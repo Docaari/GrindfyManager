@@ -208,10 +208,17 @@ describe('insertPlannedTournamentSchema — campos enriquecidos', () => {
       expect(result.success).toBe(false);
     });
 
-    it('deve rejeitar gameType="" (string vazia)', () => {
+    it('deve aceitar gameType="" (string vazia) e normalizar para null (Sprint 1 RF-01)', () => {
+      // Antes do Sprint 1 (Tournament Types Extension), string vazia era rejeitada,
+      // contribuindo para o bug "Erro ao adicionar torneio". O preprocess agora
+      // normaliza '' → null porque o form envia string vazia quando o campo
+      // opcional nao e preenchido.
       const data = makeValidPlannedTournament({ gameType: '' });
       const result = insertPlannedTournamentSchema.safeParse(data);
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.gameType).toBeNull();
+      }
     });
   });
 

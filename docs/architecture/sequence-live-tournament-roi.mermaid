@@ -1,0 +1,70 @@
+%% Sequence: ROI de Torneio Live (presencial) com Custos de Pacote
+%% Spec: Docs/specs/tournament-types-extension-and-manual-add-fix.md (RF-11)
+%% ADR-031: isLive modificador ortogonal - campos package_* opcionais
+
+sequenceDiagram
+    actor User as Jogador
+    participant UI as TournamentLibraryNew.tsx
+    participant Helper as shared/liveROI.ts (puro, sem query)
+    participant Tournament as tournament row (carregado do storage)
+
+    Note over User,Tournament: Helpers puros - chamados client-side e server-side<br/>(sem network/DB - operacao O(1))
+
+    User->>UI: Visualiza torneio live "WSOP Main Event"
+    UI->>Tournament: Carrega tournament (ja tem isLive=true + package_* preenchidos)
+
+    UI->>Helper: getLiveTournamentTotalCost(tournament)
+
+    alt isLive === false
+        Helper-->>UI: Number(buyIn)
+        Note over Helper: Apenas buy-in - custos package_* sao ignorados<br/>(refinement Zod garante que estao todos null)
+    else isLive === true
+        Helper->>Helper: cost = Number(buyIn ?? 0)<br/>+ Number(packageBuyIn ?? 0)<br/>+ Number(packageAccommodation ?? 0)<br/>+ Number(packageTravel ?? 0)<br/>+ Number(packageMeals ?? 0)<br/>+ Number(packageOther ?? 0)
+        Helper-->>UI: cost (USD)
+
+        Note over Helper,UI: Cada componente e opcional<br/>(usuario registra apenas o que quiser)<br/>Coalesce para 0 quando null
+    end
+
+    UI->>Helper: getLiveROI(tournament)
+    Helper->>Helper: cost = getLiveTournamentTotalCost(tournament)
+
+    alt cost === 0
+        Helper-->>UI: 0
+        Note over Helper: Evita div/0 quando buyIn=0 e nenhum pacote
+    else cost > 0
+        Helper->>Helper: prize = Number(tournament.prize ?? 0)<br/>roi = (prize - cost) / cost
+        Helper-->>UI: roi (decimal, ex: 0.5 = 50% lucro, -0.3 = 30% prejuizo)
+    end
+
+    UI->>UI: Render card live com:<br/>- buyIn separado<br/>- packageBuyIn, packageAccommodation, packageTravel, packageMeals, packageOther (se preenchidos)<br/>- packageNotes (se preenchido)<br/>- Total Cost (helper output)<br/>- Prize<br/>- ROI live (%) calculado considerando custos
+    UI-->>User: Visualizacao com ROI realista
+
+    alt Combinacao com Coach Tournament Selector (RF-08)
+        participant Scorer as server/scoring/tournamentScorer.ts
+        participant Selector as Coach Tournament Selector
+
+        Note over Scorer,Selector: Scoring usa Helper para calcular liveCostPenalty
+        Selector->>Helper: getLiveTournamentTotalCost(template)
+        Helper-->>Selector: sumPackage (excluindo buy-in)
+        Selector->>Scorer: liveCostPenalty = -clamp((sumPackage / buyIn) * 5, 0, 15)
+        Scorer-->>Selector: scoring ajustado<br/>(torneios live caros tem ROI menor por unidade de tempo)
+
+        Note over Scorer: Razao da penalty:<br/>- Deslocamento (voo, transporte)<br/>- Dias de jogo (alimentacao, hospedagem)<br/>- Comparado a online: tempo investido e maior<br/>- Penalty proporcional ao custo total / buy-in
+    end
+
+    alt Analytics agregado /api/analytics/by-modifier
+        participant Analytics as server/routes/analytics.ts
+        participant DB as PostgreSQL
+
+        Analytics->>DB: SELECT<br/>SUM(buy_in + COALESCE(package_buy_in,0) + COALESCE(package_accommodation,0) + COALESCE(package_travel,0) + COALESCE(package_meals,0) + COALESCE(package_other,0)) AS totalCost,<br/>SUM(prize) AS totalWon,<br/>COUNT(*) AS sampleSize<br/>FROM tournaments<br/>WHERE user_id=? AND is_live=true
+        DB-->>Analytics: aggregateLive
+
+        Analytics->>DB: SELECT SUM(buy_in) AS totalCost, SUM(prize) AS totalWon, COUNT(*) AS sampleSize<br/>FROM tournaments<br/>WHERE user_id=? AND is_live=false
+        DB-->>Analytics: aggregateOnline
+
+        Note over Analytics: ROI live considera todos os custos<br/>ROI online considera apenas buy-in<br/>Comparativo no dashboard "Live vs Online"
+
+        Analytics-->>User: Cards comparativos no dashboard
+    end
+
+    Note over User,Helper: Edge case: Satelite reward=package + isLive=true<br/>Refinement Zod rejeita esta combinacao<br/>(rewardType=package implica satelite ONLINE dando pacote como premio;<br/>se satelite e presencial ganhando pacote, o pacote e do TARGET, nao do satelite)

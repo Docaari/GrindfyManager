@@ -1,10 +1,12 @@
 import type { Express } from "express";
+import { ZodError } from "zod";
 import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import {
   insertPlannedTournamentSchema,
 } from "@shared/schema";
 import { selectorCache } from "../services/selectorCache";
+import { zodErrorResponse } from "../lib/zodErrorResponse";
 
 // =============================================================================
 // Selector Logging (RF-07) — Q9 + Q10
@@ -129,6 +131,11 @@ export function registerGradePlannerRoutes(app: Express): void {
 
       // Validate the payload (strip metadata before validation)
       const { metadata, ...rest } = req.body || {};
+      // Sprint 1 RF-01 (backward compat): EditDialog as vezes envia gameType=""
+      // (string vazia) quando user nao seleciona. Normalizamos para null antes
+      // do schema para evitar 400 ruidoso. Mesmo principio para outros campos
+      // que aceitam null.
+      if (rest.gameType === '') rest.gameType = null;
       const tournamentData = insertPlannedTournamentSchema.parse({ ...rest, userId });
 
       const tournament = await handleCreatePlannedTournament({
@@ -138,8 +145,14 @@ export function registerGradePlannerRoutes(app: Express): void {
 
       res.json(tournament);
     } catch (error) {
+      // Sprint 1 RF-01 + RF-10: erros Zod estruturados (field, message, code).
+      if (error instanceof ZodError) {
+        const isProd = process.env.NODE_ENV === 'production';
+        const out = zodErrorResponse(error, isProd);
+        if (out) return res.status(out.status).json(out.body);
+      }
       console.error("Failed to create planned tournament:", error);
-      res.status(400).json({
+      res.status(500).json({
         message: "Failed to create planned tournament",
         error: error instanceof Error ? error.message : 'Unknown error'
       });
@@ -173,6 +186,21 @@ export function registerGradePlannerRoutes(app: Express): void {
           }
         } else if (key === 'buyIn' || key === 'guaranteed') {
           updates[key] = String(value || '0');
+        } else if (key === 'addOnCost') {
+          // Decimal nullable
+          updates[key] = value === null || value === undefined || value === '' ? null : String(value);
+        } else if (key === 'startingStack' || key === 'maxPlayers' || key === 'blindLevelMinutes' || key === 'lateRegMinutes' || key === 'alertMinutesBefore' || key === 'maxReentries') {
+          // Integer nullable fields from the advanced form
+          if (value === null || value === undefined || value === '') {
+            updates[key] = null;
+          } else {
+            const n = parseInt(String(value), 10);
+            updates[key] = isNaN(n) ? null : n;
+          }
+        } else if (key === 'gameType') {
+          updates[key] = value === 'NLH' || value === 'PLO' ? value : null;
+        } else if (key === 'allowsAddOn' || key === 'allowsReentry') {
+          updates[key] = Boolean(value);
         } else if (key === 'startTime' || key === 'endTime') {
           updates[key] = value === null || value === undefined ? null : (value ? new Date(String(value)) : null);
         } else if (key === 'site' || key === 'time' || key === 'type' || key === 'speed' || key === 'name') {
@@ -185,8 +213,13 @@ export function registerGradePlannerRoutes(app: Express): void {
       const tournament = await storage.updatePlannedTournament(id, updates);
       res.json(tournament);
     } catch (error) {
+      if (error instanceof ZodError) {
+        const isProd = process.env.NODE_ENV === 'production';
+        const out = zodErrorResponse(error, isProd);
+        if (out) return res.status(out.status).json(out.body);
+      }
       console.error("Failed to update planned tournament:", error);
-      res.status(400).json({
+      res.status(500).json({
         message: "Failed to update planned tournament",
         error: error instanceof Error ? error.message : 'Unknown error'
       });

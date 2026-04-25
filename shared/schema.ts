@@ -13,6 +13,10 @@ import {
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import {
+  TournamentPrimaryTypeSchema,
+  SatelliteRewardTypeSchema,
+} from "./tournamentTypes";
 
 // Session storage table (mandatory for Replit Auth)
 export const sessions = pgTable(
@@ -196,7 +200,9 @@ export const tournaments = pgTable("tournaments", {
   datePlayed: timestamp("date_played").notNull(),
   site: varchar("site").notNull(),
   format: varchar("format").notNull(), // MTT, SNG, etc
-  category: varchar("category").notNull(), // Vanilla, PKO, Mystery, etc
+  // Sprint 1 (ADR-031): modelo ortogonal type primario + modificadores booleanos
+  type: varchar("type").default("Vanilla"), // Vanilla | PKO | Mystery | Satellite (SSoT em shared/tournamentTypes.ts)
+  category: varchar("category").notNull(), // [DEPRECATED ADR-032] espelho de `type` durante deprecation gradual; remover apos migracao concluida
   speed: varchar("speed").notNull(), // Regular, Turbo, Hyper, etc
   fieldSize: integer("field_size"),
   reentries: integer("reentries").default(0),
@@ -213,6 +219,27 @@ export const tournaments = pgTable("tournaments", {
   addOnTaken: boolean("addon_taken").default(false),
   allowsReentry: boolean("allows_reentry").default(false),
   maxReentries: integer("max_reentries"),
+  // Sprint 1 (ADR-031): modificadores ortogonais
+  isFlight: boolean("is_flight").default(false),
+  isLive: boolean("is_live").default(false),
+  // Satellite fields (so quando type=Satellite)
+  satelliteRewardType: varchar("satellite_reward_type"), // 'ticket' | 'package' | 'cash' | 'mixed'
+  satelliteTicketValue: decimal("satellite_ticket_value"),
+  satelliteTargetTemplateId: varchar("satellite_target_template_id"),
+  satelliteTargetName: varchar("satellite_target_name"),
+  satelliteExtraCash: decimal("satellite_extra_cash"),
+  enteredViaSatellite: boolean("entered_via_satellite").default(false),
+  // Flight fields (so quando isFlight=true)
+  flightDay: varchar("flight_day"), // '1A' | '1B' | ... | 'Final' | '2' | '3' | 'Day 1' | ...
+  flightParentId: varchar("flight_parent_id"),
+  flightAdvanced: boolean("flight_advanced"),
+  // Package fields (so quando isLive=true)
+  packageBuyIn: decimal("package_buy_in"),
+  packageAccommodation: decimal("package_accommodation"),
+  packageTravel: decimal("package_travel"),
+  packageMeals: decimal("package_meals"),
+  packageOther: decimal("package_other"),
+  packageNotes: text("package_notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   templateId: varchar("template_id"),
@@ -222,6 +249,10 @@ export const tournaments = pgTable("tournaments", {
   index("idx_tournaments_user_name_date_buyin").on(table.userId, table.name, table.datePlayed, table.buyIn),
   index("idx_tournaments_user_date").on(table.userId, table.datePlayed),
   index("idx_tournaments_user_site").on(table.userId, table.site),
+  // Sprint 1: indexes parciais para queries dos modulos novos (Selector, dashboard)
+  index("tournaments_satellite_target_idx").on(table.satelliteTargetTemplateId),
+  index("tournaments_flight_parent_idx").on(table.flightParentId),
+  index("tournaments_live_idx").on(table.isLive),
 ]);
 
 export const tournamentTemplates = pgTable("tournament_templates", {
@@ -267,7 +298,8 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   profile: varchar("profile").notNull().default("A"), // 'A', 'B' ou 'C' - Profile associated with tournament
   site: varchar("site").notNull(),
   time: varchar("time").notNull(), // e.g. "19:00"
-  type: varchar("type").notNull(), // e.g. "PKO", "Vanilla", "Mystery"
+  type: varchar("type").notNull(), // Vanilla | PKO | Mystery | Satellite (Sprint 1 ADR-031)
+  category: varchar("category"), // [DEPRECATED ADR-032] espelho de `type`; opcional aqui pois pode nao existir em rows antigas
   speed: varchar("speed").notNull(), // e.g. "Normal", "Turbo", "Hyper"
   name: text("name").notNull(),
   buyIn: decimal("buy_in").notNull(),
@@ -295,6 +327,16 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   addOnCost: decimal("addon_cost"),
   allowsReentry: boolean("allows_reentry").default(false),
   maxReentries: integer("max_reentries"),
+  // Sprint 1 (ADR-031): modificadores ortogonais
+  isFlight: boolean("is_flight").default(false),
+  isLive: boolean("is_live").default(false),
+  flightDay: varchar("flight_day"),
+  flightParentId: varchar("flight_parent_id"),
+  // Sprint 1: campos satellite minimos (ticket value + target name) para
+  // quando type=Satellite e o usuario adiciona o satelite na grade.
+  satelliteRewardType: varchar("satellite_reward_type"),
+  satelliteTicketValue: decimal("satellite_ticket_value"),
+  satelliteTargetName: varchar("satellite_target_name"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -954,14 +996,211 @@ const addOnReaFieldsConfig = {
 };
 
 // ---------------------------------------------------------------------------
+// Sprint 1 (ADR-031): refinements ortogonais — type primario + isFlight + isLive
+// + campos satellite/flight/package condicionais. Usado por insertTournamentSchema
+// e insertPlannedTournamentSchema (subset). Nao usado em insertSessionTournamentSchema
+// porque session capture acontece via outras rotas.
+// Nota: campos de cada dimensao (satellite*, flight*, package*) so podem ser
+// populados quando seu trigger esta ativo (type=Satellite / isFlight=true / isLive=true ou
+// rewardType=package).
+// ---------------------------------------------------------------------------
+
+const FLIGHT_DAY_REGEX = /^(Final|Day\s?\d+|\d+[A-Z]?)$/;
+
+// Helper: detecta se valor decimal-like (string ou number) e nao-nulo/zero/vazio
+function isPopulatedDecimal(v: unknown): boolean {
+  if (v == null || v === '') return false;
+  return true;
+}
+
+// Helper: detecta se valor (booleano, string, number, etc) e nao-null/undefined
+function isPopulatedField(v: unknown): boolean {
+  return v !== null && v !== undefined && v !== '';
+}
+
+// Sprint 1: extensoes Zod para os campos novos da tabela tournaments.
+const tournamentTypeFieldsExtension = {
+  // Tipo primario — validado pelo enum SSoT. Optional+default mantem
+  // backwards-compat com payloads legados (CSV upload) que enviam apenas
+  // `category` — o storage layer normaliza para 'Vanilla' se faltar via
+  // normalizeTournamentTypePayload. Tentativas de enviar valores fora do
+  // enum (ex: 'Flight', 'Live') sao SEMPRE rejeitadas.
+  type: TournamentPrimaryTypeSchema.optional().default('Vanilla'),
+  // Modificadores ortogonais
+  isFlight: z.boolean().optional().default(false),
+  isLive: z.boolean().optional().default(false),
+  // Satellite fields
+  satelliteRewardType: SatelliteRewardTypeSchema.nullable().optional(),
+  satelliteTicketValue: z.union([z.string(), z.number()]).nullable().optional()
+    .transform((v) => v == null ? null : String(v)),
+  satelliteTargetTemplateId: z.string().nullable().optional(),
+  satelliteTargetName: z.string().nullable().optional(),
+  satelliteExtraCash: z.union([z.string(), z.number()]).nullable().optional()
+    .transform((v) => v == null ? null : String(v)),
+  enteredViaSatellite: z.boolean().optional().default(false),
+  // Flight fields
+  flightDay: z.string().nullable().optional(),
+  flightParentId: z.string().nullable().optional(),
+  flightAdvanced: z.boolean().nullable().optional(),
+  // Package fields (so quando isLive=true ou satellite rewardType=package)
+  packageBuyIn: z.union([z.string(), z.number()]).nullable().optional()
+    .transform((v) => v == null ? null : String(v)),
+  packageAccommodation: z.union([z.string(), z.number()]).nullable().optional()
+    .transform((v) => v == null ? null : String(v)),
+  packageTravel: z.union([z.string(), z.number()]).nullable().optional()
+    .transform((v) => v == null ? null : String(v)),
+  packageMeals: z.union([z.string(), z.number()]).nullable().optional()
+    .transform((v) => v == null ? null : String(v)),
+  packageOther: z.union([z.string(), z.number()]).nullable().optional()
+    .transform((v) => v == null ? null : String(v)),
+  packageNotes: z.string().nullable().optional(),
+};
+
+// Sprint 1: aplica os refinements ortogonais ao schema (type/isFlight/isLive).
+// Returns a Zod schema with `superRefine` chained — agnostic ao tipo do schema.
+function applyOrthogonalRefinements(schema: any): any {
+  return schema.superRefine((d: any, ctx: any) => {
+    const type = d?.type;
+    const isFlight = d?.isFlight === true;
+    const isLive = d?.isLive === true;
+    const isSatelliteType = type === 'Satellite';
+
+    // ---- Refinement 1: campos satellite* so quando type=Satellite ----
+    const satelliteFields = [
+      'satelliteRewardType',
+      'satelliteTicketValue',
+      'satelliteTargetTemplateId',
+      'satelliteTargetName',
+      'satelliteExtraCash',
+    ] as const;
+    if (!isSatelliteType) {
+      for (const f of satelliteFields) {
+        if (isPopulatedField(d?.[f])) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [f],
+            message: `Campo ${f} so e permitido quando type=Satellite`,
+          });
+        }
+      }
+    } else {
+      // type === 'Satellite' — exige rewardType e (template OR name)
+      if (!isPopulatedField(d?.satelliteRewardType)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['satelliteRewardType'],
+          message: 'satelliteRewardType e obrigatorio quando type=Satellite',
+        });
+      }
+      const hasTarget =
+        isPopulatedField(d?.satelliteTargetTemplateId) ||
+        isPopulatedField(d?.satelliteTargetName);
+      if (!hasTarget) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['satelliteTargetName'],
+          message:
+            'Informe satelliteTargetTemplateId ou satelliteTargetName quando type=Satellite',
+        });
+      }
+    }
+
+    // ---- Refinement 2: campos flight* so quando isFlight=true ----
+    const flightFieldsAll = ['flightDay', 'flightParentId', 'flightAdvanced'] as const;
+    if (!isFlight) {
+      for (const f of flightFieldsAll) {
+        if (isPopulatedField(d?.[f])) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [f],
+            message: `Campo ${f} so e permitido quando isFlight=true`,
+          });
+        }
+      }
+    } else {
+      // isFlight=true — flightDay e obrigatorio + regex valido
+      if (!isPopulatedField(d?.flightDay)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['flightDay'],
+          message: 'flightDay e obrigatorio quando isFlight=true',
+        });
+      } else if (!FLIGHT_DAY_REGEX.test(String(d.flightDay))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['flightDay'],
+          message:
+            'flightDay invalido (use formatos como "1A", "Day 1", "2", "Final")',
+        });
+      } else {
+        // flightDay valido — valida coerencia com flightAdvanced/position
+        const flightDay = String(d.flightDay);
+        const isDayLetterPattern = /^\d+[A-Z]$/.test(flightDay);
+        const isFinal = flightDay === 'Final';
+
+        // Day letter pattern (1A, 1B, ...) — flightAdvanced e obrigatorio (boolean)
+        if (isDayLetterPattern) {
+          if (typeof d?.flightAdvanced !== 'boolean') {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['flightAdvanced'],
+              message: 'flightAdvanced e obrigatorio quando flightDay e formato "Day 1A/B/C"',
+            });
+          }
+        }
+
+        // Day Final — position e obrigatorio
+        if (isFinal) {
+          if (d?.position == null) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['position'],
+              message: 'position e obrigatorio quando flightDay=Final',
+            });
+          }
+        }
+      }
+    }
+
+    // ---- Refinement 3: campos package* so quando isLive=true OU satellite rewardType=package ----
+    const packageFields = [
+      'packageBuyIn',
+      'packageAccommodation',
+      'packageTravel',
+      'packageMeals',
+      'packageOther',
+      'packageNotes',
+    ] as const;
+    const allowPackages =
+      isLive || (isSatelliteType && d?.satelliteRewardType === 'package');
+    if (!allowPackages) {
+      for (const f of packageFields) {
+        if (isPopulatedField(d?.[f])) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [f],
+            message: `Campo ${f} so e permitido quando isLive=true ou satelite com rewardType=package`,
+          });
+        }
+      }
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
 
 export const insertTournamentSchemaBase = createInsertSchema(tournaments).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
-}).extend(addOnReaFieldsSession);
+}).extend({
+  ...addOnReaFieldsSession,
+  ...tournamentTypeFieldsExtension,
+});
 
-export const insertTournamentSchema = applyAddOnReaRefinements(insertTournamentSchemaBase);
+export const insertTournamentSchema = applyOrthogonalRefinements(
+  applyAddOnReaRefinements(insertTournamentSchemaBase)
+);
 
 export const insertTournamentTemplateSchema = createInsertSchema(tournamentTemplates).omit({
   id: true,
@@ -969,24 +1208,127 @@ export const insertTournamentTemplateSchema = createInsertSchema(tournamentTempl
   updatedAt: true,
 });
 
+// Sprint 1: extensoes Zod para os campos novos da tabela planned_tournaments.
+// Subset dos campos de tournaments — planned nao tem package/satelliteExtraCash/
+// satelliteTargetTemplateId/satelliteRewardType nem package* (planejamento mais
+// simples; resultados live ficam em tournaments).
+const plannedTypeFieldsExtension = {
+  type: TournamentPrimaryTypeSchema,
+  isFlight: z.boolean().optional().default(false),
+  isLive: z.boolean().optional().default(false),
+  flightDay: z.string().nullable().optional(),
+  flightParentId: z.string().nullable().optional(),
+  satelliteRewardType: SatelliteRewardTypeSchema.nullable().optional(),
+  satelliteTicketValue: z.union([z.string(), z.number()]).nullable().optional()
+    .transform((v) => v == null ? null : String(v)),
+  satelliteTargetName: z.string().nullable().optional(),
+};
+
+// Refinements ortogonais para planned (subset do tournaments — sem package*
+// nem flightAdvanced obrigatorio porque planned e um placeholder, nao um
+// resultado).
+function applyPlannedOrthogonalRefinements(schema: any): any {
+  return schema.superRefine((d: any, ctx: any) => {
+    const type = d?.type;
+    const isFlight = d?.isFlight === true;
+    const isSatelliteType = type === 'Satellite';
+
+    // Satellite ortogonalidade
+    const satelliteFields = [
+      'satelliteRewardType',
+      'satelliteTicketValue',
+      'satelliteTargetName',
+    ] as const;
+    if (!isSatelliteType) {
+      for (const f of satelliteFields) {
+        if (isPopulatedField(d?.[f])) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [f],
+            message: `Campo ${f} so e permitido quando type=Satellite`,
+          });
+        }
+      }
+    } else {
+      if (!isPopulatedField(d?.satelliteRewardType)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['satelliteRewardType'],
+          message: 'satelliteRewardType e obrigatorio quando type=Satellite',
+        });
+      }
+      if (!isPopulatedField(d?.satelliteTargetName)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['satelliteTargetName'],
+          message: 'satelliteTargetName e obrigatorio quando type=Satellite (planned)',
+        });
+      }
+    }
+
+    // Flight ortogonalidade
+    const flightFieldsAll = ['flightDay', 'flightParentId'] as const;
+    if (!isFlight) {
+      for (const f of flightFieldsAll) {
+        if (isPopulatedField(d?.[f])) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [f],
+            message: `Campo ${f} so e permitido quando isFlight=true`,
+          });
+        }
+      }
+    } else {
+      if (!isPopulatedField(d?.flightDay)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['flightDay'],
+          message: 'flightDay e obrigatorio quando isFlight=true',
+        });
+      } else if (!FLIGHT_DAY_REGEX.test(String(d.flightDay))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['flightDay'],
+          message: 'flightDay invalido',
+        });
+      }
+    }
+  });
+}
+
 export const insertPlannedTournamentSchemaBase = createInsertSchema(plannedTournaments).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 }).extend({
   startTime: z.string().optional().transform((str) => str ? new Date(str) : undefined),
+  // Sprint 1 RF-01: time validado via regex HH:MM no backend (alinhado ao
+  // schema do form RHF — espelha a regra que ja era validada so no front).
+  // Relaxado para aceitar segundos opcionais (:SS) para compatibilidade com alguns browsers.
+  time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)(:([0-5]\d))?$/, 'Horario invalido (use HH:MM)'),
+  // Sprint 1 RF-01: dayOfWeek validado em [0,6]
+  dayOfWeek: z.number().int().min(0).max(6),
   lateRegMinutes: z.number().int().min(0).max(999).nullable().optional(),
   startingStack: z.number().int().min(1).nullable().optional(),
   maxPlayers: z.number().int().min(1).nullable().optional(),
-  gameType: z.enum(['NLH', 'PLO']).nullable().optional(),
+  // Sprint 1 RF-01: tolera gameType='' (legacy form fallback) — converte para null.
+  // EditDialog antigo enviava '' quando user nao selecionava NLH/PLO; rejeitar
+  // ali era 400 ruidoso. Mantem rejeicao de "INVALID"/"PLO5"/qualquer string nao-enum.
+  gameType: z.preprocess(
+    (v) => (v === '' ? null : v),
+    z.enum(['NLH', 'PLO']).nullable().optional()
+  ),
   blindLevelMinutes: z.number().int().nullable().optional(),
   alertMinutesBefore: z.number().int().min(1).max(120).nullable().optional(),
   ...addOnReaFieldsConfig,
+  ...plannedTypeFieldsExtension,
 });
 
-export const insertPlannedTournamentSchema = insertPlannedTournamentSchemaBase.refine(
-  (d: any) => d?.maxReentries == null || (d.maxReentries as number) >= 0,
-  { message: 'maxReentries nao pode ser negativo', path: ['maxReentries'] }
+export const insertPlannedTournamentSchema = applyPlannedOrthogonalRefinements(
+  insertPlannedTournamentSchemaBase.refine(
+    (d: any) => d?.maxReentries == null || (d.maxReentries as number) >= 0,
+    { message: 'maxReentries nao pode ser negativo', path: ['maxReentries'] }
+  )
 );
 
 export const insertWeeklyPlanSchema = createInsertSchema(weeklyPlans).omit({

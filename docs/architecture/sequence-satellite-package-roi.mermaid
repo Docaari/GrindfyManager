@@ -1,0 +1,49 @@
+%% Sequence: ROI Agregado de Satelite com premio em Pacote
+%% Spec: Docs/specs/tournament-types-extension-and-manual-add-fix.md (RF-04)
+%% ADR-031: modelo ortogonal - rewardType=package usa campos package_* para descrever pacote ganho
+
+sequenceDiagram
+    actor User as Jogador
+    participant UI as Pagina /analytics/satellites/:targetId
+    participant Query as TanStack Query (staleTime 5min)
+    participant API as GET /api/satellites/roi/:targetTemplateId
+    participant Auth as requireAuth (JWT)
+    participant Storage as getSatelliteROI(userId, targetId, range?)
+    participant DB as PostgreSQL
+
+    User->>UI: Acessa pagina de analytics do target<br/>(ex: WSOP Main Event)
+    UI->>Query: useQuery(['satellite-roi', targetTemplateId])
+
+    alt Cache hit (TTL 5min)
+        Query-->>UI: Resposta cacheada
+    else Cache miss
+        Query->>API: GET /api/satellites/roi/:targetTemplateId
+        API->>Auth: validate JWT
+        Auth-->>API: userId
+
+        API->>Storage: getSatelliteROI(userId, targetTemplateId, range)
+
+        par Query 1 - agregados de satelites
+            Storage->>DB: SELECT SUM(buy_in) AS totalInvested,<br/>SUM(CASE WHEN prize > 0 AND reward_type IN ('ticket','mixed') THEN ticket_value ELSE 0 END) AS totalWonInTickets,<br/>SUM(CASE WHEN prize > 0 AND reward_type IN ('package','mixed') THEN (package_buy_in+package_accommodation+package_travel+package_meals+package_other) ELSE 0 END) AS totalWonInPackages,<br/>SUM(extra_cash) + SUM(CASE WHEN reward_type='cash' THEN prize ELSE 0 END) AS totalExtraCash,<br/>COUNT(*) AS sampleSize<br/>FROM tournaments<br/>WHERE user_id=? AND type='Satellite' AND target_template_id=?
+            DB-->>Storage: satelliteAgg row
+        and Query 2 - agregados do target via satelite
+            Storage->>DB: SELECT SUM(buy_in) AS totalInvested,<br/>SUM(prize) AS totalWon,<br/>COUNT(*) AS sampleSize<br/>FROM tournaments<br/>WHERE user_id=? AND template_id=? AND entered_via_satellite=true
+            DB-->>Storage: targetAgg row
+        end
+
+        Note over Storage: ROI integrado:<br/>totalInvested = satelliteAgg.totalInvested + targetAgg.totalInvested<br/>totalWon = satelliteAgg.totalWonInTickets + satelliteAgg.totalWonInPackages + satelliteAgg.totalExtraCash + targetAgg.totalWon<br/>roi = (totalWon - totalInvested) / totalInvested<br/>(retorna 0 se totalInvested=0 - sem div/0)
+
+        Storage-->>API: SatelliteROI shape
+
+        API-->>Query: 200 OK + SatelliteROI
+        Query->>Query: Cache (staleTime 5min)
+        Query-->>UI: Resposta
+    end
+
+    UI->>UI: Render card com:<br/>- totalInvestedSatellites (USD)<br/>- totalWonInTickets (USD)<br/>- totalWonInPackages (USD - com componentes detalhados)<br/>- totalExtraCash (USD)<br/>- ROI integrado (%)<br/>- sampleSize (satellites + targetEntries)
+
+    UI-->>User: Visualizacao completa
+
+    alt Caso especifico: Satelite reward=package + ganhou pacote
+        Note over User,DB: Cenario E2E:<br/>1. User cria Satellite com rewardType='package',<br/>   prize=5000, packageBuyIn=10000, packageAccommodation=3000,<br/>   packageTravel=1500, satelliteTargetTemplateId='wsop-main'<br/>2. User joga WSOP Main Event Day 1A com<br/>   enteredViaSatellite=true, templateId='wsop-main',<br/>   isFlight=true, isLive=true<br/>3. ROI consolidado mostra:<br/>   investido = buy-in do satelite + buy-in do target<br/>   ganho = pacote (10000+3000+1500=14500) + prize do target<br/>   ROI integrado refletindo o pacote como premio
+    end

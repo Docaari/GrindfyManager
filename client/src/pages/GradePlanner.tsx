@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,17 +9,18 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useProfileStates, useUpdateProfileState } from "@/hooks/useProfileStates";
 import { DragDropContext, type DropResult } from "react-beautiful-dnd";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { Panel, PanelGroup, PanelResizeHandle, type ImperativePanelHandle } from "react-resizable-panels";
 import { validateDrop, mapLibraryToPlanned, calculateMove } from "@shared/drag-drop-utils";
 import { checkOffToggleWarning, getAffectedTournaments, shouldShowOffDialog } from "@shared/grade-off-toggle";
 import { shouldShowGrindCTA, getGrindCTAData, getTodayDayOfWeek } from "@/components/grade-planner/grind-cta-helpers";
-import { Maximize2, Minimize2, BarChart3, Zap, X } from "lucide-react";
+import { Maximize2, Minimize2, BarChart3, Zap, X, Plus, Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectorPanel } from "@/components/tournament-selector/SelectorPanel";
 
 import { tournamentSchema, type TournamentForm, weekDays } from '@/components/grade-planner/types';
+import { mapZodIssuesToForm } from '@/lib/zodErrorMapper';
 import { LoadingScreen } from '@/components/grade-planner/LoadingScreen';
 import { WeeklySummaryBar } from '@/components/grade-planner/WeeklySummaryBar';
 import { WeekGrid } from '@/components/grade-planner/WeekGrid';
@@ -43,7 +44,6 @@ export default function GradePlanner() {
   const [viewMode, setViewMode] = useState<'compact' | 'expanded'>('compact');
   const [libraryCollapsed, setLibraryCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [pendingEnrichedFields, setPendingEnrichedFields] = useState<{ lateRegMinutes?: number | null; alertMinutesBefore?: number | null } | null>(null);
   const [mobileTab, setMobileTab] = useState<string>("grade");
   const [showComparison, setShowComparison] = useState(false);
 
@@ -52,6 +52,20 @@ export default function GradePlanner() {
   const updateProfileStateMutation = useUpdateProfileState();
   const [, setLocation] = useLocation();
 
+  // Imperative ref para colapsar/expandir o Panel da biblioteca de fato
+  // (react-resizable-panels expõe collapse/expand via ref).
+  const libraryPanelRef = useRef<ImperativePanelHandle>(null);
+
+  const handleToggleLibrary = useCallback(() => {
+    const panel = libraryPanelRef.current;
+    if (!panel) return;
+    if (panel.isCollapsed()) {
+      panel.expand();
+    } else {
+      panel.collapse();
+    }
+  }, []);
+
   // FP-04: Off toggle dialog state
   const [showOffDialog, setShowOffDialog] = useState(false);
   const [pendingOffDay, setPendingOffDay] = useState<number | null>(null);
@@ -59,6 +73,9 @@ export default function GradePlanner() {
 
   // FP-06: Grind CTA banner state
   const [ctaDismissed, setCtaDismissed] = useState(false);
+
+  // UX: Dialog de novo torneio com seletor de dia (independente do clique-na-celula)
+  const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
 
   const getActiveProfile = (dayOfWeek: number): 'A' | 'B' | 'C' | 'OFF' | null => {
     const state = profileStates?.find((ps: any) => ps.dayOfWeek === dayOfWeek);
@@ -113,7 +130,27 @@ export default function GradePlanner() {
 
   const editForm = useForm<TournamentForm>({
     resolver: zodResolver(tournamentSchema),
-    defaultValues: { site: "", time: "", type: "", speed: "", name: "", buyIn: "", guaranteed: "", prioridade: 2 },
+    defaultValues: {
+      site: "",
+      time: "",
+      // Defaults sensatos — usuarios tipicamente jogam Vanilla Normal
+      type: "Vanilla",
+      speed: "Normal",
+      name: "",
+      buyIn: "",
+      guaranteed: "",
+      prioridade: 2,
+      gameType: null,
+      startingStack: null,
+      maxPlayers: null,
+      blindLevelMinutes: null,
+      lateRegMinutes: null,
+      alertMinutesBefore: null,
+      allowsAddOn: false,
+      addOnCost: null,
+      allowsReentry: false,
+      maxReentries: null,
+    },
   });
 
   // Fetch planned tournaments
@@ -150,8 +187,25 @@ export default function GradePlanner() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
     },
-    onError: () => {
-      toast({ title: "Erro", description: "Falha ao adicionar torneio a grade", variant: "destructive" });
+    onError: (error: any) => {
+      // Sprint 1 RF-01: backend devolve {error:'validation', issues:[{field,message,code}]}
+      // em caso de erro Zod. Aplica setError em cada campo do form RHF.
+      const issues = error?.response?.data?.issues ?? error?.issues ?? error?.body?.issues;
+
+      if (Array.isArray(issues) && issues.length > 0) {
+        mapZodIssuesToForm(issues, editForm);
+        toast({
+          title: "Falha na validacao",
+          description: "Verifique os campos destacados em vermelho",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: "Erro ao adicionar torneio",
+        description: error?.message || "Não foi possível adicionar o torneio. Revise os campos e tente novamente.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -166,8 +220,23 @@ export default function GradePlanner() {
       setIsEditDialogOpen(false);
       setEditingTournament(null);
     },
-    onError: (error: Error) => {
-      toast({ title: "Erro ao Atualizar", description: error.message || "Erro desconhecido ao atualizar torneio", variant: "destructive" });
+    onError: (error: any) => {
+      // Sprint 1 RF-01: idem add — issues estruturadas iluminam campos inline
+      const issues = error?.issues ?? error?.body?.issues ?? error?.cause?.issues;
+      if (Array.isArray(issues) && issues.length > 0) {
+        mapZodIssuesToForm(issues, editForm);
+        toast({
+          title: "Falha na validacao",
+          description: "Verifique os campos destacados em vermelho",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: "Erro ao Atualizar",
+        description: error?.message || "Erro desconhecido ao atualizar torneio",
+        variant: "destructive"
+      });
     },
   });
 
@@ -274,14 +343,52 @@ export default function GradePlanner() {
     editForm.reset({
       site: tournament.site || "",
       time: tournament.time || "",
-      type: tournament.type || "",
-      speed: tournament.speed || "",
+      type: tournament.type || "Vanilla",
+      speed: tournament.speed || "Normal",
       name: tournament.name || "",
       buyIn: tournament.buyIn?.toString() || "",
       guaranteed: tournament.guaranteed?.toString() || "",
       prioridade: Number(tournament.prioridade) || 2,
+      dayOfWeek: tournament.dayOfWeek,
+      // Campos avancados
+      gameType: (tournament.gameType === "NLH" || tournament.gameType === "PLO") ? tournament.gameType : null,
+      startingStack: tournament.startingStack != null ? String(tournament.startingStack) : null,
+      maxPlayers: tournament.maxPlayers != null ? String(tournament.maxPlayers) : null,
+      blindLevelMinutes: tournament.blindLevelMinutes != null ? String(tournament.blindLevelMinutes) : null,
+      lateRegMinutes: tournament.lateRegMinutes != null ? String(tournament.lateRegMinutes) : null,
+      alertMinutesBefore: tournament.alertMinutesBefore != null ? String(tournament.alertMinutesBefore) : null,
+      allowsAddOn: Boolean(tournament.allowsAddOn),
+      addOnCost: tournament.addOnCost != null ? String(tournament.addOnCost) : null,
+      allowsReentry: Boolean(tournament.allowsReentry),
+      maxReentries: tournament.maxReentries != null ? String(tournament.maxReentries) : null,
     });
     setTimeout(() => setIsEditDialogOpen(true), 50);
+  };
+
+  // Normaliza campos avancados (strings de input -> numeros ou null)
+  const normalizeAdvancedFields = (data: TournamentForm) => {
+    const toIntOrNull = (v: any): number | null => {
+      if (v === null || v === undefined || v === "") return null;
+      const n = parseInt(String(v), 10);
+      return isNaN(n) ? null : n;
+    };
+    const toStringOrNull = (v: any): string | null => {
+      if (v === null || v === undefined) return null;
+      const s = String(v).trim();
+      return s === "" ? null : s;
+    };
+    return {
+      gameType: data.gameType ?? null,
+      startingStack: toIntOrNull(data.startingStack),
+      maxPlayers: toIntOrNull(data.maxPlayers),
+      blindLevelMinutes: toIntOrNull(data.blindLevelMinutes),
+      lateRegMinutes: toIntOrNull(data.lateRegMinutes),
+      alertMinutesBefore: toIntOrNull(data.alertMinutesBefore),
+      allowsAddOn: Boolean(data.allowsAddOn),
+      addOnCost: data.allowsAddOn ? toStringOrNull(data.addOnCost) : null,
+      allowsReentry: Boolean(data.allowsReentry),
+      maxReentries: data.allowsReentry ? toIntOrNull(data.maxReentries) : null,
+    };
   };
 
   const handleEditSubmit = (data: TournamentForm) => {
@@ -289,22 +396,20 @@ export default function GradePlanner() {
       toast({ title: "Erro", description: "ID do torneio nao encontrado", variant: "destructive" });
       return;
     }
-    const enriched = pendingEnrichedFields || {};
+    const advanced = normalizeAdvancedFields(data);
     updateTournamentMutation.mutate({
       id: editingTournament.id,
-      dayOfWeek: editingTournament.dayOfWeek,
+      dayOfWeek: data.dayOfWeek ?? editingTournament.dayOfWeek,
       site: String(data.site || ""),
       time: String(data.time || ""),
-      type: String(data.type || ""),
-      speed: String(data.speed || ""),
+      type: String(data.type || "Vanilla"),
+      speed: String(data.speed || "Normal"),
       name: String(data.name || ""),
       buyIn: String(data.buyIn || "0"),
       guaranteed: String(data.guaranteed || "0"),
       prioridade: Number(data.prioridade) || 2,
-      ...('lateRegMinutes' in enriched ? { lateRegMinutes: enriched.lateRegMinutes } : {}),
-      ...('alertMinutesBefore' in enriched ? { alertMinutesBefore: enriched.alertMinutesBefore } : {}),
+      ...advanced,
     });
-    setPendingEnrichedFields(null);
   };
 
   const handleDeleteTournament = (tournament: any) => {
@@ -328,34 +433,87 @@ export default function GradePlanner() {
 
   const handleClickEmptyCell = (dayOfWeek: number, time: string) => {
     const activeProfile = getActiveProfile(dayOfWeek);
-    if (!activeProfile || activeProfile === 'OFF') return;
-    // Quick inline add: create a minimal tournament
-    // For now, open the edit form pre-filled
+    // FIX UX: se o dia esta OFF ou sem perfil, nao deixar o clique silencioso
+    if (!activeProfile || activeProfile === 'OFF') {
+      const dayName = weekDays.find(d => d.id === dayOfWeek)?.name || 'este dia';
+      toast({
+        title: `${dayName} está OFF`,
+        description: "Ative o perfil A, B ou C no cabeçalho da coluna para adicionar torneios.",
+      });
+      return;
+    }
     const newTournament = {
       dayOfWeek,
       time,
       profile: activeProfile,
-      site: "",
-      type: "",
-      speed: "",
-      name: "",
-      buyIn: "",
-      guaranteed: "",
-      prioridade: 2,
     };
     setEditingTournament(newTournament);
     editForm.reset({
       site: "",
       time,
-      type: "",
-      speed: "",
+      type: "Vanilla",
+      speed: "Normal",
       name: "",
       buyIn: "",
       guaranteed: "",
       prioridade: 2,
+      dayOfWeek,
+      gameType: null,
+      startingStack: null,
+      maxPlayers: null,
+      blindLevelMinutes: null,
+      lateRegMinutes: null,
+      alertMinutesBefore: null,
+      allowsAddOn: false,
+      addOnCost: null,
+      allowsReentry: false,
+      maxReentries: null,
     });
-    // Use the edit dialog for new inline add too (submit will POST)
     setTimeout(() => setIsEditDialogOpen(true), 50);
+  };
+
+  // Abre o dialog de novo torneio com seletor de dia (vindo do botao no header)
+  const handleOpenNewDialog = () => {
+    // Achar o primeiro dia ativo (A/B/C) como default; fallback = hoje
+    const today = new Date().getDay();
+    const dayCandidates = [today, 1, 2, 3, 4, 5, 6, 0];
+    let defaultDay = today;
+    for (const d of dayCandidates) {
+      const p = getActiveProfile(d);
+      if (p && p !== 'OFF') {
+        defaultDay = d;
+        break;
+      }
+    }
+
+    // Hora default: proxima hora redonda apos hora atual, dentro do range da grade
+    const now = new Date();
+    const nextHour = (now.getHours() + 1) % 24;
+    const defaultTime = `${String(nextHour).padStart(2, "0")}:00`;
+
+    setEditingTournament({ dayOfWeek: defaultDay });
+    editForm.reset({
+      site: "",
+      time: defaultTime,
+      type: "Vanilla",
+      speed: "Normal",
+      name: "",
+      buyIn: "",
+      guaranteed: "",
+      prioridade: 2,
+      dayOfWeek: defaultDay,
+      gameType: null,
+      startingStack: null,
+      maxPlayers: null,
+      blindLevelMinutes: null,
+      lateRegMinutes: null,
+      alertMinutesBefore: null,
+      allowsAddOn: false,
+      addOnCost: null,
+      allowsReentry: false,
+      maxReentries: null,
+    });
+    setIsNewDialogOpen(true);
   };
 
   // Override edit submit to handle new tournaments (no id)
@@ -365,27 +523,67 @@ export default function GradePlanner() {
       handleEditSubmit(data);
     } else {
       // New tournament - create
-      const activeProfile = getActiveProfile(editingTournament?.dayOfWeek ?? 0);
+      const targetDay = data.dayOfWeek ?? editingTournament?.dayOfWeek ?? 0;
+      const activeProfile = getActiveProfile(targetDay);
+
+      // Se o dia de destino estiver OFF/null, ativar perfil A automaticamente
+      if (!activeProfile || activeProfile === 'OFF') {
+        executeProfileSwitch(targetDay, 'A');
+      }
+      const profileToUse = (activeProfile && activeProfile !== 'OFF') ? activeProfile : 'A';
+      const advanced = normalizeAdvancedFields(data);
+
+      // Auto-gerar nome se nao preenchido (schema do DB exige name not null)
+      const buyInNum = parseFloat(data.buyIn || "0");
+      const autoName = (data.name && data.name.trim())
+        ? data.name
+        : `$${isNaN(buyInNum) ? "0" : buyInNum.toFixed(0)} ${data.site}`;
+
       addPlannedMutation.mutate({
-        dayOfWeek: editingTournament?.dayOfWeek ?? 0,
-        profile: activeProfile || 'A',
+        dayOfWeek: targetDay,
+        profile: profileToUse,
         site: String(data.site || ""),
         time: String(data.time || ""),
-        type: String(data.type || ""),
-        speed: String(data.speed || ""),
-        name: String(data.name || ""),
+        type: String(data.type || "Vanilla"),
+        speed: String(data.speed || "Normal"),
+        name: autoName,
         buyIn: String(data.buyIn || "0"),
         guaranteed: String(data.guaranteed || "0"),
         prioridade: Number(data.prioridade) || 2,
+        ...advanced,
       }, {
         onSuccess: () => {
           setIsEditDialogOpen(false);
+          setIsNewDialogOpen(false);
           setEditingTournament(null);
-          toast({ title: "Torneio Adicionado", description: "Torneio adicionado a grade" });
+          toast({
+            title: "✓ Torneio adicionado",
+            description: `${autoName} — ${weekDays.find(d => d.id === targetDay)?.name} às ${data.time}`,
+          });
         },
       });
     }
   };
+
+  // Keyboard shortcut: N abre o dialog de novo torneio
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'n' || e.key === 'N') {
+        const target = e.target as HTMLElement | null;
+        // Ignora se o usuario esta digitando em algum input/textarea/select
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+          return;
+        }
+        // Ignora se algum dialog ja esta aberto
+        if (isEditDialogOpen || isNewDialogOpen || isSettingsOpen || isDeleteDialogOpen) return;
+        e.preventDefault();
+        handleOpenNewDialog();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditDialogOpen, isNewDialogOpen, isSettingsOpen, isDeleteDialogOpen]);
 
   // =========================================================================
   // Drag & Drop handler
@@ -480,7 +678,7 @@ export default function GradePlanner() {
   const bibliotecaContent = (
     <BibliotecaPanel
       collapsed={libraryCollapsed && !isMobile}
-      onToggleCollapsed={() => setLibraryCollapsed(!libraryCollapsed)}
+      onToggleCollapsed={handleToggleLibrary}
     />
   );
 
@@ -502,7 +700,7 @@ export default function GradePlanner() {
               const weekCount = allWeekTournaments.length;
               if (weekCount === 0) return null;
               return (
-                <div className="flex items-center gap-4 bg-gray-800/60 border border-gray-700/50 rounded-lg px-4 py-2">
+                <div className="hidden md:flex items-center gap-4 bg-gray-800/60 border border-gray-700/50 rounded-lg px-4 py-2">
                   <div className="text-center">
                     <div className="text-white font-bold text-lg">{weekCount}</div>
                     <div className="text-gray-400 text-xs">Torneios</div>
@@ -523,14 +721,27 @@ export default function GradePlanner() {
           </div>
           <div className="flex items-center gap-2">
             <Button
+              size="sm"
+              onClick={handleOpenNewDialog}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-900/30 font-medium"
+              title="Adicionar novo torneio (atalho: N)"
+              data-testid="btn-novo-torneio"
+            >
+              <Plus className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">Novo Torneio</span>
+              <kbd className="hidden md:inline-flex ml-2 items-center justify-center w-5 h-5 rounded bg-emerald-700/60 text-[10px] font-mono text-emerald-100">
+                N
+              </kbd>
+            </Button>
+            <Button
               variant="outline"
               size="sm"
               onClick={() => setShowComparison(!showComparison)}
               className={`border-gray-700 text-gray-300 hover:bg-gray-700 ${showComparison ? 'bg-emerald-900/30 border-emerald-600 text-emerald-400' : 'bg-gray-800'}`}
               title="Comparar perfis A/B/C"
             >
-              <BarChart3 className="h-4 w-4 mr-1.5" />
-              Comparar
+              <BarChart3 className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">Comparar</span>
             </Button>
             <Button
               variant="outline"
@@ -555,6 +766,33 @@ export default function GradePlanner() {
           isDayActiveWithTournaments={isDayActiveWithTournaments}
           getActiveProfile={getActiveProfile}
         />
+
+        {/* Empty state onboarding — primeiro uso */}
+        {plannedTournaments.length === 0 && (
+          <div className="mb-4 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-900/20 via-zinc-900/40 to-zinc-900/40 px-5 py-4">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-emerald-500/10 ring-1 ring-emerald-500/20">
+                  <Plus className="h-5 w-5 text-emerald-400" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-zinc-100">Comece sua grade semanal</div>
+                  <div className="text-xs text-zinc-400 mt-0.5">
+                    Ative um perfil (A/B/C) num dia e adicione torneios, ou arraste da biblioteca à esquerda.
+                  </div>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleOpenNewDialog}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-900/30"
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                Adicionar primeiro torneio
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* FP-06: CTA Banner Grade -> Grind */}
         {(() => {
@@ -623,7 +861,16 @@ export default function GradePlanner() {
             </TabsList>
             <TabsContent value="planner" className="mt-0">
               <PanelGroup direction="horizontal" className="min-h-[600px]">
-                <Panel defaultSize={30} minSize={20} className="pr-2">
+                <Panel
+                  ref={libraryPanelRef}
+                  defaultSize={30}
+                  minSize={20}
+                  collapsible
+                  collapsedSize={3}
+                  onCollapse={() => setLibraryCollapsed(true)}
+                  onExpand={() => setLibraryCollapsed(false)}
+                  className={libraryCollapsed ? "" : "pr-2"}
+                >
                   {bibliotecaContent}
                 </Panel>
                 <PanelResizeHandle className="w-1.5 bg-gray-700/50 hover:bg-emerald-500/50 rounded transition-colors cursor-col-resize" />
@@ -662,50 +909,67 @@ export default function GradePlanner() {
           generateTournamentName={generateTournamentName}
         />
 
+        {/* Dialog para edicao de torneio existente OU inline-add via celula vazia */}
         <EditDialog
           open={isEditDialogOpen}
           onOpenChange={setIsEditDialogOpen}
           editForm={editForm}
           onSubmit={handleFormSubmit}
-          onCancel={() => { setIsEditDialogOpen(false); setEditingTournament(null); setPendingEnrichedFields(null); }}
+          onCancel={() => { setIsEditDialogOpen(false); setEditingTournament(null); }}
           isPending={updateTournamentMutation.isPending || addPlannedMutation.isPending}
           editingTournament={editingTournament}
-          onUpdateEnrichedFields={(fields) => setPendingEnrichedFields(fields)}
+        />
+
+        {/* Dialog para criar novo torneio via botao do header — com seletor de dia */}
+        <EditDialog
+          open={isNewDialogOpen}
+          onOpenChange={setIsNewDialogOpen}
+          editForm={editForm}
+          onSubmit={handleFormSubmit}
+          onCancel={() => { setIsNewDialogOpen(false); setEditingTournament(null); }}
+          isPending={addPlannedMutation.isPending}
+          editingTournament={editingTournament}
+          showDayPicker={true}
         />
 
         {/* FP-04: Off Toggle Dialog */}
         <Dialog open={showOffDialog} onOpenChange={(open) => { if (!open) handleCancelOff(); }}>
-          <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                Desativar dia {pendingOffDay !== null ? weekDays.find(d => d.id === pendingOffDay)?.name : ''}?
-              </DialogTitle>
-              <DialogDescription className="text-gray-400">
-                Este dia possui {affectedTournaments.length} torneio{affectedTournaments.length > 1 ? 's' : ''} planejado{affectedTournaments.length > 1 ? 's' : ''}. Ao mudar para OFF, eles serao ocultados (nao deletados).
-              </DialogDescription>
-            </DialogHeader>
+          <DialogContent className="!bg-zinc-900 border-zinc-800 text-zinc-100 max-w-md p-0 overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] sm:rounded-xl">
+            <div className="bg-gradient-to-br from-amber-900/30 via-zinc-900 to-zinc-900 border-b border-zinc-800 px-6 py-5">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2.5 text-lg font-semibold">
+                  <div className="p-1.5 rounded-lg bg-amber-500/15 ring-1 ring-amber-500/30">
+                    <X className="h-4 w-4 text-amber-400" />
+                  </div>
+                  Desativar {pendingOffDay !== null ? weekDays.find(d => d.id === pendingOffDay)?.name : ''}?
+                </DialogTitle>
+                <DialogDescription className="text-zinc-400 text-sm">
+                  {affectedTournaments.length} torneio{affectedTournaments.length > 1 ? 's' : ''} planejado{affectedTournaments.length > 1 ? 's' : ''} serão ocultados (não deletados).
+                </DialogDescription>
+              </DialogHeader>
+            </div>
             {affectedTournaments.length > 0 && (
-              <div className="max-h-48 overflow-y-auto space-y-2 my-2">
+              <div className="px-6 py-4 max-h-64 overflow-y-auto space-y-1.5">
                 {affectedTournaments.map((t: any, idx: number) => (
-                  <div key={t.id || idx} className="flex items-center justify-between bg-gray-800 rounded px-3 py-2 text-sm">
-                    <span className="text-white truncate flex-1">{t.name || t.site || 'Torneio'}</span>
-                    <div className="flex items-center gap-3 text-gray-400 text-xs ml-2">
-                      {t.time && <span>{t.time}</span>}
-                      {t.buyIn && <span>${parseFloat(t.buyIn || '0').toFixed(0)}</span>}
-                      {t.site && <span>{t.site}</span>}
+                  <div key={t.id || idx} className="flex items-center justify-between bg-zinc-950/60 border border-zinc-800 rounded-lg px-3 py-2 text-sm">
+                    <span className="text-zinc-100 truncate flex-1 font-medium">{t.name || t.site || 'Torneio'}</span>
+                    <div className="flex items-center gap-3 text-zinc-400 text-xs ml-2 flex-shrink-0">
+                      {t.time && <span className="font-mono">{t.time}</span>}
+                      {t.buyIn && <span className="text-emerald-400">${parseFloat(t.buyIn || '0').toFixed(0)}</span>}
+                      {t.site && <span className="text-zinc-500">{t.site}</span>}
                     </div>
                   </div>
                 ))}
               </div>
             )}
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button variant="outline" onClick={handleCancelOff} className="border-gray-600 text-gray-300 hover:bg-gray-800">
+            <div className="border-t border-zinc-800 bg-zinc-950/60 px-6 py-4 flex gap-2 justify-end">
+              <Button variant="ghost" onClick={handleCancelOff} className="text-zinc-300 hover:bg-zinc-800 hover:text-white">
                 Cancelar
               </Button>
-              <Button onClick={handleConfirmOff} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                Confirmar
+              <Button onClick={handleConfirmOff} className="bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-900/30">
+                Desativar dia
               </Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       </div>

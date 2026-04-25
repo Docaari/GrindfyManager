@@ -1,0 +1,111 @@
+%% Flowchart: Wizard 4-steps "Adicionar Torneio" com bifurcacoes condicionais
+%% Spec: Docs/specs/tournament-types-extension-and-manual-add-fix.md (RF-06)
+%% ADR-031: modelo ortogonal type + isFlight + isLive
+
+flowchart TD
+    Start(["Usuario abre EditDialog<br/>modo criar OU historico"]) --> Step1["Step 1 - Tipo Primario<br/>(grid 2x2 com 4 botoes radio)"]
+
+    Step1 --> Vanilla["Vanilla<br/>(default)"]
+    Step1 --> PKO["PKO<br/>(Bounty Knockout)"]
+    Step1 --> Mystery["Mystery<br/>(Mystery Bounty)"]
+    Step1 --> Satellite["Satellite<br/>(Satelite)"]
+
+    Vanilla --> Step2
+    PKO --> Step2
+    Mystery --> Step2
+    Satellite --> Step2
+
+    Step2["Step 2 - Modificadores<br/>(2 checkboxes independentes)"]
+
+    Step2 --> ChooseFlight{"Marcou<br/>'E Flight (multi-dia)'?"}
+    Step2 --> ChooseLive{"Marcou<br/>'E Live (presencial)'?"}
+
+    ChooseFlight -->|Sim| FlightTrue["isFlight=true"]
+    ChooseFlight -->|Nao| FlightFalse["isFlight=false"]
+
+    ChooseLive -->|Sim| LiveTrue["isLive=true"]
+    ChooseLive -->|Nao| LiveFalse["isLive=false"]
+
+    FlightTrue --> CombineCheck
+    FlightFalse --> CombineCheck
+    LiveTrue --> CombineCheck
+    LiveFalse --> CombineCheck
+
+    CombineCheck{"Tem campos<br/>condicionais?<br/>(type=Satellite OR<br/>isFlight=true OR<br/>isLive=true)"}
+
+    CombineCheck -->|Nao - Vanilla puro<br/>+ ambos modifs false| SkipStep3["Step 3 SKIPADO<br/>(mostra mensagem<br/>'Sem campos especiais')"]
+    CombineCheck -->|Sim| Step3
+
+    Step3["Step 3 - Campos Condicionais<br/>(renderiza secoes pertinentes)"]
+
+    Step3 --> SatelliteSection{"type === 'Satellite'?"}
+    Step3 --> FlightSection{"isFlight === true?"}
+    Step3 --> LiveSection{"isLive === true?"}
+
+    SatelliteSection -->|Sim| SatFields["Secao Satelite:<br/>- satelliteRewardType (radio: ticket/package/cash/mixed)<br/>- satelliteTargetTemplateId OU satelliteTargetName<br/>- Conforme rewardType:<br/>  * ticket: satelliteTicketValue (USD)<br/>  * package: campos package_* (5 inputs)<br/>  * cash: prize substitui ticket<br/>  * mixed: ticket + extraCash"]
+    SatelliteSection -->|Nao| SkipSat["Secao Satelite oculta"]
+
+    FlightSection -->|Sim| FlightFields["Secao Flight:<br/>- flightDay (input + datalist com<br/>  FLIGHT_DAY_SUGGESTIONS '1A,1B,1C,2,3,Final')<br/>- flightParentId (autocomplete<br/>  ultimos 14 dias com mesmo nome)<br/>- Se Day 1: checkbox 'Avancei pro proximo dia'<br/>- Se Day Final: position + prize<br/>  no Step 4"]
+    FlightSection -->|Nao| SkipFlight["Secao Flight oculta"]
+
+    LiveSection -->|Sim| LiveFields["Secao Live (custos opcionais):<br/>- packageBuyIn (Buy-in separado)<br/>- packageAccommodation (Hospedagem)<br/>- packageTravel (Voo/transporte)<br/>- packageMeals (Alimentacao)<br/>- packageOther (Outras)<br/>- packageNotes (textarea)<br/>Card informativo: 'Todos opcionais'"]
+    LiveSection -->|Nao| SkipLive["Secao Live oculta"]
+
+    SatFields --> Step4
+    SkipSat --> Step4
+    FlightFields --> Step4
+    SkipFlight --> Step4
+    LiveFields --> Step4
+    SkipLive --> Step4
+    SkipStep3 --> Step4
+
+    Step4["Step 4 - Campos Comuns<br/>(sempre renderizado)"]
+
+    Step4 --> CommonFields["Campos:<br/>- site, time, buyIn, name<br/>  (auto-gerado)<br/>- gameType (NLH/PLO/null)<br/>- speed, profile, late reg minutes<br/>- starting stack, max players<br/>- blind level minutes<br/>- alert minutes before<br/>- maxReentries, addOn fields<br/>- Modo historical=true:<br/>  + datePlayed (max=hoje)<br/>  + position (opcional - obrigatorio se Flight Final)<br/>  + prize (opcional)"]
+
+    CommonFields --> SubmitCheck{"Clicou<br/>'Submeter'?"}
+
+    SubmitCheck -->|Nao - Voltar| Step3
+    SubmitCheck -->|Sim| ClientValidation["Validacao Client-Side<br/>(Zod resolver via RHF)"]
+
+    ClientValidation --> ZodOK{"Zod OK<br/>client-side?"}
+
+    ZodOK -->|Nao| ClientErrors["form.setError(field, message)<br/>por issue<br/>Toast generico:<br/>'Verifique os campos<br/>destacados em vermelho'<br/>Dialog NAO fecha"]
+    ClientErrors --> Step4
+
+    ZodOK -->|Sim| ServerCall["POST /api/planned-tournaments<br/>OU<br/>POST /api/tournaments (historical)"]
+
+    ServerCall --> ServerValidation["server-side superRefine<br/>(7 refinements ortogonais)"]
+
+    ServerValidation --> ServerOK{"Zod OK<br/>server-side?"}
+
+    ServerOK -->|Nao - ZodError| ZodResponse["zodErrorResponse(error, isProd)<br/>=> 400 {error: 'validation', issues: [...]}"]
+    ZodResponse --> MapErrors["Frontend:<br/>zodErrorMapper(issues)<br/>=> form.setError por field<br/>Toast: 'Verifique campos'<br/>Dialog NAO fecha"]
+    MapErrors --> Step4
+
+    ServerOK -->|Nao - outros erros| GenericError["500 {error: 'internal'}<br/>Toast: 'Erro inesperado'"]
+
+    ServerOK -->|Sim| StorageNormalize["server/storage/tournaments.ts<br/>normalizeTournamentTypePayload(input)<br/>=> espelha type=>category<br/>(ADR-032)"]
+
+    StorageNormalize --> DBInsert["INSERT INTO tournaments<br/>(ou planned_tournaments)<br/>com 18+ colunas novas"]
+
+    DBInsert --> Success["200 OK + payload"]
+    Success --> InvalidateCache["Frontend invalidate:<br/>/api/tournaments<br/>/api/planned-tournaments<br/>/api/dashboard/stats<br/>/api/tournament-library"]
+    InvalidateCache --> CloseDialog["form.reset() + dialog.close()<br/>Toast: 'Torneio adicionado'"]
+    CloseDialog --> End(["Fim"])
+
+    GenericError --> Step4
+
+    classDef stepClass fill:#22d3ee,color:#000,stroke:#0891b2
+    classDef typeClass fill:#fbbf24,color:#000,stroke:#d97706
+    classDef modifierClass fill:#34d399,color:#000,stroke:#059669
+    classDef errorClass fill:#f87171,color:#000,stroke:#dc2626
+    classDef successClass fill:#86efac,color:#000,stroke:#16a34a
+    classDef decisionClass fill:#a78bfa,color:#fff,stroke:#7c3aed
+
+    class Step1,Step2,Step3,Step4 stepClass
+    class Vanilla,PKO,Mystery,Satellite typeClass
+    class FlightTrue,FlightFalse,LiveTrue,LiveFalse modifierClass
+    class ClientErrors,ZodResponse,MapErrors,GenericError errorClass
+    class Success,InvalidateCache,CloseDialog successClass
+    class CombineCheck,SatelliteSection,FlightSection,LiveSection,SubmitCheck,ZodOK,ServerOK,ChooseFlight,ChooseLive decisionClass

@@ -1,0 +1,70 @@
+%% Sequence: Adicionar Torneio via Wizard 4-steps (modelo ortogonal type + modificadores)
+%% Spec: Docs/specs/tournament-types-extension-and-manual-add-fix.md (RF-01, RF-02, RF-06, RF-10)
+%% ADR-031: modelo ortogonal type+modificadores
+%% ADR-032: deprecation gradual da coluna category
+
+sequenceDiagram
+    actor User as Jogador
+    participant UI as EditDialog (Wizard)
+    participant Form as React Hook Form + Zod
+    participant API as POST /api/planned-tournaments
+    participant Zod as insertPlannedTournamentSchema (.superRefine)
+    participant Storage as server/storage/plannedTournaments.ts
+    participant Helper as normalizeTournamentTypePayload
+    participant DB as PostgreSQL
+
+    User->>UI: Abre wizard "Adicionar torneio"
+    UI->>UI: Step 1 - escolhe type primario (Vanilla/PKO/Mystery/Satellite)
+    UI->>Form: form.setValue('type', 'Satellite')
+    UI->>UI: Step 2 - toggla modificadores (isFlight, isLive)
+    UI->>Form: form.setValue('isFlight', true)
+    UI->>Form: form.setValue('isLive', true)
+
+    alt Step 3 condicional - tem campos especiais?
+        UI->>UI: type=Satellite ? renderiza secao Satelite (rewardType + ticket/package/cash + target)
+        UI->>UI: isFlight=true ? renderiza secao Flight (flightDay + flightAdvanced + flightParentId)
+        UI->>UI: isLive=true ? renderiza secao Live (5 inputs package_*)
+    else Sem campos especiais (Vanilla puro)
+        UI->>UI: Skip Step 3 com mensagem "Sem campos especiais"
+    end
+
+    UI->>UI: Step 4 - campos comuns (site, time, buyIn, name, gameType, speed, profile)
+    UI->>UI: Header exibe badges em tempo real (getTypeBadges) - Satelite + Flight + Live
+    User->>UI: Clica "Submeter"
+
+    UI->>Form: form.handleSubmit(handleFormSubmit)
+    Form->>Form: Validacao client-side (TournamentPrimaryTypeSchema + refinements basicos)
+
+    alt Validacao client falhou
+        Form-->>UI: form.setError(field, message) por issue
+        UI-->>User: Erros inline em vermelho - dialog NAO fecha
+    else Validacao client OK
+        Form->>API: POST /api/planned-tournaments {type, isFlight, isLive, satellite*, flight*, package*, ...}
+
+        API->>Zod: insertPlannedTournamentSchema.parse(req.body)
+
+        Note over Zod: superRefine cobre:<br/>1. type=Satellite => satelliteRewardType + target obrigatorios<br/>2. type!=Satellite => satellite_* todos null<br/>3. isFlight=true => flightDay regex + flightAdvanced/position conforme dia<br/>4. isFlight=false => flight_* todos null<br/>5. isLive=true => package_* opcionais<br/>6. isLive=false => package_* todos null<br/>7. Mutual exclusion satellite+package + isLive=true
+
+        alt ZodError
+            Zod-->>API: throw ZodError
+            API->>API: zodErrorResponse(error, isProd)
+            API-->>UI: 400 {error: 'validation', issues: [{field, code, message}]}
+            UI->>UI: zodErrorMapper(issues) => form.setError por field
+            UI-->>User: Erros inline destacados - dialog NAO fecha
+        else Validacao OK
+            API->>Storage: storage.createPlannedTournament(validatedInput)
+            Storage->>Helper: normalizeTournamentTypePayload(input)
+            Helper-->>Storage: input + {category: input.type} (espelha ADR-032)
+
+            Note over Storage,Helper: Sprint 1-4: storage espelha type=>category<br/>Sprint 5: helper removido (drop coluna)
+
+            Storage->>DB: INSERT INTO planned_tournaments (type, category, isFlight, isLive, satellite_*, flight_*, ...)
+            DB-->>Storage: row criada
+
+            Storage-->>API: PlannedTournament (com category espelhado)
+            API-->>UI: 200 OK + payload
+            UI->>UI: Invalidate /api/planned-tournaments + /api/grade-stats
+            UI->>UI: form.reset() + dialog.close()
+            UI-->>User: Toast "Torneio adicionado a grade"
+        end
+    end

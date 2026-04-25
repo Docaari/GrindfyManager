@@ -84,6 +84,7 @@ import {
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { normalizeTournamentTypePayload } from "./storage/normalizeTournamentTypePayload";
 
 // Utility function to build period conditions with custom date range support
 function buildPeriodCondition(period: string, filters: any) {
@@ -522,17 +523,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTournament(tournament: InsertTournament): Promise<Tournament> {
+    // Sprint 1 (ADR-031 + ADR-032): garantir espelhamento type ↔ category.
+    const normalized = normalizeTournamentTypePayload(tournament as any);
     const [newTournament] = await db
       .insert(tournaments)
-      .values({ ...tournament, id: nanoid() })
+      .values({ ...normalized, id: nanoid() })
       .returning();
     return newTournament;
   }
 
   async updateTournament(id: string, tournament: Partial<InsertTournament>): Promise<Tournament> {
+    // Sprint 1: so aplicar espelhamento se o update tocar em type ou category.
+    // Quando NENHUM dos dois esta no payload, NAO injetamos default Vanilla
+    // (isso sobrescreveria valor existente).
+    const t: any = tournament;
+    const touchesType = t?.type !== undefined;
+    const touchesCategory = t?.category !== undefined;
+    const setPayload: any = touchesType || touchesCategory
+      ? normalizeTournamentTypePayload(t)
+      : { ...t };
+    setPayload.updatedAt = new Date();
     const [updatedTournament] = await db
       .update(tournaments)
-      .set({ ...tournament, updatedAt: new Date() })
+      .set(setPayload)
       .where(eq(tournaments.id, id))
       .returning();
     return updatedTournament;
@@ -2633,18 +2646,27 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   async createPlannedTournament(tournament: InsertPlannedTournament): Promise<PlannedTournament> {
     const id = nanoid();
+    // Sprint 1: espelha type ↔ category nos planned tournaments tambem
+    const normalized = normalizeTournamentTypePayload(tournament as any);
     const [created] = await db
       .insert(plannedTournaments)
-      .values({ ...tournament, id })
+      .values({ ...normalized, id })
       .returning();
     return created;
   }
 
   async updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament> {
 
+    const t: any = tournament;
+    const touchesType = t?.type !== undefined;
+    const touchesCategory = t?.category !== undefined;
+    const setPayload: any = touchesType || touchesCategory
+      ? normalizeTournamentTypePayload(t)
+      : { ...t };
+    setPayload.updatedAt = new Date();
     const [updated] = await db
       .update(plannedTournaments)
-      .set({ ...tournament, updatedAt: new Date() })
+      .set(setPayload)
       .where(eq(plannedTournaments.id, id))
       .returning();
 

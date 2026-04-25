@@ -1,0 +1,61 @@
+%% Sequence: ROI Agregado de Flights (multi-dia: Day 1A, 1B, 1C -> Day 2 -> Final)
+%% Spec: Docs/specs/tournament-types-extension-and-manual-add-fix.md (RF-05)
+%% ADR-031: isFlight como modificador ortogonal - parent/child via flight_parent_id self-FK soft
+
+sequenceDiagram
+    actor User as Jogador
+    participant UI as Pagina /analytics/flights/:parentId
+    participant Query as TanStack Query (staleTime 5min)
+    participant API as GET /api/flights/aggregate/:parentId
+    participant Auth as requireAuth (JWT)
+    participant Storage as getFlightAggregateROI(userId, parentId)
+    participant DB as PostgreSQL
+
+    User->>UI: Acessa analytics do evento Flight<br/>(ex: BSOP Million Sao Paulo)
+    UI->>Query: useQuery(['flight-aggregate', parentId])
+
+    alt Cache hit (TTL 5min)
+        Query-->>UI: Resposta cacheada
+    else Cache miss
+        Query->>API: GET /api/flights/aggregate/:parentId
+        API->>Auth: validate JWT
+        Auth-->>API: userId
+
+        API->>Storage: getFlightAggregateROI(userId, parentId)
+
+        Storage->>DB: SELECT * FROM tournaments<br/>WHERE id = ? LIMIT 1
+        DB-->>Storage: parent row (Day 1 ancora)
+
+        alt Parent nao existe ou isFlight=false
+            Storage-->>API: null
+            API-->>Query: 404 Not Found
+            Query-->>UI: Error
+            UI-->>User: Mensagem "Flight nao encontrado"
+        else Parent valido (isFlight=true)
+            Note over Storage: Index utilizado:<br/>idx_tournaments_user_flight_parent<br/>(user_id, flight_parent_id) partial WHERE flight_parent_id IS NOT NULL
+
+            Storage->>DB: SELECT * FROM tournaments<br/>WHERE user_id=? AND<br/>(id = ? OR flight_parent_id = ?)<br/>ORDER BY date_played
+            DB-->>Storage: allFlights[] (parent + filhos)
+
+            Note over Storage: Particiona allFlights:<br/>day1Entries = filter(/^\d+[A-Z]$/.test(flightDay))<br/>(matches "1A", "1B", "1C")<br/>finalDay = find(flightDay='Final' OR /^\d+$/ != '1')<br/>(matches "Final", "Day 2", "Day 3")
+
+            Storage->>Storage: totalInvested = sum(allFlights.buy_in)
+            Storage->>Storage: totalWon = finalDay ? Number(finalDay.prize) : 0
+            Storage->>Storage: roi = totalInvested === 0 ? 0 : (totalWon - totalInvested) / totalInvested
+            Storage->>Storage: advancedCount = day1Entries.filter(d => d.flightAdvanced === true).length
+
+            Storage-->>API: FlightAggregateROI shape
+
+            API-->>Query: 200 OK + FlightAggregateROI
+            Query->>Query: Cache (staleTime 5min)
+            Query-->>UI: Resposta
+        end
+    end
+
+    UI->>UI: Render card com:<br/>- eventName (parent.name)<br/>- day1Entries[] (cada Day 1 com buyIn + advanced)<br/>- finalDay {position, prize} ou null<br/>- totalInvested (sum buy-ins de todos Day 1 + Day Final)<br/>- totalWon (prize do Day Final)<br/>- ROI agregado (%)<br/>- advancedCount (quantos Day 1 avancaram)
+
+    UI-->>User: Visualizacao consolidada
+
+    alt Caso especifico: Re-entry entre 1A e 1B (mesmo evento)
+        Note over User,DB: Cenario E2E:<br/>1. User joga Day 1A do BSOP Million com buy-in $1000.<br/>   Eliminado. Cria row 1: {flightDay:'1A', flightAdvanced:false, flightParentId:null, prize:0}<br/>2. Re-entra no Day 1B com buy-in $1000.<br/>   Sobrevive. Cria row 2: {flightDay:'1B', flightAdvanced:true, flightParentId:row1.id, prize:0}<br/>3. Joga Day Final, posicao 5, prize $5000.<br/>   Cria row 3: {flightDay:'Final', position:5, prize:5000, flightParentId:row1.id}<br/>4. getFlightAggregateROI(userId, row1.id) retorna:<br/>   - day1Entries: [row1 (advanced=false), row2 (advanced=true)]<br/>   - finalDay: row3<br/>   - totalInvested: $3000 (1000+1000+1000)<br/>   - totalWon: $5000<br/>   - roi: 0.667 (66.7%)<br/>   - advancedCount: 1
+    end

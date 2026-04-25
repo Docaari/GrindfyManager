@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { ZodError } from "zod";
 import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import {
@@ -8,6 +9,7 @@ import {
 } from "@shared/schema";
 import { parseFiltersParam, mapFiltersToBackendFormat } from "./helpers";
 import { invalidateUserTournamentCaches } from "../services/playerBundle";
+import { zodErrorResponse } from "../lib/zodErrorResponse";
 
 export function registerTournamentRoutes(app: Express): void {
   // Tournament routes
@@ -130,7 +132,13 @@ export function registerTournamentRoutes(app: Express): void {
       invalidateUserTournamentCaches(userId);
       res.json(tournament);
     } catch (error) {
-      res.status(400).json({ message: "Failed to create tournament" });
+      // Sprint 1 RF-01 + RF-10: erros Zod estruturados
+      if (error instanceof ZodError) {
+        const isProd = process.env.NODE_ENV === 'production';
+        const out = zodErrorResponse(error, isProd);
+        if (out) return res.status(out.status).json(out.body);
+      }
+      res.status(500).json({ message: "Failed to create tournament" });
     }
   });
 
@@ -143,7 +151,12 @@ export function registerTournamentRoutes(app: Express): void {
       invalidateUserTournamentCaches(userId);
       res.json(tournament);
     } catch (error) {
-      res.status(400).json({ message: "Failed to update tournament" });
+      if (error instanceof ZodError) {
+        const isProd = process.env.NODE_ENV === 'production';
+        const out = zodErrorResponse(error, isProd);
+        if (out) return res.status(out.status).json(out.body);
+      }
+      res.status(500).json({ message: "Failed to update tournament" });
     }
   });
 

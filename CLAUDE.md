@@ -595,7 +595,17 @@ O `server/csvParser.ts` interpreta arquivos de:
 
 ## 9. Erros Conhecidos da IA
 
-### 2026-04-24 — Double-write de tokens (saveMessage + recordUsage) escondido em codigo de producao (Coach Sprint 1)
+### 2026-04-25 — Tests legados x novos com expectativas conflitantes em mesmo schema (Sprint 1 Tournament Types)
+**Contexto:** `insertPlannedTournamentSchema` deveria validar `gameType=''`. O test legado (`suprema-schemas-enriched.test.ts:211`) esperava REJEICAO de `''`. O test novo do Sprint 1 (`add-tournament-error-paths.test.ts:282`) esperava ACEITACAO (ou pelo menos rejeicao SEM `'gameType'` no path do erro, o que e impossivel com enum normal). Conflito direto.
+**Erro:** Tentar satisfazer ambos com workarounds (preprocess que retorna issue em path diferente; transform pular preprocess) gera codigo Frankenstein que nao reflete a intencao da spec.
+**Correto:** Ler a spec — Sprint 1 RF-01 explicitamente RELAXA esse contrato (UI envia '' quando user nao seleciona NLH/PLO; rejeitar e 400 ruidoso). Manter `preprocess('' -> null)` no schema (aceita) e documentar que o test legado reflete comportamento ANTIGO. Sinalizar como ressalva ao reviewer; test-writer atualiza o legado em sprint subsequente.
+
+### 2026-04-25 — Schema base com `type` required quebra fixtures legadas (CSV upload, dashboard) que so enviam `category` (Sprint 1)
+**Contexto:** Adicionei `type: TournamentPrimaryTypeSchema` (sem default) ao `insertTournamentSchemaBase`. Centenas de testes legados que enviam fixtures `{...validTournament}` SEM type (apenas `category: 'PKO'`) comecaram a falhar em massa.
+**Erro:** Mudar coluna de "nao existe" para "required no schema" forca update sincronizado de TODAS as fixtures, mesmo as que dependem do storage layer para back-fill (ADR-032 deprecation gradual).
+**Correto:** Em deprecation gradual (ADR-032), o nivel correto de validacao e `optional + default('Vanilla')` no Zod. O storage layer (`normalizeTournamentTypePayload`) faz o back-fill formal. Distincao por entidade: `tournaments` (history) usa optional+default (CSV/dashboard nao enviam type); `planned_tournaments` mantem required (form do Grade Planner sempre envia type).
+
+
 **Contexto:** O handler `handleCoachChat` salvava a mensagem do assistant via `saveMessage` (INSERT com tokens) e em seguida chamava `recordUsage` (UPDATE com os MESMOS tokens). Dois round-trips por mensagem (~10-30ms a mais) sem ganho de informacao.
 **Erro:** Quando duas funcoes lidam com o mesmo objeto e ambas escrevem os mesmos campos, e provavel que a logica esteja duplicada. Tests passavam porque cada um afirmava o que via no proprio mock — nao via o todo. Sem revisao com olho holistico, double-write fica invisivel.
 **Correto:** Separar responsabilidades: `saveMessage` cria a row (role/content/tokenCount/model/latencyMs); `recordUsage` faz UPDATE focado em tokens (input/output/cache_*). Atualizar tests para refletir essa separacao (alguns testes que assertavam usage no payload de saveMessage precisaram migrar para asserts em recordUsage).
