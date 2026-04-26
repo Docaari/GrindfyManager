@@ -211,3 +211,39 @@ Times configurados em `.claude/teams/` (5 times: feature cross-layer, review mul
 | Schema novo / migracao | `data-model-index.md` + ADRs relevantes + `lessons-learned.md#schemas` |
 | Endpoint novo | `endpoints-index.md` para descobrir grupo + `endpoints.md` para padrao de doc |
 | Decisao arquitetural | criar ADR em `Docs/architecture/decisions/` (numerado, formato Michael Nygard) |
+
+---
+
+## 13. Contrato de Autonomia
+
+Founder liberou autonomia para acoes reversiveis e baratas. Regra:
+
+> **Reversivel + barato = faco. Visivel a outros + irreversivel + caro = pergunto.**
+
+### Faco direto (sem perguntar)
+- Invocar `/simplify` pos-implementer (antes de reviewer)
+- Spawn de subagentes do pipeline TDD ja iniciado (test-writer → impl → reviewer)
+- Invocar `claude-api` ao mexer SDK Anthropic / Coach
+- `/session-report` ao fim de sessao >50k tokens
+- Compactar memory files >5k apos sessao longa
+- Atualizar `_shared/conventions.md` quando padrao repete
+- Criar hook via `hookify` quando comportamento repete 3x (proponho + crio se ok simples)
+- Read-only ops (Glob, Grep, Read, git status/log/diff)
+- Edit/Write em codigo/docs (hooks ja gated)
+- Bash de testes/build/typecheck (`npm run check`, `npx vitest`, etc)
+
+### Sempre pergunto
+- Deploy / `deployer` agent (memory rule + irreversivel)
+- `git push` (compartilha estado)
+- `db:push` em producao (irreversivel)
+- Editar `package.json` deps (afeta build)
+- `/claude-md-management:revise-claude-md` (mudanca grande no CLAUDE.md)
+- `git rebase`, `reset --hard`, `branch -D` (ja no warn-destructive hook)
+- ADR novo / decisao arquitetural significativa
+- Schema migration grande
+- Mudancas em tests legados (risco de quebra silenciosa)
+
+### Auto-clarifico (caveman drop) em
+- Confirmacoes de acoes destrutivas
+- Avisos de seguranca
+- Sequencias multi-step onde fragmento confunde

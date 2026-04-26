@@ -2,30 +2,54 @@
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
-  "enabledPlugins": {
-    "caveman@caveman": true
-  },
   "hooks": {
     "PreToolUse": [
       {
         "matcher": "Write|Edit",
         "hooks": [
-          { "type": "command", "command": "node .claude/hooks/block-emojis.cjs" }
+          {
+            "type": "command",
+            "command": "node .claude/hooks/block-emojis.cjs"
+          }
         ]
       },
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "node .claude/hooks/warn-destructive.cjs" }
+          {
+            "type": "command",
+            "command": "node .claude/hooks/warn-destructive.cjs"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/auto-sync-agents.cjs"
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "node .claude/hooks/session-summary.cjs" }
+          {
+            "type": "command",
+            "command": "node .claude/hooks/session-summary.cjs"
+          }
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "caveman@caveman": true,
+    "claude-md-management@claude-plugins-official": true,
+    "hookify@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "session-report@claude-plugins-official": true
   }
 }
