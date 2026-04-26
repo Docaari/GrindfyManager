@@ -56,6 +56,8 @@ Modulo de gestao de banca em USD para jogadores MTT, ativando o filtro latente d
 | [`flows/bankroll/feature-flow.md`](flows/bankroll/feature-flow.md) | User journey + cenarios | Perspectiva do jogador: onboarding (empty state no Dashboard), configuracao em Settings, registrar aporte, consultar historico, interacao com Selector e Grind Live |
 | [`flows/bankroll/sequence-wallet-tx-balance-mode.mermaid`](flows/bankroll/sequence-wallet-tx-balance-mode.mermaid) | Sequence | Modo "Reportar saldo" — cliente envia `expectedPreviousBalance`, backend valida dentro da TX (apos SELECT FOR UPDATE), 409 `balance_mismatch` aciona refetch + recomputo de preview |
 | [`flows/bankroll/sequence-rakeback-report.mermaid`](flows/bankroll/sequence-rakeback-report.mermaid) | Sequence | `RakebackDialog` — disparadores (header da /bankroll, menu da wallet); reusa `POST /api/wallets/:id/transactions` com `reason='rakeback'` + `direction='in'`; branches 400 `invalid_rakeback_direction`, 422 `wallet_archived`; SEM optimistic concurrency |
+| [`flows/grind/sequence-session-end-reconciliation.mermaid`](flows/grind/sequence-session-end-reconciliation.mermaid) | Sequence | `WalletReconciliationDialog` — passo intermediario entre `handleEndSession` e `SessionSummaryModal`; `POST /api/grind-sessions/:id/reconcile-wallets` itera ajustes em loop fail-fast, reusa `walletService.recordTransaction` com `reason='session_result'` + `source='auto_session'`; branches 409 `balance_mismatch` (mid-batch), 409 `already_reconciled` (idempotencia), 422 `wallet_archived`, skip total |
+| [`flows/grind/flow-session-end-reconciliation-ux.mermaid`](flows/grind/flow-session-end-reconciliation-ux.mermaid) | Flowchart UX | Estados do jogador desde "Encerrar Sessao" ate redirect /grind: Encerrando, Reconciliando, Skip, Submitting, Parcial (409 mid-batch), Completo, SummaryOpen, RedirectGrind. Inclui handling de wallet archived durante o dialog via refetch + remount |
 
 ### Decisoes (ADRs)
 
@@ -65,6 +67,7 @@ Modulo de gestao de banca em USD para jogadores MTT, ativando o filtro latente d
 | [ADR-018](decisions/018-bankroll-tolerance-hardcoded.md) | Tolerancia 1.5x hardcoded no MVP (nao configuravel por usuario) | Aceito |
 | [ADR-038](decisions/038-wallet-tx-optimistic-concurrency.md) | Optimistic concurrency em wallet transactions via `expectedPreviousBalance` | Proposto (2026-04-26) |
 | [ADR-039](decisions/039-rakeback-as-wallet-tx-reason.md) | Rakeback como `reason='rakeback'` em `wallet_transactions` (sem novo endpoint, sem nova tabela) | Proposto (2026-04-26) |
+| [ADR-040](decisions/040-session-end-wallet-reconciliation.md) | Reconciliacao de banca ao fim da sessao via passo intermediario (endpoint batch fail-fast, idempotente, reuso integral de ADR-017/034/038, sem schema delta) | Proposto (2026-04-26) |
 
 ### Modelo de Dados
 

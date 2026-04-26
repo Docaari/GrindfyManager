@@ -1,0 +1,70 @@
+%% Flow UX: Reconciliacao de banca ao fim da sessao - perspectiva do usuario
+%% Spec: Docs/specs/session-end-wallet-reconciliation.md
+%% ADR: Docs/architecture/decisions/040-session-end-wallet-reconciliation.md
+%%
+%% Estados do jogador desde clicar "Encerrar Sessao" ate redirecionamento /grind.
+%% Cobre branches: skip total, happy path, 409 mid-batch (parcial), idempotencia, wallet archived,
+%% sessao sem wallets elegiveis.
+
+flowchart TD
+    Start([Sessao Ativa em /grind]):::stateActive
+
+    Start -->|"Clica 'Encerrar Sessao'"| Encerrando[Encerrando<br/><i>PUT /api/grind-sessions/:id status=completed</i>]:::stateTransitive
+
+    Encerrando -->|"PUT 200"| Preflight{"GET /reconcilable-wallets<br/>preflight"}:::stateDecision
+    Encerrando -->|"PUT erro fatal"| ErrorEnd[Erro ao encerrar<br/><i>toast erro + abre Summary direto</i>]:::stateError
+
+    Preflight -->|"alreadyReconciled = true"| ToastAlreadyDone[Toast 'Sessao ja foi reconciliada']:::stateInfo
+    Preflight -->|"wallets.length === 0"| SkipDialog[Pula Dialog<br/><i>nenhuma wallet elegivel</i>]:::stateSkip
+    Preflight -->|"wallets.length > 0"| Reconciling[Reconciliando<br/><i>WalletReconciliationDialog aberto</i>]:::stateActive
+    Preflight -->|"GET erro fatal"| ToastFailedFetch[Toast erro fetch<br/><i>nao bloqueia fluxo</i>]:::stateInfo
+
+    ToastAlreadyDone --> SummaryOpen
+    SkipDialog --> SummaryOpen
+    ToastFailedFetch --> SummaryOpen
+
+    Reconciling -->|"Editou inputs<br/>(preview delta atualiza)"| Reconciling
+    Reconciling -->|"Toggle 'Mostrar todas'"| RefetchAll[Refetch includeAll=true<br/><i>remount com lista completa</i>]:::stateTransitive
+    RefetchAll --> Reconciling
+
+    Reconciling -->|"Clica 'Sem ajuste'"| SkipTotal[Skip Total<br/><i>telemetria reconcile_skip_total</i>]:::stateSkip
+    SkipTotal --> SummaryOpen
+
+    Reconciling -->|"Clica 'Confirmar e gerar ajustes'"| Submitting[Submitting<br/><i>POST /reconcile-wallets<br/>body: adjustments[]</i>]:::stateTransitive
+
+    Submitting -->|"200 txCreated.length === N<br/>skipped possivel"| Completo[Completo<br/><i>toast 'N ajustes registrados'<br/>ou 'Nenhum ajuste necessario'</i>]:::stateSuccess
+
+    Submitting -->|"409 already_reconciled"| ToastAlreadyDone2[Toast 'Sessao ja reconciliada']:::stateInfo
+    ToastAlreadyDone2 --> SummaryOpen
+
+    Submitting -->|"409 balance_mismatch<br/>(em wallet N do batch)"| Parcial[Parcial - Re-submeter<br/><i>txCreated[0..N-1] persistidas<br/>wallet N mostra alerta de drift<br/>demais editaveis<br/>reportedBalance preservado<br/>delta recomputado</i>]:::stateWarning
+
+    Parcial -->|"Refetch automatico<br/>+ remount"| Reconciling
+
+    Submitting -->|"422 wallet_archived<br/>(em wallet N do batch)"| ArchivedHandling[Wallet arquivada<br/><i>txCreated[0..N-1] persistidas<br/>linha da wallet some<br/>alerta inline 'Carteira X arquivada'</i>]:::stateWarning
+
+    ArchivedHandling -->|"Refetch reconcilable + remount"| Reconciling
+
+    Submitting -->|"400 validacao body<br/>(empty/duplicate/missing)"| ValidationError[Erro validacao<br/><i>toast tecnico<br/>dialog continua aberto</i>]:::stateError
+
+    ValidationError --> Reconciling
+
+    Submitting -->|"5xx servidor"| ServerError[Erro servidor<br/><i>toast 'Tente novamente'<br/>dialog continua aberto</i>]:::stateError
+
+    ServerError --> Reconciling
+
+    Completo --> SummaryOpen[SessionSummary aberto<br/><i>profit/ROI recalculados<br/>com novos balances</i>]:::stateSuccess
+    ErrorEnd --> SummaryOpen
+
+    SummaryOpen -->|"Usuario fecha summary<br/>ou clica CTA cooldown"| RedirectGrind([Redirect /grind]):::stateEnd
+
+    %% Estilizacao
+    classDef stateActive fill:#1e3a8a,stroke:#1e40af,color:#fff
+    classDef stateTransitive fill:#7c2d12,stroke:#9a3412,color:#fff
+    classDef stateDecision fill:#713f12,stroke:#854d0e,color:#fff
+    classDef stateSuccess fill:#14532d,stroke:#166534,color:#fff
+    classDef stateError fill:#7f1d1d,stroke:#991b1b,color:#fff
+    classDef stateWarning fill:#78350f,stroke:#92400e,color:#fff
+    classDef stateInfo fill:#155e75,stroke:#0e7490,color:#fff
+    classDef stateSkip fill:#374151,stroke:#4b5563,color:#fff
+    classDef stateEnd fill:#0f172a,stroke:#1e293b,color:#fff

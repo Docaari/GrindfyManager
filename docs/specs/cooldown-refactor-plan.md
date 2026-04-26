@@ -32,11 +32,19 @@ Esta spec define a feature dedicada de Cool-down em fases, complementando a spec
 4. **Dados para Coach AI:** A/B/C journal + starred hands alimentam memory do coach com contexto altamente acionavel.
 
 ### Como o cool-down se conecta ao fluxo
+
+**ATUALIZADO 2026-04-26:** spec irma `Docs/specs/session-end-wallet-reconciliation.md` (ADR-040) introduz passo intermediario de reconciliacao de banca antes do `SessionSummaryModal`. Cool-down agora ocorre APOS reconciliacao, e red flags sao calculadas com profit pos-reconciliation (sessao pode ficar mais negativa que estimativa intra-sessao).
+
 ```
 [Encerrar Sessao] -> PUT /api/grind-sessions {status:completed}
-                  -> SessionSummaryModal (atual)
-                  -> NOVO: CTA "Iniciar Cool-down (~5min)"
-                       (destacado se red flags detectadas)
+                  -> [NOVO em ADR-040] WalletReconciliationDialog (skipavel)
+                       -> GET /reconcilable-wallets
+                       -> POST /reconcile-wallets {adjustments[]}
+                       -> ajustes geram wallet_transactions
+                          reason='session_result' source='auto_session'
+                  -> SessionSummaryModal (recalcula profit/ROI pos-reconciliation)
+                       -> NOVO: CTA "Iniciar Cool-down (~5min)"
+                            (destacado se red flags detectadas)
                   -> CoolDownRunner (modal full-screen)
                        -> Bloco 1: starred hands + 4-7-8
                        -> Bloco 2: A/B/C Journal
@@ -44,6 +52,8 @@ Esta spec define a feature dedicada de Cool-down em fases, complementando a spec
                        -> [Sprint 2] Bloco 4: sleep gate
                   -> Resumo + persist + redirect
 ```
+
+**Dependencia bloqueante:** Sprint Reconciliation deve mergear ANTES de Sprint Cooldown-1. Caso reconciliation seja skipada pelo usuario, fluxo segue normalmente — cooldown nao depende de ajustes terem sido feitos.
 
 ---
 
@@ -101,7 +111,8 @@ Esta spec define a feature dedicada de Cool-down em fases, complementando a spec
 **Descricao:** Apos encerrar sessao, oferecer cool-down como caminho opcional, com sugestao adaptive baseada em red flags.
 
 **Regras de negocio:**
-- Encerramento de sessao mantem comportamento atual (PUT /api/grind-sessions com `status=completed` + abre `SessionSummaryModal`).
+- Encerramento de sessao agora segue: PUT /api/grind-sessions {status:completed} -> WalletReconciliationDialog (skipavel, ADR-040) -> `SessionSummaryModal`.
+- `summary` recebido por `detectRedFlags` deve usar profit/ROI **pos-reconciliation**. Se reconciliation skipou, summary fica como antes (sem ajustes adicionais).
 - `SessionSummaryModal` ganha 3 CTAs no rodape (substitui os 2 atuais):
   1. **"Continuar Sessao"** (existente, inalterado)
   2. **"Cool-down Rapido (~3min)"** (novo, secundario)
@@ -509,6 +520,7 @@ cooldown/
 ### Bloqueantes (devem estar mergeadas antes de Sprint Cooldown-1)
 1. **Sprint W-1 (warm-up cronometrado)** — `BreathingGuide` e `BlockTimer` podem ser extraidos do warm-up se ja existirem; senao, criados aqui e reutilizados em warm-up depois.
 2. **Refatoracao GradePlanner / tournament-types** — se houver mudancas pendentes em `session_tournaments`, mergear antes para evitar conflito FK em `starred_hands`.
+3. **Sprint Reconciliation (`Docs/specs/session-end-wallet-reconciliation.md`, ADR-040)** — passo intermediario obrigatorio entre `handleEndSession` e `SessionSummaryModal`. Cool-down precisa do summary pos-reconciliation para calcular red flags com profit ja ajustado.
 
 ### Nao bloqueantes
 - Sprint Coach-2a (page context) — pode ser paralelizado; integracao Coach (RF-07) so em Sprint Cooldown-3.

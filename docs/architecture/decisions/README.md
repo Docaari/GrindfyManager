@@ -37,6 +37,7 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [030](030-warmup-telemetry-client-only-w1.md) | Telemetria do warm-up Sprint W-1 e client-only via console.log (sem persistencia server-side) | Aceito | 2026-04-25 |
 | [031](031-tournament-types-orthogonal-model.md) | Modelo ortogonal de tipos de torneio (type primario + modificadores booleanos isFlight/isLive) | Aceito | 2026-04-25 |
 | [032](032-deprecation-category-column.md) | Deprecation gradual da coluna `tournaments.category` em 5 sprints | Aceito | 2026-04-25 |
+| [040](040-session-end-wallet-reconciliation.md) | Reconciliacao de banca ao fim da sessao via passo intermediario (endpoint batch fail-fast, idempotente, reuso de ADR-017/034/038, sem schema delta) | Proposto | 2026-04-26 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 

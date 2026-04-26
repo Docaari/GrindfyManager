@@ -1,0 +1,150 @@
+%% Sequence: Reconciliacao de banca ao fim da sessao
+%% Spec: Docs/specs/session-end-wallet-reconciliation.md
+%% ADR: Docs/architecture/decisions/040-session-end-wallet-reconciliation.md
+%% Companion ADRs: 017 (ledger imutavel), 034 (multi-wallet FX), 038 (optimistic concurrency)
+%%
+%% Cobre:
+%%  - Happy path: 2 wallets reconciliadas com sucesso, source='auto_session' em todas as tx.
+%%  - 409 balance_mismatch mid-batch (fail-fast preserva tx ja persistidas).
+%%  - Skip total via "Sem ajuste" (sem chamada ao endpoint reconcile-wallets).
+%%  - Idempotencia: 2a chamada com mesma sessionId retorna 409 already_reconciled.
+%%  - Wallet archived durante o dialog (refetch + reload reconcilable list).
+%%  - Validacao server-side de ownership (sessao + cada walletId).
+
+sequenceDiagram
+    autonumber
+    actor User as Jogador
+    participant UI as GrindSessionLive
+    participant Dlg as WalletReconciliationDialog
+    participant API as Express (server/routes/grind-sessions.ts)
+    participant Svc as walletService.recordTransaction
+    participant DB as PostgreSQL
+
+    Note over User,UI: Sessao ativa em /grind. Usuario clica "Encerrar Sessao".
+
+    User->>UI: Clica "Encerrar Sessao"
+    UI->>API: PUT /api/grind-sessions/:id { status: 'completed' }
+    API->>API: requireAuth + assertSessionOwnership
+    API->>DB: UPDATE grind_sessions SET status='completed', endedAt=NOW() WHERE id=:id AND userId=:uid
+    DB-->>API: ok
+    API-->>UI: 200 { session }
+
+    UI->>API: GET /api/grind-sessions/:id/reconcilable-wallets?includeAll=false
+    API->>API: requireAuth + assertSessionOwnership
+
+    Note over API,DB: Idempotencia preflight (RF-08, RF-01)
+    API->>DB: SELECT id FROM wallet_transactions<br/>WHERE session_id=:id AND reason='session_result'<br/>AND source='auto_session' LIMIT 1
+    DB-->>API: rows
+
+    alt alreadyReconciled (preflight)
+        API-->>UI: 200 { sessionId, alreadyReconciled: true, wallets: [] }
+        UI->>User: Toast "Esta sessao ja foi reconciliada anteriormente"
+        UI->>UI: Pula dialog -> abre SessionSummaryModal direto
+    end
+
+    Note over API,DB: Coleta wallets elegiveis (RF-02)
+    API->>DB: SELECT w.* FROM wallets w<br/>WHERE w.userId=:uid AND w.status='active'<br/>AND EXISTS (SELECT 1 FROM wallet_transactions wt<br/>            WHERE wt.walletId=w.id AND wt.sessionId=:id)
+    DB-->>API: wallets[]
+    API-->>UI: 200 { sessionId, alreadyReconciled: false,<br/>wallets: [{walletId, name, nativeCurrency, balance,<br/>expectedPreviousBalance, hadActivityInSession}, ...] }
+
+    alt eligibleWallets.length === 0 (RF-01)
+        UI->>UI: Pula dialog -> abre SessionSummaryModal direto
+    end
+
+    UI->>Dlg: Monta WalletReconciliationDialog<br/>props: { sessionId, wallets }
+    Dlg->>Dlg: Telemetria: reconcile_dialog_view<br/>{ sessionId, eligibleWalletsCount, includeAll: false }
+    Dlg->>User: Mostra lista de wallets + inputs<br/>pre-preenchidos com balance atual
+
+    Note over User,Dlg: RF-03 — preview de delta em tempo real
+    User->>Dlg: Edita reportedBalance por wallet
+    Dlg->>Dlg: delta = reportedBalance - balance<br/>label "+R$ X (entrada extra)" verde / vermelho / "Sem ajuste" cinza
+
+    alt Branch A — Skip total (RF-05, US-02)
+        User->>Dlg: Clica "Sem ajuste"
+        Dlg->>Dlg: Telemetria: reconcile_skip_total<br/>{ sessionId, eligibleWalletsCount }
+        Dlg-->>UI: onClose (sem chamada a /reconcile-wallets)
+        UI->>UI: Abre SessionSummaryModal
+    end
+
+    alt Branch B — Toggle "Mostrar todas wallets ativas" (RF-02)
+        User->>Dlg: Liga toggle
+        Dlg->>API: GET /api/grind-sessions/:id/reconcilable-wallets?includeAll=true
+        API->>DB: SELECT * FROM wallets WHERE userId=:uid AND status='active'
+        DB-->>API: wallets[] (todas ativas)
+        API-->>Dlg: 200 { wallets: [...] }
+        Dlg->>Dlg: Remount com nova lista (includes wallets sem atividade)
+    end
+
+    User->>Dlg: Clica "Confirmar e gerar ajustes"
+    Dlg->>Dlg: Filtra linhas com |delta| < 0.01 (skip client-side)
+    Dlg->>API: POST /api/grind-sessions/:id/reconcile-wallets<br/>{ adjustments: [<br/>{walletId:wA, reportedBalance:1247, expectedPreviousBalance:1180},<br/>{walletId:wB, reportedBalance:165,  expectedPreviousBalance:200}<br/>] }
+
+    API->>API: requireAuth + walletLimiter + assertSessionOwnership
+
+    Note over API,DB: Idempotencia preflight (RF-08)
+    API->>DB: SELECT id FROM wallet_transactions<br/>WHERE session_id=:id AND reason='session_result'<br/>AND source='auto_session' LIMIT 1
+    DB-->>API: rows
+
+    alt Branch C — Idempotencia (RF-08, US-05)
+        Note over API: rows.length > 0 -> ja reconciliada
+        API-->>Dlg: 409 { code:'already_reconciled', existingCount: N }
+        Dlg->>Dlg: Telemetria: reconcile_submit_error<br/>{ sessionId, errorCode:'already_reconciled', httpStatus:409 }
+        Dlg->>User: Toast "Sessao ja reconciliada anteriormente"
+        Dlg-->>UI: onClose
+        UI->>UI: Abre SessionSummaryModal
+    end
+
+    Note over API: Validacao de body (RF-07): empty_adjustments,<br/>duplicate_wallet, missing_expected_balance...
+
+    Note over API,Svc: Loop fail-fast por wallet
+    API->>API: txCreated = []
+
+    loop para cada adjustment
+        Note over API: delta = reportedBalance - expectedPreviousBalance<br/>se |delta| < 0.01: continue (skip silencioso)
+        API->>Svc: recordTransaction({ userId, walletId,<br/>direction: delta>0?'in':'out',<br/>nativeAmount: |delta|,<br/>reason:'session_result',<br/>source:'auto_session',<br/>sessionId,<br/>expectedPreviousBalance,<br/>note:'Reconciliacao automatica fim de sessao' })
+
+        Svc->>DB: BEGIN
+        Svc->>DB: SELECT * FROM wallets WHERE id=walletId AND userId=:uid FOR UPDATE
+        DB-->>Svc: wallet { balance, status, ... }
+
+        alt wallet status='archived' (RF-07, US-06)
+            Svc->>DB: ROLLBACK
+            Svc-->>API: throw makeError('wallet_archived', 422, { walletId })
+            API-->>Dlg: 422 { code:'wallet_archived', walletId, txCreated }
+            Dlg->>Dlg: Remove wallet da lista + alerta inline<br/>"Carteira X foi arquivada. Removendo da lista."
+            Dlg->>API: GET /reconcilable-wallets (refetch)
+            Dlg->>Dlg: Tx anteriores permanecem persistidas;<br/>linha da wallet archived some;<br/>demais linhas continuam editaveis
+        end
+
+        Note over Svc: ADR-038 — check de drift
+        alt expectedPreviousBalance presente E |actual - expected| > 0.01 (US-04)
+            Svc->>DB: ROLLBACK
+            Svc-->>API: throw makeError('balance_mismatch', 409,<br/>{ walletId, currentBalance: parseDecimal(wallet.balance) })
+            API-->>Dlg: 409 { code:'balance_mismatch',<br/>failedAt:{walletId, currentBalance:1280},<br/>txCreated:[txA] }
+            Dlg->>Dlg: Telemetria: reconcile_submit_error<br/>{ errorCode:'balance_mismatch', failedAtWalletId }
+            Dlg->>User: Alerta inline "Saldo da carteira X mudou.<br/>Saldo atual: R$ 1.280,00. Confira e re-submeta."
+            Dlg->>API: GET /reconcilable-wallets (refetch)
+            API-->>Dlg: 200 { wallets: [...com novos expectedPreviousBalance] }
+            Dlg->>Dlg: Linhas com tx ja criada viram disabled<br/>"Ajuste registrado"; demais editaveis;<br/>reportedBalance digitado preservado, delta recomputado
+        end
+
+        Note over Svc: Caminho feliz para esta wallet
+        Svc->>DB: INSERT INTO wallet_transactions<br/>(walletId, direction, nativeAmount, reason='session_result',<br/>source='auto_session', sessionId,<br/>previousNativeBalance, newNativeBalance, fxRateUSDPerNative, ...)
+        DB-->>Svc: { transactionId }
+        Svc->>DB: UPDATE wallets SET balance=newNativeBalance, updatedAt=NOW() WHERE id=walletId
+        DB-->>Svc: ok
+        Svc->>DB: INSERT INTO bankroll_snapshots<br/>(walletId, sessionId, reason='session_result',<br/>delta_USD, previous_USD, new_USD, ...) (HIGH-5 mirror)
+        DB-->>Svc: ok
+        Svc->>DB: COMMIT
+        Svc-->>API: { transaction, wallet }
+        API->>API: txCreated.push(transaction)
+    end
+
+    Note over API: Branch D — Happy path completo (US-01)
+    API-->>Dlg: 200 { txCreated: [txA, txB], skipped: 0 }
+    Dlg->>Dlg: Telemetria: reconcile_submit_success<br/>{ sessionId, adjustmentsCount:2, txCreatedCount:2,<br/>skippedCount:0, totalDeltaUsdEstimate? }
+    Dlg->>Dlg: invalidateQueries(['wallets', 'bankroll',<br/>['walletTransactions', walletId]])
+    Dlg->>User: Toast "2 ajustes registrados"
+    Dlg-->>UI: onClose
+    UI->>UI: Abre SessionSummaryModal (existente)<br/>com profit/ROI recalculados a partir dos novos balances
+    UI->>User: Apos summary, redireciona /grind
