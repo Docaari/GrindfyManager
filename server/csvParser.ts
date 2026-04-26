@@ -816,9 +816,9 @@ export class PokerCSVParser {
     }
 
     // Parse PokerStars specific fields (handle column names with spaces)
-    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake']) * conversionRate;
-    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake']) * conversionRate;
-    const result = this.parseFloatSafe(row[' Result'] || row['Result']) * conversionRate;
+    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake']) / conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake']) / conversionRate;
+    const result = this.parseFloatSafe(row[' Result'] || row['Result']) / conversionRate;
 
 
     // Calculate buy-in and profit for PokerStars
@@ -905,10 +905,10 @@ export class PokerCSVParser {
     }
 
 
-    const stake = this.parseFloatSafe(stakeValue) * conversionRate;
-    const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) * conversionRate;
+    const stake = this.parseFloatSafe(stakeValue) / conversionRate;
+    const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) / conversionRate;
     const buyIn = stake + rake;
-    const result = this.parseFloatSafe(row['Result'] || row[' Result']) * conversionRate;
+    const result = this.parseFloatSafe(row['Result'] || row[' Result']) / conversionRate;
     const prize = result - rake; // Net profit calculation
     const position = Math.max(0, this.parseIntSafe(row['Position'] || row[' Position'] || row['Rank']));
 
@@ -948,12 +948,12 @@ export class PokerCSVParser {
     }
 
     // Apply universal profit calculation: Resultado - Rake (handle leading spaces)
-    const resultado = this.parseFloatSafe(row['Resultado'] || row[' Resultado']) * conversionRate;
-    const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) * conversionRate;
+    const resultado = this.parseFloatSafe(row['Resultado'] || row[' Resultado']) / conversionRate;
+    const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) / conversionRate;
     const profit = resultado - rake;
 
     // Buy-in calculation: Stake + Rake (total tournament cost)
-    const stake = this.parseFloatSafe(row['Stake'] || row[' Stake'] || row['Buy-in']) * conversionRate;
+    const stake = this.parseFloatSafe(row['Stake'] || row[' Stake'] || row['Buy-in']) / conversionRate;
     const buyIn = stake + rake;
 
     const position = Math.max(0, this.parseIntSafe(row['Posição'] || row[' Posição'] || row['Position']));
@@ -991,7 +991,7 @@ export class PokerCSVParser {
       currency: originalCurrency,
       finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
       bigHit: (profit > buyIn * 10 && buyIn > 0),
-      prizePool: this.parseFloatSafe(row['Prêmio'] || row[' Prêmio'] || row['Prize Pool']) * conversionRate,
+      prizePool: this.parseFloatSafe(row['Prêmio'] || row[' Prêmio'] || row['Prize Pool']) / conversionRate,
       reentries: reentries,
       rake: rake,
       convertedToUSD: convertedToUSD,
@@ -1017,18 +1017,18 @@ export class PokerCSVParser {
       convertedToUSD = true;
     }
 
-    const stake = this.parseFloatSafe(g('Stake')) * conversionRate;
-    const rake = this.parseFloatSafe(g('Rake')) * conversionRate;
+    const stake = this.parseFloatSafe(g('Stake')) / conversionRate;
+    const rake = this.parseFloatSafe(g('Rake')) / conversionRate;
     const buyIn = stake + rake;
 
     // Key difference: "Result Including Rake" is already the final profit
-    const profit = this.parseFloatSafe(g('Result Including Rake') || g('Resultado (incluindo Rake)')) * conversionRate;
+    const profit = this.parseFloatSafe(g('Result Including Rake') || g('Resultado (incluindo Rake)')) / conversionRate;
 
     const position = Math.max(0, this.parseIntSafe(g('Position') || g('Posição')));
     const fieldSize = this.parseIntSafe(g('Entrants') || g('Participantes'));
     const reentries = this.parseIntSafe(g('ReEntries/Rebuys') || g('Reentradas/Recompras')) || 0;
-    const bountyPrize = this.parseFloatSafe(g('Bounty Prize') || g('Prêmio de Recompensa')) * conversionRate;
-    const prizePool = this.parseFloatSafe(g('Prize Pool') || g('Prêmio')) * conversionRate;
+    const bountyPrize = this.parseFloatSafe(g('Bounty Prize') || g('Prêmio de Recompensa')) / conversionRate;
+    const prizePool = this.parseFloatSafe(g('Prize Pool') || g('Prêmio')) / conversionRate;
 
     const flags = g('Flags') || g('Bandeiras');
     const speed = g('Speed') || g('Velocidade');
@@ -1114,9 +1114,9 @@ export class PokerCSVParser {
       }
       
       // Apply conversion to monetary values
-      const convertedBuyIn = buyIn * conversionRate;
-      const convertedRake = rake * conversionRate;
-      const convertedResult = result * conversionRate;
+      const convertedBuyIn = buyIn / conversionRate;
+      const convertedRake = rake / conversionRate;
+      const convertedResult = result / conversionRate;
       
       // Profit calculation: Result é já o lucro líquido no formato 888poker
       const profit = convertedResult;
@@ -1192,12 +1192,12 @@ export class PokerCSVParser {
     }
 
     // Apply universal profit calculation: Resultado - Rake
-    const resultado = this.parseFloatSafe(row['Resultado']) * conversionRate;
-    const rake = this.parseFloatSafe(row['Rake']) * conversionRate;
+    const resultado = this.parseFloatSafe(row['Resultado']) / conversionRate;
+    const rake = this.parseFloatSafe(row['Rake']) / conversionRate;
     const profit = resultado - rake;
 
     // Buy-in calculation: Stake + Rake (total tournament cost)
-    const stake = this.parseFloatSafe(row['Stake'] || row['Buy-in']) * conversionRate;
+    const stake = this.parseFloatSafe(row['Stake'] || row['Buy-in']) / conversionRate;
     const buyIn = stake + rake;
     const position = Math.max(0, this.parseIntSafe(row['Posição'] || row['Position']));
     const fieldSize = this.parseIntSafe(row['Participantes'] || row['Players']);
@@ -1231,7 +1231,7 @@ export class PokerCSVParser {
       currency: originalCurrency,
       finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
       bigHit: (profit > buyIn * 10 && buyIn > 0),
-      prizePool: this.parseFloatSafe(row['Prêmio'] || row['Prize Pool']) * conversionRate,
+      prizePool: this.parseFloatSafe(row['Prêmio'] || row['Prize Pool']) / conversionRate,
       reentries: reentries,
       rake: rake,
       convertedToUSD: convertedToUSD,
@@ -1259,9 +1259,9 @@ export class PokerCSVParser {
     }
 
     // Parse values first
-    const stake = this.parseFloatSafe(row[' Stake']) * conversionRate;
-    const rake = this.parseFloatSafe(row[' Rake']) * conversionRate;
-    const result = this.parseFloatSafe(row[' Result']) * conversionRate;
+    const stake = this.parseFloatSafe(row[' Stake']) / conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake']) / conversionRate;
+    const result = this.parseFloatSafe(row[' Result']) / conversionRate;
 
     // CORREÇÃO: Buy-in deve incluir rake para Chico
     const buyIn = stake + rake; // Total tournament cost (stake + rake)
@@ -1341,9 +1341,9 @@ export class PokerCSVParser {
 
 
     // Apply conversion to USD
-    const stake = stakeEUR * conversionRate;
-    const rake = rakeEUR * conversionRate;
-    const result = resultEUR * conversionRate;
+    const stake = stakeEUR / conversionRate;
+    const rake = rakeEUR / conversionRate;
+    const result = resultEUR / conversionRate;
 
 
     // Calculate buy-in and profit for PokerStars(FR-ES-PT)
@@ -1438,9 +1438,9 @@ export class PokerCSVParser {
 
 
     // Apply conversion to USD
-    const stake = stakeEUR * conversionRate;
-    const rake = rakeEUR * conversionRate;
-    const result = resultEUR * conversionRate;
+    const stake = stakeEUR / conversionRate;
+    const rake = rakeEUR / conversionRate;
+    const result = resultEUR / conversionRate;
 
 
     // Calculate buy-in and profit for iPoker
@@ -1533,9 +1533,9 @@ export class PokerCSVParser {
     }
 
     // Parse buy-in and result - flexible field mapping
-    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake'] || row['Buy-in'] || row['buy_in'] || row['buyin']) * conversionRate;
-    const result = this.parseFloatSafe(row[' Result'] || row['Result'] || row['winnings'] || row['prize']) * conversionRate;
-    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake'] || row['rake']) * conversionRate;
+    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake'] || row['Buy-in'] || row['buy_in'] || row['buyin']) / conversionRate;
+    const result = this.parseFloatSafe(row[' Result'] || row['Result'] || row['winnings'] || row['prize']) / conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake'] || row['rake']) / conversionRate;
 
     // Se name ainda estiver vazio, força o valor do campo Tournament
     if (!name && row['Tournament']) {
@@ -1616,9 +1616,9 @@ export class PokerCSVParser {
     }
 
     // Parse values first
-    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake']) * conversionRate;
-    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake']) * conversionRate;
-    const result = this.parseFloatSafe(row[' Result'] || row['Result']) * conversionRate;
+    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake']) / conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake']) / conversionRate;
+    const result = this.parseFloatSafe(row[' Result'] || row['Result']) / conversionRate;
 
     // CORREÇÃO: Buy-in deve incluir rake para WPN Network
     const buyIn = stake + rake; // Total tournament cost (stake + rake)
@@ -1674,9 +1674,9 @@ export class PokerCSVParser {
     }
 
     // Parse values first
-    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake']) * conversionRate;
-    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake']) * conversionRate;
-    const result = this.parseFloatSafe(row[' Result'] || row['Result']) * conversionRate;
+    const stake = this.parseFloatSafe(row[' Stake'] || row['Stake']) / conversionRate;
+    const rake = this.parseFloatSafe(row[' Rake'] || row['Rake']) / conversionRate;
+    const result = this.parseFloatSafe(row[' Result'] || row['Result']) / conversionRate;
 
     // CORREÇÃO: Buy-in deve incluir rake para PartyPoker
     const buyIn = stake + rake; // Total tournament cost (stake + rake)

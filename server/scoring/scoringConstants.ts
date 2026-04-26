@@ -1,3 +1,4 @@
+// FX CONVENTION: rates[ccy] = ccy units per 1 USD. See ADR-033.
 /**
  * Tournament Selector — Scoring Constants
  *
@@ -110,15 +111,22 @@ export const SUPREMA_CATEGORY_MAP: Record<string, string> = {
 };
 
 // =============================================================================
-// Default exchange rates (Q2) - usado quando user_settings.exchange_rates
-// nao tem a chave necessaria.
-// Chave = moeda origem; valor = multiplier para USD (1 BRL = 0.20 USD).
+// Default exchange rates — convencao ADR-033 ("ccy units per 1 USD")
+//
+// Valor = quantas unidades da moeda equivalem a 1 USD.
+// BRL=5.0 significa "1 USD vale 5 BRL".
+// Conversao native -> USD: usd = native / rate.
+// Conversao USD -> native: native = usd * rate.
+//
+// Referencia: 2026-04-25.
 // =============================================================================
 export const DEFAULT_EXCHANGE_RATES: Record<string, number> = {
   USD: 1.0,
-  BRL: 0.20,
-  EUR: 1.10,
-  GBP: 1.30,
-  CNY: 0.14,
+  BRL: 5.0,
+  EUR: 0.92,
+  GBP: 0.78,
+  CNY: 7.20,
   USDT: 1.0,
+  // Cripto: rate < 1 e CORRETO na nova convencao (1 USD ~ 0.000015 BTC).
+  BTC: 0.000015,
 };

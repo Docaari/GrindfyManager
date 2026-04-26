@@ -1,14 +1,28 @@
+// FX CONVENTION: rates[ccy] = ccy units per 1 USD. See ADR-033.
 /**
  * Tournament Selector — Currency Normalizer (Q2)
  *
  * Normaliza buy-in de qualquer moeda para USD usando user_settings.exchange_rates
  * (jsonb). Quando a chave nao existe, usa DEFAULT_EXCHANGE_RATES.
  *
+ * Convencao oficial (ADR-033):
+ *   exchangeRates[ccy] = N -> "1 USD vale N unidades de ccy".
+ *   native -> USD:  usd = native / rate
+ *   USD -> native:  native = usd * rate
+ *
  *   normalizeBuyInToUSD(amount, currency, exchangeRates) -> number (USD)
  *   normalizeBucketRange(amountUSD)                      -> string (bucket)
  */
 
 import { BUYIN_BUCKETS, DEFAULT_EXCHANGE_RATES } from "./scoringConstants";
+
+function isValidRate(rate: unknown): rate is number {
+  return (
+    typeof rate === "number" &&
+    Number.isFinite(rate) &&
+    rate > 0
+  );
+}
 
 export function normalizeBuyInToUSD(
   amount: number,
@@ -21,16 +35,24 @@ export function normalizeBuyInToUSD(
   }
 
   const rates = exchangeRates ?? {};
-  const userRate = rates[currency];
+  const userRateRaw = rates[currency];
+  const userRateProvided = userRateRaw !== undefined;
 
-  if (typeof userRate === "number") {
-    return amount * userRate;
+  // Quando o usuario explicitamente fornece um rate invalido (0, NaN, Infinity,
+  // negativo, string), NAO cair no fallback do DEFAULT — retorna 0 deterministico.
+  // Isso evita que um rate corrompido seja silenciosamente substituido.
+  if (userRateProvided) {
+    if (isValidRate(userRateRaw)) {
+      // ADR-033: native -> USD = native / rate
+      return amount / userRateRaw;
+    }
+    return 0;
   }
 
-  // Fallback para DEFAULT_EXCHANGE_RATES
+  // Fallback para DEFAULT_EXCHANGE_RATES (apenas quando user NAO forneceu)
   const defaultRate = DEFAULT_EXCHANGE_RATES[currency];
-  if (typeof defaultRate === "number") {
-    return amount * defaultRate;
+  if (isValidRate(defaultRate)) {
+    return amount / defaultRate;
   }
 
   // Moeda completamente desconhecida — retorna 0 (deterministico, nao crash)

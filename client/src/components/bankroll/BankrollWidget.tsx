@@ -24,6 +24,9 @@ interface BankrollState {
   exchangeRateBRL?: number | null;
   snapshotCount?: number;
   lastUpdatedAt?: string | null;
+  // Sprint Bankroll-2 v2 (compat reverso — campos novos opcionais)
+  aggregationMode?: "global" | "per_wallet";
+  walletCount?: number;
 }
 
 interface BankrollHistory {
@@ -121,6 +124,14 @@ export function BankrollWidget() {
             className="text-sm text-muted-foreground"
           >
             R$ {formatBRL(amountBRL)}
+          </div>
+        )}
+        {state.walletCount != null && state.walletCount > 0 && (
+          <div
+            data-testid="bankroll-widget-wallet-count"
+            className="text-xs text-muted-foreground mt-1"
+          >
+            {state.walletCount} {state.walletCount === 1 ? "carteira" : "carteiras"}
           </div>
         )}
       </div>

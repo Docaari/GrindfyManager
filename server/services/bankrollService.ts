@@ -140,6 +140,10 @@ function validateRuleOrThrow(rule: string): number {
   return parsed.pct;
 }
 
+// QW-1 RF-06: telemetria pos-deploy detecta rate < 1.0 (suspeita legacy).
+// Set por (userId, processo) — emit unico por usuario.
+const LEGACY_FX_WARNED_USERS = new Set<string>();
+
 function buildStateFromSettings(
   settings: any,
   snapshotCount: number,
@@ -152,10 +156,36 @@ function buildStateFromSettings(
   const exchangeRates = (settings?.exchangeRates ?? {}) as Record<string, number>;
   // MED-3 fix (UX-2 2026-04-25): expoe exchangeRateBRL e amountDisplay
   // explicitos. Antes, o BankrollWidget derivava taxa via
-  // `maxBuyInBRL/maxBuyInUSD` — fragil (NaN se shape mudasse, divisao por
-  // valor pequeno introduzia erro). Agora server eh fonte unica.
-  const exchangeRateBRL = exchangeRates.BRL ?? null;
+  // `maxBuyInBRL/maxBuyInUSD` — fragil. Agora server eh fonte unica.
+  // QW-1 RF-03 (ADR-033): rate=5.0 significa "1 USD vale 5 BRL".
+  // Conversao USD -> native: native = usd * rate. Guard para rate <= 0.
+  const exchangeRateBRLRaw = exchangeRates.BRL;
+  const exchangeRateBRL =
+    typeof exchangeRateBRLRaw === "number" && exchangeRateBRLRaw > 0
+      ? exchangeRateBRLRaw
+      : null;
 
+  // QW-1 RF-06: telemetria — usuario com rate < 1.0 e suspeito de convencao
+  // antiga (legacy "USD por unidade"). Emitir warning unico por (userId, sessao).
+  if (
+    typeof exchangeRateBRLRaw === "number" &&
+    exchangeRateBRLRaw > 0 &&
+    exchangeRateBRLRaw < 1.0 &&
+    settings?.userId
+  ) {
+    const userId = String(settings.userId);
+    if (!LEGACY_FX_WARNED_USERS.has(userId)) {
+      LEGACY_FX_WARNED_USERS.add(userId);
+      console.warn("bankroll_fx_rate_suspect_legacy", {
+        userId,
+        ccy: "BRL",
+        rate: exchangeRateBRLRaw,
+        expected: ">= 1.0 in new convention (ADR-033)",
+      });
+    }
+  }
+
+  // ADR-033: USD -> native (display) = usdAmount * rate.
   const display: { USD: number | null; BRL?: number } = {
     USD: thresholds.hardLimitUSD,
   };
@@ -197,9 +227,36 @@ function buildStateFromSettings(
 // ============================================================================
 
 async function getBankrollState(userId: string): Promise<BankrollState> {
+  // ADR-035 RF-4: GET /api/bankroll vira wrapper sobre getConsolidatedBalance.
+  // Em multi-wallet, amount = soma USD de todas wallets active. Mantem shape v1
+  // para Tournament Selector, Coach AI e BankrollWidget legado.
   const settings = await storage.getUserSettings(userId);
   const snapshots = await storage.getBankrollSnapshots(userId);
-  return buildStateFromSettings(settings, snapshots.length);
+
+  let consolidated: { totalUSD: string; walletCount: number; aggregationMode: string } | null = null;
+  try {
+    const mod = await import("./walletService");
+    consolidated = await mod.walletService.getConsolidatedBalance(userId);
+  } catch {
+    consolidated = null;
+  }
+
+  const totalUSD = consolidated ? parseDecimal(consolidated.totalUSD) : null;
+  const walletCount = consolidated?.walletCount ?? 0;
+
+  // Quando ha wallets, amount = consolidated; quando nao ha (pre-migration), fallback v1.
+  const settingsForState =
+    walletCount > 0 && totalUSD !== null
+      ? { ...(settings ?? {}), bankrollAmount: String(totalUSD) }
+      : settings;
+
+  const state = buildStateFromSettings(settingsForState as any, snapshots.length);
+  (state as any).walletCount = walletCount;
+  (state as any).aggregationMode =
+    consolidated?.aggregationMode ??
+    (settings as any)?.bankrollAggregationMode ??
+    "global";
+  return state;
 }
 
 async function updateBankroll(

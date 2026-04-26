@@ -41,7 +41,8 @@ import {
 export default function Settings() {
   const { toast } = useToast();
   const { autoCollapseForGrind, setAutoCollapseForGrind } = useSidebar();
-  const [exchangeRates, setExchangeRates] = useState({ CNY: 0.14, EUR: 0.92 });
+  // ADR-033: convencao "unidades nativas por 1 USD" (1 USD = 7.20 CNY = 0.92 EUR).
+  const [exchangeRates, setExchangeRates] = useState({ CNY: 7.20, EUR: 0.92 });
   const [showClearConfirmation, setShowClearConfirmation] = useState(false);
 
   // Alert settings
@@ -451,25 +452,25 @@ export default function Settings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="cny-rate" className="text-white">
-                CNY para USD
+                Taxa CNY (yuans por dolar)
               </Label>
               <Input
                 id="cny-rate"
                 type="number"
-                step="0.001"
+                step="0.01"
                 value={exchangeRates.CNY}
                 onChange={(e) => handleExchangeRateChange('CNY', e.target.value)}
                 className="bg-gray-800 border-gray-600 text-white"
-                placeholder="0.140"
+                placeholder="7.20"
               />
               <p className="text-xs text-gray-500">
-                1 CNY = {exchangeRates.CNY} USD
+                1 USD = {exchangeRates.CNY} CNY
               </p>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="eur-rate" className="text-white">
-                EUR para USD
+                Taxa EUR (euros por dolar)
               </Label>
               <Input
                 id="eur-rate"
@@ -481,7 +482,7 @@ export default function Settings() {
                 placeholder="0.920"
               />
               <p className="text-xs text-gray-500">
-                1 EUR = {exchangeRates.EUR} USD
+                1 USD = {exchangeRates.EUR} EUR
               </p>
             </div>
           </div>

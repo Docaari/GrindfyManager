@@ -25,6 +25,7 @@ import { registerTournamentLibraryRoutes } from "./tournament-library";
 import { registerCoachRoutes } from "./coach";
 import { registerTournamentSelectorRoutes } from "./tournament-selector";
 import { registerBankrollRoutes } from "./bankroll";
+import { registerWalletRoutes } from "./wallets";
 import { registerWarmupRitualsRoutes } from "./warmup-rituals";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -131,6 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerCoachRoutes(app);
   registerTournamentSelectorRoutes(app);
   registerBankrollRoutes(app);
+  registerWalletRoutes(app);
   registerWarmupRitualsRoutes(app);
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);

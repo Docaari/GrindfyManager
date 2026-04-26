@@ -10,7 +10,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import {
@@ -583,6 +583,15 @@ export const userSettings = pgTable("user_settings", {
   // Sprint W-1 (Warm-up): heuristicas semanais e drillUrl customizavel
   weeklyHeuristics: jsonb("weekly_heuristics").$type<[string, string, string] | null>().default(null),
   drillUrl: varchar("drill_url", { length: 500 }).default("https://app.gtowizard.com/"),
+  // Sprint Bankroll-2 (Multi-Wallet Foundation) — RF-06.
+  // bankrollAggregationMode: 'global' soma todas wallets em USD; 'per_wallet'
+  // (futuro) trata cada wallet com sua propria regra de banca no Selector.
+  bankrollAggregationMode: varchar("bankroll_aggregation_mode").default("global"),
+  bankrollDisplayCurrency: varchar("bankroll_display_currency", { length: 8 }).default("USD"),
+  // Flag de migration v1->v2 — preenchida pelo migrate-v2-multi-wallet script.
+  bankrollV2Migrated: boolean("bankroll_v2_migrated").default(false),
+  // Onboarding tooltip da pagina /bankroll v2 (visita unica pos-migration).
+  lastBankrollPageVisitV2: timestamp("last_bankroll_page_visit_v2"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1445,6 +1454,14 @@ export const insertUserSettingsSchema = _insertUserSettingsSchemaBase.extend({
     ])
     .optional(),
   drillUrl: z.string().max(500).optional(),
+  // Sprint Bankroll-2 (RF-06)
+  bankrollAggregationMode: z.enum(["global", "per_wallet"]).optional(),
+  bankrollDisplayCurrency: z.enum(["USD", "BRL", "EUR", "GBP", "CNY", "USDT", "BTC"]).optional(),
+  bankrollV2Migrated: z.boolean().optional(),
+  lastBankrollPageVisitV2: z
+    .union([z.date(), z.string(), z.null()])
+    .transform((v) => (typeof v === "string" ? new Date(v) : v))
+    .optional(),
 });
 
 export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit({
@@ -2239,12 +2256,20 @@ export const bankrollSnapshots = pgTable("bankroll_snapshots", {
   newAmount: decimal("new_amount").notNull(),
   reason: varchar("reason").notNull(), // initial | deposit | withdrawal | session_result | manual_adjustment
   note: text("note"),
-  source: varchar("source").notNull().default("manual"), // manual | auto_session | auto_import
+  source: varchar("source").notNull().default("manual"), // manual | auto_session | auto_import | migration_v1
   sessionId: varchar("session_id"), // FK grind_sessions, opcional (reservado p/ auto_session)
+  // Sprint Bankroll-2 (RF-04) — 4 colunas nullable para multi-wallet.
+  // Snapshots pre-v2 ficam null. Snapshots criados pela migration v1->v2 recebem walletId.
+  // Snapshots criados em V2 a partir de wallet_transactions replicam dados da tx (audit).
+  walletId: varchar("wallet_id"),
+  nativeAmount: decimal("native_amount"),
+  nativeCurrency: varchar("native_currency", { length: 8 }),
+  fxRateUSDPerNative: decimal("fx_rate_usd_per_native"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_bankroll_snapshots_user_occurred").on(table.userId, table.occurredAt),
   index("idx_bankroll_snapshots_user_reason").on(table.userId, table.reason),
+  index("idx_bankroll_snapshots_wallet").on(table.walletId),
 ]);
 
 const BANKROLL_REASON_ENUM = z.enum([
@@ -2284,3 +2309,171 @@ export type BankrollSnapshot = typeof bankrollSnapshots.$inferSelect;
 export type InsertBankrollSnapshot = z.infer<typeof insertBankrollSnapshotSchema>;
 export type BankrollReason = z.infer<typeof BANKROLL_REASON_ENUM>;
 export type BankrollSource = z.infer<typeof BANKROLL_SOURCE_ENUM>;
+
+// =============================================================================
+// Sprint Bankroll-2 — Multi-Wallet Foundation
+//
+// Spec: Docs/specs/bankroll-v2-multi-wallet-foundation.md (RF-01, RF-03)
+// ADR-034: modelo multi-wallet com FX historico imutavel
+// ADR-017: invariantes ledger (transacao + SELECT FOR UPDATE)
+// =============================================================================
+
+import {
+  WALLET_PLATFORMS,
+  WALLET_NATIVE_CURRENCIES,
+} from "./wallet-platforms";
+import {
+  WALLET_TX_REASONS,
+  WALLET_TX_DIRECTIONS,
+  WALLET_TX_SOURCES,
+} from "./wallet-reasons";
+
+// RF-01: tabela wallets — uma carteira por (user, plataforma+moeda).
+export const wallets = pgTable("wallets", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
+  name: varchar("name", { length: 80 }).notNull(),
+  platform: varchar("platform").notNull(),
+  nativeCurrency: varchar("native_currency", { length: 8 }).notNull(),
+  // Espelho autoritativo do ultimo wallet_transactions.newNativeBalance.
+  balance: decimal("balance").notNull().default("0"),
+  status: varchar("status").notNull().default("active"), // 'active' | 'archived'
+  // Override do default global. Null = usa user_settings.bankrollRule.
+  bankrollRule: varchar("bankroll_rule"),
+  color: varchar("color", { length: 7 }), // hex #RRGGBB
+  displayOrder: integer("display_order").notNull().default(0),
+  isShotPocket: boolean("is_shot_pocket").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_wallets_user_status").on(table.userId, table.status),
+  index("idx_wallets_user_platform").on(table.userId, table.platform),
+  // RF-01: defesa-em-profundidade contra race condition de criacao de duplicata.
+  uniqueIndex("uq_wallets_user_name_active")
+    .on(table.userId, table.name)
+    .where(sql`status = 'active'`),
+]);
+
+// RF-03: tabela wallet_transactions — ledger imutavel.
+// fxRateUSDPerNative IMUTAVEL pos-INSERT (validado em service-layer; sem trigger SQL).
+// Invariante audit (ADR-017): tx[N+1].previousNativeBalance === tx[N].newNativeBalance por walletId ASC.
+export const walletTransactions = pgTable("wallet_transactions", {
+  id: varchar("id").primaryKey().notNull(),
+  walletId: varchar("wallet_id").notNull().references(() => wallets.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull(), // denormalizado p/ query rapida (idx_wtx_user_*)
+  occurredAt: timestamp("occurred_at").notNull(),
+  effectiveAt: timestamp("effective_at").notNull(), // = occurredAt no P0
+  direction: varchar("direction").notNull(), // 'in' | 'out'
+  nativeAmount: decimal("native_amount").notNull(),
+  nativeCurrency: varchar("native_currency", { length: 8 }).notNull(),
+  // FX CONVENTION: fxRateUSDPerNative significa "1 USD vale N nativeCurrency".
+  // Para USD: fxRate = 1.0. usdAmount = nativeAmount / fxRate (ADR-033).
+  fxRateUSDPerNative: decimal("fx_rate_usd_per_native").notNull(),
+  usdAmount: decimal("usd_amount").notNull(),
+  previousNativeBalance: decimal("previous_native_balance").notNull(),
+  newNativeBalance: decimal("new_native_balance").notNull(),
+  reason: varchar("reason").notNull(), // RF-05 enum
+  feeAmount: decimal("fee_amount"), // nullable — pareado com feeCurrency
+  feeCurrency: varchar("fee_currency", { length: 8 }),
+  sessionId: varchar("session_id").references(() => grindSessions.id, { onDelete: "set null" }),
+  note: text("note"),
+  source: varchar("source").notNull().default("manual"),
+  // Reservados para specs futuras (transfer, staking) — schema-only no P0.
+  transferGroupId: varchar("transfer_group_id"),
+  stakingDealId: varchar("staking_deal_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_wtx_wallet_occurred").on(table.walletId, table.occurredAt),
+  index("idx_wtx_user_reason").on(table.userId, table.reason),
+  index("idx_wtx_user_occurred").on(table.userId, table.occurredAt),
+  index("idx_wtx_transfer_group").on(table.transferGroupId),
+]);
+
+// Wallet pending — schema reservado para specs futuras (ADR-034 Sprint Bankroll-2 P1).
+// Implementacao real (auto-clear, expiracao) virao em spec dedicada.
+export const walletPending = pgTable("wallet_pending", {
+  id: varchar("id").primaryKey().notNull(),
+  walletId: varchar("wallet_id").notNull().references(() => wallets.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull(),
+  direction: varchar("direction").notNull(),
+  nativeAmount: decimal("native_amount").notNull(),
+  nativeCurrency: varchar("native_currency", { length: 8 }).notNull(),
+  reason: varchar("reason").notNull(),
+  status: varchar("status").notNull().default("pending"), // 'pending' | 'cleared' | 'cancelled'
+  expectedClearAt: timestamp("expected_clear_at"),
+  clearedAt: timestamp("cleared_at"),
+  cancelledAt: timestamp("cancelled_at"),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_wallet_pending_wallet_status").on(table.walletId, table.status),
+]);
+
+// =============================================================================
+// Wallets — Zod schemas
+// =============================================================================
+
+const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
+const BANKROLL_RULE_REGEX = /^(1pct|2pct|5pct|custom:\d+(\.\d+)?)$/;
+
+export const insertWalletSchema = z.object({
+  userId: z.string().min(1),
+  // Trim explicito antes da validacao de tamanho.
+  name: z.string()
+    .transform((s) => s.trim())
+    .refine((s) => s.length >= 1 && s.length <= 80, {
+      message: "Nome deve ter entre 1 e 80 caracteres",
+    }),
+  platform: z.enum(WALLET_PLATFORMS),
+  nativeCurrency: z.enum(WALLET_NATIVE_CURRENCIES),
+  balance: z.union([z.string(), z.number()]).optional(),
+  status: z.enum(["active", "archived"]).optional(),
+  bankrollRule: z.string().regex(BANKROLL_RULE_REGEX).nullable().optional(),
+  color: z.string().regex(HEX_COLOR_REGEX, "Cor deve ser hex #RRGGBB").nullable().optional(),
+  displayOrder: z.number().int().min(0).optional(),
+  isShotPocket: z.boolean().optional(),
+});
+
+export const insertWalletTransactionSchema = z.object({
+  walletId: z.string().min(1),
+  userId: z.string().min(1),
+  occurredAt: z.union([z.date(), z.string()]),
+  effectiveAt: z.union([z.date(), z.string()]),
+  direction: z.enum(WALLET_TX_DIRECTIONS),
+  nativeAmount: z.union([z.string(), z.number()]).refine((v) => {
+    const n = typeof v === "string" ? parseFloat(v) : v;
+    return Number.isFinite(n) && n > 0;
+  }, { message: "nativeAmount deve ser maior que zero" }),
+  nativeCurrency: z.string().min(1).max(8),
+  fxRateUSDPerNative: z.union([z.string(), z.number()]).refine((v) => {
+    const n = typeof v === "string" ? parseFloat(v) : v;
+    return Number.isFinite(n) && n > 0;
+  }, { message: "fxRateUSDPerNative deve ser maior que zero" }),
+  usdAmount: z.union([z.string(), z.number()]),
+  previousNativeBalance: z.union([z.string(), z.number()]),
+  newNativeBalance: z.union([z.string(), z.number()]),
+  reason: z.enum(WALLET_TX_REASONS),
+  feeAmount: z.union([z.string(), z.number(), z.null()]).optional(),
+  feeCurrency: z.union([z.string(), z.null()]).optional(),
+  sessionId: z.string().nullable().optional(),
+  note: z.string().max(500, "note tem limite de 500 caracteres").nullable().optional(),
+  source: z.enum(WALLET_TX_SOURCES).optional(),
+  // transferGroupId nullable; quando set deve ser nao-vazio (consistencia com nanoid)
+  transferGroupId: z.union([z.string().min(1), z.null()]).optional(),
+  stakingDealId: z.union([z.string().min(1), z.null()]).optional(),
+}).refine((data) => {
+  // feeAmount + feeCurrency: ambos null OU ambos set.
+  const feeAmountSet = data.feeAmount != null;
+  const feeCurrencySet = data.feeCurrency != null;
+  return feeAmountSet === feeCurrencySet;
+}, {
+  message: "feeAmount e feeCurrency devem ser ambos preenchidos ou ambos null",
+  path: ["feeAmount"],
+});
+
+export type Wallet = typeof wallets.$inferSelect;
+export type InsertWallet = z.infer<typeof insertWalletSchema>;
+export type WalletTransaction = typeof walletTransactions.$inferSelect;
+export type InsertWalletTransaction = z.infer<typeof insertWalletTransactionSchema>;
+export type WalletPending = typeof walletPending.$inferSelect;

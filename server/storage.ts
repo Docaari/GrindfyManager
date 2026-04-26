@@ -22,6 +22,12 @@ import {
   calendarEvents,
   bugReports,
   tournamentSelectorLogs,
+  wallets,
+  walletTransactions,
+  type Wallet,
+  type InsertWallet,
+  type WalletTransaction,
+  type InsertWalletTransaction,
   type TournamentSelectorLog,
   type InsertTournamentSelectorLog,
   type User,
@@ -378,6 +384,29 @@ export interface IStorage {
   insertBankrollSnapshot(data: InsertBankrollSnapshot, tx?: any): Promise<BankrollSnapshot>;
   updateUserBankroll(params: { userId: string; amount: number | null; rule: string }, tx?: any): Promise<void>;
   getBankrollSnapshots(userId: string, filters?: BankrollSnapshotsFilters): Promise<BankrollSnapshot[]>;
+
+  // Sprint Bankroll-2 — Multi-Wallet Foundation
+  createWallet(data: InsertWallet & { id?: string }, tx?: any): Promise<Wallet>;
+  getWalletById(walletId: string, userId: string, tx?: any): Promise<Wallet | null>;
+  listWalletsByUser(userId: string, opts?: { includeArchived?: boolean }, tx?: any): Promise<Wallet[]>;
+  countActiveWalletsByUser(userId: string, tx?: any): Promise<number>;
+  findActiveWalletByName(userId: string, name: string, tx?: any): Promise<Wallet | null>;
+  selectWalletForUpdate(walletId: string, userId: string, tx?: any): Promise<Wallet | null>;
+  updateWallet(walletId: string, userId: string, patch: Partial<Wallet>, tx?: any): Promise<Wallet>;
+  archiveWallet(walletId: string, userId: string, tx?: any): Promise<Wallet>;
+  updateWalletBalance(walletId: string, newBalance: string | number, tx?: any): Promise<void>;
+  createWalletTransaction(data: InsertWalletTransaction & { id?: string }, tx?: any): Promise<WalletTransaction>;
+  listWalletTransactions(userId: string, walletId: string, filters?: any, tx?: any): Promise<WalletTransaction[]>;
+  getLastWalletTransaction(walletId: string, tx?: any): Promise<WalletTransaction | null>;
+  getActiveWalletsByUser(userId: string, tx?: any): Promise<Wallet[]>;
+  setUserBankrollV2Migrated(userId: string, value: boolean, tx?: any): Promise<void>;
+  backfillSnapshotsWalletId(userId: string, walletId: string, tx?: any): Promise<number>;
+  listUsersForV2Migration(tx?: any): Promise<Array<{ userId: string; bankrollAmount: string | null; bankrollV2Migrated: boolean | null }>>;
+  selectUserSettingsForUpdate(userId: string, tx?: any): Promise<any>;
+  // QW-1 RF-04 migration support
+  getAllUsersWithSettings(tx?: any): Promise<Array<{ userId: string; exchangeRates: Record<string, number> | null }>>;
+  updateUserSettingsExchangeRates(userId: string, newRates: Record<string, number>, tx?: any): Promise<boolean>;
+
   transaction<T>(fn: (tx: IStorage) => Promise<T>): Promise<T>;
 }
 
@@ -3787,6 +3816,323 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return await query;
   }
 
+  // ==========================================================================
+  // Sprint Bankroll-2 — Multi-Wallet Foundation
+  // Implementacoes em storage. Usadas pelo walletService.
+  // ==========================================================================
+
+  async createWallet(data: InsertWallet & { id?: string }, tx?: any): Promise<Wallet> {
+    const runner = tx ?? db;
+    const id = data.id ?? nanoid();
+    const [inserted] = await runner
+      .insert(wallets)
+      .values({
+        id,
+        userId: data.userId,
+        name: data.name,
+        platform: data.platform,
+        nativeCurrency: data.nativeCurrency,
+        balance: data.balance != null ? String(data.balance) : "0",
+        status: data.status ?? "active",
+        bankrollRule: data.bankrollRule ?? null,
+        color: data.color ?? null,
+        displayOrder: data.displayOrder ?? 0,
+        isShotPocket: data.isShotPocket ?? false,
+      } as any)
+      .returning();
+    return inserted;
+  }
+
+  async getWalletById(walletId: string, userId: string, tx?: any): Promise<Wallet | null> {
+    const runner = tx ?? db;
+    const [row] = await runner
+      .select()
+      .from(wallets)
+      .where(and(eq(wallets.id, walletId), eq(wallets.userId, userId)));
+    return row ?? null;
+  }
+
+  async listWalletsByUser(
+    userId: string,
+    opts: { includeArchived?: boolean } = {},
+    tx?: any,
+  ): Promise<Wallet[]> {
+    const runner = tx ?? db;
+    const conditions: any[] = [eq(wallets.userId, userId)];
+    if (!opts.includeArchived) {
+      conditions.push(eq(wallets.status, "active"));
+    }
+    const result = await runner
+      .select()
+      .from(wallets)
+      .where(and(...conditions))
+      .orderBy(wallets.displayOrder, wallets.createdAt);
+    return result;
+  }
+
+  async countActiveWalletsByUser(userId: string, tx?: any): Promise<number> {
+    const runner = tx ?? db;
+    const result: any = await runner.execute(
+      sql`SELECT COUNT(*)::int AS cnt FROM wallets WHERE user_id = ${userId} AND status = 'active'`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    return rows[0]?.cnt ?? 0;
+  }
+
+  async findActiveWalletByName(
+    userId: string,
+    name: string,
+    tx?: any,
+  ): Promise<Wallet | null> {
+    const runner = tx ?? db;
+    const trimmed = name.trim();
+    const [row] = await runner
+      .select()
+      .from(wallets)
+      .where(
+        and(
+          eq(wallets.userId, userId),
+          eq(wallets.name, trimmed),
+          eq(wallets.status, "active"),
+        ),
+      );
+    return row ?? null;
+  }
+
+  async selectWalletForUpdate(
+    walletId: string,
+    userId: string,
+    tx?: any,
+  ): Promise<Wallet | null> {
+    const runner = tx ?? db;
+    const result: any = await runner.execute(
+      sql`SELECT * FROM wallets WHERE id = ${walletId} AND user_id = ${userId} FOR UPDATE`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    if (rows.length === 0) return null;
+    return rows[0] as Wallet;
+  }
+
+  async updateWallet(
+    walletId: string,
+    userId: string,
+    patch: Partial<Wallet>,
+    tx?: any,
+  ): Promise<Wallet> {
+    const runner = tx ?? db;
+    const updates: any = { updatedAt: new Date() };
+    if (patch.name !== undefined) updates.name = patch.name;
+    if (patch.color !== undefined) updates.color = patch.color;
+    if (patch.displayOrder !== undefined) updates.displayOrder = patch.displayOrder;
+    if (patch.bankrollRule !== undefined) updates.bankrollRule = patch.bankrollRule;
+    if (patch.isShotPocket !== undefined) updates.isShotPocket = patch.isShotPocket;
+    const [updated] = await runner
+      .update(wallets)
+      .set(updates)
+      .where(and(eq(wallets.id, walletId), eq(wallets.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async archiveWallet(walletId: string, userId: string, tx?: any): Promise<Wallet> {
+    const runner = tx ?? db;
+    const [updated] = await runner
+      .update(wallets)
+      .set({ status: "archived", updatedAt: new Date() })
+      .where(and(eq(wallets.id, walletId), eq(wallets.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async updateWalletBalance(
+    walletId: string,
+    newBalance: string | number,
+    tx?: any,
+  ): Promise<void> {
+    const runner = tx ?? db;
+    await runner
+      .update(wallets)
+      .set({ balance: String(newBalance), updatedAt: new Date() })
+      .where(eq(wallets.id, walletId));
+  }
+
+  async createWalletTransaction(
+    data: InsertWalletTransaction & { id?: string },
+    tx?: any,
+  ): Promise<WalletTransaction> {
+    const runner = tx ?? db;
+    const id = data.id ?? nanoid();
+    const occurredAt = data.occurredAt instanceof Date ? data.occurredAt : new Date(data.occurredAt as any);
+    const effectiveAt = data.effectiveAt instanceof Date ? data.effectiveAt : new Date(data.effectiveAt as any);
+    const [inserted] = await runner
+      .insert(walletTransactions)
+      .values({
+        id,
+        walletId: data.walletId,
+        userId: data.userId,
+        occurredAt,
+        effectiveAt,
+        direction: data.direction,
+        nativeAmount: String(data.nativeAmount),
+        nativeCurrency: data.nativeCurrency,
+        fxRateUSDPerNative: String(data.fxRateUSDPerNative),
+        usdAmount: String(data.usdAmount),
+        previousNativeBalance: String(data.previousNativeBalance),
+        newNativeBalance: String(data.newNativeBalance),
+        reason: data.reason,
+        feeAmount: data.feeAmount != null ? String(data.feeAmount) : null,
+        feeCurrency: data.feeCurrency ?? null,
+        sessionId: data.sessionId ?? null,
+        note: data.note ?? null,
+        source: data.source ?? "manual",
+        transferGroupId: data.transferGroupId ?? null,
+        stakingDealId: data.stakingDealId ?? null,
+      } as any)
+      .returning();
+    return inserted;
+  }
+
+  async listWalletTransactions(
+    userId: string,
+    walletId: string,
+    filters: any = {},
+    tx?: any,
+  ): Promise<WalletTransaction[]> {
+    const runner = tx ?? db;
+    const conditions: any[] = [
+      eq(walletTransactions.userId, userId),
+      eq(walletTransactions.walletId, walletId),
+    ];
+    if (filters.from) {
+      const d = filters.from instanceof Date ? filters.from : new Date(filters.from);
+      conditions.push(gte(walletTransactions.occurredAt, d));
+    }
+    if (filters.to) {
+      const d = filters.to instanceof Date ? filters.to : new Date(filters.to);
+      conditions.push(lte(walletTransactions.occurredAt, d));
+    }
+    if (filters.reason && Array.isArray(filters.reason) && filters.reason.length > 0) {
+      conditions.push(inArray(walletTransactions.reason, filters.reason));
+    }
+    let query: any = runner
+      .select()
+      .from(walletTransactions)
+      .where(and(...conditions))
+      .orderBy(desc(walletTransactions.occurredAt));
+    if (filters.limit != null) query = query.limit(filters.limit);
+    if (filters.offset != null) query = query.offset(filters.offset);
+    return await query;
+  }
+
+  async getLastWalletTransaction(
+    walletId: string,
+    tx?: any,
+  ): Promise<WalletTransaction | null> {
+    const runner = tx ?? db;
+    const [row] = await runner
+      .select()
+      .from(walletTransactions)
+      .where(eq(walletTransactions.walletId, walletId))
+      .orderBy(desc(walletTransactions.occurredAt))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async getActiveWalletsByUser(userId: string, tx?: any): Promise<Wallet[]> {
+    const runner = tx ?? db;
+    return await runner
+      .select()
+      .from(wallets)
+      .where(and(eq(wallets.userId, userId), eq(wallets.status, "active")))
+      .orderBy(wallets.displayOrder, wallets.createdAt);
+  }
+
+  async setUserBankrollV2Migrated(
+    userId: string,
+    value: boolean,
+    tx?: any,
+  ): Promise<void> {
+    const runner = tx ?? db;
+    await runner.execute(
+      sql`UPDATE user_settings SET bankroll_v2_migrated = ${value}, updated_at = NOW() WHERE user_id = ${userId}`,
+    );
+  }
+
+  async backfillSnapshotsWalletId(
+    userId: string,
+    walletId: string,
+    tx?: any,
+  ): Promise<number> {
+    const runner = tx ?? db;
+    const result: any = await runner.execute(
+      sql`UPDATE bankroll_snapshots SET wallet_id = ${walletId} WHERE user_id = ${userId} AND wallet_id IS NULL`,
+    );
+    return result?.rowCount ?? result?.rows?.length ?? 0;
+  }
+
+  async listUsersForV2Migration(
+    tx?: any,
+  ): Promise<Array<{ userId: string; bankrollAmount: string | null; bankrollV2Migrated: boolean | null }>> {
+    const runner = tx ?? db;
+    const result: any = await runner.execute(
+      sql`SELECT user_id, bankroll_amount, bankroll_v2_migrated
+          FROM user_settings
+          WHERE bankroll_amount IS NOT NULL
+            AND CAST(bankroll_amount AS NUMERIC) > 0
+            AND (bankroll_v2_migrated IS NULL OR bankroll_v2_migrated = FALSE)`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    return rows.map((r: any) => ({
+      userId: r.user_id ?? r.userId,
+      bankrollAmount: r.bankroll_amount ?? r.bankrollAmount ?? null,
+      bankrollV2Migrated: r.bankroll_v2_migrated ?? r.bankrollV2Migrated ?? false,
+    }));
+  }
+
+  async selectUserSettingsForUpdate(userId: string, tx?: any): Promise<any> {
+    const runner = tx ?? db;
+    const result: any = await runner.execute(
+      sql`SELECT * FROM user_settings WHERE user_id = ${userId} FOR UPDATE`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    if (rows.length === 0) return null;
+    const r = rows[0];
+    return {
+      userId: r.user_id ?? r.userId,
+      bankrollAmount: r.bankroll_amount ?? r.bankrollAmount ?? null,
+      bankrollRule: r.bankroll_rule ?? r.bankrollRule ?? "1pct",
+      bankrollV2Migrated: r.bankroll_v2_migrated ?? r.bankrollV2Migrated ?? false,
+      exchangeRates: r.exchange_rates ?? r.exchangeRates ?? {},
+    };
+  }
+
+  async getAllUsersWithSettings(
+    tx?: any,
+  ): Promise<Array<{ userId: string; exchangeRates: Record<string, number> | null }>> {
+    const runner = tx ?? db;
+    const result: any = await runner.execute(
+      sql`SELECT user_id, exchange_rates FROM user_settings`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    return rows.map((r: any) => ({
+      userId: r.user_id ?? r.userId,
+      exchangeRates: r.exchange_rates ?? r.exchangeRates ?? null,
+    }));
+  }
+
+  async updateUserSettingsExchangeRates(
+    userId: string,
+    newRates: Record<string, number>,
+    tx?: any,
+  ): Promise<boolean> {
+    const runner = tx ?? db;
+    const json = JSON.stringify(newRates);
+    await runner.execute(
+      sql`UPDATE user_settings SET exchange_rates = ${json}::jsonb, updated_at = NOW() WHERE user_id = ${userId}`,
+    );
+    return true;
+  }
+
   async transaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {
     return await db.transaction(async (tx) => {
       // Wrap tx com metodos de bankroll que sabem usar tx
@@ -3799,6 +4145,69 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           this.updateUserBankroll(params, tx),
         getBankrollSnapshots: (userId: string, filters?: BankrollSnapshotsFilters) =>
           this.getBankrollSnapshots(userId, filters),
+        // Wallet wrappers
+        createWallet: (data: any) => this.createWallet(data, tx),
+        getWalletById: (walletId: string, userId: string) =>
+          this.getWalletById(walletId, userId, tx),
+        listWalletsByUser: (userId: string, opts?: any) =>
+          this.listWalletsByUser(userId, opts, tx),
+        countActiveWalletsByUser: (userId: string) =>
+          this.countActiveWalletsByUser(userId, tx),
+        findActiveWalletByName: (userId: string, name: string) =>
+          this.findActiveWalletByName(userId, name, tx),
+        selectWalletForUpdate: (walletId: string, userId: string) =>
+          this.selectWalletForUpdate(walletId, userId, tx),
+        // tx wrapper legado: (walletId, patch) — usado por mocks de tests.
+        // Ownership eh garantida pelo service que chama getWalletById antes.
+        updateWallet: async (walletId: string, patch: any): Promise<Wallet> => {
+          const updates: any = { updatedAt: new Date() };
+          if (patch.name !== undefined) updates.name = patch.name;
+          if (patch.color !== undefined) updates.color = patch.color;
+          if (patch.displayOrder !== undefined) updates.displayOrder = patch.displayOrder;
+          if (patch.bankrollRule !== undefined) updates.bankrollRule = patch.bankrollRule;
+          if (patch.isShotPocket !== undefined) updates.isShotPocket = patch.isShotPocket;
+          const [updated] = await tx
+            .update(wallets)
+            .set(updates)
+            .where(eq(wallets.id, walletId))
+            .returning();
+          return updated;
+        },
+        // HIGH-7: nova fn com filtro userId no WHERE — defesa-em-profundidade
+        // contra cross-tenant write em refatoracao futura.
+        updateWalletScoped: async (walletId: string, userId: string, patch: any): Promise<Wallet> => {
+          const updates: any = { updatedAt: new Date() };
+          if (patch.name !== undefined) updates.name = patch.name;
+          if (patch.color !== undefined) updates.color = patch.color;
+          if (patch.displayOrder !== undefined) updates.displayOrder = patch.displayOrder;
+          if (patch.bankrollRule !== undefined) updates.bankrollRule = patch.bankrollRule;
+          if (patch.isShotPocket !== undefined) updates.isShotPocket = patch.isShotPocket;
+          const [updated] = await tx
+            .update(wallets)
+            .set(updates)
+            .where(and(eq(wallets.id, walletId), eq(wallets.userId, userId)))
+            .returning();
+          return updated;
+        },
+        archiveWallet: (walletId: string, userId: string) =>
+          this.archiveWallet(walletId, userId, tx),
+        updateWalletBalance: (walletId: string, newBalance: any) =>
+          this.updateWalletBalance(walletId, newBalance, tx),
+        createWalletTransaction: (data: any) =>
+          this.createWalletTransaction(data, tx),
+        listWalletTransactions: (userId: string, walletId: string, filters: any) =>
+          this.listWalletTransactions(userId, walletId, filters, tx),
+        getLastWalletTransaction: (walletId: string) =>
+          this.getLastWalletTransaction(walletId, tx),
+        getActiveWalletsByUser: (userId: string) =>
+          this.getActiveWalletsByUser(userId, tx),
+        setUserBankrollV2Migrated: (userId: string, value: boolean) =>
+          this.setUserBankrollV2Migrated(userId, value, tx),
+        backfillSnapshotsWalletId: (userId: string, walletId: string) =>
+          this.backfillSnapshotsWalletId(userId, walletId, tx),
+        selectUserSettingsForUpdate: (userId: string) =>
+          this.selectUserSettingsForUpdate(userId, tx),
+        getUserSettings: (userId: string) => this.getUserSettings(userId),
       };
       return await fn(txWrapper);
     });
