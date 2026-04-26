@@ -83,4 +83,6 @@ import { _resetLibraryStore } from '../server/library-storage';
 
 beforeEach(() => {
   _resetLibraryStore();
+  // B1 do reviewer: in-memory ticket store removido — testes de tickets
+  // declaram seus proprios vi.mock('../../../server/db', ...) com Drizzle-shape.
 });

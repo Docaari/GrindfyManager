@@ -240,6 +240,8 @@ export const tournaments = pgTable("tournaments", {
   packageMeals: decimal("package_meals"),
   packageOther: decimal("package_other"),
   packageNotes: text("package_notes"),
+  // Sprint Tickets-1 (RF-01): back-ref para ticket consumido (FK para tickets.id, ON DELETE SET NULL)
+  consumedTicketId: varchar("consumed_ticket_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   templateId: varchar("template_id"),
@@ -444,6 +446,11 @@ export const sessionTournaments = pgTable("session_tournaments", {
   allowsReentry: boolean("allows_reentry").default(false),
   maxReentries: integer("max_reentries"),
   reentries: integer("reentries").default(0),
+  // Sprint Tickets-1 (RF-01 + data-model/tickets.md):
+  // espelha tournaments.enteredViaSatellite no live (antes da migracao session->tournament)
+  enteredViaSatellite: boolean("entered_via_satellite").default(false),
+  // back-ref para ticket consumido (FK para tickets.id, ON DELETE SET NULL)
+  consumedTicketId: varchar("consumed_ticket_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -2477,3 +2484,153 @@ export type InsertWallet = z.infer<typeof insertWalletSchema>;
 export type WalletTransaction = typeof walletTransactions.$inferSelect;
 export type InsertWalletTransaction = z.infer<typeof insertWalletTransactionSchema>;
 export type WalletPending = typeof walletPending.$inferSelect;
+
+// =============================================================================
+// Sprint Tickets-1 — Foundation: tabela tickets
+//
+// Spec: docs/specs/satellite-tickets-management.md (RF-01)
+// Data model: docs/architecture/data-model/tickets.md
+// ADR-036, ADR-037
+// =============================================================================
+
+export const TICKET_STATUSES = ['available', 'used', 'expired', 'cancelled', 'transferred'] as const;
+export const TICKET_SOURCES = ['satellite_result', 'manual'] as const;
+
+export const tickets = pgTable("tickets", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  // Source — origem do ticket (XOR via Z7: source=manual => sem source ids; source=satellite_result => exatamente um source id)
+  sourceTournamentId: varchar("source_tournament_id"),
+  sourceSessionTournamentId: varchar("source_session_tournament_id"),
+  // Target — para qual torneio este ticket eh valido (Z1: pelo menos um)
+  targetTemplateId: varchar("target_template_id"),
+  targetName: varchar("target_name"),
+  targetSite: varchar("target_site"),
+  // Valor sempre USD (Z4: > 0)
+  ticketValueUSD: decimal("ticket_value_usd").notNull(),
+  extraCashUSD: decimal("extra_cash_usd"),
+  // Status (default 'available')
+  status: varchar("status").notNull().default("available"),
+  // Used in (Z2 XOR quando status=used)
+  usedInTournamentId: varchar("used_in_tournament_id"),
+  usedInSessionTournamentId: varchar("used_in_session_tournament_id"),
+  // Timestamps
+  earnedAt: timestamp("earned_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at"),
+  usedAt: timestamp("used_at"),
+  cancelledAt: timestamp("cancelled_at"),
+  // v2 reservados
+  transferredAt: timestamp("transferred_at"),
+  transferredToUserId: varchar("transferred_to_user_id"),
+  // Sprint 2 ready: dedupe da notificacao "expira em 48h"
+  notifiedExpiringAt: timestamp("notified_expiring_at"),
+  // Observacoes / origem livre
+  note: text("note"),
+  source: varchar("source").notNull().default("manual"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_tickets_user_status").on(table.userId, table.status),
+  index("idx_tickets_user_target_template").on(table.userId, table.targetTemplateId),
+  // idx_tickets_user_expires (parcial em status='available') — criado via SQL na migration
+  index("idx_tickets_source_tournament").on(table.sourceTournamentId),
+  index("idx_tickets_used_in_tournament").on(table.usedInTournamentId),
+]);
+
+// =============================================================================
+// insertTicketSchema — Zod refinements (Z1, Z2, Z4, Z5, Z7)
+// =============================================================================
+
+const ticketDecimal = z.union([z.string(), z.number()])
+  .transform((v) => typeof v === "number" ? String(v) : v);
+
+const ticketDecimalNullable = z.union([z.string(), z.number(), z.null()])
+  .nullable()
+  .optional()
+  .transform((v) => v == null ? v : (typeof v === "number" ? String(v) : v));
+
+const dateLike = z.union([z.date(), z.string(), z.null()])
+  .nullable()
+  .optional()
+  .transform((v) => {
+    if (v == null) return v;
+    if (v instanceof Date) return v;
+    return new Date(v);
+  });
+
+export const insertTicketSchema = z.object({
+  id: z.string().optional(),
+  userId: z.string().min(1),
+  sourceTournamentId: z.string().nullable().optional(),
+  sourceSessionTournamentId: z.string().nullable().optional(),
+  targetTemplateId: z.string().nullable().optional(),
+  targetName: z.string().nullable().optional(),
+  targetSite: z.string().nullable().optional(),
+  ticketValueUSD: ticketDecimal,
+  extraCashUSD: ticketDecimalNullable,
+  status: z.enum(TICKET_STATUSES).optional().default("available"),
+  usedInTournamentId: z.string().nullable().optional(),
+  usedInSessionTournamentId: z.string().nullable().optional(),
+  earnedAt: dateLike,
+  expiresAt: dateLike,
+  usedAt: dateLike,
+  cancelledAt: dateLike,
+  transferredAt: dateLike,
+  transferredToUserId: z.string().nullable().optional(),
+  notifiedExpiringAt: dateLike,
+  note: z.string().nullable().optional(),
+  source: z.enum(TICKET_SOURCES),
+})
+  // Z4 — ticketValueUSD > 0
+  .refine((data) => {
+    const n = parseFloat(String(data.ticketValueUSD));
+    return Number.isFinite(n) && n > 0;
+  }, { message: "ticketValueUSD deve ser maior que 0", path: ["ticketValueUSD"] })
+  // extraCashUSD nao-negativo
+  .refine((data) => {
+    if (data.extraCashUSD == null) return true;
+    const n = parseFloat(String(data.extraCashUSD));
+    return Number.isFinite(n) && n >= 0;
+  }, { message: "extraCashUSD nao pode ser negativo", path: ["extraCashUSD"] })
+  // Z1 — pelo menos um target
+  .refine((data) => {
+    return !!data.targetTemplateId || !!data.targetName;
+  }, { message: "Informe pelo menos targetTemplateId ou targetName", path: ["targetName"] })
+  // Z5 — expiresAt > earnedAt
+  .refine((data) => {
+    if (!data.expiresAt) return true;
+    const earned = data.earnedAt instanceof Date
+      ? data.earnedAt
+      : (data.earnedAt ? new Date(data.earnedAt as any) : new Date(0));
+    const expires = data.expiresAt as Date;
+    return expires.getTime() > earned.getTime();
+  }, { message: "expiresAt deve ser maior que earnedAt", path: ["expiresAt"] })
+  // Z2 — XOR usedInTournamentId vs usedInSessionTournamentId quando status=used
+  .refine((data) => {
+    if (data.status !== "used") return true;
+    const a = !!data.usedInTournamentId;
+    const b = !!data.usedInSessionTournamentId;
+    return (a && !b) || (!a && b);
+  }, { message: "status=used exige exatamente um entre usedInTournamentId e usedInSessionTournamentId (XOR)", path: ["usedInTournamentId"] })
+  // Z2 — usedAt obrigatorio quando status=used
+  .refine((data) => {
+    if (data.status !== "used") return true;
+    return !!data.usedAt;
+  }, { message: "status=used exige usedAt", path: ["usedAt"] })
+  // Z7 — consistencia source <-> source ids
+  .refine((data) => {
+    if (data.source === "manual") {
+      return !data.sourceTournamentId && !data.sourceSessionTournamentId;
+    }
+    if (data.source === "satellite_result") {
+      return !!data.sourceTournamentId || !!data.sourceSessionTournamentId;
+    }
+    return true;
+  }, { message: "source e source ids inconsistentes", path: ["source"] });
+
+export type Ticket = typeof tickets.$inferSelect;
+export type InsertTicket = z.infer<typeof insertTicketSchema>;
+export type TicketStatus = typeof TICKET_STATUSES[number];
+export type TicketSource = typeof TICKET_SOURCES[number];

@@ -833,3 +833,330 @@ function AlertBellPopover({
     </Popover>
   );
 }
+
+// =============================================================================
+// Sprint Tickets-1 (RF-02) — Named export para satellite result flow
+//
+// Componente leve focado no fluxo de resultado de torneio Satellite.
+// Coexiste com o default export (RegisteredCard/UpcomingCard/CompletedCard).
+// =============================================================================
+
+import { apiRequest as ticketApiRequest, queryClient as ticketsQueryClient } from "@/lib/queryClient";
+import { RegisterTicketDialog as TicketRecoveryDialog } from "@/components/tickets/RegisterTicketDialog";
+
+export interface TournamentCardSatelliteProps {
+  tournament: any;
+  registered?: boolean;
+  index?: number;
+  totalCount?: number;
+  registrationData?: any;
+  onSetRegistrationData?: any;
+  onFinishDirect?: (id: string) => void;
+  onUnregister?: (id: string) => void;
+  onBust?: (id: string) => void;
+  onLateReg?: (id: string) => void;
+  onEdit?: (t: any) => void;
+  onEditTime?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onRegister?: (id: string) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  onCreateLateRegAlert?: any;
+  hasAlertForTournament?: any;
+  queryClient?: any;
+}
+
+function TournamentCardSatellite(props: TournamentCardSatelliteProps) {
+  const { tournament } = props;
+  const isSatellite = tournament?.type === "Satellite";
+  const rewardType: string | null = tournament?.satelliteRewardType ?? null;
+
+  const [resultOpen, setResultOpen] = useState(false);
+  const [outcome, setOutcome] = useState<"ticket" | "cash" | "nopass" | null>(null);
+  const [ticketValue, setTicketValue] = useState<string>(
+    tournament?.satelliteTicketValue ? String(tournament.satelliteTicketValue) : "",
+  );
+  const [cashPrize, setCashPrize] = useState<string>("");
+  const [position, setPosition] = useState<string>("");
+  const [valueError, setValueError] = useState<string | null>(null);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryToast, setRecoveryToast] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!resultOpen) return;
+    if (rewardType === "cash") setOutcome("cash");
+    else if (rewardType === "ticket" || rewardType === "package") setOutcome("ticket");
+    else setOutcome(null);
+  }, [resultOpen, rewardType]);
+
+  const ticketDisabled = rewardType === "cash";
+  const cashDisabled = rewardType === "ticket" || rewardType === "package";
+
+  function openResult() {
+    setResultOpen(true);
+    setValueError(null);
+    setRecoveryToast(false);
+  }
+
+  async function onSubmit() {
+    if (!isSatellite) return;
+    setValueError(null);
+
+    if (outcome === "ticket") {
+      const v = parseFloat(ticketValue);
+      if (!ticketValue || !Number.isFinite(v) || v <= 0) {
+        setValueError("Valor do ticket obrigatorio");
+        return;
+      }
+
+      let putOk = false;
+      try {
+        await ticketApiRequest("PUT", `/api/session-tournaments/${tournament.id}`, {
+          status: "finished",
+          prize: 0,
+          position: position ? parseInt(position, 10) : undefined,
+        });
+        putOk = true;
+      } catch (err) {
+        return;
+      }
+
+      // B3 fix: priorizar templateId quando ambos targetTemplateId E
+      // satelliteTargetName estao preenchidos (route tem XOR estrito).
+      const ticketBody: any = {
+        source: "satellite_result",
+        sourceSessionTournamentId: tournament.id,
+        targetSite: tournament.site ?? undefined,
+        ticketValueUSD: v,
+      };
+      if (tournament.satelliteTargetTemplateId) {
+        ticketBody.targetTemplateId = tournament.satelliteTargetTemplateId;
+      } else if (tournament.satelliteTargetName) {
+        ticketBody.targetName = tournament.satelliteTargetName;
+      }
+
+      try {
+        await ticketApiRequest("POST", "/api/tickets", ticketBody);
+        // B2 fix: invalidar cache de tickets apos POST sucesso para refletir
+        // imediatamente no widget do dashboard.
+        try { ticketsQueryClient.invalidateQueries({ queryKey: ["/api/tickets"] }); } catch { /* noop */ }
+        // Tambem invalidar session-tournaments para o card sair de upcoming/registered.
+        try { ticketsQueryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] }); } catch { /* noop */ }
+        setResultOpen(false);
+      } catch (err) {
+        if (putOk) setRecoveryToast(true);
+      }
+      return;
+    }
+
+    if (outcome === "cash") {
+      try {
+        await ticketApiRequest("PUT", `/api/session-tournaments/${tournament.id}`, {
+          status: "finished",
+          prize: cashPrize ? parseFloat(cashPrize) : 0,
+          position: position ? parseInt(position, 10) : undefined,
+        });
+        // B2 fix: invalidar session-tournaments para o card refrescar.
+        try { ticketsQueryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] }); } catch { /* noop */ }
+        setResultOpen(false);
+      } catch (err) {
+        // mantem aberto
+      }
+      return;
+    }
+
+    if (outcome === "nopass") {
+      try {
+        await ticketApiRequest("PUT", `/api/session-tournaments/${tournament.id}`, {
+          status: "finished",
+          prize: 0,
+          position: position ? parseInt(position, 10) : undefined,
+        });
+        // B2 fix: invalidar session-tournaments para o card refrescar.
+        try { ticketsQueryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] }); } catch { /* noop */ }
+        setResultOpen(false);
+      } catch (err) {
+        // mantem aberto
+      }
+      return;
+    }
+  }
+
+  return (
+    <div className="tournament-card-satellite">
+      <button
+        data-testid={`tournament-card-result-button-${tournament.id}`}
+        onClick={openResult}
+        className="px-2 py-1 bg-blue-600 rounded text-sm"
+      >
+        Resultado
+      </button>
+
+      {resultOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 flex items-center justify-center bg-black/60 z-50"
+        >
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 max-w-md w-full">
+            <h3 className="font-semibold mb-3">Resultado do torneio</h3>
+
+            {isSatellite && (
+              <div className="flex gap-2 mb-3">
+                <button
+                  data-testid="satellite-outcome-ticket"
+                  onClick={() => setOutcome("ticket")}
+                  disabled={ticketDisabled}
+                  className={`flex-1 px-2 py-1 rounded ${
+                    outcome === "ticket" ? "bg-emerald-600" : "bg-zinc-800"
+                  } ${ticketDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                >
+                  Ganhei ticket
+                </button>
+                <button
+                  data-testid="satellite-outcome-cash"
+                  onClick={() => setOutcome("cash")}
+                  disabled={cashDisabled}
+                  className={`flex-1 px-2 py-1 rounded ${
+                    outcome === "cash" ? "bg-emerald-600" : "bg-zinc-800"
+                  } ${cashDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                >
+                  Ganhei cash
+                </button>
+                <button
+                  data-testid="satellite-outcome-nopass"
+                  onClick={() => setOutcome("nopass")}
+                  className={`flex-1 px-2 py-1 rounded ${
+                    outcome === "nopass" ? "bg-emerald-600" : "bg-zinc-800"
+                  }`}
+                >
+                  Nao passei
+                </button>
+              </div>
+            )}
+
+            {isSatellite && outcome === "ticket" && (
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-xs">Valor do ticket (USD)</label>
+                  <input
+                    data-testid="satellite-ticket-value-input"
+                    type="number"
+                    step="0.01"
+                    value={ticketValue}
+                    onChange={(e) => setTicketValue(e.target.value)}
+                    className="w-full px-2 py-1 bg-zinc-800 border border-zinc-700 rounded"
+                  />
+                  {valueError && (
+                    <span data-testid="satellite-ticket-value-error" className="text-xs text-red-400">
+                      {valueError}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs">Posicao</label>
+                  <input
+                    type="number"
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                    className="w-full px-2 py-1 bg-zinc-800 border border-zinc-700 rounded"
+                  />
+                </div>
+              </div>
+            )}
+
+            {isSatellite && outcome === "cash" && (
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-xs">Premio (cash)</label>
+                  <input
+                    data-testid="satellite-cash-prize-input"
+                    type="number"
+                    step="0.01"
+                    value={cashPrize}
+                    onChange={(e) => setCashPrize(e.target.value)}
+                    className="w-full px-2 py-1 bg-zinc-800 border border-zinc-700 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs">Posicao</label>
+                  <input
+                    type="number"
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                    className="w-full px-2 py-1 bg-zinc-800 border border-zinc-700 rounded"
+                  />
+                </div>
+              </div>
+            )}
+
+            {isSatellite && outcome === "nopass" && (
+              <div className="space-y-2">
+                <p className="text-sm text-zinc-400">Sem premio. Sem ticket.</p>
+                <div>
+                  <label className="block text-xs">Posicao (opcional)</label>
+                  <input
+                    type="number"
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                    className="w-full px-2 py-1 bg-zinc-800 border border-zinc-700 rounded"
+                  />
+                </div>
+              </div>
+            )}
+
+            {recoveryToast && (
+              <div
+                data-testid="satellite-ticket-recovery-toast"
+                className="mt-3 p-2 bg-amber-700/30 border border-amber-700 rounded text-xs"
+              >
+                Resultado salvo, mas falha ao criar ticket.
+                <button
+                  data-testid="satellite-ticket-recovery-cta"
+                  onClick={() => setRecoveryOpen(true)}
+                  className="ml-2 underline"
+                >
+                  Registrar manualmente
+                </button>
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setResultOpen(false)}
+                className="px-3 py-1 border border-zinc-700 rounded"
+              >
+                Fechar
+              </button>
+              <button
+                data-testid="satellite-result-submit"
+                onClick={onSubmit}
+                className="px-3 py-1 bg-emerald-600 rounded"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {recoveryOpen && (
+        <TicketRecoveryDialog
+          open={recoveryOpen}
+          onOpenChange={setRecoveryOpen}
+          initialValues={{
+            targetName: tournament?.satelliteTargetName ?? "",
+            targetSite: tournament?.site ?? "",
+            ticketValueUSD: ticketValue ? parseFloat(ticketValue) : undefined,
+            note: `Vindo do satelite #${tournament?.id ?? ""}`,
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Named export para Sprint Tickets-1 (RF-02). Resolve conflito com `function
+// TournamentCard` default export (mode-based) — o named export e dedicado ao
+// fluxo de resultado de Satellite.
+export { TournamentCardSatellite as TournamentCard };

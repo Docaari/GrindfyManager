@@ -86,9 +86,11 @@ import {
   bankrollSnapshots,
   type BankrollSnapshot,
   type InsertBankrollSnapshot,
+  tickets,
+  type Ticket,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
+import { eq, desc, asc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { normalizeTournamentTypePayload } from "./storage/normalizeTournamentTypePayload";
 
@@ -2794,8 +2796,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return created;
   }
 
-  async getSessionTournamentById(id: string): Promise<SessionTournament | null> {
-    const [row] = await db
+  async getSessionTournamentById(id: string, tx?: any): Promise<SessionTournament | null> {
+    const runner = tx ?? db;
+    const [row] = await runner
       .select()
       .from(sessionTournaments)
       .where(eq(sessionTournaments.id, id))
@@ -2910,6 +2913,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         allowsReentry: (p as any).allowsReentry ?? false,
         maxReentries: (p as any).maxReentries ?? null,
         reentries: 0,
+        // Sprint Tickets-1: novos campos com defaults
+        enteredViaSatellite: false,
+        consumedTicketId: null,
       };
 
       return tournament;
@@ -4133,6 +4139,349 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return true;
   }
 
+  // ==========================================================================
+  // Sprint Tickets-1 — Drizzle real (B1 fix do reviewer)
+  //
+  // Substitui o in-memory Map antigo. Migration 0008 cria a tabela `tickets`.
+  // Todas as queries usam `db` ou `tx` (quando dentro de transacao).
+  // ==========================================================================
+
+  async createTicket(
+    data: any,
+    tx?: any,
+  ): Promise<Ticket> {
+    const runner = tx ?? db;
+    const id = data.id ?? nanoid();
+    const now = new Date();
+    const earnedAt =
+      data.earnedAt instanceof Date
+        ? data.earnedAt
+        : data.earnedAt
+        ? new Date(data.earnedAt)
+        : now;
+    const expiresAt =
+      data.expiresAt == null
+        ? null
+        : data.expiresAt instanceof Date
+        ? data.expiresAt
+        : new Date(data.expiresAt);
+    const usedAt =
+      data.usedAt == null
+        ? null
+        : data.usedAt instanceof Date
+        ? data.usedAt
+        : new Date(data.usedAt);
+    const cancelledAt =
+      data.cancelledAt == null
+        ? null
+        : data.cancelledAt instanceof Date
+        ? data.cancelledAt
+        : new Date(data.cancelledAt);
+    const [inserted] = await runner
+      .insert(tickets)
+      .values({
+        id,
+        userId: data.userId,
+        sourceTournamentId: data.sourceTournamentId ?? null,
+        sourceSessionTournamentId: data.sourceSessionTournamentId ?? null,
+        targetTemplateId: data.targetTemplateId ?? null,
+        targetName: data.targetName ?? null,
+        targetSite: data.targetSite ?? null,
+        ticketValueUSD: String(data.ticketValueUSD),
+        extraCashUSD: data.extraCashUSD == null ? null : String(data.extraCashUSD),
+        status: data.status ?? "available",
+        usedInTournamentId: data.usedInTournamentId ?? null,
+        usedInSessionTournamentId: data.usedInSessionTournamentId ?? null,
+        earnedAt,
+        expiresAt,
+        usedAt,
+        cancelledAt,
+        transferredAt: null,
+        transferredToUserId: null,
+        notifiedExpiringAt: null,
+        note: data.note ?? null,
+        source: data.source ?? "manual",
+        createdAt: now,
+        updatedAt: now,
+      } as any)
+      .returning();
+    return inserted as Ticket;
+  }
+
+  async getTicketById(
+    id: string,
+    userId?: string,
+    tx?: any,
+  ): Promise<Ticket | null> {
+    const runner = tx ?? db;
+    const conditions: any[] = [eq(tickets.id, id)];
+    if (userId) conditions.push(eq(tickets.userId, userId));
+    const [row] = await runner
+      .select()
+      .from(tickets)
+      .where(and(...conditions))
+      .limit(1);
+    return (row as Ticket) ?? null;
+  }
+
+  async getTicketByIdForUpdate(
+    id: string,
+    userId?: string,
+    tx?: any,
+  ): Promise<Ticket | null> {
+    // SELECT ... FOR UPDATE — requer estar dentro de uma transacao real (tx).
+    // Em produca o lock e adquirido; fora de tx, comportamento equivale a getTicketById.
+    const runner = tx ?? db;
+    const result: any = userId
+      ? await runner.execute(
+          sql`SELECT * FROM tickets WHERE id = ${id} AND user_id = ${userId} FOR UPDATE`,
+        )
+      : await runner.execute(
+          sql`SELECT * FROM tickets WHERE id = ${id} FOR UPDATE`,
+        );
+    const rows = Array.isArray(result) ? result : result?.rows ?? [];
+    if (rows.length === 0) return null;
+    const r = rows[0];
+    // Normalizar snake_case -> camelCase quando vier de execute() (mocks podem retornar camelCase direto).
+    return {
+      id: r.id,
+      userId: r.userId ?? r.user_id,
+      sourceTournamentId: r.sourceTournamentId ?? r.source_tournament_id ?? null,
+      sourceSessionTournamentId:
+        r.sourceSessionTournamentId ?? r.source_session_tournament_id ?? null,
+      targetTemplateId: r.targetTemplateId ?? r.target_template_id ?? null,
+      targetName: r.targetName ?? r.target_name ?? null,
+      targetSite: r.targetSite ?? r.target_site ?? null,
+      ticketValueUSD: r.ticketValueUSD ?? r.ticket_value_usd,
+      extraCashUSD: r.extraCashUSD ?? r.extra_cash_usd ?? null,
+      status: r.status,
+      usedInTournamentId: r.usedInTournamentId ?? r.used_in_tournament_id ?? null,
+      usedInSessionTournamentId:
+        r.usedInSessionTournamentId ?? r.used_in_session_tournament_id ?? null,
+      earnedAt: r.earnedAt ?? r.earned_at,
+      expiresAt: r.expiresAt ?? r.expires_at ?? null,
+      usedAt: r.usedAt ?? r.used_at ?? null,
+      cancelledAt: r.cancelledAt ?? r.cancelled_at ?? null,
+      transferredAt: r.transferredAt ?? r.transferred_at ?? null,
+      transferredToUserId: r.transferredToUserId ?? r.transferred_to_user_id ?? null,
+      notifiedExpiringAt: r.notifiedExpiringAt ?? r.notified_expiring_at ?? null,
+      note: r.note ?? null,
+      source: r.source,
+      createdAt: r.createdAt ?? r.created_at,
+      updatedAt: r.updatedAt ?? r.updated_at,
+    } as Ticket;
+  }
+
+  async getActiveTicketsByUser(userId: string, tx?: any): Promise<Ticket[]> {
+    const runner = tx ?? db;
+    const rows = await runner
+      .select()
+      .from(tickets)
+      .where(and(eq(tickets.userId, userId), eq(tickets.status, "available")))
+      .orderBy(asc(tickets.earnedAt));
+    return rows as Ticket[];
+  }
+
+  async getTicketsByUser(
+    userId: string,
+    filters?: { status?: string; expiringIn?: number; targetTemplateId?: string },
+    tx?: any,
+  ): Promise<Ticket[]> {
+    const runner = tx ?? db;
+    const conditions: any[] = [eq(tickets.userId, userId)];
+    if (filters?.status && filters.status !== "all") {
+      conditions.push(eq(tickets.status, filters.status));
+    }
+    if (filters?.targetTemplateId) {
+      conditions.push(eq(tickets.targetTemplateId, filters.targetTemplateId));
+    }
+    if (filters?.expiringIn != null) {
+      const horizon = new Date(Date.now() + filters.expiringIn * 24 * 60 * 60 * 1000);
+      conditions.push(
+        or(isNull(tickets.expiresAt), lte(tickets.expiresAt, horizon)),
+      );
+    }
+    const rows = await runner
+      .select()
+      .from(tickets)
+      .where(and(...conditions))
+      // Ordenacao: expiresAt ASC NULLS LAST, depois earnedAt DESC.
+      .orderBy(sql`${tickets.expiresAt} ASC NULLS LAST`, desc(tickets.earnedAt));
+    return rows as Ticket[];
+  }
+
+  async cancelTicket(
+    ticketId: string,
+    userId: string,
+    reason?: string,
+    tx?: any,
+  ): Promise<Ticket> {
+    const runner = tx ?? db;
+    // Busca + ownership + idempotencia em 1 fluxo.
+    const existing = await this.getTicketById(ticketId, userId, tx);
+    if (!existing) {
+      const err: any = new Error("Ticket nao encontrado");
+      err.statusCode = 404;
+      throw err;
+    }
+    if (existing.status === "cancelled") {
+      // Idempotente — retorna o mesmo row sem mexer em timestamps.
+      return existing;
+    }
+    if (existing.status !== "available") {
+      const err: any = new Error(`Ticket nao esta available (status=${existing.status})`);
+      err.statusCode = 409;
+      err.code = "errNotAvailable";
+      throw err;
+    }
+    const now = new Date();
+    const newNote = reason
+      ? existing.note
+        ? `${existing.note}\n${reason}`
+        : reason
+      : existing.note;
+    const [updated] = await runner
+      .update(tickets)
+      .set({
+        status: "cancelled",
+        cancelledAt: now,
+        note: newNote ?? null,
+        updatedAt: now,
+      })
+      .where(and(eq(tickets.id, ticketId), eq(tickets.userId, userId)))
+      .returning();
+    return updated as Ticket;
+  }
+
+  async useTicket(
+    params: {
+      ticketId: string;
+      userId: string;
+      targetId: string;
+      kind: "tournament" | "session_tournament";
+    },
+    tx?: any,
+  ): Promise<{ ticket: Ticket; tournament?: any; sessionTournament?: any }> {
+    const runner = tx ?? db;
+    const { ticketId, userId, targetId, kind } = params;
+    const now = new Date();
+
+    // UPDATE ticket
+    const [updatedTicket] = await runner
+      .update(tickets)
+      .set({
+        status: "used",
+        usedAt: now,
+        usedInTournamentId: kind === "tournament" ? targetId : null,
+        usedInSessionTournamentId: kind === "session_tournament" ? targetId : null,
+        updatedAt: now,
+      })
+      .where(and(eq(tickets.id, ticketId), eq(tickets.userId, userId)))
+      .returning();
+
+    // UPDATE tournament/session_tournament — back-ref + flag
+    let tournamentRow: any = null;
+    let sessionTournamentRow: any = null;
+    if (kind === "tournament") {
+      const [t] = await runner
+        .update(tournaments)
+        .set({
+          enteredViaSatellite: true,
+          consumedTicketId: ticketId,
+          updatedAt: now,
+        })
+        .where(eq(tournaments.id, targetId))
+        .returning();
+      tournamentRow = t ?? { id: targetId, enteredViaSatellite: true, consumedTicketId: ticketId };
+    } else {
+      const [st] = await runner
+        .update(sessionTournaments)
+        .set({
+          enteredViaSatellite: true,
+          consumedTicketId: ticketId,
+          updatedAt: now,
+        })
+        .where(eq(sessionTournaments.id, targetId))
+        .returning();
+      sessionTournamentRow =
+        st ?? { id: targetId, enteredViaSatellite: true, consumedTicketId: ticketId };
+    }
+
+    return {
+      ticket: updatedTicket as Ticket,
+      tournament: tournamentRow ?? undefined,
+      sessionTournament: sessionTournamentRow ?? undefined,
+    };
+  }
+
+  async findMatchingTickets(
+    userId: string,
+    params: { tournamentId: string; kind: "tournament" | "session_tournament" },
+    tx?: any,
+  ): Promise<Ticket[]> {
+    const runner = tx ?? db;
+    // Resolver torneio alvo
+    let target: any = null;
+    if (params.kind === "tournament") {
+      target = await this.getTournamentById(params.tournamentId, undefined, tx);
+    } else {
+      target = await this.getSessionTournamentById(params.tournamentId, tx);
+    }
+    if (!target) return [];
+    if (target.userId && target.userId !== userId) return [];
+
+    // Match forte (templateId) OU match medio (lower(name)+lower(site))
+    const matchConds: any[] = [];
+    if ((target as any).templateId) {
+      matchConds.push(eq(tickets.targetTemplateId, (target as any).templateId));
+    }
+    const targetName = String(target.name ?? "").trim().toLowerCase();
+    const targetSite = String(target.site ?? "").trim().toLowerCase();
+    if (targetName) {
+      // Usa indice funcional idx_tickets_user_target_name (lower(target_name), lower(target_site))
+      matchConds.push(
+        and(
+          sql`lower(${tickets.targetName}) = ${targetName}`,
+          sql`coalesce(lower(${tickets.targetSite}), '') = ${targetSite}`,
+        ),
+      );
+    }
+    if (matchConds.length === 0) return [];
+
+    const rows = await runner
+      .select()
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.userId, userId),
+          eq(tickets.status, "available"),
+          or(...matchConds),
+        ),
+      )
+      // FIFO: expiresAt ASC NULLS LAST, depois earnedAt ASC
+      .orderBy(
+        sql`${tickets.expiresAt} ASC NULLS LAST`,
+        asc(tickets.earnedAt),
+      );
+    return rows as Ticket[];
+  }
+
+  async getTournamentById(
+    id: string,
+    userId?: string,
+    tx?: any,
+  ): Promise<Tournament | null> {
+    const runner = tx ?? db;
+    const conditions: any[] = [eq(tournaments.id, id)];
+    if (userId) conditions.push(eq(tournaments.userId, userId));
+    const [row] = await runner
+      .select()
+      .from(tournaments)
+      .where(and(...conditions))
+      .limit(1);
+    return (row as Tournament) ?? null;
+  }
+
   async transaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {
     return await db.transaction(async (tx) => {
       // Wrap tx com metodos de bankroll que sabem usar tx
@@ -4208,6 +4557,24 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         selectUserSettingsForUpdate: (userId: string) =>
           this.selectUserSettingsForUpdate(userId, tx),
         getUserSettings: (userId: string) => this.getUserSettings(userId),
+        // Sprint Tickets-1 — wrappers Drizzle reais (B1 fix)
+        createTicket: (data: any) => this.createTicket(data, tx),
+        getTicketById: (id: string, userId: string) => this.getTicketById(id, userId, tx),
+        getTicketByIdForUpdate: (id: string, userId: string) =>
+          this.getTicketByIdForUpdate(id, userId, tx),
+        useTicket: (params: any) => this.useTicket(params, tx),
+        cancelTicket: (id: string, userId: string, reason?: string) =>
+          this.cancelTicket(id, userId, reason, tx),
+        getActiveTicketsByUser: (userId: string) =>
+          this.getActiveTicketsByUser(userId, tx),
+        getTicketsByUser: (userId: string, filters?: any) =>
+          this.getTicketsByUser(userId, filters, tx),
+        findMatchingTickets: (userId: string, params: any) =>
+          this.findMatchingTickets(userId, params, tx),
+        getTournamentById: (id: string, userId?: string) =>
+          this.getTournamentById(id, userId, tx),
+        getSessionTournamentById: (id: string) =>
+          this.getSessionTournamentById(id, tx),
       };
       return await fn(txWrapper);
     });
@@ -4491,3 +4858,146 @@ export async function updateUserSettingsWeeklyHeuristics(
     });
   return { heuristics };
 }
+
+// ============================================================================
+// Sprint Tickets-1 — Module-level facade (Drizzle-backed)
+//
+// Spec: docs/specs/satellite-tickets-management.md (RF-01)
+// Data model: docs/architecture/data-model/tickets.md
+//
+// B1 fix do reviewer: substituido in-memory Map por Drizzle real. Os metodos
+// reais vivem em DatabaseStorage (acima). Estas funcoes exportadas no nivel de
+// modulo sao apenas conveniencias para callers que importam do server/storage
+// diretamente (incluindo o test unitario tests/unit/tickets/ticket-storage.test.ts,
+// que mocka `server/db` com uma fachada Drizzle-shape).
+// ============================================================================
+
+import { insertTicketSchema as ticketsInsertSchema } from "@shared/schema";
+
+// Helper para erros tipados (usados pelos wrappers).
+function makeTicketError(message: string, statusCode: number, code?: string): Error {
+  const err: any = new Error(message);
+  err.statusCode = statusCode;
+  if (code) err.code = code;
+  return err;
+}
+
+/**
+ * Funcao top-level: cria ticket validando schema Zod (Z1, Z4, Z5, Z7) antes do INSERT.
+ * Delega ao Drizzle de DatabaseStorage.createTicket.
+ */
+export async function createTicket(data: any): Promise<Ticket> {
+  const parsed = ticketsInsertSchema.safeParse(data);
+  if (!parsed.success) {
+    throw makeTicketError(
+      `source/Z* validation failed: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+      400,
+      "errInsertSchema",
+    );
+  }
+  return await (storage as any).createTicket(parsed.data);
+}
+
+export async function getActiveTicketsByUser(userId: string): Promise<Ticket[]> {
+  return await (storage as any).getActiveTicketsByUser(userId);
+}
+
+export async function getTicketsByUser(
+  userId: string,
+  filters?: { status?: string; expiringIn?: number; targetTemplateId?: string },
+): Promise<Ticket[]> {
+  return await (storage as any).getTicketsByUser(userId, filters ?? {});
+}
+
+/**
+ * Top-level useTicket — match server-side + status check + UPDATE atomico em
+ * tx real (db.transaction). Lock via SELECT FOR UPDATE.
+ */
+export async function useTicket(
+  ticketId: string,
+  userId: string,
+  targetId: string,
+  kind: "tournament" | "session_tournament",
+): Promise<Ticket> {
+  return await storage.transaction(async (tx: any) => {
+    // 1) Lock do row
+    const ticket = await tx.getTicketByIdForUpdate(ticketId, userId);
+    if (!ticket) throw makeTicketError("Ticket nao encontrado", 404, "errNotFound");
+    if (ticket.userId !== userId) {
+      throw makeTicketError("Ticket nao encontrado", 404, "errNotFound");
+    }
+    if (ticket.status !== "available") {
+      throw makeTicketError(
+        `Ticket nao esta available (status=${ticket.status})`,
+        409,
+        "errNotAvailable",
+      );
+    }
+    // 2) Resolver torneio alvo
+    let target: any = null;
+    if (kind === "tournament") {
+      target = await tx.getTournamentById(targetId);
+    } else {
+      target = await tx.getSessionTournamentById(targetId);
+    }
+    if (target) {
+      // 3) Match server-side (template OU lower(name)+lower(site))
+      const tplMatch =
+        ticket.targetTemplateId &&
+        (target as any).templateId &&
+        ticket.targetTemplateId === (target as any).templateId;
+      let nameMatch = false;
+      if (!tplMatch && ticket.targetName && target.name) {
+        const sameName =
+          String(ticket.targetName).trim().toLowerCase() ===
+          String(target.name).trim().toLowerCase();
+        if (sameName) {
+          if (ticket.targetSite || target.site) {
+            const sameSite =
+              String(ticket.targetSite ?? "").trim().toLowerCase() ===
+              String(target.site ?? "").trim().toLowerCase();
+            nameMatch = sameSite;
+          } else {
+            nameMatch = true;
+          }
+        }
+      }
+      if (!tplMatch && !nameMatch) {
+        throw makeTicketError(
+          "Ticket nao casa com torneio alvo",
+          422,
+          "errMatchFailed",
+        );
+      }
+    }
+    // 4) UPDATE atomico
+    const out = await tx.useTicket({ ticketId, userId, targetId, kind });
+    return out.ticket as Ticket;
+  });
+}
+
+export async function cancelTicket(
+  ticketId: string,
+  userId: string,
+  reason?: string,
+): Promise<Ticket> {
+  return await (storage as any).cancelTicket(ticketId, userId, reason);
+}
+
+export async function findMatchingTickets(
+  userId: string,
+  params: { tournamentId: string; kind: "tournament" | "session_tournament" },
+): Promise<Ticket[]> {
+  return await (storage as any).findMatchingTickets(userId, params);
+}
+
+// IMPORTANTE: in-memory Map removido (B1 do reviewer). Migration 0008 cria a
+// tabela `tickets` real. Tests que dependiam de fixtures (tkt-1, tkt-already-used,
+// etc.) declaram seu proprio vi.mock('../../../server/db', ...) com Drizzle-shape
+// fake backed por Map — vide tests/unit/tickets/ticket-storage.test.ts e
+// tests/integration/tickets/ticket-storage-concurrency.test.ts.
+
+// In-memory store antigo (Map _ticketStore + seeds + helpers) REMOVIDO pelo
+// B1 do reviewer. Producao usa Drizzle real (vide DatabaseStorage.* metodos).
+// Tests que dependiam dos IDs fixture (tkt-1, etc.) declaram seu proprio
+// vi.mock('../../../server/db', ...) com Drizzle-shape fake backed por Map.
