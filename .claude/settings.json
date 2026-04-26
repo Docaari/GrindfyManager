@@ -1,5 +1,31 @@
 {
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "enabledPlugins": {
+    "caveman@caveman": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          { "type": "command", "command": "node .claude/hooks/block-emojis.cjs" }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "node .claude/hooks/warn-destructive.cjs" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node .claude/hooks/session-summary.cjs" }
+        ]
+      }
+    ]
   }
 }

@@ -18,3 +18,4 @@ CSV Field/
 # Backups temporarios criados durante operacoes git cirurgicas
 .tmp_*.ts
 .tmp_*.json
+session-log.txt
