@@ -401,6 +401,22 @@ export interface IStorage {
   listWalletTransactions(userId: string, walletId: string, filters?: any, tx?: any): Promise<WalletTransaction[]>;
   getLastWalletTransaction(walletId: string, tx?: any): Promise<WalletTransaction | null>;
   getActiveWalletsByUser(userId: string, tx?: any): Promise<Wallet[]>;
+  // ADR-040 Sprint Session-End Reconciliation
+  findReconciliationMarker(sessionId: string, userId: string, tx?: any): Promise<{ count: number }>;
+  listReconcilableWallets(
+    sessionId: string,
+    userId: string,
+    opts?: { includeAll?: boolean },
+    tx?: any,
+  ): Promise<Array<{
+    walletId: string;
+    name: string;
+    platform: string;
+    nativeCurrency: string;
+    balance: number;
+    expectedPreviousBalance: number;
+    hadActivityInSession: boolean;
+  }>>;
   setUserBankrollV2Migrated(userId: string, value: boolean, tx?: any): Promise<void>;
   backfillSnapshotsWalletId(userId: string, walletId: string, tx?: any): Promise<number>;
   listUsersForV2Migration(tx?: any): Promise<Array<{ userId: string; bankrollAmount: string | null; bankrollV2Migrated: boolean | null }>>;
@@ -4051,6 +4067,91 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .from(wallets)
       .where(and(eq(wallets.userId, userId), eq(wallets.status, "active")))
       .orderBy(wallets.displayOrder, wallets.createdAt);
+  }
+
+  /**
+   * ADR-040 RF-08: preflight idempotencia.
+   * Conta wallet_transactions com (sessionId, reason='session_result', source='auto_session').
+   * Se count > 0, sessao ja foi reconciliada — retorna sem chamar service.
+   */
+  async findReconciliationMarker(
+    sessionId: string,
+    userId: string,
+    tx?: any,
+  ): Promise<{ count: number }> {
+    const runner = tx ?? db;
+    const result: any = await runner.execute(
+      sql`SELECT COUNT(*)::int AS cnt
+          FROM wallet_transactions
+          WHERE session_id = ${sessionId}
+            AND user_id = ${userId}
+            AND reason = 'session_result'
+            AND source = 'auto_session'`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    return { count: rows[0]?.cnt ?? 0 };
+  }
+
+  /**
+   * ADR-040 RF-02: lista wallets elegiveis para reconciliacao.
+   * - Default (includeAll=false): apenas wallets ATIVAS com >=1 wallet_transaction
+   *   vinculada ao sessionId (hadActivityInSession=true).
+   * - includeAll=true: todas wallets ATIVAS (hadActivityInSession reflete se
+   *   teve ou nao tx na sessao).
+   * - Wallets archived nunca aparecem.
+   * - expectedPreviousBalance = balance atual (snapshot capturado para optimistic
+   *   concurrency, ADR-038).
+   */
+  async listReconcilableWallets(
+    sessionId: string,
+    userId: string,
+    opts: { includeAll?: boolean } = {},
+    tx?: any,
+  ): Promise<Array<{
+    walletId: string;
+    name: string;
+    platform: string;
+    nativeCurrency: string;
+    balance: number;
+    expectedPreviousBalance: number;
+    hadActivityInSession: boolean;
+  }>> {
+    const runner = tx ?? db;
+    const includeAll = !!opts.includeAll;
+
+    // 1) Wallets que tiveram atividade na sessao (set de walletId)
+    const activityResult: any = await runner.execute(
+      sql`SELECT DISTINCT wallet_id
+          FROM wallet_transactions
+          WHERE session_id = ${sessionId}
+            AND user_id = ${userId}`,
+    );
+    const activityRows = Array.isArray(activityResult)
+      ? activityResult
+      : activityResult.rows ?? [];
+    const activeSet = new Set<string>(
+      activityRows.map((r: any) => r.wallet_id ?? r.walletId).filter(Boolean),
+    );
+
+    // 2) Buscar wallets ativas do usuario; filtrar conforme includeAll
+    const all = await this.listWalletsByUser(userId, { includeArchived: false }, tx);
+
+    return all
+      .filter((w: any) => includeAll || activeSet.has(w.id))
+      .map((w: any) => {
+        const balanceNum =
+          typeof w.balance === "number" ? w.balance : parseFloat(String(w.balance ?? "0"));
+        const safeBalance = Number.isFinite(balanceNum) ? balanceNum : 0;
+        return {
+          walletId: w.id,
+          name: w.name,
+          platform: w.platform,
+          nativeCurrency: w.nativeCurrency,
+          balance: safeBalance,
+          expectedPreviousBalance: safeBalance,
+          hadActivityInSession: activeSet.has(w.id),
+        };
+      });
   }
 
   async setUserBankrollV2Migrated(

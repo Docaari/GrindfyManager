@@ -7,7 +7,11 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { reasonLabel, reasonColor } from "@/lib/bankrollHelpers";
+import {
+  reasonLabel,
+  reasonColor,
+  transactionSourceLabel,
+} from "@/lib/bankrollHelpers";
 
 interface Snapshot {
   id: string;
@@ -17,7 +21,7 @@ interface Snapshot {
   newAmount: number;
   reason: string;
   note?: string | null;
-  source?: string;
+  source?: string | null;
 }
 
 interface HistoryResp {
@@ -68,7 +72,16 @@ export function BankrollHistoryTable() {
                     {reasonLabel("rakeback")}
                   </span>
                 ) : (
-                  reasonLabel(s.reason)
+                  <span>{reasonLabel(s.reason)}</span>
+                )}
+                {s.source && s.source !== "manual" && (
+                  <span
+                    data-testid={`source-badge-auto-${s.id}`}
+                    title={transactionSourceLabel(s.source)}
+                    className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-medium text-slate-700 bg-slate-50 border-slate-200"
+                  >
+                    Auto
+                  </span>
                 )}
               </td>
               <td

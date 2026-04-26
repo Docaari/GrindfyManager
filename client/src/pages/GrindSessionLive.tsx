@@ -77,6 +77,8 @@ import {
   buildUndoFinishPayload,
   UNDO_FINISH_TOAST_DURATION_MS,
 } from "@/components/grind-session-live/finish-undo-helpers";
+import { WalletReconciliationDialog } from "@/components/grind-session-live/WalletReconciliationDialog";
+import { runSessionEndFlow } from "@/components/grind-session-live/session-end-flow";
 
 export default function GrindSessionLive() {
   const [, setLocation] = useLocation();
@@ -147,6 +149,11 @@ export default function GrindSessionLive() {
   const [sessionSummaryData, setSessionSummaryData] = useState<any>(null);
   const [finalNotes, setFinalNotes] = useState('');
   const [pendingTournaments, setPendingTournaments] = useState<any[]>([]);
+
+  // ADR-040: Wallet reconciliation dialog ao fim da sessao
+  const [showReconcileDialog, setShowReconcileDialog] = useState(false);
+  const [reconcileSessionId, setReconcileSessionId] = useState<string | null>(null);
+  const reconcileResolveRef = useRef<((info?: any) => void) | null>(null);
 
   // RF-08: Bankroll integration — hook + accumulator da sessao.
   // fail-open: se o hook falhar ou retornar null, assume "nao configurado" e o
@@ -520,40 +527,74 @@ export default function GrindSessionLive() {
   };
 
   const handleEndSession = async () => {
-    try {
-      const sessionData = sessionSummaryData || {
-        volume: stats.registros, invested: stats.totalInvestido, profit: stats.profit, roi: stats.roi,
-        fts: stats.fts, wins: stats.cravadas,
-        mentalAverages: {
-          focus: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.foco, 0) / breakFeedbacks.length : 0,
-          energy: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.energia, 0) / breakFeedbacks.length : 0,
-          confidence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.confianca, 0) / breakFeedbacks.length : 0,
-          emotionalIntelligence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.inteligenciaEmocional, 0) / breakFeedbacks.length : 0,
-          interference: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.interferencias, 0) / breakFeedbacks.length : 0,
-        }
-      };
+    const sessionId = activeSession?.id;
+    if (!sessionId) return;
+    const sessionData = sessionSummaryData || {
+      volume: stats.registros, invested: stats.totalInvestido, profit: stats.profit, roi: stats.roi,
+      fts: stats.fts, wins: stats.cravadas,
+      mentalAverages: {
+        focus: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.foco, 0) / breakFeedbacks.length : 0,
+        energy: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.energia, 0) / breakFeedbacks.length : 0,
+        confidence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.confianca, 0) / breakFeedbacks.length : 0,
+        emotionalIntelligence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.inteligenciaEmocional, 0) / breakFeedbacks.length : 0,
+        interference: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.interferencias, 0) / breakFeedbacks.length : 0,
+      }
+    };
 
-      await apiRequest('PUT', `/api/grind-sessions/${activeSession!.id}`, {
-        status: 'completed', endTime: new Date().toISOString(), finalNotes: finalNotes || '',
-        objectiveCompleted: sessionData.objectiveStatus === 'completed',
-        volume: sessionData.volume, profit: sessionData.profit.toString(),
-        abiMed: sessionData.invested > 0 ? (sessionData.invested / sessionData.volume).toString() : '0',
-        roi: sessionData.roi.toString(), fts: sessionData.fts, cravadas: sessionData.wins,
-        energiaMedia: sessionData.mentalAverages.energy.toString(),
-        focoMedio: sessionData.mentalAverages.focus.toString(),
-        confiancaMedia: sessionData.mentalAverages.confidence.toString(),
-        inteligenciaEmocionalMedia: sessionData.mentalAverages.emotionalIntelligence.toString(),
-        interferenciasMedia: sessionData.mentalAverages.interference.toString(),
-      });
-
-      setQuickNotes([]);
-      localStorage.removeItem('grindfy_session_backup');
-      setLocation('/grind');
-    } catch (error) {
-      console.error("Failed to end session:", error);
-      toast({ title: "Erro ao Finalizar", description: "Nao foi possivel salvar os dados da sessao. Tente novamente.", variant: "destructive" });
-    }
+    await runSessionEndFlow({
+      sessionId,
+      completeSession: async () => {
+        await apiRequest('PUT', `/api/grind-sessions/${sessionId}`, {
+          status: 'completed', endTime: new Date().toISOString(), finalNotes: finalNotes || '',
+          objectiveCompleted: sessionData.objectiveStatus === 'completed',
+          volume: sessionData.volume, profit: sessionData.profit.toString(),
+          abiMed: sessionData.invested > 0 ? (sessionData.invested / sessionData.volume).toString() : '0',
+          roi: sessionData.roi.toString(), fts: sessionData.fts, cravadas: sessionData.wins,
+          energiaMedia: sessionData.mentalAverages.energy.toString(),
+          focoMedio: sessionData.mentalAverages.focus.toString(),
+          confiancaMedia: sessionData.mentalAverages.confidence.toString(),
+          inteligenciaEmocionalMedia: sessionData.mentalAverages.emotionalIntelligence.toString(),
+          interferenciasMedia: sessionData.mentalAverages.interference.toString(),
+        });
+      },
+      fetchReconcilable: async () => {
+        const data: any = await apiRequest('GET', `/api/grind-sessions/${sessionId}/reconcilable-wallets`);
+        return {
+          wallets: Array.isArray(data?.wallets) ? data.wallets : [],
+          alreadyReconciled: !!data?.alreadyReconciled,
+        };
+      },
+      openReconcileDialog: () => new Promise<any>((resolve) => {
+        reconcileResolveRef.current = resolve;
+        setReconcileSessionId(sessionId);
+        setShowReconcileDialog(true);
+      }),
+      openSummaryModal: () => {
+        setQuickNotes([]);
+        localStorage.removeItem('grindfy_session_backup');
+        setLocation('/grind');
+      },
+      toast,
+      onError: (err) => {
+        console.error("Failed to end session:", err);
+        toast({ title: "Erro ao Finalizar", description: "Nao foi possivel salvar os dados da sessao. Tente novamente.", variant: "destructive" });
+      },
+    });
   };
+
+  function handleReconcileComplete(info?: any) {
+    // HIGH-4 reviewer fix: torna idempotente. Sem essa guarda, double trigger
+    // (onComplete + onOpenChange(false) consecutivos) podia causar resolve
+    // multiplo do ref ou races sutis em reabertura.
+    if (!showReconcileDialog && reconcileResolveRef.current === null) {
+      return;
+    }
+    setShowReconcileDialog(false);
+    if (reconcileResolveRef.current) {
+      reconcileResolveRef.current(info);
+      reconcileResolveRef.current = null;
+    }
+  }
 
   const handleContinueSession = () => {
     setShowSessionSummary(false); setSessionSummaryData(null); setFinalNotes('');
@@ -1893,6 +1934,18 @@ export default function GrindSessionLive() {
         finalNotes={finalNotes} setFinalNotes={setFinalNotes}
         onContinueSession={handleContinueSession} onEndSession={handleEndSession}
       />
+
+      {/* ADR-040: Wallet reconciliation dialog ao fim da sessao */}
+      {showReconcileDialog && reconcileSessionId && (
+        <WalletReconciliationDialog
+          open={showReconcileDialog}
+          onOpenChange={(open) => {
+            if (!open) handleReconcileComplete();
+          }}
+          sessionId={reconcileSessionId}
+          onComplete={handleReconcileComplete}
+        />
+      )}
 
       {/* RF-02: Simplified confirmation modal - single step with notes */}
       {/* GL-D (UX 2026-04-24): lista torneios pendentes que serao auto-fechados */}

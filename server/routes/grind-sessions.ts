@@ -13,11 +13,216 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, gte, sql, count, avg } from "drizzle-orm";
 import { clampBreakFeedback } from "@shared/utils";
+import { ReconcileWalletsBodySchema } from "@shared/reconcile-schemas";
+import { runReconciliation } from "../services/sessionReconciliation";
+import { walletLimiter } from "./wallets";
 
 // Track users who already had their duplicate sessions cleaned up (resets on server restart)
 const cleanedUpUsers = new Set<string>();
 
+// =============================================================================
+// ADR-040 — Reconciliacao de banca ao fim da sessao
+// =============================================================================
+
+/**
+ * GET /api/grind-sessions/:id/reconcilable-wallets
+ *
+ * Lista wallets elegiveis para reconciliacao (RF-02).
+ * Default: apenas wallets ativas com atividade na sessao (>=1 wallet_transaction
+ * com sessionId === :id). Toggle includeAll=true inclui demais wallets ativas.
+ *
+ * Resposta 200: { sessionId, alreadyReconciled, wallets: [...] }
+ *  Quando alreadyReconciled=true, wallets=[] (preflight RF-08).
+ */
+export async function handleGetReconcilableWallets(req: any, res: any): Promise<void> {
+  const user = req.user;
+  if (!user || !user.userPlatformId) {
+    res.status(401).json({ message: "Nao autenticado" });
+    return;
+  }
+
+  const sessionId = req.params.id;
+  try {
+    const session = await storage.getGrindSession(sessionId);
+    if (!session || session.userId !== user.userPlatformId) {
+      res.status(404).json({ message: "Sessao nao encontrada" });
+      return;
+    }
+
+    const marker = await storage.findReconciliationMarker(sessionId, user.userPlatformId);
+    if ((marker?.count ?? 0) > 0) {
+      res.status(200).json({
+        sessionId,
+        alreadyReconciled: true,
+        wallets: [],
+      });
+      return;
+    }
+
+    const includeAll = String(req.query?.includeAll ?? "").toLowerCase() === "true";
+    const wallets = await storage.listReconcilableWallets(sessionId, user.userPlatformId, {
+      includeAll,
+    });
+
+    res.status(200).json({
+      sessionId,
+      alreadyReconciled: false,
+      wallets,
+    });
+  } catch (error: any) {
+    console.error("GET /api/grind-sessions/:id/reconcilable-wallets failed:", error);
+    res.status(500).json({ message: "Erro ao listar carteiras elegiveis" });
+  }
+}
+
+/**
+ * mapFailureCodeToStatus — HIGH-3 reviewer fix.
+ *
+ * Mapeia o `code` de `ReconciliationFailure` para HTTP status conforme spec
+ * (Docs/specs/session-end-wallet-reconciliation.md, secao "API Delta").
+ *
+ *  - wallet_archived            -> 422 (semantic invalid: estado da wallet impede)
+ *  - out_of_order               -> 422 (semantic invalid: ordem das tx invalida)
+ *  - invalid_reported_balance   -> 422 (NaN/Infinity)
+ *  - balance_mismatch           -> 409 (conflito de concurrency)
+ *  - already_reconciled         -> 409 (idempotencia, conflito)
+ *  - wallet_not_found           -> 404 (mascarado por seguranca: cross-user / inexistente)
+ *  - duplicate_wallet           -> 400 (request invalido)
+ *  - missing_expected_balance   -> 400 (request invalido)
+ *  - default                    -> 500 (defesa em profundidade)
+ */
+function mapFailureCodeToStatus(code: string): number {
+  switch (code) {
+    case "wallet_archived":
+    case "out_of_order":
+    case "invalid_reported_balance":
+      return 422;
+    case "balance_mismatch":
+    case "already_reconciled":
+      return 409;
+    case "wallet_not_found":
+      return 404;
+    case "duplicate_wallet":
+    case "missing_expected_balance":
+      return 400;
+    default:
+      console.error("[reconcile] unknown failure code", { code });
+      return 500;
+  }
+}
+
+/**
+ * POST /api/grind-sessions/:id/reconcile-wallets
+ *
+ * Aplica batch de ajustes em loop fail-fast (RF-04).
+ *  - Valida body via ReconcileWalletsBodySchema (RF-07).
+ *  - Rejeita walletId duplicado (400 duplicate_wallet).
+ *  - Verifica ownership da sessao (404).
+ *  - Chama runReconciliation; trata respostas:
+ *      alreadyReconciled -> 409 already_reconciled (RF-08)
+ *      failed.code mapeado por mapFailureCodeToStatus (HIGH-3).
+ */
+export async function handlePostReconcileWallets(req: any, res: any): Promise<void> {
+  const user = req.user;
+  if (!user || !user.userPlatformId) {
+    res.status(401).json({ message: "Nao autenticado" });
+    return;
+  }
+
+  const sessionId = req.params.id;
+  try {
+    const session = await storage.getGrindSession(sessionId);
+    if (!session || session.userId !== user.userPlatformId) {
+      res.status(404).json({ message: "Sessao nao encontrada" });
+      return;
+    }
+
+    // Validacao Zod (RF-07)
+    const parsed = ReconcileWalletsBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      const firstIssue = parsed.error.issues[0];
+      res.status(400).json({
+        message: firstIssue?.message ?? "Body invalido",
+        code: "invalid_body",
+      });
+      return;
+    }
+    const adjustments = parsed.data.adjustments;
+
+    // Duplicate wallet check (RF-07)
+    const seen = new Set<string>();
+    for (const adj of adjustments) {
+      if (seen.has(adj.walletId)) {
+        res.status(400).json({
+          message: "Mesma carteira aparece duas vezes",
+          code: "duplicate_wallet",
+          walletId: adj.walletId,
+        });
+        return;
+      }
+      seen.add(adj.walletId);
+    }
+
+    const result = await runReconciliation(user.userPlatformId, sessionId, adjustments);
+
+    // Idempotencia (RF-08)
+    if (result.alreadyReconciled) {
+      res.status(409).json({
+        message: "Esta sessao ja foi reconciliada anteriormente",
+        code: "already_reconciled",
+        existingCount: result.existingCount ?? 0,
+      });
+      return;
+    }
+
+    // Falha mid-batch (RF-04) — HIGH-3: mapeamento explicito por code
+    if (result.failed) {
+      const code = result.failed.code;
+      const status = mapFailureCodeToStatus(code);
+      const payload: any = {
+        message: result.failed.message ?? code,
+        code,
+        txCreated: result.created,
+        skipped: result.skipped,
+        failedAt: {
+          walletId: result.failed.walletId,
+        },
+      };
+      if (typeof result.failed.currentBalance === "number") {
+        payload.failedAt.currentBalance = result.failed.currentBalance;
+      }
+      res.status(status).json(payload);
+      return;
+    }
+
+    // 200 OK
+    res.status(200).json({
+      txCreated: result.created,
+      skipped: result.skipped,
+    });
+  } catch (error: any) {
+    console.error("POST /api/grind-sessions/:id/reconcile-wallets failed:", error);
+    res.status(500).json({
+      message: error?.message ?? "Erro ao reconciliar carteiras",
+      code: "internal_error",
+    });
+  }
+}
+
 export function registerGrindSessionRoutes(app: Express): void {
+  // ADR-040: Reconciliacao de banca ao fim da sessao
+  app.get(
+    '/api/grind-sessions/:id/reconcilable-wallets',
+    requireAuth,
+    (req: any, res) => handleGetReconcilableWallets(req, res),
+  );
+  app.post(
+    '/api/grind-sessions/:id/reconcile-wallets',
+    requireAuth,
+    walletLimiter,
+    (req: any, res) => handlePostReconcileWallets(req, res),
+  );
+
   // Grind session routes
   app.get('/api/grind-sessions', requireAuth, async (req: any, res) => {
     try {

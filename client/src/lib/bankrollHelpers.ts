@@ -40,6 +40,24 @@ export function reasonColor(reason: string): string {
   return REASON_COLOR_MAP[reason] ?? "text-slate-700 bg-slate-50 border-slate-200";
 }
 
+// Sprint Session-End Reconciliation (RF-09, HIGH-2): label PT-BR para a coluna
+// `wallet_transactions.source` / `bankroll_snapshots.source`.
+//   'manual'        -> "Manual"           (default; tambem null/undefined)
+//   'auto_session'  -> "Reconciliacao automatica"
+//   demais valores  -> "Automatica"       (fallback generico)
+const SOURCE_LABEL_MAP: Record<string, string> = {
+  manual: "Manual",
+  auto_session: "Reconciliacao automatica",
+};
+
+export function transactionSourceLabel(
+  source: string | null | undefined,
+): string {
+  if (source == null) return "Manual";
+  if (source in SOURCE_LABEL_MAP) return SOURCE_LABEL_MAP[source];
+  return "Automatica";
+}
+
 export function computeBankrollDropPct(start: number, current: number): number {
   if (start <= 0) return 0;
   return ((start - current) / start) * 100;

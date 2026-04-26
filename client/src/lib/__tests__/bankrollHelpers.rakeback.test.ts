@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
 // manual_adjustment) continuam retornando seus labels existentes.
 // =============================================================================
 
-import { reasonLabel, reasonColor } from '../bankrollHelpers';
+import { reasonLabel, reasonColor, transactionSourceLabel } from '../bankrollHelpers';
 
 // =============================================================================
 // 1. reasonLabel('rakeback')
@@ -99,5 +99,45 @@ describe('reasonColor — backward-compat outros reasons (RF-08)', () => {
 
   it('reasonColor para reason desconhecida retorna fallback nao-vazio', () => {
     expect(reasonColor('unknown_xpto').length).toBeGreaterThan(0);
+  });
+});
+
+// =============================================================================
+// 5. transactionSourceLabel — Sprint Session-End Reconciliation (HIGH-2, RF-09)
+//
+// Spec: Docs/specs/session-end-wallet-reconciliation.md (RF-09)
+//   'manual'        -> "Manual"
+//   'auto_session'  -> "Reconciliacao automatica"
+//   demais valores  -> "Automatica" (fallback generico)
+//   undefined/null  -> "Manual"     (default seguro)
+// =============================================================================
+
+describe('transactionSourceLabel (HIGH-2, RF-09)', () => {
+  it('manual -> "Manual"', () => {
+    expect(transactionSourceLabel('manual')).toBe('Manual');
+  });
+
+  it('auto_session -> "Reconciliacao automatica"', () => {
+    expect(transactionSourceLabel('auto_session')).toBe('Reconciliacao automatica');
+  });
+
+  it('valor desconhecido -> "Automatica" (fallback)', () => {
+    expect(transactionSourceLabel('auto_import_csv')).toBe('Automatica');
+    expect(transactionSourceLabel('migration_v1')).toBe('Automatica');
+    expect(transactionSourceLabel('xpto_unknown')).toBe('Automatica');
+  });
+
+  it('null -> "Manual" (default)', () => {
+    expect(transactionSourceLabel(null)).toBe('Manual');
+  });
+
+  it('undefined -> "Manual" (default)', () => {
+    expect(transactionSourceLabel(undefined)).toBe('Manual');
+  });
+
+  it('string vazia -> "Automatica" (fallback)', () => {
+    // string vazia eh truthy enough para nao cair em null/undefined,
+    // mas tambem nao bate "manual" exato
+    expect(transactionSourceLabel('')).toBe('Automatica');
   });
 });

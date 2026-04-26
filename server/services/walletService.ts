@@ -53,6 +53,9 @@ export interface RecordWalletTransactionInput {
   note?: string;
   sessionId?: string;
   expectedPreviousBalance?: number;
+  // ADR-040 / Sprint Session-End Reconciliation: permite handler de reconciliacao
+  // passar 'auto_session'. Default 'manual' preservado quando nao informado.
+  source?: "manual" | "auto_session" | "migration_v1" | "auto_import_csv";
 }
 
 export interface ConsolidatedBalance {
@@ -443,7 +446,7 @@ async function recordWalletTransaction(
       reason: input.reason,
       note: input.note ?? null,
       sessionId: input.sessionId ?? null,
-      source: "manual",
+      source: input.source ?? "manual",
     });
 
     await tx.updateWalletBalance(walletId, newBalance);
