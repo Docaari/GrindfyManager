@@ -376,6 +376,18 @@ async function recordWalletTransaction(
       );
     }
 
+    // Sprint Bankroll-3 (RF-02): defesa em profundidade — rakeback so aceita
+    // direction='in'. Mesmo que Zod do router ja bloqueie, service rejeita
+    // chamadas internas/futuras com a mesma regra. Apos archived check
+    // (precedencia de wallet_archived eh mais informativa).
+    if (input.reason === "rakeback" && input.direction === "out") {
+      throw makeError(
+        "Rakeback so aceita credito (entrada)",
+        400,
+        "invalid_rakeback_direction",
+      );
+    }
+
     // ADR-038: optimistic concurrency via expectedPreviousBalance.
     // Roda APOS selectWalletForUpdate (leitura serializada) e APOS wallet_archived.
     // Boundary 0.01 inclusivo (Math.round em centavos elimina ruido fp).

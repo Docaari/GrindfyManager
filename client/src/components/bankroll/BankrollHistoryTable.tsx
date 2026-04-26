@@ -1,9 +1,13 @@
 /**
  * BankrollHistoryTable — Tabela de historico (RF-04, RF-11)
+ *
+ * Sprint Bankroll-3 (RF-06): adiciona data-reason em <tr> + badge dedicado
+ * para rakeback (cor amber/dourado).
  */
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { reasonLabel, reasonColor } from "@/lib/bankrollHelpers";
 
 interface Snapshot {
   id: string;
@@ -19,14 +23,6 @@ interface Snapshot {
 interface HistoryResp {
   snapshots: Snapshot[];
 }
-
-const REASON_LABEL: Record<string, string> = {
-  initial: "Inicial",
-  deposit: "Aporte",
-  withdrawal: "Saque",
-  session_result: "Sessao",
-  manual_adjustment: "Ajuste",
-};
 
 export function BankrollHistoryTable() {
   const { data } = useQuery<HistoryResp>({
@@ -56,11 +52,25 @@ export function BankrollHistoryTable() {
         </thead>
         <tbody>
           {rows.map((s) => (
-            <tr key={s.id} className="border-b">
+            <tr key={s.id} className="border-b" data-reason={s.reason}>
               <td className="py-2 pr-3">
                 {new Date(s.occurredAt).toLocaleDateString("pt-BR")}
               </td>
-              <td className="py-2 pr-3">{REASON_LABEL[s.reason] ?? s.reason}</td>
+              <td className="py-2 pr-3">
+                {s.reason === "rakeback" ? (
+                  <span
+                    data-testid="reason-badge-rakeback"
+                    className={
+                      "inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium " +
+                      reasonColor("rakeback")
+                    }
+                  >
+                    {reasonLabel("rakeback")}
+                  </span>
+                ) : (
+                  reasonLabel(s.reason)
+                )}
+              </td>
               <td
                 className={
                   "py-2 pr-3 text-right " + (Number(s.delta) >= 0 ? "text-green-600" : "text-red-600")

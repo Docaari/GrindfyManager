@@ -12,15 +12,32 @@ export function formatBRL(n: number | null | undefined): string {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+const REASON_LABEL_MAP: Record<string, string> = {
+  initial: "Inicial",
+  deposit: "Aporte",
+  withdrawal: "Saque",
+  session_result: "Sessao",
+  rakeback: "Rakeback",
+  manual_adjustment: "Ajuste manual",
+};
+
 export function reasonLabel(reason: string): string {
-  const map: Record<string, string> = {
-    initial: "Inicial",
-    deposit: "Aporte",
-    withdrawal: "Saque",
-    session_result: "Sessao",
-    manual_adjustment: "Ajuste manual",
-  };
-  return map[reason] ?? reason;
+  return REASON_LABEL_MAP[reason] ?? reason;
+}
+
+// Sprint Bankroll-3 (RF-06, RF-07): cor distinta para rakeback (amber/dourado).
+// Mapping centralizado para evitar acoplar componentes a Tailwind classes.
+const REASON_COLOR_MAP: Record<string, string> = {
+  initial: "text-slate-700 bg-slate-50 border-slate-200",
+  deposit: "text-green-700 bg-green-50 border-green-200",
+  withdrawal: "text-red-700 bg-red-50 border-red-200",
+  session_result: "text-blue-700 bg-blue-50 border-blue-200",
+  rakeback: "text-amber-800 bg-amber-50 border-amber-300",
+  manual_adjustment: "text-slate-700 bg-slate-50 border-slate-200",
+};
+
+export function reasonColor(reason: string): string {
+  return REASON_COLOR_MAP[reason] ?? "text-slate-700 bg-slate-50 border-slate-200";
 }
 
 export function computeBankrollDropPct(start: number, current: number): number {

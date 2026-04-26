@@ -13,6 +13,7 @@ import { BankrollMovementDialog } from "@/components/bankroll/BankrollMovementDi
 import { WalletList, type WalletListItem, type WalletSuggestion } from "@/components/bankroll/WalletList";
 import { WalletDetailPanel } from "@/components/bankroll/WalletDetailPanel";
 import { WalletCreateDialog } from "@/components/bankroll/WalletCreateDialog";
+import { RakebackDialog } from "@/components/bankroll/RakebackDialog";
 import type { WalletPlatform } from "@shared/wallet-platforms";
 
 interface ConsolidatedWalletEntry {
@@ -40,6 +41,15 @@ export default function BankrollPage() {
     { name?: string; platform?: WalletPlatform; nativeCurrency?: string } | undefined
   >(undefined);
   const [selectedWalletId, setSelectedWalletId] = useState<string | null>(null);
+
+  // Sprint Bankroll-3 (RF-04): RakebackDialog state
+  const [rakebackDialogOpen, setRakebackDialogOpen] = useState(false);
+  const [rakebackSource, setRakebackSource] = useState<"page_header" | "wallet_menu">(
+    "page_header",
+  );
+  const [rakebackPreSelectedWalletId, setRakebackPreSelectedWalletId] = useState<
+    string | undefined
+  >(undefined);
 
   const { data: consolidated } = useQuery<ConsolidatedResponse>({
     queryKey: ["/api/bankroll/consolidated"],
@@ -99,6 +109,18 @@ export default function BankrollPage() {
     setCreateDialogOpen(true);
   }
 
+  function openRakebackFromHeader() {
+    setRakebackSource("page_header");
+    setRakebackPreSelectedWalletId(undefined);
+    setRakebackDialogOpen(true);
+  }
+
+  function openRakebackForWallet(walletId: string) {
+    setRakebackSource("wallet_menu");
+    setRakebackPreSelectedWalletId(walletId);
+    setRakebackDialogOpen(true);
+  }
+
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <header className="flex items-center justify-between">
@@ -111,6 +133,14 @@ export default function BankrollPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={openRakebackFromHeader}
+            className="px-3 py-2 text-sm rounded border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+            data-testid="bankroll-rakeback-trigger-header"
+            title="Registrar rakeback recebido"
+          >
+            Reportar rakeback
+          </button>
           <button
             onClick={() => setLegacyDialogOpen(true)}
             className="px-3 py-2 text-sm rounded border hover:bg-accent"
@@ -141,7 +171,10 @@ export default function BankrollPage() {
           />
           <div className="flex-1">
             {selectedWallet ? (
-              <WalletDetailPanel wallet={selectedWallet as any} />
+              <WalletDetailPanel
+                wallet={selectedWallet as any}
+                onRakebackClick={() => openRakebackForWallet(selectedWallet.id)}
+              />
             ) : (
               <div className="p-8 text-center text-sm text-muted-foreground">
                 {hasWallets
@@ -166,6 +199,13 @@ export default function BankrollPage() {
           if (!o) setCreatePrefill(undefined);
         }}
         prefill={createPrefill}
+      />
+      <RakebackDialog
+        open={rakebackDialogOpen}
+        onOpenChange={setRakebackDialogOpen}
+        wallets={walletItems as any}
+        preSelectedWalletId={rakebackPreSelectedWalletId}
+        source={rakebackSource}
       />
     </div>
   );

@@ -8,6 +8,7 @@ export const WALLET_TX_REASONS = [
   "deposit",
   "withdrawal",
   "session_result",
+  "rakeback",
   "manual_adjustment",
   // P1 — Sprint Bankroll-2 (transferencia, fees) — reservados schema-only
   "transfer_in",
@@ -26,6 +27,7 @@ export const WALLET_TX_REASONS_P0 = [
   "deposit",
   "withdrawal",
   "session_result",
+  "rakeback",
   "manual_adjustment",
 ] as const;
 
@@ -41,3 +43,38 @@ export const WalletTxDirectionSchema = z.enum(WALLET_TX_DIRECTIONS);
 export const WALLET_TX_SOURCES = ["manual", "auto_session", "migration_v1", "auto_import_csv"] as const;
 export type WalletTxSource = typeof WALLET_TX_SOURCES[number];
 export const WalletTxSourceSchema = z.enum(WALLET_TX_SOURCES);
+
+// =============================================================================
+// Sprint Bankroll-3 — Reportar rakeback (RF-01, RF-02)
+//
+// WalletTxBodyRefinedSchema: schema combinado para body do POST
+// /api/wallets/:id/transactions com superRefine que aplica regras
+// cross-field (ex: reason='rakeback' exige direction='in').
+// Reusado entre router e tests.
+// =============================================================================
+
+export const WalletTxBodyRefinedSchema = z
+  .object({
+    direction: WalletTxDirectionSchema,
+    nativeAmount: z
+      .number({ invalid_type_error: "nativeAmount deve ser numero" })
+      .refine((n) => Number.isFinite(n), { message: "nativeAmount deve ser numero finito" })
+      .refine((n) => n > 0, { message: "nativeAmount deve ser maior que zero" }),
+    reason: z.string(),
+    note: z.string().max(500, "note tem limite de 500 caracteres").nullable().optional(),
+    occurredAt: z.union([z.string(), z.date()]).optional(),
+    sessionId: z.string().nullable().optional(),
+    expectedPreviousBalance: z
+      .number()
+      .refine((n) => Number.isFinite(n), { message: "expectedPreviousBalance deve ser numero finito" })
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.reason === "rakeback" && data.direction === "out") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["direction"],
+        message: "invalid_rakeback_direction: rakeback so aceita credito (entrada)",
+      });
+    }
+  });

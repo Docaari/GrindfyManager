@@ -55,6 +55,7 @@ Modulo de gestao de banca em USD para jogadores MTT, ativando o filtro latente d
 | [`flows/bankroll/sequence-grind-alert.md`](flows/bankroll/sequence-grind-alert.md) | Sequence | Fluxo de adicionar torneio em Grind Live — normalizacao de moeda, checagem de regra, modal de shot, warning 10% da sessao |
 | [`flows/bankroll/feature-flow.md`](flows/bankroll/feature-flow.md) | User journey + cenarios | Perspectiva do jogador: onboarding (empty state no Dashboard), configuracao em Settings, registrar aporte, consultar historico, interacao com Selector e Grind Live |
 | [`flows/bankroll/sequence-wallet-tx-balance-mode.mermaid`](flows/bankroll/sequence-wallet-tx-balance-mode.mermaid) | Sequence | Modo "Reportar saldo" — cliente envia `expectedPreviousBalance`, backend valida dentro da TX (apos SELECT FOR UPDATE), 409 `balance_mismatch` aciona refetch + recomputo de preview |
+| [`flows/bankroll/sequence-rakeback-report.mermaid`](flows/bankroll/sequence-rakeback-report.mermaid) | Sequence | `RakebackDialog` — disparadores (header da /bankroll, menu da wallet); reusa `POST /api/wallets/:id/transactions` com `reason='rakeback'` + `direction='in'`; branches 400 `invalid_rakeback_direction`, 422 `wallet_archived`; SEM optimistic concurrency |
 
 ### Decisoes (ADRs)
 
@@ -63,6 +64,7 @@ Modulo de gestao de banca em USD para jogadores MTT, ativando o filtro latente d
 | [ADR-017](decisions/017-bankroll-snapshot-vs-derived.md) | Tabela dedicada `bankroll_snapshots` (snapshots explicitos) em vez de derivar em tempo real | Aceito |
 | [ADR-018](decisions/018-bankroll-tolerance-hardcoded.md) | Tolerancia 1.5x hardcoded no MVP (nao configuravel por usuario) | Aceito |
 | [ADR-038](decisions/038-wallet-tx-optimistic-concurrency.md) | Optimistic concurrency em wallet transactions via `expectedPreviousBalance` | Proposto (2026-04-26) |
+| [ADR-039](decisions/039-rakeback-as-wallet-tx-reason.md) | Rakeback como `reason='rakeback'` em `wallet_transactions` (sem novo endpoint, sem nova tabela) | Proposto (2026-04-26) |
 
 ### Modelo de Dados
 

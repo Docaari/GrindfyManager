@@ -1,0 +1,89 @@
+%% Sequence: RakebackDialog — fluxo de "Reportar rakeback"
+%% Spec: Docs/specs/rakeback-reporting.md
+%% ADR: Docs/architecture/decisions/039-rakeback-as-wallet-tx-reason.md
+%%
+%% Cobre:
+%%  - Disparadores: header da pagina /bankroll OU menu da wallet (wallet pre-selecionada)
+%%  - Happy path: submit valido cria wallet_transaction + espelho em bankroll_snapshots
+%%  - Branches de erro: 401 unauth, 400 invalid_rakeback_direction, 422 wallet_archived
+%%  - SEM optimistic concurrency (contraste com ADR-038): rakeback nao depende de saldo previo
+
+sequenceDiagram
+    autonumber
+    actor User as Jogador
+    participant UI as RakebackDialog
+    participant QC as queryClient (TanStack)
+    participant API as POST /api/wallets/:id/transactions
+    participant Svc as walletService.recordWalletTransaction
+    participant DB as PostgreSQL
+
+    Note over User,UI: Disparador A — header da /bankroll<br/>Disparador B — menu de acoes da wallet (wallet pre-selecionada)
+
+    alt Disparador A: header /bankroll (sem wallet pre-selecionada)
+        User->>UI: Clica "Reportar rakeback" no header
+        UI->>QC: useQuery(['wallets']) — wallets ativas do usuario
+        QC-->>UI: lista de wallets (filtra status='active')
+        UI->>User: Renderiza select obrigatorio + valor + data + nota
+    else Disparador B: menu da wallet (wallet pre-selecionada)
+        User->>UI: Clica "Reportar rakeback" no menu da wallet
+        UI->>UI: defaultValue do select = walletId disparador<br/>indicador visual "carteira: PokerStars BRL"
+        UI->>User: Renderiza com wallet ja selecionada
+    end
+
+    User->>UI: Preenche valor (ex: 50,00 BRL)<br/>+ data (default = agora) + nota (opcional)
+    UI->>UI: Valida client-side: nativeAmount > 0,<br/>occurredAt <= now(), note <= 500 chars
+
+    User->>UI: Clica "Registrar rakeback"
+    UI->>API: POST /api/wallets/:id/transactions<br/>{ direction:'in', nativeAmount:50.00,<br/>reason:'rakeback', note?, occurredAt? }<br/>Cookies: JWT
+
+    alt 401 — JWT ausente/invalido
+        API-->>UI: 401 Unauthorized
+        UI->>User: redirect para /login (handler global do queryClient)
+    end
+
+    API->>API: Zod parse body — aceita 'rakeback' (RF-01)
+    API->>API: superRefine: reason='rakeback' && direction !== 'in'?
+
+    alt direction='out' com reason='rakeback'
+        API-->>UI: 400 { code:'invalid_rakeback_direction' }
+        UI->>User: Alerta inline "Rakeback so aceita credito (entrada)."<br/>Dialog permanece aberto
+    end
+
+    API->>Svc: recordWalletTransaction(userId, walletId, input)
+
+    Note over Svc,DB: Transacao atomica (ADR-034)<br/>SEM check ADR-038 (rakeback nao envia expectedPreviousBalance)
+    Svc->>DB: BEGIN
+    Svc->>DB: SELECT * FROM wallets<br/>WHERE id=walletId AND userId=X FOR UPDATE
+    DB-->>Svc: wallet { balance, status, nativeCurrency }
+
+    alt wallet status = 'archived' (race condition)
+        Svc->>DB: ROLLBACK
+        Svc-->>API: throw makeError('wallet_archived', 422)
+        API-->>UI: 422 { code:'wallet_archived' }
+        UI->>QC: invalidateQueries(['wallets'])
+        UI->>User: Alerta inline "Carteira arquivada. Atualize a lista."<br/>Dialog permanece aberto
+    end
+
+    Note over Svc: Caminho feliz — sem drift, sem restricao de saldo
+    Svc->>Svc: pega FX corrente (user_settings.exchangeRates[ccy])
+    Svc->>Svc: prev = parseDecimal(wallet.balance)<br/>next = prev + 50.00 (direction='in')
+
+    Svc->>DB: INSERT INTO wallet_transactions<br/>(walletId, direction:'in', nativeAmount:50.00,<br/>fxRateUSDPerNative, previousNativeBalance:prev,<br/>newNativeBalance:next, reason:'rakeback', note?, occurredAt)
+    DB-->>Svc: { transactionId }
+
+    Svc->>DB: UPDATE wallets SET balance=next, updatedAt=NOW()<br/>WHERE id=walletId
+    DB-->>Svc: ok
+
+    Svc->>DB: INSERT INTO bankroll_snapshots<br/>(walletId, nativeAmount:50.00, fxRateUSDPerNative,<br/>delta_USD, reason:'rakeback', kind, ...)
+    DB-->>Svc: ok
+
+    Svc->>DB: COMMIT
+    Svc-->>API: { transaction, wallet }
+    API-->>UI: 201 Created
+
+    UI->>QC: invalidateQueries(['wallets'])
+    UI->>QC: invalidateQueries(['wallets', walletId, 'transactions'])
+    UI->>QC: invalidateQueries(['bankroll', 'history'])
+    UI->>User: Toast "Rakeback registrado" + dialog fecha
+
+    Note over User,UI: Historico mostra badge "Rakeback" (cor amber)<br/>Filtro de reason inclui "Rakeback" (RF-06)

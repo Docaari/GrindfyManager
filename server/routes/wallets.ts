@@ -25,7 +25,11 @@ import { z } from "zod";
 import { requireAuth } from "../auth";
 import { walletService } from "../services/walletService";
 import { WALLET_PLATFORMS, WALLET_NATIVE_CURRENCIES } from "../../shared/wallet-platforms";
-import { WALLET_TX_DIRECTIONS, WALLET_TX_REASONS_P0 } from "../../shared/wallet-reasons";
+import {
+  WALLET_TX_DIRECTIONS,
+  WALLET_TX_REASONS_P0,
+  WalletTxBodyRefinedSchema,
+} from "../../shared/wallet-reasons";
 
 // =============================================================================
 // Zod schemas dos handlers
@@ -62,21 +66,28 @@ const updateWalletBody = z.object({
 // Nota: passthrough() permite que campos imutaveis (nativeCurrency, platform,
 // balance, status) cheguem ao handler para resposta 400 explicita.
 
-const txBody = z.object({
-  direction: z.enum(WALLET_TX_DIRECTIONS),
-  nativeAmount: z.number().positive("nativeAmount deve ser maior que zero"),
-  reason: z.string(),
-  note: z.string().max(500, "note tem limite de 500 caracteres").nullable().optional(),
-  occurredAt: z.union([z.string(), z.date()]).refine((v) => {
-    const d = v instanceof Date ? v : new Date(v);
-    if (Number.isNaN(d.getTime())) return false;
-    // Permite ate 24h grace para skew de timezone client/server.
-    return d.getTime() < Date.now() + 24 * 60 * 60 * 1000;
-  }, { message: "occurredAt nao pode ser no futuro" }),
-  sessionId: z.string().nullable().optional(),
-  expectedPreviousBalance: z.number().refine((n) => Number.isFinite(n), {
-    message: "expectedPreviousBalance deve ser numero finito",
-  }).optional(),
+// Validacao de occurredAt: nao pode ser no futuro (24h grace para skew).
+const occurredAtSchema = z.union([z.string(), z.date()]).refine((v) => {
+  const d = v instanceof Date ? v : new Date(v);
+  if (Number.isNaN(d.getTime())) return false;
+  // Permite ate 24h grace para skew de timezone client/server.
+  return d.getTime() < Date.now() + 24 * 60 * 60 * 1000;
+}, { message: "occurredAt nao pode ser no futuro" });
+
+// Sprint Bankroll-3 (RF-01, RF-02): usa WalletTxBodyRefinedSchema do shared
+// para regra cross-field (rakeback => direction=in). Wrapper aqui apenas
+// valida o future-date de occurredAt.
+const txBody = WalletTxBodyRefinedSchema.superRefine((data, ctx) => {
+  if (data.occurredAt != null) {
+    const r = occurredAtSchema.safeParse(data.occurredAt);
+    if (!r.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["occurredAt"],
+        message: r.error.issues[0]?.message ?? "occurredAt invalido",
+      });
+    }
+  }
 });
 
 // =============================================================================
@@ -255,6 +266,19 @@ export async function handlePostWalletTransaction(req: any, res: Response): Prom
 
   const parsed = txBody.safeParse(req.body ?? {});
   if (!parsed.success) {
+    // Sprint Bankroll-3 (RF-02): se issue contem 'invalid_rakeback_direction',
+    // retorna code estavel para client.
+    const rakebackIssue = parsed.error.issues.find(
+      (i) => typeof i.message === "string" && i.message.includes("invalid_rakeback_direction"),
+    );
+    if (rakebackIssue) {
+      res.status(400).json({
+        message: "Rakeback so aceita credito (entrada)",
+        code: "invalid_rakeback_direction",
+        issues: parsed.error.issues,
+      });
+      return;
+    }
     res.status(400).json({
       message: parsed.error.issues[0]?.message ?? "Body invalido",
       issues: parsed.error.issues,
@@ -291,7 +315,9 @@ export async function handlePostWalletTransaction(req: any, res: Response): Prom
       });
       return;
     }
-    res.status(status).json({ message: err?.message ?? "Erro ao registrar movimento" });
+    const payload: any = { message: err?.message ?? "Erro ao registrar movimento" };
+    if (err?.code) payload.code = err.code;
+    res.status(status).json(payload);
   }
 }
 

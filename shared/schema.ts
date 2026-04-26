@@ -2284,6 +2284,7 @@ const BANKROLL_REASON_ENUM = z.enum([
   "deposit",
   "withdrawal",
   "session_result",
+  "rakeback",
   "manual_adjustment",
 ]);
 const BANKROLL_SOURCE_ENUM = z.enum(["manual", "auto_session", "auto_import"]);
@@ -2308,7 +2309,9 @@ export const insertBankrollSnapshotSchema = z.object({
       if (v == null) return true;
       const d = v instanceof Date ? v : new Date(v);
       if (Number.isNaN(d.getTime())) return false;
-      return d.getTime() <= Date.now();
+      // Permite ate 24h grace para skew de timezone client/server (consistencia
+      // com txBody em server/routes/wallets.ts).
+      return d.getTime() < Date.now() + 24 * 60 * 60 * 1000;
     }, { message: "occurredAt nao pode ser no futuro" }),
 });
 

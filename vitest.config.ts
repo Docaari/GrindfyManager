@@ -19,6 +19,9 @@ export default defineConfig({
     // Vitest 4 removeu environmentMatchGlobs em favor de "projects" (multi-config).
     // Usamos projects para separar testes server-side (node) e client-side (jsdom).
     setupFiles: ['tests/setup.ts'],
+    // clearMocks: true limpa mock.calls entre testes (sem resetar implementations).
+    // Necessario para vi.spyOn(console, 'log') que reusa o mesmo MockInstance.
+    clearMocks: true,
     coverage: {
       provider: 'v8',
       include: ['server/**/*.ts', 'shared/**/*.ts'],
@@ -40,6 +43,7 @@ export default defineConfig({
           include: ['tests/**/*.test.ts'],
           exclude: ['tests/**/*.test.tsx'],
           setupFiles: ['tests/setup.ts'],
+          clearMocks: true,
           alias: {
             '@shared': path.resolve(__dirname, 'shared'),
             '@': path.resolve(__dirname, 'client/src'),
@@ -57,6 +61,7 @@ export default defineConfig({
           globals: true,
           include: ['client/src/**/*.test.tsx', 'client/src/**/*.test.ts', 'tests/**/*.test.tsx'],
           setupFiles: ['tests/setup.ts'],
+          clearMocks: true,
           alias: {
             '@shared': path.resolve(__dirname, 'shared'),
             '@': path.resolve(__dirname, 'client/src'),

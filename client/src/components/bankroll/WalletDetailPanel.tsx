@@ -29,6 +29,9 @@ interface WalletProp {
 
 interface Props {
   wallet: WalletProp;
+  // Sprint Bankroll-3 (RF-04): callback do parent para abrir RakebackDialog
+  // com wallet pre-selecionada (source='wallet_menu').
+  onRakebackClick?: () => void;
 }
 
 function currencySymbol(ccy: string): string {
@@ -45,7 +48,7 @@ function formatBalance(value: string | number): string {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function WalletDetailPanel({ wallet }: Props) {
+export function WalletDetailPanel({ wallet, onRakebackClick }: Props) {
   const [txDialogOpen, setTxDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
@@ -116,6 +119,18 @@ export function WalletDetailPanel({ wallet }: Props) {
         >
           Arquivar
         </button>
+        {onRakebackClick && (
+          <button
+            type="button"
+            data-testid="wallet-detail-rakeback-trigger"
+            onClick={onRakebackClick}
+            disabled={archived}
+            className="px-3 py-2 text-sm rounded-md border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+            title="Reportar rakeback recebido nesta carteira"
+          >
+            Reportar rakeback
+          </button>
+        )}
       </div>
 
       {archived && (
