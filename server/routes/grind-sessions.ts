@@ -430,7 +430,14 @@ export function registerGrindSessionRoutes(app: Express): void {
               endTime: null,
               time: planned.time,
               type: planned.type,
-              speed: planned.speed
+              speed: planned.speed,
+              // ADR-014: propaga add-on/re-entry do plano para a live session
+              // para que TournamentCard consiga exibir o botao "+ Add-on"
+              // sem que o user precise editar manualmente.
+              allowsAddOn: planned.allowsAddOn ?? false,
+              addOnCost: planned.addOnCost ?? null,
+              allowsReentry: planned.allowsReentry ?? false,
+              maxReentries: planned.maxReentries ?? null,
             };
 
             await storage.createSessionTournament(sessionTournament as any);
