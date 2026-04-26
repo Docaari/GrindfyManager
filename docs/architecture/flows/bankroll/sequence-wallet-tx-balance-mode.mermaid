@@ -1,0 +1,84 @@
+%% Sequence: WalletTransactionDialog em modo "Reportar saldo" (balance mode)
+%% Spec: Docs/specs/wallet-balance-mode.md
+%% ADR: Docs/architecture/decisions/038-wallet-tx-optimistic-concurrency.md
+%%
+%% Cobre:
+%%  - Happy path: cliente envia expectedPreviousBalance, backend valida dentro da TX, persiste.
+%%  - Drift detectado: backend retorna 409 balance_mismatch, cliente refetch + recomputa preview.
+%%  - Modo "Movimento" preservado (sem expectedPreviousBalance) para contraste.
+
+sequenceDiagram
+    autonumber
+    actor User as Jogador
+    participant UI as WalletTransactionDialog
+    participant QC as queryClient (TanStack)
+    participant API as POST /api/wallets/:id/transactions
+    participant Svc as walletService.recordWalletTransaction
+    participant DB as PostgreSQL
+
+    Note over User,UI: Dialog abre apos GET /api/wallets/:id<br/>UI captura saldoConhecido = wallet.balance no momento da abertura
+
+    User->>UI: Alterna toggle para "Reportar saldo"
+    User->>UI: Digita novoSaldo (ex: 1247.00)
+    UI->>UI: delta = novoSaldo - saldoConhecido (ex: 67.00)
+    UI->>UI: preview "+R$ 67,00 (lucro)" verde<br/>botao Salvar habilitado
+
+    User->>UI: Clica Salvar
+    UI->>API: POST {direction:'in', nativeAmount:67.00,<br/>reason:'session_result',<br/>expectedPreviousBalance:1180.00,<br/>occurredAt, sessionId?, note?}
+
+    API->>API: Zod valida body (expectedPreviousBalance opcional)
+    API->>Svc: recordWalletTransaction(userId, walletId, input)
+
+    Note over Svc,DB: Transacao atomica (ADR-034)
+    Svc->>DB: BEGIN
+    Svc->>DB: SELECT * FROM wallets WHERE id=walletId AND userId=X FOR UPDATE
+    DB-->>Svc: wallet { balance: 1180.00, status:'active', ... }
+
+    alt wallet status = 'archived'
+        Svc->>DB: ROLLBACK
+        Svc-->>API: 409 wallet_archived
+        API-->>UI: 409
+    end
+
+    Note over Svc: ADR-038 — check de drift<br/>(so quando expectedPreviousBalance presente)
+
+    alt expectedPreviousBalance presente E |actual - expected| > 0.01
+        Svc->>DB: ROLLBACK
+        Svc-->>API: throw makeError('balance_mismatch', 409,<br/>{ currentBalance: parseDecimal(wallet.balance) })
+        API-->>UI: 409 { code:'balance_mismatch', currentBalance: 1247.50 }
+
+        UI->>UI: Detecta 409 -> NAO fecha dialog
+        UI->>User: Alerta inline "O saldo da carteira mudou.<br/>Saldo atual: R$ 1.247,50. Atualizar?"
+
+        User->>UI: Clica "Atualizar"
+        UI->>QC: invalidateQueries(['wallets', walletId])
+        QC->>API: GET /api/wallets/:id (refetch)
+        API-->>QC: wallet { balance: 1247.50, ... }
+        QC-->>UI: dados frescos
+        UI->>UI: saldoConhecido = 1247.50<br/>preview recomputa: novoSaldo (1247.00) - 1247.50 = -0.50<br/>label "-R$ 0,50 (perda)" vermelho<br/>(novoSaldo digitado preservado)
+
+        Note over User,UI: Usuario revisa e re-submete manualmente<br/>com expectedPreviousBalance=1247.50
+    end
+
+    alt expectedPreviousBalance ausente OU dentro do epsilon 0.01
+        Note over Svc: Caminho feliz — sem drift
+        Svc->>Svc: pega FX corrente (user_settings.exchangeRates[ccy] ?? DEFAULT)
+        Svc->>Svc: prev=1180, next=prev+67=1247 (direction='in')
+
+        Svc->>DB: INSERT INTO wallet_transactions<br/>(walletId, direction, nativeAmount, fxRateUSDPerNative,<br/>previousNativeBalance:1180, newNativeBalance:1247, reason, ...)
+        DB-->>Svc: { transactionId }
+
+        Svc->>DB: UPDATE wallets SET balance=1247, updatedAt=NOW() WHERE id=walletId
+        DB-->>Svc: ok
+
+        Svc->>DB: INSERT INTO bankroll_snapshots<br/>(walletId, nativeAmount, fxRateUSDPerNative, delta_USD, ...)<br/>(espelho compat v1, HIGH-5)
+        DB-->>Svc: ok
+
+        Svc->>DB: COMMIT
+        Svc-->>API: { transaction, wallet }
+        API-->>UI: 201 Created
+        UI->>QC: invalidateQueries(['wallets', walletId, 'bankroll', 'walletTransactions'])
+        UI->>User: Toast "Transacao registrada" + dialog fecha
+    end
+
+    Note over User,UI: Modo "Movimento" (contraste): UI nao envia expectedPreviousBalance.<br/>Backend pula o check ADR-038. Comportamento legacy preservado 100%.

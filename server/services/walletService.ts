@@ -52,6 +52,7 @@ export interface RecordWalletTransactionInput {
   occurredAt: Date | string;
   note?: string;
   sessionId?: string;
+  expectedPreviousBalance?: number;
 }
 
 export interface ConsolidatedBalance {
@@ -374,6 +375,22 @@ async function recordWalletTransaction(
         "wallet_archived",
       );
     }
+
+    // ADR-038: optimistic concurrency via expectedPreviousBalance.
+    // Roda APOS selectWalletForUpdate (leitura serializada) e APOS wallet_archived.
+    // Boundary 0.01 inclusivo (Math.round em centavos elimina ruido fp).
+    if (typeof input.expectedPreviousBalance === "number" && Number.isFinite(input.expectedPreviousBalance)) {
+      const actualBalance = parseDecimal(wallet.balance);
+      const diffCents = Math.round(Math.abs(actualBalance - input.expectedPreviousBalance) * 100);
+      if (diffCents > 1) {
+        const err: any = new Error("balance_mismatch");
+        err.statusCode = 409;
+        err.code = "balance_mismatch";
+        err.currentBalance = actualBalance;
+        throw err;
+      }
+    }
+
     // Out-of-order check (MED-6 do plano).
     const lastTx = await tx.getLastWalletTransaction(walletId);
     if (lastTx?.occurredAt) {

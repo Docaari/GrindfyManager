@@ -74,6 +74,9 @@ const txBody = z.object({
     return d.getTime() < Date.now() + 24 * 60 * 60 * 1000;
   }, { message: "occurredAt nao pode ser no futuro" }),
   sessionId: z.string().nullable().optional(),
+  expectedPreviousBalance: z.number().refine((n) => Number.isFinite(n), {
+    message: "expectedPreviousBalance deve ser numero finito",
+  }).optional(),
 });
 
 // =============================================================================
@@ -274,11 +277,20 @@ export async function handlePostWalletTransaction(req: any, res: Response): Prom
       occurredAt: parsed.data.occurredAt,
       note: parsed.data.note ?? undefined,
       sessionId: parsed.data.sessionId ?? undefined,
+      expectedPreviousBalance: parsed.data.expectedPreviousBalance,
     });
     res.status(201).json(result);
   } catch (err: any) {
     const status = mapErrorToStatus(err);
     if (status === 500) console.error("POST /api/wallets/:id/transactions failed:", err);
+    if (status === 409 && err?.code === "balance_mismatch") {
+      res.status(409).json({
+        message: err?.message ?? "Saldo divergente",
+        code: "balance_mismatch",
+        currentBalance: err.currentBalance,
+      });
+      return;
+    }
     res.status(status).json({ message: err?.message ?? "Erro ao registrar movimento" });
   }
 }
