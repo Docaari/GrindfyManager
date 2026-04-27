@@ -1,0 +1,119 @@
+%% Sequence: Pre-calculo de expectedDelta por wallet (server-side)
+%% Spec: B:\grindfy\Docs\specs\session-end-reconciliation-v2.md
+%% RFs cobertas: RF-02 (calculateExpectedDeltaPerWallet), RF-03 (mapSiteToWallet),
+%%               RF-04 (endpoint GET /reconcilable-wallets).
+%% ADRs: 045 (tie-break proporcional), 033 (FX convention).
+%%
+%% Cobre:
+%%  - Happy path: 1 site -> 1 wallet, mesma currency, sem orfao.
+%%  - Branch: 0 candidates (site sem wallet ativa) -> orphanContribution.
+%%  - Branch: 1 candidate -> delta inteiro vai pra ela.
+%%  - Branch: N candidates (mesma platform) -> distribuicao proporcional ao saldo (ADR-045).
+%%  - Branch: tournament_currency != wallet.nativeCurrency -> conversao via exchangeRates.
+%%  - Branch: exchangeRates ausente/invalido -> contribuicao = 0 (ADR-033 deterministico).
+%%  - Branch: tournament status != 'finished' -> ignorado.
+
+sequenceDiagram
+    autonumber
+    participant Client as runSessionEndFlow (client)
+    participant API as Express GET /api/grind-sessions/:id/reconcilable-wallets
+    participant Storage as storage.ts
+    participant Calc as calculateExpectedDeltaPerWallet (helper puro)
+    participant Map as mapSiteToWallet (helper puro)
+    participant FX as convertToNativeCurrency (helper puro)
+    participant DB as PostgreSQL
+
+    Client->>API: GET /api/grind-sessions/:id/reconcilable-wallets?includeAll=false
+
+    Note over API,DB: RF-04 — preflight idempotencia
+    API->>API: requireAuth + assertSessionOwnership
+    API->>DB: SELECT 1 FROM wallet_transactions<br/>WHERE session_id=:id AND reason='session_result'<br/>AND source='auto_session' LIMIT 1
+    DB-->>API: rows
+
+    alt Branch — alreadyReconciled
+        API-->>Client: 200 { alreadyReconciled: true, wallets: [], orphanContribution: {} }
+        Note over API: Curto-circuita. Detalhado em sequence-session-end-v2.mermaid.
+    end
+
+    Note over API,Storage: Coleta inputs do helper puro
+    API->>Storage: listSessionTournaments(sessionId, userId)
+    Storage->>DB: SELECT * FROM session_tournaments<br/>WHERE session_id=:sid AND user_id=:uid
+    DB-->>Storage: rows[]
+    Storage-->>API: tournaments[]<br/>(com site, buyIn, prize, bounty, rebuys,<br/>addOnTaken, addOnCost, status)
+
+    API->>Storage: listWalletsByUser(userId, includeArchived=false)
+    Storage->>DB: SELECT * FROM wallets<br/>WHERE user_id=:uid AND status='active'
+    DB-->>Storage: wallets[]
+    Storage-->>API: wallets[]<br/>(com id, platform, nativeCurrency, balance)
+
+    API->>Storage: getUserSettings(userId)
+    Storage->>DB: SELECT exchangeRates FROM user_settings<br/>WHERE user_id=:uid
+    DB-->>Storage: { exchangeRates: { USD: 1, BRL: 5.2, EUR: 0.92, ... } }
+    Storage-->>API: userSettings
+
+    Note over API,Calc: RF-02 — invoca helper puro (testavel sem mock pesado)
+    API->>Calc: calculateExpectedDeltaPerWallet(tournaments, wallets, exchangeRates)
+
+    Calc->>Calc: Inicializa<br/>resultByWallet = Map<walletId, { expectedDelta:0,<br/>contributingTournaments:[] }><br/>orphanByCurrency = Map<currency, amount>
+
+    loop Para cada tournament em tournaments
+        alt Branch — tournament.status != 'finished'
+            Calc->>Calc: skip (RF-02: ignorado)
+            Note over Calc: Cancelados / em andamento / null nao geram delta.
+        end
+
+        Note over Calc: Calcula contribuicao individual
+        Calc->>Calc: contribution_native =<br/>(prize + bounty)<br/>- (buyIn + addOnCost*addOnTaken<br/>+ buyIn*rebuys)
+        Note over Calc: rebuyCost = buyIn (convencao do projeto,<br/>alinhada com calculateSessionStats).
+
+        Note over Calc: Determina currency do tournament
+        Calc->>Calc: tournament_currency =<br/>tournament.currency<br/>?? SITE_DEFAULT_CURRENCY[site]<br/>?? 'USD' (fallback)
+        Note over Calc: Cenario L da spec — site desconhecido<br/>assume USD (consistente com sites internacionais).
+
+        Note over Calc,Map: RF-03 — mapeia site para wallets
+        Calc->>Map: mapSiteToWallet(tournament.site, wallets)
+        Map->>Map: group = SITE_ALIASES[normalize(site)]<br/>candidates = wallets.filter(w =><br/>w.platform.toLowerCase() === group.toLowerCase()<br/>&& w.status === 'active')
+        Map-->>Calc: candidates[] (0..N)
+
+        alt Branch — candidates.length === 0 (orfao)
+            Calc->>Calc: orphanByCurrency[tournament_currency] +=<br/>contribution_native
+            Note over Calc: Cenario E da spec — site sem wallet correspondente.<br/>Exibido como banner no dialog mas NAO gera tx.
+        else candidates.length === 1
+            Calc->>FX: convertToNativeCurrency(<br/>contribution_native, tournament_currency,<br/>candidates[0].nativeCurrency, exchangeRates)
+            FX->>FX: if same currency -> return contribution_native<br/>elif rate ausente/invalido -> return 0 (ADR-033)<br/>else: usd = contribution_native / exchangeRates[from]<br/>     return usd * exchangeRates[to]
+            FX-->>Calc: contribution_in_wallet_currency
+            Calc->>Calc: resultByWallet[candidates[0].id].expectedDelta +=<br/>contribution_in_wallet_currency<br/>resultByWallet[candidates[0].id].contributingTournaments<br/>.push(tournament.id)
+        else candidates.length >= 2
+            Note over Calc: ADR-045 — distribuicao proporcional
+            Calc->>Calc: sumBalances = Σ candidates.map(c => c.balance)
+            alt sumBalances === 0
+                Calc->>Calc: weight_i = 1 / candidates.length<br/>(distribuicao igualitaria)
+            else
+                Calc->>Calc: weight_i = candidates[i].balance / sumBalances
+            end
+            loop Para cada candidate em candidates
+                Calc->>Calc: portion_native = contribution_native * weight_i
+                Calc->>FX: convertToNativeCurrency(portion_native,<br/>tournament_currency, candidate.nativeCurrency,<br/>exchangeRates)
+                FX-->>Calc: portion_in_wallet_currency
+                Calc->>Calc: resultByWallet[candidate.id].expectedDelta +=<br/>portion_in_wallet_currency<br/>resultByWallet[candidate.id].contributingTournaments<br/>.push(tournament.id)
+            end
+        end
+    end
+
+    Calc-->>API: {<br/>resultByWallet: Map<walletId, { expectedDelta,<br/>contributingTournaments }>,<br/>orphanContribution: Map<currency, amount><br/>}
+
+    Note over API: RF-04 — monta resposta enriquecida com wallets
+    API->>API: response.wallets = wallets.map(w => ({<br/>walletId: w.id,<br/>name: w.name,<br/>platform: w.platform,<br/>nativeCurrency: w.nativeCurrency,<br/>openingBalance: w.balance,<br/>expectedPreviousBalance: w.balance,<br/>expectedDelta: resultByWallet[w.id]?.expectedDelta ?? 0,<br/>expectedClosingBalance: w.balance + (expectedDelta ?? 0),<br/>contributingTournaments:<br/>resultByWallet[w.id]?.contributingTournaments ?? [],<br/>hadActivityInSession:<br/>(contributingTournaments?.length ?? 0) > 0<br/>}))
+
+    alt Branch — includeAll=false (default)
+        API->>API: filtra wallets.filter(w => w.hadActivityInSession)
+        Note over API: Default: so wallets com atividade aparecem.
+    else includeAll=true
+        Note over API: Toggle do dialog: todas wallets ativas,<br/>mesmo as sem atividade (expectedDelta=0).
+    end
+
+    API->>API: orphanContribution = Object.fromEntries(orphanByCurrency)
+
+    API-->>Client: 200 {<br/>sessionId, alreadyReconciled: false,<br/>wallets: [{ walletId, name, platform, nativeCurrency,<br/>openingBalance, expectedPreviousBalance, expectedDelta,<br/>expectedClosingBalance, contributingTournaments,<br/>hadActivityInSession }],<br/>orphanContribution: { USD: 0, BRL: 12.50 }<br/>}
+
+    Note over API,Client: Cliente usa expectedClosingBalance para pre-preencher<br/>input "Saldo final reportado" no WalletReconciliationDialog (RF-05).<br/>Cliente NAO recalcula nada — server eh autoritativo.

@@ -27,12 +27,12 @@ const cleanedUpUsers = new Set<string>();
 /**
  * GET /api/grind-sessions/:id/reconcilable-wallets
  *
- * Lista wallets elegiveis para reconciliacao (RF-02).
- * Default: apenas wallets ativas com atividade na sessao (>=1 wallet_transaction
- * com sessionId === :id). Toggle includeAll=true inclui demais wallets ativas.
+ * V2 (RF-04): wallets DERIVADAS de session_tournaments + mapSiteToWallet.
+ * Idempotencia primaria via session_wallet_snapshots (P5/ADR-046);
+ * fallback secundario via wallet_transactions auto_session marker.
  *
- * Resposta 200: { sessionId, alreadyReconciled, wallets: [...] }
- *  Quando alreadyReconciled=true, wallets=[] (preflight RF-08).
+ * Resposta 200: { sessionId, alreadyReconciled, wallets, orphanContribution }
+ *  Quando alreadyReconciled=true, wallets=[] e orphanContribution=[].
  */
 export async function handleGetReconcilableWallets(req: any, res: any): Promise<void> {
   const user = req.user;
@@ -49,29 +49,98 @@ export async function handleGetReconcilableWallets(req: any, res: any): Promise<
       return;
     }
 
+    // V2 (RF-04, P5/ADR-046): snapshot eh fonte PRIMARIA de idempotencia.
+    const snapshotMarker = await (storage as any).findSessionWalletSnapshot?.(
+      sessionId,
+      user.userPlatformId,
+    );
+    if (snapshotMarker) {
+      res.status(200).json({
+        sessionId,
+        alreadyReconciled: true,
+        wallets: [],
+        orphanContribution: [],
+      });
+      return;
+    }
+
+    // Fallback secundario: wallet_transactions auto_session marker.
     const marker = await storage.findReconciliationMarker(sessionId, user.userPlatformId);
     if ((marker?.count ?? 0) > 0) {
       res.status(200).json({
         sessionId,
         alreadyReconciled: true,
         wallets: [],
+        orphanContribution: [],
       });
       return;
     }
 
     const includeAll = String(req.query?.includeAll ?? "").toLowerCase() === "true";
-    const wallets = await storage.listReconcilableWallets(sessionId, user.userPlatformId, {
+    const result = await storage.listReconcilableWallets(sessionId, user.userPlatformId, {
       includeAll,
     });
+
+    // V2: storage retorna { wallets, orphanContribution } OU array (compat v1).
+    let wallets: any[] = [];
+    let orphanContribution: any[] = [];
+    if (Array.isArray(result)) {
+      wallets = result;
+    } else if (result && typeof result === "object") {
+      wallets = Array.isArray(result.wallets) ? result.wallets : [];
+      orphanContribution = Array.isArray(result.orphanContribution)
+        ? result.orphanContribution
+        : [];
+    }
 
     res.status(200).json({
       sessionId,
       alreadyReconciled: false,
       wallets,
+      orphanContribution,
     });
   } catch (error: any) {
     console.error("GET /api/grind-sessions/:id/reconcilable-wallets failed:", error);
     res.status(500).json({ message: "Erro ao listar carteiras elegiveis" });
+  }
+}
+
+/**
+ * GET /api/grind-sessions/:id/wallet-snapshots
+ *
+ * V2 (RF-09): retorna snapshots persistidos da sessao para a aba "Banca"
+ * do edit modal de SessionHistory.
+ */
+export async function handleGetSessionWalletSnapshots(
+  req: any,
+  res: any,
+): Promise<void> {
+  const user = req.user;
+  if (!user || !user.userPlatformId) {
+    res.status(401).json({ message: "Nao autenticado" });
+    return;
+  }
+
+  const sessionId = req.params.id;
+  try {
+    const session = await storage.getGrindSession(sessionId);
+    if (!session || session.userId !== user.userPlatformId) {
+      res.status(404).json({ message: "Sessao nao encontrada" });
+      return;
+    }
+
+    const snapshots = await (storage as any).listSessionWalletSnapshots(
+      sessionId,
+      user.userPlatformId,
+    );
+
+    res.status(200).json({
+      sessionId,
+      snapshots: Array.isArray(snapshots) ? snapshots : [],
+    });
+  } catch (error: any) {
+    console.error("GET /api/grind-sessions/:id/wallet-snapshots failed:", error);
+    res.status(500).json({ message: "Erro ao listar snapshots da sessao" });
   }
 }
 
@@ -148,6 +217,22 @@ export async function handlePostReconcileWallets(req: any, res: any): Promise<vo
       return;
     }
     const adjustments = parsed.data.adjustments;
+    const skipReconciliation = !!parsed.data.skipReconciliation;
+
+    // expectedPreviousBalance ausente -> 400 (RF-06)
+    for (const adj of adjustments) {
+      if (
+        typeof adj.expectedPreviousBalance !== "number" ||
+        !Number.isFinite(adj.expectedPreviousBalance)
+      ) {
+        res.status(400).json({
+          message: "expectedPreviousBalance ausente ou invalido",
+          code: "missing_expected_balance",
+          walletId: adj.walletId,
+        });
+        return;
+      }
+    }
 
     // Duplicate wallet check (RF-07)
     const seen = new Set<string>();
@@ -163,7 +248,12 @@ export async function handlePostReconcileWallets(req: any, res: any): Promise<vo
       seen.add(adj.walletId);
     }
 
-    const result = await runReconciliation(user.userPlatformId, sessionId, adjustments);
+    const result = await runReconciliation(
+      user.userPlatformId,
+      sessionId,
+      adjustments,
+      { skipReconciliation },
+    );
 
     // Idempotencia (RF-08)
     if (result.alreadyReconciled) {
@@ -195,11 +285,17 @@ export async function handlePostReconcileWallets(req: any, res: any): Promise<vo
       return;
     }
 
-    // 200 OK
-    res.status(200).json({
+    // 200 OK — V2 (RF-06, RF-07): inclui snapshotsCreated.
+    const responseBody: any = {
       txCreated: result.created,
+      created: result.created,
       skipped: result.skipped,
-    });
+      snapshotsCreated: result.snapshotsCreated ?? 0,
+    };
+    if (result.skippedByUser) {
+      responseBody.skippedByUser = true;
+    }
+    res.status(200).json(responseBody);
   } catch (error: any) {
     console.error("POST /api/grind-sessions/:id/reconcile-wallets failed:", error);
     res.status(500).json({
@@ -214,6 +310,7 @@ export function registerGrindSessionRoutes(app: Express): void {
   app.get(
     '/api/grind-sessions/:id/reconcilable-wallets',
     requireAuth,
+    walletLimiter,
     (req: any, res) => handleGetReconcilableWallets(req, res),
   );
   app.post(
@@ -221,6 +318,12 @@ export function registerGrindSessionRoutes(app: Express): void {
     requireAuth,
     walletLimiter,
     (req: any, res) => handlePostReconcileWallets(req, res),
+  );
+  app.get(
+    '/api/grind-sessions/:id/wallet-snapshots',
+    requireAuth,
+    walletLimiter,
+    (req: any, res) => handleGetSessionWalletSnapshots(req, res),
   );
 
   // Grind session routes

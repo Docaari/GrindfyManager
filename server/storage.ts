@@ -95,6 +95,9 @@ import {
   type UpdateCooldownLog,
   type StarredHand,
   type InsertStarredHand,
+  sessionWalletSnapshots,
+  type SessionWalletSnapshot,
+  type InsertSessionWalletSnapshot,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
@@ -415,15 +418,12 @@ export interface IStorage {
     userId: string,
     opts?: { includeAll?: boolean },
     tx?: any,
-  ): Promise<Array<{
-    walletId: string;
-    name: string;
-    platform: string;
-    nativeCurrency: string;
-    balance: number;
-    expectedPreviousBalance: number;
-    hadActivityInSession: boolean;
-  }>>;
+  ): Promise<any>;
+  // Sprint Session-End Reconciliation V2 — RF-04, RF-07, RF-09
+  listSessionTournaments(sessionId: string, userId: string, tx?: any): Promise<any[]>;
+  findSessionWalletSnapshot(sessionId: string, userId: string, tx?: any): Promise<any | null>;
+  listSessionWalletSnapshots(sessionId: string, userId: string, tx?: any): Promise<any[]>;
+  createSessionWalletSnapshot(input: any, tx?: any): Promise<any>;
   setUserBankrollV2Migrated(userId: string, value: boolean, tx?: any): Promise<void>;
   backfillSnapshotsWalletId(userId: string, walletId: string, tx?: any): Promise<number>;
   listUsersForV2Migration(tx?: any): Promise<Array<{ userId: string; bankrollAmount: string | null; bankrollV2Migrated: boolean | null }>>;
@@ -4160,51 +4160,227 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     userId: string,
     opts: { includeAll?: boolean } = {},
     tx?: any,
-  ): Promise<Array<{
-    walletId: string;
-    name: string;
-    platform: string;
-    nativeCurrency: string;
-    balance: number;
-    expectedPreviousBalance: number;
-    hadActivityInSession: boolean;
-  }>> {
+  ): Promise<any> {
     const runner = tx ?? db;
     const includeAll = !!opts.includeAll;
 
-    // 1) Wallets que tiveram atividade na sessao (set de walletId)
-    const activityResult: any = await runner.execute(
-      sql`SELECT DISTINCT wallet_id
-          FROM wallet_transactions
-          WHERE session_id = ${sessionId}
-            AND user_id = ${userId}`,
-    );
-    const activityRows = Array.isArray(activityResult)
-      ? activityResult
-      : activityResult.rows ?? [];
-    const activeSet = new Set<string>(
-      activityRows.map((r: any) => r.wallet_id ?? r.walletId).filter(Boolean),
+    // V2 (RF-04): deriva via session_tournaments + mapSiteToWallet.
+    const { calculateExpectedDeltaPerWallet, mapSiteToWallet } = await import(
+      "@shared/wallet-reconciliation"
     );
 
-    // 2) Buscar wallets ativas do usuario; filtrar conforme includeAll
-    const all = await this.listWalletsByUser(userId, { includeArchived: false }, tx);
+    // Queries independentes paralelizadas (E-02).
+    const [activeWallets, stRows, settings] = await Promise.all([
+      this.listWalletsByUser(userId, { includeArchived: false }, tx),
+      runner.execute(
+        sql`SELECT id, site, buy_in, result, bounty, rebuys, add_on_taken, add_on_cost, status
+            FROM session_tournaments
+            WHERE session_id = ${sessionId}
+              AND user_id = ${userId}`,
+      ),
+      this.getUserSettings(userId).catch(() => null),
+    ]);
 
-    return all
-      .filter((w: any) => includeAll || activeSet.has(w.id))
+    const stRaw = Array.isArray(stRows) ? stRows : (stRows as any).rows ?? [];
+    const tournaments = stRaw.map((r: any) => ({
+      id: r.id,
+      site: r.site,
+      buyIn: parseFloat(String(r.buy_in ?? r.buyIn ?? "0")) || 0,
+      prize: parseFloat(String(r.result ?? "0")) || 0,
+      bounty: parseFloat(String(r.bounty ?? "0")) || 0,
+      rebuys: parseInt(String(r.rebuys ?? "0"), 10) || 0,
+      addOnTaken: !!(r.add_on_taken ?? r.addOnTaken),
+      addOnCost: parseFloat(String(r.add_on_cost ?? r.addOnCost ?? "0")) || 0,
+      status: r.status,
+    }));
+
+    const rawRates = (settings as any)?.exchangeRates;
+    const exchangeRates: Record<string, number> =
+      rawRates && typeof rawRates === "object" ? rawRates : {};
+
+    // 4) Calcula expected delta por wallet via helper puro.
+    const walletShapes = activeWallets.map((w: any) => ({
+      id: w.id,
+      platform: w.platform,
+      nativeCurrency: w.nativeCurrency,
+      balance: parseFloat(String(w.balance ?? "0")) || 0,
+      status: (w.status ?? "active") as "active" | "archived",
+    }));
+    const calc = calculateExpectedDeltaPerWallet({
+      tournaments: tournaments as any,
+      wallets: walletShapes,
+      exchangeRates,
+    });
+
+    // 5) Wallets candidatas (site -> match) determinam hadActivityInSession.
+    const walletsWithActivity = new Set<string>(
+      calc.walletsDelta.map((w) => w.walletId),
+    );
+
+    // MEDIUM-03 (reviewer): wallets que receberam delta via tie-break proporcional
+    // (ADR-045) recebem `tieBreakStrategy='proportional'`. UI exibe badge
+    // "Distribuido proporcionalmente" — sem este campo, RF-13 ficaria sem feedback.
+    const walletsWithTieBreak = new Set<string>();
+    for (const t of tournaments) {
+      if (t.status !== "finished") continue;
+      const candidates = mapSiteToWallet(t.site, walletShapes);
+      if (candidates.length >= 2) {
+        for (const c of candidates) walletsWithTieBreak.add(c.id);
+      }
+    }
+
+    // 6) Monta resposta.
+    const wallets = activeWallets
+      .filter((w: any) => includeAll || walletsWithActivity.has(w.id))
       .map((w: any) => {
-        const balanceNum =
-          typeof w.balance === "number" ? w.balance : parseFloat(String(w.balance ?? "0"));
+        const balanceNum = parseFloat(String(w.balance ?? "0"));
         const safeBalance = Number.isFinite(balanceNum) ? balanceNum : 0;
+        const entry = calc.walletsDelta.find((d) => d.walletId === w.id);
+        const expectedDelta = entry?.expectedDelta ?? 0;
+        const contributingTournaments = entry?.contributingTournaments ?? [];
+        const hadActivityInSession = (entry?.contributingTournaments?.length ?? 0) > 0;
+        const tieBreakStrategy: "proportional" | "single" =
+          walletsWithTieBreak.has(w.id) ? "proportional" : "single";
         return {
           walletId: w.id,
           name: w.name,
           platform: w.platform,
           nativeCurrency: w.nativeCurrency,
+          openingBalance: safeBalance,
           balance: safeBalance,
           expectedPreviousBalance: safeBalance,
-          hadActivityInSession: activeSet.has(w.id),
+          expectedDelta,
+          expectedClosingBalance: safeBalance + expectedDelta,
+          contributingTournaments,
+          hadActivityInSession,
+          tieBreakStrategy,
         };
       });
+
+    return {
+      wallets,
+      orphanContribution: calc.orphanContribution,
+    };
+  }
+
+  // =============================================================================
+  // Sprint Session-End Reconciliation V2 — RF-04, RF-07, RF-09
+  // =============================================================================
+
+  async listSessionTournaments(
+    sessionId: string,
+    userId: string,
+    tx?: any,
+  ): Promise<any[]> {
+    const runner = tx ?? db;
+    const result: any = await runner.execute(
+      sql`SELECT * FROM session_tournaments
+          WHERE session_id = ${sessionId} AND user_id = ${userId}`,
+    );
+    return Array.isArray(result) ? result : result.rows ?? [];
+  }
+
+  async findSessionWalletSnapshot(
+    sessionId: string,
+    userId: string,
+    tx?: any,
+  ): Promise<any | null> {
+    const runner = tx ?? db;
+    const result: any = await runner.execute(
+      sql`SELECT id, session_id AS "sessionId", wallet_id AS "walletId"
+          FROM session_wallet_snapshots
+          WHERE session_id = ${sessionId} AND user_id = ${userId}
+          LIMIT 1`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  async listSessionWalletSnapshots(
+    sessionId: string,
+    userId: string,
+    tx?: any,
+  ): Promise<any[]> {
+    const runner = tx ?? db;
+    const result: any = await runner.execute(
+      sql`SELECT
+            sws.wallet_id           AS "walletId",
+            w.name                  AS "walletName",
+            w.platform              AS "platform",
+            sws.native_currency     AS "nativeCurrency",
+            sws.opening_balance     AS "openingBalance",
+            sws.closing_balance     AS "closingBalance",
+            sws.expected_delta      AS "expectedDelta",
+            sws.manual_adjustment   AS "manualAdjustment",
+            sws.contributing_tournament_ids AS "contributingTournamentIds",
+            sws.reason              AS "reason",
+            sws.wallet_transaction_id AS "walletTransactionId",
+            sws.created_at          AS "createdAt"
+          FROM session_wallet_snapshots sws
+          LEFT JOIN wallets w ON w.id = sws.wallet_id
+          WHERE sws.session_id = ${sessionId} AND sws.user_id = ${userId}
+          ORDER BY sws.created_at ASC`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    return rows.map((r: any) => ({
+      walletId: r.walletId ?? r.wallet_id,
+      walletName: r.walletName ?? r.wallet_name,
+      platform: r.platform,
+      nativeCurrency: r.nativeCurrency ?? r.native_currency,
+      openingBalance: r.openingBalance != null ? parseFloat(String(r.openingBalance)) : null,
+      closingBalance: r.closingBalance != null ? parseFloat(String(r.closingBalance)) : null,
+      expectedDelta: r.expectedDelta != null ? parseFloat(String(r.expectedDelta)) : 0,
+      manualAdjustment: r.manualAdjustment != null ? parseFloat(String(r.manualAdjustment)) : null,
+      contributingTournamentIds: Array.isArray(r.contributingTournamentIds)
+        ? r.contributingTournamentIds
+        : [],
+      reason: r.reason ?? "session_result",
+      walletTransactionId: r.walletTransactionId ?? null,
+      createdAt: r.createdAt ?? null,
+    }));
+  }
+
+  async createSessionWalletSnapshot(
+    input: any,
+    tx?: any,
+  ): Promise<any> {
+    const runner = tx ?? db;
+    const id = input.id ?? nanoid();
+    const data: any = {
+      id,
+      userId: input.userId,
+      sessionId: input.sessionId,
+      walletId: input.walletId,
+      nativeCurrency: input.nativeCurrency,
+      openingBalance:
+        typeof input.openingBalance === "number"
+          ? String(input.openingBalance)
+          : input.openingBalance,
+      closingBalance:
+        input.closingBalance == null
+          ? null
+          : typeof input.closingBalance === "number"
+            ? String(input.closingBalance)
+            : input.closingBalance,
+      expectedDelta:
+        typeof input.expectedDelta === "number"
+          ? String(input.expectedDelta)
+          : input.expectedDelta,
+      manualAdjustment:
+        input.manualAdjustment == null
+          ? null
+          : typeof input.manualAdjustment === "number"
+            ? String(input.manualAdjustment)
+            : input.manualAdjustment,
+      contributingTournamentIds: input.contributingTournamentIds ?? [],
+      reason: input.reason ?? "session_result",
+      walletTransactionId: input.walletTransactionId ?? null,
+    };
+    const [created] = await runner
+      .insert(sessionWalletSnapshots)
+      .values(data)
+      .returning();
+    return created;
   }
 
   async setUserBankrollV2Migrated(
@@ -5117,6 +5293,19 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           this.getTournamentById(id, userId, tx),
         getSessionTournamentById: (id: string) =>
           this.getSessionTournamentById(id, tx),
+        // CRITICAL-01 fix (sprint session-end-reconciliation): expor metodos
+        // de reconciliacao no tx wrapper para sessionReconciliation rodar
+        // wallet_transaction + session_wallet_snapshot atomicamente.
+        findReconciliationMarker: (sessionId: string, userId: string) =>
+          this.findReconciliationMarker(sessionId, userId, tx),
+        findSessionWalletSnapshot: (sessionId: string, userId: string) =>
+          this.findSessionWalletSnapshot(sessionId, userId, tx),
+        createSessionWalletSnapshot: (input: any) =>
+          this.createSessionWalletSnapshot(input, tx),
+        listSessionTournaments: (sessionId: string, userId: string) =>
+          this.listSessionTournaments(sessionId, userId, tx),
+        listSessionWalletSnapshots: (sessionId: string, userId: string) =>
+          this.listSessionWalletSnapshots(sessionId, userId, tx),
       };
       return await fn(txWrapper);
     });

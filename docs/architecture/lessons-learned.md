@@ -171,6 +171,11 @@ Tambem precisa instalar accessor com setter no proto de Navigator e re-instalar 
 **Erro:** Aplicar `clamp(50 + speedBonus + fieldBonus + timeBonus, 0, 100)` puramente linear nao reproduz os anchors da spec (Normal+medio+nobre=75, Hyper+massivo+madrugada=25). A spec define dois pontos extremos que NAO sao saida da formula linear.
 **Correto:** Aplicar `clamp(sum - hyperMassivoPenalty, 0, 75)` onde `hyperMassivoPenalty = 10 if (speed=Hyper && field=massivo) else 0`. Isso modela "synergy de variancia" e respeita o cap superior 75 (anchor da spec). Documentado em `server/scoring/tournamentScorer.ts` — funcao `computeColdStartScore`.
 
+### 2026-04-27 — Atomicidade quebrada quando service abre tx propria dentro de outro service (Sprint Session-End Reconciliation V2)
+**Contexto:** `runReconciliation` chamava `walletService.recordWalletTransaction` (que internamente abria `storage.transaction`) e DEPOIS, fora dessa transaction, chamava `storage.createSessionWalletSnapshot`. Resultado: se snapshot falhasse, `wallet_transaction` ja tinha commitado -> snapshot orfao + idempotencia quebrada. Pior: race UNIQUE concorrente — 2 callers passam preflight, cada um commita sua tx, segundo viola UNIQUE em snapshot mas tx duplicada ja gravada -> saldo dobrado.
+**Erro:** Tratar `walletService.recordWalletTransaction` como caixa-preta atomica. Cada chamada ao service abria/commitava uma tx independente, e qualquer escrita externa (snapshot) ficava desprotegida fora dela.
+**Correto:** Service-de-baixo aceita `tx?: any` opcional. Quando passado, NAO abre tx propria — usa o tx do caller (ownership de commit/rollback transferida). Caller (service-de-cima) abre `storage.transaction(tx => ...)` UMA vez, passa o `tx` para todas as escritas filhas. UNIQUE violation (Postgres `23505`) em snapshot dentro da tx -> rollback automatico da `wallet_transaction` da mesma tx -> mapear erro para `already_reconciled` (409). Cache invalidation tambem migra para o caller (so apos commit do outer tx). Pattern reutilizavel para qualquer service que precise compor com outro atomicamente. Detalhes: `server/services/walletService.ts` (parametro `externalTx`), `server/services/sessionReconciliation.ts` (orchestrator), tests `tests/integration/regression/session-end-atomicity.test.ts`.
+
 ---
 
 <a name="general"></a>

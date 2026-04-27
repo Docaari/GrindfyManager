@@ -31,12 +31,27 @@ export const ReconcileAdjustmentSchema = z.object({
     .refine((n) => Number.isFinite(n), {
       message: "expectedPreviousBalance deve ser numero finito",
     }),
+  // V2 (RF-04): expectedDelta agora pode acompanhar adjustment para snapshot.
+  expectedDelta: z
+    .number()
+    .refine((n) => Number.isFinite(n), { message: "expectedDelta deve ser numero finito" })
+    .optional(),
 });
 
 export type ReconcileAdjustment = z.infer<typeof ReconcileAdjustmentSchema>;
 
-export const ReconcileWalletsBodySchema = z.object({
-  adjustments: z.array(ReconcileAdjustmentSchema).max(50, "Maximo de 50 ajustes por chamada"),
-});
+export const ReconcileWalletsBodySchema = z
+  .object({
+    adjustments: z.array(ReconcileAdjustmentSchema).max(50, "Maximo de 50 ajustes por chamada"),
+    skipReconciliation: z.boolean().optional(),
+  })
+  .refine(
+    (b) => b.skipReconciliation === true || b.adjustments.length > 0,
+    {
+      message:
+        "adjustments vazio so eh permitido quando skipReconciliation=true",
+      path: ["adjustments"],
+    },
+  );
 
 export type ReconcileWalletsBody = z.infer<typeof ReconcileWalletsBodySchema>;

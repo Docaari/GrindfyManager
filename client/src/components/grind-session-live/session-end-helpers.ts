@@ -61,3 +61,86 @@ export function formatPendingTournamentLabel(t: PendingTournamentSummary): strin
   const time = t.time?.trim();
   return time ? `${site} - ${name} (${time})` : `${site} - ${name}`;
 }
+
+// =============================================================================
+// Sprint Session-End Reconciliation V2 — RF-01, RF-08, RF-10, RF-13/P7
+// =============================================================================
+
+export interface CreateEndSessionOnSuccessDeps {
+  activeSessionId?: string;
+  sessionAlertManagerRef: { current: { reset: () => void } | null };
+  setGenericAlerts: (a: any[]) => void;
+  setFiredGenericAlerts: (a: any[]) => void;
+  setActiveAlertCount: (n: number) => void;
+  setSessionSummaryData: (d: any) => void;
+  setShowSessionSummary: (b: boolean) => void;
+  setLocation?: (path: string) => void;
+  queryClient?: { invalidateQueries: (q: any) => void };
+  toast?: (m: any) => void;
+  sessionStats?: any;
+}
+
+/**
+ * createEndSessionOnSuccess — RF-01.
+ *
+ * Factory que retorna o callback do `endSessionMutation.onSuccess`.
+ * Reseta alarmes (chamando a API publica do sessionAlertManagerRef + state setters)
+ * e abre summary modal in-place setando setSessionSummaryData(... sessionId ...) +
+ * setShowSessionSummary(true). NAO chama setLocation.
+ */
+export function createEndSessionOnSuccess(
+  deps: CreateEndSessionOnSuccessDeps,
+): () => void {
+  return function onSuccess() {
+    // Reset alarmes (API publica do manager ref).
+    try {
+      deps.sessionAlertManagerRef.current?.reset();
+    } catch {
+      // ignore
+    }
+    deps.setGenericAlerts([]);
+    deps.setFiredGenericAlerts([]);
+    deps.setActiveAlertCount(0);
+
+    // Monta summaryData com sessionId (RF-08, fix bug P3).
+    const stats = deps.sessionStats ?? {};
+    const summaryData = {
+      ...stats,
+      sessionId: deps.activeSessionId,
+    };
+    deps.setSessionSummaryData(summaryData);
+    deps.setShowSessionSummary(true);
+  };
+}
+
+/**
+ * shouldSkipConfirmationModal — RF-13/P7.
+ *
+ * Quando pendingTournaments.length === 0, ConfirmationModal eh pulado e
+ * endSessionMutation.mutate eh chamado direto.
+ */
+export function shouldSkipConfirmationModal(
+  pendingTournaments: any[] | null | undefined,
+): boolean {
+  if (!Array.isArray(pendingTournaments)) return true;
+  return pendingTournaments.length === 0;
+}
+
+/**
+ * deriveAlertsSuspended — RF-10.
+ *
+ * Flag derivada que vale true enquanto qualquer modal terminal esta aberto.
+ * Sessao A (gestao de alarmes) consome via useEffect proprio.
+ */
+export interface DeriveAlertsSuspendedInput {
+  showSessionSummary: boolean;
+  showReconcileDialog: boolean;
+  showConfirmationModal: boolean;
+}
+export function deriveAlertsSuspended(s: DeriveAlertsSuspendedInput): boolean {
+  return !!(
+    s.showSessionSummary ||
+    s.showReconcileDialog ||
+    s.showConfirmationModal
+  );
+}

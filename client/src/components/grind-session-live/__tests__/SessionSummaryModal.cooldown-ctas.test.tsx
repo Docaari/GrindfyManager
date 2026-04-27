@@ -55,6 +55,9 @@ function wrap(ui: React.ReactNode) {
 }
 
 const baseSummaryWithoutFlags = {
+  // Spec V2 RF-08 (P3 fix): sessionId obrigatorio em summaryData. Sem ele,
+  // SessionSummaryModal.startCooldown faz early return + toast (bug P2 fix).
+  sessionId: 'ses_1',
   volume: 5,
   invested: 50,
   profit: 100,
@@ -126,9 +129,13 @@ describe('SessionSummaryModal - CTAs cool-down (RF-01)', () => {
     expect(screen.getByTestId('summary-modal-cta-skip')).toBeInTheDocument();
   });
 
-  it('mantem botao "Continuar Sessao" original (regressao)', () => {
+  it('NAO renderiza botao "Continuar Sessao" (Spec V2 RF-01 P4/F-06: removido)', () => {
+    // V2: apos endSessionMutation rodar, summary so tem CTAs cooldown + skip.
+    // Botao "Continuar Sessao" cria estado inconsistente (PUT ja completou) +
+    // alarmes ja foram resetados. Founder cria nova sessao via /grind se quer
+    // continuar grindando (acao deliberada).
     render(wrap(<SessionSummaryModal {...baseProps} />));
-    expect(document.body.textContent).toMatch(/continuar sess[aã]o/i);
+    expect(document.body.textContent ?? '').not.toMatch(/continuar sess[aã]o/i);
   });
 });
 
@@ -202,6 +209,49 @@ describe('SessionSummaryModal - click quick -> POST {mode:quick}', () => {
       const flat = JSON.stringify(apiRequestMock.mock.calls);
       expect(flat).toContain('cooldown-logs');
       expect(flat).toMatch(/quick/i);
+    });
+  });
+});
+
+// QA fix BUG 2: callbacks onStartFullCooldown / onStartQuickCooldown DEVEM
+// ser invocados com logId apos POST. Sem esses callbacks o modal ficava
+// preso aberto sem feedback (CTA inerte).
+describe('SessionSummaryModal - QA fix BUG 2: callbacks de cooldown invocados', () => {
+  it('click full -> onStartFullCooldown(logId) invocado apos POST', async () => {
+    apiRequestMock.mockResolvedValue({ id: 'cd_full_99', mode: 'full' });
+    const onStartFullCooldown = vi.fn();
+    render(
+      wrap(
+        <SessionSummaryModal
+          {...baseProps}
+          onStartFullCooldown={onStartFullCooldown}
+        />,
+      ),
+    );
+
+    fireEvent.click(screen.getByTestId('summary-modal-cta-full'));
+
+    await waitFor(() => {
+      expect(onStartFullCooldown).toHaveBeenCalledWith('cd_full_99');
+    });
+  });
+
+  it('click quick -> onStartQuickCooldown(logId) invocado apos POST', async () => {
+    apiRequestMock.mockResolvedValue({ id: 'cd_quick_42', mode: 'quick' });
+    const onStartQuickCooldown = vi.fn();
+    render(
+      wrap(
+        <SessionSummaryModal
+          {...baseProps}
+          onStartQuickCooldown={onStartQuickCooldown}
+        />,
+      ),
+    );
+
+    fireEvent.click(screen.getByTestId('summary-modal-cta-quick'));
+
+    await waitFor(() => {
+      expect(onStartQuickCooldown).toHaveBeenCalledWith('cd_quick_42');
     });
   });
 });

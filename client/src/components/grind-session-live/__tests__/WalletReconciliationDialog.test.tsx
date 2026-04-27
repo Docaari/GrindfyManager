@@ -266,7 +266,9 @@ describe('<WalletReconciliationDialog> — toggle "todas" (RF-02)', () => {
 // 3. Preview de delta em tempo real (RF-03)
 // =============================================================================
 
-describe('<WalletReconciliationDialog> — preview delta (RF-03)', () => {
+// V1 obsoleto — V2 spec mudou comportamento (input range/step diferente).
+// Cobertura V2 em WalletReconciliationDialog.v2.test.tsx.
+describe.skip('<WalletReconciliationDialog> — preview delta (RF-03)', () => {
   it('input com valor maior que balance -> delta positivo, tone positive', async () => {
     apiRequestMock.mockResolvedValue(reconcilableResponse);
     const user = userEvent.setup();
@@ -359,7 +361,9 @@ describe('<WalletReconciliationDialog> — preview delta (RF-03)', () => {
 // 4. Submit (RF-04)
 // =============================================================================
 
-describe('<WalletReconciliationDialog> — submit (RF-04)', () => {
+// V1 obsoleto — botao "Sem ajuste" V2 envia skipReconciliation=true (nao mais []).
+// Cobertura V2 em WalletReconciliationDialog.v2.test.tsx.
+describe.skip('<WalletReconciliationDialog> — submit (RF-04)', () => {
   it('submit envia POST /reconcile-wallets com adjustments filtrando delta=0', async () => {
     const user = userEvent.setup();
     // 1a chamada: GET reconcilable-wallets
@@ -606,7 +610,9 @@ describe('<WalletReconciliationDialog> — 422 wallet_archived (RF-07, US-06)', 
 // 6. Telemetria (RF-12)
 // =============================================================================
 
-describe('<WalletReconciliationDialog> — telemetria (RF-12)', () => {
+// V1 obsoleto — RF-11 V2 renomeou eventos (reconcile_dialog_view -> reconcile_dialog_opened etc).
+// Cobertura V2 em tests/integration/telemetry/session-end-events.test.ts.
+describe.skip('<WalletReconciliationDialog> — telemetria (RF-12)', () => {
   it('reconcile_dialog_view ao montar com open=true', async () => {
     apiRequestMock.mockResolvedValue(reconcilableResponse);
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -774,7 +780,9 @@ describe('<WalletReconciliationDialog> — telemetria (RF-12)', () => {
 // 7. Edge cases (filtra delta=0, sessao sem wallets, etc)
 // =============================================================================
 
-describe('<WalletReconciliationDialog> — edge cases', () => {
+// V1 obsoleto — input type/step + button disabled regras V2 mudaram.
+// Cobertura V2 em WalletReconciliationDialog.v2.test.tsx.
+describe.skip('<WalletReconciliationDialog> — edge cases', () => {
   it('GET retorna wallets=[] -> mostra estado vazio (data-testid reconcile-empty)', async () => {
     apiRequestMock.mockResolvedValue({
       sessionId: 'ses_1',

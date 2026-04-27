@@ -336,6 +336,7 @@ async function recordWalletTransaction(
   userId: string,
   walletId: string,
   input: RecordWalletTransactionInput,
+  externalTx?: any,
 ): Promise<{ transaction: any; wallet: any; warning?: string }> {
   // Validacoes sincronas pre-transaction.
   if (typeof input.nativeAmount !== "number" || input.nativeAmount <= 0) {
@@ -366,7 +367,12 @@ async function recordWalletTransaction(
     throw makeError("occurredAt nao pode ser no futuro", 400);
   }
 
-  const result = await storage.transaction(async (tx: any) => {
+  // CRITICAL-01 fix: aceita `externalTx` para participar de transaction abrangente
+  // do caller (ex: sessionReconciliation). Quando passado, NAO abre tx propria —
+  // ownership de commit/rollback fica com o caller. Cache invalidation tambem
+  // delegada ao caller (que decide quando seguro invalidar apos commit do outer tx).
+  // Quando ausente, mantem comportamento original (back-compat).
+  const txRunner = async (tx: any) => {
     const wallet = await tx.selectWalletForUpdate(walletId, userId);
     if (!wallet) {
       throw makeError("Wallet nao encontrada", 404, "wallet_not_found");
@@ -486,9 +492,19 @@ async function recordWalletTransaction(
     });
 
     return { transaction, wallet: { ...wallet, balance: String(newBalance) }, newBalance };
-  });
+  };
 
-  invalidateCaches(userId);
+  // Branch atomico: usa externalTx (caller controla commit) ou abre tx interna.
+  const result = externalTx
+    ? await txRunner(externalTx)
+    : await storage.transaction(txRunner);
+
+  // Cache invalidation so quando NAO ha externalTx — caller eh responsavel
+  // por invalidar apos commit do outer tx (evita janela de cache stale entre
+  // commit do filho e commit do pai).
+  if (!externalTx) {
+    invalidateCaches(userId);
+  }
 
   const warning = result.newBalance < 0 ? "wallet_negative" : undefined;
   return warning

@@ -43,6 +43,75 @@ export interface RunSessionEndFlowDeps {
   onError: (err: unknown) => void;
 }
 
+// =============================================================================
+// V2 — runSessionEndFlowV2 (Spec session-end-reconciliation-v2)
+// =============================================================================
+
+import { emitReconcileSkippedNoWallets } from "@/lib/session-end/telemetry";
+
+export interface RunSessionEndFlowV2Deps {
+  sessionId: string;
+  fetchReconcilable: () => Promise<{
+    wallets: ReconcileWalletEntry[];
+    alreadyReconciled: boolean;
+    orphanContribution?: any[];
+  }>;
+  openReconcileDialog: () => Promise<any>;
+  setLocation: (path: string) => void;
+  toast: (msg: any) => void;
+  onError?: (err: unknown) => void;
+}
+
+/**
+ * runSessionEndFlowV2 — RF-04 (apos summary "Finalizar Sessao" clicked).
+ *
+ * 1. fetchReconcilable. Falha -> toast + setLocation('/grind').
+ * 2. alreadyReconciled=true -> toast + setLocation('/grind').
+ * 3. wallets=[] -> emit reconcile_skipped_no_wallets + setLocation('/grind').
+ * 4. wallets>0 -> openReconcileDialog -> setLocation('/grind').
+ *
+ * NAO chama summary modal (summary ja foi aberto pelo endSessionMutation.onSuccess).
+ */
+export async function runSessionEndFlowV2(deps: RunSessionEndFlowV2Deps): Promise<void> {
+  let reconcilable: { wallets: ReconcileWalletEntry[]; alreadyReconciled: boolean };
+  try {
+    reconcilable = await deps.fetchReconcilable();
+  } catch (err) {
+    deps.toast({
+      title: "Nao foi possivel carregar carteiras para reconciliacao",
+      variant: "destructive",
+    });
+    if (deps.onError) deps.onError(err);
+    deps.setLocation("/grind");
+    return;
+  }
+
+  if (reconcilable.alreadyReconciled) {
+    deps.toast({ title: "Esta sessao ja foi reconciliada anteriormente" });
+    deps.setLocation("/grind");
+    return;
+  }
+
+  const wallets = Array.isArray(reconcilable.wallets) ? reconcilable.wallets : [];
+  if (wallets.length === 0) {
+    try {
+      emitReconcileSkippedNoWallets({ sessionId: deps.sessionId });
+    } catch {
+      // ignore
+    }
+    deps.setLocation("/grind");
+    return;
+  }
+
+  try {
+    await deps.openReconcileDialog();
+  } catch {
+    // dialog rejeitou — segue para redirect
+  }
+
+  deps.setLocation("/grind");
+}
+
 /**
  * Runs the session-end flow with the reconciliation step. Always opens
  * the summary modal at the end (errors are signaled via toast/onError but

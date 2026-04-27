@@ -1,0 +1,192 @@
+%% Sequence: Reconciliacao de banca ao fim da sessao — V2 (corrige P1+P2+P3)
+%% Spec: B:\grindfy\Docs\specs\session-end-reconciliation-v2.md
+%% ADRs: 045 (tie-break proporcional), 046 (session_wallet_snapshots), 040 (v1 arquivada),
+%%       017 (ledger imutavel), 033 (FX convention), 038 (optimistic concurrency).
+%%
+%% Cobre:
+%%  - Happy path: PUT completed -> reset alarmes -> summary IN-PLACE -> dialog -> reconcile -> /grind.
+%%  - Branch wallets.length === 0: pula dialog, redireciona apos summary skip.
+%%  - Branch user clica "Iniciar Cool-down" (com sessionId, corrige P3).
+%%  - Branch user clica "Pular reconciliacao" no dialog (skipReconciliation=true).
+%%  - Branch alreadyReconciled (idempotencia): toast + redirect.
+%%  - Branch 409 balance_mismatch: dialog mostra erro + opcao retry (refetch).
+%%  - Branch GET /reconcilable-wallets falha 5xx: toast + redirect (nao bloqueia).
+%%  - Branch PUT /grind-sessions falha: nao reseta alarmes, nao abre summary, toast.
+%%  - Correcao P2: setLocation('/grind') NAO acontece em onSuccess de endSessionMutation.
+
+sequenceDiagram
+    autonumber
+    actor User as Jogador
+    participant UI as GrindSessionLive (client)
+    participant Mut as endSessionMutation
+    participant AlertMgr as sessionAlertManager
+    participant Summary as SessionSummaryModal
+    participant Flow as runSessionEndFlow
+    participant Dlg as WalletReconciliationDialog
+    participant API as Express server (server/routes/grind-sessions.ts)
+    participant Svc as walletService.recordTransaction
+    participant DB as PostgreSQL
+
+    Note over User,UI: Sessao ativa em /grind-session-live. ConfirmationModal ja confirmou.
+
+    User->>UI: Clica "Finalizar" (apos auto-finish de pendentes)
+    UI->>Mut: endSessionMutation.mutate({ status: 'completed' })
+    Mut->>API: PUT /api/grind-sessions/:id { status: 'completed' }
+    API->>API: requireAuth + assertSessionOwnership
+    API->>DB: UPDATE grind_sessions SET status='completed', endedAt=NOW()<br/>WHERE id=:id AND userId=:uid
+    DB-->>API: ok
+    API-->>Mut: 200 { session }
+
+    alt Branch — PUT falhou (4xx/5xx)
+        API-->>Mut: error
+        Mut->>UI: onError -> toast "Falha ao encerrar sessao"
+        Note over UI: Reset alarmes NAO acontece. Summary NAO abre.<br/>Sessao continua status='active'. User pode tentar de novo.
+    end
+
+    Note over Mut,UI: RF-01 — onSuccess: reset alarmes + summary IN-PLACE (corrige P2)
+    Mut->>AlertMgr: sessionAlertManager.reset()
+    Mut->>UI: setGenericAlerts([]) + setFiredGenericAlerts([])<br/>+ setActiveAlertCount(0)
+    Mut->>UI: invalidate queries [grind-sessions, session-tournaments]
+    Mut->>UI: setSessionSummaryData({ ...stats, sessionId: activeSession.id })
+    Mut->>UI: setShowSessionSummary(true)
+    Note over UI: NAO chama setLocation('/grind') aqui. Bug P2 evitado.
+
+    UI->>Summary: render in-place com summaryData incluindo sessionId
+    Summary->>User: Mostra 3 CTAs:<br/>"Cool-down completo" / "Quick cool-down" / "Finalizar Sessao"
+
+    alt Branch — User clica "Iniciar Cool-down" (full ou quick) — corrige P3
+        User->>Summary: Clica "Cool-down completo" ou "Quick cool-down"
+        Summary->>Summary: handleStartCooldown(mode)
+        Summary->>API: POST /api/cooldown-logs<br/>{ sessionId: summaryData.sessionId, mode }
+        API->>API: requireAuth + insertCooldownLogSchema.parse()
+        API->>DB: INSERT INTO cooldown_logs (id, userId, sessionId, mode, startedAt)
+        DB-->>API: ok
+        API-->>Summary: 201 { cooldownLog }
+        Summary->>UI: telemetria cooldown_started_from_summary { sessionId, mode }
+        Summary->>UI: setLocation('/cooldown/:id') ou abre cooldown UI in-place
+        Note over Summary: P3 corrigido — sessionId presente, server nao retorna 400 "Required".
+    end
+
+    alt Branch — POST /api/cooldown-logs falha (RF-12)
+        API-->>Summary: 400 / 401 / 409 / 500
+        Summary->>Summary: errorMap por status (RF-12)
+        Summary->>User: Toast PT-BR ("Sessao invalida...", "Cool-down ja iniciado...", etc)
+        Summary->>UI: telemetria cooldown_create_failed { sessionId, httpStatus, errorMessage }
+        Note over Summary: Modal continua aberto. User pode tentar outro CTA ou skip cool-down.
+    end
+
+    Note over User,Summary: Caminho principal: skip cool-down -> reconciliar
+    User->>Summary: Clica "Finalizar Sessao" (skip cool-down)
+    Summary->>UI: telemetria summary_finalize_clicked { sessionId }
+    Summary->>UI: handleEndSession(sessionId)
+    UI->>Flow: runSessionEndFlow(sessionId)
+    Flow->>API: GET /api/grind-sessions/:id/reconcilable-wallets?includeAll=false
+
+    Note over API,DB: RF-04 — pre-calculo expectedDelta server-side<br/>(ver sequence-expected-delta-calculation.mermaid)
+    API->>API: requireAuth + assertSessionOwnership
+    API->>DB: SELECT 1 FROM wallet_transactions<br/>WHERE session_id=:id AND reason='session_result'<br/>AND source='auto_session' LIMIT 1
+    DB-->>API: rows (preflight idempotencia)
+
+    alt Branch — alreadyReconciled (idempotencia preflight)
+        API-->>Flow: 200 { sessionId, alreadyReconciled: true,<br/>wallets: [], orphanContribution: {} }
+        Flow->>UI: toast "Esta sessao ja foi reconciliada"
+        Flow->>UI: telemetria reconcile_failed { errorCode: 'already_reconciled' }
+        Flow->>UI: setLocation('/grind')
+    end
+
+    Note over API,DB: Fluxo normal: deriva wallets via session_tournaments
+    API->>DB: storage.listSessionTournaments(sessionId, status='finished')
+    DB-->>API: tournaments[]
+    API->>DB: storage.listWalletsByUser(userId, includeArchived=false)
+    DB-->>API: wallets[] (active only)
+    API->>DB: SELECT exchangeRates FROM user_settings WHERE userId=:uid
+    DB-->>API: { exchangeRates }
+    API->>API: calculateExpectedDeltaPerWallet(<br/>tournaments, wallets, exchangeRates)<br/>(detalhe em sequence-expected-delta-calculation.mermaid)
+    API-->>Flow: 200 { sessionId, alreadyReconciled: false,<br/>wallets: [{ walletId, name, platform, nativeCurrency,<br/>openingBalance, expectedPreviousBalance, expectedDelta,<br/>expectedClosingBalance, contributingTournaments,<br/>hadActivityInSession }],<br/>orphanContribution: { USD: 0, BRL: 12.50 } }
+
+    alt Branch — GET /reconcilable-wallets falha (5xx ou network)
+        API-->>Flow: error
+        Flow->>UI: toast "Nao foi possivel carregar carteiras"
+        Flow->>UI: setLocation('/grind')
+        Note over Flow: Spec NFR: falha do GET NAO bloqueia o flow.
+    end
+
+    alt Branch — wallets.length === 0 (sem session_tournaments finalizados)
+        Note over Flow: Sem nada para reconciliar.
+        Flow->>UI: telemetria reconcile_skipped_no_wallets { sessionId }
+        Flow->>UI: setLocation('/grind')
+    end
+
+    Note over Flow,Dlg: RF-05 — wallets.length > 0 -> abre dialog
+    Flow->>Dlg: openReconcileDialog(wallets, orphanContribution)
+    Dlg->>Dlg: telemetria reconcile_dialog_opened<br/>{ sessionId, walletsCount, hadActivityCount,<br/>orphanCurrencies: ['BRL'] }
+    Dlg->>User: Renderiza linhas com:<br/>- openingBalance (saldo inicial)<br/>- expectedDelta (delta esperado, verde/vermelho/cinza)<br/>- expectedClosingBalance (pre-preenche reportedBalance)<br/>- input "Saldo final reportado" editavel<br/>- preview manualAdjustment em tempo real<br/>- banner orphanContribution se > 0
+
+    alt Branch — User edita reportedBalance
+        User->>Dlg: Edita reportedBalance numa wallet
+        Dlg->>Dlg: manualAdjustment = reportedBalance - expectedClosingBalance<br/>label "+R$X (extra)" verde / "-R$Y (saida)" vermelho / "Sem ajuste" cinza
+    end
+
+    alt Branch — User clica "Pular reconciliacao" (link terciario)
+        User->>Dlg: Clica "Pular reconciliacao"
+        Dlg->>Dlg: telemetria reconcile_skipped_user { sessionId, walletsCount }
+        Dlg-->>UI: onClose (sem chamar POST /reconcile-wallets)
+        UI->>UI: setLocation('/grind')
+        Note over Dlg: Diferente da v1: NAO grava snapshot e NAO grava tx.
+    end
+
+    alt Branch — User clica "Sem ajuste manual"
+        User->>Dlg: Clica "Sem ajuste manual"
+        Dlg->>Dlg: payload com reportedBalance = expectedClosingBalance<br/>(manualAdjustment = 0 implicito)
+        Note over Dlg: Continua para POST normal — grava snapshot com manualAdjustment=0.
+    end
+
+    Note over User,Dlg: Caminho principal: User confirma e gera ajustes
+    User->>Dlg: Clica "Confirmar e gerar ajustes"
+    Dlg->>API: POST /api/grind-sessions/:id/reconcile-wallets<br/>{ adjustments: [{ walletId, reportedBalance,<br/>expectedPreviousBalance, expectedDelta }],<br/>skipReconciliation: false }
+
+    API->>API: requireAuth + walletLimiter + assertSessionOwnership
+    API->>DB: SELECT 1 FROM wallet_transactions<br/>WHERE session_id=:id AND source='auto_session' LIMIT 1
+    DB-->>API: rows
+
+    alt Branch — 409 already_reconciled (race entre 2 abas)
+        API-->>Dlg: 409 { errorCode: 'already_reconciled' }
+        Dlg->>UI: telemetria reconcile_failed { errorCode, httpStatus: 409 }
+        Dlg->>User: Toast "Sessao ja reconciliada anteriormente"
+        Dlg-->>UI: onClose
+        UI->>UI: setLocation('/grind')
+    end
+
+    Note over API,DB: RF-06 — loop fail-fast por wallet
+    loop Para cada adjustment
+        API->>API: delta_total = reportedBalance - expectedPreviousBalance<br/>manualAdjustment = delta_total - expectedDelta
+        alt |delta_total| < 0.01
+            Note over API: Pula tx mas grava snapshot.
+        else delta_total >= 0.01
+            API->>Svc: walletService.recordTransaction(<br/>walletId, direction, |delta_total|,<br/>reason='session_result', source='auto_session',<br/>sessionId, expectedPreviousBalance)
+            Svc->>DB: BEGIN; SELECT balance FROM wallets<br/>WHERE id=:wid FOR UPDATE
+            DB-->>Svc: { balance: actualPrevious }
+            alt actualPrevious !== expectedPreviousBalance (ADR-038)
+                Svc->>DB: ROLLBACK
+                Svc-->>API: throw 409 balance_mismatch
+                API-->>Dlg: 409 { errorCode: 'balance_mismatch',<br/>failedAt: { walletId, error } }
+                Dlg->>UI: telemetria reconcile_failed { errorCode, httpStatus: 409 }
+                Dlg->>Dlg: refetch GET /reconcilable-wallets (novo opening)<br/>+ recompute manualAdjustment preservando reportedBalance
+                Dlg->>User: Toast "Saldo da wallet mudou. Confira e reenvie."
+                Note over Dlg: Wallets ja persistidas anteriores no loop ficam disabled.
+            end
+            Svc->>DB: INSERT wallet_transactions (...)<br/>UPDATE wallets SET balance=newBalance<br/>COMMIT
+            DB-->>Svc: tx
+            Svc-->>API: { tx }
+        end
+        API->>DB: INSERT session_wallet_snapshots<br/>(sessionId, walletId, openingBalance, closingBalance,<br/>expectedDelta, manualAdjustment, contributingTournamentIds,<br/>walletTransactionId, reason='session_result')
+        DB-->>API: snapshot
+    end
+
+    API-->>Dlg: 200 { snapshotsCreated, txCreated[], skipped }
+    Dlg->>UI: telemetria reconcile_submitted<br/>{ sessionId, snapshotsCreated, txCreated.length, skipped }
+    Dlg->>UI: handleReconcileComplete()
+    UI->>UI: invalidate queries [wallets, bankroll-snapshots]
+    UI->>UI: setLocation('/grind')
+
+    Note over UI,User: Pos-merge: SessionHistory edit modal exibe aba "Banca"<br/>via GET /api/grind-sessions/:id/wallet-snapshots (RF-09).

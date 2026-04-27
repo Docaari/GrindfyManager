@@ -43,6 +43,8 @@ import SessionDashboard from "@/components/grind-session-live/SessionDashboard";
 import AddTournamentDialog from "@/components/grind-session-live/AddTournamentDialog";
 import TournamentCard from "@/components/grind-session-live/TournamentCard";
 import SessionSummaryModal from "@/components/grind-session-live/SessionSummaryModal";
+import { CoolDownRunner } from "@/components/cooldown/CoolDownRunner";
+import { QuickCoolDownDialog } from "@/components/cooldown/QuickCoolDownDialog";
 import EditTournamentDialog from "@/components/grind-session-live/EditTournamentDialog";
 import TimeEditDialog from "@/components/grind-session-live/TimeEditDialog";
 import AlertsPanel from "@/components/grind-session-live/AlertsPanel";
@@ -155,6 +157,12 @@ export default function GrindSessionLive() {
   const [showReconcileDialog, setShowReconcileDialog] = useState(false);
   const [reconcileSessionId, setReconcileSessionId] = useState<string | null>(null);
   const reconcileResolveRef = useRef<((info?: any) => void) | null>(null);
+
+  // QA fix BUG 2: cooldown ativo (CTA Cool-down Rapido / Cool-down Full no summary)
+  const [activeCooldown, setActiveCooldown] = useState<{
+    logId: string;
+    mode: "full" | "quick";
+  } | null>(null);
 
   // RF-08: Bankroll integration — hook + accumulator da sessao.
   // fail-open: se o hook falhar ou retornar null, assume "nao configurado" e o
@@ -476,6 +484,8 @@ export default function GrindSessionLive() {
       const investedNorm = stats.totalInvestidoUSD ?? stats.totalInvestido;
       const profitNorm = stats.profitUSD ?? stats.profit;
       const summaryData = {
+        // V2 (RF-08, fix bug P3): inclui sessionId para POST /cooldown-logs nao retornar 400.
+        sessionId: activeSession?.id,
         volume: stats.registros,
         invested: investedNorm,
         profit: profitNorm,
@@ -1179,8 +1189,18 @@ export default function GrindSessionLive() {
       // RF-08 Q5: reseta o accumulator ao finalizar a sessao
       setSessionAccumulatorUSD(0);
       lastAccumulatorWarnedRef.current = 0;
-      // RF-02: Show summary, redirect on summary close
-      setShowSessionSummary(true);
+      // V2 (RF-01): reset alarmes + abre summary in-place. NAO chama setLocation.
+      if (genericAlerts.length || firedGenericAlerts.length || activeAlertCount > 0) {
+        try {
+          sessionAlertManagerRef.current.reset();
+        } catch {
+          // ignore — manager nao deve throw em reset, mas defensivo.
+        }
+        setGenericAlerts([]);
+        setFiredGenericAlerts([]);
+        setActiveAlertCount(0);
+      }
+      generateSessionSummary();
     },
   });
 
@@ -1998,10 +2018,56 @@ export default function GrindSessionLive() {
         </DialogContent>
       </Dialog>
 
-      <SessionSummaryModal show={showSessionSummary} summaryData={sessionSummaryData}
-        finalNotes={finalNotes} setFinalNotes={setFinalNotes}
-        onContinueSession={handleContinueSession} onEndSession={handleEndSession}
+      <SessionSummaryModal
+        show={showSessionSummary}
+        summaryData={sessionSummaryData}
+        finalNotes={finalNotes}
+        setFinalNotes={setFinalNotes}
+        onContinueSession={handleContinueSession}
+        onEndSession={handleEndSession}
+        onStartFullCooldown={(logId) => {
+          setShowSessionSummary(false);
+          setActiveCooldown({ logId, mode: "full" });
+        }}
+        onStartQuickCooldown={(logId) => {
+          setShowSessionSummary(false);
+          setActiveCooldown({ logId, mode: "quick" });
+        }}
       />
+
+      {/* QA fix BUG 2: CoolDownRunner / QuickCoolDownDialog inline.
+          Sem rota /cooldown dedicada — render in-place apos POST /cooldown-logs. */}
+      {activeCooldown && activeSession?.id && activeCooldown.mode === "full" && (
+        <CoolDownRunner
+          cooldownLogId={activeCooldown.logId}
+          sessionId={activeSession.id}
+          mode="full"
+          sessionTournaments={(sessionTournaments ?? []) as any[]}
+          onClose={() => {
+            setActiveCooldown(null);
+            setLocation("/grind");
+          }}
+          onComplete={() => {
+            setActiveCooldown(null);
+            setLocation("/grind");
+          }}
+        />
+      )}
+      {activeCooldown && activeSession?.id && activeCooldown.mode === "quick" && (
+        <QuickCoolDownDialog
+          cooldownLogId={activeCooldown.logId}
+          sessionId={activeSession.id}
+          sessionTournaments={(sessionTournaments ?? []) as any[]}
+          onSave={() => {
+            setActiveCooldown(null);
+            setLocation("/grind");
+          }}
+          onClose={() => {
+            setActiveCooldown(null);
+            setLocation("/grind");
+          }}
+        />
+      )}
 
       {/* ADR-040: Wallet reconciliation dialog ao fim da sessao */}
       {showReconcileDialog && reconcileSessionId && (
@@ -2050,16 +2116,6 @@ export default function GrindSessionLive() {
                 </div>
               );
             })()}
-            <div>
-              <Label className="text-sm font-medium text-gray-300 mb-2 block">Notas finais (opcional)</Label>
-              <Textarea
-                value={finalNotes}
-                onChange={(e) => setFinalNotes(e.target.value)}
-                placeholder="Como foi a sessao? Alguma observacao importante?"
-                className="bg-gray-800 border-gray-600 text-white min-h-[80px] focus:border-emerald-500"
-                maxLength={500}
-              />
-            </div>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setShowConfirmationModal(false)} className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800">
                 Cancelar

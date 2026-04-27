@@ -364,17 +364,33 @@ describe('POST /api/grind-sessions/:id/reconcile-wallets — happy path (RF-04, 
     expect(args[2]).toHaveLength(2);
   });
 
-  it('200 com adjustments=[] -> txCreated=[]', async () => {
-    (runReconciliation as any).mockResolvedValue({ created: [], skipped: 0 });
+  it('200 com adjustments=[] + skipReconciliation=true -> txCreated=[]', async () => {
+    // V2 HIGH-04: adjustments=[] sem skipReconciliation agora retorna 400
+    // (defesa contra clients buggy filtrarem tudo localmente sem sinalizar skip).
+    (runReconciliation as any).mockResolvedValue({
+      created: [],
+      skipped: 0,
+      snapshotsCreated: 0,
+      skippedByUser: true,
+    });
 
     const res = makeRes();
     await handlePostReconcileWallets(
-      makeReq({ body: { adjustments: [] } }) as any,
+      makeReq({ body: { adjustments: [], skipReconciliation: true } }) as any,
       res,
     );
     expect(res.statusCode).toBe(200);
     const created = res.body.txCreated ?? res.body.created;
     expect(created).toEqual([]);
+  });
+
+  it('400 com adjustments=[] sem skipReconciliation (HIGH-04 v2)', async () => {
+    const res = makeRes();
+    await handlePostReconcileWallets(
+      makeReq({ body: { adjustments: [] } }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(400);
   });
 });
 

@@ -64,6 +64,35 @@ export interface QuickNote {
   timestamp: string;
 }
 
+export interface CurrencyBreakdownEntry {
+  currency: string;
+  invested: number;
+  profit: number;
+  fxRateNativePerUSD: number;
+  rateMissing: boolean;
+  investedUSD: number;
+  profitUSD: number;
+}
+
+export interface PlatformBreakdownEntry {
+  site: string;
+  currency: string;
+  invested: number;
+  profit: number;
+  investedUSD: number;
+  profitUSD: number;
+  fxRateNativePerUSD: number;
+  rateMissing: boolean;
+}
+
+export interface SessionFinancialBreakdown {
+  byCurrency: CurrencyBreakdownEntry[];
+  byPlatform: PlatformBreakdownEntry[];
+  totalInvestedUSD: number;
+  profitUSD: number;
+  hasMissingRate: boolean;
+}
+
 export interface SessionStats {
   emAndamento: number;
   registros: number;
@@ -72,6 +101,9 @@ export interface SessionStats {
   concluidos: number;
   totalInvestido: number;
   profit: number;
+  totalInvestidoUSD: number;
+  profitUSD: number;
+  breakdown: SessionFinancialBreakdown;
   itm: number;
   itmPercent: number;
   roi: number;

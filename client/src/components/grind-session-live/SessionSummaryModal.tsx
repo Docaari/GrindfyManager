@@ -1,8 +1,50 @@
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import { detectRedFlags } from "@/lib/cooldownHelpers";
+import {
+  emitCooldownStartedFromSummary,
+  emitCooldownCreateFailed,
+} from "@/lib/session-end/telemetry";
 import type { SessionSummaryData } from './types';
+
+/**
+ * RF-12: mapeia HTTP status / error code para mensagem PT-BR humana.
+ */
+function mapCooldownErrorToMessage(
+  status: number | undefined,
+  errBody: any,
+): { title: string; description?: string } {
+  if (status === undefined || status === 0) {
+    return { title: "Sem conexao. Verifique sua internet e tente novamente." };
+  }
+  if (status === 400) {
+    return { title: "Sessao invalida ou expirada. Recarregue a pagina." };
+  }
+  if (status === 401) {
+    return { title: "Sessao expirada. Faca login novamente." };
+  }
+  if (status === 404) {
+    return {
+      title:
+        "Sessao nao encontrada. Pode ter sido removida noutra aba. Voltando para /grind...",
+    };
+  }
+  if (status === 409) {
+    return { title: "Cool-down ja iniciado para esta sessao. Continuando..." };
+  }
+  if (status === 429) {
+    return { title: "Muitas tentativas. Aguarde 1 minuto e tente novamente." };
+  }
+  if (status >= 500) {
+    return {
+      title:
+        "Erro no servidor. Sua sessao foi salva, mas o cool-down nao iniciou. Tente em alguns minutos.",
+    };
+  }
+  return { title: errBody?.message ?? "Erro ao iniciar cool-down" };
+}
 
 interface SessionSummaryModalProps {
   show: boolean;
@@ -28,7 +70,7 @@ export default function SessionSummaryModal({
   summaryData,
   finalNotes,
   setFinalNotes,
-  onContinueSession,
+  onContinueSession: _onContinueSession,
   onEndSession,
   onStartFullCooldown,
   onStartQuickCooldown,
@@ -36,6 +78,8 @@ export default function SessionSummaryModal({
   // Hooks first (lessons-learned #1) — useState ANTES de qualquer early return.
   const [isCreatingCooldown, setIsCreatingCooldown] = useState(false);
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  void _onContinueSession; // P4/F-06 — botao removido; manter prop para compat.
 
   if (!show || !summaryData) return null;
 
@@ -53,23 +97,47 @@ export default function SessionSummaryModal({
 
   const startCooldown = async (mode: "full" | "quick") => {
     if (isCreatingCooldown) return;
+
+    // RF-08 (P3 fix): early return + toast quando sessionId ausente. NAO chama POST.
+    if (!summaryData.sessionId) {
+      toast({ title: "Sessao nao identificada. Tente recarregar a pagina." });
+      return;
+    }
+
     setIsCreatingCooldown(true);
     try {
-      let logId = "";
-      if (summaryData.sessionId) {
-        const result: any = await apiRequest("POST", "/api/cooldown-logs", {
-          sessionId: summaryData.sessionId,
-          mode,
-        });
-        logId = result?.id ?? "";
-      } else {
-        // Sem sessionId, ainda dispara o callback (caso parent gerencie).
-        await apiRequest("POST", "/api/cooldown-logs", { mode });
+      const result: any = await apiRequest("POST", "/api/cooldown-logs", {
+        sessionId: summaryData.sessionId,
+        mode,
+      });
+      const logId = result?.id ?? "";
+      try {
+        emitCooldownStartedFromSummary({ sessionId: summaryData.sessionId, mode });
+      } catch {
+        // ignore
       }
       if (mode === "full") onStartFullCooldown?.(logId);
       else onStartQuickCooldown?.(logId);
     } catch (err: any) {
-      toast({ title: "Erro ao iniciar cool-down", description: err?.message });
+      const status: number | undefined = err?.response?.status;
+      const errBody = err?.response?.data ?? {};
+      const msg = mapCooldownErrorToMessage(status, errBody);
+      toast(msg);
+      try {
+        emitCooldownCreateFailed({
+          sessionId: summaryData.sessionId,
+          httpStatus: status ?? 0,
+          errorMessage: msg.title,
+        });
+      } catch {
+        // ignore
+      }
+      // RF-12 redirect side-effects.
+      if (status === 401) {
+        setTimeout(() => setLocation("/login"), 3000);
+      } else if (status === 404) {
+        setTimeout(() => setLocation("/grind"), 1500);
+      }
     } finally {
       setIsCreatingCooldown(false);
     }
@@ -213,11 +281,8 @@ export default function SessionSummaryModal({
           </div>
         )}
 
+        {/* P4 / F-06: botao "Continuar Sessao" REMOVIDO. Spec v2 RF-01. */}
         <div className="session-end-actions">
-          <button className="continue-session-btn" onClick={onContinueSession}>
-            Continuar Sessao
-          </button>
-
           {!cooldownAlreadyDone && (
             <>
               <button

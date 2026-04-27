@@ -458,7 +458,9 @@ export const sessionTournaments = pgTable("session_tournaments", {
   consumedTicketId: varchar("consumed_ticket_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_session_tournaments_session_user").on(table.sessionId, table.userId),
+]);
 
 export const preparationLogs = pgTable("preparation_logs", {
   id: varchar("id").primaryKey().notNull(),
@@ -2855,3 +2857,52 @@ export const sleepGateInputSchema = z.object({
 });
 
 export type SleepGateInput = z.infer<typeof sleepGateInputSchema>;
+
+// =============================================================================
+// Sprint Session-End Reconciliation V2 — RF-07 / ADR-046
+// session_wallet_snapshots: estado da banca por wallet por sessao
+// =============================================================================
+
+export const sessionWalletSnapshots = pgTable("session_wallet_snapshots", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  sessionId: varchar("session_id")
+    .notNull()
+    .references(() => grindSessions.id, { onDelete: "cascade" }),
+  walletId: varchar("wallet_id")
+    .notNull()
+    .references(() => wallets.id, { onDelete: "cascade" }),
+  nativeCurrency: varchar("native_currency", { length: 8 }).notNull(),
+  openingBalance: decimal("opening_balance").notNull(),
+  closingBalance: decimal("closing_balance"),
+  expectedDelta: decimal("expected_delta").notNull(),
+  manualAdjustment: decimal("manual_adjustment"),
+  contributingTournamentIds: jsonb("contributing_tournament_ids")
+    .$type<string[]>()
+    .default([]),
+  reason: varchar("reason").notNull().default("session_result"),
+  walletTransactionId: varchar("wallet_transaction_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("uq_session_wallet_snapshot").on(table.sessionId, table.walletId),
+  index("idx_session_wallet_snapshots_user").on(table.userId, table.sessionId),
+]);
+
+export const insertSessionWalletSnapshotSchema = z.object({
+  userId: z.string().min(1),
+  sessionId: z.string().min(1),
+  walletId: z.string().min(1),
+  nativeCurrency: z.string().min(1).max(8),
+  openingBalance: z.union([z.string(), z.number()]),
+  closingBalance: z.union([z.string(), z.number()]).nullable().optional(),
+  expectedDelta: z.union([z.string(), z.number()]),
+  manualAdjustment: z.union([z.string(), z.number()]).nullable().optional(),
+  contributingTournamentIds: z.array(z.string()).default([]),
+  reason: z.literal("session_result").default("session_result"),
+  walletTransactionId: z.string().nullable().optional(),
+}).strict();
+
+export type SessionWalletSnapshot = typeof sessionWalletSnapshots.$inferSelect;
+export type InsertSessionWalletSnapshot = z.infer<typeof insertSessionWalletSnapshotSchema>;
