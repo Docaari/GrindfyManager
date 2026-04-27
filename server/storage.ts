@@ -88,6 +88,13 @@ import {
   type InsertBankrollSnapshot,
   tickets,
   type Ticket,
+  cooldownLogs,
+  starredHands,
+  type CooldownLog,
+  type InsertCooldownLog,
+  type UpdateCooldownLog,
+  type StarredHand,
+  type InsertStarredHand,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
@@ -424,6 +431,27 @@ export interface IStorage {
   // QW-1 RF-04 migration support
   getAllUsersWithSettings(tx?: any): Promise<Array<{ userId: string; exchangeRates: Record<string, number> | null }>>;
   updateUserSettingsExchangeRates(userId: string, newRates: Record<string, number>, tx?: any): Promise<boolean>;
+
+  // Sprint Cooldown-1 (MVP) — pos-sessao
+  getSessionTournament(id: string): Promise<SessionTournament | null>;
+  createCooldownLog(input: { userId: string; sessionId: string; mode: "full" | "quick" }): Promise<{ id: string }>;
+  updateCooldownLog(id: string, userId: string, patch: Record<string, any>): Promise<any>;
+  getCooldownLog(id: string, userId: string): Promise<any | null>;
+  getCooldownLogBySession(sessionId: string, userId: string): Promise<any | null>;
+  listCooldownLogs(userId: string, opts?: { page?: number; pageSize?: number }): Promise<{ items: any[]; total: number; page: number; pageSize: number }>;
+  createStarredHand(input: {
+    userId: string;
+    sessionId: string;
+    sessionTournamentId: string;
+    cooldownLogId?: string | null;
+    type: string;
+    spot: string;
+    notes?: string | null;
+  }): Promise<{ id: string }>;
+  getStarredHand(id: string, userId: string): Promise<any | null>;
+  listStarredHands(userId: string, filter?: { sessionId?: string; type?: string; period?: "7d" | "30d" | "all" }): Promise<any[]>;
+  deleteStarredHand(id: string, userId: string): Promise<boolean>;
+  countStarredHandsByTournament(sessionTournamentId: string, userId: string): Promise<number>;
 
   transaction<T>(fn: (tx: IStorage) => Promise<T>): Promise<T>;
 }
@@ -4581,6 +4609,176 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .where(and(...conditions))
       .limit(1);
     return (row as Tournament) ?? null;
+  }
+
+  // ===========================================================================
+  // Sprint Cooldown-1 (MVP) — Cool-down Logs e Starred Hands
+  // Spec: Docs/specs/cooldown-refactor-plan.md (RF-04)
+  // ADR : Docs/architecture/decisions/041-cooldown-dedicated-spec-and-schema.md
+  // ===========================================================================
+
+  async createCooldownLog(input: InsertCooldownLog & { id?: string }): Promise<CooldownLog> {
+    const id = input.id ?? nanoid();
+    const [row] = await db
+      .insert(cooldownLogs)
+      .values({
+        id,
+        userId: input.userId,
+        sessionId: input.sessionId,
+        mode: input.mode,
+        blocksCompleted: (input.blocksCompleted as any) ?? [],
+        abGameAnswers: (input.abGameAnswers as any) ?? null,
+        notes: input.notes ?? null,
+      })
+      .returning();
+    return row as CooldownLog;
+  }
+
+  async getCooldownLog(id: string, userId: string): Promise<CooldownLog | null> {
+    const [row] = await db
+      .select()
+      .from(cooldownLogs)
+      .where(and(eq(cooldownLogs.id, id), eq(cooldownLogs.userId, userId)))
+      .limit(1);
+    return (row as CooldownLog) ?? null;
+  }
+
+  async getCooldownLogBySession(sessionId: string, userId: string): Promise<CooldownLog | null> {
+    const [row] = await db
+      .select()
+      .from(cooldownLogs)
+      .where(
+        and(eq(cooldownLogs.sessionId, sessionId), eq(cooldownLogs.userId, userId)),
+      )
+      .limit(1);
+    return (row as CooldownLog) ?? null;
+  }
+
+  async updateCooldownLog(
+    id: string,
+    userId: string,
+    patch: Partial<UpdateCooldownLog> & { durationMinutes?: number },
+  ): Promise<CooldownLog | null> {
+    const updateData: any = { updatedAt: new Date() };
+    if (patch.blocksCompleted !== undefined) updateData.blocksCompleted = patch.blocksCompleted;
+    if (patch.abGameAnswers !== undefined) updateData.abGameAnswers = patch.abGameAnswers;
+    if (patch.completedAt !== undefined) {
+      updateData.completedAt =
+        typeof patch.completedAt === "string" ? new Date(patch.completedAt) : patch.completedAt;
+    }
+    if (patch.durationMinutes !== undefined) updateData.durationMinutes = patch.durationMinutes;
+    if (patch.notes !== undefined) updateData.notes = patch.notes;
+
+    const [row] = await db
+      .update(cooldownLogs)
+      .set(updateData)
+      .where(and(eq(cooldownLogs.id, id), eq(cooldownLogs.userId, userId)))
+      .returning();
+    return (row as CooldownLog) ?? null;
+  }
+
+  async listCooldownLogs(
+    userId: string,
+    opts: { page?: number; pageSize?: number } = {},
+  ): Promise<{ items: CooldownLog[]; total: number; page: number; pageSize: number }> {
+    const page = Math.max(1, Math.floor(opts.page ?? 1));
+    const pageSize = Math.min(100, Math.max(1, Math.floor(opts.pageSize ?? 20)));
+    const offset = (page - 1) * pageSize;
+
+    const items = await db
+      .select()
+      .from(cooldownLogs)
+      .where(eq(cooldownLogs.userId, userId))
+      .orderBy(desc(cooldownLogs.completedAt))
+      .limit(pageSize)
+      .offset(offset);
+
+    const [{ count: totalCount }] = await db
+      .select({ count: count() })
+      .from(cooldownLogs)
+      .where(eq(cooldownLogs.userId, userId));
+
+    return {
+      items: items as CooldownLog[],
+      total: Number(totalCount ?? 0),
+      page,
+      pageSize,
+    };
+  }
+
+  // Wrapper compativel com testes que mockam `getSessionTournament` (sem `ById`).
+  async getSessionTournament(id: string): Promise<SessionTournament | null> {
+    return this.getSessionTournamentById(id);
+  }
+
+  async createStarredHand(input: InsertStarredHand & { id?: string }): Promise<StarredHand> {
+    const id = input.id ?? nanoid();
+    const [row] = await db
+      .insert(starredHands)
+      .values({
+        id,
+        userId: input.userId,
+        sessionId: input.sessionId,
+        sessionTournamentId: input.sessionTournamentId,
+        cooldownLogId: input.cooldownLogId ?? null,
+        type: input.type,
+        spot: input.spot,
+        notes: input.notes ?? null,
+      })
+      .returning();
+    return row as StarredHand;
+  }
+
+  async getStarredHand(id: string, userId: string): Promise<StarredHand | null> {
+    const [row] = await db
+      .select()
+      .from(starredHands)
+      .where(and(eq(starredHands.id, id), eq(starredHands.userId, userId)))
+      .limit(1);
+    return (row as StarredHand) ?? null;
+  }
+
+  async listStarredHands(
+    userId: string,
+    filter: { sessionId?: string; type?: string; period?: "7d" | "30d" | "all" } = {},
+  ): Promise<StarredHand[]> {
+    const conditions: any[] = [eq(starredHands.userId, userId)];
+    if (filter.sessionId) conditions.push(eq(starredHands.sessionId, filter.sessionId));
+    if (filter.type) conditions.push(eq(starredHands.type, filter.type));
+    if (filter.period && filter.period !== "all") {
+      const now = new Date();
+      const days = filter.period === "7d" ? 7 : 30;
+      const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      conditions.push(gte(starredHands.createdAt, cutoff));
+    }
+    const rows = await db
+      .select()
+      .from(starredHands)
+      .where(and(...conditions))
+      .orderBy(desc(starredHands.createdAt));
+    return rows as StarredHand[];
+  }
+
+  async deleteStarredHand(id: string, userId: string): Promise<void> {
+    await db
+      .delete(starredHands)
+      .where(and(eq(starredHands.id, id), eq(starredHands.userId, userId)));
+  }
+
+  async countStarredHandsByTournament(
+    sessionTournamentId: string,
+    userId: string,
+  ): Promise<number> {
+    const [{ count: c }] = await db
+      .select({ count: count() })
+      .from(starredHands)
+      .where(
+        and(
+          eq(starredHands.sessionTournamentId, sessionTournamentId),
+          eq(starredHands.userId, userId),
+        ),
+      );
+    return Number(c ?? 0);
   }
 
   async transaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {

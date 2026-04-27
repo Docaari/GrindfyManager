@@ -2637,3 +2637,145 @@ export type Ticket = typeof tickets.$inferSelect;
 export type InsertTicket = z.infer<typeof insertTicketSchema>;
 export type TicketStatus = typeof TICKET_STATUSES[number];
 export type TicketSource = typeof TICKET_SOURCES[number];
+
+// =============================================================================
+// Sprint Cooldown-1 (MVP) — Cool-down pos-sessao
+//
+// Spec: Docs/specs/cooldown-refactor-plan.md (RF-03)
+// ADR : Docs/architecture/decisions/041-cooldown-dedicated-spec-and-schema.md
+// =============================================================================
+
+export const COOLDOWN_LOG_MODES = ["full", "quick"] as const;
+export const STARRED_HAND_TYPES = [
+  "tilt",
+  "leak",
+  "soulread",
+  "hero-call",
+  "cooler",
+  "mistake",
+  "sick",
+  "other",
+] as const;
+export const STARRED_HAND_SPOTS = [
+  "preflop",
+  "flop",
+  "turn",
+  "river",
+  "icm",
+  "final-table",
+  "bubble",
+  "other",
+] as const;
+
+export type AbGameAnswers = {
+  aGame: string[];
+  bGame: string[];
+  cGame: string;
+  lesson: string;
+};
+
+export type TiltSelfAssessment = {
+  feltTilt: number;
+  keptTilting: number;
+  presence: number;
+  triggers: string[];
+  action: string;
+};
+
+export const cooldownLogs = pgTable("cooldown_logs", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  sessionId: varchar("session_id")
+    .notNull()
+    .references(() => grindSessions.id, { onDelete: "cascade" }),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+  durationMinutes: integer("duration_minutes"),
+  mode: varchar("mode").notNull().default("full"), // 'full' | 'quick'
+  blocksCompleted: jsonb("blocks_completed").$type<string[]>().default([]),
+  abGameAnswers: jsonb("ab_game_answers").$type<AbGameAnswers>(),
+  tiltSelfAssessment: jsonb("tilt_self_assessment").$type<TiltSelfAssessment>(),
+  sleepIntent: boolean("sleep_intent"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("uq_cooldown_user_session").on(table.userId, table.sessionId),
+  index("idx_cooldown_user_completed").on(table.userId, table.completedAt),
+]);
+
+export const starredHands = pgTable("starred_hands", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  sessionId: varchar("session_id")
+    .notNull()
+    .references(() => grindSessions.id, { onDelete: "cascade" }),
+  sessionTournamentId: varchar("session_tournament_id")
+    .notNull()
+    .references(() => sessionTournaments.id, { onDelete: "cascade" }),
+  cooldownLogId: varchar("cooldown_log_id")
+    .references(() => cooldownLogs.id, { onDelete: "set null" }),
+  type: varchar("type").notNull(),
+  spot: varchar("spot").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_starred_user_session").on(table.userId, table.sessionId),
+  index("idx_starred_user_type").on(table.userId, table.type),
+]);
+
+// -----------------------------------------------------------------------------
+// Zod schemas
+// -----------------------------------------------------------------------------
+
+export const cooldownLogModeSchema = z.enum(COOLDOWN_LOG_MODES);
+export const starredHandTypeSchema = z.enum(STARRED_HAND_TYPES);
+export const starredHandSpotSchema = z.enum(STARRED_HAND_SPOTS);
+
+export const abGameAnswersSchema = z.object({
+  aGame: z.array(z.string()),
+  bGame: z.array(z.string()),
+  cGame: z.string().max(2000, "cGame tem limite de 2000 caracteres"),
+  lesson: z.string().max(200, "lesson tem limite de 200 caracteres"),
+});
+
+export const insertCooldownLogSchema = z.object({
+  userId: z.string().min(1),
+  sessionId: z.string().min(1),
+  mode: cooldownLogModeSchema,
+  blocksCompleted: z.array(z.string()).optional(),
+  abGameAnswers: abGameAnswersSchema.optional(),
+  notes: z.string().max(500, "notes tem limite de 500 caracteres").nullable().optional(),
+}).strict();
+
+export const updateCooldownLogSchema = z.object({
+  blocksCompleted: z.array(z.string()).optional(),
+  abGameAnswers: abGameAnswersSchema.optional(),
+  completedAt: z.union([z.string(), z.date()]).optional(),
+  durationMinutes: z.number().int().nonnegative().optional(),
+  notes: z.string().max(500, "notes tem limite de 500 caracteres").nullable().optional(),
+}).strict();
+
+export const insertStarredHandSchema = z.object({
+  userId: z.string().min(1),
+  sessionId: z.string().min(1),
+  sessionTournamentId: z.string().min(1),
+  cooldownLogId: z.string().min(1).nullable().optional(),
+  type: starredHandTypeSchema,
+  spot: starredHandSpotSchema,
+  notes: z.string().max(500, "notes tem limite de 500 caracteres").optional(),
+}).strict();
+
+export type CooldownLog = typeof cooldownLogs.$inferSelect;
+export type InsertCooldownLog = z.infer<typeof insertCooldownLogSchema>;
+export type UpdateCooldownLog = z.infer<typeof updateCooldownLogSchema>;
+export type CooldownLogMode = typeof COOLDOWN_LOG_MODES[number];
+
+export type StarredHand = typeof starredHands.$inferSelect;
+export type InsertStarredHand = z.infer<typeof insertStarredHandSchema>;
+export type StarredHandType = typeof STARRED_HAND_TYPES[number];
+export type StarredHandSpot = typeof STARRED_HAND_SPOTS[number];

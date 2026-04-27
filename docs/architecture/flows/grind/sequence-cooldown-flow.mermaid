@@ -1,0 +1,208 @@
+%% Sequence: Cool-down pos-sessao (Sprint Cooldown-1 MVP)
+%% Spec: Docs/specs/cooldown-refactor-plan.md
+%% ADR: Docs/architecture/decisions/041-cooldown-dedicated-spec-and-schema.md
+%% Companion ADRs:
+%%   - ADR-040 (session-end wallet reconciliation) — passo anterior obrigatorio (skipavel)
+%%   - ADR-014/031 (tournament types ortogonais) — session_tournaments referenciado por starred_hands
+%%   - ADR-028 (warmup_rituals vs preparation_logs) — padrao espelhado
+%%
+%% Cobre os 4 branches da spec RF-02 / cenarios de teste:
+%%   Branch FULL  — happy path Bloco 1 + Bloco 2 (US-01, US-02, US-03)
+%%   Branch QUICK — Quick Cool-down ~3min (US-04)
+%%   Branch SKIP  — usuario clica "Finalizar Sessao" (US-05)
+%%   Branch DRAFT — usuario fecha modal abruptamente, log com completedAt=null (US-06)
+%%
+%% Pre-condicao: WalletReconciliationDialog (ADR-040) ja foi tratado (skipavel ou completado).
+%% Summary do SessionSummaryModal eh pos-reconciliation — detectRedFlags usa profit ja ajustado.
+
+sequenceDiagram
+    autonumber
+    actor User as Jogador
+    participant UI as GrindSessionLive
+    participant SSM as SessionSummaryModal
+    participant CDR as CoolDownRunner
+    participant QCD as QuickCoolDownDialog
+    participant API as Express (server/routes/cooldown.ts)
+    participant Storage as storage.ts
+    participant DB as PostgreSQL
+
+    Note over User,UI: Pre: PUT /grind-sessions { status:'completed' } JA executado.<br/>WalletReconciliationDialog (ADR-040) JA foi resolvido<br/>(skip ou submit). grind_sessions.profitLoss esta pos-ajuste.
+
+    UI->>SSM: Monta com summary pos-reconciliation<br/>{ sessionId, profit, roi, abiMed, focoMedio,<br/>  inteligenciaEmocionalMedia, interferenciasMedia, durationMin }
+    SSM->>SSM: detectRedFlags(summary) -> { hasFlags, reasons[] }
+    Note over SSM: Red flags se qualquer:<br/>profit < -2*abiMed<br/>focoMedio < 4 OU IE < 4<br/>interferenciasMedia > 7<br/>duration > 360min<br/>Edge: abiMed=0 -> fallback profit < -50 USD
+
+    alt Red flags presentes
+        SSM->>User: Mensagem amarela "Sua sessao teve sinais de fadiga/tilt..."<br/>CTA "Iniciar Cool-down (~5min)" classe='cooldown-cta-warning'
+    else Sem red flags
+        SSM->>User: CTA "Iniciar Cool-down (~5min)" classe='cooldown-cta-neutral'
+    end
+
+    Note over SSM,User: 3 CTAs no rodape:<br/>1) "Iniciar Cool-down (~5min)" -> Branch FULL<br/>2) "Cool-down Rapido (~3min)" -> Branch QUICK<br/>3) "Finalizar Sessao (Pular cool-down)" -> Branch SKIP
+
+    %% =======================================
+    %% BRANCH FULL — happy path Bloco 1 + Bloco 2
+    %% =======================================
+    alt Branch FULL — Cool-down completo (US-01, US-02, US-03)
+        User->>SSM: Clica "Iniciar Cool-down (~5min)"
+        SSM->>API: POST /api/cooldown-logs<br/>{ sessionId, mode:'full' }
+        API->>API: requireAuth + assertSessionOwnership(sessionId)
+        API->>Storage: getCooldownLogBySession(userId, sessionId)
+        Storage->>DB: SELECT id FROM cooldown_logs<br/>WHERE userId=:u AND sessionId=:s LIMIT 1
+        DB-->>Storage: rows
+        alt Ja existe log para essa sessao (UNIQUE violation preflight)
+            Storage-->>API: existing
+            API-->>SSM: 409 { code:'cooldown_already_exists', logId }
+            SSM->>User: Toast "Cool-down ja iniciado para esta sessao"
+            SSM->>CDR: Reabre runner em estado existente (resumir rascunho)
+        else Novo
+            Storage->>DB: INSERT INTO cooldown_logs<br/>(id, userId, sessionId, mode='full',<br/>  startedAt=NOW(), blocksCompleted='[]')
+            DB-->>Storage: { id: cooldownLogId }
+            Storage-->>API: { id }
+            API-->>SSM: 201 { id, mode:'full', startedAt }
+        end
+        SSM->>CDR: Monta CoolDownRunner full-screen<br/>props: { cooldownLogId, sessionId, mode:'full' }
+        CDR->>CDR: useReducer state: { currentBlock:'hands', draft, isSaving, completedBlocks:[] }
+
+        %% --- Bloco 1: Starred Hands ---
+        Note over CDR,User: Bloco 1 (5min) — Analise de Maos Criticas<br/>Cronometro nao-bloqueante; BreathingGuide toggle on/off
+        CDR->>API: GET /api/grind-sessions/:sessionId/tournaments<br/>(reuso endpoint existente)
+        API-->>CDR: tournaments[] ordered by buyIn DESC
+
+        loop Para cada mao estrelada (max 3 por torneio)
+            User->>CDR: Seleciona torneio + type + spot + notes (opcional, max 500)
+            CDR->>API: POST /api/starred-hands<br/>{ sessionId, sessionTournamentId, cooldownLogId,<br/>  type, spot, notes? }
+            API->>API: requireAuth + walletLimiter (30/min)
+            API->>Storage: assertSessionTournamentOwnership(userId, sessionTournamentId, sessionId)
+            Storage->>DB: SELECT id FROM session_tournaments<br/>WHERE id=:st AND sessionId=:s
+            DB-->>Storage: row?
+            alt sessionTournamentId nao pertence a sessionId
+                Storage-->>API: throw 'fk_mismatch'
+                API-->>CDR: 400 { code:'invalid_session_tournament' }
+                CDR->>User: Alerta "Torneio nao pertence a esta sessao"
+            end
+            alt Limite de 3 stars por torneio atingido
+                Storage->>DB: SELECT count(*) FROM starred_hands<br/>WHERE sessionTournamentId=:st AND userId=:u
+                DB-->>Storage: count
+                Note over Storage,API: count >= 3 -> rejeitar
+                API-->>CDR: 400 { code:'star_limit_reached' }
+                CDR->>User: UI desabilita botao + tooltip "Maximo 3 maos"
+            else OK
+                Storage->>DB: INSERT INTO starred_hands<br/>(id, userId, sessionId, sessionTournamentId,<br/>  cooldownLogId, type, spot, notes)
+                DB-->>Storage: { id }
+                Storage-->>API: { id, ...row }
+                API-->>CDR: 201 { id, type, spot, notes }
+                CDR->>CDR: Adiciona ao draft.starredHands[] (optimistic UI)
+            end
+        end
+
+        User->>CDR: Clica "Avancar para Bloco 2"
+        CDR->>CDR: Debounce 1s -> autosave
+        CDR->>API: PATCH /api/cooldown-logs/:id<br/>{ blocksCompleted: ['hands'] }
+        API->>Storage: updateCooldownLog(id, userId, partial)
+        Storage->>DB: UPDATE cooldown_logs<br/>SET blocksCompleted='["hands"]', updatedAt=NOW()<br/>WHERE id=:id AND userId=:u
+        DB-->>Storage: ok
+        Storage-->>API: { ...updated }
+        API-->>CDR: 200 { ...updated }
+        CDR->>CDR: setState { currentBlock: 'abc' }
+
+        %% --- Bloco 2: A/B/C Game Journal ---
+        Note over CDR,User: Bloco 2 (5min) — A/B/C Game Journal<br/>4 textareas estruturadas, validacao soft (warning sem bloqueio)
+        User->>CDR: Preenche aGame[] (1-3 itens), bGame[] (1-3 itens),<br/>cGame (multiline), lesson (single line max 200 chars)
+        CDR->>CDR: onBlur por campo -> debounce 1s -> autosave
+        CDR->>API: PATCH /api/cooldown-logs/:id<br/>{ abGameAnswers: { aGame:[...], bGame:[...], cGame, lesson } }
+        API->>Storage: updateCooldownLog(...)
+        Storage->>DB: UPDATE cooldown_logs SET abGameAnswers=:json, updatedAt=NOW()
+        DB-->>Storage: ok
+        API-->>CDR: 200 { ...updated }
+
+        User->>CDR: Clica "Concluir Cool-down"
+        CDR->>API: PATCH /api/cooldown-logs/:id<br/>{ blocksCompleted:['hands','abc'],<br/>  completedAt: NOW(), durationMinutes: elapsed }
+        API->>Storage: updateCooldownLog(...)
+        Storage->>DB: UPDATE cooldown_logs<br/>SET blocksCompleted='["hands","abc"]',<br/>completedAt=NOW(), durationMinutes=:n
+        DB-->>Storage: ok
+        Storage-->>API: { ...completed }
+        API-->>CDR: 200 { ...completed }
+        CDR->>CDR: invalidateQueries(['cooldownLogs', sessionId])
+        CDR->>User: Toast "Cool-down concluido. Bom descanso."
+        CDR-->>UI: onClose
+        UI->>UI: Redirect /grind
+    end
+
+    %% =======================================
+    %% BRANCH QUICK — Quick Cool-down ~3min
+    %% =======================================
+    alt Branch QUICK — Quick Cool-down (US-04)
+        User->>SSM: Clica "Cool-down Rapido (~3min)"
+        SSM->>API: POST /api/cooldown-logs<br/>{ sessionId, mode:'quick' }
+        API->>Storage: createCooldownLog(...)
+        Storage->>DB: INSERT INTO cooldown_logs<br/>(mode='quick', startedAt=NOW(), blocksCompleted='[]')
+        DB-->>Storage: { id }
+        API-->>SSM: 201 { id, mode:'quick' }
+        SSM->>QCD: Monta QuickCoolDownDialog<br/>props: { cooldownLogId, sessionId }
+        Note over QCD,User: 5 campos:<br/>3 maos criticas (textareas curtas, type/spot opcionais)<br/>+ "O que fez bem?" + "O que faria diferente?"
+
+        loop Para cada mao critica curta (ate 3)
+            User->>QCD: Preenche notes curta (type/spot opcionais)
+            QCD->>API: POST /api/starred-hands<br/>{ sessionId, sessionTournamentId, cooldownLogId,<br/>  type:'other', spot:'other', notes }
+            API-->>QCD: 201 { id }
+        end
+
+        User->>QCD: Preenche 2 perguntas + clica "Salvar"
+        QCD->>API: PATCH /api/cooldown-logs/:id<br/>{ abGameAnswers:{ aGame:[respWell], bGame:[],<br/>  cGame:'', lesson:respDifferent },<br/>  blocksCompleted:['quick'],<br/>  completedAt:NOW(), durationMinutes:elapsed }
+        API->>Storage: updateCooldownLog(...)
+        Storage->>DB: UPDATE cooldown_logs SET ...
+        DB-->>Storage: ok
+        API-->>QCD: 200 { ...completed }
+        QCD->>User: Toast "Cool-down rapido salvo"
+        QCD-->>UI: onClose
+        UI->>UI: Redirect /grind
+    end
+
+    %% =======================================
+    %% BRANCH SKIP — usuario nao quer cool-down
+    %% =======================================
+    alt Branch SKIP — Pular cool-down (US-05)
+        User->>SSM: Clica "Finalizar Sessao (Pular cool-down)"
+        Note over SSM,API: Nenhuma chamada a /api/cooldown-logs.<br/>Nada eh persistido em cooldown_logs ou starred_hands.
+        SSM-->>UI: onClose
+        UI->>UI: Redirect /grind
+    end
+
+    %% =======================================
+    %% BRANCH DRAFT — usuario fecha modal abruptamente
+    %% =======================================
+    alt Branch DRAFT — Rascunho preservado (US-06)
+        Note over User,CDR: Usuario ja iniciou cool-down (POST criou log com<br/>completedAt=null). Decide fechar modal antes de concluir.
+
+        User->>CDR: Clica X / pressiona ESC
+        CDR->>CDR: Confirmacao modal "Cool-down em rascunho. Sair?"
+        alt Usuario confirma sair
+            CDR->>CDR: Ultimo PATCH em-flight aguarda (debounce flush)
+            CDR->>API: PATCH /api/cooldown-logs/:id<br/>{ blocksCompleted:[...partial], abGameAnswers:partial }
+            API->>Storage: updateCooldownLog(...)
+            Storage->>DB: UPDATE cooldown_logs<br/>SET blocksCompleted=..., completedAt IS STILL NULL
+            DB-->>Storage: ok
+            API-->>CDR: 200
+            CDR-->>UI: onClose
+            UI->>UI: Redirect /grind
+        else Usuario cancela (volta ao runner)
+            CDR->>CDR: Permanece no bloco atual
+        end
+
+        Note over User,UI: Mais tarde — usuario abre /grind/history/:sessionId
+        User->>UI: Visualiza sessao no historico
+        UI->>API: GET /api/cooldown-logs/:sessionId
+        API->>Storage: getCooldownLogBySession(userId, sessionId)
+        Storage->>DB: SELECT * FROM cooldown_logs<br/>WHERE userId=:u AND sessionId=:s
+        DB-->>Storage: log com completedAt=null
+        Storage-->>API: { ...log }
+        API-->>UI: 200 { ...log, isDraft: completedAt IS NULL }
+        UI->>User: Badge "Cool-down em rascunho" + CTA "Retomar"
+        alt Usuario clica "Retomar"
+            UI->>CDR: Reabre runner com state inicial = log.blocksCompleted
+            Note over CDR: PATCH retoma de onde parou (idempotente)
+        end
+    end
+
+    Note over User,DB: Pos-condicoes:<br/>- FULL/QUICK -> cooldown_logs.completedAt != NULL,<br/>  blocksCompleted contem rota tomada<br/>- SKIP -> nada criado<br/>- DRAFT -> cooldown_logs.completedAt = NULL ate retomada

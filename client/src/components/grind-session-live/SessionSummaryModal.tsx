@@ -1,12 +1,26 @@
+import { useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { detectRedFlags } from "@/lib/cooldownHelpers";
 import type { SessionSummaryData } from './types';
 
 interface SessionSummaryModalProps {
   show: boolean;
-  summaryData: SessionSummaryData | null;
+  summaryData: (SessionSummaryData & {
+    abiMed?: number;
+    duration?: number;
+    focoMedio?: number;
+    inteligenciaEmocionalMedia?: number;
+    interferenciasMedia?: number;
+    cooldownCompleted?: boolean;
+    sessionId?: string;
+  }) | null;
   finalNotes: string;
   setFinalNotes: (notes: string) => void;
   onContinueSession: () => void;
   onEndSession: () => void;
+  onStartFullCooldown?: (logId: string) => void;
+  onStartQuickCooldown?: (logId: string) => void;
 }
 
 export default function SessionSummaryModal({
@@ -16,8 +30,50 @@ export default function SessionSummaryModal({
   setFinalNotes,
   onContinueSession,
   onEndSession,
+  onStartFullCooldown,
+  onStartQuickCooldown,
 }: SessionSummaryModalProps) {
+  // Hooks first (lessons-learned #1) — useState ANTES de qualquer early return.
+  const [isCreatingCooldown, setIsCreatingCooldown] = useState(false);
+  const { toast } = useToast();
+
   if (!show || !summaryData) return null;
+
+  // Sprint Cooldown-1 (RF-01): detectRedFlags + 3 CTAs novos.
+  const redFlags = detectRedFlags({
+    profit: summaryData.profit,
+    abiMed: summaryData.abiMed,
+    focoMedio: summaryData.focoMedio,
+    inteligenciaEmocionalMedia: summaryData.inteligenciaEmocionalMedia,
+    interferenciasMedia: summaryData.interferenciasMedia,
+    duration: summaryData.duration,
+  });
+  const cooldownAlreadyDone = summaryData.cooldownCompleted === true;
+  const fullCtaClass = redFlags.hasFlags ? "cooldown-cta-warning" : "cooldown-cta-neutral";
+
+  const startCooldown = async (mode: "full" | "quick") => {
+    if (isCreatingCooldown) return;
+    setIsCreatingCooldown(true);
+    try {
+      let logId = "";
+      if (summaryData.sessionId) {
+        const result: any = await apiRequest("POST", "/api/cooldown-logs", {
+          sessionId: summaryData.sessionId,
+          mode,
+        });
+        logId = result?.id ?? "";
+      } else {
+        // Sem sessionId, ainda dispara o callback (caso parent gerencie).
+        await apiRequest("POST", "/api/cooldown-logs", { mode });
+      }
+      if (mode === "full") onStartFullCooldown?.(logId);
+      else onStartQuickCooldown?.(logId);
+    } catch (err: any) {
+      toast({ title: "Erro ao iniciar cool-down", description: err?.message });
+    } finally {
+      setIsCreatingCooldown(false);
+    }
+  };
 
   return (
     <div className="session-end-modal show">
@@ -146,12 +202,49 @@ export default function SessionSummaryModal({
           </div>
         </div>
 
+        {/* Sprint Cooldown-1 (RF-01): mensagem warning quando red flags */}
+        {redFlags.hasFlags && !cooldownAlreadyDone && (
+          <div
+            data-testid="summary-modal-flag-warning"
+            className="cooldown-flag-warning"
+            role="status"
+          >
+            Sua sessao teve sinais de fadiga/tilt. Recomendamos cool-down.
+          </div>
+        )}
+
         <div className="session-end-actions">
           <button className="continue-session-btn" onClick={onContinueSession}>
             Continuar Sessao
           </button>
-          <button className="end-session-btn" onClick={onEndSession}>
-            Fechar
+
+          {!cooldownAlreadyDone && (
+            <>
+              <button
+                data-testid="summary-modal-cta-quick"
+                className="cooldown-cta-quick"
+                onClick={() => startCooldown("quick")}
+                disabled={isCreatingCooldown}
+              >
+                Cool-down Rapido (~3min)
+              </button>
+              <button
+                data-testid="summary-modal-cta-full"
+                className={fullCtaClass}
+                onClick={() => startCooldown("full")}
+                disabled={isCreatingCooldown}
+              >
+                Iniciar Cool-down (~5min)
+              </button>
+            </>
+          )}
+
+          <button
+            data-testid="summary-modal-cta-skip"
+            className="end-session-btn"
+            onClick={onEndSession}
+          >
+            {cooldownAlreadyDone ? "Fechar" : "Finalizar Sessao"}
           </button>
         </div>
       </div>

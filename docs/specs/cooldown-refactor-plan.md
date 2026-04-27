@@ -367,7 +367,7 @@ cooldown/
 - Cacheable (entra no cache strategy de ADR-019).
 
 **Criterios de aceitacao:**
-- [ ] ADR-029 documentando a decisao + tool registry pattern (consistente com ADR-023).
+- [ ] ADR-041 documentando a decisao + tool registry pattern (consistente com ADR-023).
 - [ ] Tool e testado em `tests/unit/coach/tools/cooldown-history.test.ts`.
 - [ ] Page context schema validado por Zod whitelist.
 - [ ] Sanitizer remove campos sensiveis (notes pessoais detalhados — manter so contagem por tipo).
@@ -420,8 +420,8 @@ cooldown/
 
 ### RF-10: Documentacao
 
-- [ ] **ADR-029:** `B:\grindfy\Docs\architecture\decisions\029-cooldown-dedicated-spec-and-schema.md` — justifica por que cool-down e spec separada e schema novo (vs. estender `preparation_logs`).
-- [ ] **ADR-030 (Sprint 3):** `030-cooldown-coach-tool-registry.md` — pattern do `read_cooldown_history` tool.
+- [ ] **ADR-041:** `B:\grindfy\Docs\architecture\decisions\041-cooldown-dedicated-spec-and-schema.md` — justifica por que cool-down e spec separada e schema novo (vs. estender `preparation_logs`).
+- [ ] **ADR-042 (Sprint 3):** `042-cooldown-coach-tool-registry.md` — pattern do `read_cooldown_history` tool.
 - [ ] **Sequence diagram:** `B:\grindfy\Docs\architecture\sequence-cooldown-flow.mermaid` — fluxo completo encerramento -> runner -> persist.
 - [ ] **Atualizar `data-model.mermaid`:** adicionar `cooldown_logs` e `starred_hands` com FKs.
 - [ ] **Atualizar `CLAUDE.md`:** secao 7 (endpoints) + secao 6 (modelos de dados); registrar erros conhecidos da IA quando aplicavel.
@@ -531,9 +531,9 @@ cooldown/
 
 | Sprint | Escopo | Esforco est. |
 |---|---|---|
-| **Cooldown-1** (P0, MVP) | Schema + RF-01 (gate) + RF-02 Blocos 1+2 + Quick + RF-03 + RF-04 (CRUD) + RF-09 testes core + RF-10 ADR-029 + sequence diagram + RF-08 (update warm-up spec) | ~5 dias |
+| **Cooldown-1** (P0, MVP) | Schema + RF-01 (gate) + RF-02 Blocos 1+2 + Quick + RF-03 + RF-04 (CRUD) + RF-09 testes core + RF-10 ADR-041 + sequence diagram + RF-08 (update warm-up spec) | ~5 dias |
 | **Cooldown-2** (P1) | RF-02 Blocos 3+4 + Sleep Gate (`planClosed`, `dashboardSnoozedUntil`) + `BreathingGuide` integrado + RF-06 (analytics) + testes | ~4 dias |
-| **Cooldown-3** (P2) | RF-07 (Coach AI tool + page context + ADR-030) + deprecation `preparation_logs.*` orfaos + correlacao cool-down x performance | ~3 dias |
+| **Cooldown-3** (P2) | RF-07 (Coach AI tool + page context + ADR-042) + deprecation `preparation_logs.*` orfaos + correlacao cool-down x performance | ~3 dias |
 
 **Total ~12 dias.**
 
