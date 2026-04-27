@@ -4,8 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { PlayCircle, Clock, Coins, Edit, X, Undo2, UserPlus, Trophy, Bell, BellRing, CheckCircle, Check, Plus } from "lucide-react";
+import { PlayCircle, Clock, Coins, Edit, X, Undo2, UserPlus, Trophy, Bell, CheckCircle, Plus } from "lucide-react";
 import { calculateLateRegDeadline, formatStack, getLateRegColor } from "@/lib/lateRegUtils";
 import { formatBuyIn, getCurrencyForSite } from "@shared/platform-currency";
 import {
@@ -48,14 +47,13 @@ interface TournamentCardUpcomingProps {
   tournament: any;
   registered: any[];
   onRegister: (id: string) => void;
-  onEditTime: (id: string) => void;
   onEdit: (tournament: any) => void;
   onDelete: (id: string) => void;
   queryClient: any;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
-  onCreateLateRegAlert?: (tournamentId: string, tournamentName: string, startTime: Date, lateRegMinutes: number, minutesBefore: number) => void;
-  hasAlertForTournament?: (tournamentId: string, triggerAt: Date) => boolean;
+  // Sprint Alarmes 2.0 — botao unico Alerta abre TournamentAlertDialog com torneio pre-selecionado.
+  onOpenTournamentAlert?: (tournamentId: string) => void;
 }
 
 interface TournamentCardCompletedProps {
@@ -406,9 +404,9 @@ function RegisteredCard({
 
 function UpcomingCard({
   tournament, registered,
-  onRegister, onEditTime, onEdit, onDelete, queryClient,
+  onRegister, onEdit, onDelete, queryClient,
   isSelected, onToggleSelect,
-  onCreateLateRegAlert, hasAlertForTournament,
+  onOpenTournamentAlert,
 }: TournamentCardUpcomingProps) {
   const guaranteedValue = getGuaranteedValue(tournament);
 
@@ -538,19 +536,8 @@ function UpcomingCard({
             )}
           </div>
         </div>
-        {/* Grid 2x3 Layout */}
-        <div className="grid grid-cols-[1fr_1fr_1.3fr] grid-rows-2 gap-2 w-72 max-w-72">
-          {/* Horario */}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onEditTime(tournament.id)}
-            className="border-2 border-orange-500 bg-gradient-to-r from-orange-600/60 to-orange-700/60 text-orange-100 hover:from-orange-500/80 hover:to-orange-600/80 hover:text-white h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-          >
-            <Clock className="w-3 h-3 mr-1" />
-            Horario
-          </Button>
-
+        {/* Grid 3x2 Layout — Fix 9 (apos remocao Horario + AlertBellPopover) */}
+        <div className="grid grid-cols-[1fr_1.3fr] grid-rows-3 gap-2 w-64 max-w-64">
           {/* Editar */}
           <Button
             size="sm"
@@ -562,11 +549,11 @@ function UpcomingCard({
             Editar
           </Button>
 
-          {/* REGISTRAR (2 rows) */}
+          {/* REGISTRAR (3 rows span) */}
           <Button
             size="sm"
             onClick={() => onRegister(tournament.id)}
-            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white row-span-2 h-[84px] px-2 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-blue-400/50"
+            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white row-span-3 h-[136px] px-2 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-blue-400/50"
           >
             <div className="flex flex-col items-center justify-center">
               <UserPlus className="w-4 h-4 mb-1" />
@@ -574,27 +561,19 @@ function UpcomingCard({
             </div>
           </Button>
 
-          {/* Alert bell popover for late-reg quick alerts */}
-          {onCreateLateRegAlert && lateRegInfo && lateRegInfo.color !== 'expired' ? (
-            <AlertBellPopover
-              tournament={tournament}
-              lateRegInfo={lateRegInfo}
-              onCreateLateRegAlert={onCreateLateRegAlert}
-              hasAlertForTournament={hasAlertForTournament}
-            />
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled
-              title={lateRegInfo && lateRegInfo.color !== 'expired' ? "Alerta" : "Sem late reg"}
-              aria-label="Notificar - Sem late reg disponivel"
-              className="border-2 border-gray-500 bg-gradient-to-r from-gray-600/60 to-gray-700/60 text-gray-300 opacity-50 cursor-not-allowed h-10 px-2 text-xs font-semibold shadow-lg transition-all duration-200"
-            >
-              <Bell className="w-3 h-3 mr-1" />
-              Alerta
-            </Button>
-          )}
+          {/* Alerta unico (Sprint Alarmes 2.0 — abre TournamentAlertDialog) */}
+          <Button
+            size="sm"
+            variant="outline"
+            data-testid={`tournament-alert-btn-${tournament.id}`}
+            onClick={() => onOpenTournamentAlert?.(tournament.id)}
+            disabled={!onOpenTournamentAlert}
+            title="Criar alerta para este torneio"
+            className="border-2 border-amber-500 bg-gradient-to-r from-amber-600/60 to-amber-700/60 text-amber-100 hover:from-amber-500/80 hover:to-amber-600/80 hover:text-white h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Bell className="w-3 h-3 mr-1" />
+            Alerta
+          </Button>
 
           {/* Excluir */}
           <Button
@@ -742,95 +721,6 @@ function CompletedCard({
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * Alert bell popover for upcoming tournaments with late reg.
- * Shows quick buttons to create 5/10/15 min alerts.
- */
-function AlertBellPopover({
-  tournament,
-  lateRegInfo,
-  onCreateLateRegAlert,
-  hasAlertForTournament,
-}: {
-  tournament: any;
-  lateRegInfo: { deadline: Date; minutesRemaining: number; color: string; hh: string; mm: string };
-  onCreateLateRegAlert: (tournamentId: string, tournamentName: string, startTime: Date, lateRegMinutes: number, minutesBefore: number) => void;
-  hasAlertForTournament?: (tournamentId: string, triggerAt: Date) => boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const tournamentName = generateTournamentName(tournament);
-
-  const getStartTime = () => {
-    if (!tournament.time) return new Date();
-    const [h, m] = tournament.time.split(':').map(Number);
-    const startTime = new Date();
-    startTime.setHours(h, m, 0, 0);
-    return startTime;
-  };
-
-  const quickOptions = [5, 10, 15];
-
-  const getButtonState = (minutesBefore: number) => {
-    const startTime = getStartTime();
-    const deadline = calculateLateRegDeadline(startTime, tournament.lateRegMinutes);
-    const triggerAt = new Date(deadline.getTime() - minutesBefore * 60000);
-    const now = new Date();
-
-    if (triggerAt <= now) return 'expired';
-    if (hasAlertForTournament && hasAlertForTournament(tournament.id, triggerAt)) return 'created';
-    return 'available';
-  };
-
-  const handleCreate = (minutesBefore: number) => {
-    const startTime = getStartTime();
-    onCreateLateRegAlert(tournament.id, tournamentName, startTime, tournament.lateRegMinutes, minutesBefore);
-  };
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          size="sm"
-          variant="outline"
-          className="border-2 border-amber-500 bg-gradient-to-r from-amber-600/60 to-amber-700/60 text-amber-100 hover:from-amber-500/80 hover:to-amber-600/80 hover:text-white h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
-        >
-          <Bell className="w-3 h-3 mr-1" />
-          Alerta
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-52 bg-gray-900 border-gray-700 p-3" align="start" side="bottom">
-        <div className="space-y-2">
-          <p className="text-xs text-gray-400 font-medium mb-2">Alertar antes do late reg</p>
-          {quickOptions.map((mins) => {
-            const state = getButtonState(mins);
-            return (
-              <button
-                key={mins}
-                disabled={state !== 'available'}
-                onClick={() => {
-                  handleCreate(mins);
-                  setOpen(false);
-                }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded text-xs font-medium transition-all ${
-                  state === 'available'
-                    ? 'bg-amber-600/20 text-amber-300 hover:bg-amber-600/40 border border-amber-600/30'
-                    : state === 'created'
-                    ? 'bg-green-600/20 text-green-400 border border-green-600/30 cursor-default'
-                    : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'
-                }`}
-              >
-                <span>{mins}min antes</span>
-                {state === 'created' && <Check className="w-3 h-3" />}
-                {state === 'expired' && <span className="text-gray-600">Passou</span>}
-              </button>
-            );
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
   );
 }
 

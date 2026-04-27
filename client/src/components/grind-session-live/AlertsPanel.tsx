@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Bell, BellRing, Clock, Plus, X, ChevronDown, ChevronUp, RotateCcw, Volume2 } from "lucide-react";
+import { Bell, BellRing, Clock, Plus, X, ChevronDown, ChevronUp, RotateCcw, Volume2, Trophy } from "lucide-react";
 import type { SessionAlert } from "@shared/generic-alerts";
 import { speakUtterance } from "@/lib/ttsVoices";
 
@@ -24,6 +24,10 @@ interface AlertsPanelProps {
   volume?: number;
   ttsAvailable?: boolean;
   soundMode?: 'tts' | 'beep' | 'mute';
+  // RF-03 wiring fix — abre TournamentAlertDialog no parent. tournamentId opcional
+  // permite que TournamentCard pre-selecione torneio especifico (Sprint Alarmes 2.0).
+  onOpenTournamentAlert?: (tournamentId?: string) => void;
+  hasUpcomingTournaments?: boolean;
 }
 
 export default function AlertsPanel({
@@ -39,6 +43,8 @@ export default function AlertsPanel({
   volume = 0.8,
   ttsAvailable = false,
   soundMode = 'tts',
+  onOpenTournamentAlert,
+  hasUpcomingTournaments = false,
 }: AlertsPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -161,6 +167,18 @@ export default function AlertsPanel({
                 <Plus className="w-3 h-3 mr-1" />
                 Novo Alerta
               </Button>
+              {hasUpcomingTournaments && onOpenTournamentAlert && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  data-testid="open-tournament-alert-btn"
+                  onClick={() => onOpenTournamentAlert()}
+                  className="border-amber-600 text-amber-300 hover:bg-amber-600/20 text-xs"
+                >
+                  <Trophy className="w-3 h-3 mr-1" />
+                  Novo alerta de torneio
+                </Button>
+              )}
               {(activeAlerts.length > 0 || firedAlerts.length > 0) && (
                 <Button
                   size="sm"

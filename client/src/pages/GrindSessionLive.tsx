@@ -36,6 +36,7 @@ import { calculateLateRegDeadline, resolveAlertThreshold } from "@/lib/lateRegUt
 import { SessionAlertManager } from "@shared/generic-alerts";
 import type { SessionAlert } from "@shared/generic-alerts";
 import { fireAlert } from "@/lib/fireAlert";
+import { stopAlertById, stopAllAlerts } from "@/lib/tts/narrationQueue";
 
 // Sub-components
 import SessionHeader from "@/components/grind-session-live/SessionHeader";
@@ -49,6 +50,12 @@ import EditTournamentDialog from "@/components/grind-session-live/EditTournament
 import TimeEditDialog from "@/components/grind-session-live/TimeEditDialog";
 import AlertsPanel from "@/components/grind-session-live/AlertsPanel";
 import ReentryConfirmDialog from "@/components/grind-session-live/ReentryConfirmDialog";
+import {
+  TournamentAlertDialog,
+  type TournamentAlertCreatePayload,
+  type TournamentLite,
+} from "@/components/grind-session-live/TournamentAlertDialog";
+import { useTTSVoices } from "@/lib/ttsVoices";
 
 // Bankroll (RF-08)
 import { useBankroll } from "@/hooks/useBankroll";
@@ -145,6 +152,18 @@ export default function GrindSessionLive() {
   const [genericAlerts, setGenericAlerts] = useState<SessionAlert[]>([]);
   const [firedGenericAlerts, setFiredGenericAlerts] = useState<SessionAlert[]>([]);
   const [activeAlertCount, setActiveAlertCount] = useState(0);
+  // RF-03 — TournamentAlertDialog (alarmes vinculados a torneios).
+  // Sprint Alarmes 2.0 unified alert button: defaultTournamentId quando aberto via
+  // botao "Alerta" em TournamentCard; null quando aberto via "Novo alerta de torneio"
+  // do AlertsPanel (usuario escolhe na lista).
+  const [tournamentAlertContext, setTournamentAlertContext] = useState<{
+    open: boolean;
+    defaultTournamentId: string | null;
+  }>({ open: false, defaultTournamentId: null });
+  const openTournamentAlertFor = (tournamentId?: string) =>
+    setTournamentAlertContext({ open: true, defaultTournamentId: tournamentId ?? null });
+  const closeTournamentAlert = () =>
+    setTournamentAlertContext({ open: false, defaultTournamentId: null });
 
   // Session finalization
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
@@ -711,6 +730,21 @@ export default function GrindSessionLive() {
     retry: false,
   });
 
+  // RF-07/RF-08 — TTS settings derivados de userAlertSettings (defaults espelham schema).
+  const userTTSSettings = useMemo(() => {
+    const s = (userAlertSettings as any) ?? {};
+    return {
+      soundMode: (s.soundMode ?? 'tts') as 'tts' | 'beep' | 'mute',
+      preferredVoiceURI: (s.preferredVoiceURI ?? null) as string | null,
+      volume: typeof s.alertVolume === 'number' ? s.alertVolume : 0.8,
+      repeatCount: typeof s.alertRepeatCount === 'number' ? s.alertRepeatCount : 3,
+      repeatGapMs: typeof s.alertRepeatGapMs === 'number' ? s.alertRepeatGapMs : 3000,
+      redactBuyIn: typeof s.ttsRedactBuyIn === 'boolean' ? s.ttsRedactBuyIn : true,
+    };
+  }, [userAlertSettings]);
+
+  const { available: ttsAvailable, preferredVoice } = useTTSVoices(userTTSSettings.preferredVoiceURI);
+
   // Exit warning: show native browser dialog when navigating away during active session
   useEffect(() => {
     if (!activeSession) return;
@@ -986,10 +1020,22 @@ export default function GrindSessionLive() {
           const tournamentName = tournament.name || 'Torneio';
           const description = `${tournamentName} — Late ate ${hh}:${mm} (faltam ${minutesRemaining}min)`;
 
+          // RF-07/RF-08: usa soundMode/voice/volume/repeat do userTTSSettings.
+          // Se usuario desligou som dos alertas (lateRegAlertSound=false), forca mute.
+          const effectiveSoundMode = alertSettings.lateRegAlertSound
+            ? userTTSSettings.soundMode
+            : 'mute';
+          // alertId deterministic permite stopAlertById quando o usuario dispensar.
           fireAlert({
             title: "Late Reg Encerrando!",
             description,
-            soundEnabled: alertSettings.lateRegAlertSound,
+            narrationText: description,
+            soundMode: effectiveSoundMode,
+            voiceURI: userTTSSettings.preferredVoiceURI,
+            volume: userTTSSettings.volume,
+            repeatCount: userTTSSettings.repeatCount,
+            repeatGapMs: userTTSSettings.repeatGapMs,
+            alertId: `latereg-${tournament.id}`,
             toast,
           });
         }
@@ -1001,10 +1047,19 @@ export default function GrindSessionLive() {
       for (const alert of alertsToFire) {
         sessionAlertManagerRef.current.markFired(alert.id);
         const title = alert.type === 'late-reg' ? `Late Reg: ${alert.label.replace('Late Reg: ', '')}` : 'Lembrete';
+        const effectiveSoundMode = alertSettings.lateRegAlertSound
+          ? userTTSSettings.soundMode
+          : 'mute';
         fireAlert({
           title,
           description: alert.label,
-          soundEnabled: alertSettings.lateRegAlertSound,
+          narrationText: (alert as any).narrationText || alert.label,
+          soundMode: effectiveSoundMode,
+          voiceURI: userTTSSettings.preferredVoiceURI,
+          volume: userTTSSettings.volume,
+          repeatCount: userTTSSettings.repeatCount,
+          repeatGapMs: userTTSSettings.repeatGapMs,
+          alertId: alert.id,
           toast,
         });
       }
@@ -1016,7 +1071,7 @@ export default function GrindSessionLive() {
     checkAlerts();
     const interval = setInterval(checkAlerts, 30000);
     return () => clearInterval(interval);
-  }, [activeSession, plannedTournaments, sessionTournaments, userAlertSettings, toast]);
+  }, [activeSession, plannedTournaments, sessionTournaments, userAlertSettings, userTTSSettings, toast]);
 
   // ===== MUTATIONS =====
   const startSessionMutation = useMutation({
@@ -1260,11 +1315,14 @@ export default function GrindSessionLive() {
   };
 
   const handleDismissAlert = (id: string) => {
+    // Sprint Alarmes 2.0 — interrompe TTS imediato (cancel + clear timeouts pendentes).
+    stopAlertById(id);
     sessionAlertManagerRef.current.dismissAlert(id);
     refreshAlertState();
   };
 
   const handleRemoveAlert = (id: string) => {
+    stopAlertById(id);
     sessionAlertManagerRef.current.removeAlert(id);
     refreshAlertState();
   };
@@ -1275,9 +1333,68 @@ export default function GrindSessionLive() {
   };
 
   const handleClearAllAlerts = () => {
+    stopAllAlerts();
     sessionAlertManagerRef.current.reset();
     refreshAlertState();
   };
+
+  // RF-03 — handler para criar alerta vinculado a torneio (TournamentAlertDialog)
+  const handleCreateTournamentAlert = (payload: TournamentAlertCreatePayload) => {
+    const mgr = sessionAlertManagerRef.current;
+    try {
+      mgr.addTournamentAlert({
+        tournamentId: payload.tournamentId,
+        narrationText: payload.narrationText,
+        triggerAt: payload.triggerAt,
+        label: payload.label,
+      });
+      refreshAlertState();
+      toast({ title: "Alerta criado", description: payload.label });
+    } catch (err: any) {
+      toast({
+        title: "Erro",
+        description: err?.message ?? "Falha ao criar alerta",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Lista de torneios upcoming convertidos para shape TournamentLite (para o dialog).
+  const upcomingTournamentLites = useMemo<{
+    planned: TournamentLite[];
+    session: TournamentLite[];
+  }>(() => {
+    const toLite = (t: any, idPrefix = ''): TournamentLite | null => {
+      if (!t?.time || typeof t.time !== 'string') return null;
+      const [h, m] = t.time.split(':').map(Number);
+      if (Number.isNaN(h) || Number.isNaN(m)) return null;
+      const startTime = new Date();
+      startTime.setHours(h, m, 0, 0);
+      return {
+        id: idPrefix ? `${idPrefix}${t.id}` : String(t.id),
+        name: t.name ?? 'Torneio',
+        site: t.site ?? '',
+        buyIn: String(t.buyIn ?? '0'),
+        startTime,
+        lateRegMinutes: typeof t.lateRegMinutes === 'number' ? t.lateRegMinutes : undefined,
+      };
+    };
+
+    const planned = (plannedTournaments ?? [])
+      .filter((pt: any) => (pt.status ?? 'upcoming') === 'upcoming')
+      .map((pt: any) => toLite(pt, 'planned-'))
+      .filter((x): x is TournamentLite => x !== null);
+
+    const session = (sessionTournaments ?? [])
+      .filter((st: any) => (st.status ?? 'upcoming') === 'upcoming')
+      .map((st: any) => toLite(st))
+      .filter((x): x is TournamentLite => x !== null);
+
+    return { planned, session };
+  }, [plannedTournaments, sessionTournaments]);
+
+  const hasUpcomingTournaments =
+    upcomingTournamentLites.planned.length + upcomingTournamentLites.session.length > 0;
 
   const hasAlertForTournament = (tournamentId: string, triggerAt: Date) => {
     return sessionAlertManagerRef.current.hasDuplicateLateReg(tournamentId, triggerAt);
@@ -1285,6 +1402,17 @@ export default function GrindSessionLive() {
 
   // ===== TOURNAMENT HANDLERS =====
   const handleStartSession = async () => {
+    // RF-10 — gesture unlock pra speechSynthesis (Chrome/Safari travam primeiro
+    // speak() sem gesto user). Utterance silenciosa dispara o consent path.
+    try {
+      if (typeof speechSynthesis !== 'undefined') {
+        const unlock = new SpeechSynthesisUtterance('');
+        unlock.volume = 0;
+        speechSynthesis.speak(unlock);
+      }
+    } catch {
+      // ignore — TTS unlock é best-effort
+    }
     try { await apiRequest('POST', '/api/grind-sessions/reset-tournaments'); queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day"] }); queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] }); } catch {}
     setQuickNotes([]);
     startSessionMutation.mutate({ preparationNotes: preparationObservations, preparationPercentage: preparationPercentage[0], dailyGoals, screenCap, skipBreaksToday });
@@ -1743,6 +1871,12 @@ export default function GrindSessionLive() {
         onRemoveAlert={handleRemoveAlert}
         onRefireAlert={handleRefireAlert}
         onClearAll={handleClearAllAlerts}
+        voice={preferredVoice}
+        volume={userTTSSettings.volume}
+        ttsAvailable={ttsAvailable}
+        soundMode={userTTSSettings.soundMode}
+        onOpenTournamentAlert={openTournamentAlertFor}
+        hasUpcomingTournaments={hasUpcomingTournaments}
       />
 
       {/* Tournament List */}
@@ -1860,13 +1994,12 @@ export default function GrindSessionLive() {
                         {breakBlock.tournaments.map((tournament: any) => (
                           <TournamentCard key={tournament.id} mode="upcoming"
                             tournament={tournament} registered={registered}
-                            onRegister={handleRegisterTournament} onEditTime={handleEditTime}
+                            onRegister={handleRegisterTournament}
                             onEdit={(t) => { setEditingTournament(t); setShowEditTournamentDialog(true); }}
                             onDelete={handleDeleteTournament} queryClient={queryClient}
                             isSelected={selectedTournaments.has(tournament.id)}
                             onToggleSelect={toggleTournamentSelection}
-                            onCreateLateRegAlert={handleCreateLateRegAlert}
-                            hasAlertForTournament={hasAlertForTournament}
+                            onOpenTournamentAlert={openTournamentAlertFor}
                           />
                         ))}
                       </div>
@@ -2080,6 +2213,24 @@ export default function GrindSessionLive() {
           onComplete={handleReconcileComplete}
         />
       )}
+
+      {/* RF-03 — Dialog de alerta vinculado a torneio.
+          Sprint Alarmes 2.0: defaultTournamentId vem do TournamentCard quando o botao
+          "Alerta" do card eh clicado; null quando aberto via "Novo alerta de torneio". */}
+      <TournamentAlertDialog
+        open={tournamentAlertContext.open}
+        onOpenChange={(open) => {
+          if (!open) closeTournamentAlert();
+        }}
+        plannedTournaments={upcomingTournamentLites.planned}
+        sessionTournaments={upcomingTournamentLites.session}
+        onCreate={handleCreateTournamentAlert}
+        ttsAvailable={ttsAvailable}
+        voice={preferredVoice}
+        volume={userTTSSettings.volume}
+        redactBuyIn={userTTSSettings.redactBuyIn}
+        defaultTournamentId={tournamentAlertContext.defaultTournamentId}
+      />
 
       {/* RF-02: Simplified confirmation modal - single step with notes */}
       {/* GL-D (UX 2026-04-24): lista torneios pendentes que serao auto-fechados */}

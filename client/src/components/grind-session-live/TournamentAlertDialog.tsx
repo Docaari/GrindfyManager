@@ -43,6 +43,11 @@ interface TournamentAlertDialogProps {
   voice: SpeechSynthesisVoice | null;
   volume: number;
   redactBuyIn: boolean;
+  /**
+   * Pre-seleciona um torneio e bloqueia o select. Usado quando o dialog eh
+   * aberto a partir do botao "Alerta" de um TournamentCard especifico.
+   */
+  defaultTournamentId?: string | null;
 }
 
 type TriggerMode = 'before-start' | 'before-late' | 'absolute';
@@ -57,8 +62,21 @@ export function TournamentAlertDialog({
   voice,
   volume,
   redactBuyIn,
+  defaultTournamentId = null,
 }: TournamentAlertDialogProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const isLocked = Boolean(defaultTournamentId);
+
+  // Sincroniza selectedId com defaultTournamentId quando o dialog abre.
+  useEffect(() => {
+    if (open && defaultTournamentId) {
+      setSelectedId(defaultTournamentId);
+    }
+    if (!open) {
+      // Reseta selecao ao fechar pra proxima abertura comecar limpo.
+      setSelectedId(null);
+    }
+  }, [open, defaultTournamentId]);
   const [mode, setMode] = useState<TriggerMode>('before-start');
   const [minutesBeforeStart, setMinutesBeforeStart] = useState<string>('10');
   const [minutesBeforeLate, setMinutesBeforeLate] = useState<string>('5');
@@ -182,30 +200,46 @@ export function TournamentAlertDialog({
         </div>
 
         <div className="space-y-4">
-          {/* Lista de torneios (P1-2 ordenada por proximidade) */}
-          <div data-testid="tournament-select" className="space-y-1 max-h-48 overflow-y-auto">
-            {tournaments.map((t) => (
-              <button
-                key={t.id}
-                data-testid={`tournament-option-${t.id}`}
-                type="button"
-                onClick={() => setSelectedId(t.id)}
-                className={`w-full text-left px-3 py-2 rounded border text-sm transition-colors ${
-                  selectedId === t.id
-                    ? 'bg-amber-600/20 border-amber-500 text-amber-100'
-                    : 'bg-gray-800/40 border-gray-700 text-gray-200 hover:bg-gray-700/40'
-                }`}
-              >
-                <div className="font-medium">{t.name}</div>
-                <div className="text-xs text-gray-400">
-                  {t.site} · {new Date(t.startTime).toLocaleTimeString('pt-BR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </div>
-              </button>
-            ))}
-          </div>
+          {/* Lista de torneios (P1-2 ordenada por proximidade).
+              Quando isLocked, renderiza apenas o torneio pre-selecionado em modo display. */}
+          {isLocked && selected ? (
+            <div
+              data-testid="tournament-locked-display"
+              className="px-3 py-2 rounded border bg-amber-600/20 border-amber-500 text-amber-100"
+            >
+              <div className="font-medium">{selected.name}</div>
+              <div className="text-xs text-amber-200/80">
+                {selected.site} · {new Date(selected.startTime).toLocaleTimeString('pt-BR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </div>
+            </div>
+          ) : (
+            <div data-testid="tournament-select" className="space-y-1 max-h-48 overflow-y-auto">
+              {tournaments.map((t) => (
+                <button
+                  key={t.id}
+                  data-testid={`tournament-option-${t.id}`}
+                  type="button"
+                  onClick={() => setSelectedId(t.id)}
+                  className={`w-full text-left px-3 py-2 rounded border text-sm transition-colors ${
+                    selectedId === t.id
+                      ? 'bg-amber-600/20 border-amber-500 text-amber-100'
+                      : 'bg-gray-800/40 border-gray-700 text-gray-200 hover:bg-gray-700/40'
+                  }`}
+                >
+                  <div className="font-medium">{t.name}</div>
+                  <div className="text-xs text-gray-400">
+                    {t.site} · {new Date(t.startTime).toLocaleTimeString('pt-BR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
 
           {selected && (
             <>

@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Settings as SettingsIcon,
   DollarSign,
@@ -16,8 +18,11 @@ import {
   Save,
   Sidebar,
   Bell,
-  Wallet
+  Wallet,
+  Volume2,
+  Mic
 } from "lucide-react";
+import { useTTSVoices, speakUtterance } from "@/lib/ttsVoices";
 import { useBankroll } from "@/hooks/useBankroll";
 import { BankrollMovementDialog } from "@/components/bankroll/BankrollMovementDialog";
 import { Link } from "wouter";
@@ -42,13 +47,24 @@ export default function Settings() {
   const { toast } = useToast();
   const { autoCollapseForGrind, setAutoCollapseForGrind } = useSidebar();
   // ADR-033: convencao "unidades nativas por 1 USD" (1 USD = 7.20 CNY = 0.92 EUR).
-  const [exchangeRates, setExchangeRates] = useState({ CNY: 7.20, EUR: 0.92 });
+  const [exchangeRates, setExchangeRates] = useState({ BRL: 5.00, CNY: 7.20, EUR: 0.92 });
   const [showClearConfirmation, setShowClearConfirmation] = useState(false);
 
   // Alert settings
   const [lateRegAlertMinutes, setLateRegAlertMinutes] = useState(10);
   const [lateRegAlertEnabled, setLateRegAlertEnabled] = useState(true);
   const [lateRegAlertSound, setLateRegAlertSound] = useState(true);
+
+  // RF-07/RF-08 — TTS / Voz settings (Sprint Alarmes 2.0).
+  const [soundMode, setSoundMode] = useState<'tts' | 'beep' | 'mute'>('tts');
+  const [preferredVoiceURI, setPreferredVoiceURI] = useState<string | null>(null);
+  const [alertVolume, setAlertVolume] = useState<number>(0.8);
+  const [alertRepeatCount, setAlertRepeatCount] = useState<number>(3);
+  const [alertRepeatGapMs, setAlertRepeatGapMs] = useState<number>(3000);
+  const [ttsRedactBuyIn, setTtsRedactBuyIn] = useState<boolean>(true);
+
+  // Hook de vozes pt-BR (Chrome async via voiceschanged).
+  const { voices, available: ttsAvailable, preferredVoice } = useTTSVoices(preferredVoiceURI);
 
   // Bankroll (RF-06) — estado local do form
   const { data: bankroll } = useBankroll();
@@ -149,7 +165,12 @@ export default function Settings() {
 
   useEffect(() => {
     if (rates && typeof rates === 'object') {
-      setExchangeRates(rates as { CNY: number; EUR: number });
+      const r = rates as Partial<{ BRL: number; CNY: number; EUR: number }>;
+      setExchangeRates((prev) => ({
+        BRL: typeof r.BRL === 'number' ? r.BRL : prev.BRL,
+        CNY: typeof r.CNY === 'number' ? r.CNY : prev.CNY,
+        EUR: typeof r.EUR === 'number' ? r.EUR : prev.EUR,
+      }));
     }
   }, [rates]);
 
@@ -165,12 +186,20 @@ export default function Settings() {
       if (s.lateRegAlertMinutes != null) setLateRegAlertMinutes(s.lateRegAlertMinutes);
       if (s.lateRegAlertEnabled != null) setLateRegAlertEnabled(s.lateRegAlertEnabled);
       if (s.lateRegAlertSound != null) setLateRegAlertSound(s.lateRegAlertSound);
+      if (s.soundMode === 'tts' || s.soundMode === 'beep' || s.soundMode === 'mute') {
+        setSoundMode(s.soundMode);
+      }
+      if (s.preferredVoiceURI != null) setPreferredVoiceURI(s.preferredVoiceURI);
+      if (typeof s.alertVolume === 'number') setAlertVolume(s.alertVolume);
+      if (typeof s.alertRepeatCount === 'number') setAlertRepeatCount(s.alertRepeatCount);
+      if (typeof s.alertRepeatGapMs === 'number') setAlertRepeatGapMs(s.alertRepeatGapMs);
+      if (typeof s.ttsRedactBuyIn === 'boolean') setTtsRedactBuyIn(s.ttsRedactBuyIn);
     }
   }, [userSettings]);
 
   // Save exchange rates mutation
   const saveExchangeRates = useMutation({
-    mutationFn: (rates: { CNY: number; EUR: number }) => 
+    mutationFn: (rates: { BRL: number; CNY: number; EUR: number }) =>
       apiRequest("POST", "/api/settings/exchange-rates", rates),
     onSuccess: () => {
       toast({
@@ -207,6 +236,48 @@ export default function Settings() {
       });
     },
   });
+
+  // RF-07/RF-08 — Save TTS settings mutation (POST eh o endpoint real, ver server/routes/misc.ts).
+  const saveTTSSettings = useMutation({
+    mutationFn: (settings: {
+      soundMode: 'tts' | 'beep' | 'mute';
+      preferredVoiceURI: string | null;
+      alertVolume: number;
+      alertRepeatCount: number;
+      alertRepeatGapMs: number;
+      ttsRedactBuyIn: boolean;
+    }) => apiRequest("POST", "/api/user-settings", settings),
+    onSuccess: () => {
+      toast({
+        title: "Sucesso",
+        description: "Configuracoes de voz atualizadas.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/user-settings"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleTestVoice = () => {
+    if (!ttsAvailable) return;
+    speakUtterance("Teste de voz Grindfy", preferredVoice, alertVolume);
+  };
+
+  const handleSaveTTSSettings = () => {
+    saveTTSSettings.mutate({
+      soundMode,
+      preferredVoiceURI,
+      alertVolume,
+      alertRepeatCount,
+      alertRepeatGapMs,
+      ttsRedactBuyIn,
+    });
+  };
 
   // Bankroll save mutation (RF-06)
   const saveBankroll = useMutation({
@@ -298,7 +369,7 @@ export default function Settings() {
     },
   });
 
-  const handleExchangeRateChange = (currency: 'CNY' | 'EUR', value: string) => {
+  const handleExchangeRateChange = (currency: 'BRL' | 'CNY' | 'EUR', value: string) => {
     const rate = parseFloat(value);
     if (!isNaN(rate) && rate > 0) {
       setExchangeRates(prev => ({
@@ -436,6 +507,189 @@ export default function Settings() {
         </CardContent>
       </Card>
 
+      {/* RF-07/RF-08 — Alertas e Voz (Sprint Alarmes 2.0) */}
+      <Card className="bg-poker-surface border-gray-700" data-testid="settings-tts-section">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Mic className="h-5 w-5 text-amber-400" />
+            Alertas e Voz
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <p className="text-gray-400 text-sm">
+            Configure como os alertas soam durante a sessao de grind.
+          </p>
+
+          {/* 1. Modo de som */}
+          <div className="space-y-2">
+            <Label className="text-white font-medium">Modo de som</Label>
+            <RadioGroup
+              value={soundMode}
+              onValueChange={(v) => setSoundMode(v as 'tts' | 'beep' | 'mute')}
+              className="flex gap-6"
+              data-testid="tts-sound-mode"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem
+                  value="tts"
+                  id="sound-mode-tts"
+                  disabled={!ttsAvailable}
+                  data-testid="tts-mode-tts"
+                />
+                <Label htmlFor="sound-mode-tts" className="text-gray-200 text-sm cursor-pointer">
+                  Voz (TTS)
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="beep" id="sound-mode-beep" data-testid="tts-mode-beep" />
+                <Label htmlFor="sound-mode-beep" className="text-gray-200 text-sm cursor-pointer">
+                  Beep
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="mute" id="sound-mode-mute" data-testid="tts-mode-mute" />
+                <Label htmlFor="sound-mode-mute" className="text-gray-200 text-sm cursor-pointer">
+                  Mudo
+                </Label>
+              </div>
+            </RadioGroup>
+            {!ttsAvailable && (
+              <p className="text-amber-400 text-xs">
+                Nenhuma voz pt-BR disponivel neste navegador. Modo TTS desabilitado.
+              </p>
+            )}
+          </div>
+
+          {/* 2. Voz */}
+          <div className="space-y-2">
+            <Label className="text-white font-medium">Voz</Label>
+            <div className="flex gap-2 items-center">
+              <Select
+                value={preferredVoiceURI ?? '__default__'}
+                onValueChange={(v) => setPreferredVoiceURI(v === '__default__' ? null : v)}
+                disabled={!ttsAvailable}
+              >
+                <SelectTrigger
+                  className="bg-gray-800 border-gray-600 text-white w-72"
+                  data-testid="tts-voice-select"
+                >
+                  <SelectValue placeholder="Primeira voz pt-BR disponivel" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="__default__">Primeira voz pt-BR disponivel</SelectItem>
+                  {voices.map((v) => (
+                    <SelectItem key={v.voiceURI} value={v.voiceURI}>
+                      {v.name} ({v.lang})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleTestVoice}
+                disabled={!ttsAvailable}
+                data-testid="tts-test-voice-btn"
+                aria-label="Testar voz"
+                className="border-amber-600 text-amber-300 hover:bg-amber-600/20"
+              >
+                <Volume2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* 3. Volume */}
+          <div className="space-y-2">
+            <Label className="text-white font-medium">
+              Volume: {Math.round(alertVolume * 100)}%
+            </Label>
+            <Slider
+              data-testid="tts-volume-slider"
+              value={[alertVolume]}
+              min={0}
+              max={1}
+              step={0.05}
+              onValueChange={([v]) => setAlertVolume(v)}
+              className="max-w-md"
+            />
+          </div>
+
+          {/* 4. Repetição */}
+          <div className="space-y-2">
+            <Label className="text-white font-medium">Repeticao</Label>
+            <Select
+              value={String(alertRepeatCount)}
+              onValueChange={(v) => setAlertRepeatCount(parseInt(v, 10))}
+            >
+              <SelectTrigger
+                className="bg-gray-800 border-gray-600 text-white w-48"
+                data-testid="tts-repeat-count"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-600">
+                <SelectItem value="1">1 vez</SelectItem>
+                <SelectItem value="2">2 vezes</SelectItem>
+                <SelectItem value="3">3 vezes</SelectItem>
+                <SelectItem value="5">5 vezes</SelectItem>
+                <SelectItem value="99">Loop (ate dispensar)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* 5. Intervalo entre repetições */}
+          <div className="space-y-2">
+            <Label className="text-white font-medium">
+              Intervalo entre repeticoes (segundos)
+            </Label>
+            <Input
+              type="number"
+              min={2}
+              max={30}
+              step={1}
+              value={Math.round(alertRepeatGapMs / 1000)}
+              onChange={(e) => {
+                const seconds = parseInt(e.target.value, 10);
+                if (!Number.isNaN(seconds) && seconds >= 2 && seconds <= 30) {
+                  setAlertRepeatGapMs(seconds * 1000);
+                }
+              }}
+              data-testid="tts-repeat-gap"
+              className="bg-gray-800 border-gray-600 text-white w-32"
+            />
+          </div>
+
+          {/* 6. Redatar buy-in alto */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label className="text-white font-medium">Redatar buy-in alto</Label>
+              <p className="text-gray-400 text-sm">
+                Narra "buy-in alto" em vez do valor quando &gt; $100. Util em ambientes
+                compartilhados.
+              </p>
+            </div>
+            <Switch
+              data-testid="tts-redact-buyin"
+              checked={ttsRedactBuyIn}
+              onCheckedChange={setTtsRedactBuyIn}
+              className="data-[state=checked]:bg-poker-green"
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={handleSaveTTSSettings}
+              disabled={saveTTSSettings.isPending}
+              data-testid="tts-save-btn"
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {saveTTSSettings.isPending ? "Salvando..." : "Salvar Voz"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Exchange Rates Section */}
       <Card className="bg-poker-surface border-gray-700">
         <CardHeader>
@@ -449,7 +703,26 @@ export default function Settings() {
             Configure as taxas de conversão para moedas não-USD nos seus torneios.
           </p>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="brl-rate" className="text-white">
+                Taxa BRL (reais por dolar)
+              </Label>
+              <Input
+                id="brl-rate"
+                type="number"
+                step="0.01"
+                value={exchangeRates.BRL}
+                onChange={(e) => handleExchangeRateChange('BRL', e.target.value)}
+                className="bg-gray-800 border-gray-600 text-white"
+                placeholder="5.00"
+                data-testid="settings-rate-brl"
+              />
+              <p className="text-xs text-gray-500">
+                1 USD = {exchangeRates.BRL} BRL
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="cny-rate" className="text-white">
                 Taxa CNY (yuans por dolar)

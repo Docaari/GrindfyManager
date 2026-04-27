@@ -617,7 +617,7 @@ export const userSettings = pgTable("user_settings", {
   // alertVolume: 0.0–1.0 (passa direto para SpeechSynthesisUtterance.volume).
   alertVolume: real("alert_volume").default(0.8),
   // alertRepeatCount: numero de repeticoes da narracao (1, 2, 3, 5, 99=loop).
-  alertRepeatCount: integer("alert_repeat_count").default(2),
+  alertRepeatCount: integer("alert_repeat_count").default(3),
   // alertRepeatGapMs: gap entre repeticoes (2000–30000ms).
   alertRepeatGapMs: integer("alert_repeat_gap_ms").default(3000),
   // ttsRedactBuyIn: P0-2 privacy default — narracao nao revela buy-in.

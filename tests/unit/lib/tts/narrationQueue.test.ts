@@ -334,6 +334,52 @@ describe('narrationQueue (RF-01 + RF-13 priority queue)', () => {
       expect(speechSynthesisMock.speak).toHaveBeenCalledTimes(2);
       expect(getCurrentlySpeaking()).toBeNull();
     });
+
+    // Fix 8 — founder default 3x com gap 3000ms.
+    it('repeatCount 3 + gap 3000ms toca exatamente 3 vezes com 3s entre cada', () => {
+      enqueue(makeItem({ alertId: 'A', repeatCount: 3, repeatGapMs: 3000 }));
+
+      // 1a fala imediata
+      expect(speechSynthesisMock.speak).toHaveBeenCalledTimes(1);
+
+      // Encerra 1a -> agenda 2a em 3s
+      speechSynthesisMock.speak.mock.calls[0][0].onend?.({});
+      vi.advanceTimersByTime(2999);
+      expect(speechSynthesisMock.speak).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(1);
+      expect(speechSynthesisMock.speak).toHaveBeenCalledTimes(2);
+
+      // Encerra 2a -> agenda 3a em 3s
+      speechSynthesisMock.speak.mock.calls[1][0].onend?.({});
+      vi.advanceTimersByTime(3000);
+      expect(speechSynthesisMock.speak).toHaveBeenCalledTimes(3);
+
+      // Encerra 3a -> sem mais repeticoes
+      speechSynthesisMock.speak.mock.calls[2][0].onend?.({});
+      vi.advanceTimersByTime(10000);
+      expect(speechSynthesisMock.speak).toHaveBeenCalledTimes(3);
+      expect(getCurrentlySpeaking()).toBeNull();
+    });
+
+    // Fix 8 — founder requer dismiss imediato.
+    it('stopAlertById durante o gap impede o proximo repeat', () => {
+      enqueue(makeItem({ alertId: 'A', repeatCount: 3, repeatGapMs: 3000 }));
+
+      // 1a fala
+      expect(speechSynthesisMock.speak).toHaveBeenCalledTimes(1);
+      speechSynthesisMock.speak.mock.calls[0][0].onend?.({});
+
+      // Durante o gap, dispara stopAlertById
+      vi.advanceTimersByTime(1500);
+      stopAlertById('A');
+
+      expect(speechSynthesisMock.cancel).toHaveBeenCalled();
+
+      // Avanca tempo — nenhum speak adicional
+      vi.advanceTimersByTime(10000);
+      expect(speechSynthesisMock.speak).toHaveBeenCalledTimes(1);
+      expect(getCurrentlySpeaking()).toBeNull();
+    });
   });
 
   describe('__resetForTesting', () => {
