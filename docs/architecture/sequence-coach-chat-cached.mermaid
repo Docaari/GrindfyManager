@@ -1,0 +1,134 @@
+%% Sprint Coach-1 — POST /api/coach/chat com prompt caching + rate limit tiered + gate por plano
+%% Referencia: Docs/specs/coach-sprint-1-fundacao-economica.md
+
+sequenceDiagram
+    actor User as Usuario (Free/Pro/Premium/Admin)
+    participant FE as Frontend<br/>(coach UI + SSE)
+    participant API as POST /api/coach/chat<br/>(handleCoachChat)
+    participant Access as coachAccess.ts<br/>(resolveUserTier / canAccessCoach)
+    participant Store as coachStorage<br/>(Drizzle)
+    participant DB as PostgreSQL<br/>(chat_sessions,<br/>chat_messages,<br/>user_subscriptions,<br/>user_ai_profile)
+    participant Ctx as coachContext.ts<br/>(assembleContext)
+    participant Sys as coachSystemBuilder.ts<br/>(static + dynamic)
+    participant Anth as Anthropic API<br/>(messages.stream)
+
+    User->>FE: Digita mensagem + coachType
+    FE->>API: POST /api/coach/chat<br/>{coachType, message, sessionId?}
+
+    %% === AUTH + VALIDACAO ===
+    API->>API: requireAuth (JWT)
+    API->>API: valida coachType, message<=2000, sessionId string
+
+    %% === RESOLVE TIER + COACH GATE ===
+    API->>Access: resolveUserTier(userId)
+    Access->>DB: SELECT users.role, subscriptionPlan<br/>+ user_subscriptions.plan_id
+    DB-->>Access: row
+    Access-->>API: tier: free | pro | premium | admin
+
+    API->>Access: canAccessCoach(tier, coachType)
+
+    alt Coach DENIED (ex: Free + technical)
+        Access-->>API: false
+        API->>Access: getUpgradeTarget(tier, coachType)
+        Access-->>API: upgradeTo: 'pro' | 'premium'
+        API-->>FE: 403<br/>{message, upgradeTo, currentPlan}
+        FE-->>User: Modal de upgrade com CTA
+    else Coach GRANTED
+        Access-->>API: true
+
+        %% === RATE LIMIT 24h ROLLING ===
+        alt tier === 'admin' (bypass)
+            API->>API: pula rate limit<br/>Headers X-RateLimit-Limit: unlimited
+        else tier normal
+            API->>Store: countUserMessagesInLastDay(userId)
+            Store->>DB: SELECT COUNT(*) FROM chat_messages<br/>JOIN chat_sessions ON session.userId=?<br/>WHERE role='user' AND createdAt > now()-24h
+            DB-->>Store: usedCount
+            Store-->>API: usedCount
+
+            API->>Access: getRateLimitForPlan(tier)
+            Access-->>API: {daily: 10|50|200}
+
+            alt usedCount >= dailyLimit (429)
+                API->>Store: getOldestUserMessageInWindow(userId)
+                Store->>DB: SELECT MIN(createdAt) WHERE ...
+                DB-->>Store: oldestCreatedAt
+                Store-->>API: oldestCreatedAt
+                API-->>FE: 429<br/>Headers X-RateLimit-Limit/Remaining:0/Reset<br/>Body {message, limit, resetAt}
+                FE-->>User: Toast + contador reset
+            else usedCount < dailyLimit (PASS)
+                API->>API: Headers X-RateLimit-*<br/>(Limit, Remaining, Reset)
+
+                %% === SESSAO: existente ou nova ===
+                alt sessionId fornecido
+                    API->>Store: getSession(sessionId)
+                    Store->>DB: SELECT FROM chat_sessions
+                    DB-->>Store: session
+                    Store-->>API: session
+                    API->>API: valida ownership + coachType
+                else sem sessionId
+                    API->>Store: archiveActiveSession(userId, coachType)
+                    API->>Store: createSession({userId, coachType})
+                    Store->>DB: INSERT chat_sessions
+                    DB-->>Store: newSession
+                    Store-->>API: activeSessionId
+                end
+
+                %% === SALVA MSG USER ===
+                API->>Store: saveMessage({sessionId, role:'user', content})
+                Store->>DB: INSERT chat_messages<br/>(role='user', content)
+                DB-->>Store: ok
+
+                %% === MONTA CONTEXTO ===
+                API->>Ctx: assembleContext(userId, coachType, sessionId)
+                Ctx->>DB: SELECT user_ai_profile.content<br/>+ stats snapshot (dashboard)<br/>+ last archived summary<br/>+ active grind + weekly plan<br/>+ break feedbacks + leaks<br/>+ chat history (asc)
+                DB-->>Ctx: bundle
+
+                Ctx->>Sys: buildStaticSystemBlock(coachType, {aiProfile, statsSnapshot, lastSummary})
+                Note over Sys: base prompt + SAFETY_RULES<br/>+ user_ai_profile (raro)<br/>+ stats snapshot<br/>+ last summary
+                Sys-->>Ctx: staticText (cacheado)
+
+                Ctx->>Sys: buildDynamicSystemBlock(coachType, {activeGrind, weeklyPlan, breakFeedbacks, leaks, studyProgress})
+                Note over Sys: dados session-specific<br/>(reescritos a cada msg)
+                Sys-->>Ctx: dynamicText
+
+                Ctx-->>API: {system: [<br/> {type:'text', text:staticText, cache_control:{type:'ephemeral'}},<br/> {type:'text', text:dynamicText}<br/>], messages: [...history, {role:'user', content}]}
+
+                %% === STREAM ANTHROPIC ===
+                API->>Anth: messages.stream({<br/>model: COACH_CHAT_MODEL (claude-sonnet-4-6),<br/>max_tokens: 2048,<br/>system: [...array...],<br/>messages<br/>})
+
+                alt Cache HIT (2+ msg em <5min)
+                    Anth-->>API: event message_start<br/>usage.cache_read_input_tokens > 0<br/>usage.cache_creation_input_tokens = 0
+                    Note over Anth: -90% custo no bloco estatico<br/>(Sonnet: $0.30/1M lidos)
+                else Cache MISS (1a msg ou >5min)
+                    Anth-->>API: event message_start<br/>usage.cache_creation_input_tokens > 0<br/>usage.cache_read_input_tokens = 0
+                    Note over Anth: +25% custo 1a msg<br/>(Sonnet: $3.75/1M escritos)
+                else Cache malformed (fallback)
+                    Anth-->>API: erro 400 cache_control
+                    API->>API: log estruturado<br/>retry sem cache_control
+                    API->>Anth: messages.stream (sem cache)
+                    Anth-->>API: stream regular
+                end
+
+                loop Stream chunks
+                    Anth-->>API: content_block_delta (texto)
+                    API-->>FE: SSE data: chunk
+                    FE-->>User: Renderiza streaming<br/>+ ConfidenceBadge parser inline
+                end
+
+                Anth-->>API: message_delta + message_stop<br/>usage final {input, output,<br/>cache_read, cache_creation}
+                API->>API: latencyMs = now() - startedAt
+
+                %% === SALVA MSG ASSISTANT COM USAGE ===
+                API->>Store: saveMessage({<br/>sessionId, role:'assistant', content,<br/>input_tokens, output_tokens,<br/>cache_read_input_tokens,<br/>cache_creation_input_tokens,<br/>model, latency_ms<br/>})
+                Store->>DB: INSERT chat_messages (com colunas novas)
+                DB-->>Store: assistantMsg
+
+                API->>Store: updateSessionTokenCount(sessionId)
+                Store->>DB: UPDATE chat_sessions<br/>SET totalTokens = totalTokens + ...
+                DB-->>Store: ok
+
+                API-->>FE: SSE event: done<br/>{messageId, sessionId, usage}
+                FE-->>User: Render final + feedback buttons (thumbs)
+            end
+        end
+    end

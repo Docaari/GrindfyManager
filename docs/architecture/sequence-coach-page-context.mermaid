@@ -1,0 +1,70 @@
+%% Sequence diagram — Sprint Coach-2A RF-01 + RF-06
+%% Cobre: page context capture, validacao Zod, sanitize, injecao no bloco dinamico
+%% Referencias: ADR-019 (estatico vs dinamico), ADR-025 (zod whitelist)
+
+sequenceDiagram
+    autonumber
+    actor User
+    participant Page as Pagina React<br/>(GradePlanner / GrindLive / Dashboard / CoachAI)
+    participant Hook as useCoachPageContext
+    participant Prov as CoachPageContextProvider<br/>(React Context)
+    participant Chat as useCoachChat
+    participant BE as Backend<br/>POST /api/coach/chat
+    participant Zod as pageContextSchema<br/>(discriminated union)
+    participant Sani as sanitize()
+    participant Build as coachSystemBuilder
+
+    User->>Page: navega para rota instrumentada<br/>(ex: /grade-planner)
+    Page->>Page: monta + lê state local<br/>(selectedDay, activeProfile, filters)
+
+    Page->>Hook: useCoachPageContext({route, day, profile, ...})
+    Hook->>Prov: setPageContext(contexto)
+    Prov->>Prov: state global atualizado
+
+    Note over User,Page: usuario interage com pagina<br/>(troca de dia, muda filtro, etc.)
+
+    User->>Page: muda selectedDay para 3
+    Page->>Hook: re-render com novo deps<br/>useEffect dispara
+    Hook->>Prov: setPageContext({route, day: 3, ...})
+
+    User->>Page: digita mensagem no chat e envia
+    Page->>Chat: sendMessage("qual dia voce esta vendo?")
+    Chat->>Prov: useContext(CoachPageContext)
+    Prov-->>Chat: pageContext atual
+
+    Chat->>BE: POST /api/coach/chat<br/>{coachType, message, sessionId, pageContext}
+
+    BE->>Zod: pageContextSchema.safeParse(pageContext)
+
+    alt validacao FALHA (route invalida, campo extra, tipo errado)
+        Zod-->>BE: {success: false, error}
+        BE-->>Chat: HTTP 400<br/>{error: 'validation_failed', field: 'pageContext', details}
+        Chat->>User: erro UI (raro — bug de instrumentacao)
+    else validacao OK
+        Zod-->>BE: {success: true, data: ParsedPageContext}
+
+        BE->>Sani: sanitizePageContext(parsed)<br/>recursivo em strings
+        Note over Sani: remove tokens conhecidos<br/>(<|im_start|>, [INST], backticks, \n duplos)
+        Sani-->>BE: ctx limpo
+
+        BE->>Build: buildDynamicBlock({...dadosDinamicos, pageContext: ctx})
+        Note over Build: switch(ctx.route) — exhaustiveness check<br/>format especifico por rota:<br/>"## Contexto da pagina atual<br/>Rota: grade-planner<br/>Dia: quarta-feira<br/>Perfil: A<br/>Filtros: {site: 'PokerStars'}"
+
+        Build-->>BE: dynamicSystemBlock string
+
+        Note over BE: bloco DINAMICO (sem cache_control)<br/>cache hit rate do bloco ESTATICO<br/>permanece intacto (ADR-019)
+
+        BE->>BE: array system = [<br/>  {static, cache_control: ephemeral},<br/>  {dynamic com pageContext}<br/>]<br/>chama Anthropic stream
+
+        BE-->>Chat: SSE stream resposta
+        Chat->>User: render texto<br/>"Estou vendo a sua grade de quarta-feira (dia 3)..."
+    end
+
+    Note over Page,Prov: usuario navega para fora da pagina
+
+    User->>Page: navega para outra rota
+    Page->>Page: desmonta
+    Hook->>Prov: cleanup do effect<br/>setPageContext(null)
+    Prov->>Prov: state limpo
+
+    Note over Chat: proxima mensagem em pagina nao instrumentada<br/>request body NAO inclui pageContext<br/>system prompt sem secao "Contexto da pagina atual"

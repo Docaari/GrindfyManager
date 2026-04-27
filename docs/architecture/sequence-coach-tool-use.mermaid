@@ -1,0 +1,100 @@
+%% Sequence diagram — Sprint Coach-2A RF-04
+%% Cobre: chat com tool use streaming, branches de erro, multi-tool, limite, tier free
+%% Referencias: ADR-023 (registry), ADR-024 (wrapping), ADR-026 (limit 5 tools)
+
+sequenceDiagram
+    autonumber
+    actor User
+    participant FE as Frontend<br/>useCoachChat + useCoachToolEvents
+    participant BE as Backend<br/>POST /api/coach/chat
+    participant Reg as coachTools/registry
+    participant Run as coachToolRunner
+    participant Anth as Anthropic API<br/>messages.stream
+    participant DB as PostgreSQL<br/>coach_actions
+
+    User->>FE: digita mensagem
+    FE->>BE: POST /api/coach/chat<br/>{coachType, message, sessionId, pageContext?}
+
+    Note over BE: requireAuth + resolveUserTier<br/>(ADR-020)
+
+    alt tier === 'free'
+        BE->>Reg: exportToolsForAnthropic('free')
+        Reg-->>BE: [] (free nao tem tools — RF-04 #6)
+    else tier in [pro, premium, admin]
+        BE->>Reg: exportToolsForAnthropic(tier)
+        Reg-->>BE: 5 read tools como AnthropicToolSchema[]
+    end
+
+    Note over BE: assembleContext + buildSystemBlocks<br/>(ADR-019: estatico cacheado + dinamico)<br/>injetar pageContext em bloco DINAMICO se presente
+
+    BE->>Anth: messages.stream({system, tools, messages})
+    activate Anth
+
+    loop turn = 1 ate stop_reason !== 'tool_use' OU toolCallsInTurn >= 5
+        Anth-->>BE: content_block_start (text)
+        BE->>FE: SSE chunk (texto)
+        FE->>User: render texto inline
+        Anth-->>BE: content_block_delta (text delta)
+        BE->>FE: SSE chunk
+
+        Anth-->>BE: content_block_start type=tool_use<br/>{toolUseId, name}
+        BE->>FE: SSE tool_use_start<br/>{toolUseId, toolName}
+        FE->>User: chip "preparando consulta..."
+
+        Anth-->>BE: content_block_delta type=input_json_delta<br/>(partial_json)
+        BE->>FE: SSE tool_use_input_delta
+
+        Anth-->>BE: content_block_stop (tool_use)
+        BE->>FE: SSE tool_use_input_done<br/>{input parsed}
+
+        Anth-->>BE: message_stop stop_reason=tool_use
+
+        alt toolCallsInTurn >= 5 (limite — ADR-026)
+            BE->>FE: SSE tool_limit_reached<br/>{limit: 5}
+            FE->>User: aviso "limite de consultas atingido"
+            Note over BE: break loop, NAO continua stream
+        else toolCallsInTurn < 5
+            BE->>FE: SSE tool_executing {toolUseId}
+            FE->>User: chip "executando..."
+
+            BE->>Run: executeTool(toolUseId, name, rawInput, ctx)
+            activate Run
+
+            Run->>Reg: getTool(name)
+
+            alt tool nao registrada
+                Reg-->>Run: undefined
+                Run-->>BE: {ok: false, error: 'tool_not_found'}
+            else inputSchema.safeParse(rawInput) falha
+                Run-->>BE: {ok: false, error: 'validation_failed', details}
+            else handler executa
+                Note over Run: medir performance.now()
+                Run->>Run: handler(input, ctx)
+                alt handler throws
+                    Run->>DB: INSERT coach_actions<br/>(status='failed', error_message, latency_ms)
+                    Run-->>BE: {ok: false, error: 'handler_error', message}
+                else handler retorna data
+                    Run->>DB: INSERT coach_actions<br/>(status='completed', latency_ms,<br/>result se auditLevel='persist')
+                    Run-->>BE: {ok: true, data}
+                end
+            end
+            deactivate Run
+
+            Note over BE: wrapResult em<br/>{__type: 'ToolResult', tool, ok, data}<br/>(ADR-024)<br/>truncar a 4000 tokens (~16KB) se necessario
+
+            BE->>FE: SSE tool_completed<br/>{toolUseId, success, result truncado a ~2000 chars UI}
+            FE->>User: card renderer especifico inline
+
+            BE->>BE: toolCallsInTurn++<br/>append assistant block + tool_result block
+
+            BE->>Anth: messages.stream(continuation)<br/>messages: [...prev, assistant{toolUseBlocks}, user{toolResults}]
+        end
+    end
+
+    deactivate Anth
+
+    Anth-->>BE: message_stop stop_reason=end_turn
+    BE->>FE: SSE done<br/>{messageId, sessionId, usage}
+    FE->>User: resposta final completa
+
+    Note over DB: total de linhas em coach_actions<br/>= toolCallsInTurn (max 5)<br/>com latencia + status + audit conforme auditLevel

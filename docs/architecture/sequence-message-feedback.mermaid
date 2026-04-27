@@ -1,0 +1,111 @@
+%% Sprint Coach-1 — Feedback loop: POST/DELETE feedback + GET admin stats
+%% Referencia: Docs/specs/coach-sprint-1-fundacao-economica.md (RF-02)
+
+sequenceDiagram
+    actor User as Usuario (owner)
+    actor Admin as Admin (role='admin')
+    participant FE as Frontend
+    participant API as Express routes<br/>(coach.ts / admin.coach.ts)
+    participant Store as coachStorage<br/>(Drizzle)
+    participant DB as PostgreSQL<br/>(message_feedback,<br/>chat_messages,<br/>chat_sessions)
+
+    %% ===============================
+    %% FLUXO 1 — POST feedback
+    %% ===============================
+    User->>FE: Clica thumbs up/down em msg assistant<br/>(opcional: comment)
+    FE->>API: POST /api/coach/messages/:id/feedback<br/>{feedback: 'up'|'down', comment?}
+
+    API->>API: requireAuth (JWT)
+    API->>API: Zod valida body:<br/>feedback enum, comment<=500
+
+    alt body invalido
+        API-->>FE: 400 {message: 'Feedback invalido'}
+    else body valido
+        API->>Store: getMessageWithSession(messageId)
+        Store->>DB: SELECT chat_messages.*,<br/>chat_sessions.user_id, chat_sessions.coach_type<br/>FROM chat_messages<br/>JOIN chat_sessions ON session_id
+        DB-->>Store: row or null
+
+        alt mensagem nao existe
+            Store-->>API: null
+            API-->>FE: 404 {message: 'Mensagem nao encontrada'}
+        else role='user' (feedback proibido)
+            Store-->>API: row (role='user')
+            API-->>FE: 400 {message: 'Nao e possivel dar feedback em mensagem do usuario'}
+        else ownership mismatch
+            Store-->>API: row (session.userId != req.user)
+            API-->>FE: 403 {message: 'Acesso negado'}
+        else ownership OK
+            Store-->>API: row (assistant, proprio)
+
+            API->>Store: getFeedback(messageId, userId)
+            Store->>DB: SELECT FROM message_feedback<br/>WHERE message_id=? AND user_id=?
+            DB-->>Store: existing or null
+
+            alt feedback duplicado (409)
+                Store-->>API: existing
+                API-->>FE: 409 {message: 'Feedback ja existe. Use DELETE antes de enviar novo.'}
+            else primeiro feedback
+                Store-->>API: null
+                API->>Store: insertFeedback({id: nanoid(),<br/>messageId, userId,<br/>feedback, comment})
+                Store->>DB: INSERT message_feedback<br/>(UNIQUE(message_id, user_id))
+                DB-->>Store: inserted
+                Store-->>API: {id, messageId, feedback, comment, createdAt}
+                API-->>FE: 201 {id, messageId, feedback, comment, createdAt}
+                FE-->>User: Badge thumbs ativa
+            end
+        end
+    end
+
+    %% ===============================
+    %% FLUXO 2 — DELETE feedback
+    %% ===============================
+    User->>FE: Clica novamente thumbs (toggle off) ou "remover"
+    FE->>API: DELETE /api/coach/messages/:id/feedback
+
+    API->>API: requireAuth (JWT)
+    API->>Store: deleteFeedback(messageId, userId)
+    Store->>DB: DELETE FROM message_feedback<br/>WHERE message_id=? AND user_id=?
+    DB-->>Store: affectedRows (0 or 1)
+
+    alt nao existia
+        Store-->>API: 0
+        API-->>FE: 404 {message: 'Feedback nao encontrado'}
+    else existia
+        Store-->>API: 1
+        API-->>FE: 200 {deleted: true}
+        FE-->>User: Badge thumbs limpa
+        Note over User,FE: Para "trocar voto": DELETE seguido de POST<br/>(cria novo feedback, sem update in-place)
+    end
+
+    %% ===============================
+    %% FLUXO 3 — GET admin feedback-stats
+    %% ===============================
+    Admin->>FE: Abre /admin/coach-analytics
+    FE->>API: GET /api/admin/coach/feedback-stats?coachType=mental&weeks=8
+
+    API->>API: requireAuth (JWT)
+    API->>API: check role==='admin'
+
+    alt nao e admin
+        API-->>FE: 403 {message: 'Acesso negado'}
+    else admin
+        par Global counts por coach type
+            API->>Store: getGlobalFeedbackCounts(coachType?)
+            Store->>DB: SELECT coach_type,<br/>SUM(CASE feedback='up' THEN 1 END) AS up,<br/>SUM(CASE feedback='down' THEN 1 END) AS down<br/>FROM message_feedback<br/>JOIN chat_messages + chat_sessions<br/>GROUP BY coach_type
+            DB-->>Store: [{coachType, up, down}]
+            Store-->>API: globalCounts
+        and Weekly rate ultimas 8 semanas
+            API->>Store: getWeeklyFeedbackRate(coachType?, weeks=8)
+            Store->>DB: SELECT date_trunc('week', created_at) AS w,<br/>coach_type, COUNT up, COUNT total<br/>GROUP BY w, coach_type
+            DB-->>Store: rows
+            Store-->>API: weeklyRate
+        and Top 20 msgs com feedback='down' recentes
+            API->>Store: getTopDownMessages(limit=20, coachType?)
+            Store->>DB: SELECT mf.*, cm.content (truncado 500),<br/>cs.coach_type, cs.id<br/>FROM message_feedback mf<br/>JOIN chat_messages cm<br/>JOIN chat_sessions cs<br/>WHERE mf.feedback='down'<br/>ORDER BY mf.created_at DESC<br/>LIMIT 20
+            DB-->>Store: rows
+            Store-->>API: topDownMessages
+        end
+
+        API-->>FE: 200 {<br/>globalCounts,<br/>weeklyRate,<br/>topDownMessages<br/>}
+        FE-->>Admin: Dashboard renderiza:<br/>cards de custo/taxa up/lista downs
+    end
