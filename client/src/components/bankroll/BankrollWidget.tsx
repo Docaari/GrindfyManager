@@ -66,7 +66,7 @@ export function BankrollWidget() {
     return (
       <div
         data-testid="bankroll-widget-empty"
-        className="rounded-lg border p-4 bg-card"
+        className="rounded-lg border p-5 bg-card"
       >
         <h3 className="text-lg font-semibold mb-2">Banca nao configurada</h3>
         <p className="text-sm text-muted-foreground mb-3">
@@ -77,7 +77,7 @@ export function BankrollWidget() {
           href="/settings"
           data-to="/settings"
           data-testid="bankroll-widget-cta"
-          className="inline-block px-4 py-2 rounded-md bg-primary text-primary-foreground hover:opacity-90"
+          className="inline-block px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90"
         >
           Configure sua banca
         </a>
@@ -103,20 +103,20 @@ export function BankrollWidget() {
   const sparkPath = buildSparklinePath(series);
 
   return (
-    <div className="rounded-lg border p-4 bg-card space-y-3">
+    <div className="rounded-lg border p-5 bg-card space-y-3">
       <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">Banca atual</h3>
+        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Banca atual</h3>
         <span className="text-xs text-muted-foreground">
-          {state.rule ?? "1pct"} - max {formatUSD(state.maxBuyInUSD)} USD
+          {state.rule ?? "1pct"} · max ${formatUSD(state.maxBuyInUSD)} USD
         </span>
       </div>
 
       <div>
         <div
           data-testid="bankroll-widget-amount"
-          className="text-2xl font-semibold"
+          className="text-3xl font-bold text-primary tabular-nums"
         >
-          ${formatUSD(amount)} USD
+          ${formatUSD(amount)} <span className="text-base text-muted-foreground font-medium">USD</span>
         </div>
         {amountBRL != null && (
           <div

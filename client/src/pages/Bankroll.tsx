@@ -14,6 +14,7 @@ import { WalletList, type WalletListItem, type WalletSuggestion } from "@/compon
 import { WalletDetailPanel } from "@/components/bankroll/WalletDetailPanel";
 import { WalletCreateDialog } from "@/components/bankroll/WalletCreateDialog";
 import { RakebackDialog } from "@/components/bankroll/RakebackDialog";
+import { Wallet } from "lucide-react";
 import type { WalletPlatform } from "@shared/wallet-platforms";
 
 interface ConsolidatedWalletEntry {
@@ -123,19 +124,24 @@ export default function BankrollPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Banca</h1>
-          <p className="text-xs text-muted-foreground">
-            {hasWallets
-              ? `${consolidated?.walletCount ?? walletItems.filter((w) => w.status === "active").length} carteira(s) ativa(s)`
-              : "Configuracao inicial — adicione sua primeira carteira"}
-          </p>
+      <header className="flex items-center justify-between gap-4 rounded-lg border bg-card p-5">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
+            <Wallet className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Banca</h1>
+            <p className="text-xs text-muted-foreground">
+              {hasWallets
+                ? `${consolidated?.walletCount ?? walletItems.filter((w) => w.status === "active").length} carteira(s) ativa(s)`
+                : "Configuracao inicial — adicione sua primeira carteira"}
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 justify-end">
           <button
             onClick={openRakebackFromHeader}
-            className="px-3 py-2 text-sm rounded border surface-warning surface-interactive"
+            className="px-3 py-2 text-sm rounded-md border surface-warning surface-interactive"
             data-testid="bankroll-rakeback-trigger-header"
             title="Registrar rakeback recebido"
           >
@@ -143,7 +149,7 @@ export default function BankrollPage() {
           </button>
           <button
             onClick={() => setLegacyDialogOpen(true)}
-            className="px-3 py-2 text-sm rounded border hover:bg-accent"
+            className="px-3 py-2 text-sm rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-foreground"
             data-testid="bankroll-legacy-movement-button"
             title="Registrar aporte/saque consolidado (modo legado)"
           >
@@ -151,7 +157,7 @@ export default function BankrollPage() {
           </button>
           <button
             onClick={() => handleCreateClick()}
-            className="px-4 py-2 rounded bg-primary text-primary-foreground"
+            className="px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90"
             data-testid="bankroll-new-wallet-button"
           >
             + Nova carteira
@@ -186,7 +192,7 @@ export default function BankrollPage() {
         </div>
       </div>
 
-      <section>
+      <section className="rounded-lg border bg-card p-5">
         <h2 className="text-lg font-semibold mb-3">Historico consolidado</h2>
         <BankrollHistoryTable />
       </section>

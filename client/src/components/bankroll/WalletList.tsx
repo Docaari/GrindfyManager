@@ -73,7 +73,7 @@ export function WalletList({ wallets, selectedWalletId, onSelect, onCreateClick 
           type="button"
           data-testid="wallet-list-new-button"
           onClick={() => onCreateClick()}
-          className="text-xs font-medium px-2 py-1 rounded-md bg-primary text-primary-foreground hover:opacity-90"
+          className="text-xs font-medium px-2 py-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
         >
           + Nova
         </button>
@@ -130,8 +130,10 @@ export function WalletList({ wallets, selectedWalletId, onSelect, onCreateClick 
               data-selected={selected ? "true" : "false"}
               onClick={() => onSelect(w.id)}
               className={
-                "text-left rounded-md px-3 py-2 border " +
-                (selected ? "bg-accent border-primary" : "bg-card hover:bg-accent")
+                "text-left rounded-md px-3 py-2 border transition-colors " +
+                (selected
+                  ? "bg-primary/10 border-primary/60 ring-1 ring-primary/40"
+                  : "bg-card border-border hover:bg-accent hover:border-border")
               }
             >
               <div className="flex items-center gap-2">

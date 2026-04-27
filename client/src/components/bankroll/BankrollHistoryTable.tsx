@@ -86,7 +86,7 @@ export function BankrollHistoryTable() {
               </td>
               <td
                 className={
-                  "py-2 pr-3 text-right " + (Number(s.delta) >= 0 ? "text-emerald-400" : "text-rose-400")
+                  "py-2 pr-3 text-right tabular-nums font-medium " + (Number(s.delta) >= 0 ? "text-primary" : "text-rose-400")
                 }
               >
                 {Number(s.delta) >= 0 ? "+" : ""}

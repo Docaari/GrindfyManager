@@ -77,17 +77,17 @@ export function WalletDetailPanel({ wallet, onRakebackClick }: Props) {
   }
 
   return (
-    <div data-testid="wallet-detail-panel" className="flex-1 p-4 space-y-4">
-      <header className="flex items-baseline justify-between">
+    <div data-testid="wallet-detail-panel" className="flex-1 p-5 space-y-4">
+      <header className="flex items-baseline justify-between gap-4 pb-4 border-b border-border">
         <div>
-          <h1 className="text-xl font-bold">{wallet.name}</h1>
-          <p className="text-sm text-muted-foreground">{wallet.platform}</p>
+          <h1 className="text-xl font-bold tracking-tight">{wallet.name}</h1>
+          <p className="text-xs text-muted-foreground uppercase tracking-wide mt-0.5">{wallet.platform}</p>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-semibold">
+          <div className="text-2xl font-bold text-primary tabular-nums">
             {currencySymbol(wallet.nativeCurrency)} {formatBalance(wallet.balance)}
           </div>
-          <div className="text-xs text-muted-foreground">{wallet.nativeCurrency}</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">{wallet.nativeCurrency}</div>
         </div>
       </header>
 
@@ -97,7 +97,7 @@ export function WalletDetailPanel({ wallet, onRakebackClick }: Props) {
           data-testid="wallet-detail-record-tx-button"
           onClick={() => setTxDialogOpen(true)}
           disabled={archived}
-          className="px-3 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          className="px-3 py-2 text-sm rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50"
         >
           Registrar movimento
         </button>
@@ -191,7 +191,7 @@ function ArchiveConfirmDialog({
       role="dialog"
       aria-modal="true"
     >
-      <div className="bg-background rounded-lg border shadow-lg p-6 space-y-3 max-w-md">
+      <div className="bg-card rounded-lg border border-border shadow-2xl p-6 space-y-3 max-w-md">
         <h3 className="text-lg font-semibold">Arquivar carteira?</h3>
         <p className="text-sm text-muted-foreground">
           Carteira ficara visivel apenas em modo arquivado. Historico preservado.
@@ -237,7 +237,7 @@ function ArchiveConfirmDialog({
             data-testid="wallet-archive-confirm-submit"
             onClick={onConfirm}
             disabled={submitting || (hasBalance && !acknowledged)}
-            className="px-3 py-2 text-sm rounded-md bg-destructive text-destructive-foreground hover:opacity-90 disabled:opacity-50"
+            className="px-3 py-2 text-sm rounded-md bg-destructive text-destructive-foreground font-medium hover:bg-destructive/90 disabled:opacity-50"
           >
             {submitting ? "Arquivando..." : "Arquivar"}
           </button>

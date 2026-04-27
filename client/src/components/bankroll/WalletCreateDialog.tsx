@@ -117,7 +117,7 @@ export function WalletCreateDialog({ open, onOpenChange, prefill }: Props) {
     >
       <form
         onSubmit={handleSubmit}
-        className="bg-background rounded-lg border shadow-lg w-full max-w-md p-6 space-y-4"
+        className="bg-card rounded-lg border border-border shadow-2xl w-full max-w-md p-6 space-y-4"
       >
         <h2 className="text-lg font-semibold">Nova Carteira</h2>
 
@@ -229,7 +229,7 @@ export function WalletCreateDialog({ open, onOpenChange, prefill }: Props) {
           <button
             type="submit"
             data-testid="wallet-create-submit"
-            className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-60"
+            className="px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-60"
             disabled={submitting}
           >
             {submitting ? "Criando..." : "Criar carteira"}
