@@ -26,6 +26,8 @@ vi.mock('../../../server/storage', () => ({
     createCooldownLog: vi.fn(),
     updateCooldownLog: vi.fn(),
     listCooldownLogs: vi.fn(),
+    setSessionPlanClosed: vi.fn(),
+    setUserDashboardSnoozedUntil: vi.fn(),
   },
 }));
 
@@ -34,8 +36,10 @@ import {
   handleUpdateCooldownLog,
   handleGetCooldownLogBySession,
   handleListCooldownLogs,
+  handleFinishCooldownLog,
 } from '../../../server/routes/cooldown';
 import { storage } from '../../../server/storage';
+import { nextMorning } from '../../../server/services/sleepGateService';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -698,5 +702,267 @@ describe('Cross-user ownership protection', () => {
     );
     expect(res.statusCode).toBe(404);
     expect(storage.updateCooldownLog).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// POST /api/cooldown-logs/:id/finish — Sprint Cooldown-2 (Reviewer fix CRITICAL #1+#2)
+// ============================================================================
+
+describe('POST /api/cooldown-logs/:id/finish - auth + ownership', () => {
+  it('401 quando req.user ausente', async () => {
+    const res = makeRes();
+    await handleFinishCooldownLog(
+      makeReq({
+        user: undefined,
+        params: { id: 'cd_1' },
+        body: { sleepIntent: true, planClosed: false },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(401);
+    expect(storage.updateCooldownLog).not.toHaveBeenCalled();
+    expect(storage.setSessionPlanClosed).not.toHaveBeenCalled();
+    expect(storage.setUserDashboardSnoozedUntil).not.toHaveBeenCalled();
+  });
+
+  it('404 quando cooldown nao existe', async () => {
+    (storage.getCooldownLog as any).mockResolvedValue(null);
+
+    const res = makeRes();
+    await handleFinishCooldownLog(
+      makeReq({
+        params: { id: 'cd_404' },
+        body: { sleepIntent: true, planClosed: false },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(404);
+    expect(storage.updateCooldownLog).not.toHaveBeenCalled();
+    expect(storage.setSessionPlanClosed).not.toHaveBeenCalled();
+    expect(storage.setUserDashboardSnoozedUntil).not.toHaveBeenCalled();
+  });
+
+  it('404 quando cooldown pertence a outro usuario (mascarado)', async () => {
+    (storage.getCooldownLog as any).mockResolvedValue({
+      id: 'cd_1',
+      userId: 'USER-OTHER',
+      sessionId: 'ses_1',
+      mode: 'full',
+      startedAt: '2026-04-26T10:00:00Z',
+      blocksCompleted: [],
+    });
+
+    const res = makeRes();
+    await handleFinishCooldownLog(
+      makeReq({
+        params: { id: 'cd_1' },
+        body: { sleepIntent: true, planClosed: false },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(404);
+    expect(storage.setSessionPlanClosed).not.toHaveBeenCalled();
+    expect(storage.setUserDashboardSnoozedUntil).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/cooldown-logs/:id/finish - validacao body', () => {
+  beforeEach(() => {
+    (storage.getCooldownLog as any).mockResolvedValue({
+      id: 'cd_1',
+      userId: 'USER-0001',
+      sessionId: 'ses_1',
+      mode: 'full',
+      startedAt: '2026-04-26T10:00:00Z',
+      blocksCompleted: ['hands', 'abc', 'tilt'],
+    });
+  });
+
+  it('400 quando sleepIntent ausente', async () => {
+    const res = makeRes();
+    await handleFinishCooldownLog(
+      makeReq({
+        params: { id: 'cd_1' },
+        body: { planClosed: false },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('400 quando planClosed ausente', async () => {
+    const res = makeRes();
+    await handleFinishCooldownLog(
+      makeReq({
+        params: { id: 'cd_1' },
+        body: { sleepIntent: true },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('400 quando sleepIntent nao-boolean', async () => {
+    const res = makeRes();
+    await handleFinishCooldownLog(
+      makeReq({
+        params: { id: 'cd_1' },
+        body: { sleepIntent: 'yes', planClosed: false },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('POST /api/cooldown-logs/:id/finish - happy path', () => {
+  beforeEach(() => {
+    (storage.getCooldownLog as any).mockResolvedValue({
+      id: 'cd_1',
+      userId: 'USER-0001',
+      sessionId: 'ses_1',
+      mode: 'full',
+      startedAt: '2026-04-26T10:00:00Z',
+      blocksCompleted: ['hands', 'abc', 'tilt'],
+    });
+    (storage.setSessionPlanClosed as any).mockResolvedValue({
+      id: 'ses_1',
+      userId: 'USER-0001',
+      planClosed: true,
+    });
+    (storage.setUserDashboardSnoozedUntil as any).mockImplementation(
+      async (_uid: string, until: Date) => ({ userPlatformId: 'USER-0001', dashboardSnoozedUntil: until }),
+    );
+    (storage.updateCooldownLog as any).mockImplementation(
+      async (id: string, _userId: string, patch: any) => ({
+        id,
+        sessionId: 'ses_1',
+        completedAt: patch.completedAt,
+        durationMinutes: patch.durationMinutes,
+        sleepIntent: patch.sleepIntent,
+        blocksCompleted: patch.blocksCompleted,
+      }),
+    );
+  });
+
+  it('200 happy: planClosed=true -> setSessionPlanClosed; sleepIntent=true -> setUserDashboardSnoozedUntil(nextMorning(now))', async () => {
+    const res = makeRes();
+    await handleFinishCooldownLog(
+      makeReq({
+        params: { id: 'cd_1' },
+        body: {
+          sleepIntent: true,
+          planClosed: true,
+          tiltSelfAssessment: {
+            feltTilt: 5,
+            keptTilting: 3,
+            presence: 7,
+            triggers: ['cooler'],
+            action: 'pausa de 2min',
+          },
+        },
+      }) as any,
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    // grind_sessions.planClosed=true
+    expect(storage.setSessionPlanClosed).toHaveBeenCalledWith('ses_1', 'USER-0001', true);
+    // dashboardSnoozedUntil = nextMorning(now) — server-calculated
+    expect(storage.setUserDashboardSnoozedUntil).toHaveBeenCalledTimes(1);
+    const callArgs = (storage.setUserDashboardSnoozedUntil as any).mock.calls[0];
+    expect(callArgs[0]).toBe('USER-0001');
+    const passedDate = callArgs[1] as Date;
+    // Comparar com nextMorning(now) — janela de 5s para tolerar diff de execucao.
+    const expected = nextMorning(new Date());
+    expect(Math.abs(passedDate.getTime() - expected.getTime())).toBeLessThan(5000);
+    // Response inclui dashboardSnoozedUntil ISO string nao-null
+    expect(typeof res.body.dashboardSnoozedUntil).toBe('string');
+  });
+
+  it('sleepIntent=false -> dashboardSnoozedUntil NAO eh setado (storage NAO chamado)', async () => {
+    const res = makeRes();
+    await handleFinishCooldownLog(
+      makeReq({
+        params: { id: 'cd_1' },
+        body: { sleepIntent: false, planClosed: false },
+      }) as any,
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(storage.setUserDashboardSnoozedUntil).not.toHaveBeenCalled();
+    expect(res.body.dashboardSnoozedUntil).toBeNull();
+  });
+
+  it('planClosed=false -> grind_sessions.planClosed NAO mexe (storage NAO chamado)', async () => {
+    const res = makeRes();
+    await handleFinishCooldownLog(
+      makeReq({
+        params: { id: 'cd_1' },
+        body: { sleepIntent: false, planClosed: false },
+      }) as any,
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(storage.setSessionPlanClosed).not.toHaveBeenCalled();
+  });
+
+  it('PATCH cooldown_log com completedAt + blocksCompleted preservados/expandidos', async () => {
+    const res = makeRes();
+    await handleFinishCooldownLog(
+      makeReq({
+        params: { id: 'cd_1' },
+        body: { sleepIntent: true, planClosed: true },
+      }) as any,
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    const callArgs = (storage.updateCooldownLog as any).mock.calls[0];
+    const patch = callArgs[2];
+    expect(patch.completedAt).toBeInstanceOf(Date);
+    // mode='full' -> blocksCompleted contem todos 4 tokens
+    const blocks: string[] = patch.blocksCompleted ?? [];
+    expect(blocks).toEqual(expect.arrayContaining(['hands', 'abc', 'tilt', 'sleep']));
+    expect(patch.sleepIntent).toBe(true);
+  });
+
+  it('tiltSelfAssessment + abGameAnswers passados -> persistidos no PATCH cooldown_log', async () => {
+    const tilt = {
+      feltTilt: 6,
+      keptTilting: 4,
+      presence: 7,
+      triggers: ['cooler'],
+      action: 'parei 5min',
+    };
+    const abc = {
+      aGame: ['focado'],
+      bGame: ['hero call'],
+      cGame: 'tilt curto',
+      lesson: 'respeitar stop loss',
+    };
+
+    const res = makeRes();
+    await handleFinishCooldownLog(
+      makeReq({
+        params: { id: 'cd_1' },
+        body: {
+          sleepIntent: true,
+          planClosed: false,
+          tiltSelfAssessment: tilt,
+          abGameAnswers: abc,
+        },
+      }) as any,
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    const callArgs = (storage.updateCooldownLog as any).mock.calls[0];
+    const patch = callArgs[2];
+    expect(patch.tiltSelfAssessment).toEqual(tilt);
+    expect(patch.abGameAnswers).toEqual(abc);
   });
 });

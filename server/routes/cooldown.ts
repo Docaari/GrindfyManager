@@ -16,6 +16,7 @@
  */
 
 import type { Express, Request, Response } from "express";
+import { z } from "zod";
 import rateLimit from "express-rate-limit";
 import { requireAuth } from "../auth";
 import { storage } from "../storage";
@@ -24,7 +25,10 @@ import {
   updateCooldownLogSchema,
   insertStarredHandSchema,
   starredHandTypeSchema,
+  abGameAnswersSchema,
+  tiltSelfAssessmentSchema,
 } from "../../shared/schema";
+import { nextMorning } from "../services/sleepGateService";
 
 // =============================================================================
 // Helpers
@@ -164,6 +168,141 @@ export async function handleUpdateCooldownLog(req: any, res: Response): Promise<
   } catch (err: any) {
     console.error("PATCH /api/cooldown-logs/:id failed:", err);
     res.status(500).json({ message: err?.message ?? "Erro ao atualizar cool-down" });
+  }
+}
+
+// =============================================================================
+// POST /api/cooldown-logs/:id/finish — Sprint Cooldown-2 (Reviewer fix CRITICAL #1+#2)
+//
+// Endpoint unificado para conclusao do cool-down em mode='full' (Bloco 4).
+// Resolve 2 problemas:
+//   #1 Cliente chamava PATCH /api/grind-sessions/:id (endpoint nao existe).
+//   #2 Cliente calculava nextMorning() local sempre adicionando 1 dia,
+//      divergindo do server-side que retorna mesmo dia 08h se now < 08h.
+//
+// Body: { sleepIntent, planClosed, abGameAnswers?, tiltSelfAssessment? }
+// Effects (em ordem):
+//   - planClosed=true   -> storage.setSessionPlanClosed(sessionId, userId, true)
+//   - sleepIntent=true  -> storage.setUserDashboardSnoozedUntil(userId, nextMorning(now))
+//   - PATCH cooldown_log: completedAt=now, blocksCompleted (preserva existing),
+//                          sleepIntent, tiltSelfAssessment, abGameAnswers (se vierem)
+// Response: { id, completedAt, durationMinutes, dashboardSnoozedUntil }
+// =============================================================================
+
+const finishCooldownBodySchema = z.object({
+  sleepIntent: z.boolean(),
+  planClosed: z.boolean(),
+  abGameAnswers: abGameAnswersSchema.optional(),
+  tiltSelfAssessment: tiltSelfAssessmentSchema.optional(),
+});
+
+export async function handleFinishCooldownLog(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) {
+    unauthorized(res);
+    return;
+  }
+
+  const id = req.params?.id;
+  if (!id) {
+    res.status(400).json({ message: "id obrigatorio" });
+    return;
+  }
+
+  const parsed = finishCooldownBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({
+      message: parsed.error.issues[0]?.message ?? "Body invalido",
+      issues: parsed.error.issues,
+    });
+    return;
+  }
+
+  try {
+    const existing = await storage.getCooldownLog(id, userId);
+    if (!existing || (existing as any).userId !== userId) {
+      res.status(404).json({ message: "Cool-down nao encontrado" });
+      return;
+    }
+
+    const { sleepIntent, planClosed, abGameAnswers, tiltSelfAssessment } = parsed.data;
+
+    // Side-effect 1: planClosed=true -> grind_sessions.planClosed=true
+    if (planClosed === true) {
+      try {
+        await storage.setSessionPlanClosed(
+          (existing as any).sessionId,
+          userId,
+          true,
+        );
+      } catch (err: any) {
+        console.error(
+          "POST /api/cooldown-logs/:id/finish setSessionPlanClosed failed:",
+          err,
+        );
+      }
+    }
+
+    // Side-effect 2: sleepIntent=true -> users.dashboardSnoozedUntil = nextMorning(now)
+    let dashboardSnoozedUntil: Date | null = null;
+    if (sleepIntent === true) {
+      const target = nextMorning(new Date());
+      try {
+        await storage.setUserDashboardSnoozedUntil(userId, target);
+        dashboardSnoozedUntil = target;
+      } catch (err: any) {
+        console.error(
+          "POST /api/cooldown-logs/:id/finish setUserDashboardSnoozedUntil failed:",
+          err,
+        );
+      }
+    }
+
+    // PATCH cooldown_log — completedAt + sleepIntent + tilt + abc
+    const completedAt = new Date();
+    const startMs =
+      existing.startedAt != null
+        ? new Date((existing as any).startedAt).getTime()
+        : NaN;
+    const durationMinutes = Number.isFinite(startMs)
+      ? Math.max(0, Math.round((completedAt.getTime() - startMs) / 60000))
+      : undefined;
+
+    // blocksCompleted: preserva existente + garante 4 blocos para mode='full'.
+    const prevBlocks: string[] = Array.isArray((existing as any).blocksCompleted)
+      ? ((existing as any).blocksCompleted as string[])
+      : [];
+    const expectedFullBlocks = ["hands", "abc", "tilt", "sleep"];
+    const finalBlocks =
+      (existing as any).mode === "full"
+        ? Array.from(new Set([...prevBlocks, ...expectedFullBlocks]))
+        : prevBlocks;
+
+    const patch: any = {
+      completedAt,
+      blocksCompleted: finalBlocks,
+      sleepIntent,
+    };
+    if (tiltSelfAssessment !== undefined) patch.tiltSelfAssessment = tiltSelfAssessment;
+    if (abGameAnswers !== undefined) patch.abGameAnswers = abGameAnswers;
+    if (durationMinutes !== undefined) patch.durationMinutes = durationMinutes;
+
+    const updated = await storage.updateCooldownLog(id, userId, patch);
+    if (!updated) {
+      res.status(404).json({ message: "Cool-down nao encontrado" });
+      return;
+    }
+
+    res.status(200).json({
+      id: (updated as any).id,
+      completedAt: (updated as any).completedAt,
+      durationMinutes: (updated as any).durationMinutes ?? durationMinutes ?? null,
+      dashboardSnoozedUntil:
+        dashboardSnoozedUntil != null ? dashboardSnoozedUntil.toISOString() : null,
+    });
+  } catch (err: any) {
+    console.error("POST /api/cooldown-logs/:id/finish failed:", err);
+    res.status(500).json({ message: err?.message ?? "Erro ao concluir cool-down" });
   }
 }
 
@@ -392,6 +531,13 @@ export function registerCooldownRoutes(app: Express): void {
   );
   app.patch("/api/cooldown-logs/:id", requireAuth, cooldownLimiter, (req: Request, res: Response) =>
     handleUpdateCooldownLog(req, res),
+  );
+  // Sprint Cooldown-2 — endpoint unificado de conclusao (CRITICAL #1+#2).
+  app.post(
+    "/api/cooldown-logs/:id/finish",
+    requireAuth,
+    cooldownLimiter,
+    (req: Request, res: Response) => handleFinishCooldownLog(req, res),
   );
   // Note: GET /:sessionId vem antes de GET / para nao conflitar.
   app.get("/api/cooldown-logs/:sessionId", requireAuth, (req: Request, res: Response) =>

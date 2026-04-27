@@ -60,6 +60,8 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastLogin: timestamp("last_login"),
+  // Sprint Cooldown-2 — Sleep Gate suave (snooze do dashboard ate manha seguinte)
+  dashboardSnoozedUntil: timestamp("dashboard_snoozed_until"),
 });
 
 // Auth tokens table - email verification and password reset tokens
@@ -386,6 +388,8 @@ export const grindSessions = pgTable("grind_sessions", {
   normalSpeedPercentage: decimal("normal_speed_percentage"), // Percentual de velocidade Normal
   turboSpeedPercentage: decimal("turbo_speed_percentage"), // Percentual de velocidade Turbo
   hyperSpeedPercentage: decimal("hyper_speed_percentage"), // Percentual de velocidade Hyper
+  // Sprint Cooldown-2 — Sleep Gate (Bloco 4)
+  planClosed: boolean("plan_closed").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -2758,6 +2762,17 @@ export const updateCooldownLogSchema = z.object({
   completedAt: z.union([z.string(), z.date()]).optional(),
   durationMinutes: z.number().int().nonnegative().optional(),
   notes: z.string().max(500, "notes tem limite de 500 caracteres").nullable().optional(),
+  // Sprint Cooldown-2 — Bloco 3/4
+  tiltSelfAssessment: z
+    .object({
+      feltTilt: z.number().min(0).max(10),
+      keptTilting: z.number().min(0).max(10),
+      presence: z.number().min(0).max(10),
+      triggers: z.array(z.string()),
+      action: z.string().max(500),
+    })
+    .optional(),
+  sleepIntent: z.boolean().nullable().optional(),
 }).strict();
 
 export const insertStarredHandSchema = z.object({
@@ -2779,3 +2794,37 @@ export type StarredHand = typeof starredHands.$inferSelect;
 export type InsertStarredHand = z.infer<typeof insertStarredHandSchema>;
 export type StarredHandType = typeof STARRED_HAND_TYPES[number];
 export type StarredHandSpot = typeof STARRED_HAND_SPOTS[number];
+
+// -----------------------------------------------------------------------------
+// Sprint Cooldown-2 — Tilt Self-Assessment + Sleep Gate Zod schemas
+// -----------------------------------------------------------------------------
+
+export const TILT_TRIGGERS = [
+  "cooler",
+  "slowroll",
+  "big-bluff-fail",
+  "downswing",
+  "distracao",
+  "fome",
+  "sono",
+  "briga-interpessoal",
+  "outro",
+] as const;
+
+export const tiltTriggerSchema = z.enum(TILT_TRIGGERS);
+export type TiltTrigger = typeof TILT_TRIGGERS[number];
+
+export const tiltSelfAssessmentSchema = z.object({
+  feltTilt: z.number().min(0).max(10),
+  keptTilting: z.number().min(0).max(10),
+  presence: z.number().min(0).max(10),
+  triggers: z.array(tiltTriggerSchema),
+  action: z.string().max(500, "action tem limite de 500 caracteres"),
+});
+
+export const sleepGateInputSchema = z.object({
+  sleepIntent: z.boolean(),
+  planClosed: z.boolean().optional(),
+});
+
+export type SleepGateInput = z.infer<typeof sleepGateInputSchema>;

@@ -371,6 +371,47 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // PATCH /api/users/me — Sprint Cooldown-2 (Sleep Gate suave)
+  //
+  // Ownership: usa req.user.userPlatformId (NAO confia em body.userId).
+  // Sprint 2 escopo: aceita apenas { dashboardSnoozedUntil: null } para limpar
+  // o snooze do splash. Qualquer outra chave eh ignorada (forward-compat).
+  // ---------------------------------------------------------------------------
+  app.patch('/api/users/me', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user?.userPlatformId;
+      if (!userId) {
+        res.status(401).json({ message: 'Unauthorized' });
+        return;
+      }
+      const body = req.body ?? {};
+
+      let updated: any = null;
+      if ('dashboardSnoozedUntil' in body) {
+        const v = body.dashboardSnoozedUntil;
+        if (v === null) {
+          updated = await storage.clearUserDashboardSnoozedUntil(userId);
+        } else if (typeof v === 'string') {
+          const d = new Date(v);
+          if (Number.isNaN(d.getTime())) {
+            res.status(400).json({ message: 'dashboardSnoozedUntil invalido' });
+            return;
+          }
+          updated = await storage.setUserDashboardSnoozedUntil(userId, d);
+        } else {
+          res.status(400).json({ message: 'dashboardSnoozedUntil invalido' });
+          return;
+        }
+      }
+
+      res.status(200).json(updated ?? { userPlatformId: userId });
+    } catch (err: any) {
+      console.error('PATCH /api/users/me failed:', err);
+      res.status(500).json({ message: err?.message ?? 'Erro interno do servidor' });
+    }
+  });
+
   // Email verification routes
   app.post('/api/auth/verify-email', async (req, res) => {
     try {

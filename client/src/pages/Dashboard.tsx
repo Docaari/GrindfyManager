@@ -42,6 +42,7 @@ import { TabSpeed } from '@/components/dashboard/TabSpeed';
 import { TabPeriod } from '@/components/dashboard/TabPeriod';
 import { TabParticipants } from '@/components/dashboard/TabParticipants';
 import { TabPosition } from '@/components/dashboard/TabPosition';
+import { DashboardGoodMorningSplash } from '@/components/dashboard/DashboardGoodMorningSplash';
 
 export default function Dashboard() {
   const hasDashboardAccess = usePermission('dashboard_access');
@@ -54,6 +55,20 @@ export default function Dashboard() {
       featureName="Dashboard"
       description="Acesso ao dashboard de performance e analytics."
     />;
+  }
+
+  // Sprint Cooldown-2 — Sleep Gate suave: splash "Bom dia!" se snoozed.
+  // Early return mantem hooks abaixo coerentes com o ja-existente !hasDashboardAccess.
+  const snoozedUntil = (user as any)?.dashboardSnoozedUntil;
+  if (snoozedUntil) {
+    const until = typeof snoozedUntil === 'string' ? new Date(snoozedUntil) : snoozedUntil;
+    if (until instanceof Date && !Number.isNaN(until.getTime()) && until.getTime() > Date.now()) {
+      return (
+        <div className="p-6 text-white">
+          <DashboardGoodMorningSplash />
+        </div>
+      );
+    }
   }
   // Initialize state from URL params (FP-11)
   const initialUrlFilters = useMemo(() => {

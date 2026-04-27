@@ -453,6 +453,31 @@ export interface IStorage {
   deleteStarredHand(id: string, userId: string): Promise<boolean>;
   countStarredHandsByTournament(sessionTournamentId: string, userId: string): Promise<number>;
 
+  // Sprint Cooldown-2 — Sleep Gate + Analytics
+  setSessionPlanClosed(sessionId: string, userId: string, value: boolean): Promise<GrindSession | null>;
+  setUserDashboardSnoozedUntil(userId: string, until: Date | string): Promise<User | null>;
+  clearUserDashboardSnoozedUntil(userId: string): Promise<User | null>;
+  getCooldownComplianceMetrics(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<{ total: number; completed: number; complianceRate: number }>;
+  getStarredHandsDistribution(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<Array<{ type: string; count: number }>>;
+  getCooldownImpactMetrics(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<{
+    withCooldown: { avgRoi: number };
+    withoutCooldown: { avgRoi: number };
+    delta: number;
+  }>;
+  getTopLessons(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<Array<{ token: string; count: number }>>;
+
   transaction<T>(fn: (tx: IStorage) => Promise<T>): Promise<T>;
 }
 
@@ -4668,6 +4693,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     }
     if (patch.durationMinutes !== undefined) updateData.durationMinutes = patch.durationMinutes;
     if (patch.notes !== undefined) updateData.notes = patch.notes;
+    // Sprint Cooldown-2 — Bloco 3 + Bloco 4
+    if ((patch as any).tiltSelfAssessment !== undefined) {
+      updateData.tiltSelfAssessment = (patch as any).tiltSelfAssessment;
+    }
+    if ((patch as any).sleepIntent !== undefined) {
+      updateData.sleepIntent = (patch as any).sleepIntent;
+    }
 
     const [row] = await db
       .update(cooldownLogs)
@@ -4779,6 +4811,217 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         ),
       );
     return Number(c ?? 0);
+  }
+
+  // ===========================================================================
+  // Sprint Cooldown-2 — Sleep Gate
+  // ===========================================================================
+
+  async setSessionPlanClosed(
+    sessionId: string,
+    userId: string,
+    value: boolean,
+  ): Promise<GrindSession | null> {
+    const [row] = await db
+      .update(grindSessions)
+      .set({ planClosed: value, updatedAt: new Date() })
+      .where(and(eq(grindSessions.id, sessionId), eq(grindSessions.userId, userId)))
+      .returning();
+    return (row as GrindSession) ?? null;
+  }
+
+  async setUserDashboardSnoozedUntil(
+    userId: string,
+    until: Date | string,
+  ): Promise<User | null> {
+    const value = typeof until === "string" ? new Date(until) : until;
+    const [row] = await db
+      .update(users)
+      .set({ dashboardSnoozedUntil: value, updatedAt: new Date() })
+      .where(eq(users.userPlatformId, userId))
+      .returning();
+    return (row as User) ?? null;
+  }
+
+  async clearUserDashboardSnoozedUntil(userId: string): Promise<User | null> {
+    const [row] = await db
+      .update(users)
+      .set({ dashboardSnoozedUntil: null, updatedAt: new Date() })
+      .where(eq(users.userPlatformId, userId))
+      .returning();
+    return (row as User) ?? null;
+  }
+
+  // ===========================================================================
+  // Sprint Cooldown-2 — Analytics aggregation
+  // ===========================================================================
+
+  private periodCutoff(period: "7d" | "30d" | "90d"): Date {
+    const days = period === "7d" ? 7 : period === "90d" ? 90 : 30;
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  }
+
+  async getCooldownComplianceMetrics(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<{ total: number; completed: number; complianceRate: number }> {
+    const cutoff = this.periodCutoff(period);
+
+    // Total = sessoes do user com status='completed' no periodo
+    const [{ count: totalCount }] = await db
+      .select({ count: count() })
+      .from(grindSessions)
+      .where(
+        and(
+          eq(grindSessions.userId, userId),
+          eq(grindSessions.status, "completed"),
+          gte(grindSessions.date, cutoff),
+        ),
+      );
+
+    // Completed = cooldown_logs com completedAt!=null no periodo
+    const [{ count: completedCount }] = await db
+      .select({ count: count() })
+      .from(cooldownLogs)
+      .where(
+        and(
+          eq(cooldownLogs.userId, userId),
+          isNotNull(cooldownLogs.completedAt),
+          gte(cooldownLogs.startedAt, cutoff),
+        ),
+      );
+
+    const total = Number(totalCount ?? 0);
+    const completed = Number(completedCount ?? 0);
+    const complianceRate = total > 0 ? Math.min(1, completed / total) : 0;
+    return { total, completed, complianceRate };
+  }
+
+  async getStarredHandsDistribution(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<Array<{ type: string; count: number }>> {
+    const cutoff = this.periodCutoff(period);
+    const rows = await db
+      .select({
+        type: starredHands.type,
+        count: count(),
+      })
+      .from(starredHands)
+      .where(
+        and(
+          eq(starredHands.userId, userId),
+          gte(starredHands.createdAt, cutoff),
+        ),
+      )
+      .groupBy(starredHands.type);
+
+    return rows
+      .map((r: any) => ({ type: String(r.type), count: Number(r.count ?? 0) }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  async getCooldownImpactMetrics(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<{
+    withCooldown: { avgRoi: number };
+    withoutCooldown: { avgRoi: number };
+    delta: number;
+  }> {
+    const cutoff = this.periodCutoff(period);
+
+    // Sessoes do user no periodo, completed
+    const sessions = await db
+      .select({
+        id: grindSessions.id,
+        roi: grindSessions.roi,
+      })
+      .from(grindSessions)
+      .where(
+        and(
+          eq(grindSessions.userId, userId),
+          eq(grindSessions.status, "completed"),
+          gte(grindSessions.date, cutoff),
+        ),
+      );
+
+    if (sessions.length === 0) {
+      return {
+        withCooldown: { avgRoi: 0 },
+        withoutCooldown: { avgRoi: 0 },
+        delta: 0,
+      };
+    }
+
+    // Sessoes que tem cooldown completo
+    const cdLogs = await db
+      .select({ sessionId: cooldownLogs.sessionId })
+      .from(cooldownLogs)
+      .where(
+        and(
+          eq(cooldownLogs.userId, userId),
+          isNotNull(cooldownLogs.completedAt),
+        ),
+      );
+    const sessionsWithCooldown = new Set(cdLogs.map((r: any) => r.sessionId));
+
+    let withSum = 0;
+    let withCount = 0;
+    let withoutSum = 0;
+    let withoutCount = 0;
+
+    for (const s of sessions) {
+      const roi = s.roi == null ? null : Number(s.roi);
+      if (roi == null || !Number.isFinite(roi)) continue;
+      if (sessionsWithCooldown.has(s.id)) {
+        withSum += roi;
+        withCount += 1;
+      } else {
+        withoutSum += roi;
+        withoutCount += 1;
+      }
+    }
+
+    const withAvg = withCount > 0 ? withSum / withCount : 0;
+    const withoutAvg = withoutCount > 0 ? withoutSum / withoutCount : 0;
+    return {
+      withCooldown: { avgRoi: withAvg },
+      withoutCooldown: { avgRoi: withoutAvg },
+      delta: withAvg - withoutAvg,
+    };
+  }
+
+  async getTopLessons(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<Array<{ token: string; count: number }>> {
+    const cutoff = this.periodCutoff(period);
+    const rows = await db
+      .select({ abGameAnswers: cooldownLogs.abGameAnswers })
+      .from(cooldownLogs)
+      .where(
+        and(
+          eq(cooldownLogs.userId, userId),
+          isNotNull(cooldownLogs.completedAt),
+          gte(cooldownLogs.startedAt, cutoff),
+        ),
+      );
+
+    const lessons: string[] = [];
+    for (const r of rows) {
+      const answers: any = (r as any).abGameAnswers;
+      const lesson = answers?.lesson;
+      if (typeof lesson === "string" && lesson.trim()) {
+        lessons.push(lesson);
+      }
+    }
+
+    if (lessons.length === 0) return [];
+
+    // Tokenizer aplicado aqui (sanitizer + agregacao)
+    const { tokenizeLessons } = await import("./services/lessonTokenizer");
+    return tokenizeLessons(lessons);
   }
 
   async transaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {

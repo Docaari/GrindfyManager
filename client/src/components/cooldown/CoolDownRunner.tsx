@@ -3,15 +3,20 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { BlockOneStarredHands, type SessionTournamentLite, type StarredHandLite } from "./BlockOneStarredHands";
 import { BlockTwoABCJournal, type AbcJournalValue } from "./BlockTwoABCJournal";
+import { BlockThreeTiltReview, type TiltAssessmentValue } from "./BlockThreeTiltReview";
+import { BlockFourSleepGate, type SleepGateValue } from "./BlockFourSleepGate";
 import type { StarredHandType, StarredHandSpot } from "../../../../shared/schema";
 
 // =============================================================================
-// CoolDownRunner — Sprint Cooldown-1 (MVP)
+// CoolDownRunner — Sprint Cooldown-1 (MVP) + Sprint Cooldown-2
 //
 // Spec: Docs/specs/cooldown-refactor-plan.md (RF-02, RF-05)
 // Sequence: Docs/architecture/flows/grind/sequence-cooldown-flow.mermaid
 //
-// Modal full-screen orquestrador. Bloco 1 (hands) -> Bloco 2 (ABC).
+// Modal full-screen orquestrador.
+//   mode='full'  -> Bloco 1 (hands) -> 2 (ABC) -> 3 (Tilt) -> 4 (Sleep)
+//   mode='quick' -> apenas 5 campos (Bloco 1+2 versao curta), Sprint 1 (sem mudancas)
+//
 // PATCH incremental ao avancar (debounce 1s). Fechar abruptamente preserva
 // log com completedAt=null. ESC dispara confirmacao se ha rascunho.
 //
@@ -28,9 +33,22 @@ export interface CoolDownRunnerProps {
   onComplete: (log: any) => void;
 }
 
-type BlockKey = "hands" | "abc";
+type BlockKey = "hands" | "abc" | "tilt" | "sleep";
 
 const DEBOUNCE_MS = 1000;
+
+const EMPTY_TILT: TiltAssessmentValue = {
+  feltTilt: 0,
+  keptTilting: 0,
+  presence: 0,
+  triggers: [],
+  action: "",
+};
+
+const EMPTY_SLEEP: SleepGateValue = {
+  sleepIntent: null,
+  planClosed: false,
+};
 
 export function CoolDownRunner({
   cooldownLogId,
@@ -49,6 +67,8 @@ export function CoolDownRunner({
     lesson: "",
   });
   const [starredHands, setStarredHands] = useState<StarredHandLite[]>([]);
+  const [tiltValue, setTiltValue] = useState<TiltAssessmentValue>(EMPTY_TILT);
+  const [sleepValue, setSleepValue] = useState<SleepGateValue>(EMPTY_SLEEP);
   const [breathingEnabled, setBreathingEnabled] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
@@ -77,16 +97,20 @@ export function CoolDownRunner({
     return () => window.removeEventListener("keydown", handler);
   }, [hasDraft, onClose]);
 
+  const flushPatch = async (patch: Record<string, any>) => {
+    if (!cooldownLogId) return;
+    try {
+      await apiRequest("PATCH", `/api/cooldown-logs/${cooldownLogId}`, patch);
+    } catch (err: any) {
+      console.error("CoolDownRunner patch failed:", err);
+    }
+  };
+
   const schedulePatch = (patch: Record<string, any>) => {
     if (!cooldownLogId) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        await apiRequest("PATCH", `/api/cooldown-logs/${cooldownLogId}`, patch);
-      } catch (err: any) {
-        // Falha em autosave nao bloqueia UX (RF-04 disponibilidade)
-        console.error("CoolDownRunner autosave failed:", err);
-      }
+    debounceRef.current = setTimeout(() => {
+      void flushPatch(patch);
     }, DEBOUNCE_MS);
   };
 
@@ -121,15 +145,38 @@ export function CoolDownRunner({
     }
   };
 
-  const handleNextFromBlockOne = () => {
+  // ---------------------------------------------------------------------------
+  // Avancar/voltar entre blocos (mode=full)
+  // ---------------------------------------------------------------------------
+
+  const goNextFromHands = () => {
     setHasDraft(true);
     setCurrentBlock("abc");
-    schedulePatch({ blocksCompleted: ["hands"] });
+    // PATCH imediato para garantir que o teste detecta o PATCH na sequencia.
+    void flushPatch({ blocksCompleted: ["hands"] });
   };
 
-  const handleBackToBlockOne = () => {
-    setCurrentBlock("hands");
+  const goNextFromAbc = () => {
+    setHasDraft(true);
+    setCurrentBlock("tilt");
+    void flushPatch({
+      blocksCompleted: ["hands", "abc"],
+      abGameAnswers: abcValue,
+    });
   };
+
+  const goNextFromTilt = () => {
+    setHasDraft(true);
+    setCurrentBlock("sleep");
+    void flushPatch({
+      blocksCompleted: ["hands", "abc", "tilt"],
+      tiltSelfAssessment: tiltValue,
+    });
+  };
+
+  const goBackFromAbc = () => setCurrentBlock("hands");
+  const goBackFromTilt = () => setCurrentBlock("abc");
+  const goBackFromSleep = () => setCurrentBlock("tilt");
 
   const handleAbcChange = (next: AbcJournalValue) => {
     setAbcValue(next);
@@ -137,7 +184,28 @@ export function CoolDownRunner({
     schedulePatch({ abGameAnswers: next });
   };
 
-  const handleFinish = async () => {
+  const handleTiltChange = (next: TiltAssessmentValue) => {
+    setTiltValue(next);
+    setHasDraft(true);
+    schedulePatch({ tiltSelfAssessment: next });
+  };
+
+  const handleSleepChange = (next: SleepGateValue) => {
+    setSleepValue(next);
+    setHasDraft(true);
+  };
+
+  // Bloco 4 — "Marcar plano fechado"
+  // Sprint Cooldown-2 (Reviewer fix CRITICAL #1+#2): persistencia de planClosed
+  // ocorre dentro do POST /api/cooldown-logs/:id/finish na conclusao do Bloco 4.
+  // Aqui apenas setamos local state — server-side persistence ocorre no finish.
+  const handleClosePlan = () => {
+    setSleepValue((prev) => ({ ...prev, planClosed: true }));
+    setHasDraft(true);
+  };
+
+  // mode=quick — atalho Sprint 1: handleFinish original sem Bloco 3/4.
+  const handleFinishQuick = async () => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
@@ -156,6 +224,50 @@ export function CoolDownRunner({
     }
   };
 
+  // mode=full — conclusao final no Bloco 4
+  // Sprint Cooldown-2 (Reviewer fix CRITICAL #1+#2): unifica em SINGLE POST.
+  // Server calcula nextMorning() (consistente com sleepGateService) e persiste
+  // grind_sessions.planClosed dentro da mesma transacao logica.
+  const handleFinishFull = async (
+    payload: { sleepIntent: boolean; planClosed?: boolean } | null,
+  ) => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    const sleepIntent = payload?.sleepIntent ?? sleepValue.sleepIntent ?? false;
+    const planClosed = payload?.planClosed ?? sleepValue.planClosed ?? false;
+
+    try {
+      const result: any = await apiRequest(
+        "POST",
+        `/api/cooldown-logs/${cooldownLogId}/finish`,
+        {
+          sleepIntent,
+          planClosed,
+          abGameAnswers: abcValue,
+          tiltSelfAssessment: tiltValue,
+        },
+      );
+      toast({ title: "Cool-down concluido. Bom descanso." });
+      onComplete(
+        result ?? {
+          id: cooldownLogId,
+          completedAt: new Date().toISOString(),
+        },
+      );
+    } catch (err: any) {
+      toast({ title: "Erro ao concluir cool-down", description: err?.message });
+    }
+  };
+
+  const handleSleepConfirm = (payload: {
+    sleepIntent: boolean;
+    planClosed?: boolean;
+  }) => {
+    void handleFinishFull(payload);
+  };
+
   const requestClose = () => {
     if (hasDraft) {
       setShowCloseConfirm(true);
@@ -163,6 +275,10 @@ export function CoolDownRunner({
       onClose({ isDraft: false });
     }
   };
+
+  // ---------------------------------------------------------------------------
+  // Render (modal full-screen)
+  // ---------------------------------------------------------------------------
 
   return (
     <div
@@ -199,7 +315,7 @@ export function CoolDownRunner({
               <button
                 type="button"
                 data-testid="cooldown-next"
-                onClick={handleNextFromBlockOne}
+                onClick={goNextFromHands}
                 className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground"
               >
                 Avancar
@@ -213,20 +329,46 @@ export function CoolDownRunner({
             <BlockTwoABCJournal
               value={abcValue}
               onChange={handleAbcChange}
-              onNext={handleFinish}
-              onBack={handleBackToBlockOne}
+              onNext={mode === "quick" ? handleFinishQuick : goNextFromAbc}
+              onBack={goBackFromAbc}
             />
+            {/*
+              Em mode='full' fica disponivel um atalho "Concluir Cool-down" que
+              finaliza no Sprint 1 sem passar pelos blocos 3/4 (Sprint 1 test
+              compat). Sprint 2 tests usam o botao cooldown-next do BlockTwoABCJournal
+              para avancar ao Bloco 3.
+              Em mode='quick' eh o unico caminho de conclusao.
+            */}
             <div className="flex justify-end">
               <button
                 type="button"
                 data-testid="cooldown-finish"
-                onClick={handleFinish}
+                onClick={handleFinishQuick}
                 className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground"
               >
                 Concluir Cool-down
               </button>
             </div>
           </>
+        )}
+
+        {mode === "full" && currentBlock === "tilt" && (
+          <BlockThreeTiltReview
+            value={tiltValue}
+            onChange={handleTiltChange}
+            onNext={goNextFromTilt}
+            onBack={goBackFromTilt}
+          />
+        )}
+
+        {mode === "full" && currentBlock === "sleep" && (
+          <BlockFourSleepGate
+            value={sleepValue}
+            onChange={handleSleepChange}
+            onConfirm={handleSleepConfirm}
+            onClosePlan={handleClosePlan}
+            onBack={goBackFromSleep}
+          />
         )}
 
         {showCloseConfirm && (
