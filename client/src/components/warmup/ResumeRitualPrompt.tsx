@@ -77,8 +77,8 @@ export function ResumeRitualPrompt({ onResume, onDiscard }: ResumeRitualPromptPr
   if (!valid) return null;
 
   return (
-    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-      <p className="text-sm text-amber-900">
+    <div className="rounded-lg border surface-warning p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <p className="text-sm">
         Retomar warm-up em andamento?
       </p>
       <div className="flex gap-2">

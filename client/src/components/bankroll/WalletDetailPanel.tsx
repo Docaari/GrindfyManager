@@ -125,7 +125,7 @@ export function WalletDetailPanel({ wallet, onRakebackClick }: Props) {
             data-testid="wallet-detail-rakeback-trigger"
             onClick={onRakebackClick}
             disabled={archived}
-            className="px-3 py-2 text-sm rounded-md border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+            className="px-3 py-2 text-sm rounded-md border surface-warning hover:brightness-125 disabled:opacity-50"
             title="Reportar rakeback recebido nesta carteira"
           >
             Reportar rakeback
@@ -134,7 +134,7 @@ export function WalletDetailPanel({ wallet, onRakebackClick }: Props) {
       </div>
 
       {archived && (
-        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+        <div className="text-xs border surface-warning rounded px-3 py-2">
           Esta carteira esta arquivada. Movimentos novos nao sao aceitos.
         </div>
       )}
@@ -200,19 +200,19 @@ function ArchiveConfirmDialog({
           // QW-F: warning explicito quando ha saldo + checkbox "entendi"
           <div
             data-testid="wallet-archive-balance-warning"
-            className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-2"
+            className="rounded-md border surface-warning p-3 space-y-2"
           >
-            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+            <p className="text-sm font-medium">
               Esta carteira ainda tem saldo:
               <strong className="ml-1">
                 {currencySymbol(wallet.nativeCurrency)} {formatBalance(wallet.balance)}
               </strong>
             </p>
-            <p className="text-xs text-amber-800 dark:text-amber-300">
+            <p className="text-xs opacity-80">
               Movimente o saldo antes de arquivar para nao perder visibilidade
               do dinheiro na banca consolidada.
             </p>
-            <label className="flex items-center gap-2 text-xs text-amber-900 dark:text-amber-200 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
               <input
                 type="checkbox"
                 data-testid="wallet-archive-acknowledge"

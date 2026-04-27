@@ -78,7 +78,7 @@ export function BankrollHistoryTable() {
                   <span
                     data-testid={`source-badge-auto-${s.id}`}
                     title={transactionSourceLabel(s.source)}
-                    className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-medium text-slate-700 bg-slate-50 border-slate-200"
+                    className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded border surface-neutral text-[10px] font-medium"
                   >
                     Auto
                   </span>
@@ -86,7 +86,7 @@ export function BankrollHistoryTable() {
               </td>
               <td
                 className={
-                  "py-2 pr-3 text-right " + (Number(s.delta) >= 0 ? "text-green-600" : "text-red-600")
+                  "py-2 pr-3 text-right " + (Number(s.delta) >= 0 ? "text-emerald-400" : "text-rose-400")
                 }
               >
                 {Number(s.delta) >= 0 ? "+" : ""}

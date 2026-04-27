@@ -389,7 +389,7 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
         {balanceMismatch && (
           <div
             data-testid="wallet-tx-balance-mismatch-alert"
-            className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 space-y-2"
+            className="text-sm border surface-warning rounded px-3 py-2 space-y-2"
           >
             <p>
               Saldo divergente. Saldo atual no servidor:{" "}
@@ -406,7 +406,7 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
           </div>
         )}
         {warning && (
-          <div data-testid="wallet-tx-warning" className="text-sm text-amber-700 bg-amber-50 rounded px-3 py-2">
+          <div data-testid="wallet-tx-warning" className="text-sm border surface-warning rounded px-3 py-2">
             {warning}
           </div>
         )}

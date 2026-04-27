@@ -135,7 +135,7 @@ export default function BankrollPage() {
         <div className="flex gap-2">
           <button
             onClick={openRakebackFromHeader}
-            className="px-3 py-2 text-sm rounded border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+            className="px-3 py-2 text-sm rounded border surface-warning hover:brightness-125"
             data-testid="bankroll-rakeback-trigger-header"
             title="Registrar rakeback recebido"
           >

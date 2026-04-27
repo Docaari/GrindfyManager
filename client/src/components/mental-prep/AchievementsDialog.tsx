@@ -15,7 +15,7 @@ export function AchievementsDialog({ open, onOpenChange, achievements }: Achieve
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="border-gray-600 hover:bg-gray-700 text-[#000000] hover:text-white">
+        <Button variant="outline" className="border-border hover:bg-accent">
           <Trophy className="w-4 h-4 mr-2" />
           Conquistas
         </Button>

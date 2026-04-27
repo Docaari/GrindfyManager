@@ -45,25 +45,25 @@ function decisionBadge(r: Ritual): BadgeInfo {
     if (r.overrideUsed) {
       return {
         label: "Override",
-        className: "bg-amber-100 text-amber-800 border-amber-300",
+        className: "surface-warning",
       };
     }
     if (r.decisionToPlay === true) {
       return {
         label: "Jogou",
-        className: "bg-emerald-100 text-emerald-800 border-emerald-300",
+        className: "surface-success",
       };
     }
   }
   if (r.version === "aborted" && r.decisionToPlay === false) {
     return {
       label: "Nao jogou",
-      className: "bg-rose-100 text-rose-800 border-rose-300",
+      className: "surface-danger",
     };
   }
   return {
     label: "Abortou",
-    className: "bg-slate-100 text-slate-700 border-slate-300",
+    className: "surface-neutral",
   };
 }
 

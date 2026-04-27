@@ -196,7 +196,7 @@ export function RakebackDialog({
         <div className="flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">Reportar rakeback</h2>
           <span
-            className="text-[10px] uppercase tracking-wide bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded"
+            className="text-[10px] uppercase tracking-wide surface-warning border px-1.5 py-0.5 rounded"
             aria-hidden
           >
             Rakeback
@@ -286,7 +286,7 @@ export function RakebackDialog({
         {errorMessage && (
           <div
             data-testid="rakeback-error-alert"
-            className="text-sm text-amber-800 bg-amber-50 border border-amber-300 rounded px-3 py-2"
+            className="text-sm border surface-warning rounded px-3 py-2"
             role="alert"
           >
             {errorMessage}

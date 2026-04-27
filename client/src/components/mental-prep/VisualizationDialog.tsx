@@ -66,7 +66,7 @@ export function VisualizationDialog({ showSelection, onSelectionChange, showGuid
     <>
       <Dialog open={showSelection} onOpenChange={onSelectionChange}>
         <DialogTrigger asChild>
-          <Button variant="outline" className="border-gray-600 hover:bg-gray-700">
+          <Button variant="outline" className="border-border hover:bg-accent">
             <Eye className="w-4 h-4 mr-2" />
             Guia Visualização
           </Button>

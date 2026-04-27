@@ -143,7 +143,7 @@ export function WalletList({ wallets, selectedWalletId, onSelect, onCreateClick 
                 <span className="font-medium text-sm truncate">{w.name}</span>
                 {w.isShotPocket && (
                   <span
-                    className="ml-auto text-[10px] uppercase tracking-wide bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded"
+                    className="ml-auto text-[10px] uppercase tracking-wide surface-warning border px-1.5 py-0.5 rounded"
                     title="Shot pocket: carteira reservada para tentativas em buy-ins acima da banca de gestao"
                   >
                     Shot

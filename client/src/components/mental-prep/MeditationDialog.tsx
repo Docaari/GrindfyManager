@@ -58,7 +58,7 @@ export function MeditationDialog({ open, onOpenChange }: MeditationDialogProps) 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="border-gray-600 hover:bg-gray-700">
+        <Button variant="outline" className="border-border hover:bg-accent">
           <Sparkles className="w-4 h-4 mr-2" />
           Timer Meditação
         </Button>
