@@ -470,8 +470,11 @@ export const preparationLogs = pgTable("preparation_logs", {
   warmupCompleted: boolean("warmup_completed").default(false),
   sessionGoals: text("session_goals"),
   notes: text("notes"),
+  // @deprecated Sprint Cooldown-3 — usar cooldown_logs.abGameAnswers em vez deste campo
   postSessionReview: text("post_session_review"),
+  // @deprecated Sprint Cooldown-3 — usar cooldown_logs.abGameAnswers.aGame/bGame em vez deste campo
   goalsAchieved: boolean("goals_achieved"),
+  // @deprecated Sprint Cooldown-3 — usar cooldown_logs.abGameAnswers.lesson em vez deste campo
   lessonsLearned: text("lessons_learned"),
   createdAt: timestamp("created_at").defaultNow(),
 });

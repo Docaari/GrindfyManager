@@ -1,0 +1,120 @@
+%% Sequence Diagram — Coach AI integration with Cool-down (Sprint Cooldown-3)
+%% Source: ADR-042 (tool registry) + ADR-043 (page context)
+%% Companion to: ADR-019 (prompt cache), ADR-023 (registry), ADR-024 (wrap), ADR-025 (page ctx)
+
+sequenceDiagram
+    autonumber
+    actor Player as Player
+    participant CoachUI as Coach UI<br/>(client/src/components/coach)
+    participant API as API Server<br/>(server/routes/coach.ts)
+    participant Builder as System Builder<br/>(coachSystemBuilder.ts)
+    participant Anthropic as Anthropic API<br/>(claude-sonnet-4)
+    participant Registry as Tool Registry<br/>(coachTools/index.ts)
+    participant Runner as Tool Runner<br/>(coachToolRunner.ts)
+    participant Storage as Storage<br/>(server/storage.ts)
+    participant DB as PostgreSQL<br/>(cooldown_logs, starred_hands)
+
+    Note over Player, DB: Cenario A — Player na rota /grade<br/>pergunta agregada sobre tilt<br/>(usa tool, sem page context cooldown-log)
+
+    Player->>CoachUI: digita "Como eu lido com tilt?"
+    CoachUI->>API: POST /api/coach/chat<br/>{message, conversationId, pageContext: {route:'grade-planner',...}}
+
+    API->>API: validatePageContext<br/>(Zod discriminated union, ADR-025)
+    API->>Builder: buildSystemPrompt(userId)
+    Builder->>Storage: getRecentCooldownDigest(userId, 5)
+    Storage->>DB: SELECT cooldown_logs JOIN starred_hands<br/>WHERE userId=? AND completedAt IS NOT NULL<br/>ORDER BY completedAt DESC LIMIT 5
+    DB-->>Storage: 5 rows agregadas<br/>(NO notes, NO cGame, NO action)
+    Storage-->>Builder: digest items
+    Note right of Builder: bloco "Rituais de cool-down recentes"<br/>vai no STATIC block (ADR-019)<br/>cache_control: ephemeral
+    Builder-->>API: system [static+dynamic]
+
+    API->>Anthropic: messages.create<br/>{system, tools, messages}
+    Note right of Anthropic: cache HIT no static block<br/>(read $0.30/1M, ADR-019)
+    Anthropic-->>API: tool_use<br/>{name:'read_cooldown_history',<br/>input:{period:'30d'}}
+
+    API->>Registry: getTool('read_cooldown_history')
+    Registry-->>API: tool descriptor<br/>(handler + inputSchema, ADR-023)
+    API->>Runner: run(tool, input, ctx={userId})
+
+    Runner->>Runner: validate input<br/>z.object({period:enum}).parse
+    Runner->>Storage: parallel:<br/>getCooldownComplianceMetrics<br/>getStarredHandsDistribution<br/>getTopLessons<br/>getCooldownImpact
+    Storage->>DB: 4 aggregations<br/>(GROUP BY type, period filter)
+    DB-->>Storage: counts + tokens + ROI deltas
+    Storage-->>Runner: raw aggregates
+
+    Runner->>Runner: SANITIZER<br/>(NO notes, NO action, NO cGame)<br/>{totalSessions, cooldownCount,<br/>starredHands:{byType,total},<br/>recentLessons[token],<br/>impact:{withCooldown,withoutCooldown,delta}}
+
+    Runner->>Runner: WRAP per ADR-024<br/>{__type:'ToolResult',<br/>tool:'read_cooldown_history',<br/>ok:true, data:{...}}
+
+    Runner-->>API: wrapped result
+    API->>Anthropic: messages.create<br/>+ tool_result block
+    Anthropic-->>API: assistant text<br/>"Voce teve 12 maos tipo tilt em 30d.<br/>Sugestao: trabalhar tilt management..."
+    API-->>CoachUI: stream response
+    CoachUI-->>Player: render markdown
+
+    Note over Player, DB: Cenario B — Player na rota<br/>/grind/history/:id?tab=cooldown<br/>(page context cooldown-log presente)
+
+    Player->>CoachUI: abre /grind/history/abc?tab=cooldown
+    CoachUI->>CoachUI: useCoachPageContext detecta rota<br/>buildCooldownLogContext(log)<br/>(ADR-043: counts+booleans+enums)
+    Note right of CoachUI: PII strip no client:<br/>notes, cGame, lesson, action<br/>NUNCA enviados
+
+    Player->>CoachUI: digita "Por que essa licao?"
+    CoachUI->>API: POST /api/coach/chat<br/>{message, pageContext:{<br/>  route:'cooldown-log',<br/>  cooldownLogId:'abc',<br/>  mode:'full',<br/>  blocksCompleted:['hands','abc'],<br/>  abGameAnswers:{hasLesson:true},<br/>  starredHandsCount:3,<br/>  starredHandsByType:{tilt:2,leak:1},<br/>  recentLessonTokens:['paciencia','foco']<br/>}}
+
+    API->>API: pageContextSchema.safeParse<br/>(ADR-043 variant: cooldown-log)
+    Note right of API: campo "notes" rejeitado<br/>se atacante incluir<br/>(whitelist Zod estrita)
+    API->>API: sanitizePageContext<br/>(regex residual em strings)
+
+    API->>Builder: buildSystemPrompt(userId)<br/>+ buildPageContextSection(ctx)<br/>(ADR-019: dynamic block)
+    Builder-->>API: system [static cached + dynamic w/ ctx]
+
+    API->>Anthropic: messages.create
+    Note right of Anthropic: STATIC: cache HIT<br/>DYNAMIC: page ctx + recent msgs<br/>(no cache, full price)
+
+    alt Coach precisa profundidade<br/>(ex: dados de 30d)
+        Anthropic-->>API: tool_use read_cooldown_history
+        API->>Runner: run(...)
+        Runner->>Storage: agregados (mesmo path do Cenario A)
+        Storage-->>Runner: data
+        Runner-->>API: wrapped result
+        API->>Anthropic: tool_result
+        Anthropic-->>API: text final
+    else Page context suficiente
+        Anthropic-->>API: text direto<br/>"Sua licao 'paciencia' e<br/>recorrente — voce esta<br/>identificando o padrao..."
+    end
+
+    API-->>CoachUI: stream response
+    CoachUI-->>Player: render
+
+    Note over Player, DB: Cenario C — Cache HIT do bloco<br/>"rituais recentes" entre mensagens<br/>(< 5min, ADR-019 TTL)
+
+    Player->>CoachUI: digita 2a mensagem<br/>(< 5min apos a 1a)
+    CoachUI->>API: POST /api/coach/chat
+    API->>Builder: buildSystemPrompt(userId)
+    Note right of Builder: digest cool-down NAO mudou<br/>(no novo cool-down completo)<br/>=> system static block hash igual
+    Builder-->>API: system identico
+
+    API->>Anthropic: messages.create
+    Note right of Anthropic: STATIC: cache HIT<br/>(read $0.30/1M = -90% vs regular)<br/>Economia ~$2.70/1M tokens
+
+    Anthropic-->>API: response
+    API-->>CoachUI: stream
+    CoachUI-->>Player: render
+
+    Note over Player, DB: Cenario D — Cache MISS apos<br/>player completar novo cool-down<br/>(invalidacao natural, raro intra-janela)
+
+    Player->>API: POST /api/cooldown-logs/:id PATCH<br/>{completedAt: now}
+    Note right of DB: nova row em digest
+
+    Player->>CoachUI: pergunta seguinte ao Coach
+    CoachUI->>API: POST /api/coach/chat
+    API->>Builder: buildSystemPrompt(userId)
+    Builder->>Storage: getRecentCooldownDigest(userId, 5)
+    Storage-->>Builder: 5 rows (1 nova)
+    Note right of Builder: hash do static MUDOU<br/>cache miss esperado<br/>(write $3.75/1M, +25% vs regular)<br/>compensa nas proximas N msgs
+    Builder-->>API: system NOVO
+
+    API->>Anthropic: messages.create
+    Note right of Anthropic: STATIC: cache WRITE<br/>(custo ~uma vez por cool-down completado)
+    Anthropic-->>API: response
+    API-->>CoachUI: stream
