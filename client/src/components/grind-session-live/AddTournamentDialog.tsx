@@ -8,6 +8,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { getCategoryColor, getSpeedColor } from './helpers';
 import type { NewTournamentForm } from './types';
 import { TOURNAMENT_PRIMARY_TYPES, getTypeLabel } from "@shared/tournamentTypes";
+import { detectAddonReaFromName } from "@shared/addon-rea-detector";
 
 interface AddTournamentDialogProps {
   open: boolean;
@@ -159,6 +160,46 @@ export default function AddTournamentDialog({
               </select>
             </div>
           </div>
+
+          {/* Auto-detect hint: Plus / ReA detectado pelo nome */}
+          {(() => {
+            const nameForDetect = newTournament.name || `${newTournament.site} ${newTournament.type || ''}`.trim();
+            const detected = detectAddonReaFromName(nameForDetect);
+            const showAddOnHint = detected.allowsAddOn && !newTournament.allowsAddOn;
+            const showReentryHint = detected.allowsReentry && !newTournament.allowsReentry;
+            if (!showAddOnHint && !showReentryHint) return null;
+            return (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200" data-testid="autodetect-hint">
+                <div className="font-semibold mb-1">Detectado pelo nome:</div>
+                <div className="flex flex-wrap gap-2">
+                  {showAddOnHint && (
+                    <button
+                      type="button"
+                      onClick={() => setNewTournament((prev) => ({
+                        ...prev,
+                        allowsAddOn: true,
+                        addOnCost: prev.addOnCost && String(prev.addOnCost).trim() !== '' ? prev.addOnCost : prev.buyIn,
+                      }))}
+                      className="px-2 py-0.5 rounded bg-amber-600/40 hover:bg-amber-600/60 text-amber-100"
+                      data-testid="autodetect-apply-addon"
+                    >
+                      Marcar Permite Add-on
+                    </button>
+                  )}
+                  {showReentryHint && (
+                    <button
+                      type="button"
+                      onClick={() => setNewTournament((prev) => ({ ...prev, allowsReentry: true }))}
+                      className="px-2 py-0.5 rounded bg-purple-600/40 hover:bg-purple-600/60 text-purple-100"
+                      data-testid="autodetect-apply-reentry"
+                    >
+                      Marcar Permite Re-entry
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Advanced fields - apenas GTD por enquanto */}
           <Collapsible open={showAdvancedFields} onOpenChange={setShowAdvancedFields}>

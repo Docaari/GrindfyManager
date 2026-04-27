@@ -65,6 +65,7 @@ import {
   organizeTournaments, organizeTournamentsByBreaks, combineTournaments,
   getSiteColor,
   shouldShowReentryModal, buildReentryPayload,
+  resolveAddonReaPayload,
   type ReentryQueueState,
 } from "@/components/grind-session-live/helpers";
 import { calculateSessionStats, calculateFinalSessionStats, calculateBreakAverages, calculateTournamentPercentages } from "@/components/grind-session-live/calculateSessionStats";
@@ -300,7 +301,8 @@ export default function GrindSessionLive() {
   const [showPendingTournamentsDialog, setShowPendingTournamentsDialog] = useState(false);
   const [newTournament, setNewTournament] = useState<NewTournamentForm>({
     site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal",
-    scheduledTime: "", fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming"
+    scheduledTime: "", fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming",
+    allowsAddOn: false, addOnCost: "", allowsReentry: false, maxReentries: null,
   });
 
   // Re-entry queue (ADR-014 / Spec 3 — FIFO)
@@ -471,10 +473,12 @@ export default function GrindSessionLive() {
 
   const generateSessionSummary = async () => {
     try {
+      const investedNorm = stats.totalInvestidoUSD ?? stats.totalInvestido;
+      const profitNorm = stats.profitUSD ?? stats.profit;
       const summaryData = {
         volume: stats.registros,
-        invested: stats.totalInvestido,
-        profit: stats.profit,
+        invested: investedNorm,
+        profit: profitNorm,
         roi: stats.roi,
         fts: stats.fts,
         wins: stats.cravadas,
@@ -486,7 +490,7 @@ export default function GrindSessionLive() {
           emotionalIntelligence: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.inteligenciaEmocional, 0) / breakFeedbacks.length : 0,
           interference: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.interferencias, 0) / breakFeedbacks.length : 0,
         },
-        objectiveStatus: stats.profit > 0 ? 'completed' : (stats.profit > -stats.totalInvestido * 0.5 ? 'partial' : 'missed'),
+        objectiveStatus: profitNorm > 0 ? 'completed' : (profitNorm > -investedNorm * 0.5 ? 'partial' : 'missed'),
         sessionTime: sessionElapsedTime,
         objectives: activeSession?.dailyGoals || '',
         quickNotes: quickNotes,
@@ -530,7 +534,10 @@ export default function GrindSessionLive() {
     const sessionId = activeSession?.id;
     if (!sessionId) return;
     const sessionData = sessionSummaryData || {
-      volume: stats.registros, invested: stats.totalInvestido, profit: stats.profit, roi: stats.roi,
+      volume: stats.registros,
+      invested: stats.totalInvestidoUSD ?? stats.totalInvestido,
+      profit: stats.profitUSD ?? stats.profit,
+      roi: stats.roi,
       fts: stats.fts, wins: stats.cravadas,
       mentalAverages: {
         focus: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.foco, 0) / breakFeedbacks.length : 0,
@@ -1019,6 +1026,21 @@ export default function GrindSessionLive() {
 
   const addTournamentMutation = useMutation({
     mutationFn: async (tournamentData: any) => {
+      // ADR-014 (B1+B2 fix): propaga add-on/re-entry em ambos os paths
+      // (manual e syncWithGrade). Helper resolveAddonReaPayload espelha
+      // autodetect server-side em grade-planner.ts (Plus/ReA pelo nome).
+      const resolvedName = tournamentData.name || `${tournamentData.site} ${tournamentData.type || 'Tournament'}`;
+      const addonReaPayload = resolveAddonReaPayload({
+        name: resolvedName,
+        site: tournamentData.site,
+        type: tournamentData.type,
+        buyIn: tournamentData.buyIn,
+        allowsAddOn: tournamentData.allowsAddOn,
+        addOnCost: tournamentData.addOnCost,
+        allowsReentry: tournamentData.allowsReentry,
+        maxReentries: tournamentData.maxReentries,
+      });
+
       if (tournamentData.syncWithGrade) {
         const currentDayOfWeek = new Date().getDay();
         let activeProfile = 'A';
@@ -1028,16 +1050,17 @@ export default function GrindSessionLive() {
           if (todayProfileState?.activeProfile) activeProfile = todayProfileState.activeProfile;
         } catch {}
         return await apiRequest("POST", "/api/planned-tournaments", {
-          site: tournamentData.site, name: tournamentData.name || `${tournamentData.site} ${tournamentData.type || 'Tournament'}`,
+          site: tournamentData.site, name: resolvedName,
           buyIn: String(tournamentData.buyIn), type: tournamentData.type || 'Vanilla', speed: tournamentData.speed || 'Normal',
           time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
           guaranteed: tournamentData.guaranteed ? String(tournamentData.guaranteed) : null, prioridade: 2,
-          dayOfWeek: currentDayOfWeek, profile: activeProfile
+          dayOfWeek: currentDayOfWeek, profile: activeProfile,
+          ...addonReaPayload,
         });
       } else {
         return await apiRequest("POST", "/api/session-tournaments", {
           userId: activeSession?.userId, sessionId: activeSession?.id, site: tournamentData.site,
-          name: tournamentData.name || `${tournamentData.site} ${tournamentData.type || 'Tournament'}`,
+          name: resolvedName,
           buyIn: tournamentData.buyIn, rebuys: 0, result: "0", bounty: "0",
           status: tournamentData.status || "upcoming", fromPlannedTournament: tournamentData.fromPlannedTournament || false,
           plannedTournamentId: tournamentData.plannedTournamentId || null,
@@ -1045,7 +1068,10 @@ export default function GrindSessionLive() {
           startTime: tournamentData.startTime || null, endTime: null,
           time: tournamentData.scheduledTime || tournamentData.time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
           type: tournamentData.type || 'Vanilla', speed: tournamentData.speed || 'Normal',
-          guaranteed: tournamentData.guaranteed || null
+          guaranteed: tournamentData.guaranteed || null,
+          addOnTaken: false,
+          reentries: 0,
+          ...addonReaPayload,
         });
       }
     },
@@ -1059,7 +1085,7 @@ export default function GrindSessionLive() {
         queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       }
       // RF-12: Keep modal open for adding more, show success toast
-      setNewTournament({ site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal", scheduledTime: "", fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming" });
+      setNewTournament({ site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal", scheduledTime: "", fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming", allowsAddOn: false, addOnCost: "", allowsReentry: false, maxReentries: null });
       const isRegistration = variables?.status === 'registered' && variables?.fromPlannedTournament;
       toast({
         title: isRegistration ? "Registrado no Torneio" : "Torneio Adicionado",
@@ -1302,7 +1328,29 @@ export default function GrindSessionLive() {
     const existingSessionTournament = sessionTournaments?.find(st => st.plannedTournamentId === actualId);
 
     if (existingSessionTournament && !isSuprema) {
-      updateTournamentMutation.mutate({ id: existingSessionTournament.id, data: { status: 'registered', startTime: new Date().toISOString() } });
+      // Refresh addon/reentry config from the current planned source.
+      // The session row was snapshotted at session-creation time; if the
+      // planned tournament was edited afterwards (e.g., user enabled
+      // allowsAddOn), the snapshot is stale and the Add-on button never
+      // shows. Promoting upcoming -> registered is the right moment to
+      // re-sync those fields.
+      const promoteData: any = { status: 'registered', startTime: new Date().toISOString() };
+      const pt: any = plannedTournaments?.find(t => t.id === actualId);
+      if (pt) {
+        if (pt.allowsAddOn === true && existingSessionTournament.allowsAddOn !== true) {
+          promoteData.allowsAddOn = true;
+          if (!existingSessionTournament.addOnCost) {
+            promoteData.addOnCost = pt.addOnCost ?? existingSessionTournament.buyIn ?? null;
+          }
+        }
+        if (pt.allowsReentry === true && existingSessionTournament.allowsReentry !== true) {
+          promoteData.allowsReentry = true;
+          if (existingSessionTournament.maxReentries == null && pt.maxReentries != null) {
+            promoteData.maxReentries = pt.maxReentries;
+          }
+        }
+      }
+      updateTournamentMutation.mutate({ id: existingSessionTournament.id, data: promoteData });
       return;
     }
 
@@ -1415,8 +1463,28 @@ export default function GrindSessionLive() {
   // sobrescrevia o conteudo do React via DOM direto, conflitando com re-renders
   // e dificultando testes/SSR. Lookup duplicado eliminado.
 
+  // FX rates "1 USD = N native units" para conversao USD do dashboard live.
+  // Combina exchangeRates do user_settings com rate de BRL derivado de
+  // bankroll.maxBuyInDisplay quando o usuario nao configurou BRL ainda.
+  const usdConversionRates = useMemo<Record<string, number>>(() => {
+    const fromSettings = (exchangeRatesData ?? {}) as Record<string, unknown>;
+    const out: Record<string, number> = {};
+    for (const [code, val] of Object.entries(fromSettings)) {
+      const n = typeof val === 'number' ? val : parseFloat(String(val));
+      if (Number.isFinite(n) && n > 0) out[code] = n;
+    }
+    if (out.BRL == null) {
+      const usd = bankroll?.maxBuyInUSD;
+      const brl = bankroll?.maxBuyInDisplay?.BRL;
+      if (usd != null && brl != null && usd > 0 && brl > 0) {
+        out.BRL = brl / usd;
+      }
+    }
+    return out;
+  }, [exchangeRatesData, bankroll?.maxBuyInUSD, bankroll?.maxBuyInDisplay?.BRL]);
+
   // Calculate stats
-  const stats = useMemo(() => calculateSessionStats(sessionTournaments, plannedTournaments, registrationData, activeSession), [plannedTournaments, sessionTournaments, registrationData, activeSession]);
+  const stats = useMemo(() => calculateSessionStats(sessionTournaments, plannedTournaments, registrationData, activeSession, usdConversionRates), [plannedTournaments, sessionTournaments, registrationData, activeSession, usdConversionRates]);
 
   // Screen cap alert via toast (não manipular DOM diretamente)
   const lastScreenCapAlertRef = useRef<number>(0);

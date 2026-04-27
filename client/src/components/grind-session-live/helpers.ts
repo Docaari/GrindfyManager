@@ -1,5 +1,55 @@
 // Helper functions for tournament categorization and colors
 import { getTypeColor, TOURNAMENT_PRIMARY_TYPES, type TournamentPrimaryType } from "@shared/tournamentTypes";
+import { detectAddonReaFromName } from "@shared/addon-rea-detector";
+
+/**
+ * Resolve add-on / re-entry fields for an "Add Tournament" payload.
+ *
+ * Rules (ADR-014, fix B1+B2 2026-04-27):
+ * - User explicit values (true/false) win.
+ * - Undefined/null -> auto-detect via name regex (Plus / ReA).
+ * - allowsAddOn=true && no addOnCost -> default to buyIn.
+ * - allowsAddOn=false -> addOnCost forced null.
+ *
+ * Used by addTournamentMutation in GrindSessionLive to ensure the live
+ * "Adicionar Torneio" modal never drops these flags before POST.
+ */
+export function resolveAddonReaPayload(input: {
+  name?: string | null;
+  site?: string | null;
+  type?: string | null;
+  buyIn?: string | number | null;
+  allowsAddOn?: boolean | null;
+  addOnCost?: string | number | null;
+  allowsReentry?: boolean | null;
+  maxReentries?: number | null;
+}): {
+  allowsAddOn: boolean;
+  addOnCost: string | null;
+  allowsReentry: boolean;
+  maxReentries: number | null;
+} {
+  const resolvedName = input.name && String(input.name).trim() !== ''
+    ? String(input.name)
+    : `${input.site ?? ''} ${input.type ?? ''}`.trim();
+  const detected = detectAddonReaFromName(resolvedName);
+
+  const allowsAddOn = input.allowsAddOn === true
+    || (input.allowsAddOn == null && detected.allowsAddOn);
+
+  const addOnCost = allowsAddOn
+    ? (input.addOnCost != null && String(input.addOnCost).trim() !== ''
+        ? String(input.addOnCost)
+        : (input.buyIn != null && String(input.buyIn).trim() !== '' ? String(input.buyIn) : null))
+    : null;
+
+  const allowsReentry = input.allowsReentry === true
+    || (input.allowsReentry == null && detected.allowsReentry);
+
+  const maxReentries = input.maxReentries ?? null;
+
+  return { allowsAddOn, addOnCost, allowsReentry, maxReentries };
+}
 
 export const getSiteColor = (site: string): string => {
   switch (site.toLowerCase()) {
@@ -295,6 +345,36 @@ export const organizeTournaments = (tournaments: any[], plannedTournaments: any[
       }
     }
 
+    // Session row from planned: keep addon/reentry config in sync with
+    // the current planned tournament. Covers the case where planned was
+    // edited (e.g., user enabled allowsAddOn) after the session was
+    // created — without this, the live row keeps the stale snapshot
+    // copied at session-creation time and the Add-on button stays hidden.
+    if (
+      tournament.fromPlannedTournament &&
+      tournament.plannedTournamentId &&
+      Array.isArray(plannedTournaments) &&
+      plannedTournaments.length > 0
+    ) {
+      const plannedSource = plannedTournaments.find(p => p.id === tournament.plannedTournamentId);
+      if (plannedSource) {
+        const merged: any = { ...tournament };
+        if (plannedSource.allowsAddOn === true && tournament.allowsAddOn !== true) {
+          merged.allowsAddOn = true;
+          if (tournament.addOnCost == null || tournament.addOnCost === '') {
+            merged.addOnCost = plannedSource.addOnCost ?? tournament.buyIn ?? null;
+          }
+        }
+        if (plannedSource.allowsReentry === true && tournament.allowsReentry !== true) {
+          merged.allowsReentry = true;
+          if (tournament.maxReentries == null && plannedSource.maxReentries != null) {
+            merged.maxReentries = plannedSource.maxReentries;
+          }
+        }
+        return merged;
+      }
+    }
+
     return tournament;
   });
 
@@ -437,6 +517,10 @@ export const buildAddOnMutationPayload = (
 /**
  * Derive render state for the Add-on button in RegisteredCard.
  * Returns visibility, disabled, variant (default=green, paid=gold), and label.
+ *
+ * Invariant I1 (ADR-014): visivel SE E SOMENTE SE status=registered AND
+ * allowsAddOn AND addOnCost != null AND addOnCost > 0. Paga (state final)
+ * mantem o botao visivel com label "pago" para permitir desfazer.
  */
 export const getAddOnButtonState = (
   tournament: any,
@@ -447,11 +531,14 @@ export const getAddOnButtonState = (
   variant: 'default' | 'paid';
   label: string;
 } => {
-  const visible = Boolean(tournament?.allowsAddOn) && tournament?.status === 'registered';
-  if (!visible) {
+  if (!tournament || tournament.status !== 'registered' || !tournament.allowsAddOn) {
     return { visible: false, disabled: false, variant: 'default', label: '' };
   }
-  const paid = Boolean(tournament?.addOnTaken);
+  const cost = tournament.addOnCost == null ? 0 : parseFloat(String(tournament.addOnCost));
+  if (!isFinite(cost) || cost <= 0) {
+    return { visible: false, disabled: false, variant: 'default', label: '' };
+  }
+  const paid = Boolean(tournament.addOnTaken);
   const costDisplay = formatAddOnCost(tournament);
   return {
     visible: true,

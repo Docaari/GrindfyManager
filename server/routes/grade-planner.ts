@@ -5,8 +5,27 @@ import { storage } from "../storage";
 import {
   insertPlannedTournamentSchema,
 } from "@shared/schema";
+import { detectAddonReaFromName } from "@shared/addon-rea-detector";
 import { selectorCache } from "../services/selectorCache";
 import { zodErrorResponse } from "../lib/zodErrorResponse";
+
+// Auto-detect Plus / ReA flags from name when caller did not explicitly set
+// them. Mutates only fields that are undefined/null so explicit `false` from
+// the form is respected. Default addOnCost to buyIn when allowsAddOn flips on
+// without an explicit cost.
+export function applyAddonReaAutoDetect(payload: any): void {
+  if (!payload || typeof payload.name !== 'string' || !payload.name.trim()) return;
+  const detected = detectAddonReaFromName(payload.name);
+  if (detected.allowsAddOn && (payload.allowsAddOn === undefined || payload.allowsAddOn === null)) {
+    payload.allowsAddOn = true;
+    if ((payload.addOnCost === undefined || payload.addOnCost === null || payload.addOnCost === '') && payload.buyIn) {
+      payload.addOnCost = String(payload.buyIn);
+    }
+  }
+  if (detected.allowsReentry && (payload.allowsReentry === undefined || payload.allowsReentry === null)) {
+    payload.allowsReentry = true;
+  }
+}
 
 // =============================================================================
 // Selector Logging (RF-07) — Q9 + Q10
@@ -136,6 +155,7 @@ export function registerGradePlannerRoutes(app: Express): void {
       // do schema para evitar 400 ruidoso. Mesmo principio para outros campos
       // que aceitam null.
       if (rest.gameType === '') rest.gameType = null;
+      applyAddonReaAutoDetect(rest);
       const tournamentData = insertPlannedTournamentSchema.parse({ ...rest, userId });
 
       const tournament = await handleCreatePlannedTournament({
@@ -207,6 +227,29 @@ export function registerGradePlannerRoutes(app: Express): void {
           updates[key] = String(value || '');
         } else {
           updates[key] = value;
+        }
+      }
+
+      // Auto-detect addon/reentry when caller updates name without
+      // explicitly setting flags. Defaults addOnCost to buyIn (incoming or
+      // existing row) when flag flips on without a cost.
+      if (typeof updates.name === 'string' && updates.name.trim()) {
+        const flagsAlreadySet = updates.allowsAddOn !== undefined || updates.allowsReentry !== undefined;
+        if (!flagsAlreadySet) {
+          const detected = detectAddonReaFromName(updates.name);
+          if (detected.allowsAddOn || detected.allowsReentry) {
+            const existing = await storage.getPlannedTournament(id);
+            if (detected.allowsAddOn && existing?.allowsAddOn !== true) {
+              updates.allowsAddOn = true;
+              if (updates.addOnCost == null || updates.addOnCost === '') {
+                const fallbackCost = updates.buyIn ?? existing?.buyIn;
+                if (fallbackCost) updates.addOnCost = String(fallbackCost);
+              }
+            }
+            if (detected.allowsReentry && existing?.allowsReentry !== true) {
+              updates.allowsReentry = true;
+            }
+          }
         }
       }
 

@@ -26,6 +26,7 @@ import {
   buildAddOnMutationPayload,
   getAddOnButtonState,
   countAddOnsPaid,
+  resolveAddonReaPayload,
 } from '../../../client/src/components/grind-session-live/helpers';
 
 // ---------------------------------------------------------------------------
@@ -183,6 +184,40 @@ describe('getAddOnButtonState - card RegisteredCard', () => {
     const state = getAddOnButtonState(t, false);
     expect(state.visible).toBe(false);
   });
+
+  // Invariante I1 (ADR-014, fix 2026-04-27): addOnCost null/0 nao deve
+  // permitir botao mesmo com allowsAddOn=true. Antes do fix, getAddOnButtonState
+  // divergia de canAddOn em state-machine.ts e mostrava botao com cost null,
+  // gerando POST com addOnCost undefined que server rejeitava.
+  it('botao NAO renderiza quando allowsAddOn=true mas addOnCost=null', () => {
+    const t = makeTournament({
+      allowsAddOn: true,
+      addOnCost: null,
+      status: 'registered',
+    });
+    const state = getAddOnButtonState(t, false);
+    expect(state.visible).toBe(false);
+  });
+
+  it('botao NAO renderiza quando addOnCost=0 (string)', () => {
+    const t = makeTournament({
+      allowsAddOn: true,
+      addOnCost: '0',
+      status: 'registered',
+    });
+    const state = getAddOnButtonState(t, false);
+    expect(state.visible).toBe(false);
+  });
+
+  it('botao NAO renderiza quando addOnCost vazio', () => {
+    const t = makeTournament({
+      allowsAddOn: true,
+      addOnCost: '',
+      status: 'registered',
+    });
+    const state = getAddOnButtonState(t, false);
+    expect(state.visible).toBe(false);
+  });
 });
 
 // ===========================================================================
@@ -280,6 +315,100 @@ describe('AddTournamentDialog - submit payload', () => {
     };
     const result = insertSessionTournamentSchema.safeParse(payload);
     expect(result.success).toBe(true);
+  });
+});
+
+// ===========================================================================
+// resolveAddonReaPayload — fix B1+B2 (2026-04-27)
+//
+// Garante que addTournamentMutation no Live page nao perca flags addon/reentry
+// quando user passa pelo modal "Adicionar Torneio". Espelha autodetect
+// server-side em grade-planner.ts.
+// ===========================================================================
+
+describe('resolveAddonReaPayload - autodetect Plus/ReA pelo nome', () => {
+  it('nome "Plus" sem flags explicitas -> allowsAddOn=true, addOnCost=buyIn', () => {
+    const out = resolveAddonReaPayload({ name: 'Sunday Plus', buyIn: '15' });
+    expect(out.allowsAddOn).toBe(true);
+    expect(out.addOnCost).toBe('15');
+    expect(out.allowsReentry).toBe(false);
+  });
+
+  it('nome "Re-Entry" sem flags explicitas -> allowsReentry=true', () => {
+    const out = resolveAddonReaPayload({ name: 'Big Re-Entry $100', buyIn: '100' });
+    expect(out.allowsReentry).toBe(true);
+    expect(out.allowsAddOn).toBe(false);
+  });
+
+  it('user explicit allowsAddOn=true overrides regex (mesmo nome neutro)', () => {
+    const out = resolveAddonReaPayload({
+      name: 'Daily $5', buyIn: '5', allowsAddOn: true, addOnCost: '3',
+    });
+    expect(out.allowsAddOn).toBe(true);
+    expect(out.addOnCost).toBe('3');
+  });
+
+  it('user explicit allowsAddOn=false respeitado mesmo se nome bate regex', () => {
+    const out = resolveAddonReaPayload({
+      name: 'Sunday Plus Freeroll', buyIn: '0', allowsAddOn: false,
+    });
+    expect(out.allowsAddOn).toBe(false);
+    expect(out.addOnCost).toBe(null);
+  });
+
+  it('allowsAddOn=true sem cost explicito + sem buyIn -> addOnCost=null', () => {
+    const out = resolveAddonReaPayload({ name: 'Plus', allowsAddOn: true });
+    expect(out.allowsAddOn).toBe(true);
+    expect(out.addOnCost).toBe(null);
+  });
+
+  it('allowsAddOn=false forca addOnCost=null mesmo se cost foi enviado', () => {
+    const out = resolveAddonReaPayload({
+      name: 'Daily', buyIn: '10', allowsAddOn: false, addOnCost: '10',
+    });
+    expect(out.addOnCost).toBe(null);
+  });
+
+  it('nome vazio + site/type -> compoe nome para detector', () => {
+    const out = resolveAddonReaPayload({
+      name: '', site: 'Suprema', type: 'Plus', buyIn: '15',
+    });
+    expect(out.allowsAddOn).toBe(true);
+    expect(out.addOnCost).toBe('15');
+  });
+
+  it('cost explicito nao-numerico cai pra buyIn', () => {
+    const out = resolveAddonReaPayload({
+      name: 'Plus', buyIn: '15', allowsAddOn: true, addOnCost: '',
+    });
+    expect(out.addOnCost).toBe('15');
+  });
+
+  it('maxReentries propagado quando fornecido', () => {
+    const out = resolveAddonReaPayload({
+      name: 'Re-Entry', buyIn: '20', allowsReentry: true, maxReentries: 3,
+    });
+    expect(out.maxReentries).toBe(3);
+  });
+
+  it('maxReentries=null quando nao fornecido', () => {
+    const out = resolveAddonReaPayload({
+      name: 'Re-Entry', buyIn: '20', allowsReentry: true,
+    });
+    expect(out.maxReentries).toBe(null);
+  });
+
+  // Regressao do bug do founder (2026-04-27): torneio "Plus" Suprema
+  // adicionado manualmente pelo Live nao ganhava flag no DB.
+  it('regressao bug founder: Plus Suprema R$15 manual -> flags propagadas', () => {
+    const out = resolveAddonReaPayload({
+      name: 'Plus',
+      site: 'Suprema',
+      type: 'Vanilla',
+      buyIn: '15',
+    });
+    expect(out.allowsAddOn).toBe(true);
+    expect(out.addOnCost).toBe('15');
   });
 });
 
