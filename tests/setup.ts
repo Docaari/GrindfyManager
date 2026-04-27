@@ -81,8 +81,82 @@ vi.mock('../server/db', () => ({
 
 import { _resetLibraryStore } from '../server/library-storage';
 
+// =============================================================================
+// TTS / SpeechSynthesis polyfill (Sprint Alarmes 2.0).
+// O modulo narrationQueue mantem state global (`_currentlySpeaking`, `_queue`,
+// `_alertTimeouts`). Sem reset entre testes -> pollution.
+// `vi.fn()` NAO eh constructor, entao `SpeechSynthesisUtterance` precisa ser
+// uma class real para `new SpeechSynthesisUtterance(text)` funcionar.
+// =============================================================================
+class MockSpeechSynthesisUtterance {
+  text: string;
+  voice: any = null;
+  volume = 1;
+  rate = 1;
+  pitch = 1;
+  lang = 'pt-BR';
+  onend: ((ev: any) => void) | null = null;
+  onerror: ((ev: any) => void) | null = null;
+  onstart: ((ev: any) => void) | null = null;
+  constructor(text?: string) {
+    this.text = text ?? '';
+  }
+}
+
+(globalThis as any).SpeechSynthesisUtterance = MockSpeechSynthesisUtterance;
+
+const speechSynthesisMock = {
+  speak: vi.fn(),
+  cancel: vi.fn(),
+  pause: vi.fn(),
+  resume: vi.fn(),
+  getVoices: vi.fn(() => [] as any[]),
+  speaking: false,
+  paused: false,
+  pending: false,
+  onvoiceschanged: null as any,
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  dispatchEvent: vi.fn(() => false),
+};
+
+(globalThis as any).speechSynthesis = speechSynthesisMock;
+if (typeof (globalThis as any).window !== 'undefined') {
+  (globalThis as any).window.speechSynthesis = speechSynthesisMock;
+  (globalThis as any).window.SpeechSynthesisUtterance = MockSpeechSynthesisUtterance;
+}
+
+// Disponivel para os testes: helpers para acessar/resetar o mock global.
+(globalThis as any).__speechSynthesisMock = speechSynthesisMock;
+
 beforeEach(() => {
   _resetLibraryStore();
   // B1 do reviewer: in-memory ticket store removido — testes de tickets
   // declaram seus proprios vi.mock('../../../server/db', ...) com Drizzle-shape.
+
+  // Reset speechSynthesis mock state.
+  speechSynthesisMock.speak.mockClear();
+  speechSynthesisMock.cancel.mockClear();
+  speechSynthesisMock.pause.mockClear();
+  speechSynthesisMock.resume.mockClear();
+  speechSynthesisMock.getVoices.mockReset();
+  speechSynthesisMock.getVoices.mockReturnValue([]);
+  speechSynthesisMock.addEventListener.mockClear();
+  speechSynthesisMock.removeEventListener.mockClear();
+  speechSynthesisMock.speaking = false;
+  speechSynthesisMock.paused = false;
+  speechSynthesisMock.pending = false;
+  speechSynthesisMock.onvoiceschanged = null;
+
+  // Reset narrationQueue module-level state se o modulo ja foi importado.
+  // (try/catch porque modulo pode nao existir ainda em red phase).
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('../client/src/lib/tts/narrationQueue');
+    if (typeof mod.__resetForTesting === 'function') {
+      mod.__resetForTesting();
+    }
+  } catch {
+    // narrationQueue ainda nao implementado — red phase.
+  }
 });

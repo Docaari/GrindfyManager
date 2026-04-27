@@ -1,20 +1,33 @@
 /**
  * Generic session alert manager for Grind Live.
- * Handles custom and late-reg manual alerts (client-side, transient per session).
+ * Handles custom, late-reg and tournament alerts (client-side, transient per session).
  */
+
+import { generateClientId } from './ids';
+
+export const ALERT_TYPES = ['late-reg', 'custom', 'tournament'] as const;
+export type AlertType = (typeof ALERT_TYPES)[number];
 
 export interface SessionAlert {
   id: string;
   tournamentId?: string;
-  type: 'late-reg' | 'custom';
+  type: AlertType;
   label: string;
   triggerAt: Date;
   createdAt: Date;
   fired: boolean;
   dismissed: boolean;
+  narrationText?: string;
 }
 
 export type CreateAlertInput = Omit<SessionAlert, 'id' | 'createdAt' | 'fired' | 'dismissed'>;
+
+export interface CreateTournamentAlertInput {
+  tournamentId: string;
+  narrationText: string;
+  triggerAt: Date;
+  label: string;
+}
 
 export interface LateRegTournament {
   id: string;
@@ -26,21 +39,9 @@ export interface LateRegTournament {
 
 const MAX_ALERTS = 50;
 
-function generateId(): string {
-  // Use crypto.randomUUID if available, otherwise fallback
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  // Simple fallback for environments without crypto.randomUUID
-  return 'alert-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 9);
-}
-
 export class SessionAlertManager {
   private alerts: Map<string, SessionAlert> = new Map();
 
-  /**
-   * Create a custom alert.
-   */
   addAlert(input: CreateAlertInput): SessionAlert {
     if (this.alerts.size >= MAX_ALERTS) {
       throw new Error('Limite de alertas atingido');
@@ -48,7 +49,7 @@ export class SessionAlertManager {
 
     const alert: SessionAlert = {
       ...input,
-      id: generateId(),
+      id: generateClientId('alert'),
       createdAt: new Date(),
       fired: false,
       dismissed: false,
@@ -56,6 +57,16 @@ export class SessionAlertManager {
 
     this.alerts.set(alert.id, alert);
     return alert;
+  }
+
+  addTournamentAlert(input: CreateTournamentAlertInput): SessionAlert {
+    return this.addAlert({
+      type: 'tournament',
+      label: input.label,
+      triggerAt: input.triggerAt,
+      tournamentId: input.tournamentId,
+      narrationText: input.narrationText,
+    });
   }
 
   /**

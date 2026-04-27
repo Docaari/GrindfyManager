@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,8 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Bell, BellRing, Clock, Plus, X, ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
+import { Bell, BellRing, Clock, Plus, X, ChevronDown, ChevronUp, RotateCcw, Volume2 } from "lucide-react";
 import type { SessionAlert } from "@shared/generic-alerts";
+import { speakUtterance } from "@/lib/ttsVoices";
 
 interface AlertsPanelProps {
   activeAlerts: SessionAlert[];
@@ -18,6 +19,11 @@ interface AlertsPanelProps {
   onRemoveAlert: (id: string) => void;
   onRefireAlert: (id: string) => void;
   onClearAll: () => void;
+  // Sprint Alarmes 2.0 (RF-03) — TTS preview support.
+  voice?: SpeechSynthesisVoice | null;
+  volume?: number;
+  ttsAvailable?: boolean;
+  soundMode?: 'tts' | 'beep' | 'mute';
 }
 
 export default function AlertsPanel({
@@ -29,6 +35,10 @@ export default function AlertsPanel({
   onRemoveAlert,
   onRefireAlert,
   onClearAll,
+  voice = null,
+  volume = 0.8,
+  ttsAvailable = false,
+  soundMode = 'tts',
 }: AlertsPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -38,6 +48,22 @@ export default function AlertsPanel({
   const [formTime, setFormTime] = useState("");
   const [formMinutes, setFormMinutes] = useState("10");
   const [formError, setFormError] = useState("");
+  // RF-03 / P1-10 — preview do form custom debounced 500ms.
+  const [debouncedLabel, setDebouncedLabel] = useState("");
+
+  // Debounce do label do form para habilitar preview.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedLabel(formLabel.trim()), 500);
+    return () => clearTimeout(t);
+  }, [formLabel]);
+
+  // P1-9 / P1-10 — flag para mostrar/esconder botoes de preview.
+  const showPreviewButtons = soundMode !== 'mute' && ttsAvailable;
+
+  // Helper: dispara preview de uma narracao.
+  const handlePreview = (text: string) => {
+    speakUtterance(text, voice, volume);
+  };
 
   const handleCreateAlert = () => {
     setFormError("");
@@ -213,7 +239,7 @@ export default function AlertsPanel({
                   <p className="text-red-400 text-xs">{formError}</p>
                 )}
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Button
                     size="sm"
                     onClick={handleCreateAlert}
@@ -229,6 +255,19 @@ export default function AlertsPanel({
                   >
                     Cancelar
                   </Button>
+                  {showPreviewButtons && (
+                    <button
+                      type="button"
+                      data-testid="preview-form-custom-btn"
+                      disabled={debouncedLabel.length === 0}
+                      onClick={() => handlePreview(formLabel.trim())}
+                      className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border border-gray-600 text-gray-200 hover:bg-gray-700/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                      aria-label="Ouvir como vai soar"
+                    >
+                      <Volume2 className="w-3 h-3" />
+                      Ouvir como vai soar
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -253,6 +292,18 @@ export default function AlertsPanel({
                       <span className="text-xs text-amber-400 font-mono">
                         {formatCountdown(alert.triggerAt)}
                       </span>
+                      {showPreviewButtons && (
+                        <button
+                          data-testid={`preview-btn-${alert.id}`}
+                          onClick={() => handlePreview((alert as any).narrationText || alert.label)}
+                          className="text-gray-500 hover:text-amber-400 transition-colors p-0.5"
+                          aria-label="Ouvir narracao"
+                          title="Ouvir como vai soar"
+                          type="button"
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         onClick={() => onRemoveAlert(alert.id)}
                         className="text-gray-500 hover:text-red-400 transition-colors p-0.5"

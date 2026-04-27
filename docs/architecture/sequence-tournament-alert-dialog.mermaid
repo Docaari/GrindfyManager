@@ -1,0 +1,117 @@
+%% Sequence — TournamentAlertDialog flow (Alarmes 2.0 — TTS)
+%% Fonte: Docs/specs/alarmes-2-0-tts.md (RF-03, RF-04, RF-05, RF-10, P1-1, P1-2, P1-9)
+%% Cobre: abrir dialog -> selecao -> modos progressivos -> preview -> salvar -> refresh AlertsPanel
+
+sequenceDiagram
+    autonumber
+    actor User as Grinder
+    participant AP as AlertsPanel.tsx
+    participant TAD as TournamentAlertDialog.tsx<br/>(novo componente)
+    participant BTN as buildTournamentNarration<br/>(client/src/lib/tts/)
+    participant SU as speakUtterance<br/>(low-level wrapper)
+    participant SAM as SessionAlertManager<br/>(shared/generic-alerts.ts)
+    participant SS as speechSynthesis
+
+    %% =============== ABRIR DIALOG ===============
+    User->>AP: click "Novo alerta de torneio" (Trophy icon)
+    Note right of AP: visivel se (planned + session).length > 0
+    AP->>TAD: open=true, plannedTournaments, sessionTournaments, ttsAvailable, voice, volume, redactBuyIn
+
+    %% =============== LISTA ORDENADA (P1-2) ===============
+    TAD->>TAD: combined = [...planned, ...session].filter(t => t.status==='upcoming' && t.time)
+    TAD->>TAD: sort por triggerAt ASC (proximo primeiro)<br/>tie-breaker: name alfabetico
+    TAD-->>User: dropdown renderizado com logos site + nome + horario + buy-in
+
+    %% =============== SELECAO POPULA PREVIA AUTO (P1-1) ===============
+    User->>TAD: select tournament = { site:'Suprema', name:'Sunday Plus', buyIn:'100', startsAt:T+30min, lateRegMinutes:60 }
+    TAD->>TAD: setSelectedTournament(t)
+    TAD->>TAD: triggerAt default = startsAt - 10min (modo "Antes do start")
+
+    %% =============== MODOS PROGRESSIVOS (P1-1) ===============
+    rect rgb(235, 250, 235)
+    Note over TAD: Modo principal "Antes do start" — input numerico pre-preenchido com 10
+    Note over TAD: Modo condicional "Antes do late close" — so visivel se lateRegMinutes > 0
+    Note over TAD: Modo escondido "Outro horario..." — link colapsado<br/>expandir → input type="time" (HH:MM)
+    end
+
+    TAD->>BTN: buildTournamentNarration(t, { redactBuyIn: true })
+    Note right of BTN: P1-7 — modo discreto (default true P0-2)<br/>output: "Suprema, Sunday Plus, atencao"<br/>(sem mencionar valor)
+    BTN-->>TAD: narrationText
+    TAD-->>User: caixa cinza mono fonte exibe previa "Suprema, Sunday Plus, atencao"
+
+    %% =============== TROCA DE MODO ===============
+    opt usuario muda para "Antes do late close"
+        User->>TAD: select modo "Antes do late close" + input 5min
+        TAD->>TAD: triggerAt = startsAt + lateRegMinutes - 5min
+        Note right of TAD: previa narration NAO muda (independe do horario)
+    end
+
+    opt usuario expande "Outro horario..."
+        User->>TAD: click link discreto
+        TAD->>TAD: expand input type="time"
+        User->>TAD: digita "21:00"
+        TAD->>TAD: triggerAt = today 21:00 (ou tomorrow se passou)
+    end
+
+    %% =============== PREVIEW (R-04 unlock alternativo) ===============
+    rect rgb(235, 240, 255)
+    User->>TAD: click "🔊 Ouvir previa"
+    Note right of TAD: disabled se !ttsAvailable OR !selectedTournament
+    TAD->>SU: speakUtterance(narrationText, voice, volume)
+    SU->>SS: speechSynthesis.speak(utterance) — 1x, sem queue, sem repeat
+    Note right of SS: serve de gesture unlock alternativo<br/>(caso usuario nao tenha clicado "Iniciar Sessao" ainda)
+    SS-->>User: 🔊 "Suprema, Sunday Plus, atencao"
+    SU->>SU: emit telemetry alert.preview.played { source: 'tournament_dialog' }
+    end
+
+    %% =============== TOGGLE redactBuyIn (preview reflete) ===============
+    opt usuario desativa "Modo discreto" em Settings (em outra aba)
+        Note over TAD: redactBuyIn vem como prop do parent<br/>re-render dispara recalculo de previa
+        TAD->>BTN: buildTournamentNarration(t, { redactBuyIn: false })
+        BTN-->>TAD: "Suprema, Sunday Plus, buy-in 100"
+    end
+
+    %% =============== VALIDACAO + SALVAR ===============
+    rect rgb(255, 240, 230)
+    User->>TAD: click "Salvar alerta"
+    TAD->>TAD: validar triggerAt > now()
+    alt triggerAt no passado
+        TAD-->>User: erro "Horario ja passou"
+    end
+    TAD->>TAD: validar limite 50 alertas (MAX_ALERTS)
+    alt ja tem 50 alertas
+        TAD-->>User: erro "Limite de 50 alertas atingido"
+    end
+    TAD->>TAD: validar duplicata: hasDuplicateLateReg({tournamentId, triggerAt}, tolerance:60s)
+    alt duplicata detectada
+        TAD-->>User: erro "Ja existe alerta para este torneio neste horario"
+    end
+    end
+
+    %% =============== onCreate -> SAM ===============
+    TAD->>AP: onCreate({ tournamentId, narrationText, triggerAt, type: 'tournament', label })
+    AP->>SAM: addTournamentAlert({ tournamentId, narrationText, triggerAt, label })
+    Note right of SAM: DP-04 default — type:'tournament' separado de 'custom'/'late-reg'<br/>label: limite 80 chars (DP-06 mantido)
+    SAM->>SAM: alerts.push({ id, type:'tournament', tournamentId, narrationText, triggerAt, label, ... })
+    SAM->>SAM: emit telemetry tournament_alert.created { mode, minutesBefore?, redacted }
+    SAM-->>AP: SessionAlert criado
+    AP->>AP: refresh active alerts list
+    TAD->>TAD: onOpenChange(false) — fecha dialog
+    AP-->>User: novo card aparece na lista com botao Volume2 preview (P1-9)
+
+    %% =============== PREVIEW DO CARD (P1-9) ===============
+    rect rgb(245, 230, 250)
+    Note over User,SS: Mais tarde — usuario revisa narracao do alerta criado
+    User->>AP: click botao Volume2 do card (antes do X)
+    AP->>SU: speakUtterance(alert.narrationText || alert.label, voice, volume)
+    Note right of SU: NAO entra na priority queue do fireAlert<br/>1x, sem repeat
+    SU->>SS: speak
+    SS-->>User: 🔊 "Suprema, Sunday Plus, atencao"
+    SU->>SU: emit telemetry alert.preview.played { source: 'active_card' }
+    end
+
+    %% =============== DISPARO REAL (na hora) ===============
+    Note over SAM,SS: Quando triggerAt chega — checkAlerts (30s interval) detecta
+    SAM-->>AP: getAlertsToFire() retorna [{ id, type:'tournament', narrationText, ... }]
+    AP->>AP: fireAlert({ priority:'normal', alertId, narrationText, ... })
+    Note right of AP: ver sequence-fire-alert-v2.mermaid para fluxo do disparo

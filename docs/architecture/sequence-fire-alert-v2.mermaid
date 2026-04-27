@@ -1,0 +1,137 @@
+%% Sequence — fireAlert v2 com priority queue (Alarmes 2.0 — TTS)
+%% Fonte: Docs/specs/alarmes-2-0-tts.md (RF-01, RF-09, RF-13, RF-14)
+%% Cobre: trigger -> FLUSH/QUEUE decision -> repeats -> cancel paths -> watchdog 30s
+
+sequenceDiagram
+    autonumber
+    actor User as Grinder
+    participant GSL as GrindSessionLive.tsx<br/>(checkAlerts 30s + handlers)
+    participant FA as fireAlert.ts<br/>(soundMode router)
+    participant Q as narrationQueue.ts<br/>(_currentlySpeaking + _queue + _alertTimeouts)
+    participant SS as window.speechSynthesis<br/>(browser engine)
+    participant TM as Toast/Notification<br/>(camadas paralelas)
+
+    Note over GSL,SS: Trigger: checkAlerts interval 30s OU late-reg auto OU dismiss button
+
+    %% =============== HAPPY PATH — sem item em curso ===============
+    rect rgb(235, 250, 235)
+    Note over GSL,SS: Cenario A — alerta NORMAL chega, fila vazia
+    GSL->>FA: fireAlert({ alertId: A, priority: 'normal', narrationText, repeatCount: 2, repeatGapMs: 3000 })
+    FA->>TM: toast.show() + notification.fire()
+    FA->>Q: enqueue({ alertId: A, priority: 'normal', text, voice, volume })
+    Q->>Q: _currentlySpeaking === null → vira current
+    Q->>SS: speechSynthesis.speak(utterance)
+    SS-->>User: 🔊 fala (rep 1/2)
+    SS-->>Q: utterance.onend
+    Q->>Q: _alertTimeouts.set(A, setTimeout(speak, 3000ms))
+    Note right of Q: aguarda gap 3s
+    Q->>SS: speechSynthesis.speak(utterance) (rep 2/2)
+    SS-->>User: 🔊 fala (rep 2/2)
+    SS-->>Q: utterance.onend
+    Q->>Q: repeats esgotados → _promoteNext() → queue vazia → _currentlySpeaking = null
+    end
+
+    %% =============== FLUSH — late-reg interrompe custom ===============
+    rect rgb(255, 240, 230)
+    Note over GSL,SS: Cenario B — late-reg HIGH chega enquanto custom NORMAL toca (FLUSH)
+    GSL->>FA: fireAlert({ alertId: B_late, priority: 'high', alertId: 'latereg-T123' })
+    FA->>Q: enqueue({ priority: 'high' })
+    Q->>Q: _currentlySpeaking.priority === 'normal' && new === 'high' → FLUSH
+    Q->>SS: speechSynthesis.cancel()
+    Q->>Q: clear _alertTimeouts (current) + descarta _queue inteira (todos normal)
+    Q->>Q: emit telemetry tts.flush.triggered
+    Q->>SS: speechSynthesis.speak(utterance B_late)
+    SS-->>User: 🔊 fala late-reg (interrompeu custom)
+    end
+
+    %% =============== QUEUE — mesma priority ===============
+    rect rgb(235, 240, 255)
+    Note over GSL,SS: Cenario C — 2 customs proximos (mesma priority NORMAL = QUEUE)
+    GSL->>FA: fireAlert({ alertId: C1, priority: 'normal' })
+    FA->>Q: enqueue
+    Q->>SS: speak C1
+    SS-->>User: 🔊 fala C1 (com repeats)
+    GSL->>FA: fireAlert({ alertId: C2, priority: 'normal' })
+    FA->>Q: enqueue
+    Q->>Q: _currentlySpeaking ocupado, mesma priority → push em _queue
+    Q->>Q: check cap: _queue.length < 3 ✓ ; enqueuedAt = Date.now()
+    Note right of Q: C2 aguarda. NAO toca repeats em queue (1x apenas)
+    SS-->>Q: C1 utterance.onend (apos repeats)
+    Q->>Q: _promoteNext()
+    Q->>Q: check expiry: now - C2.enqueuedAt < 30000 ✓
+    Q->>SS: speak C2 (1x, sem repeat)
+    SS-->>User: 🔊 fala C2
+    end
+
+    %% =============== CAPS — drop por items ===============
+    rect rgb(255, 235, 235)
+    Note over GSL,SS: Cenario D — 5 alarmes em rajada (cap_items)
+    loop 5x rajada
+        GSL->>FA: fireAlert({ priority: 'normal' })
+    end
+    Note right of Q: 1o vira current; 2o,3o,4o entram em queue (max 3)
+    FA->>Q: 5o tenta enqueue
+    Q->>Q: _queue.length === 3 → drop
+    Q->>Q: emit telemetry tts.queue.dropped { reason: 'cap_items' }
+    Note over FA,TM: TODOS 5 toasts ainda aparecem (camada toast independente)
+    end
+
+    %% =============== WATCHDOG 30s ===============
+    rect rgb(250, 245, 220)
+    Note over GSL,SS: Cenario E — watchdog (R-12 — queue stuck)
+    Q->>Q: setInterval check 5s: _currentlySpeaking._startedAt > 30s atras?
+    Q->>Q: utterance.onerror / onend nunca chamou (engine travada)
+    Q->>SS: speechSynthesis.cancel() (defensivo)
+    Q->>Q: _currentlySpeaking = null + _promoteNext()
+    Q->>Q: emit telemetry tts.watchdog.triggered
+    end
+
+    %% =============== CANCEL PATHS ===============
+    rect rgb(245, 230, 250)
+    Note over User,SS: Cancel A — usuario clica X em card de alarme (scoped P1-5)
+    User->>GSL: click X em card alertId=X1
+    GSL->>FA: stopAlertById('X1')
+    FA->>Q: stopAlertById('X1')
+    alt _currentlySpeaking?.alertId === 'X1'
+        Q->>SS: speechSynthesis.cancel()
+        Q->>Q: clear _alertTimeouts.get('X1')
+        Q->>Q: _promoteNext()
+    else 'X1' esta na _queue
+        Q->>Q: _queue.filter(i => i.alertId !== 'X1')
+    else nao esta nem em current nem queue
+        Q->>Q: NO-OP (alertId antigo, ja terminou)
+    end
+
+    Note over User,SS: Cancel B — Esc/Space (P0-3 RF-14)
+    User->>GSL: keydown Escape ou Space
+    GSL->>GSL: target nao e input/textarea/select/contentEditable ✓
+    GSL->>GSL: _currentlySpeaking || speechSynthesis.speaking ✓
+    GSL->>FA: stopAllAlerts()
+    FA->>Q: stopAllAlerts()
+    Q->>SS: speechSynthesis.cancel()
+    Q->>Q: _currentlySpeaking = null; _queue = []; clear todos _alertTimeouts
+    Q->>Q: emit telemetry tts.keyboard.dismiss { key }
+
+    Note over User,SS: Cancel C — alertsSuspended flag (Sessao B abre summary modal)
+    GSL->>GSL: useEffect detecta alertsSuspended === true
+    GSL->>FA: stopAllAlerts()
+    FA->>Q: stopAllAlerts() (idem Cancel B)
+
+    Note over User,SS: Cancel D — toast X click
+    User->>TM: click X no toast
+    TM->>FA: onCloseClick callback
+    FA->>Q: stopAlertById(alertId) ou stopAllAlerts() se alertId desconhecido
+    end
+
+    %% =============== FALLBACK BEEP ===============
+    rect rgb(245, 245, 245)
+    Note over GSL,SS: Cenario F — voz pt-BR ausente / speechSynthesis undefined / prefers-reduced-data
+    GSL->>FA: fireAlert({ soundMode: 'tts' })
+    FA->>FA: pickVoice(preferredURI, voices) === null
+    FA->>FA: oscillator 880Hz 200ms (Web Audio API atual)
+    alt _ttsUnavailableNotified === false
+        FA->>TM: toast '[TTS indisponivel — usando beep]' (1x sessao)
+        FA->>FA: _ttsUnavailableNotified = true
+        FA->>FA: emit telemetry tts.fallback.triggered
+    end
+    end

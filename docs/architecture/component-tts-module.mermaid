@@ -1,0 +1,99 @@
+%% Component diagram — TTS module structure (Alarmes 2.0)
+%% Fonte: Docs/specs/alarmes-2-0-tts.md (estrutura de arquivos sugerida + RF-01..RF-14)
+%% Mostra: relacoes entre fireAlert, modulo tts/, componentes UI, schema
+
+graph TB
+    %% ============= UI LAYER =============
+    subgraph ui["UI Layer (client/src)"]
+        direction TB
+        GSL["pages/GrindSessionLive.tsx<br/><i>checkAlerts 30s + handleStartSession unlock<br/>+ keyboard listener Esc/Space (RF-14)<br/>+ alertsSuspended consumer + first-run hint (RF-10b)</i>"]
+        SET["pages/Settings.tsx<br/><i>Secao 'Alertas e Voz' (RF-06)<br/>6 controles + botao 'Testar voz'</i>"]
+        AP["components/grind-session-live/AlertsPanel.tsx<br/><i>botao 'Novo alerta de torneio'<br/>+ Volume2 preview por card (P1-9)<br/>+ 'Ouvir como vai soar' no form (P1-10)</i>"]
+        TAD["components/grind-session-live/TournamentAlertDialog.tsx<br/><i>NOVO — selecao + modos progressivos<br/>+ previa + 'Ouvir previa'</i>"]
+    end
+
+    %% ============= TTS MODULE (NOVO) =============
+    subgraph tts["lib/tts/ (NOVO modulo)"]
+        direction TB
+        SU["speakUtterance.ts<br/><i>low-level wrapper<br/>cria SpeechSynthesisUtterance + speak()<br/>1x, sem queue, sem repeat</i>"]
+        UTV["useTTSVoices.ts<br/><i>hook — getPtBRVoices + voiceschanged<br/>retorna { voices, ready, available }<br/>+ pickVoice helper</i>"]
+        NQ["narrationQueue.ts<br/><i>STATE MODULE singleton<br/>_currentlySpeaking, _queue, _alertTimeouts<br/>FLUSH/QUEUE logic (RF-13)<br/>stopAlertById scoped (P1-5)<br/>watchdog 30s (R-12)</i>"]
+        BTN["buildTournamentNarration.ts<br/><i>helper puro — assinatura SEM threshold (P1-7)<br/>(t, { redactBuyIn }) → string</i>"]
+    end
+
+    %% ============= FIRE ALERT (MODIFIED) =============
+    subgraph alert["lib/ (modificado)"]
+        FA["fireAlert.ts v2<br/><i>router por soundMode: 'tts'|'beep'|'mute'<br/>+ priority + alertId + narrationText<br/>+ fallback beep + flag _ttsUnavailableNotified<br/>+ prefers-reduced-data check (RF-12)</i>"]
+    end
+
+    %% ============= SHARED =============
+    subgraph shared["shared/"]
+        direction TB
+        GA["generic-alerts.ts<br/><i>SessionAlert ganha narrationText?<br/>+ type 'tournament' (DP-04)<br/>+ addTournamentAlert(input)</i>"]
+        SCH["schema.ts<br/><i>userSettings +7 colunas:<br/>sound_mode, preferred_voice_uri,<br/>alert_volume, alert_repeat_count (P1-4 def 2),<br/>alert_repeat_gap_ms (P1-4 def 3000),<br/>tts_redact_buy_in (P0-2 def true),<br/>tts_first_run_seen (P0-1 def false)</i>"]
+    end
+
+    %% ============= BROWSER API =============
+    subgraph browser["Browser API"]
+        SS["window.speechSynthesis<br/><i>Web Speech API</i>"]
+        WA["Web Audio API<br/><i>OscillatorNode 880Hz 200ms<br/>(fallback beep — mantido)</i>"]
+        TM["useToast / Notification<br/><i>(camadas paralelas — inalteradas)</i>"]
+    end
+
+    %% ============= SERVER =============
+    subgraph server["server/"]
+        EP["routes/userSettings.ts<br/><i>PUT /api/user/settings<br/>(existente — sem alteracao codigo)<br/>aceita 7 novos campos via Zod partial</i>"]
+    end
+
+    %% ============= RELACOES — UI consome TTS =============
+    GSL -->|"useTTSVoices()<br/>(mount hook — pre-load voices)"| UTV
+    GSL -->|"fireAlert({ priority, alertId, narrationText })"| FA
+    GSL -->|"stopAllAlerts() /<br/>stopAlertById(id)"| NQ
+    GSL -.->|"unlock TTS<br/>(speak utterance volume 0)"| SS
+
+    SET -->|"useTTSVoices()"| UTV
+    SET -->|"speakUtterance('Teste de voz Grindfy')"| SU
+    SET -->|"PUT /api/user/settings<br/>(7 campos)"| EP
+
+    AP -->|"speakUtterance (preview 1x P1-9/P1-10)"| SU
+    AP -->|"open TournamentAlertDialog"| TAD
+    AP -->|"addAlert / addTournamentAlert"| GA
+
+    TAD -->|"buildTournamentNarration(t, { redactBuyIn })"| BTN
+    TAD -->|"speakUtterance (preview 1x)"| SU
+
+    %% ============= RELACOES — FA orquestra =============
+    FA -->|"enqueue / FLUSH / QUEUE decision"| NQ
+    FA -->|"toast.show + notification.fire"| TM
+    FA -.->|"fallback (sem voz pt-BR<br/>OR speechSynthesis undef<br/>OR prefers-reduced-data)"| WA
+    FA -->|"_ttsUnavailableNotified flag<br/>+ _resetForTesting()"| FA
+
+    %% ============= RELACOES — NQ controla browser =============
+    NQ -->|"speak(utterance)<br/>+ utterance.onend → _promoteNext()<br/>+ utterance.onerror → _promoteNext()"| SS
+    NQ -->|"speechSynthesis.cancel()<br/>(FLUSH / stopAllAlerts / scoped)"| SS
+
+    %% ============= RELACOES — Hooks consomem voices =============
+    UTV -->|"speechSynthesis.getVoices()<br/>+ voiceschanged listener (Chrome async)"| SS
+
+    %% ============= RELACOES — SU usa picked voice =============
+    SU -->|"speak(utterance) 1x"| SS
+
+    %% ============= RELACOES — Schema feeds runtime =============
+    GA -.->|"narrationText / type 'tournament'<br/>persistidos em-memoria<br/>(SessionAlertManager)"| AP
+    SCH -.->|"GET /api/user/settings<br/>(query existente — campos novos)"| GSL
+    SCH -.->|"PUT /api/user/settings"| EP
+    EP -.->|"valida com insertUserSettingsSchema.partial()"| SCH
+
+    %% ============= RELACOES — alertsSuspended (Sessao B paralela) =============
+    GSL -.->|"useEffect dep alertsSuspended<br/>true → stopAllAlerts() + skip checkAlerts"| NQ
+
+    %% ============= STYLES =============
+    classDef new fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef modified fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef unchanged fill:#f5f5f5,stroke:#616161,stroke-width:1px,stroke-dasharray:5 5
+    classDef external fill:#e1f5fe,stroke:#01579b,stroke-width:1px
+
+    class TAD,SU,UTV,NQ,BTN new
+    class GSL,SET,AP,FA,GA,SCH modified
+    class TM,EP unchanged
+    class SS,WA external

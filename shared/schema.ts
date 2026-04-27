@@ -9,6 +9,7 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  real,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -606,6 +607,21 @@ export const userSettings = pgTable("user_settings", {
   bankrollV2Migrated: boolean("bankroll_v2_migrated").default(false),
   // Onboarding tooltip da pagina /bankroll v2 (visita unica pos-migration).
   lastBankrollPageVisitV2: timestamp("last_bankroll_page_visit_v2"),
+  // Sprint Alarmes 2.0 (RF-07) — TTS settings.
+  // soundMode: 'tts' (default) | 'beep' (Web Audio API fallback) | 'mute'.
+  soundMode: varchar("sound_mode").default("tts"),
+  // preferredVoiceURI: null = primeira voz pt-BR disponivel no browser.
+  preferredVoiceURI: text("preferred_voice_uri"),
+  // alertVolume: 0.0–1.0 (passa direto para SpeechSynthesisUtterance.volume).
+  alertVolume: real("alert_volume").default(0.8),
+  // alertRepeatCount: numero de repeticoes da narracao (1, 2, 3, 5, 99=loop).
+  alertRepeatCount: integer("alert_repeat_count").default(2),
+  // alertRepeatGapMs: gap entre repeticoes (2000–30000ms).
+  alertRepeatGapMs: integer("alert_repeat_gap_ms").default(3000),
+  // ttsRedactBuyIn: P0-2 privacy default — narracao nao revela buy-in.
+  ttsRedactBuyIn: boolean("tts_redact_buy_in").default(true),
+  // ttsFirstRunSeen: P0-1 — ja viu o onboarding TTS na primeira execucao.
+  ttsFirstRunSeen: boolean("tts_first_run_seen").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1476,7 +1492,15 @@ export const insertUserSettingsSchema = _insertUserSettingsSchemaBase.extend({
     .union([z.date(), z.string(), z.null()])
     .transform((v) => (typeof v === "string" ? new Date(v) : v))
     .optional(),
-});
+  // Sprint Alarmes 2.0 (RF-07 + RF-08) — TTS settings.
+  soundMode: z.enum(["tts", "beep", "mute"]).optional(),
+  preferredVoiceURI: z.string().max(255).nullable().optional(),
+  alertVolume: z.number().min(0).max(1).optional(),
+  alertRepeatCount: z.number().int().min(1).max(99).optional(),
+  alertRepeatGapMs: z.number().int().min(2000).max(30000).optional(),
+  ttsRedactBuyIn: z.boolean().optional(),
+  ttsFirstRunSeen: z.boolean().optional(),
+}).strict();
 
 export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit({
   id: true,
