@@ -31,6 +31,21 @@
   --poker-green-light: hsl(142, 69%, 45%);
   --poker-gold: hsl(51, 100%, 50%);
   --break-accent: hsl(159, 67%, 35%);
+
+  /* Soft semantic surfaces — mirrored in :root + .dark so utilities are
+     resilient if .dark class is missing during boot or in test envs. */
+  --warning-soft-bg: hsl(38, 92%, 50%, 0.12);
+  --warning-soft-border: hsl(38, 92%, 50%, 0.4);
+  --warning-soft-fg: hsl(38, 92%, 80%);
+  --success-soft-bg: hsl(142, 70%, 45%, 0.15);
+  --success-soft-border: hsl(142, 70%, 45%, 0.4);
+  --success-soft-fg: hsl(142, 70%, 75%);
+  --danger-soft-bg: hsl(0, 72%, 60%, 0.15);
+  --danger-soft-border: hsl(0, 72%, 60%, 0.4);
+  --danger-soft-fg: hsl(0, 72%, 80%);
+  --neutral-soft-bg: hsl(240, 5%, 30%, 0.3);
+  --neutral-soft-border: hsl(240, 5%, 50%, 0.4);
+  --neutral-soft-fg: hsl(0, 0%, 80%);
 }
 
 .dark {
@@ -91,7 +106,9 @@
     background-color: var(--poker-surface);
   }
 
-  /* Soft semantic surfaces — dark-mode friendly. Pair bg + border + fg. */
+  /* Soft semantic surfaces — dark-mode friendly. Pair bg + border + fg.
+     Add `surface-interactive` alongside to enable a hover brightness lift
+     so call sites do not repeat hover:brightness-* utilities. */
   .surface-warning {
     background-color: var(--warning-soft-bg);
     border-color: var(--warning-soft-border);
@@ -114,6 +131,10 @@
     background-color: var(--neutral-soft-bg);
     border-color: var(--neutral-soft-border);
     color: var(--neutral-soft-fg);
+  }
+
+  .surface-interactive:hover:not(:disabled) {
+    filter: brightness(1.25);
   }
 
   /* Break header styles */

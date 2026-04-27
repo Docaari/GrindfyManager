@@ -125,7 +125,7 @@ export function WalletDetailPanel({ wallet, onRakebackClick }: Props) {
             data-testid="wallet-detail-rakeback-trigger"
             onClick={onRakebackClick}
             disabled={archived}
-            className="px-3 py-2 text-sm rounded-md border surface-warning hover:brightness-125 disabled:opacity-50"
+            className="px-3 py-2 text-sm rounded-md border surface-warning surface-interactive disabled:opacity-50"
             title="Reportar rakeback recebido nesta carteira"
           >
             Reportar rakeback

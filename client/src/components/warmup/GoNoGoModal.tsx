@@ -48,7 +48,7 @@ export function GoNoGoModal({ open, score, onCancel, onWantsToPlay }: GoNoGoModa
             type="button"
             variant="outline"
             onClick={onWantsToPlay}
-            className="border-amber-500/60 text-amber-300 hover:bg-amber-500/10"
+            className="border surface-warning surface-interactive"
           >
             Ainda quero jogar
           </Button>
