@@ -177,6 +177,20 @@ export default function GrindSessionLive() {
   const [reconcileSessionId, setReconcileSessionId] = useState<string | null>(null);
   const reconcileResolveRef = useRef<((info?: any) => void) | null>(null);
 
+  // Sprint B2 (M1/M3): dados pre-fetched de reconcilable-wallets pra o summary inline.
+  // Carrega quando summary aparece e sessionId conhecido.
+  const [summaryReconcilable, setSummaryReconcilable] = useState<{
+    wallets: any[];
+    missingPlatforms: string[];
+    playedPlatforms: string[];
+    bankrollManagementEnabled: boolean;
+  }>({
+    wallets: [],
+    missingPlatforms: [],
+    playedPlatforms: [],
+    bankrollManagementEnabled: true,
+  });
+
   // QA fix BUG 2: cooldown ativo (CTA Cool-down Rapido / Cool-down Full no summary)
   const [activeCooldown, setActiveCooldown] = useState<{
     logId: string;
@@ -636,6 +650,41 @@ export default function GrindSessionLive() {
     setShowSessionSummary(false); setSessionSummaryData(null); setFinalNotes('');
     setShowConfirmationModal(false); setPendingTournaments([]);
   };
+
+  // Sprint B2 (M1/M3): pre-fetch reconcilable-wallets + user-settings ao abrir
+  // summary. Resultado popula `summaryReconcilable` consumido por
+  // SessionSummaryModal (props).
+  useEffect(() => {
+    if (!showSessionSummary) return;
+    const sid = sessionSummaryData?.sessionId;
+    if (!sid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [wallets, settings] = await Promise.all([
+          apiRequest('GET', `/api/grind-sessions/${sid}/reconcilable-wallets`).catch(() => null),
+          apiRequest('GET', '/api/user-settings').catch(() => null),
+        ]);
+        if (cancelled) return;
+        const w: any = wallets ?? {};
+        const s: any = settings ?? {};
+        setSummaryReconcilable({
+          wallets: Array.isArray(w?.wallets) ? w.wallets : [],
+          missingPlatforms: Array.isArray(w?.missingPlatforms) ? w.missingPlatforms : [],
+          playedPlatforms: Array.isArray(w?.playedPlatforms) ? w.playedPlatforms : [],
+          bankrollManagementEnabled:
+            typeof s?.bankrollManagementEnabled === 'boolean'
+              ? s.bankrollManagementEnabled
+              : true,
+        });
+      } catch {
+        // fail-open: sem reconcile inline, summary segue funcional.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showSessionSummary, sessionSummaryData?.sessionId]);
 
   // ===== EFFECTS =====
   useEffect(() => { localStorage.setItem('grindSessionDashboardVisible', JSON.stringify(showDashboard)); }, [showDashboard]);
@@ -2166,6 +2215,11 @@ export default function GrindSessionLive() {
           setShowSessionSummary(false);
           setActiveCooldown({ logId, mode: "quick" });
         }}
+        bankrollManagementEnabled={
+          summaryReconcilable.bankrollManagementEnabled !== false
+        }
+        reconcilableWallets={summaryReconcilable.wallets}
+        missingPlatforms={summaryReconcilable.missingPlatforms}
       />
 
       {/* QA fix BUG 2: CoolDownRunner / QuickCoolDownDialog inline.

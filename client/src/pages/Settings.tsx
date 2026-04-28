@@ -62,6 +62,11 @@ export default function Settings() {
   const [alertRepeatCount, setAlertRepeatCount] = useState<number>(3);
   const [alertRepeatGapMs, setAlertRepeatGapMs] = useState<number>(3000);
   const [ttsRedactBuyIn, setTtsRedactBuyIn] = useState<boolean>(true);
+  // Sprint B2 (M2): toggle gestao multi-wallet. Estado derivado do server +
+  // optimistic update via mutation. Evita race condition de useState default.
+  const [optimisticBankrollManagement, setOptimisticBankrollManagement] = useState<
+    boolean | null
+  >(null);
 
   // Hook de vozes pt-BR (Chrome async via voiceschanged).
   const { voices, available: ttsAvailable, preferredVoice } = useTTSVoices(preferredVoiceURI);
@@ -177,6 +182,9 @@ export default function Settings() {
   // Fetch user settings (alert preferences)
   const { data: userSettings } = useQuery({
     queryKey: ["/api/user-settings"],
+    // Sprint B2 (M2): queryFn explicito para garantir compat com tests que
+    // criam um QueryClient local sem defaultQueryFn registrado.
+    queryFn: () => apiRequest('GET', '/api/user-settings'),
     retry: false,
   });
 
@@ -196,6 +204,42 @@ export default function Settings() {
       if (typeof s.ttsRedactBuyIn === 'boolean') setTtsRedactBuyIn(s.ttsRedactBuyIn);
     }
   }, [userSettings]);
+
+  // Sprint B2 (M2): valor exibido derivado de userSettings (back-fill default true).
+  // Optimistic override durante mutation evita flicker.
+  const enabledFromServer =
+    userSettings && typeof (userSettings as any).bankrollManagementEnabled === 'boolean'
+      ? ((userSettings as any).bankrollManagementEnabled as boolean)
+      : null;
+  const bankrollManagementEnabled =
+    optimisticBankrollManagement ??
+    (enabledFromServer === null ? true : enabledFromServer);
+  const bankrollSettingsLoaded = userSettings !== undefined;
+
+  // Sprint B2 (M2): toggle handler — PUT /api/user-settings com bankrollManagementEnabled.
+  // Optimistic clear acontece em onSuccess apos invalidate — evita flicker entre
+  // valor otimista limpo e refetch ainda in-flight.
+  const saveBankrollManagementToggle = useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiRequest("PUT", "/api/user-settings", { bankrollManagementEnabled: enabled }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/user-settings"] });
+      setOptimisticBankrollManagement(null);
+    },
+    onError: (error: Error) => {
+      setOptimisticBankrollManagement(null);
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleToggleBankrollManagement = (checked: boolean) => {
+    setOptimisticBankrollManagement(checked);
+    saveBankrollManagementToggle.mutate(checked);
+  };
 
   // Save exchange rates mutation
   const saveExchangeRates = useMutation({
@@ -776,10 +820,33 @@ export default function Settings() {
       {/* Bankroll Section (RF-06) */}
       <Card className="bg-poker-surface border-gray-700" data-testid="bankroll-settings-section">
         <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <Wallet className="h-5 w-5 text-emerald-400" />
-            Banca (Bankroll)
-          </CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-white flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-emerald-400" />
+              Banca (Bankroll)
+            </CardTitle>
+            {/* Sprint B2 (M2): toggle gestao multi-wallet + reconcile pos-sessao */}
+            {bankrollSettingsLoaded && (
+              <div className="flex items-center gap-2">
+                <Label
+                  htmlFor="bankroll-management-toggle"
+                  className="text-xs text-gray-300"
+                >
+                  Gestao multi-wallet
+                </Label>
+                <Switch
+                  id="bankroll-management-toggle"
+                  data-testid="setting-bankroll-management-toggle"
+                  checked={bankrollManagementEnabled}
+                  onCheckedChange={handleToggleBankrollManagement}
+                />
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Quando desativado, a sessao finaliza sem pedir reconciliacao de saldos.
+            Banca legada (campo unico) continua funcionando.
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           {!bankroll?.configured && (
@@ -926,6 +993,33 @@ export default function Settings() {
               {saveBankroll.isPending ? "Salvando..." : "Salvar banca"}
             </Button>
           </div>
+
+          {/* Sprint B2 (M2): wallets-list-section so renderiza com toggle ON */}
+          {bankrollManagementEnabled && (
+            <div
+              data-testid="wallets-list-section"
+              className="rounded-md border border-gray-700 bg-gray-800/30 p-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm text-white font-medium">Wallets multi-plataforma</p>
+                  <p className="text-xs text-gray-400">
+                    Gerencie wallets por plataforma (Suprema, GG, Stars, etc) na pagina de banca.
+                  </p>
+                </div>
+                <Link href="/bankroll">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    data-testid="wallets-list-link"
+                    className="border-gray-600 text-gray-200"
+                  >
+                    Abrir wallets
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

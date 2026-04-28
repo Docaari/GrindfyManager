@@ -1,0 +1,139 @@
+%% Sequence Diagram — Sprint B2 — Summary Inline Reconcile + Cooldown Finish
+%% Spec: Docs/specs/sprint-b2-summary-inline-reconcile.md
+%% UX audit: Docs/strategy/b2-ux-audit.md
+%% ADRs: 047-summary-inline-reconcile, 048-wallets-eligibility-platforms-played
+%% Cobre 4 caminhos: happy path, skip reconcile (setting OFF), missing platforms, cooldown finish.
+
+sequenceDiagram
+    autonumber
+    actor User
+    participant GSL as GrindSessionLive<br/>(client)
+    participant SSM as SessionSummaryModal<br/>(client)
+    participant WCD as WalletCreateDialog<br/>(client, prefill)
+    participant CDR as CoolDownRunner<br/>(client)
+    participant API as API Server<br/>(Express)
+    participant DB as PostgreSQL<br/>(Drizzle)
+
+    %% ============================================================
+    %% Bloco 0 — Trigger session-end (comum a todos os caminhos)
+    %% ============================================================
+    rect rgb(248, 250, 252)
+    Note over User,DB: Trigger comum — encerrar sessao
+    User->>GSL: Click "Encerrar sessao"
+    GSL->>API: PUT /api/grind-sessions/:id<br/>{ status: "ended" }
+    API->>DB: UPDATE grind_sessions SET status='ended'
+    DB-->>API: 200 OK
+    API-->>GSL: 200 { session }
+    GSL->>API: GET /api/grind-sessions/:id/reconcilable-wallets
+    API->>DB: SELECT distinct site FROM session_tournaments<br/>WHERE session_id=? AND outcome != 'not_played'
+    DB-->>API: playedPlatforms = [...]
+    API->>DB: SELECT wallets WHERE user_id=? AND active=true
+    DB-->>API: userWallets = [...]
+    Note over API: derive missingPlatforms<br/>via mapSiteToWallet inverso<br/>+ calcular expectedDelta por wallet
+    API-->>GSL: 200 { wallets, playedPlatforms,<br/>missingPlatforms, bankrollManagementEnabled }
+    GSL->>SSM: open({ stats, wallets, missingPlatforms })
+    end
+
+    %% ============================================================
+    %% Caminho 1 — Happy path (matched wallets, sem missing)
+    %% ============================================================
+    rect rgb(220, 252, 231)
+    Note over User,DB: Caminho 1 — Happy path<br/>bankrollManagementEnabled=true, missingPlatforms=[]
+    SSM-->>User: Render: stats + secao "Bancas"<br/>(tabela densa, inputs com expectedClosingBalance)
+    User->>SSM: Edita reportedBalance da wallet Suprema<br/>(150 -> 145)
+    SSM-->>User: Preview "Ajuste manual: -5,00 BRL" (amber)
+    User->>SSM: Click "Iniciar Cool-down (full)"
+    Note over SSM: walletsWithAdjustment.length > 0<br/>missingPlatforms.length === 0<br/>OK seguir
+    SSM->>API: POST /api/grind-sessions/:id/reconcile-wallets<br/>[{ walletId, reportedBalance }]
+    API->>DB: BEGIN tx
+    API->>DB: INSERT session_wallet_snapshots<br/>(opening, closing, expectedDelta, manualAdjustment)
+    API->>DB: walletService.recordTransaction<br/>(reason='manual_adjustment')
+    API->>DB: COMMIT
+    DB-->>API: 200 OK
+    API-->>SSM: 200 { snapshots: [...] }
+    Note over SSM: Telemetry: summary_inline_reconcile_submitted
+    SSM->>API: POST /api/cooldown-logs/start<br/>{ sessionId, mode: "full" }
+    API->>DB: INSERT cooldown_logs (started_at)
+    DB-->>API: 200 { logId }
+    API-->>SSM: 200 { cooldownLog }
+    SSM->>GSL: onClose() + setLocation('/cooldown/:logId')
+    GSL->>CDR: render CoolDownRunner
+    end
+
+    %% ============================================================
+    %% Caminho 2 — Skip reconcile (bankrollManagementEnabled=false)
+    %% ============================================================
+    rect rgb(254, 249, 195)
+    Note over User,DB: Caminho 2 — Skip reconcile<br/>bankrollManagementEnabled=false
+    SSM-->>User: Render: stats SEM secao "Bancas"<br/>(setting OFF guarda render)
+    User->>SSM: Click "Finalizar Sessao"
+    Note over SSM: bankrollManagementEnabled=false<br/>skip POST /reconcile-wallets
+    SSM->>API: PUT /api/grind-sessions/:id<br/>{ status: "completed" }
+    API->>DB: UPDATE grind_sessions SET status='completed'
+    Note over API: NAO grava snapshot (setting OFF)<br/>Telemetry: reconcile_skipped_setting_off
+    DB-->>API: 200 OK
+    API-->>SSM: 200 { session }
+    SSM->>GSL: onClose() + setLocation('/grind')
+    end
+
+    %% ============================================================
+    %% Caminho 3 — Missing platforms (banner amber + cadastro inline)
+    %% ============================================================
+    rect rgb(254, 215, 170)
+    Note over User,DB: Caminho 3 — Missing platforms<br/>jogou em GG sem wallet GG
+    SSM-->>User: Render: banner amber<br/>"Voce jogou em GG mas nao tem wallet"<br/>+ secao "Bancas" parcial
+    Note over SSM: Telemetry: summary_missing_platforms_shown
+    User->>SSM: Click "Cadastrar wallet"
+    Note over SSM: Telemetry: summary_missing_platforms_create_clicked
+    SSM->>WCD: open({ prefill: { platform: "GGNetwork",<br/>nativeCurrency: "USD" } })
+    WCD-->>User: Render dialog enxuto<br/>(name, platform locked, currency locked)
+    User->>WCD: Preenche name="GG Main", click "Criar"
+    WCD->>API: POST /api/wallets<br/>{ name, platform, nativeCurrency, balance: 0 }
+    API->>DB: INSERT wallets (active=true)
+    DB-->>API: 201 { wallet }
+    API-->>WCD: 201 { wallet }
+    WCD->>SSM: queryClient.invalidateQueries(['/api/grind-sessions',<br/>sessionId, 'reconcilable-wallets'])
+    WCD-->>User: close + toast "Wallet GG cadastrada"
+    SSM->>API: GET /api/grind-sessions/:id/reconcilable-wallets<br/>(refetch automatico)
+    API->>DB: SELECT (mesma query)
+    DB-->>API: missingPlatforms = []
+    API-->>SSM: 200 { wallets: [...nova], missingPlatforms: [] }
+    Note over SSM: Banner amber some<br/>Telemetry: summary_missing_platforms_resolved
+    SSM-->>User: Tabela atualizada com nova linha GG<br/>(reportedBalance pre-preenchido)
+    User->>SSM: Edita saldos + click CTA terminal
+    Note over SSM: Fluxo igual ao Caminho 1
+    end
+
+    %% ============================================================
+    %% Caminho 4 — Cooldown finish (M5 — bug fix)
+    %% ============================================================
+    rect rgb(219, 234, 254)
+    Note over User,DB: Caminho 4 — Cooldown finish<br/>Bloco 2/3/4 com botao visivel (M4)
+    User->>CDR: Click "Concluir cooldown"
+    CDR->>API: POST /api/cooldown-logs/:logId/finish
+    API->>DB: UPDATE cooldown_logs SET completed_at=NOW()
+    DB-->>API: 200 OK
+    API-->>CDR: 200 { cooldownLog }
+    Note over CDR: Verifica session.status<br/>se != 'completed', dispara PUT
+    alt session.status !== 'completed'
+        CDR->>API: PUT /api/grind-sessions/:sessionId<br/>{ status: "completed" }
+        API->>DB: UPDATE grind_sessions SET status='completed'
+        DB-->>API: 200 OK
+        API-->>CDR: 200 { session }
+        Note over CDR: Telemetry: cooldown_finish_marked_session_completed
+    else session.status === 'completed' (idempotencia)
+        Note over CDR: Skip PUT<br/>Telemetry: cooldown_finish_session_already_completed
+    end
+    CDR->>CDR: queryClient.invalidateQueries<br/>(['/api/grind-sessions'],<br/>['/api/grind-sessions', id],<br/>['/api/cooldown-logs'])
+    CDR->>GSL: setLocation('/grind')
+    GSL-->>User: Lista /grind com sessao "completed"
+    end
+
+    %% ============================================================
+    %% Caminho de erro — submit bloqueado por missingPlatforms
+    %% ============================================================
+    Note over User,DB: Erro — submit bloqueado<br/>quando missingPlatforms.length > 0
+    User->>SSM: Click CTA terminal com banner amber visivel
+    Note over SSM: missingPlatforms.length > 0<br/>NAO dispara POST /reconcile-wallets
+    SSM-->>User: Toast "Cadastre as wallets pendentes<br/>antes de finalizar."
+    Note over SSM: Telemetry: summary_submit_blocked_missing_platforms<br/>Modal permanece aberto, banner destacado

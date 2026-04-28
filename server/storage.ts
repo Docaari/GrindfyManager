@@ -319,6 +319,13 @@ export interface IStorage {
   getUserSettings(userId: string): Promise<UserSettings | undefined>;
   upsertUserSettings(settings: InsertUserSettings): Promise<UserSettings>;
 
+  // Sprint B2 (M5): idempotent session status setter (skips no-op).
+  setGrindSessionStatus(
+    id: string,
+    userId: string,
+    status: string,
+  ): Promise<GrindSession | undefined>;
+
   // Analytics operations
   getDashboardStats(userId: string, period?: string, filters?: any): Promise<any>;
   getPerformanceByPeriod(userId: string, period: string, filters?: any): Promise<any>;
@@ -1078,6 +1085,19 @@ export class DatabaseStorage implements IStorage {
       .where(eq(grindSessions.id, id))
       .returning();
     return updatedSession;
+  }
+
+  // Sprint B2 (M5): atualiza status idempotente. Skip se ja eh o status alvo.
+  // Retorna a sessao final (atual ou atualizada) ou undefined se nao existir.
+  async setGrindSessionStatus(
+    id: string,
+    userId: string,
+    status: string,
+  ): Promise<GrindSession | undefined> {
+    const current = await this.getGrindSession(id);
+    if (!current || current.userId !== userId) return undefined;
+    if (current.status === status) return current;
+    return this.updateGrindSession(id, { status } as Partial<InsertGrindSession>);
   }
 
   async deleteGrindSession(id: string): Promise<void> {

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { useLocation } from "wouter";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { track as trackTelemetry } from "@/lib/telemetry";
 import { useToast } from "@/hooks/use-toast";
 import { BlockOneStarredHands, type SessionTournamentLite, type StarredHandLite } from "./BlockOneStarredHands";
 import { BlockTwoABCJournal, type AbcJournalValue } from "./BlockTwoABCJournal";
@@ -74,6 +76,7 @@ export function CoolDownRunner({
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   // Limpa debounce ao desmontar
   useEffect(() => {
@@ -204,7 +207,24 @@ export function CoolDownRunner({
     setHasDraft(true);
   };
 
-  // mode=quick — atalho Sprint 1: handleFinish original sem Bloco 3/4.
+  // Pos-finish: invalida queries + redireciona /grind. Server (POST /finish)
+  // ja marca grind_session.status=completed idempotente.
+  const afterFinishSuccess = (result: any, completedAt: string) => {
+    try {
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions", sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cooldown-logs"] });
+    } catch {
+      // tests podem nao configurar queryClient
+    }
+    toast({ title: "Cool-down concluido. Bom descanso." });
+    onComplete(result ?? { id: cooldownLogId, completedAt });
+    setLocation("/grind");
+  };
+
+  // mode=quick — finish curto via PATCH legacy + B2 (M5) status=completed
+  // explicito (PATCH endpoint nao executa side-effect de session status).
+  // Sprint F vai mover pra Bloco 4 ultimo.
   const handleFinishQuick = async () => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
@@ -217,8 +237,30 @@ export function CoolDownRunner({
         abGameAnswers: abcValue,
         completedAt,
       });
-      toast({ title: "Cool-down concluido. Bom descanso." });
-      onComplete(result ?? { id: cooldownLogId, completedAt });
+      // Sprint B2 (M5): marca session=completed via PUT idempotente. Cooldown
+      // ja persistiu (PATCH ok). Falha aqui = sessao fica 'active' na lista —
+      // toast warning + telemetria pra diagnostico (spec M5 cenario "Falha PUT").
+      try {
+        await apiRequest("PUT", `/api/grind-sessions/${sessionId}`, {
+          status: "completed",
+        });
+      } catch (sessionErr: any) {
+        toast({
+          title: "Cool-down concluido",
+          description:
+            "Cooldown salvo, mas a sessao pode ainda aparecer como ativa. Recarregue a lista.",
+        });
+        try {
+          trackTelemetry("cooldown_finish_session_update_failed", {
+            sessionId,
+            cooldownLogId,
+            errorMessage: sessionErr?.message ?? "unknown",
+          });
+        } catch {
+          // telemetry must never throw user-facing
+        }
+      }
+      afterFinishSuccess(result, completedAt);
     } catch (err: any) {
       toast({ title: "Erro ao concluir cool-down", description: err?.message });
     }
@@ -239,6 +281,7 @@ export function CoolDownRunner({
     const planClosed = payload?.planClosed ?? sleepValue.planClosed ?? false;
 
     try {
+      const completedAt = new Date().toISOString();
       const result: any = await apiRequest(
         "POST",
         `/api/cooldown-logs/${cooldownLogId}/finish`,
@@ -249,16 +292,17 @@ export function CoolDownRunner({
           tiltSelfAssessment: tiltValue,
         },
       );
-      toast({ title: "Cool-down concluido. Bom descanso." });
-      onComplete(
-        result ?? {
-          id: cooldownLogId,
-          completedAt: new Date().toISOString(),
-        },
-      );
+      afterFinishSuccess(result, completedAt);
     } catch (err: any) {
       toast({ title: "Erro ao concluir cool-down", description: err?.message });
     }
+  };
+
+  // Sprint B2 (M4): finish a partir do Bloco 3 (tilt) em mode='full'. Server
+  // POST /finish marca session=completed idempotente. Sprint F vai mover pra
+  // Bloco 4 ultimo.
+  const handleFinishFromTilt = async () => {
+    await handleFinishFull(null);
   };
 
   const handleSleepConfirm = (payload: {
@@ -353,12 +397,26 @@ export function CoolDownRunner({
         )}
 
         {mode === "full" && currentBlock === "tilt" && (
-          <BlockThreeTiltReview
-            value={tiltValue}
-            onChange={handleTiltChange}
-            onNext={goNextFromTilt}
-            onBack={goBackFromTilt}
-          />
+          <>
+            <BlockThreeTiltReview
+              value={tiltValue}
+              onChange={handleTiltChange}
+              onNext={goNextFromTilt}
+              onBack={goBackFromTilt}
+            />
+            {/* Sprint B2 (M4): botao Concluir disponivel a partir do Bloco 2.
+                Sprint F vai mover pra Bloco 4 ultimo. */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                data-testid="cooldown-finish"
+                onClick={handleFinishFromTilt}
+                className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground"
+              >
+                Concluir Cool-down
+              </button>
+            </div>
+          </>
         )}
 
         {mode === "full" && currentBlock === "sleep" && (

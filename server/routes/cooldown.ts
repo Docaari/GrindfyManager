@@ -293,12 +293,31 @@ export async function handleFinishCooldownLog(req: any, res: Response): Promise<
       return;
     }
 
+    // Sprint B2 (M5): marca grind_session como completed (idempotente).
+    // Skip se ja estava completed. Falha aqui nao deve quebrar o finish —
+    // log + segue (warning client-side).
+    const sessionId = (existing as any).sessionId;
+    let sessionStatusUpdated = false;
+    try {
+      const session = await storage.getGrindSession(sessionId);
+      if (session && session.userId === userId && session.status !== "completed") {
+        await storage.updateGrindSession(sessionId, { status: "completed" } as any);
+        sessionStatusUpdated = true;
+      }
+    } catch (err: any) {
+      console.error(
+        "POST /api/cooldown-logs/:id/finish updateGrindSession failed:",
+        err,
+      );
+    }
+
     res.status(200).json({
       id: (updated as any).id,
       completedAt: (updated as any).completedAt,
       durationMinutes: (updated as any).durationMinutes ?? durationMinutes ?? null,
       dashboardSnoozedUntil:
         dashboardSnoozedUntil != null ? dashboardSnoozedUntil.toISOString() : null,
+      sessionStatusUpdated,
     });
   } catch (err: any) {
     console.error("POST /api/cooldown-logs/:id/finish failed:", err);

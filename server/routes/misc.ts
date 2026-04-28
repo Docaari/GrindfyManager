@@ -123,6 +123,24 @@ export function registerMiscRoutes(app: Express): void {
     }
   });
 
+  // Sprint B2 (M2): PUT alias para upsert idempotente do toggle bankrollManagementEnabled.
+  // Mesmo handler que POST — REST friendly para mutations parciais (TanStack Query).
+  app.put('/api/user-settings', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const existing = (await storage.getUserSettings(userId)) ?? {};
+      const merged = { ...existing, ...req.body, userId };
+      const settingsData = insertUserSettingsSchema.parse(merged);
+      const settings = await storage.upsertUserSettings(settingsData);
+      res.json(settings);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid settings data", errors: error.errors });
+      }
+      res.status(400).json({ message: "Failed to update user settings" });
+    }
+  });
+
   // User stats endpoint for Home page
   app.get('/api/user/stats', requireAuth, async (req: any, res) => {
     try {

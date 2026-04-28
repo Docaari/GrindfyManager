@@ -624,6 +624,11 @@ export const userSettings = pgTable("user_settings", {
   ttsRedactBuyIn: boolean("tts_redact_buy_in").default(true),
   // ttsFirstRunSeen: P0-1 — ja viu o onboarding TTS na primeira execucao.
   ttsFirstRunSeen: boolean("tts_first_run_seen").default(false),
+  // Sprint B2 (M2): Liga/desliga fluxo multi-wallet + reconcile pos-sessao.
+  // Default true para nao afetar usuarios existentes. Quando false: summary
+  // nao mostra secao "Bancas", reconcile nao eh tentado, snapshots nao
+  // gravados. Banca legada (bankrollAmount + bankrollRule) continua.
+  bankrollManagementEnabled: boolean("bankroll_management_enabled").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -68,15 +68,25 @@ export function normalizeSiteToGroups(site: string | null | undefined): string[]
 
 export const SITE_DEFAULT_CURRENCY: Record<string, string> = {
   PokerStars: "USD",
+  Stars: "USD",
   WPN: "USD",
   GG: "USD",
+  GGNetwork: "USD",
   PartyPoker: "USD",
   "888poker": "USD",
+  "888": "USD",
   Suprema: "BRL",
+  SupremaPoker: "BRL",
+  CoinPoker: "USDT",
+  Chico: "USD",
+  Revolution: "USD",
+  iPoker: "USD",
+  Bodog: "USD",
 };
 
 export function getDefaultCurrencyForSite(site: string | null | undefined): string {
   if (!site) return "USD";
+  if (SITE_DEFAULT_CURRENCY[site]) return SITE_DEFAULT_CURRENCY[site];
   const groups = normalizeSiteToGroups(site);
   for (const g of groups) {
     if (SITE_DEFAULT_CURRENCY[g]) return SITE_DEFAULT_CURRENCY[g];

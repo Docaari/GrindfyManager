@@ -90,7 +90,7 @@ Detalhes: `Docs/api/coach.md`, `Docs/api/coach-tools.md`.
 | `user_activity` | Tracking de atividade (consolidado em 2026-03-20, antes era `user_activities` + `user_activity`) |
 | `analytics_daily` | Resumo diario de analytics |
 | `engagement_metrics` | Metricas de engajamento |
-| `user_settings` | Configuracoes do usuario (moeda, notificacoes, exchange rates) |
+| `user_settings` | Configuracoes do usuario (moeda, notificacoes, exchange rates, **`bankroll_management_enabled` boolean default true** — Sprint B2/M2) |
 | `custom_groups` | Grupos customizados de templates |
 | `custom_group_templates` | Relacao grupo-template |
 | `coaching_insights` | Insights de coaching |
@@ -101,4 +101,47 @@ Detalhes: `Docs/api/coach.md`, `Docs/api/coach-tools.md`.
 - `userPlatformId` formato `USER-XXXX` (sequencial, separado de `id` interno).
 - Validacao Zod via `drizzle-zod` em `shared/schema.ts`.
 - Snapshots para auditoria (bankroll); soft-delete raro (preferir hard-delete + tracking).
-- ADRs relevantes: 014 (add-on/rea), 017 (snapshot vs derived), 028 (warmup_rituals dedicada), 031-032 (tournament types), 033 (FX rate), 038 (optimistic concurrency wallet), 039 (rakeback as wallet tx), 040 (session-end reconciliation), 041 (cooldown_logs + starred_hands dedicadas).
+- ADRs relevantes: 014 (add-on/rea), 017 (snapshot vs derived), 028 (warmup_rituals dedicada), 031-032 (tournament types), 033 (FX rate), 038 (optimistic concurrency wallet), 039 (rakeback as wallet tx), 040 (session-end reconciliation), 041 (cooldown_logs + starred_hands dedicadas), 046 (session_wallet_snapshots), 047 (summary inline reconcile), 048 (wallets eligibility por plataformas jogadas).
+
+---
+
+## Schema Delta — Sprint B2 (`bankroll_management_enabled`)
+
+ADR-047 + ADR-048 adicionam coluna em `user_settings`:
+
+```mermaid
+erDiagram
+    USERS ||--|| USER_SETTINGS : "1:1"
+    USER_SETTINGS {
+        varchar user_id PK_FK
+        varchar default_currency "default 'USD'"
+        boolean notifications_enabled "default true"
+        jsonb exchange_rates "FX freezes (ADR-033)"
+        boolean bankroll_management_enabled "NEW B2 — default true"
+        timestamp created_at
+        timestamp updated_at
+    }
+    USER_SETTINGS ||--o{ WALLETS : "guards-render"
+    USER_SETTINGS ||--o{ SESSION_WALLET_SNAPSHOTS : "guards-write<br/>(skip se false)"
+```
+
+Migracao SQL (em `migrations/` quando implementer aplicar):
+
+```sql
+ALTER TABLE user_settings
+  ADD COLUMN bankroll_management_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+```
+
+Drizzle (em `shared/schema.ts`):
+
+```ts
+bankrollManagementEnabled: boolean('bankroll_management_enabled').notNull().default(true),
+```
+
+Zod schema (insert/update): `optional + default(true)` — lesson learned #7 (deprecation gradual).
+
+**Comportamento por valor:**
+- `true` (default): fluxo multi-wallet completo. Lista de wallets em `/settings`, secao "Bancas" no `SessionSummaryModal`, banner missing platforms (ADR-048), snapshot gravado.
+- `false`: lista de wallets escondida em `/settings`, secao "Bancas" e banner missing NAO renderizados, snapshot NAO gravado server-side, telemetry `reconcile_skipped_setting_off`.
+
+Banca legada (`bankroll_amount` + `bankroll_rule` em `user_settings`) **continua visivel** em ambos os modos.

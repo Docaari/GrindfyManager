@@ -16,6 +16,7 @@ import { clampBreakFeedback } from "@shared/utils";
 import { ReconcileWalletsBodySchema } from "@shared/reconcile-schemas";
 import { runReconciliation } from "../services/sessionReconciliation";
 import { walletLimiter } from "./wallets";
+import { mapSiteToWallet } from "@shared/wallet-reconciliation";
 
 // Track users who already had their duplicate sessions cleaned up (resets on server restart)
 const cleanedUpUsers = new Set<string>();
@@ -60,6 +61,8 @@ export async function handleGetReconcilableWallets(req: any, res: any): Promise<
         alreadyReconciled: true,
         wallets: [],
         orphanContribution: [],
+        playedPlatforms: [],
+        missingPlatforms: [],
       });
       return;
     }
@@ -72,6 +75,8 @@ export async function handleGetReconcilableWallets(req: any, res: any): Promise<
         alreadyReconciled: true,
         wallets: [],
         orphanContribution: [],
+        playedPlatforms: [],
+        missingPlatforms: [],
       });
       return;
     }
@@ -93,11 +98,65 @@ export async function handleGetReconcilableWallets(req: any, res: any): Promise<
         : [];
     }
 
+    // Sprint B2 (M3): playedPlatforms + missingPlatforms. Skip compute quando
+    // bankrollManagementEnabled=false — economiza 2 queries no path session-end
+    // pra usuarios com setting off.
+    let playedPlatforms: string[] = [];
+    let missingPlatforms: string[] = [];
+    try {
+      const settings = await storage.getUserSettings(user.userPlatformId);
+      const bankrollManagementEnabled =
+        settings && typeof (settings as any).bankrollManagementEnabled === "boolean"
+          ? (settings as any).bankrollManagementEnabled
+          : true;
+
+      if (bankrollManagementEnabled) {
+        const [sessionTournaments, userWallets] = await Promise.all([
+          storage.listSessionTournaments(sessionId, user.userPlatformId),
+          storage.listWalletsByUser(user.userPlatformId, { includeArchived: false }),
+        ]);
+        const playedSet = new Set<string>();
+        for (const st of sessionTournaments ?? []) {
+          const outcome = (st as any).outcome;
+          const status = (st as any).status;
+          // ADR-048: torneio "jogado" = outcome != 'not_played' OU status terminal.
+          // outcome=null + status=registered/upcoming nao conta (ainda nao rolou).
+          const hasOutcome = outcome != null && outcome !== "not_played";
+          const finishedByStatus =
+            (status === "finished" || status === "completed") && outcome !== "not_played";
+          if (!hasOutcome && !finishedByStatus) continue;
+          const site = (st as any).site;
+          if (typeof site === "string" && site.length > 0) playedSet.add(site);
+        }
+        playedPlatforms = Array.from(playedSet);
+
+        if (playedPlatforms.length > 0) {
+          const activeWallets = (userWallets ?? []).map((w: any) => ({
+            id: w.id,
+            platform: w.platform,
+            nativeCurrency: w.nativeCurrency,
+            balance: Number(w.balance ?? 0),
+            status: w.status ?? "active",
+          }));
+          for (const site of playedPlatforms) {
+            const matched = mapSiteToWallet(site, activeWallets);
+            if (matched.length === 0) missingPlatforms.push(site);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("playedPlatforms/missingPlatforms compute failed:", err);
+      playedPlatforms = [];
+      missingPlatforms = [];
+    }
+
     res.status(200).json({
       sessionId,
       alreadyReconciled: false,
       wallets,
       orphanContribution,
+      playedPlatforms,
+      missingPlatforms,
     });
   } catch (error: any) {
     console.error("GET /api/grind-sessions/:id/reconcilable-wallets failed:", error);
