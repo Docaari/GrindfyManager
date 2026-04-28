@@ -1,0 +1,154 @@
+%% Component diagram (C4 level 3) — Spot Screenshots module structure (Sprint F2)
+%% Spec: Docs/specs/sprint-f2-spot-screenshots.md
+%% ADRs: 051 (storage local), 052 (ownership middleware), 053 (node-cron purge)
+%%
+%% Mostra:
+%%   - Componentes UI novos (paste, list, review modal, drop target, studies tab)
+%%   - Extensao em BlockOneStarredHands (drop target + reuso de Cooldown-1)
+%%   - Backend novo (rotas, storage helpers, spotStorage abstraction, cron job)
+%%   - Schema delta em starred_hands
+
+graph TB
+    %% ============= UI LAYER =============
+    subgraph ui["UI Layer (client/src)"]
+        direction TB
+
+        subgraph livegrind["pages/GrindSession.tsx (modificada — RF-01/RF-07)"]
+            direction TB
+            GS["GrindSession.tsx<br/><i>monta SpotScreenshotPaster<br/>+ counter no header (X/10)</i>"]
+            SP["components/grind-session-live/<br/>SpotScreenshotPaster.tsx<br/><i>NOVO (RF-07)<br/>window paste listener<br/>activeElement guard<br/>file picker fallback<br/>5MB + MIME validation client-side<br/>otimistic UI + retry button</i>"]
+        end
+
+        subgraph cooldown["Cooldown surface (RF-08/RF-09)"]
+            direction TB
+            CDP["pages/Cooldown.tsx ou<br/>CoolDownRunner.tsx (extension)<br/><i>renderiza SessionSpotsList lateral<br/>(reuso ADR-041 cooldown)</i>"]
+            SL["components/cooldown/<br/>SessionSpotsList.tsx<br/><i>NOVO (RF-08)<br/>thumbnail 64x64<br/>HTML5 native drag<br/>click = lightbox<br/>filtra por sessionId</i>"]
+            B1["components/cooldown/<br/>BlockOneStarredHands.tsx<br/><i>EXTENSION (RF-09)<br/>cards aceitam onDrop<br/>respeita MAX_STARS_PER_TOURNAMENT (3)<br/>NAO altera comportamento existente<br/>cooldown-1</i>"]
+            SRC["components/cooldown/<br/>SpotReviewCard.tsx<br/><i>NOVO (RF-09)<br/>modal preview + selects type/spot<br/>+ textarea conclusion (max 500)<br/>+ botoes Salvar / Revisar Depois<br/>tooltip "Maximo 3 maos"</i>"]
+        end
+
+        subgraph studies["pages/Studies.tsx (modificada — RF-10)"]
+            direction TB
+            ST["Studies.tsx<br/><i>insere tab nova<br/>id='pending-spots'<br/>NAO altera tabs existentes</i>"]
+            PST["components/studies/<br/>PendingSpotsTab.tsx<br/><i>NOVO (RF-10)<br/>grid de thumbnails<br/>filtra reviewLater=all<br/>+ pending de sessao terminada (RF-11)<br/>botoes Revisar / Descartar<br/>badge sidebar count</i>"]
+        end
+    end
+
+    %% ============= BACKEND ROUTES =============
+    subgraph routes["server/routes/ (modificado)"]
+        direction TB
+        SH["starred-hands.ts<br/><i>NOVO arquivo dedicado<br/>(spec recomenda nao alterar cooldown.ts)<br/><br/>POST /api/starred-hands/screenshot<br/>PATCH /api/starred-hands/:id/review<br/>GET /api/starred-hands/pending<br/>DELETE /api/starred-hands/:id<br/>GET /api/starred-hands/:id/image (ADR-052)</i>"]
+        CD["cooldown.ts (existente)<br/><i>INTACTO (Cooldown-1)<br/>endpoints classicos starred-hands<br/>POST /api/starred-hands<br/>GET /api/starred-hands<br/>DELETE /api/starred-hands/:id<br/>nao colide — paths distintos</i>"]
+    end
+
+    %% ============= AUTH + RATE LIMIT =============
+    subgraph mw["Middleware (server/)"]
+        direction TB
+        AUTH["auth.ts (existente)<br/><i>requireAuth (JWT cookie httpOnly)<br/>aplicado em todas rotas novas</i>"]
+        RL["express-rate-limit<br/><i>30 req / 5min em<br/>POST /screenshot</i>"]
+        MUL["multer disk storage<br/><i>diskStorage destination<br/>+ filename: nanoid(16)+ext<br/>+ fileFilter MIME (png/jpg/jpeg/webp)<br/>+ limits.fileSize 5MB</i>"]
+        OWN["ownership middleware<br/>(custom em /image route)<br/><i>ADR-052<br/>requireAuth + getStarredHandById +<br/>row.userId == auth.userId else 404</i>"]
+    end
+
+    %% ============= STORAGE LAYER =============
+    subgraph storage["Storage abstraction (server/lib + server/storage.ts)"]
+        direction TB
+        SPS["lib/spotStorage.ts<br/><i>NOVO (ADR-051)<br/>interface SpotStorage:<br/>- save(buffer, ext)<br/>- getReadStream(key)<br/>- delete(key)<br/>- healthCheck()<br/><br/>F2: LocalDiskSpotStorage (fs/promises)<br/>F3: S3SpotStorage (futuro)</i>"]
+        STO["storage.ts (modificado)<br/><i>helpers novos:<br/>- createStarredHand (extensao com<br/>  imageUrl, source, status, expiresAt)<br/>- listPendingSpots(userId, filters)<br/>- countSpotsBySession(sessionId, ...)<br/>- resolveTournamentInSession(sessionId)<br/>- listSpotsForPurge({ kind })<br/>- softDeleteStarredHand(id)<br/>- updateStarredHand (review fields)<br/>- assertSessionOwnership<br/>- assertTournamentInSession</i>"]
+    end
+
+    %% ============= JOBS =============
+    subgraph jobs["server/jobs/ (NOVO — ADR-053)"]
+        direction TB
+        JI["jobs/index.ts<br/><i>registerAllJobs()<br/>chamado em server/index.ts boot</i>"]
+        PSS["jobs/purgeSpotScreenshots.ts<br/><i>NOVO (ADR-053)<br/><br/>purgeSpotScreenshots() funcao pura<br/>(testavel sem cron)<br/>SELECT discarded + expired<br/>loop: spotStorage.delete + storage.delete<br/>try/catch por row<br/>ENOENT = warn (nao errorCount)<br/><br/>registerSpotScreenshotsCron()<br/>cron.schedule('0 4 * * *', handler)</i>"]
+    end
+
+    %% ============= EXTERNAL =============
+    subgraph external["Filesystem / Lib externa"]
+        direction TB
+        FS["uploads/spot-screenshots/<br/><i>disco local (F2)<br/>arquivos &lt;nanoid&gt;.&lt;ext&gt;<br/>budget 1GB<br/>.gitignore rule</i>"]
+        NCRON["node-cron (npm)<br/><i>NOVA dep<br/>~50KB POSIX cron<br/>in-process scheduling</i>"]
+    end
+
+    %% ============= SCHEMA =============
+    subgraph schema["shared/schema.ts (modificado — Migration 0012)"]
+        direction TB
+        SHTBL["starred_hands (extensao)<br/><i>+ imageUrl text NULL<br/>+ conclusion text NULL (max 500)<br/>+ reviewedAt timestamp NULL<br/>+ reviewLater boolean NOT NULL default false<br/>+ expiresAt timestamp NULL<br/>+ pastedAt timestamp NULL<br/>+ source varchar(20) default 'manual'<br/>+ status varchar(20) default 'pending'<br/><br/>indices novos:<br/>- idx_starred_user_status<br/>- idx_starred_expires (partial)<br/>- idx_starred_session_source<br/><br/>back-fill rows existentes:<br/>UPDATE ... SET status='reviewed',<br/>  source='manual', pastedAt=createdAt<br/>WHERE pastedAt IS NULL</i>"]
+        ZD["Zod enums atualizados<br/><i>STARRED_HAND_TYPES += 'spot_screenshot'<br/>STARRED_HAND_SPOTS += 'screenshot_pending'<br/>STARRED_HAND_SOURCES (novo)<br/>STARRED_HAND_STATUSES (novo)</i>"]
+    end
+
+    %% ============= TELEMETRY =============
+    subgraph tel["Telemetria (logger existente)"]
+        direction TB
+        TEL["logger / console.info<br/><i>spot.pasted<br/>spot.upload_rejected<br/>spot.reviewed<br/>spot.review_later<br/>spot.discarded<br/>spot.expired_purged (cron)<br/>spot.drag_dropped (frontend)</i>"]
+    end
+
+    %% ============= RELACOES — UI consome rotas =============
+    GS --> SP
+    SP -->|"POST /api/starred-hands/screenshot<br/>multipart"| SH
+    SP -.->|"toast errors retry"| SP
+
+    CDP --> SL
+    CDP --> B1
+    SL -->|"GET /api/starred-hands/pending<br/>?sessionId=current"| SH
+    SL -.->|"native HTML5 drag<br/>(dataTransfer starredHandId)"| B1
+    B1 --> SRC
+    SRC -->|"PATCH /api/starred-hands/:id/review<br/>{ conclusion, type, spot,<br/>  reviewLater?, sessionTournamentId? }"| SH
+    SL -.->|"img src GET /:id/image"| SH
+
+    ST --> PST
+    PST -->|"GET /api/starred-hands/pending<br/>?reviewLater=all"| SH
+    PST -->|"DELETE /api/starred-hands/:id"| SH
+    PST --> SRC
+
+    %% ============= RELACOES — Backend interno =============
+    SH -->|"requireAuth"| AUTH
+    SH -->|"rate limit 30/5min"| RL
+    SH -->|"multer disk + filter"| MUL
+    SH -->|"GET /:id/image"| OWN
+    OWN --> AUTH
+    OWN --> STO
+    OWN -->|"getReadStream(key)"| SPS
+    SPS --> FS
+    MUL --> FS
+
+    SH -->|"createStarredHand<br/>countSpotsBySession<br/>resolveTournamentInSession<br/>updateStarredHand<br/>softDeleteStarredHand<br/>listPendingSpots<br/>assertSessionOwnership<br/>assertTournamentInSession"| STO
+    SH -->|"save / delete (rollback)"| SPS
+
+    %% ============= RELACOES — Cron =============
+    JI --> PSS
+    PSS -->|"cron.schedule"| NCRON
+    PSS -->|"listSpotsForPurge<br/>deleteStarredHand"| STO
+    PSS -->|"delete(key)"| SPS
+    SPS --> FS
+
+    %% ============= RELACOES — Schema feeds runtime =============
+    STO -.->|"Drizzle ORM<br/>insert / update / delete"| SHTBL
+    SH -.->|"Zod parse body"| ZD
+    SHTBL -.-> ZD
+
+    %% ============= RELACOES — Telemetry =============
+    SH -.->|"emit events"| TEL
+    SP -.->|"client-side telemetry<br/>(via /api/log ou inline)"| TEL
+    PSS -.->|"summary log"| TEL
+
+    %% ============= RELACOES — Boot =============
+    BOOT["server/index.ts<br/><i>(modificado)<br/>await db.connect()<br/>await spotStorage.healthCheck()<br/>registerAllJobs()<br/>app.listen(...)</i>"]
+    BOOT --> SPS
+    BOOT --> JI
+    BOOT --> SH
+    BOOT --> CD
+
+    %% ============= STYLES =============
+    classDef new fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef modified fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef unchanged fill:#f5f5f5,stroke:#616161,stroke-width:1px,stroke-dasharray:5 5
+    classDef external fill:#e1f5fe,stroke:#01579b,stroke-width:1px
+    classDef extension fill:#fce4ec,stroke:#ad1457,stroke-width:2px
+
+    class SP,SL,SRC,PST,SH,SPS,JI,PSS,OWN,SHTBL,ZD new
+    class GS,CDP,ST,STO,MUL,RL,BOOT,TEL modified
+    class B1 extension
+    class CD,AUTH unchanged
+    class FS,NCRON external

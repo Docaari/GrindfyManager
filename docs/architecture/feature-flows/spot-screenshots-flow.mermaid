@@ -1,0 +1,270 @@
+%% Sequence: Spot Screenshots — Sprint F2
+%% Spec: Docs/specs/sprint-f2-spot-screenshots.md
+%% ADRs:
+%%   - ADR-051 (storage local em F2; S3 em F3)
+%%   - ADR-052 (middleware ownership custom em GET /api/starred-hands/:id/image)
+%%   - ADR-053 (node-cron diario para purge)
+%%
+%% Cobre 3 fluxos da spec:
+%%   1) Paste flow  — RF-01 + RF-02 (capture no live grind)
+%%   2) Review flow — RF-03 + RF-09 (drag-to-review no cooldown) + RF-10 (studies tab)
+%%   3) Purge flow  — RF-06 (cron diario)
+
+sequenceDiagram
+    autonumber
+    actor User as Jogador
+    participant GS as GrindSession.tsx
+    participant SP as SpotScreenshotPaster
+    participant SL as SessionSpotsList<br/>(cooldown lateral)
+    participant B1 as BlockOneStarredHands<br/>(drop target)
+    participant SRC as SpotReviewCard<br/>(modal)
+    participant PST as PendingSpotsTab<br/>(/studies)
+    participant API as Express<br/>(server/routes/starred-hands.ts)
+    participant SS as spotStorage.ts<br/>(ADR-051)
+    participant Storage as storage.ts
+    participant DB as PostgreSQL
+    participant CRON as server/jobs/<br/>purgeSpotScreenshots.ts<br/>(ADR-053)
+    participant FS as Disk<br/>uploads/spot-screenshots/
+
+    %% =======================================
+    %% FLUXO 1 — PASTE (captura no live grind)
+    %% =======================================
+    Note over User,FS: FLUXO 1 — PASTE (RF-01 + RF-02)<br/>Pre: sessao ativa em GrindSession.tsx,<br/>SpotScreenshotPaster montado com listener paste.
+
+    User->>GS: Ctrl+V em area neutra<br/>(activeElement != input/textarea/contenteditable)
+    GS->>SP: window paste event dispatched
+    SP->>SP: guard: activeElement check<br/>(skip se input ativo)
+    SP->>SP: filtrar clipboardData.items<br/>kind='file' AND type startsWith 'image/'
+    alt Texto puro / nenhum arquivo
+        SP-->>GS: noop silencioso<br/>(nao toast, nao request)
+    else GIF
+        SP->>User: Toast "GIF nao suportado"
+    else > 5MB
+        SP->>User: Toast "Imagem maior que 5MB"
+    else MIME valido (png/jpg/jpeg/webp)
+        SP->>SP: Verifica counter local: usedCount < 10?
+        alt counter >= 10
+            SP->>User: Toast "limite 10/10 atingido"
+        else OK
+            SP->>SP: Otimistic UI: incrementa counter +1<br/>thumbnail temporario
+            SP->>API: POST /api/starred-hands/screenshot<br/>multipart/form-data<br/>{ screenshot, sessionId,<br/>  sessionTournamentId?, source:'paste' }
+            API->>API: requireAuth (JWT) +<br/>rateLimiter (30/5min)
+            API->>API: multer.diskStorage:<br/>destination=uploads/spot-screenshots/<br/>filename=nanoid(16)+ext<br/>fileFilter MIME + 5MB limit
+
+            alt MIME nao permitido
+                API-->>SP: 400 invalid_mime
+                SP->>User: Toast "Formato nao suportado"
+            else > 5MB
+                API-->>SP: 413 file_too_large
+                SP->>User: Toast "Imagem maior que 5MB"
+            else upload ok
+                API->>SS: spotStorage.save(buffer, ext)<br/>(retorna { key, absolutePath })
+                SS->>FS: fs.writeFile(uploadsDir/<nanoid>.<ext>)
+                FS-->>SS: ok
+                SS-->>API: { key:'/uploads/spot-screenshots/abc.png' }
+
+                API->>API: Validacao Zod body<br/>(sessionId obrigatorio)
+                API->>Storage: assertSessionOwnership(userId, sessionId)
+                Storage->>DB: SELECT id FROM grind_sessions<br/>WHERE id=:s AND userId=:u
+                DB-->>Storage: row?
+
+                alt sessao nao encontrada / nao do user
+                    Storage-->>API: not_found
+                    API->>SS: spotStorage.delete(key)<br/>(rollback do arquivo)
+                    SS->>FS: fs.unlink
+                    API-->>SP: 404 session_not_found
+                    SP->>User: Toast "Sessao invalida"
+                else OK
+                    API->>Storage: countSpotsBySession(sessionId, source IN ('paste','upload'),<br/>status != 'discarded')
+                    Storage->>DB: SELECT count(*) FROM starred_hands<br/>WHERE sessionId=:s AND source IN ('paste','upload')<br/>AND status != 'discarded' FOR UPDATE
+                    DB-->>Storage: count
+                    alt count >= 10
+                        API->>SS: spotStorage.delete(key) (rollback)
+                        SS->>FS: fs.unlink
+                        API-->>SP: 409 spot_limit_reached, limit=10
+                        SP->>User: Toast "limite atingido"
+                    else OK
+                        alt sessionTournamentId nao informado
+                            API->>Storage: resolveTournamentInSession(sessionId)<br/>(playing primeiro, senao mais recente updatedAt)
+                            Storage->>DB: SELECT id FROM session_tournaments<br/>WHERE sessionId=:s ORDER BY<br/>(status='playing') DESC, updatedAt DESC LIMIT 1
+                            DB-->>Storage: id?
+                            alt nenhum tournament
+                                API->>SS: spotStorage.delete(key)
+                                API-->>SP: 422 no_tournament_in_session
+                                SP->>User: Toast "Sessao sem torneios"
+                            end
+                        end
+                        API->>Storage: createStarredHand({<br/>  id:nanoid, userId, sessionId, sessionTournamentId,<br/>  type:'spot_screenshot', spot:'screenshot_pending',<br/>  imageUrl:key, pastedAt:NOW(),<br/>  expiresAt:NOW()+14d, status:'pending',<br/>  source:'paste'})
+                        Storage->>DB: INSERT INTO starred_hands (...)
+                        DB-->>Storage: { id }
+                        Storage-->>API: row
+                        API-->>SP: 201 { id, imageUrl, expiresAt,<br/>  sessionTournamentId, pastedAt }
+                        SP->>SP: Substitui thumbnail otimista<br/>por dado real
+                        SP->>User: Counter atualizado (X/10)
+                        Note over SP,API: telemetria spot.pasted<br/>{ sessionId, sessionTournamentId,<br/>  source, sizeBytes }
+                    end
+                end
+            end
+        end
+    end
+
+    %% =======================================
+    %% FLUXO 2 — REVIEW (drag-to-review no cooldown / studies)
+    %% =======================================
+    Note over User,FS: FLUXO 2 — REVIEW (RF-03 + RF-09 + RF-10)<br/>Cooldown ja iniciado (ADR-041)<br/>OU /studies > Spots Pendentes aberto.
+
+    %% --- 2A: Cooldown drag-and-drop ---
+    rect rgb(245, 250, 245)
+        Note over User,SRC: 2A — COOLDOWN drag-to-review
+
+        User->>SL: Renderiza lista lateral
+        SL->>API: GET /api/starred-hands/pending<br/>?sessionId={current}
+        API->>API: requireAuth
+        API->>Storage: listPendingSpots(userId,<br/>{ reviewLater:false, sessionId })
+        Storage->>DB: SELECT s.*, st.name as tournament_name,<br/>st.site, st.buyIn FROM starred_hands s<br/>LEFT JOIN session_tournaments st<br/>ON s.sessionTournamentId = st.id<br/>WHERE s.userId=:u AND s.status='pending'<br/>AND s.reviewLater=false AND s.sessionId=:s<br/>ORDER BY s.pastedAt DESC
+        DB-->>Storage: rows
+        Storage-->>API: items
+        API-->>SL: 200 { items, total, limit, offset }
+
+        loop Cada item: thumbnail
+            SL->>API: GET /api/starred-hands/:id/image<br/>(via <img src>)
+            API->>API: requireAuth (cookie httpOnly) +<br/>ownership check (ADR-052)
+            API->>Storage: getStarredHandById(id)
+            Storage->>DB: SELECT * FROM starred_hands<br/>WHERE id=:id AND userId=:u
+            DB-->>Storage: row?
+            alt nao existe OR userId mismatch
+                API-->>SL: 404 (oculta thumbnail quebrada)
+            else OK
+                API->>SS: spotStorage.getReadStream(imageUrl)
+                SS->>FS: fs.createReadStream(absPath)
+                FS-->>SS: stream
+                SS-->>API: stream
+                API-->>SL: 200 image/png<br/>Cache-Control: private, max-age=300
+            end
+        end
+
+        User->>SL: Drag thumbnail<br/>(HTML5 native dataTransfer)
+        SL->>B1: dragstart event<br/>(dataTransfer.setData starredHandId)
+        User->>B1: Drop em card de torneio
+        B1->>B1: onDrop -> read starredHandId +<br/>extract sessionTournamentId do card alvo
+
+        alt torneio alvo ja com 3 stars
+            B1->>SRC: Abre modal mas botao "Salvar" disabled<br/>tooltip "Maximo 3 maos"
+        else OK
+            B1->>SRC: Abre modal SpotReviewCard<br/>props: { starredHandId, sessionTournamentId,<br/>  imageUrl }
+        end
+
+        SRC->>SRC: Renderiza preview (img src GET /image)<br/>+ select type (8 valores)<br/>+ select spot (8 valores)<br/>+ textarea conclusion (max 500)<br/>+ botoes "Salvar" / "Revisar Depois"
+
+        alt User clica "Salvar revisao"
+            User->>SRC: Preenche conclusion + type + spot
+            SRC->>API: PATCH /api/starred-hands/:id/review<br/>{ conclusion, type, spot, notes?,<br/>  sessionTournamentId }
+            API->>API: requireAuth + Zod (max 500 chars)
+            API->>Storage: getStarredHandById(id)
+            Storage->>DB: SELECT * WHERE id=:id AND userId=:u
+            DB-->>Storage: row?
+            alt nao existe / outro user
+                API-->>SRC: 404
+            else OK
+                opt sessionTournamentId mudou
+                    API->>Storage: assertTournamentInSession(<br/>sessionTournamentId, row.sessionId)
+                    Storage->>DB: SELECT 1 FROM session_tournaments<br/>WHERE id=:st AND sessionId=:s
+                    DB-->>Storage: row?
+                    alt mismatch
+                        API-->>SRC: 422 tournament_session_mismatch
+                    end
+                end
+                API->>Storage: updateStarredHand(id, {<br/>  conclusion, type, spot, notes,<br/>  reviewedAt:NOW(), status:'reviewed',<br/>  sessionTournamentId })
+                Storage->>DB: UPDATE starred_hands<br/>SET status='reviewed', reviewedAt=NOW(),<br/>  conclusion=..., type=..., spot=...<br/>WHERE id=:id
+                DB-->>Storage: row updated
+                Storage-->>API: row
+                API-->>SRC: 200 { id, status:'reviewed',<br/>  reviewedAt, conclusion, ... }
+                SRC->>SL: Refetch /pending<br/>(TanStack Query invalidate)
+                SRC->>B1: Refetch starred do torneio<br/>(aparece estrelada)
+                Note over SRC,API: telemetria spot.reviewed<br/>{ id, sessionTournamentId,<br/>  hadConclusion, source }
+            end
+
+        else User clica "Revisar Depois"
+            User->>SRC: Click "Revisar Depois"
+            SRC->>API: PATCH /api/starred-hands/:id/review<br/>{ reviewLater:true }
+            API->>Storage: updateStarredHand(id, {<br/>  reviewLater:true })
+            Storage->>DB: UPDATE starred_hands<br/>SET reviewLater=true<br/>WHERE id=:id AND userId=:u
+            DB-->>Storage: ok
+            API-->>SRC: 200 { reviewLater:true }
+            SRC->>SL: Refetch (some da lista do cooldown)
+            Note over SRC,API: telemetria spot.review_later<br/>{ id, sessionId }
+        end
+    end
+
+    %% --- 2B: Studies pending tab ---
+    rect rgb(245, 245, 252)
+        Note over User,SRC: 2B — STUDIES Pending Tab (RF-10 + RF-11)
+
+        User->>PST: Abre /studies > Spots Pendentes
+        PST->>API: GET /api/starred-hands/pending?reviewLater=all
+        API->>Storage: listPendingSpots(userId, {<br/>  reviewLater:'all' })
+        Storage->>DB: SELECT s.*, st.name, st.site, st.buyIn,<br/>  gs.endedAt FROM starred_hands s<br/>LEFT JOIN session_tournaments st ...<br/>LEFT JOIN grind_sessions gs ON s.sessionId = gs.id<br/>WHERE s.userId=:u AND s.status='pending' AND<br/>  (s.reviewLater=true OR gs.endedAt IS NOT NULL)<br/>ORDER BY s.pastedAt DESC
+        DB-->>Storage: rows (inclui pending de sessao terminada)
+        API-->>PST: 200 { items, total }
+
+        alt User clica thumbnail
+            User->>PST: Click
+            PST->>SRC: Abre lightbox + SpotReviewCard
+            Note right of SRC: mesmo fluxo de review do 2A
+        else User clica "Descartar"
+            User->>PST: Click descartar
+            PST->>API: DELETE /api/starred-hands/:id
+            API->>Storage: softDeleteStarredHand(id)
+            Storage->>DB: UPDATE starred_hands<br/>SET status='discarded', reviewLater=false<br/>WHERE id=:id AND userId=:u
+            DB-->>Storage: ok
+            API-->>PST: 204
+            PST->>PST: Remove da lista (TanStack invalidate)
+            Note over PST,API: telemetria spot.discarded<br/>{ id, fromSurface:'studies' }
+        end
+    end
+
+    %% =======================================
+    %% FLUXO 3 — PURGE (cron diario)
+    %% =======================================
+    Note over User,FS: FLUXO 3 — PURGE (RF-06 + ADR-053)<br/>Schedule '0 4 * * *' (env SPOT_PURGE_CRON)<br/>node-cron in-process; single-instance assumption.
+
+    rect rgb(255, 250, 240)
+        CRON->>CRON: cron tick (04:00 UTC)
+        CRON->>CRON: start = Date.now()
+        CRON->>Storage: listSpotsForPurge({ kind:'discarded' })
+        Storage->>DB: SELECT id, imageUrl FROM starred_hands<br/>WHERE status='discarded'
+        DB-->>Storage: discarded[]
+
+        CRON->>Storage: listSpotsForPurge({ kind:'expired' })
+        Storage->>DB: SELECT id, imageUrl FROM starred_hands<br/>WHERE status='pending'<br/>AND expiresAt < NOW()<br/>AND reviewedAt IS NULL<br/>AND reviewLater = false
+        DB-->>Storage: expired[]
+
+        loop Cada row em [...discarded, ...expired]
+            alt row.imageUrl != null
+                CRON->>SS: spotStorage.delete(imageUrl)
+                SS->>FS: fs.unlink(absolutePath)
+                alt ENOENT
+                    FS-->>SS: error ENOENT
+                    SS-->>CRON: throw ENOENT
+                    CRON->>CRON: console.warn<br/>spot.purge.unlink_enoent<br/>(continua, nao incrementa errorCount)
+                else outro erro
+                    FS-->>SS: error
+                    SS-->>CRON: throw err
+                    CRON->>CRON: console.error spot.purge.error<br/>errorCount++
+                else ok
+                    FS-->>SS: ok
+                    SS-->>CRON: void
+                end
+            end
+            CRON->>Storage: deleteStarredHand(id)
+            Storage->>DB: DELETE FROM starred_hands WHERE id=:id
+            DB-->>Storage: ok
+            CRON->>CRON: purgedCount++
+        end
+
+        CRON->>CRON: durationMs = Date.now() - start
+        CRON->>CRON: console.info spot.purge.summary<br/>{ purgedCount, errorCount, durationMs }
+        Note over CRON,DB: telemetria spot.expired_purged<br/>{ count, durationMs, errorCount }
+    end
+
+    Note over User,FS: Idempotencia: re-execucao no mesmo dia<br/>encontra 0 rows (ja deletadas) -> noop.<br/>Multi-instance debt documentado em ADR-053:<br/>2 servers paralelos = waste, nao bug<br/>(SQL WHERE garante consistencia).

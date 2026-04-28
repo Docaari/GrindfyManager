@@ -29,6 +29,7 @@ export default defineConfig({
     alias: {
       '@shared': path.resolve(__dirname, 'shared'),
       '@': path.resolve(__dirname, 'client/src'),
+      '@assets': path.resolve(__dirname, 'attached_assets'),
     },
     projects: [
       {
@@ -47,6 +48,7 @@ export default defineConfig({
           alias: {
             '@shared': path.resolve(__dirname, 'shared'),
             '@': path.resolve(__dirname, 'client/src'),
+            '@assets': path.resolve(__dirname, 'attached_assets'),
           },
         },
       },
@@ -65,6 +67,7 @@ export default defineConfig({
           alias: {
             '@shared': path.resolve(__dirname, 'shared'),
             '@': path.resolve(__dirname, 'client/src'),
+            '@assets': path.resolve(__dirname, 'attached_assets'),
           },
         },
       },

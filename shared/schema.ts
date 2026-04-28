@@ -2693,6 +2693,8 @@ export const STARRED_HAND_TYPES = [
   "mistake",
   "sick",
   "other",
+  // Sprint F2 — auto-tag para print colado/upload (paste flow)
+  "spot_screenshot",
 ] as const;
 export const STARRED_HAND_SPOTS = [
   "preflop",
@@ -2703,6 +2705,21 @@ export const STARRED_HAND_SPOTS = [
   "final-table",
   "bubble",
   "other",
+  // Sprint F2 — placeholder ate jogador classificar print
+  "screenshot_pending",
+] as const;
+
+// Sprint F2 — novos enums para spot screenshots
+export const STARRED_HAND_SOURCES = [
+  "paste", // Ctrl+V no live grind
+  "upload", // file picker fallback
+  "manual", // default — cooldown classico Sprint Cooldown-1
+] as const;
+
+export const STARRED_HAND_STATUSES = [
+  "pending", // default — print recem-colado
+  "reviewed", // jogador revisou via cooldown ou studies
+  "discarded", // soft delete via DELETE /:id/discard
 ] as const;
 
 export type AbGameAnswers = {
@@ -2760,10 +2777,24 @@ export const starredHands = pgTable("starred_hands", {
   type: varchar("type").notNull(),
   spot: varchar("spot").notNull(),
   notes: text("notes"),
+  // Sprint F2 — extensoes para spot screenshots (Migration 0012)
+  // Todas nullable exceto reviewLater/source/status (defaults). Lesson #7.
+  imageUrl: text("image_url"),
+  conclusion: text("conclusion"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewLater: boolean("review_later").notNull().default(false),
+  expiresAt: timestamp("expires_at"),
+  pastedAt: timestamp("pasted_at"),
+  source: varchar("source", { length: 20 }).notNull().default("manual"),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_starred_user_session").on(table.userId, table.sessionId),
   index("idx_starred_user_type").on(table.userId, table.type),
+  // Sprint F2 — indices novos
+  index("idx_starred_user_status").on(table.userId, table.status),
+  index("idx_starred_expires").on(table.expiresAt),
+  index("idx_starred_session_source").on(table.sessionId, table.source),
 ]);
 
 // -----------------------------------------------------------------------------
@@ -2773,6 +2804,9 @@ export const starredHands = pgTable("starred_hands", {
 export const cooldownLogModeSchema = z.enum(COOLDOWN_LOG_MODES);
 export const starredHandTypeSchema = z.enum(STARRED_HAND_TYPES);
 export const starredHandSpotSchema = z.enum(STARRED_HAND_SPOTS);
+// Sprint F2 — novos enums Zod
+export const starredHandSourceSchema = z.enum(STARRED_HAND_SOURCES);
+export const starredHandStatusSchema = z.enum(STARRED_HAND_STATUSES);
 
 export const abGameAnswersSchema = z.object({
   aGame: z.array(z.string()),
@@ -2816,6 +2850,28 @@ export const insertStarredHandSchema = z.object({
   cooldownLogId: z.string().min(1).nullable().optional(),
   type: starredHandTypeSchema,
   spot: starredHandSpotSchema,
+  notes: z.string().max(500, "notes tem limite de 500 caracteres").optional(),
+  // Sprint F2 — campos opcionais (lesson #7 schema deprecation gradual).
+  // Cooldown-1 cria rows sem esses campos; F2 paste flow preenche.
+  imageUrl: z.string().optional(),
+  conclusion: z.string().max(500, "conclusion tem limite de 500 caracteres").optional(),
+  reviewedAt: z.union([z.string(), z.date()]).optional(),
+  reviewLater: z.boolean().optional(),
+  expiresAt: z.union([z.string(), z.date()]).optional(),
+  pastedAt: z.union([z.string(), z.date()]).optional(),
+  source: starredHandSourceSchema.optional(),
+  status: starredHandStatusSchema.optional(),
+}).strict();
+
+// Sprint F2 — body do PATCH /api/starred-hands/:id/review
+// Tudo opcional. Conclusion/notes max 500. Strict rejeita campos desconhecidos
+// (defesa contra injecao de userId/id/createdAt).
+export const updateSpotReviewSchema = z.object({
+  conclusion: z.string().max(500, "conclusion tem limite de 500 caracteres").optional(),
+  reviewLater: z.boolean().optional(),
+  sessionTournamentId: z.string().min(1).optional(),
+  type: starredHandTypeSchema.optional(),
+  spot: starredHandSpotSchema.optional(),
   notes: z.string().max(500, "notes tem limite de 500 caracteres").optional(),
 }).strict();
 

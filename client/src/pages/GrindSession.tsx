@@ -24,6 +24,7 @@ import RegisterSessionDialog from "@/components/grind-session/RegisterSessionDia
 import SessionDetailsDialog from "@/components/grind-session/SessionDetailsDialog";
 import ConflictDialog from "@/components/grind-session/ConflictDialog";
 import EpicStartSessionModal from "@/components/grind-session/EpicStartSessionModal";
+import SpotScreenshotPaster from "@/components/grind-session-live/SpotScreenshotPaster";
 import { hasWarmUpData, getQuickStartLabel, getLastSessionDefaults, buildQuickStartSession } from "@/components/grind-session/quick-start-helpers";
 import { mergeWarmupSources } from "@/lib/warmup-persistence-helpers";
 import { CheckCircle, Brain } from "lucide-react";
@@ -196,6 +197,58 @@ export default function GrindSession() {
   });
 
   const activeSession = activeSessions.find((session: Record<string, unknown>) => session.status === "active");
+
+  // Sprint F2 RF-07: Spot screenshots pending count (per active session) — used
+  // pelo paster como `usedCount`. Query so eh ativada quando ha sessao ativa.
+  const activeSessionId = activeSession?.id as string | undefined;
+  const { data: pendingSpotsData } = useQuery<{ items?: any[]; total?: number } | undefined>({
+    queryKey: ["/api/starred-hands/pending", { sessionId: activeSessionId }],
+    queryFn: async () => {
+      if (!activeSessionId) return { items: [], total: 0 } as any;
+      try {
+        return await apiRequest(
+          "GET",
+          `/api/starred-hands/pending?sessionId=${encodeURIComponent(activeSessionId)}`,
+        );
+      } catch (err) {
+        // Log antes do fallback (lesson #9: nao engolir erro silencioso).
+        // Fallback evita refetch loop em rede flaky; counter mostra 0/10
+        // ate proxima janela de stale.
+        console.warn("spot.pending_query.failed", err);
+        return { items: [], total: 0 };
+      }
+    },
+    enabled: !!activeSessionId,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  // Backend retorna `total` como source of truth (nao depende de paginacao
+  // do `items`). Fallback para items.length se total ausente.
+  const spotUsedCount =
+    typeof pendingSpotsData?.total === "number"
+      ? pendingSpotsData.total
+      : Array.isArray(pendingSpotsData?.items)
+        ? pendingSpotsData!.items!.length
+        : 0;
+
+  const handleSpotUploaded = useCallback(() => {
+    if (!activeSessionId) return;
+    queryClient.invalidateQueries({
+      queryKey: ["/api/starred-hands/pending", { sessionId: activeSessionId }],
+    });
+  }, [activeSessionId]);
+
+  const handleSpotError = useCallback(
+    (msg: string) => {
+      toast({
+        title: "Erro ao salvar print",
+        description: msg,
+        variant: "destructive",
+      });
+    },
+    [toast],
+  );
 
   // Query for planned tournaments from Grade Planner
   const { data: plannedTournaments = [], isLoading: isLoadingPlannedTournaments } = useQuery({
@@ -895,6 +948,16 @@ export default function GrindSession() {
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
+      {/* Sprint F2 RF-07: Spot Screenshot Paster (so quando sessao ativa) */}
+      {activeSession && (
+        <SpotScreenshotPaster
+          sessionId={activeSessionId as string}
+          usedCount={spotUsedCount}
+          onUploaded={handleSpotUploaded}
+          onError={handleSpotError}
+        />
+      )}
+
       {/* Recovery banner for unfinished sessions */}
       {recoveryData && !activeSession && !sessionsLoading && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-4 flex items-center justify-between">

@@ -1,12 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { track as trackTelemetry } from "@/lib/telemetry";
 import { useToast } from "@/hooks/use-toast";
-import { BlockOneStarredHands, type SessionTournamentLite, type StarredHandLite } from "./BlockOneStarredHands";
+import {
+  BlockOneStarredHands,
+  MAX_STARS_PER_TOURNAMENT,
+  type SessionTournamentLite,
+  type StarredHandLite,
+} from "./BlockOneStarredHands";
 import { BlockTwoABCJournal, type AbcJournalValue } from "./BlockTwoABCJournal";
 import { BlockThreeTiltReview, type TiltAssessmentValue } from "./BlockThreeTiltReview";
 import { BlockFourSleepGate, type SleepGateValue } from "./BlockFourSleepGate";
+import SessionSpotsList, { type SessionSpot } from "./SessionSpotsList";
+import SpotReviewCard from "./SpotReviewCard";
 import type { StarredHandType, StarredHandSpot } from "../../../../shared/schema";
 
 // =============================================================================
@@ -74,9 +82,41 @@ export function CoolDownRunner({
   const [breathingEnabled, setBreathingEnabled] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  // Sprint F2 W3 (RF-08/RF-09): drag-to-review wiring.
+  const [droppedSpot, setDroppedSpot] = useState<{
+    id: string;
+    imageUrl: string;
+    sessionTournamentId: string;
+  } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+
+  // Sprint F2 W3 (RF-08): query de prints pendentes da sessao.
+  const pendingSpotsQuery = useQuery<{
+    items: Array<{
+      id: string;
+      imageUrl: string;
+      sessionTournamentId: string | null;
+      pastedAt: string;
+    }>;
+    total: number;
+  }>({
+    queryKey: ["/api/starred-hands/pending", { sessionId }],
+    queryFn: () =>
+      apiRequest(
+        "GET",
+        `/api/starred-hands/pending?sessionId=${encodeURIComponent(sessionId)}`,
+      ),
+    // Lista so eh consumida no Bloco 1 (hands). Evita request inutil em
+    // sessoes que pulam direto para abc/tilt/sleep.
+    enabled: !!sessionId && currentBlock === "hands",
+  });
+
+  const sessionSpots: SessionSpot[] = useMemo(
+    () => (pendingSpotsQuery.data?.items ?? []) as SessionSpot[],
+    [pendingSpotsQuery.data],
+  );
 
   // Limpa debounce ao desmontar
   useEffect(() => {
@@ -147,6 +187,100 @@ export function CoolDownRunner({
       toast({ title: "Erro ao remover", description: err?.message });
     }
   };
+
+  // Sprint F2 W3 (RF-09): drop callback do BlockOneStarredHands.
+  const handleSpotDropped = (spotId: string, targetStId: string) => {
+    const spot = sessionSpots.find((s) => s.id === spotId);
+    if (!spot) return;
+    setDroppedSpot({
+      id: spot.id,
+      imageUrl: spot.imageUrl,
+      sessionTournamentId: targetStId,
+    });
+  };
+
+  const invalidatePendingSpots = () => {
+    try {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/starred-hands/pending", { sessionId }],
+      });
+    } catch {
+      // tests podem nao ter queryClient real
+    }
+  };
+
+  const handleSaveSpotReview = async (patch: {
+    conclusion: string;
+    type: string;
+    spot: string;
+    notes?: string;
+    sessionTournamentId: string;
+  }) => {
+    if (!droppedSpot) return;
+    try {
+      await apiRequest(
+        "PATCH",
+        `/api/starred-hands/${droppedSpot.id}/review`,
+        {
+          conclusion: patch.conclusion,
+          type: patch.type,
+          spot: patch.spot,
+          notes: patch.notes,
+          sessionTournamentId: patch.sessionTournamentId,
+        },
+      );
+      // Sprint F2 W4: telemetria spot.reviewed apos sucesso PATCH (source cooldown).
+      try {
+        trackTelemetry("spot.reviewed", {
+          spotId: droppedSpot.id,
+          sessionTournamentId: patch.sessionTournamentId,
+          hasConclusion: !!patch.conclusion?.trim(),
+          source: "cooldown",
+        });
+      } catch {
+        // telemetry never throws user-facing
+      }
+      invalidatePendingSpots();
+      setDroppedSpot(null);
+    } catch (err: any) {
+      toast({ title: "Erro ao salvar revisao", description: err?.message });
+    }
+  };
+
+  const handleReviewSpotLater = async () => {
+    if (!droppedSpot) return;
+    try {
+      await apiRequest(
+        "PATCH",
+        `/api/starred-hands/${droppedSpot.id}/review`,
+        { reviewLater: true },
+      );
+      // Sprint F2 W4: telemetria spot.review_later (source cooldown).
+      try {
+        trackTelemetry("spot.review_later", {
+          spotId: droppedSpot.id,
+          source: "cooldown",
+        });
+      } catch {
+        // telemetry never throws user-facing
+      }
+      invalidatePendingSpots();
+      setDroppedSpot(null);
+    } catch (err: any) {
+      toast({ title: "Erro", description: err?.message });
+    }
+  };
+
+  // Saturacao do torneio alvo (lesson F2 RF-09: limite 3 manuais).
+  const dropTargetSaturated = useMemo(() => {
+    if (!droppedSpot) return false;
+    const manualCount = starredHands.filter(
+      (sh) =>
+        sh.sessionTournamentId === droppedSpot.sessionTournamentId &&
+        sh.type !== "spot_screenshot",
+    ).length;
+    return manualCount >= MAX_STARS_PER_TOURNAMENT;
+  }, [droppedSpot, starredHands]);
 
   // ---------------------------------------------------------------------------
   // Avancar/voltar entre blocos (mode=full)
@@ -347,14 +481,47 @@ export function CoolDownRunner({
 
         {currentBlock === "hands" && (
           <>
-            <BlockOneStarredHands
-              sessionTournaments={sessionTournaments ?? []}
-              starredHands={starredHands}
-              onAddStar={handleAddStar}
-              onRemoveStar={handleRemoveStar}
-              breathingEnabled={breathingEnabled}
-              onToggleBreathing={() => setBreathingEnabled((v) => !v)}
-            />
+            <div className="grid gap-4 md:grid-cols-[1fr_240px]">
+              <div>
+                <BlockOneStarredHands
+                  sessionTournaments={sessionTournaments ?? []}
+                  starredHands={starredHands}
+                  onAddStar={handleAddStar}
+                  onRemoveStar={handleRemoveStar}
+                  breathingEnabled={breathingEnabled}
+                  onToggleBreathing={() => setBreathingEnabled((v) => !v)}
+                  sessionSpots={sessionSpots}
+                  onSpotDropped={handleSpotDropped}
+                />
+              </div>
+              <aside className="space-y-2">
+                <div className="text-xs font-medium text-muted-foreground">
+                  Prints colados
+                </div>
+                <SessionSpotsList
+                  sessionId={sessionId}
+                  spots={sessionSpots}
+                  onPreview={() => {
+                    /* preview lightbox: reservado para F3 */
+                  }}
+                  onReviewLater={async (spotId) => {
+                    try {
+                      await apiRequest(
+                        "PATCH",
+                        `/api/starred-hands/${spotId}/review`,
+                        { reviewLater: true },
+                      );
+                      invalidatePendingSpots();
+                    } catch (err: any) {
+                      toast({
+                        title: "Erro",
+                        description: err?.message ?? "Falha ao marcar revisar depois",
+                      });
+                    }
+                  }}
+                />
+              </aside>
+            </div>
             <div className="flex justify-end">
               <button
                 type="button"
@@ -365,6 +532,23 @@ export function CoolDownRunner({
                 Avancar
               </button>
             </div>
+            {droppedSpot && (
+              <SpotReviewCard
+                open={true}
+                spotId={droppedSpot.id}
+                imageUrl={droppedSpot.imageUrl}
+                sessionTournamentId={droppedSpot.sessionTournamentId}
+                onSave={handleSaveSpotReview}
+                onReviewLater={handleReviewSpotLater}
+                onClose={() => setDroppedSpot(null)}
+                saveDisabled={dropTargetSaturated}
+                saveDisabledReason={
+                  dropTargetSaturated
+                    ? "Maximo 3 maos manuais por torneio"
+                    : undefined
+                }
+              />
+            )}
           </>
         )}
 

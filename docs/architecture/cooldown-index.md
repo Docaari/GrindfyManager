@@ -253,3 +253,98 @@ spec warm-up RF-08 atualizado)
 
 CLAUDE.md (secao 6 modelos + secao 7 endpoints + secao 9 lessons-learned se necessario) sera
 atualizado pelo Implementer ao concluir Sprint Cooldown-1.
+
+---
+
+## F2 — Spot Screenshots (Sprint F2, branch `feature/spot-screenshots`)
+
+> **Apenso (2026-04-27).** Estende o fluxo de cool-down com captura visual durante o
+> grind live. Reusa `starred_hands` (extensao de schema, sem tabela nova) e amplia o
+> drop target em `BlockOneStarredHands.tsx` para aceitar prints colados pelo jogador.
+> Sprint Cooldown-1 segue intacta — F2 eh **adicao**, nao alteracao.
+
+### Sumario da Feature F2
+
+Jogador cola Ctrl+V screenshot durante a sessao live; print eh anexado ao
+`session_tournament` em foco com `expiresAt = pastedAt + 14d`. Revisao acontece em duas
+surfaces:
+- **Cooldown** — `SessionSpotsList` lateral + drag-to-review em `BlockOneStarredHands`.
+- **Studies** — aba "Spots Pendentes" para revisao posterior.
+
+Cron diario purga prints expirados sem `reviewLater=true`.
+
+### Spec de origem
+
+- [`Docs/specs/sprint-f2-spot-screenshots.md`](../specs/sprint-f2-spot-screenshots.md) —
+  11 RFs + 5 user stories + cenarios de teste + risk register.
+
+### Decisoes (ADRs novos)
+
+| ADR | Titulo | Status | Numero corrigido |
+|-----|--------|--------|------------------|
+| [ADR-051](decisions/051-spot-screenshots-storage.md) | Disco local em F2; S3/R2 deferido para F3 (com interface `lib/spotStorage.ts` para troca incremental) | Proposto (2026-04-27) | A spec referenciava "ADR-039" mas 039 ja em uso (rakeback). 051 eh o proximo livre. |
+| [ADR-052](decisions/052-spot-screenshots-ownership.md) | Middleware ownership custom em `GET /api/starred-hands/:id/image` (vs signed URLs) | Proposto (2026-04-27) | (spec referenciava "ADR-040") |
+| [ADR-053](decisions/053-spot-screenshots-cron.md) | `node-cron` lib nova + funcao pura `purgeSpotScreenshots()`; multi-instance debt para F3 | Proposto (2026-04-27) | (spec referenciava "ADR-041") |
+
+### Diagramas
+
+| Arquivo | Tipo | Descricao |
+|---------|------|-----------|
+| [`feature-flows/spot-screenshots-flow.mermaid`](feature-flows/spot-screenshots-flow.mermaid) | Sequence | 3 fluxos: PASTE (RF-01/02), REVIEW (cooldown 2A + studies 2B; RF-03/09/10/11), PURGE (RF-06 cron). Cobre happy paths, ENOENT no unlink, FK mismatch, ownership 404, rate limit, MIME reject, 5MB limit, race do counter 10/sessao, sessao terminada -> studies. |
+| [`feature-flows/spot-screenshots-components.mermaid`](feature-flows/spot-screenshots-components.mermaid) | C4 nivel 3 | Modulos novos vs modificados vs extension. Components UI (Paster, SpotsList, ReviewCard, PendingTab), drop target em BlockOneStarredHands (extension), rotas em `server/routes/starred-hands.ts`, abstracao `lib/spotStorage.ts`, cron `server/jobs/`, schema delta `starred_hands`. |
+
+### Reuso da arquitetura Cooldown-1 (preservacao)
+
+| Componente Cooldown-1 | Comportamento em F2 |
+|---|---|
+| `BlockOneStarredHands.tsx` | **Extension**, nao alteracao. Cards ganham `onDragOver`/`onDrop` para aceitar prints. Comportamento existente (selecao manual + form) **inalterado**. Limite `MAX_STARS_PER_TOURNAMENT=3` reusado — inclui prints revisados. |
+| `STARRED_HAND_TYPES`, `STARRED_HAND_SPOTS` | **Estendidos** — `+'spot_screenshot'` em types, `+'screenshot_pending'` em spots. Valores existentes preservados (back-compat). |
+| `cooldown.ts` rotas (`POST/GET/DELETE /api/starred-hands`) | **Inalteradas.** F2 cria arquivo novo `server/routes/starred-hands.ts` para os endpoints novos (`/screenshot`, `/review`, `/pending`, `/:id/image`). Path `/api/starred-hands/:id` (DELETE) eh override pelo arquivo novo apenas onde necessario — verificar ordem de mount em F2. |
+| Schema `starred_hands` | **Extensao** com 8 colunas nullable + back-fill para rows existentes. Lessons learned #7 (deprecation gradual). |
+| `data-model.mermaid` | Atualizar com colunas novas quando Implementer mexer em schema (Sprint W1 da spec F2). |
+
+### Mudancas em documentos relacionados (esta sprint)
+
+- [`Docs/architecture/data-model-index.md`](data-model-index.md) — secao "Core" recebe
+  registro das colunas novas em `starred_hands` (apenso, nao reescrita).
+- CLAUDE.md secao 4 (env vars) — `SPOT_PURGE_CRON` quando Implementer aplicar.
+- CLAUDE.md secao 6 (modelos) + secao 7 (endpoints) — registro dos endpoints novos.
+
+### Multi-instance debt (heranca de F2 para F3)
+
+| Componente | Debt |
+|---|---|
+| Disco local (`uploads/spot-screenshots/`) | Em PaaS efemero (Vercel) ou multi-instance (Railway scale > 1), arquivo gravado em A nao aparece em B. Mitigacao F3: ADR novo escolhe S3/R2; script `migrate-spot-storage-to-s3.mjs` faz move incremental. |
+| Cron in-process | Dois servers agendam mesmo schedule; ambos disparam 04:00 UTC. Idempotencia SQL evita duplicate delete, mas duplica DB query + tentativas de unlink. Mitigacao F3: ADR novo escolhe entre lock distribuido (Postgres advisory) / scheduler externo (Vercel/Railway cron) / designated worker. |
+| `<img>` cookie httpOnly | Em mobile native app, cookie nao funciona como em browser. Reavaliar para signed URL S3 em F3. |
+
+### Cenarios de teste derivados (resumo para Test-Writer)
+
+A spec ja lista cenarios completos em "Cenarios de Teste Derivados" (linha 446+). Os
+diagramas adicionam:
+
+- **Race condition do counter 10/sessao** (FLUXO 1, count + insert em transacao SELECT
+  ... FOR UPDATE) — testar via 2 chamadas concorrentes ao endpoint.
+- **Rollback de arquivo em erro de validacao pos-multer** (FLUXO 1, branches
+  session_not_found, spot_limit_reached, no_tournament_in_session) — assertar que
+  `spotStorage.delete(key)` foi chamado para nao deixar orfao no disco.
+- **ENOENT em cron purge** (FLUXO 3) — arquivo ja sumiu do disco, row ainda existe; cron
+  deve completar a delete da row sem incrementar `errorCount`.
+- **Idempotencia do cron** (FLUXO 3) — chamar `purgeSpotScreenshots()` 2x consecutivos;
+  segunda execucao retorna `purgedCount=0`.
+
+### Posicao no Pipeline F2
+
+```
+PM-Spec (Docs/specs/sprint-f2-spot-screenshots.md)        -> APROVADO
+   |
+System-Architect (este apenso + ADRs 051/052/053 + 2 mermaids) -> APROVADO (2026-04-27)
+   |
+Test-Writer                                               -> PROXIMO
+   |
+Implementer (W1 backend + schema 0012 -> W2 frontend live -> W3 cooldown/studies -> W4 polish)
+   |
+Reviewer
+   |
+Deployer (deferido — manter local; F3 trigger eh deploy)
+```

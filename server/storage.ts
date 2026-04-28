@@ -454,11 +454,41 @@ export interface IStorage {
     type: string;
     spot: string;
     notes?: string | null;
-  }): Promise<{ id: string }>;
+    // Sprint F2 — campos opcionais do paste flow (lesson #7)
+    imageUrl?: string;
+    conclusion?: string;
+    reviewedAt?: Date | string;
+    reviewLater?: boolean;
+    expiresAt?: Date | string;
+    pastedAt?: Date | string;
+    source?: string;
+    status?: string;
+  }): Promise<StarredHand>;
   getStarredHand(id: string, userId: string): Promise<any | null>;
   listStarredHands(userId: string, filter?: { sessionId?: string; type?: string; period?: "7d" | "30d" | "all" }): Promise<any[]>;
-  deleteStarredHand(id: string, userId: string): Promise<boolean>;
+  // Sprint F2: userId opcional (cron do purge nao tem userId — ownership ja
+  // foi resolvida no listSpotsForPurge).
+  deleteStarredHand(id: string, userId?: string): Promise<boolean | void>;
   countStarredHandsByTournament(sessionTournamentId: string, userId: string): Promise<number>;
+
+  // Sprint F2 — Spot Screenshots helpers
+  getStarredHandById(id: string): Promise<StarredHand | null>;
+  countSpotsBySession(sessionId: string): Promise<number>;
+  resolveTournamentInSession(sessionId: string): Promise<string | null>;
+  listPendingSpots(
+    userId: string,
+    filter?: { reviewLater?: string; sessionId?: string; limit?: number; offset?: number },
+  ): Promise<{ items: any[]; total: number; limit: number; offset: number }>;
+  updateStarredHand(id: string, patch: Record<string, any>): Promise<StarredHand | null>;
+  softDeleteStarredHand(id: string): Promise<void>;
+  listSpotsForPurge(
+    opts: { kind: "discarded" | "expired" },
+  ): Promise<Array<{ id: string; imageUrl: string | null }>>;
+  assertTournamentInSession(
+    sessionTournamentId: string,
+    sessionId: string,
+    userId: string,
+  ): Promise<boolean>;
 
   // Sprint Cooldown-2 — Sleep Gate + Analytics
   setSessionPlanClosed(sessionId: string, userId: string, value: boolean): Promise<GrindSession | null>;
@@ -4941,19 +4971,38 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   async createStarredHand(input: InsertStarredHand & { id?: string }): Promise<StarredHand> {
     const id = input.id ?? nanoid();
-    const [row] = await db
-      .insert(starredHands)
-      .values({
-        id,
-        userId: input.userId,
-        sessionId: input.sessionId,
-        sessionTournamentId: input.sessionTournamentId,
-        cooldownLogId: input.cooldownLogId ?? null,
-        type: input.type,
-        spot: input.spot,
-        notes: input.notes ?? null,
-      })
-      .returning();
+    const values: Record<string, any> = {
+      id,
+      userId: input.userId,
+      sessionId: input.sessionId,
+      sessionTournamentId: input.sessionTournamentId,
+      cooldownLogId: input.cooldownLogId ?? null,
+      type: input.type,
+      spot: input.spot,
+      notes: input.notes ?? null,
+    };
+    // Sprint F2 — campos opcionais (lesson #7).
+    if ((input as any).imageUrl !== undefined) values.imageUrl = (input as any).imageUrl;
+    if ((input as any).conclusion !== undefined) values.conclusion = (input as any).conclusion;
+    if ((input as any).reviewedAt !== undefined) {
+      values.reviewedAt = typeof (input as any).reviewedAt === "string"
+        ? new Date((input as any).reviewedAt)
+        : (input as any).reviewedAt;
+    }
+    if ((input as any).reviewLater !== undefined) values.reviewLater = (input as any).reviewLater;
+    if ((input as any).expiresAt !== undefined) {
+      values.expiresAt = typeof (input as any).expiresAt === "string"
+        ? new Date((input as any).expiresAt)
+        : (input as any).expiresAt;
+    }
+    if ((input as any).pastedAt !== undefined) {
+      values.pastedAt = typeof (input as any).pastedAt === "string"
+        ? new Date((input as any).pastedAt)
+        : (input as any).pastedAt;
+    }
+    if ((input as any).source !== undefined) values.source = (input as any).source;
+    if ((input as any).status !== undefined) values.status = (input as any).status;
+    const [row] = await db.insert(starredHands).values(values as any).returning();
     return row as StarredHand;
   }
 
@@ -4987,10 +5036,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return rows as StarredHand[];
   }
 
-  async deleteStarredHand(id: string, userId: string): Promise<void> {
-    await db
-      .delete(starredHands)
-      .where(and(eq(starredHands.id, id), eq(starredHands.userId, userId)));
+  async deleteStarredHand(id: string, userId?: string): Promise<void> {
+    // Sprint F2: cron do purge chama sem userId (ownership ja resolvida pelo
+    // listSpotsForPurge). Cooldown-1 sempre passa userId.
+    const condition = userId
+      ? and(eq(starredHands.id, id), eq(starredHands.userId, userId))
+      : eq(starredHands.id, id);
+    await db.delete(starredHands).where(condition);
   }
 
   async countStarredHandsByTournament(
@@ -5007,6 +5059,241 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         ),
       );
     return Number(c ?? 0);
+  }
+
+  // ===========================================================================
+  // Sprint F2 — Spot Screenshots helpers
+  // Spec: Docs/specs/sprint-f2-spot-screenshots.md
+  // ===========================================================================
+
+  /** Lookup by id (sem ownership filter — handler valida userId apos). */
+  async getStarredHandById(id: string): Promise<StarredHand | null> {
+    const [row] = await db
+      .select()
+      .from(starredHands)
+      .where(eq(starredHands.id, id))
+      .limit(1);
+    return (row as StarredHand) ?? null;
+  }
+
+  /**
+   * Conta prints "ativos" por sessao (filtro: source IN ('paste','upload') AND
+   * status != 'discarded'). Usado para limite de 10/sessao.
+   *
+   * NOTA F2 (TECH-DEBT-F2-COUNTER-RACE): em F2 isto NAO eh SELECT FOR UPDATE.
+   * Pastes concorrentes do mesmo user em 2 abas podem ultrapassar o limite em
+   * 1-2 rows sob race extrema. Aceito em F2 (single-instance dev, sem deploy
+   * prod). F3 migra para tx real quando refactor do tx wrapper existir
+   * (mesma janela do move pra S3 — ver ADR-051).
+   */
+  async countSpotsBySession(sessionId: string): Promise<number> {
+    const [{ count: c }] = await db
+      .select({ count: count() })
+      .from(starredHands)
+      .where(
+        and(
+          eq(starredHands.sessionId, sessionId),
+          inArray(starredHands.source, ["paste", "upload"]),
+          not(eq(starredHands.status, "discarded")),
+        ),
+      );
+    return Number(c ?? 0);
+  }
+
+  /**
+   * Resolve sessionTournamentId dentro de uma sessao quando o cliente nao
+   * informou. Prefere status='playing'; fallback para mais recente updatedAt.
+   * Retorna null se a sessao nao tem nenhum tournament.
+   */
+  async resolveTournamentInSession(sessionId: string): Promise<string | null> {
+    const [playing] = await db
+      .select({ id: sessionTournaments.id })
+      .from(sessionTournaments)
+      .where(
+        and(
+          eq(sessionTournaments.sessionId, sessionId),
+          eq(sessionTournaments.status, "playing"),
+        ),
+      )
+      .orderBy(desc(sessionTournaments.updatedAt))
+      .limit(1);
+    if (playing?.id) return playing.id;
+
+    const [latest] = await db
+      .select({ id: sessionTournaments.id })
+      .from(sessionTournaments)
+      .where(eq(sessionTournaments.sessionId, sessionId))
+      .orderBy(desc(sessionTournaments.updatedAt))
+      .limit(1);
+    return latest?.id ?? null;
+  }
+
+  /**
+   * Lista prints pendentes para o user. Filtros opcionais:
+   *   - reviewLater: 'true' | 'false' | 'all' (default: false)
+   *   - sessionId: filtra por sessao
+   *   - limit/offset (default 50/0; max 200)
+   *
+   * Retorna `{ items, total, limit, offset }`. Inclui dados do torneio via JOIN.
+   * Nunca retorna `status='reviewed'` ou `'discarded'`.
+   */
+  async listPendingSpots(
+    userId: string,
+    filter: {
+      reviewLater?: string;
+      sessionId?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<{ items: any[]; total: number; limit: number; offset: number }> {
+    const limit = Math.min(200, Math.max(1, filter.limit ?? 50));
+    const offset = Math.max(0, filter.offset ?? 0);
+
+    const conditions: any[] = [
+      eq(starredHands.userId, userId),
+      eq(starredHands.status, "pending"),
+    ];
+    if (filter.sessionId) {
+      conditions.push(eq(starredHands.sessionId, filter.sessionId));
+    }
+    // 'all' = sem filtro de reviewLater (qualquer pending, RF-11).
+    // 'true' = so revisar-depois. Default ('false' ou ausente) = nao revisar-depois.
+    if (filter.reviewLater === "true") {
+      conditions.push(eq(starredHands.reviewLater, true));
+    } else if (filter.reviewLater !== "all") {
+      conditions.push(eq(starredHands.reviewLater, false));
+    }
+
+    const items = await db
+      .select({
+        id: starredHands.id,
+        userId: starredHands.userId,
+        sessionId: starredHands.sessionId,
+        sessionTournamentId: starredHands.sessionTournamentId,
+        type: starredHands.type,
+        spot: starredHands.spot,
+        notes: starredHands.notes,
+        imageUrl: starredHands.imageUrl,
+        conclusion: starredHands.conclusion,
+        reviewedAt: starredHands.reviewedAt,
+        reviewLater: starredHands.reviewLater,
+        expiresAt: starredHands.expiresAt,
+        pastedAt: starredHands.pastedAt,
+        source: starredHands.source,
+        status: starredHands.status,
+        createdAt: starredHands.createdAt,
+        // Tournament join (RF-04: response inclui dados do torneio)
+        tournamentName: sessionTournaments.name,
+        tournamentSite: sessionTournaments.site,
+        tournamentBuyIn: sessionTournaments.buyIn,
+      })
+      .from(starredHands)
+      .leftJoin(sessionTournaments, eq(starredHands.sessionTournamentId, sessionTournaments.id))
+      .where(and(...conditions))
+      .orderBy(desc(starredHands.pastedAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [{ count: totalCount }] = await db
+      .select({ count: count() })
+      .from(starredHands)
+      .where(and(...conditions));
+
+    return {
+      items,
+      total: Number(totalCount ?? 0),
+      limit,
+      offset,
+    };
+  }
+
+  /**
+   * Update parcial de starred_hand (PATCH /:id/review).
+   * Caller ja validou ownership e enum. Aqui aplica o patch direto.
+   */
+  async updateStarredHand(id: string, patch: Record<string, any>): Promise<StarredHand | null> {
+    const updateValues: Record<string, any> = {};
+    if (patch.conclusion !== undefined) updateValues.conclusion = patch.conclusion;
+    if (patch.reviewedAt !== undefined) updateValues.reviewedAt = patch.reviewedAt;
+    if (patch.reviewLater !== undefined) updateValues.reviewLater = patch.reviewLater;
+    if (patch.status !== undefined) updateValues.status = patch.status;
+    if (patch.type !== undefined) updateValues.type = patch.type;
+    if (patch.spot !== undefined) updateValues.spot = patch.spot;
+    if (patch.notes !== undefined) updateValues.notes = patch.notes;
+    if (patch.sessionTournamentId !== undefined) {
+      updateValues.sessionTournamentId = patch.sessionTournamentId;
+    }
+    if (Object.keys(updateValues).length === 0) {
+      return this.getStarredHandById(id);
+    }
+    const [row] = await db
+      .update(starredHands)
+      .set(updateValues)
+      .where(eq(starredHands.id, id))
+      .returning();
+    return (row as StarredHand) ?? null;
+  }
+
+  /**
+   * Soft delete: marca status='discarded'. Cron remove arquivo + row depois.
+   * Idempotente: re-DELETE em row ja discarded eh no-op.
+   */
+  async softDeleteStarredHand(id: string): Promise<void> {
+    await db
+      .update(starredHands)
+      .set({ status: "discarded", reviewLater: false })
+      .where(eq(starredHands.id, id));
+  }
+
+  /**
+   * Lista prints elegiveis para purga.
+   *   - kind='discarded' : status='discarded' (qualquer idade).
+   *   - kind='expired'   : status='pending' AND expiresAt < NOW()
+   *                         AND reviewedAt IS NULL AND reviewLater=false.
+   *
+   * Idempotente — re-execucao no mesmo dia retorna apenas rows que ainda
+   * existem com criterios. ENOENT no unlink eh tratado pelo cron.
+   */
+  async listSpotsForPurge(opts: { kind: "discarded" | "expired" }): Promise<
+    Array<{ id: string; imageUrl: string | null }>
+  > {
+    if (opts.kind === "discarded") {
+      const rows = await db
+        .select({ id: starredHands.id, imageUrl: starredHands.imageUrl })
+        .from(starredHands)
+        .where(eq(starredHands.status, "discarded"));
+      return rows.map((r) => ({ id: r.id, imageUrl: r.imageUrl ?? null }));
+    }
+    // expired
+    const now = new Date();
+    const rows = await db
+      .select({ id: starredHands.id, imageUrl: starredHands.imageUrl })
+      .from(starredHands)
+      .where(
+        and(
+          eq(starredHands.status, "pending"),
+          eq(starredHands.reviewLater, false),
+          isNull(starredHands.reviewedAt),
+          lte(starredHands.expiresAt, now),
+        ),
+      );
+    return rows.map((r) => ({ id: r.id, imageUrl: r.imageUrl ?? null }));
+  }
+
+  /**
+   * Confirma que `sessionTournamentId` pertence a uma sessao do user (mesma
+   * sessao informada). Usado em PATCH /:id/review para re-tag de torneio.
+   */
+  async assertTournamentInSession(
+    sessionTournamentId: string,
+    sessionId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const st = await this.getSessionTournamentById(sessionTournamentId);
+    if (!st) return false;
+    if ((st as any).userId !== userId) return false;
+    if ((st as any).sessionId !== sessionId) return false;
+    return true;
   }
 
   // ===========================================================================

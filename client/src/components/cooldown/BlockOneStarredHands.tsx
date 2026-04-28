@@ -7,6 +7,16 @@ import {
   type StarredHandType,
   type StarredHandSpot,
 } from "../../../../shared/schema";
+import { SPOT_DRAG_MIME } from "@/lib/spotConstants";
+
+// Sprint F2 RF-09: select manual NAO deve oferecer placeholders F2 (esses
+// virariam tipo/spot apenas via SpotReviewCard apos drop de print).
+const SELECTABLE_TYPES = STARRED_HAND_TYPES.filter(
+  (t) => t !== "spot_screenshot",
+);
+const SELECTABLE_SPOTS = STARRED_HAND_SPOTS.filter(
+  (s) => s !== "screenshot_pending",
+);
 
 // =============================================================================
 // BlockOneStarredHands — Sprint Cooldown-1 (MVP)
@@ -47,9 +57,17 @@ export interface BlockOneStarredHandsProps {
   onRemoveStar: (starId: string) => void;
   breathingEnabled: boolean;
   onToggleBreathing: () => void;
+  // Sprint F2 RF-09 — drop targets para SessionSpotsList. Opcionais para nao
+  // quebrar callers legacy (Sprint Cooldown-1 tests).
+  sessionSpots?: Array<{
+    id: string;
+    imageUrl: string;
+    sessionTournamentId?: string | null;
+  }>;
+  onSpotDropped?: (spotId: string, targetSessionTournamentId: string) => void;
 }
 
-const MAX_STARS_PER_TOURNAMENT = 3;
+export const MAX_STARS_PER_TOURNAMENT = 3;
 
 export function BlockOneStarredHands({
   sessionTournaments,
@@ -58,11 +76,16 @@ export function BlockOneStarredHands({
   onRemoveStar,
   breathingEnabled,
   onToggleBreathing,
+  onSpotDropped,
 }: BlockOneStarredHandsProps) {
   // Hooks first — sem early returns antes deste ponto.
   const [draftByTournament, setDraftByTournament] = useState<
     Record<string, { type: string; spot: string; notes: string }>
   >({});
+  // Estado visual de drop target ativo (RF-09 visual feedback dragOver).
+  const [dragOverTournamentId, setDragOverTournamentId] = useState<
+    string | null
+  >(null);
 
   const sortedTournaments = useMemo(() => {
     const list = Array.isArray(sessionTournaments) ? [...sessionTournaments] : [];
@@ -127,8 +150,36 @@ export function BlockOneStarredHands({
               ? "Selecione tipo e spot"
               : "";
 
+          const isDragOver = dragOverTournamentId === t.id;
           return (
-            <div key={t.id} className="rounded border p-3 space-y-2">
+            <div
+              key={t.id}
+              data-testid={`bloco1-tournament-${t.id}`}
+              className={`rounded border p-3 space-y-2 ${
+                isDragOver ? "border-primary bg-primary/5" : ""
+              }`}
+              aria-dropeffect={isDragOver ? "move" : undefined}
+              onDragOver={(e) => {
+                // RF-09: preventDefault eh OBRIGATORIO para drop disparar.
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (dragOverTournamentId !== t.id) {
+                  setDragOverTournamentId(t.id);
+                }
+              }}
+              onDragLeave={() => {
+                if (dragOverTournamentId === t.id) {
+                  setDragOverTournamentId(null);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOverTournamentId(null);
+                const spotId = e.dataTransfer.getData(SPOT_DRAG_MIME);
+                if (!spotId) return;
+                onSpotDropped?.(spotId, t.id);
+              }}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-medium">{t.name ?? t.site}</div>
@@ -180,7 +231,7 @@ export function BlockOneStarredHands({
                     className="rounded border text-xs p-1"
                   >
                     <option value="">--</option>
-                    {STARRED_HAND_TYPES.map((opt) => (
+                    {SELECTABLE_TYPES.map((opt) => (
                       <option key={opt} value={opt}>
                         {opt}
                       </option>
@@ -196,7 +247,7 @@ export function BlockOneStarredHands({
                     className="rounded border text-xs p-1"
                   >
                     <option value="">--</option>
-                    {STARRED_HAND_SPOTS.map((opt) => (
+                    {SELECTABLE_SPOTS.map((opt) => (
                       <option key={opt} value={opt}>
                         {opt}
                       </option>
