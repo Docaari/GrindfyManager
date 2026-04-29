@@ -31,6 +31,8 @@ import { registerTicketRoutes } from "./tickets";
 import { registerCooldownRoutes } from "./cooldown";
 import { registerCooldownAnalyticsRoutes } from "./cooldownAnalytics";
 import { registerStatsAnalyzerRoutes } from "./statsAnalyzer";
+import primedopeRouter from "./primedope";
+import gradeDayDetailRouter from "./grade-day-detail";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -142,6 +144,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerCooldownRoutes(app);
   registerCooldownAnalyticsRoutes(app);
   registerStatsAnalyzerRoutes(app);
+
+  // Sprint F4 (PrimeDope variance simulation + drill-down) — routers default-export.
+  app.use("/api/primedope", primedopeRouter);
+  app.use("/api/grade", gradeDayDetailRouter);
+
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);
 

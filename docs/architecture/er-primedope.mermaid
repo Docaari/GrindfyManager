@@ -1,0 +1,103 @@
+%% ER diagram — Sprint F4 PrimeDope tabelas + reuses
+%% Mostra: primedope_runs (NOVA), tournaments (3 cols novas via 0014), tournament_templates (reuso),
+%% planned_tournaments (templateId FK), wallets (exchangeRates FX), users (FK source)
+%% Referencias: ADR-054 + ADR-033 (FX) + spec D.1, D.2, D.3
+%% Spec: Docs/specs/sprint-f4-primedope-grade-detail.md secao "Modelos de Dados Afetados"
+
+erDiagram
+    USERS ||--o{ PRIMEDOPE_RUNS : "1:N (CASCADE)"
+    USERS ||--o{ PLANNED_TOURNAMENTS : "1:N"
+    USERS ||--o{ TOURNAMENTS : "1:N"
+    USERS ||--o{ TOURNAMENT_TEMPLATES : "1:N"
+    USERS ||--o{ WALLETS : "1:N"
+
+    PLANNED_TOURNAMENTS }o--|| TOURNAMENT_TEMPLATES : "templateId FK"
+    TOURNAMENTS }o--|| TOURNAMENT_TEMPLATES : "templateId FK (when grouped)"
+
+    USERS {
+        varchar id PK
+        varchar userPlatformId UK "USER-XXXX"
+        varchar email
+        varchar role
+        timestamp created_at
+    }
+
+    WALLETS {
+        varchar id PK
+        varchar user_id FK
+        varchar currency "USD/BRL/EUR/CNY"
+        decimal balance
+        jsonb exchange_rates "FX freezes (ADR-033)<br/>{BRL:5.0, EUR:0.93, CNY:7.25}<br/>SOURCE FX para FX-cascata RF-26"
+        integer version "optimistic concurrency (ADR-038)"
+        timestamp created_at
+    }
+
+    TOURNAMENT_TEMPLATES {
+        varchar id PK
+        varchar user_id FK
+        varchar name
+        varchar site
+        varchar format "MTT/SNG"
+        decimal avgBuyIn "USD-normalized<br/>SOURCE pre-fill RF-02"
+        decimal avgRoi "%<br/>SOURCE pre-fill RF-02 (priority 1)"
+        integer avgFieldSize "SOURCE pre-fill RF-02 (priority 1)"
+        integer totalPlayed
+        jsonb dayOfWeek "[0..6] historico"
+        jsonb startTime "HH:MM historico"
+        timestamp created_at
+    }
+
+    TOURNAMENTS {
+        varchar id PK
+        varchar user_id FK
+        varchar template_id FK_NULL "JOIN para template lookup"
+        varchar name
+        varchar site "GG/WPN/Stars/etc — usado em rake_pct backfill"
+        decimal buyIn "moeda nativa"
+        varchar currency "USD/BRL/EUR/CNY default 'USD'"
+        varchar format "MTT/SNG (linha 205, ja existe)"
+        varchar type "Vanilla|PKO|Mystery|Satellite (linha 207)<br/>USADO drill-down %PKO"
+        varchar speed "Regular|Turbo|Hyper (linha 209)<br/>USADO drill-down %Turbo"
+        integer fieldSize "snapshot torneio jogado (linha 210)<br/>FALLBACK 2 para players_avg backfill"
+        decimal rake "USD pago (linha 217, NAO percentual)"
+        decimal prize
+        integer position
+        timestamp datePlayed
+        integer players_avg "NEW 0014 — CHECK 10..50000<br/>backfill: tt.avgFieldSize > fieldSize > 1000"
+        integer places_paid_avg "NEW 0014 — CHECK 1..10000<br/>backfill: ROUND(players_avg * 0.15)"
+        decimal rake_pct "NEW 0014 — CHECK 0..30<br/>backfill heuristico per-site<br/>(GG=10, WPN=8, Stars=9, Suprema=10, ...)"
+    }
+
+    PLANNED_TOURNAMENTS {
+        varchar id PK
+        varchar user_id FK
+        varchar template_id FK "JOIN com tournament_templates"
+        integer day_of_week "0..6"
+        varchar profile "A/B/C"
+        varchar site
+        varchar time "HH:MM"
+        decimal buyIn
+        varchar currency
+        varchar type "Vanilla|PKO|..."
+        varchar speed "Regular|Turbo|Hyper"
+        varchar status "active|inactive"
+        timestamp created_at
+    }
+
+    PRIMEDOPE_RUNS {
+        varchar id PK "nanoid 21"
+        varchar user_id FK "ON DELETE CASCADE"
+        char profile_letter "CHECK A/B/C"
+        integer day_of_week "CHECK 0..6"
+        integer multiplier "CHECK in (1,4,12,52)"
+        char input_hash "sha256 deterministico<br/>de buckets pos-FX-conversao"
+        jsonb input_json "audit trail RF-26<br/>buckets[].buyinUsd + buyinOriginal + currency<br/>+ fxRatesUsed snapshot"
+        jsonb result_json "EV, ROI, SD, RoR,<br/>conf70/95/997, min bankrolls,<br/>histogram_path, random_runs_path"
+        text histogram_path "/api/primedope/chart/[sha256]"
+        text random_runs_path "/api/primedope/chart/[sha256]"
+        integer latency_ms
+        varchar source "CHECK in (primedope, cache, fallback-stale)"
+        boolean pinned "default FALSE — RF-14"
+        timestamp created_at "DEFAULT NOW"
+        timestamp expires_at "TRIGGER: created_at + 90d se !pinned else NULL"
+    }

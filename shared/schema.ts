@@ -245,6 +245,13 @@ export const tournaments = pgTable("tournaments", {
   packageNotes: text("package_notes"),
   // Sprint Tickets-1 (RF-01): back-ref para ticket consumido (FK para tickets.id, ON DELETE SET NULL)
   consumedTicketId: varchar("consumed_ticket_id"),
+  // Sprint F4 Migration 0014 — campos para PrimeDope simulation (RF-02).
+  // Reviewer fix HIGH #4: declaracao migrada para dentro do pgTable para que
+  // drizzle-kit (db:push) crie as colunas em ambientes que nao rodam o SQL
+  // migration. SQL migration continua existindo para o backfill cascade.
+  playersAvg: integer("players_avg"),
+  placesPaidAvg: integer("places_paid_avg"),
+  rakePct: decimal("rake_pct", { precision: 5, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   templateId: varchar("template_id"),
@@ -259,6 +266,45 @@ export const tournaments = pgTable("tournaments", {
   index("tournaments_flight_parent_idx").on(table.flightParentId),
   index("tournaments_live_idx").on(table.isLive),
 ]);
+
+// Sprint F4 — primedope_runs (Migration 0015, ADR-054 cache + audit trail).
+// Reviewer fix HIGH #5: FK aponta para users.userPlatformId (padrao do
+// projeto — wallets, planned_tournaments, etc.).
+export const primedopeRuns = pgTable("primedope_runs", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  profileLetter: varchar("profile_letter", { length: 1 }).notNull(),
+  dayOfWeek: integer("day_of_week").notNull(),
+  multiplier: integer("multiplier").notNull(),
+  inputHash: varchar("input_hash", { length: 64 }).notNull(),
+  inputJson: jsonb("input_json").notNull(),
+  resultJson: jsonb("result_json").notNull(),
+  histogramPath: text("histogram_path"),
+  randomRunsPath: text("random_runs_path"),
+  latencyMs: integer("latency_ms"),
+  source: varchar("source", { length: 20 }).notNull(),
+  pinned: boolean("pinned").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at"),
+}, (table) => [
+  index("primedope_runs_user_profile_day_created_idx").on(
+    table.userId,
+    table.profileLetter,
+    table.dayOfWeek,
+    table.createdAt,
+  ),
+  index("primedope_runs_input_hash_idx").on(table.inputHash),
+]);
+
+export const insertPrimedopeRunSchema = createInsertSchema(primedopeRuns).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PrimedopeRun = typeof primedopeRuns.$inferSelect;
+export type InsertPrimedopeRun = typeof primedopeRuns.$inferInsert;
 
 export const tournamentTemplates = pgTable("tournament_templates", {
   id: varchar("id").primaryKey().notNull(),

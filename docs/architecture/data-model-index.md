@@ -95,6 +95,21 @@ Detalhes: `Docs/api/coach.md`, `Docs/api/coach-tools.md`.
 | `custom_group_templates` | Relacao grupo-template |
 | `coaching_insights` | Insights de coaching |
 
+## PrimeDope Simulation (Sprint F4)
+
+| Tabela | Descricao |
+|--------|-----------|
+| `primedope_runs` | Cache + audit de simulacoes de variance MTT (Sprint F4, ADR-054). PK nanoid 21, FK `userId` ON DELETE CASCADE. Campos: `inputHash` sha256 deterministico pos-FX, `inputJson`/`resultJson` jsonb, `histogramPath`/`randomRunsPath` paths PNG re-hosted, `latencyMs`, `source` enum (primedope/cache/fallback-stale), `pinned` default false, `expiresAt` via trigger (NULL se pinned, +90d senao). Indices: `(user_id, profile_letter, day_of_week, created_at DESC)`, `(input_hash, created_at DESC)`, `(expires_at) WHERE pinned=false`. Migration `0015_primedope_runs.sql`. |
+
+`tournaments` recebe **+3 colunas** via migration `0014_tournaments_simulation_fields.sql` (Sprint F4):
+- `players_avg INTEGER` (CHECK 10..50000) — backfill cascata `tournament_templates.avg_field_size` > `field_size` > 1000.
+- `places_paid_avg INTEGER` (CHECK 1..10000) — backfill `ROUND(players_avg * 0.15)`.
+- `rake_pct DECIMAL(4,2)` (CHECK 0..30) — backfill heuristico per-`site` (GG=10, WPN=8, Stars=9, Suprema=10, etc.).
+
+ADRs: 054 (provider externo PrimeDope vs engine nativo), 055 (`tracker.ts` stub vs `analytics_events`), 056 (onboarding dismiss localStorage vs `users.preferences`).
+
+Diagramas Mermaid: `er-primedope.mermaid`, `c4-context-primedope.mermaid`, `sequence-primedope-simulation.mermaid`, `flow-primedope-wizard-prefill.mermaid`, `flow-day-detail-drawer.mermaid`.
+
 ## Convencoes
 
 - IDs `varchar` via `nanoid()` — nunca auto-increment.

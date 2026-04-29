@@ -1,0 +1,28 @@
+{
+  "_comment": "Captured PrimeDope JSON response (sanitized) used by primedopeIntegration tests. Refer to ADR-054 + spec sprint-f4 secao C.1. Real shape mirrors prime.php?p=tournament-variance-calculator output.",
+  "ev": 124.32,
+  "evRoiPct": 12.43,
+  "roiPct": 12.43,
+  "stdDev": 245.7,
+  "riskOfRuinPct": 4.2,
+  "confidenceIntervals": {
+    "p70": { "low": -121.38, "high": 370.02 },
+    "p95": { "low": -367.08, "high": 615.72 },
+    "p997": { "low": -612.78, "high": 861.42 }
+  },
+  "minBankroll": {
+    "p50": 320,
+    "p15": 740,
+    "p05": 1180,
+    "p01": 1860
+  },
+  "histogram_path": "/charts/histogram-abc123.png",
+  "random_runs_path": "/charts/random-runs-abc123.png",
+  "samples": 10000,
+  "totalBuyinUsd": 240.5,
+  "totalRakeUsd": 24.05,
+  "rawMeta": {
+    "version": "2.4.1",
+    "generatedAt": "2026-04-28T14:00:00Z"
+  }
+}

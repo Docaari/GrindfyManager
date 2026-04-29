@@ -1,0 +1,70 @@
+%% Flowchart — Sprint F4 DayDetailDrawer (Drill-down "Detalhes do Dia")
+%% Mostra: click em celula WeekGrid → fetch agregados → renderizar drawer com cards/charts/tabela
+%% Inclui: FX normalization, empty states, sticky header, scroll independente
+%% Referencias: ADR-054 (telemetria via tracker), ADR-033 (FX)
+%% Spec: Docs/specs/sprint-f4-primedope-grade-detail.md Parte A — RF-01
+
+flowchart TD
+    Start(["User em /coach<br/>WeekGrid renderizado<br/>(7 dias x 3 perfis)"])
+
+    Start --> Click{"User click<br/>'Ver detalhes' em<br/>celula ativa<br/>(profile != OFF)?"}
+
+    Click -->|"No (cell OFF)"| EndIdle(["Botao oculto / disabled<br/>nada acontece"])
+
+    Click -->|"Yes"| OpenDrawer["DayDetailDrawer abre<br/>Sheet Radix slide-from-right<br/>side='right'<br/>desktop: max-w-xl<br/>mobile: 100vw"]
+
+    OpenDrawer --> SetState["Set local state:<br/>{ open: true, dayOfWeek, profileLetter }"]
+
+    SetState --> EmitOpen["tracker.emit('day_detail_drawer_open',<br/>{dayOfWeek, profileLetter, ...}) (ADR-055)"]
+
+    EmitOpen --> Hook["useDayDetail(dayOfWeek, profileLetter)<br/>TanStack Query<br/>queryKey: ['day-detail', dayOfWeek, profileLetter]<br/>enabled: open && both valid"]
+
+    Hook --> Fetch["GET /api/grade/day-detail/<br/>:profileLetter/:dayOfWeek"]
+
+    Fetch --> AuthCheck{"requireAuth<br/>JWT valido?"}
+
+    AuthCheck -->|"No"| AuthErr["401 → toast erro<br/>+ redirect /login"]
+
+    AuthCheck -->|"Yes"| Query["Drizzle query:<br/>SELECT pt.*, t.*<br/>FROM planned_tournaments pt<br/>LEFT JOIN tournaments t<br/>  ON t.template_id = pt.template_id<br/>WHERE pt.user_id = $1<br/>AND pt.day_of_week = $2<br/>AND pt.profile = $3<br/>ORDER BY pt.time ASC"]
+
+    Query --> HasRows{"rows.length > 0?"}
+
+    HasRows -->|"No (0 torneios)"| EmptyDrawer["EmptyState (RF-22)<br/>icone CalendarOff<br/>'Nenhum torneio planejado<br/>neste dia.'<br/>+ CTA 'Adicionar torneios'"]
+    EmptyDrawer --> EmptyAction{"User click<br/>CTA?"}
+    EmptyAction -->|"Yes"| CloseDrawer["close drawer<br/>+ scrollIntoView<br/>WeekGrid celula<br/>(behavior: smooth, block: center)"]
+    EmptyAction -->|"No (close X / Esc)"| EndDrawerClosed(["drawer fechado"])
+
+    HasRows -->|"Yes"| Aggregate["Backend on-the-fly aggregations:"]
+
+    Aggregate --> Agg_Cards["Cards superior (4):<br/>- totalTournaments = COUNT(*)<br/>- abiUsd = SUM(t.buyIn USD-norm) / COUNT(*)<br/>- investmentUsd = SUM(t.buyIn USD-norm * pt.count)<br/>- bankrollNeeded = MAX(t.buyIn USD-norm) * 100<br/>(ou regra Bankroll Mgmt)"]
+
+    Agg_Cards --> Agg_Format["Distribuicao Format (Pie chart):<br/>- pctPKO = COUNT(WHERE t.type='PKO') / COUNT(*)<br/>- pctTurbo = COUNT(WHERE t.speed IN ('Turbo','Hyper')) / COUNT(*)<br/>- pctVanilla = COUNT(WHERE t.type='Vanilla') / COUNT(*)<br/>(precisao 0.1%, soma 100%)"]
+
+    Agg_Format --> Agg_Volume["Volume por Plataforma (Bar chart horizontal):<br/>GROUP BY t.site<br/>COUNT(*) por plataforma"]
+
+    Agg_Volume --> Agg_Bankroll["Banca por Plataforma (Tabela):<br/>FOR EACH site:<br/>  - balance = getConsolidatedBalance(userId)<br/>    filtrado pela wallet do site<br/>  - dayInvestment = SUM(t.buyIn USD-norm) onde site=X<br/>  - coverage = balance / dayInvestment * 100"]
+
+    Agg_Bankroll --> Agg_List["Lista detalhada (Tabela):<br/>FOR EACH planned_tournament + tournament JOIN:<br/>  - name, site, type+speed combinados,<br/>    buyinUsd (FX-norm), count, time HH:MM<br/>ORDER BY pt.time ASC"]
+
+    Agg_List --> FXNorm["FX normalization usando<br/>normalizeBuyinToUSD<br/>(currencyNormalizer.ts ADR-033)<br/>fxRates source cascata:<br/>users → wallets → fallback"]
+
+    FXNorm --> Response["Backend returns DayDetailResponse<br/>{cards, format, volume, bankroll, list[]}"]
+
+    Response --> Render["Frontend renderiza drawer:"]
+
+    Render --> Layout["Layout:<br/>- Header sticky top-0 bg-card z-10<br/>  (titulo + perfil/dia)<br/>- Cards superior (grid 4x1 desktop / 2x2 mobile)<br/>  ALSO sticky com header<br/>- Charts area (pie + bar lado-a-lado)<br/>- Tabela banca/plataforma<br/>- Tabela detalhada<br/>  (overflow-y-auto<br/>   max-h calc(100vh-280px)<br/>   scroll independente)"]
+
+    Layout --> Behavior["Behaviors UX:<br/>- READ-ONLY (anti-pattern #4 mitigation)<br/>- Acao unica no rodape:<br/>  'Editar grade do dia' →<br/>  fecha drawer + scroll WeekGrid celula<br/>- Esc / overlay click / X → fecha<br/>- Drawer trap focus (Radix nativo)"]
+
+    Behavior --> CloseTrigger{"User dismiss<br/>action?"}
+
+    CloseTrigger -->|"Esc / overlay / X"| EndClosed(["drawer fechado<br/>state reset"])
+    CloseTrigger -->|"Click 'Editar grade do dia'"| EditAction["close drawer<br/>+ scroll WeekGrid celula<br/>+ highlight (intencao de user editar)"]
+
+    EditAction --> EndEdit(["drawer fechado<br/>WeekGrid focado"])
+
+    %% Comments
+    %% No new endpoint /api/grade/day-detail — pode reusar /api/planned-tournaments?dayOfWeek=X&profileLetter=Y
+    %% Componente DayDetailDrawer.tsx (Parte E spec) renderiza Sheet
+    %% useDayDetail hook (Parte E) faz fetch + cache
+    %% EmptyState reusado em 3 contextos (drawer, wizard, bankroll-zero) RF-22
