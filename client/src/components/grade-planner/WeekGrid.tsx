@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Draggable } from "react-beautiful-dnd";
 import { StrictModeDroppable as Droppable } from "./StrictModeDroppable";
-import { Settings, Plus } from "lucide-react";
+import { Settings, Plus, Eye } from "lucide-react";
 import { generateTimeSlots } from "@shared/grade-hours";
 import { getCellDisplayInfo } from "@shared/grade-cell-overflow";
 import { groupBuyInsByCurrency, formatGroupedBuyIns, formatBuyIn } from "@shared/platform-currency";
@@ -73,6 +73,10 @@ interface WeekGridProps {
   gradeStartHour: number;
   gradeEndHour: number;
   onOpenSettings?: () => void;
+  // Sprint F4 — drill-down "Ver detalhes" do dia (RF-01).
+  // Click no botao abre DayDetailDrawer no GradePlanner. Renderizado apenas
+  // quando profile != OFF (dia ativo) — em OFF nao ha agregados a mostrar.
+  onShowDayDetails?: (dayOfWeek: number) => void;
 }
 
 export function WeekGrid({
@@ -87,6 +91,7 @@ export function WeekGrid({
   gradeStartHour,
   gradeEndHour,
   onOpenSettings,
+  onShowDayDetails,
 }: WeekGridProps) {
   const tournaments = Array.isArray(plannedTournaments) ? plannedTournaments : [];
   const TIME_SLOTS = generateTimeSlots(gradeStartHour, gradeEndHour);
@@ -151,6 +156,20 @@ export function WeekGrid({
                         );
                       })}
                     </div>
+                    {/* Sprint F4 RF-01: drill-down "Ver detalhes" do dia.
+                        Visivel apenas quando profile != OFF (dia ativo). */}
+                    {!isOff && onShowDayDetails && (
+                      <button
+                        type="button"
+                        data-testid={`week-grid-day-detail-${day.id}`}
+                        onClick={() => onShowDayDetails(day.id)}
+                        className="mt-2 inline-flex items-center justify-center gap-1 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-[10px] font-medium text-gray-300 transition-colors hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                        title="Ver detalhes do dia"
+                      >
+                        <Eye className="h-3 w-3" />
+                        <span>Detalhes</span>
+                      </button>
+                    )}
                   </th>
                 );
               })}

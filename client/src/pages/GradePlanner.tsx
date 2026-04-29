@@ -29,6 +29,11 @@ import { ProfileComparison } from '@/components/grade-planner/ProfileComparison'
 import { GradeSettings } from '@/components/grade-planner/GradeSettings';
 import { DeleteDialog } from '@/components/grade-planner/DeleteDialog';
 import { EditDialog } from '@/components/grade-planner/EditDialog';
+// Sprint F4 — drill-down + variance simulation integration (RF-01, RF-04).
+import { DayDetailDrawer } from '@/components/grade/DayDetailDrawer';
+import { PrimedopePanel } from '@/components/primedope/PrimedopePanel';
+import { useBankroll } from '@/hooks/useBankroll';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function GradePlanner() {
   const { user } = useAuth();
@@ -76,6 +81,43 @@ export default function GradePlanner() {
 
   // UX: Dialog de novo torneio com seletor de dia (independente do clique-na-celula)
   const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
+
+  // ===========================================================================
+  // Sprint F4 — DayDetailDrawer + PrimedopePanel state (RF-01, RF-04)
+  // ===========================================================================
+  // dayDetailOpen: dayOfWeek (0..6) quando aberto, null quando fechado.
+  const [dayDetailOpen, setDayDetailOpen] = useState<number | null>(null);
+
+  // Persistencia entre sessoes (lesson #12): localStorage flag pra colapsar
+  // PrimedopePanel. Default: expandido (true). Lazy init para nao quebrar SSR.
+  const [primedopePanelExpanded, setPrimedopePanelExpanded] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const v = window.localStorage.getItem('primedope_panel_expanded');
+      // null (nunca setado) => default true
+      return v === null ? true : v === '1';
+    } catch {
+      return true;
+    }
+  });
+
+  const togglePrimedopePanel = useCallback(() => {
+    setPrimedopePanelExpanded((prev) => {
+      const next = !prev;
+      try {
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('primedope_panel_expanded', next ? '1' : '0');
+        }
+      } catch {
+        // ignore storage errors (privacy mode etc)
+      }
+      return next;
+    });
+  }, []);
+
+  const { data: bankrollState } = useBankroll();
+  const bankrollUsd =
+    typeof bankrollState?.amount === 'number' ? bankrollState.amount : 0;
 
   const getActiveProfile = (dayOfWeek: number): 'A' | 'B' | 'C' | 'OFF' | null => {
     const state = profileStates?.find((ps: any) => ps.dayOfWeek === dayOfWeek);
@@ -672,6 +714,7 @@ export default function GradePlanner() {
       gradeStartHour={gradeStartHour}
       gradeEndHour={gradeEndHour}
       onOpenSettings={() => setIsSettingsOpen(true)}
+      onShowDayDetails={(dayOfWeek) => setDayDetailOpen(dayOfWeek)}
     />
   );
 
@@ -887,6 +930,66 @@ export default function GradePlanner() {
 
         {/* Profile Comparison — visivel apenas quando botão Comparar está ativo */}
         {showComparison && <ProfileComparison />}
+
+        {/* ============================================================= */}
+        {/* Sprint F4 — PrimedopePanel (variance simulation, RF-04)         */}
+        {/* Renderizado abaixo da grade, ao lado da Biblioteca via layout   */}
+        {/* full-width. Colapsavel, com flag persistida em localStorage.    */}
+        {/* ============================================================= */}
+        <div className="mt-6" data-testid="primedope-panel-wrapper">
+          <div className="mb-2 flex items-center justify-between rounded-t-lg bg-gray-900/60 px-4 py-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-white">
+                Variance simulation (PrimeDope)
+              </h3>
+              <span className="rounded bg-gray-800 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gray-400">
+                Beta
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={togglePrimedopePanel}
+              data-testid="primedope-panel-toggle"
+              className="text-gray-300 hover:bg-gray-800 hover:text-white"
+              title={primedopePanelExpanded ? "Recolher painel" : "Expandir painel"}
+              aria-expanded={primedopePanelExpanded}
+            >
+              {primedopePanelExpanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+              <span className="ml-1 hidden sm:inline">
+                {primedopePanelExpanded ? "Recolher" : "Expandir"}
+              </span>
+            </Button>
+          </div>
+          {primedopePanelExpanded && user ? (
+            <PrimedopePanel
+              userId={user.userPlatformId}
+              bankrollUsd={bankrollUsd}
+            />
+          ) : null}
+        </div>
+
+        {/* ============================================================= */}
+        {/* Sprint F4 — DayDetailDrawer (drill-down, RF-01)                 */}
+        {/* ============================================================= */}
+        {dayDetailOpen !== null && (
+          <DayDetailDrawer
+            open={dayDetailOpen !== null}
+            onOpenChange={(o) => {
+              if (!o) setDayDetailOpen(null);
+            }}
+            profileLetter={(() => {
+              const p = getActiveProfile(dayDetailOpen);
+              return p && p !== 'OFF' ? p : 'A';
+            })()}
+            dayOfWeek={dayDetailOpen}
+          />
+        )}
 
         {/* ============================================================= */}
         {/* Dialogs */}

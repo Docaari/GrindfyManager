@@ -1,0 +1,152 @@
+%% C4 Context — Sprint F4 PrimeDope Integration + Grade Day Drill-down
+%% Mostra componentes principais da feature: drawer drill-down, painel PrimeDope, service, persistencia, integracao externa
+%% Referencias: ADR-054 (provider externo), ADR-055 (tracker stub), ADR-056 (dismiss localStorage)
+%% Spec: Docs/specs/sprint-f4-primedope-grade-detail.md
+
+graph TB
+    user["Jogador MTT<br/><i>Browser autenticado</i>"]
+
+    subgraph fe["Frontend — /coach (GradePlanner)"]
+        weekgrid["WeekGrid<br/><i>Grid 7 dias x 3 perfis<br/>Botao 'Ver detalhes' por celula</i>"]
+
+        subgraph drawer_block["DayDetailDrawer (RF-01)"]
+            drawer["Sheet Radix slide-from-right<br/><i>Cards agregados + Pie/Bar charts<br/>Tabela banca/plataforma + lista detalhada</i>"]
+            useDayDetail["useDayDetail<br/><i>TanStack Query<br/>fetch /api/grade/day-detail</i>"]
+        end
+
+        subgraph pdpanel["PrimedopePanel (B.0..B.5)"]
+            onboarding["PrimedopeOnboardingCards<br/><i>3 cards educativos RF-16<br/>dismiss localStorage (ADR-056)</i>"]
+            wizard["PrimedopeWizard<br/><i>Selector + Buckets + Bankroll<br/>RF-02..RF-03, RF-17..RF-21</i>"]
+            bucket_table["PrimedopeBucketTable<br/><i>Editavel, FX dual-column<br/>RF-26 USD/Original</i>"]
+            result["PrimedopeResult<br/><i>EV/ROI/SD/RoR cards<br/>+ Confidence intervals + Charts<br/>+ Pinned star + Skeleton ETA</i>"]
+            errblock["PrimedopeErrorBlock<br/><i>429 countdown<br/>502 mailto + copiar detalhes<br/>RF-24</i>"]
+            usePrimedopeSimulation["usePrimedopeSimulation<br/><i>TanStack mutation<br/>+ AbortController<br/>+ debounce 2s</i>"]
+            usePrimedopeRuns["usePrimedopeRuns<br/><i>Listagem runs<br/>RF-15, RF-17, RF-23</i>"]
+        end
+
+        empty_state["EmptyState (compartilhado)<br/><i>Reusado em drawer/wizard/bankroll-zero<br/>RF-22</i>"]
+    end
+
+    subgraph api["Backend — Express :3000"]
+        auth_mw["requireAuth<br/><i>JWT middleware</i>"]
+        rate_limit["rate-limit middleware<br/><i>1 req/10s/userId<br/>skip cache hits</i>"]
+
+        subgraph routes["server/routes/primedope.ts"]
+            r_simulate["POST /api/primedope/simulate<br/><i>Zod simulateInputSchema</i>"]
+            r_chart["GET /api/primedope/chart/:hash<br/><i>regex sha256 + sendFile</i>"]
+            r_runs["GET /api/primedope/runs<br/><i>profileLetter, dayOfWeek, limit</i>"]
+            r_pin["POST/DELETE /api/primedope/runs/:id/pin<br/><i>userId match check</i>"]
+        end
+
+        r_daydetail["GET /api/grade/day-detail/:profile/:dayOfWeek<br/><i>JOIN planned_tournaments x tournaments<br/>aggregations on-the-fly</i>"]
+
+        subgraph services["server/services + utils"]
+            integration["primedopeIntegration.ts<br/><i>runSimulation()<br/>cache 30min + fallback 24h<br/>semaphore max=3<br/>retry 1x backoff 500ms</i>"]
+            currency_norm["currencyNormalizer.ts<br/><i>normalizeBuyinToUSD<br/>(reuso ADR-033)</i>"]
+            wallet_service["walletService.ts<br/><i>getConsolidatedBalance<br/>(reuso Sprint Bankroll-2)</i>"]
+            tracker["tracker.ts (stub ADR-055)<br/><i>emit(event, payload)<br/>console.log [track]</i>"]
+        end
+
+        subgraph storage_layer["server/storage.ts"]
+            store["Drizzle queries<br/><i>primedopeRuns CRUD<br/>plannedTournaments + tournaments JOIN<br/>tournamentTemplates lookup</i>"]
+        end
+    end
+
+    subgraph db_block["PostgreSQL 16 / Neon"]
+        pdr[("primedope_runs<br/><i>NOVO 0015<br/>cache + audit + pinned<br/>retencao 90d</i>")]
+        tournaments_t[("tournaments<br/><i>+3 cols 0014:<br/>players_avg, places_paid_avg, rake_pct</i>")]
+        templates[("tournament_templates<br/><i>avgBuyIn, avgRoi, avgFieldSize<br/>source de pre-fill</i>")]
+        planned[("planned_tournaments<br/><i>templateId FK<br/>userId, dayOfWeek, profile</i>")]
+        wallets_t[("wallets<br/><i>exchangeRates JSONB<br/>(ADR-033 fonte FX)</i>")]
+        users_t[("users<br/><i>JWT identity</i>")]
+    end
+
+    subgraph fs["Filesystem servidor"]
+        charts_dir["uploads/primedope-charts/<br/><i>sha256(absoluteUrl).png<br/>Cache-Control 1d</i>"]
+    end
+
+    subgraph external["Sistemas Externos"]
+        pd_svc["primedope.com<br/><i>prime.php?p=tournament-variance-calculator<br/>SO USD payload</i>"]
+        pd_charts["primedope.com (charts)<br/><i>PNG histogram + random_runs<br/>re-hosted localmente</i>"]
+        mailto["mailto:ricardinho2012@gmail.com<br/><i>CTA RF-24 4xx schema change</i>"]
+    end
+
+    %% User flows
+    user -->|"HTTPS"| weekgrid
+    weekgrid -->|"click 'Ver detalhes'"| drawer
+    weekgrid -->|"abre painel"| pdpanel
+
+    %% Drawer flow
+    drawer -->|"useState onMount"| useDayDetail
+    useDayDetail -->|"GET aggregations"| r_daydetail
+    drawer -->|"empty state"| empty_state
+    r_daydetail -->|"requireAuth"| auth_mw
+    r_daydetail -->|"Drizzle JOIN"| store
+    store -->|"SQL"| planned
+    store -->|"SQL"| tournaments_t
+    store -->|"SQL"| wallets_t
+
+    %% Onboarding flow
+    onboarding -->|"localStorage check<br/>(ADR-056)"| wizard
+    onboarding -.->|"+server check<br/>GET runs?limit=1"| r_runs
+
+    %% Wizard flow
+    wizard --> bucket_table
+    wizard -->|"empty state buckets"| empty_state
+    wizard -->|"empty state bankroll=0"| empty_state
+    wizard -->|"Run click"| usePrimedopeSimulation
+    wizard -->|"reusar ultimo run"| usePrimedopeRuns
+
+    %% Run pipeline
+    usePrimedopeSimulation -->|"POST simulate"| r_simulate
+    r_simulate --> auth_mw
+    r_simulate --> rate_limit
+    r_simulate -->|"runSimulation(input)"| integration
+    integration -->|"FX cascata"| currency_norm
+    integration -->|"hash + lookup cache"| store
+    store -->|"SELECT ORDER BY created_at DESC"| pdr
+    integration -->|"cache miss<br/>+ semaphore acquire"| pd_svc
+    pd_svc -.->|"JSON response"| integration
+    integration -->|"fetch PNG (timeout 5s)"| pd_charts
+    integration -->|"save PNG"| charts_dir
+    integration -->|"INSERT run"| store
+    store --> pdr
+    integration -->|"emit telemetria"| tracker
+    integration -->|"resolve fxRates"| wallet_service
+    wallet_service --> wallets_t
+
+    %% Result
+    r_simulate -.->|"SimulationResult"| usePrimedopeSimulation
+    usePrimedopeSimulation --> result
+    result -->|"img src /api/primedope/chart/:hash"| r_chart
+    r_chart -->|"sendFile"| charts_dir
+    result -->|"toggle pin"| r_pin
+    r_pin --> store
+    store -->|"UPDATE pinned"| pdr
+
+    %% Errors
+    r_simulate -.->|"429 retryAfterMs"| errblock
+    r_simulate -.->|"502 errorType+inputHash"| errblock
+    errblock -->|"CTA mailto"| mailto
+
+    %% Bankroll input
+    wizard -.->|"getConsolidatedBalance"| wallet_service
+
+    %% Pre-fill cascata
+    r_simulate -.->|"buckets pre-fill JOIN"| store
+    store -.->|"avgBuyIn, avgRoi, avgFieldSize"| templates
+    store -.->|"backfill 0014 cols"| tournaments_t
+
+    %% Telemetria
+    drawer -.->|"emit day_detail_drawer_open"| tracker
+    integration -.->|"emit primedope_simulation_run/error"| tracker
+    r_chart -.->|"emit primedope_chart_proxy_miss<br/>(404)"| tracker
+    r_pin -.->|"emit primedope_run_pinned"| tracker
+
+    %% Auth
+    integration -.->|"userId fk"| users_t
+
+    %% Styling hints (left as comments)
+    %% External system color: muted yellow
+    %% Database cylinders use [(...)]
+    %% New artifact (NOVO) marked italic in label

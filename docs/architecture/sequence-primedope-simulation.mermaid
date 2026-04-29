@@ -1,0 +1,138 @@
+%% Sequence diagram — Sprint F4 PrimeDope Simulation Run
+%% Cobre 3 paths em alt blocks: cache HIT, cache MISS (happy), fallback STALE 24h
+%% Inclui: rate limit, semaphore, FX conversion, hash compute, tracker.emit, retry 1x
+%% Referencias: ADR-054 (provider externo + cache + fallback), ADR-055 (tracker stub)
+%% Spec: Docs/specs/sprint-f4-primedope-grade-detail.md secao C.1 (runSimulation)
+
+sequenceDiagram
+    autonumber
+    actor User
+    participant FE as Frontend<br/>usePrimedopeSimulation
+    participant BE as Backend<br/>POST /api/primedope/simulate
+    participant RL as rate-limit middleware<br/>(1/10s/userId)
+    participant Svc as primedopeIntegration.ts<br/>runSimulation
+    participant Fx as currencyNormalizer.ts<br/>normalizeBuyinToUSD
+    participant Sem as Semaphore (max=3)
+    participant DB as PostgreSQL<br/>primedope_runs
+    participant FS as uploads/primedope-charts/
+    participant PD as primedope.com<br/>(prime.php?sub_routine=calc)
+    participant Trk as tracker.ts<br/>(emit stub)
+
+    User->>FE: click "Rodar simulacao"
+    FE->>BE: POST /api/primedope/simulate<br/>{profileLetter, dayOfWeek, multiplier,<br/>bankroll, buckets[], samples?, force?}
+
+    Note over BE: requireAuth (JWT)
+    BE->>RL: check rate limit (skip se cache hit virá depois)
+    alt rate exceeded
+        RL-->>BE: 429
+        BE-->>FE: 429 {message, retryAfterMs}
+        FE-->>User: card amber inline<br/>"Aguarde Xs..." (RF-24)
+    else within limit
+        RL-->>BE: ok
+    end
+
+    BE->>Svc: runSimulation(input)
+    Note over Svc: Resolve fxRates cascata:<br/>(a) users.exchangeRates →<br/>(b) wallets.exchangeRates da wallet ativa →<br/>(c) fallback constante {BRL:5.0, EUR:0.93, ...}
+
+    Svc->>Fx: normalizeBuyinToUSD(buyinOriginal, currency, fxRates)<br/>para cada bucket
+    Fx-->>Svc: usdBuckets[] (ADR-033)
+
+    Note over Svc: inputHash = sha256(JSON.stringify(<br/>{...input, buckets: usdBuckets,<br/>force: undefined,<br/>samples: input.samples ?? 10000}<br/>)) com keys ordenadas
+
+    alt CACHE HIT — input.force !== true
+        Svc->>DB: SELECT * FROM primedope_runs<br/>WHERE input_hash = $1<br/>AND created_at > NOW() - INTERVAL '30 min'<br/>ORDER BY created_at DESC LIMIT 1
+        DB-->>Svc: row (cached)
+        Note over Svc: source = 'cache'<br/>cachedAt = row.created_at<br/>latencyMs = ~5ms
+        Svc->>Trk: emit('primedope_simulation_run',<br/>{source:'cache', cacheHit:true, latencyMs})
+        Svc-->>BE: SimulationResult {source:'cache', data, ...}
+        BE-->>FE: 200 OK (skip rate limit increment)
+        FE-->>User: render PrimedopeResult<br/>badge "Em cache (Xmin atras)"
+
+    else CACHE MISS (happy path) — fetch PrimeDope OK
+        Svc->>DB: SELECT (cache lookup)
+        DB-->>Svc: empty
+        Svc->>Sem: acquire() (waits if 3 in-flight)
+        Note over Sem: Promise.race com setTimeout 15s<br/>se queue overflow → reject QUEUE_TIMEOUT
+
+        alt queue timeout > 15s
+            Sem-->>Svc: reject QUEUE_TIMEOUT
+            Svc->>Trk: emit('primedope_simulation_error',<br/>{errorType:'queue_timeout', latencyMs})
+            Svc-->>BE: throw QUEUE_TIMEOUT
+            BE-->>FE: 503 {message:"Fila de simulacoes lotada"}
+        else acquired
+            Sem-->>Svc: ok (inFlight++)
+        end
+
+        Svc->>PD: GET prime.php?sub_routine=calc<br/>&args=urlencoded payload USD
+        Note over PD: timeout 15s<br/>1 retry com 500ms backoff em 5xx/timeout<br/>SEM retry em 4xx (schema change)
+
+        alt PrimeDope 200 OK
+            PD-->>Svc: JSON {ev, roi, sd, riskOfRuin,<br/>conf70/95/997, min50/15/05/01,<br/>histogram: '/path.png',<br/>randomRuns: '/path.png', ...}
+
+            par persiste charts
+                Svc->>PD: GET https://www.primedope.com<br/>{histogram_path}
+                PD-->>Svc: image/png bytes
+                Note over Svc: validate Content-Type === 'image/png'<br/>chartHash = sha256(absoluteUrl)
+                Svc->>FS: write uploads/primedope-charts/<br/>{chartHash}.png
+            and
+                Svc->>PD: GET {randomRuns_path}
+                PD-->>Svc: image/png bytes
+                Svc->>FS: write {chartHash2}.png
+            end
+
+            Svc->>DB: INSERT INTO primedope_runs<br/>(id, userId, profileLetter, dayOfWeek,<br/>multiplier, inputHash, inputJson, resultJson,<br/>histogramPath, randomRunsPath, latencyMs,<br/>source='primedope', pinned=false)
+            DB-->>Svc: inserted (trigger sets expires_at = NOW + 90d)
+
+            Note over Svc: source = 'primedope'<br/>histogramUrl = '/api/primedope/chart/SHA1'<br/>randomRunsUrl = '/api/primedope/chart/SHA2'
+
+            Svc->>Trk: emit('primedope_simulation_run',<br/>{source:'primedope', cacheHit:false,<br/>latencyMs, bucketCount, profileLetter, dayOfWeek})
+
+            Svc->>Sem: release()
+            Sem-->>Svc: ok (inFlight--)
+            Svc-->>BE: SimulationResult {source:'primedope', data, urls}
+            BE-->>FE: 200 OK
+            FE-->>User: render PrimedopeResult<br/>badge "Recem-simulado" emerald
+
+        else PrimeDope 4xx (schema change provavel)
+            PD-->>Svc: 404 / 400 / 401
+            Note over Svc: SEM retry em 4xx<br/>provavel URL/schema change → erro fatal
+            Svc->>Trk: emit('primedope_simulation_error',<br/>{errorType:'upstream_4xx_schema_change',<br/>statusCode, latencyMs, inputHash, timestamp})
+            Svc->>Sem: release()
+            Svc-->>BE: throw UPSTREAM_4XX
+            BE-->>FE: 502 {message, errorType:'upstream_4xx_schema_change',<br/>inputHash, timestamp}
+            FE-->>User: PrimedopeErrorBlock<br/>"Servico temporariamente indisponivel."<br/>+ CTA mailto pre-preenchido<br/>+ "Copiar detalhes tecnicos" (RF-24)
+
+        else PrimeDope 5xx OR timeout
+            PD-->>Svc: 503 / timeout
+            Note over Svc: retry 1x apos 500ms backoff
+            Svc->>PD: retry GET prime.php?...
+
+            alt retry OK
+                PD-->>Svc: JSON 200
+                Note over Svc: continua happy path
+            else retry tambem 5xx/timeout
+                PD-->>Svc: 503 / timeout (retry)
+                Note over Svc: enter FALLBACK STALE branch
+                Svc->>DB: SELECT * FROM primedope_runs<br/>WHERE userId=$1<br/>AND profileLetter=$2 AND dayOfWeek=$3<br/>AND created_at > NOW() - INTERVAL '24 hours'<br/>ORDER BY created_at DESC LIMIT 1
+
+                alt fallback stale row found
+                    DB-->>Svc: row (less than 24h old)
+                    Note over Svc: source = 'fallback-stale'<br/>staleAgeMs = NOW - row.created_at
+                    Svc->>Trk: emit('primedope_simulation_error',<br/>{errorType:'upstream_5xx_recovered',<br/>latencyMs, staleAgeMs})
+                    Svc->>Sem: release()
+                    Svc-->>BE: SimulationResult {source:'fallback-stale',<br/>staleAgeMs, data: row.resultJson, ...}
+                    BE-->>FE: 200 OK (warning amber)
+                    FE-->>User: render PrimedopeResult<br/>badge "Dados de Xh atras (PrimeDope offline)" amber
+                else no stale row available
+                    DB-->>Svc: empty
+                    Svc->>Trk: emit('primedope_simulation_error',<br/>{errorType:'upstream_5xx_no_fallback',<br/>latencyMs})
+                    Svc->>Sem: release()
+                    Svc-->>BE: throw PRIMEDOPE_UNAVAILABLE
+                    BE-->>FE: 503 {message:"PrimeDope indisponivel<br/>e sem fallback recente"}
+                    FE-->>User: PrimedopeErrorBlock<br/>"Servico temporariamente indisponivel."<br/>+ "Tentar novamente" (sem mailto)
+                end
+            end
+        end
+    end
+
+    Note over User,Trk: Fim do fluxo runSimulation.<br/>Para `force=true` (RF-07), branch CACHE HIT eh<br/>pulada — sempre vai para CACHE MISS.

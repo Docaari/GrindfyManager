@@ -37,22 +37,34 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [030](030-warmup-telemetry-client-only-w1.md) | Telemetria do warm-up Sprint W-1 e client-only via console.log (sem persistencia server-side) | Aceito | 2026-04-25 |
 | [031](031-tournament-types-orthogonal-model.md) | Modelo ortogonal de tipos de torneio (type primario + modificadores booleanos isFlight/isLive) | Aceito | 2026-04-25 |
 | [032](032-deprecation-category-column.md) | Deprecation gradual da coluna `tournaments.category` em 5 sprints | Aceito | 2026-04-25 |
+| [033](033-fx-rate-convention-units-per-usd.md) | Convencao oficial de `exchangeRates`: unidades nativas equivalentes a 1 USD | Aceito | 2026-04-26 |
+| [034](034-multi-wallet-with-immutable-fx.md) | Modelo Multi-Wallet com FX Historico Imutavel | Aceito | 2026-04-26 |
+| [035](035-bankroll-v1-to-v2-migration.md) | Compatibilidade v1->v2 e Migracao de Snapshots de Bankroll | Aceito | 2026-04-26 |
+| [036](036-tickets-effective-buyin.md) | Buy-in Efetivo Zero e ROI Individual Null em Torneios via Ticket | Aceito | 2026-04-26 |
+| [037](037-tickets-table-vs-jsonb.md) | Tabela `tickets` Separada vs JSON Column em `tournaments` | Aceito | 2026-04-26 |
+| [038](038-wallet-tx-optimistic-concurrency.md) | Optimistic concurrency em wallet transactions via `expectedPreviousBalance` | Aceito | 2026-04-26 |
+| [039](039-rakeback-as-wallet-tx-reason.md) | Rakeback como `reason='rakeback'` em wallet_transactions (sem novo endpoint, sem nova tabela) | Aceito | 2026-04-26 |
 | [040](040-session-end-wallet-reconciliation.md) | Reconciliacao de banca ao fim da sessao via passo intermediario (endpoint batch fail-fast, idempotente, reuso de ADR-017/034/038, sem schema delta) | Proposto | 2026-04-26 |
-| [058](058-auto-snapshot-cooldown.md) | Auto-snapshot pos-cooldown dentro da TX, falha logada nao bloqueia finish (Bankroll-3 RF-2) | Proposto | 2026-05-01 |
-| [059](059-cross-wallet-transfer.md) | Cross-wallet transfer via tabela `wallet_transfers` + 2 rows espelho em `wallet_transactions` agrupados via transfer_group_id (Bankroll-3 RF-4) | Proposto | 2026-05-01 |
-| [060](060-stop-loss-lock.md) | Stop-loss/stop-win em USD consolidado, lock via `stop_lock_until` em `user_settings` (Bankroll-3 RF-6) | Proposto | 2026-05-01 |
-| [061](061-fx-resolver-unified.md) | `fxResolver` unificado com cascata users > wallets > constants + cache 5min (Bankroll-3 RF-11; RF-12 skip documentado) | Proposto | 2026-05-01 |
-| [065](065-ocr-via-claude-vision.md) | OCR via Claude/Gemini Vision + cache SHA256 (Stats-V3 RF-08..RF-12) | Aceito | 2026-05-01 |
-| [067](067-studies-page-information-architecture.md) | Information Architecture da pagina /estudos: sidebar collapsivel + URL routing sub-paths Wouter (Studies-Reform RF-01) | Proposto | 2026-05-01 |
-| [067-ocr](067-section-aware-ocr-mapping.md) | Section-aware OCR mapping com SECTION_ALIASES (Stats-V3.5; estende ADR-065) — duplicidade numerica historica | Aceito | 2026-05-01 |
-| [068](068-cross-feature-recommendations-engine.md) | Cross-feature recommendations engine: pipeline server-side parallel + priority score formula (Studies-Reform RF-06/RF-07) | Proposto | 2026-05-01 |
-| [071](071-media-storage-backend-generic.md) | Generalizar storage abstraction para `MEDIA_STORAGE_BACKEND` cobrindo audio + image + video (Biblioteca-1 RF-02, refatora ADR-057 com retrocompat) | Proposto | 2026-05-01 |
-| [072](072-mux-video-integration.md) | Adotar Mux para video, signed URLs TTL 4h, watermark CSS overlay (Biblioteca-1 RF-03) | Proposto | 2026-05-01 |
-| [073](073-library-entitlements-model.md) | Entitlements granulares por aula via `user_lesson_access` + source enum (Biblioteca-1 RF-01/RF-04) | Proposto | 2026-05-01 |
-| [074](074-library-progress-cross-format-sync.md) | Sync de progresso cross-format por SEGUNDOS absolutos (nao percentual) (Biblioteca-1 RF-08, D5) | Proposto | 2026-05-01 |
-| [075](075-coach-recommend-lesson-tool.md) | Coach tool `recommend_lesson` + hard-block COMPETITOR_BLOCKLIST no system prompt (Biblioteca-1 RF-09/RF-10) | Proposto | 2026-05-01 |
-| [076](076-library-html-article-sanitization.md) | Sanitizacao server-side de HTML de artigos via DOMPurify, allowlist rigorosa (Biblioteca-1 D10/RF-08/RF-11) | Proposto | 2026-05-01 |
-| [078](078-design-tokens-ui-patterns.md) | Design tokens TS-puros + 3 componentes utilitarios canonicos para Foundation UI (UI-FND-1) | Aceito | 2026-05-02 |
+| [041](041-cooldown-dedicated-spec-and-schema.md) | Cool-down em spec dedicada com schema novo (`cooldown_logs` + `starred_hands`) | Aceito | 2026-04-26 |
+| [042](042-cooldown-coach-tool-registry.md) | Tool `coach.read_cooldown_history` no Tool Registry com sanitizer agregador + prompt block cacheable | Aceito | 2026-04-26 |
+| [043](043-coach-page-context-cooldown-log.md) | Page context `cooldownLog` — extensao da Zod discriminated union do Coach | Aceito | 2026-04-26 |
+| [044](044-session-tournament-satellite-fields.md) | Campos de satelite em `session_tournaments` | Aceito | 2026-04-26 |
+| [045](045-session-end-wallet-tie-break.md) | Session-end reconciliation — site-to-wallet tie-break policy | Aceito | 2026-04-26 |
+| [046](046-session-wallet-snapshots-table.md) | Tabela `session_wallet_snapshots` para persistencia da reconciliacao por sessao | Aceito | 2026-04-26 |
+| [047a](047-summary-inline-reconcile.md) | Reconciliacao de wallets inline no `SessionSummaryModal` | Aceito | 2026-04-26 |
+| [047b](047-tts-browser-native-vs-cloud.md) | TTS browser-native (SpeechSynthesis) vs cloud TTS | Aceito | 2026-04-27 |
+| [048a](048-tts-priority-queue.md) | Priority queue para multi-tabling TTS (FLUSH inteligente + cap 3 itens / 30s) | Aceito | 2026-04-27 |
+| [048b](048-wallets-eligibility-platforms-played.md) | Eligibility de wallets = todas plataformas jogadas (cadastro inline obrigatorio) | Aceito | 2026-04-26 |
+| [049](049-tts-privacy-default.md) | Privacy default `ttsRedactBuyIn=true` ("Modo discreto" ativo por padrao) | Aceito | 2026-04-27 |
+| [050](050-tts-state-module-level.md) | TTS state em module-level singleton (nao Context, nao Zustand) | Aceito | 2026-04-27 |
+| [051a](051-spot-screenshots-storage.md) | Spot screenshots: storage local em F2 (S3 deferido para F3) | Proposto | 2026-04-27 |
+| [051b](051-stats-analyzer-layout-schema.md) | Stats Analyzer: layout JSON shape (`hud_layouts.sections`) | Aceito | 2026-04-26 |
+| [052a](052-spot-screenshots-ownership.md) | Spot screenshots: ownership middleware em GET /image | Proposto | 2026-04-27 |
+| [052b](052-stats-analyzer-coach-tool-integration.md) | Stats Analyzer: Coach AI tool `read_user_hud_stats` | Aceito | 2026-04-26 |
+| [053](053-spot-screenshots-cron.md) | Cron diario de purge de spot screenshots via `node-cron` em F2 (scheduler externo em F3) | Proposto | 2026-04-27 |
+| [054](054-primedope-external-provider-vs-native-engine.md) | PrimeDope como provider externo (interim) vs engine Monte Carlo nativo (Sprint F4) | Aceito | 2026-04-28 |
+| [055](055-tracker-stub-vs-analytics-events-table.md) | `tracker.ts` stub minimo via console.log vs tabela `analytics_events` persistida (Sprint F4) | Aceito | 2026-04-28 |
+| [056](056-onboarding-dismiss-localstorage.md) | Onboarding educativo dismiss via `localStorage` vs coluna `users.preferences` JSONB (Sprint F4) | Aceito | 2026-04-28 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 
@@ -63,3 +75,19 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 - **Status possiveis:** Proposto, Aceito, Deprecado, Substituido por ADR-XXX
 - **Nunca deletar:** Marcar como Deprecado ou Substituido
 - **Sempre incluir:** Opcoes descartadas com pros e contras
+
+## Notas
+
+- **Numeracao duplicada (047, 048, 051, 052):** existem dois ADRs com cada um desses
+  numeros — sufixo `a`/`b` adicionado neste indice apenas para desambiguacao visual; os
+  arquivos no disco mantem nome original (e.g. `047-summary-inline-reconcile.md` e
+  `047-tts-browser-native-vs-cloud.md`). Divida historica de coordenacao entre sprints
+  paralelos (TTS, Bankroll, Stats Analyzer, Spot Screenshots) — proximos ADRs evitam
+  colisao.
+- **Branches paralelas:** ADRs 051-spot-screenshots, 052-spot-screenshots e
+  053-spot-screenshots existem somente em `feature/spot-screenshots`. ADRs
+  051-stats-analyzer e 052-stats-analyzer existem em `feature/stats-analyzer`. ADRs
+  054-056 (Sprint F4 PrimeDope) sao independentes e podem coexistir em ambas branches
+  sem conflito de numeracao.
+- **Hiato 003 → 007:** ADRs 004-006 reservados/nunca escritos durante consolidacao
+  inicial.

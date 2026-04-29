@@ -1,0 +1,82 @@
+%% Flowchart — Sprint F4 PrimeDope Wizard Buckets Pre-fill Cascade
+%% Mostra pipeline: user seleciona (profileLetter, dayOfWeek) → backend popula buckets via cascata
+%% LOOP por planned_tournament: tournament_templates > tournaments > NETWORK_DEFAULTS
+%% Inclui: FX conversion, fallback flags, badge "≈ estimado"
+%% Referencias: ADR-054, ADR-033 (FX), spec RF-02, RF-26, B.2
+
+flowchart TD
+    Start(["User seleciona<br/>(profileLetter, dayOfWeek)<br/>+ multiplier"])
+
+    Start --> Q_BE["Backend: GET /api/primedope/buckets-prefill<br/>?profileLetter=X&dayOfWeek=Y"]
+
+    Q_BE --> Q_PT["Query planned_tournaments<br/>WHERE userId=$1<br/>AND dayOfWeek=$2 AND profile=$3"]
+
+    Q_PT --> Q_HasResults{"planned[]<br/>length > 0?"}
+
+    Q_HasResults -->|"No"| EmptyState["Empty State<br/>RF-22 wizard<br/>'Nenhum torneio planejado<br/>para Perfil X em [dia]'<br/>+ CTA 'Adicione torneios'"]
+    EmptyState --> EndEmpty(["botao 'Rodar simulacao' DISABLED"])
+
+    Q_HasResults -->|"Yes"| LoopStart["FOR EACH planned IN planned[]"]
+
+    LoopStart --> Q_Template["JOIN tournament_templates<br/>ON tt.id = planned.template_id"]
+
+    Q_Template --> Q_TemplateMatch{"template encontrado<br/>com avgBuyIn,<br/>avgRoi, avgFieldSize?"}
+
+    Q_TemplateMatch -->|"Yes (priority 1)"| UseTemplate["Use template values:<br/>buyinUsd = tt.avgBuyIn<br/>roiPct = tt.avgRoi<br/>playersAvg = tt.avgFieldSize<br/>(NAO marca como 'estimado')"]
+
+    Q_TemplateMatch -->|"No"| Q_Sample["JOIN tournaments<br/>WHERE template_id = planned.template_id<br/>LIMIT 1 (sample backfilled 0014)"]
+
+    Q_Sample --> Q_SampleFound{"tournament<br/>sample existe?"}
+
+    Q_SampleFound -->|"Yes (priority 2)"| UseSample["Use tournament backfill:<br/>buyinUsd = t.buyIn (FX-converted)<br/>playersAvg = t.players_avg<br/>placesPaid = t.places_paid_avg<br/>rakePct = t.rake_pct<br/>roiPct = NETWORK_DEFAULTS[site].roi<br/>(marca roiPct como 'estimado')"]
+
+    Q_SampleFound -->|"No (priority 3)"| UseDefaults["NETWORK_DEFAULTS lookup:<br/>rakePct = NETWORK_DEFAULTS[site].rake<br/>roiPct = NETWORK_DEFAULTS[site].roi<br/>playersAvg = 1000 (last fallback)<br/>placesPaid = ROUND(1000 * 0.15) = 150<br/>(marca todos como 'estimado')"]
+
+    UseTemplate --> FX_Step
+    UseSample --> FX_Step
+    UseDefaults --> FX_Step
+
+    FX_Step["FX Conversion (RF-26)<br/>currencyNormalizer.ts<br/>normalizeBuyinToUSD(buyinOriginal, currency, fxRates)"]
+
+    FX_Step --> Q_FXSource{"fxRates source<br/>cascata"}
+
+    Q_FXSource -->|"users.exchangeRates<br/>(if exists)"| FX_User["use users.exchangeRates"]
+    Q_FXSource -->|"wallets.exchangeRates<br/>(wallet ativa moeda)"| FX_Wallet["use wallets.exchangeRates<br/>ADR-033"]
+    Q_FXSource -->|"none"| FX_Fallback["fallback constante<br/>{BRL:5.0, EUR:0.93,<br/>CNY:7.25, USDT:1.0}<br/>+ flag warning amber"]
+
+    FX_User --> Bucket_Build
+    FX_Wallet --> Bucket_Build
+    FX_Fallback --> Bucket_Build
+
+    Bucket_Build["Build bucket:<br/>{<br/>  name, network, count: planned.count * multiplier,<br/>  buyinUsd, buyinOriginal, currency,<br/>  playersAvg, placesPaid, rakePct, roiPct,<br/>  walletMissing: bool (RF-22)<br/>}"]
+
+    Bucket_Build --> LoopEnd{"More planned?"}
+
+    LoopEnd -->|"Yes"| LoopStart
+    LoopEnd -->|"No"| Aggregate["Return buckets[]<br/>+ fxRatesSnapshot used<br/>+ defaultsFlags Set of (bucketIdx:fieldName)"]
+
+    Aggregate --> FE_Render["Frontend renders<br/>PrimedopeBucketTable"]
+
+    FE_Render --> FE_Decisions{"Per bucket UI"}
+
+    FE_Decisions -->|"currency === USD"| RenderUSD["Render so coluna 'Buyin USD'<br/>(no Original column)"]
+    FE_Decisions -->|"currency !== USD"| RenderDual["Render coluna 'Buyin USD' readonly<br/>+ coluna 'Buyin Original'<br/>(toggle 'Editar buyin em moeda original'<br/>libera Original como editavel)"]
+    FE_Decisions -->|"defaultsFlags has bucket"| RenderEstimated["Adiciona badge<br/>'≈ estimado' nos campos<br/>roiPct/rakePct/playersAvg<br/>flagged como default"]
+    FE_Decisions -->|"walletMissing"| RenderWarn["Render warning amber:<br/>'Cotacao estimada — adicione<br/>wallet [BRL] para usar sua<br/>cotacao real' (RF-22+RF-26)"]
+
+    RenderUSD --> ZebraSubheader
+    RenderDual --> ZebraSubheader
+    RenderEstimated --> ZebraSubheader
+    RenderWarn --> ZebraSubheader
+
+    ZebraSubheader["Zebra striping por network<br/>+ subheader 'GG Network (5 torneios)'<br/>(anti-pattern #2 mitigation)"]
+
+    ZebraSubheader --> EditTracking["Local state:<br/>editedFields: Set of string<br/>format: 'bucketIndex:fieldName'<br/>(RF-18 diff badge<br/>+ RF-21 confirm dialog)"]
+
+    EditTracking --> End(["User edita inline<br/>OR clica 'Rodar simulacao'<br/>OR troca multiplier (debounce 2s RF-06)<br/>OR troca perfil/dia (confirm dialog RF-21)"])
+
+    %% Comments / styling hints
+    %% Sources priority: template > tournament backfill > NETWORK_DEFAULTS
+    %% FX cascata: users > wallets (active) > constant (with warning)
+    %% defaultsFlags drives '≈ estimado' badge in UI
+    %% multiplier applied to count in Bucket_Build step
