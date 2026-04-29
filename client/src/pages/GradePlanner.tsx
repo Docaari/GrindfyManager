@@ -874,105 +874,125 @@ export default function GradePlanner() {
           );
         })()}
 
-        {/* Main layout */}
-        {isMobile ? (
-          // Mobile: Tabs (Biblioteca | Grade | Selector)
-          <Tabs value={mobileTab} onValueChange={setMobileTab} className="w-full">
-            <TabsList className="w-full bg-gray-800 border border-gray-700 mb-4">
-              <TabsTrigger value="biblioteca" className="flex-1 text-sm">Biblioteca</TabsTrigger>
-              <TabsTrigger value="grade" className="flex-1 text-sm">Grade</TabsTrigger>
-              <TabsTrigger value="selector" className="flex-1 text-sm" data-testid="grade-tab-selector">Selector</TabsTrigger>
-            </TabsList>
-            <TabsContent value="biblioteca" className="mt-0">
-              <div className="h-[calc(100vh-280px)]">
-                {bibliotecaContent}
-              </div>
-            </TabsContent>
-            <TabsContent value="grade" className="mt-0">
-              {gradeContent}
-            </TabsContent>
-            <TabsContent value="selector" className="mt-0">
-              <SelectorPanel />
-            </TabsContent>
-          </Tabs>
-        ) : (
-          // Desktop: Tabs com Selector como tab de topo + Resizable split panels nas tabs Biblioteca+Grade
-          <Tabs defaultValue="planner" className="w-full">
-            <TabsList className="bg-gray-800 border border-gray-700 mb-4">
-              <TabsTrigger value="planner" className="text-sm">Biblioteca + Grade</TabsTrigger>
-              <TabsTrigger value="selector" className="text-sm" data-testid="grade-tab-selector">Tournament Selector</TabsTrigger>
-            </TabsList>
-            <TabsContent value="planner" className="mt-0">
-              <PanelGroup direction="horizontal" className="min-h-[600px]">
-                <Panel
-                  ref={libraryPanelRef}
-                  defaultSize={30}
-                  minSize={20}
-                  collapsible
-                  collapsedSize={3}
-                  onCollapse={() => setLibraryCollapsed(true)}
-                  onExpand={() => setLibraryCollapsed(false)}
-                  className={libraryCollapsed ? "" : "pr-2"}
+        {/* Main layout — PrimedopePanel inline embaixo do WeekGrid (RF-04) */}
+        {(() => {
+          const primedopeBlock = (
+            <div data-testid="primedope-panel-wrapper" className="flex h-full flex-col">
+              <div className="flex items-center justify-between rounded-t-lg bg-gray-900/60 px-4 py-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-white">
+                    Variance simulation (PrimeDope)
+                  </h3>
+                  <span className="rounded bg-gray-800 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gray-400">
+                    Beta
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={togglePrimedopePanel}
+                  data-testid="primedope-panel-toggle"
+                  className="text-gray-300 hover:bg-gray-800 hover:text-white"
+                  title={primedopePanelExpanded ? "Recolher painel" : "Expandir painel"}
+                  aria-expanded={primedopePanelExpanded}
                 >
-                  {bibliotecaContent}
-                </Panel>
-                <PanelResizeHandle className="w-1.5 bg-gray-700/50 hover:bg-emerald-500/50 rounded transition-colors cursor-col-resize" />
-                <Panel defaultSize={70} className="pl-2">
+                  {primedopePanelExpanded ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                  <span className="ml-1 hidden sm:inline">
+                    {primedopePanelExpanded ? "Recolher" : "Expandir"}
+                  </span>
+                </Button>
+              </div>
+              {primedopePanelExpanded && user ? (
+                <div className="min-h-0 flex-1 overflow-auto">
+                  <PrimedopePanel
+                    userId={user.userPlatformId}
+                    bankrollUsd={bankrollUsd}
+                  />
+                </div>
+              ) : null}
+            </div>
+          );
+
+          if (isMobile) {
+            return (
+              <Tabs value={mobileTab} onValueChange={setMobileTab} className="w-full">
+                <TabsList className="w-full bg-gray-800 border border-gray-700 mb-4">
+                  <TabsTrigger value="biblioteca" className="flex-1 text-sm">Biblioteca</TabsTrigger>
+                  <TabsTrigger value="grade" className="flex-1 text-sm">Grade</TabsTrigger>
+                  <TabsTrigger value="selector" className="flex-1 text-sm" data-testid="grade-tab-selector">Selector</TabsTrigger>
+                </TabsList>
+                <TabsContent value="biblioteca" className="mt-0">
+                  <div className="h-[calc(100vh-280px)]">
+                    {bibliotecaContent}
+                  </div>
+                </TabsContent>
+                <TabsContent value="grade" className="mt-0">
                   {gradeContent}
-                </Panel>
-              </PanelGroup>
-            </TabsContent>
-            <TabsContent value="selector" className="mt-0">
-              <SelectorPanel />
-            </TabsContent>
-          </Tabs>
-        )}
+                  <div className="mt-4">{primedopeBlock}</div>
+                </TabsContent>
+                <TabsContent value="selector" className="mt-0">
+                  <SelectorPanel />
+                </TabsContent>
+              </Tabs>
+            );
+          }
+
+          return (
+            <Tabs defaultValue="planner" className="w-full">
+              <TabsList className="bg-gray-800 border border-gray-700 mb-4">
+                <TabsTrigger value="planner" className="text-sm">Biblioteca + Grade</TabsTrigger>
+                <TabsTrigger value="selector" className="text-sm" data-testid="grade-tab-selector">Tournament Selector</TabsTrigger>
+              </TabsList>
+              <TabsContent value="planner" className="mt-0">
+                <PanelGroup direction="horizontal" className="min-h-[800px]">
+                  <Panel
+                    ref={libraryPanelRef}
+                    defaultSize={30}
+                    minSize={20}
+                    collapsible
+                    collapsedSize={3}
+                    onCollapse={() => setLibraryCollapsed(true)}
+                    onExpand={() => setLibraryCollapsed(false)}
+                    className={libraryCollapsed ? "" : "pr-2"}
+                  >
+                    {bibliotecaContent}
+                  </Panel>
+                  <PanelResizeHandle className="w-1.5 bg-gray-700/50 hover:bg-emerald-500/50 rounded transition-colors cursor-col-resize" />
+                  <Panel defaultSize={70} className="pl-2">
+                    <PanelGroup direction="vertical" className="h-full">
+                      <Panel
+                        defaultSize={primedopePanelExpanded ? 60 : 95}
+                        minSize={30}
+                      >
+                        <div className="h-full overflow-auto pb-2">
+                          {gradeContent}
+                        </div>
+                      </Panel>
+                      <PanelResizeHandle className="h-1.5 bg-gray-700/50 hover:bg-emerald-500/50 rounded transition-colors cursor-row-resize my-1" />
+                      <Panel
+                        defaultSize={primedopePanelExpanded ? 40 : 5}
+                        minSize={primedopePanelExpanded ? 20 : 4}
+                      >
+                        {primedopeBlock}
+                      </Panel>
+                    </PanelGroup>
+                  </Panel>
+                </PanelGroup>
+              </TabsContent>
+              <TabsContent value="selector" className="mt-0">
+                <SelectorPanel />
+              </TabsContent>
+            </Tabs>
+          );
+        })()}
 
         {/* Profile Comparison — visivel apenas quando botão Comparar está ativo */}
         {showComparison && <ProfileComparison />}
-
-        {/* ============================================================= */}
-        {/* Sprint F4 — PrimedopePanel (variance simulation, RF-04)         */}
-        {/* Renderizado abaixo da grade, ao lado da Biblioteca via layout   */}
-        {/* full-width. Colapsavel, com flag persistida em localStorage.    */}
-        {/* ============================================================= */}
-        <div className="mt-6" data-testid="primedope-panel-wrapper">
-          <div className="mb-2 flex items-center justify-between rounded-t-lg bg-gray-900/60 px-4 py-2">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-white">
-                Variance simulation (PrimeDope)
-              </h3>
-              <span className="rounded bg-gray-800 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gray-400">
-                Beta
-              </span>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={togglePrimedopePanel}
-              data-testid="primedope-panel-toggle"
-              className="text-gray-300 hover:bg-gray-800 hover:text-white"
-              title={primedopePanelExpanded ? "Recolher painel" : "Expandir painel"}
-              aria-expanded={primedopePanelExpanded}
-            >
-              {primedopePanelExpanded ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
-              <span className="ml-1 hidden sm:inline">
-                {primedopePanelExpanded ? "Recolher" : "Expandir"}
-              </span>
-            </Button>
-          </div>
-          {primedopePanelExpanded && user ? (
-            <PrimedopePanel
-              userId={user.userPlatformId}
-              bankrollUsd={bankrollUsd}
-            />
-          ) : null}
-        </div>
 
         {/* ============================================================= */}
         {/* Sprint F4 — DayDetailDrawer (drill-down, RF-01)                 */}
