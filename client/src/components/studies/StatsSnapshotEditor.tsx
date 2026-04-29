@@ -25,15 +25,50 @@ export interface HudStatField {
   label: string;
   decimals: number;
   suffix?: string;
+  // F3 legado
   min?: number;
   max?: number;
+  // F4 NOVO — input validation explicit
+  inputMin?: number;
+  inputMax?: number;
+  // F4 NOVO — target estrategico
+  targetMin?: number;
+  targetMax?: number;
+  targetRef?: string;
   group?: string;
+  subGroup?: string;
 }
 
 export interface HudSection {
   label: string;
   stats: HudStatField[];
   sortOrder: number;
+}
+
+export function getInputRange(field: HudStatField): { min: number; max: number } {
+  return {
+    min: field.inputMin ?? field.min ?? 0,
+    max: field.inputMax ?? field.max ?? 100,
+  };
+}
+
+export function getInlineTarget(field: HudStatField): { min: number; max: number } | null {
+  if (typeof field.targetMin === "number" && typeof field.targetMax === "number") {
+    return { min: field.targetMin, max: field.targetMax };
+  }
+  return null;
+}
+
+export function classifyVsInlineTarget(
+  value: number | null,
+  field: HudStatField,
+): "below_range" | "in_range" | "above_range" | null {
+  if (typeof value !== "number") return null;
+  const t = getInlineTarget(field);
+  if (!t) return null;
+  if (value < t.min) return "below_range";
+  if (value > t.max) return "above_range";
+  return "in_range";
 }
 
 export interface HudLayout {
@@ -59,12 +94,17 @@ export default function StatsSnapshotEditor({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [values, setValues] = useState<Record<string, string>>({});
+  // F4: sample size por stat (em adicao ao global).
+  const [sampleSizesPerStat, setSampleSizesPerStat] = useState<Record<string, string>>(
+    {},
+  );
   const [sampleSize, setSampleSize] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
 
   useEffect(() => {
     if (open) {
       setValues({});
+      setSampleSizesPerStat({});
       setSampleSize("");
       setNotes("");
     }
@@ -98,35 +138,50 @@ export default function StatsSnapshotEditor({
 
   const handleSave = () => {
     if (!layout) return;
-    const numericValues: Record<string, number | null> = {};
+    // F4: values envia formato hibrido. Se sampleSize por stat preenchido,
+    // envia { value, sampleSize }; senao envia number puro.
+    const finalValues: Record<string, number | null | { value: number | null; sampleSize: number | null }> = {};
     let hasAny = false;
     for (const stat of allStats) {
-      const raw = values[stat.key];
-      if (raw === undefined || raw === "") {
-        numericValues[stat.key] = null;
-      } else {
-        const n = Number(raw);
-        if (Number.isNaN(n)) {
-          toast({
-            title: "Valor invalido",
-            description: `${stat.label} nao e numero.`,
-            variant: "destructive",
-          });
-          return;
-        }
-        const min = stat.min ?? 0;
-        const max = stat.max ?? 100;
-        if (n < min || n > max) {
-          toast({
-            title: "Valor fora do range",
-            description: `${stat.label}: ${min}-${max}`,
-            variant: "destructive",
-          });
-          return;
-        }
-        numericValues[stat.key] = n;
-        hasAny = true;
+      const rawValue = values[stat.key];
+      const rawN = rawValue === undefined || rawValue === "" ? null : Number(rawValue);
+      if (rawValue !== undefined && rawValue !== "" && Number.isNaN(rawN as number)) {
+        toast({
+          title: "Valor invalido",
+          description: `${stat.label} nao e numero.`,
+          variant: "destructive",
+        });
+        return;
       }
+      const { min, max } = getInputRange(stat);
+      if (typeof rawN === "number" && (rawN < min || rawN > max)) {
+        toast({
+          title: "Valor fora do range",
+          description: `${stat.label}: ${min}-${max}`,
+          variant: "destructive",
+        });
+        return;
+      }
+      const rawSize = sampleSizesPerStat[stat.key];
+      const sizeN = rawSize ? Number(rawSize) : null;
+      if (rawSize && (Number.isNaN(sizeN as number) || (sizeN as number) < 0)) {
+        toast({
+          title: "Sample size invalido",
+          description: `${stat.label}: deve ser numero >= 0`,
+          variant: "destructive",
+        });
+        return;
+      }
+      if (rawN === null && sizeN === null) {
+        // Stat nao preenchida — pula.
+        continue;
+      }
+      if (sizeN !== null) {
+        finalValues[stat.key] = { value: rawN, sampleSize: sizeN };
+      } else {
+        finalValues[stat.key] = rawN;
+      }
+      if (rawN !== null) hasAny = true;
     }
     if (!hasAny) {
       toast({
@@ -138,7 +193,7 @@ export default function StatsSnapshotEditor({
     }
     mutation.mutate({
       layoutId: layout.id,
-      values: numericValues,
+      values: finalValues,
       sampleSize: sampleSize ? Number(sampleSize) : undefined,
       notes: notes || undefined,
     });
@@ -160,27 +215,78 @@ export default function StatsSnapshotEditor({
         {layout && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {allStats.map((stat) => (
-                <div key={stat.key} className="space-y-1">
-                  <Label htmlFor={`stat-${stat.key}`} className="text-sm">
-                    {stat.label}
-                    {stat.suffix ? ` (${stat.suffix})` : ""}
-                  </Label>
-                  <Input
-                    id={`stat-${stat.key}`}
-                    data-testid={`stat-input-${stat.key}`}
-                    type="number"
-                    step={stat.decimals === 0 ? "1" : `0.${"0".repeat(Math.max(0, stat.decimals - 1))}1`}
-                    min={stat.min ?? 0}
-                    max={stat.max ?? 100}
-                    value={values[stat.key] ?? ""}
-                    onChange={(e) =>
-                      setValues((v) => ({ ...v, [stat.key]: e.target.value }))
-                    }
-                    placeholder={`${stat.min ?? 0}-${stat.max ?? 100}`}
-                  />
-                </div>
-              ))}
+              {allStats.map((stat) => {
+                const inputRange = getInputRange(stat);
+                const target = getInlineTarget(stat);
+                const valueNum =
+                  values[stat.key] !== undefined && values[stat.key] !== ""
+                    ? Number(values[stat.key])
+                    : null;
+                const status = classifyVsInlineTarget(
+                  Number.isFinite(valueNum as number) ? (valueNum as number) : null,
+                  stat,
+                );
+                const valueColor =
+                  status === "in_range"
+                    ? "border-green-600/60"
+                    : status === "below_range"
+                    ? "border-red-600/60"
+                    : status === "above_range"
+                    ? "border-yellow-600/60"
+                    : "";
+                return (
+                  <div key={stat.key} className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor={`stat-${stat.key}`} className="text-sm">
+                        {stat.label}
+                        {stat.suffix ? ` (${stat.suffix})` : ""}
+                      </Label>
+                      {target && (
+                        <span
+                          data-testid={`stat-target-${stat.key}`}
+                          className="text-[10px] text-gray-500 font-mono"
+                        >
+                          target: {target.min}-{target.max}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        id={`stat-${stat.key}`}
+                        data-testid={`stat-input-${stat.key}`}
+                        type="number"
+                        step={
+                          stat.decimals === 0
+                            ? "1"
+                            : `0.${"0".repeat(Math.max(0, stat.decimals - 1))}1`
+                        }
+                        min={inputRange.min}
+                        max={inputRange.max}
+                        value={values[stat.key] ?? ""}
+                        onChange={(e) =>
+                          setValues((v) => ({ ...v, [stat.key]: e.target.value }))
+                        }
+                        placeholder={`${inputRange.min}-${inputRange.max}`}
+                        className={`flex-1 ${valueColor}`}
+                      />
+                      <Input
+                        data-testid={`stat-sample-${stat.key}`}
+                        type="number"
+                        min={0}
+                        value={sampleSizesPerStat[stat.key] ?? ""}
+                        onChange={(e) =>
+                          setSampleSizesPerStat((s) => ({
+                            ...s,
+                            [stat.key]: e.target.value,
+                          }))
+                        }
+                        placeholder="n"
+                        className="w-20 text-xs"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
