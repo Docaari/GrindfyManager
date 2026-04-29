@@ -104,19 +104,14 @@ import {
   type InsertSessionWalletSnapshot,
   hudLayouts,
   hudStatSnapshots,
-  hudOcrAudit,
+  hudStatTargets,
   type HudLayout,
   type InsertHudLayout,
   type UpdateHudLayout,
   type HudStatSnapshot,
   type InsertHudStatSnapshot,
-  type HudOcrAuditRow,
-  type HudLayoutFieldEntry,
-  studyThemes,
-  studyTabs,
-  studyThemeSpotLinks,
-  type StudyTheme,
-  type StudyThemeSpotLink,
+  type HudStatTarget,
+  type InsertHudStatTarget,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, lt, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
@@ -670,6 +665,19 @@ export interface IStorage {
     spotsReviewedThisWeek: number;
     hoursStudiedThisWeek: number;
   }>;
+
+  // Sprint F4 — hud_stat_targets (knowledge base global, ADR-057)
+  getHudStatTargets(filters?: {
+    format?: string;
+    stakeBucket?: string;
+    statKey?: string;
+  }): Promise<HudStatTarget[]>;
+  getHudStatTarget(
+    statKey: string,
+    format: string,
+    stakeBucket: string,
+  ): Promise<HudStatTarget | undefined>;
+  createHudStatTarget(input: InsertHudStatTarget): Promise<HudStatTarget>;
 
   transaction<T>(fn: (tx: IStorage) => Promise<T>): Promise<T>;
 
@@ -6403,734 +6411,65 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return result.length > 0;
   }
 
-  // ---------------------------------------------------------------------------
-  // Sprint Stats-V3: snapshot patch (RF-06) + OCR audit (RF-12)
-  // ---------------------------------------------------------------------------
+  // ===========================================================================
+  // Sprint F4 — hud_stat_targets (ADR-057)
+  // ===========================================================================
 
-  async updateHudStatSnapshot(
-    id: string,
-    userId: string,
-    patch: {
-      values?: Record<string, number | null>;
-      captureMethod?: string;
-      sourceImageKey?: string | null;
-      ocrConfidence?: Record<string, number> | null;
-      ocrRawResponse?: unknown | null;
-    },
-  ): Promise<HudStatSnapshot | undefined> {
-    return await db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(hudStatSnapshots)
-        .where(
-          and(
-            eq(hudStatSnapshots.id, id),
-            eq(hudStatSnapshots.userId, userId),
-          ),
-        );
-      if (!existing) return undefined;
-
-      const updateData: Record<string, any> = {};
-      if (patch.values !== undefined) {
-        // Patch parcial: merge sobre values existentes, com null preservado.
-        updateData.values = { ...(existing.values ?? {}), ...patch.values };
-      }
-      if (patch.captureMethod !== undefined) {
-        updateData.captureMethod = patch.captureMethod;
-      }
-      if (patch.sourceImageKey !== undefined) {
-        updateData.sourceImageKey = patch.sourceImageKey;
-      }
-      if (patch.ocrConfidence !== undefined) {
-        updateData.ocrConfidence = patch.ocrConfidence;
-      }
-      if (patch.ocrRawResponse !== undefined) {
-        updateData.ocrRawResponse = patch.ocrRawResponse;
-      }
-
-      if (Object.keys(updateData).length === 0) {
-        return existing;
-      }
-
-      const [row] = await tx
-        .update(hudStatSnapshots)
-        .set(updateData)
-        .where(
-          and(
-            eq(hudStatSnapshots.id, id),
-            eq(hudStatSnapshots.userId, userId),
-          ),
-        )
-        .returning();
-      return row;
-    });
+  async getHudStatTargets(filters?: {
+    format?: string;
+    stakeBucket?: string;
+    statKey?: string;
+  }): Promise<HudStatTarget[]> {
+    const conds: any[] = [];
+    if (filters?.format) conds.push(eq(hudStatTargets.format, filters.format));
+    if (filters?.stakeBucket)
+      conds.push(eq(hudStatTargets.stakeBucket, filters.stakeBucket));
+    if (filters?.statKey)
+      conds.push(eq(hudStatTargets.statKey, filters.statKey));
+    const query = db.select().from(hudStatTargets);
+    return conds.length > 0
+      ? await query.where(and(...conds)).orderBy(asc(hudStatTargets.statKey))
+      : await query.orderBy(asc(hudStatTargets.statKey));
   }
 
-  async insertHudOcrAudit(userId: string): Promise<HudOcrAuditRow> {
-    const id = nanoid();
-    const [row] = await db
-      .insert(hudOcrAudit)
-      .values({ id, userId })
-      .returning();
-    return row;
-  }
-
-  async getHudOcrAudit(
-    userId: string,
-    sinceTs: Date,
-  ): Promise<HudOcrAuditRow[]> {
-    return await db
-      .select()
-      .from(hudOcrAudit)
-      .where(and(eq(hudOcrAudit.userId, userId), gte(hudOcrAudit.createdAt, sinceTs)))
-      .orderBy(desc(hudOcrAudit.createdAt));
-  }
-
-  /**
-   * Sprint Stats-V3 reviewer R1 (INFO-6): cache lookup OCR via index parcial.
-   * Usa o index expression `idx_hud_snapshots_image_sha256` (migration 0020)
-   * em vez de scan + .find() em JS.
-   */
-  async findHudStatSnapshotByImageSha256(
-    userId: string,
-    sha: string,
-  ): Promise<HudStatSnapshot | undefined> {
+  async getHudStatTarget(
+    statKey: string,
+    format: string,
+    stakeBucket: string,
+  ): Promise<HudStatTarget | undefined> {
     const rows = await db
       .select()
-      .from(hudStatSnapshots)
+      .from(hudStatTargets)
       .where(
         and(
-          eq(hudStatSnapshots.userId, userId),
-          sql`${hudStatSnapshots.ocrRawResponse}->>'image_sha256' = ${sha}`,
+          eq(hudStatTargets.statKey, statKey),
+          eq(hudStatTargets.format, format),
+          eq(hudStatTargets.stakeBucket, stakeBucket),
         ),
       )
-      .orderBy(desc(hudStatSnapshots.capturedAt))
+      .orderBy(desc(hudStatTargets.version))
       .limit(1);
     return rows[0];
   }
 
-  // ===========================================================================
-  // Sprint Studies-Reform — RF-05/06/07 storage methods (ADR-067/068)
-  // Migration 0021_studies_reform.sql
-  // ===========================================================================
-
-  async getStudyTheme(themeId: string): Promise<StudyTheme | null> {
+  async createHudStatTarget(
+    input: InsertHudStatTarget,
+  ): Promise<HudStatTarget> {
+    const id = nanoid();
     const [row] = await db
-      .select()
-      .from(studyThemes)
-      .where(eq(studyThemes.id, themeId))
-      .limit(1);
-    return (row as StudyTheme) ?? null;
-  }
-
-  async getStudyThemeByName(name: string, userId: string): Promise<StudyTheme | null> {
-    const [row] = await db
-      .select()
-      .from(studyThemes)
-      .where(
-        and(
-          eq(studyThemes.userId, userId),
-          sql`lower(${studyThemes.name}) = lower(${name})`,
-        ),
-      )
-      .limit(1);
-    return (row as StudyTheme) ?? null;
-  }
-
-  async getStudyTabsByTheme(themeId: string): Promise<any[]> {
-    const rows = await db
-      .select()
-      .from(studyTabs)
-      .where(eq(studyTabs.themeId, themeId))
-      .orderBy(asc(studyTabs.sortOrder));
-    return rows;
-  }
-
-  async linkSpotToTheme(input: {
-    themeId: string;
-    spotId: string;
-    userId: string;
-    reasoningText?: string | null;
-  }): Promise<StudyThemeSpotLink & { alreadyLinked?: boolean }> {
-    const [existing] = await db
-      .select()
-      .from(studyThemeSpotLinks)
-      .where(
-        and(
-          eq(studyThemeSpotLinks.themeId, input.themeId),
-          eq(studyThemeSpotLinks.spotId, input.spotId),
-        ),
-      )
-      .limit(1);
-
-    if (existing) {
-      return { ...(existing as StudyThemeSpotLink), alreadyLinked: true };
-    }
-
-    const id = nanoid(21);
-    const [row] = await db
-      .insert(studyThemeSpotLinks)
+      .insert(hudStatTargets)
       .values({
         id,
-        themeId: input.themeId,
-        spotId: input.spotId,
-        userId: input.userId,
-        reasoningText: input.reasoningText ?? null,
+        statKey: input.statKey,
+        format: input.format,
+        stakeBucket: input.stakeBucket,
+        targetMin: String(input.targetMin),
+        targetMax: String(input.targetMax),
+        source: input.source ?? "founder",
+        version: input.version ?? 1,
       })
       .returning();
-    return row as StudyThemeSpotLink;
-  }
-
-  async unlinkSpotFromTheme(linkId: string, userId: string): Promise<boolean> {
-    const result = await db
-      .delete(studyThemeSpotLinks)
-      .where(
-        and(
-          eq(studyThemeSpotLinks.id, linkId),
-          eq(studyThemeSpotLinks.userId, userId),
-        ),
-      )
-      .returning({ id: studyThemeSpotLinks.id });
-    return result.length > 0;
-  }
-
-  async getLinkedSpots(themeId: string): Promise<any[]> {
-    const rows = await db
-      .select({
-        link: studyThemeSpotLinks,
-        spot: starredHands,
-      })
-      .from(studyThemeSpotLinks)
-      .innerJoin(starredHands, eq(starredHands.id, studyThemeSpotLinks.spotId))
-      .where(eq(studyThemeSpotLinks.themeId, themeId))
-      .orderBy(desc(studyThemeSpotLinks.linkedAt));
-    return rows.map((r: any) => ({
-      ...(r.spot as object),
-      themeLink: {
-        id: r.link.id,
-        themeId: r.link.themeId,
-        linkedAt: r.link.linkedAt,
-        reasoningText: r.link.reasoningText,
-      },
-    }));
-  }
-
-  async getStatsLeaks(_userId: string, _top: number): Promise<any[]> {
-    // TODO Sprint Studies-Reform-Backend: detectar leaks via hud_stats_snapshots
-    // ou stats_analyzer_history. Por enquanto retorna [] (frontend tolera).
-    return [];
-  }
-
-  async getStaleSpots(userId: string, days: number): Promise<any[]> {
-    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    // Spots reviewLater=true sem link em study_theme_spot_links e mais antigos que cutoff.
-    const rows = await db
-      .select()
-      .from(starredHands)
-      .where(
-        and(
-          eq(starredHands.userId, userId),
-          eq(starredHands.reviewLater, true),
-          lte(starredHands.createdAt, cutoff),
-          sql`NOT EXISTS (SELECT 1 FROM ${studyThemeSpotLinks} WHERE ${studyThemeSpotLinks.spotId} = ${starredHands.id})`,
-        ),
-      )
-      .orderBy(asc(starredHands.createdAt))
-      .limit(20);
-    return rows;
-  }
-
-  async getDormantThemes(
-    userId: string,
-    days: number,
-    maxProgress: number = 100,
-  ): Promise<any[]> {
-    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    const rows = await db
-      .select()
-      .from(studyThemes)
-      .where(
-        and(
-          eq(studyThemes.userId, userId),
-          lte(studyThemes.updatedAt, cutoff),
-          lt(studyThemes.progress, maxProgress),
-        ),
-      )
-      .orderBy(asc(studyThemes.updatedAt))
-      .limit(10);
-    return rows;
-  }
-
-  async getStudyStreak(userId: string): Promise<{
-    days: number;
-    last_activity_at: string | null;
-    heatmap_last_7_days: Array<{ date: string; active: boolean }>;
-  }> {
-    const [row] = await db
-      .select({
-        days: users.studyStreakDays,
-        lastActivity: users.lastStudyActivityAt,
-      })
-      .from(users)
-      .where(eq(users.userPlatformId, userId))
-      .limit(1);
-
-    // Heatmap em UTC consistente — date string e comparison usam mesmo fuso.
-    const heatmap: Array<{ date: string; active: boolean }> = [];
-    const lastActivity = row?.lastActivity ?? null;
-    const lastActiveStartUtc = lastActivity
-      ? Date.UTC(
-          new Date(lastActivity).getUTCFullYear(),
-          new Date(lastActivity).getUTCMonth(),
-          new Date(lastActivity).getUTCDate(),
-        )
-      : 0;
-    const nowUtc = new Date();
-    const todayStartUtc = Date.UTC(
-      nowUtc.getUTCFullYear(),
-      nowUtc.getUTCMonth(),
-      nowUtc.getUTCDate(),
-    );
-    for (let i = 6; i >= 0; i--) {
-      const startUtc = todayStartUtc - i * 86400000;
-      const dateStr = new Date(startUtc).toISOString().slice(0, 10);
-      heatmap.push({
-        date: dateStr,
-        active: lastActiveStartUtc === startUtc,
-      });
-    }
-
-    return {
-      days: Number(row?.days ?? 0),
-      last_activity_at: lastActivity ? new Date(lastActivity).toISOString() : null,
-      heatmap_last_7_days: heatmap,
-    };
-  }
-
-  async bumpStudyStreak(userId: string): Promise<{
-    days: number;
-    last_activity_at: string;
-    bumped: boolean;
-  }> {
-    const [row] = await db
-      .select({
-        days: users.studyStreakDays,
-        lastActivity: users.lastStudyActivityAt,
-      })
-      .from(users)
-      .where(eq(users.userPlatformId, userId))
-      .limit(1);
-
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const prevDays = Number(row?.days ?? 0);
-    const prevActivity = row?.lastActivity ? new Date(row.lastActivity) : null;
-    const prevStart = prevActivity
-      ? new Date(prevActivity.getFullYear(), prevActivity.getMonth(), prevActivity.getDate()).getTime()
-      : 0;
-
-    if (prevStart === todayStart) {
-      return {
-        days: prevDays,
-        last_activity_at: prevActivity!.toISOString(),
-        bumped: false,
-      };
-    }
-
-    const diffDays = prevStart > 0 ? Math.round((todayStart - prevStart) / 86400000) : null;
-    const newDays = diffDays === 1 ? prevDays + 1 : 1;
-
-    await db
-      .update(users)
-      .set({
-        studyStreakDays: newDays,
-        lastStudyActivityAt: now,
-      })
-      .where(eq(users.userPlatformId, userId));
-
-    return {
-      days: newDays,
-      last_activity_at: now.toISOString(),
-      bumped: true,
-    };
-  }
-
-  async getDashboardInsightsWeek(userId: string): Promise<{
-    themesOpenedThisWeek: number;
-    spotsReviewedThisWeek: number;
-    hoursStudiedThisWeek: number;
-  }> {
-    const now = new Date();
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-    const [{ themes }] = await db
-      .select({
-        themes: sql<number>`cast(count(*) as integer)`,
-      })
-      .from(studyThemes)
-      .where(
-        and(
-          eq(studyThemes.userId, userId),
-          gte(studyThemes.updatedAt, weekAgo),
-        ),
-      );
-
-    const [{ spots }] = await db
-      .select({
-        spots: sql<number>`cast(count(*) as integer)`,
-      })
-      .from(starredHands)
-      .where(
-        and(
-          eq(starredHands.userId, userId),
-          gte(starredHands.reviewedAt, weekAgo),
-        ),
-      );
-
-    return {
-      themesOpenedThisWeek: Number(themes ?? 0),
-      spotsReviewedThisWeek: Number(spots ?? 0),
-      // TODO Sprint Studies-Reform-Backend: somar duracao de grindSessions com tag estudo.
-      hoursStudiedThisWeek: 0,
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Sprint Biblioteca-1 — lesson library stubs.
-  // Real implementations in Sprint Biblioteca-2. Tests mock at module level.
-  // ---------------------------------------------------------------------------
-  async listLibraryCourses(_opts?: { userId?: string; onlyPublished?: boolean }): Promise<any[]> {
-    throw new Error("listLibraryCourses not implemented (Sprint Biblioteca-2)");
-  }
-  async getLibraryCourseBySlug(_slug: string): Promise<any | null> {
-    throw new Error("getLibraryCourseBySlug not implemented (Sprint Biblioteca-2)");
-  }
-  async getLibraryLesson(_id: string): Promise<any | null> {
-    throw new Error("getLibraryLesson not implemented (Sprint Biblioteca-2)");
-  }
-  async getLibraryLessonBySlug(_courseSlug: string, _lessonSlug: string): Promise<any | null> {
-    throw new Error("getLibraryLessonBySlug not implemented (Sprint Biblioteca-2)");
-  }
-  async upsertLibraryCourseBySlug(_data: any): Promise<any> {
-    throw new Error("upsertLibraryCourseBySlug not implemented (Sprint Biblioteca-2)");
-  }
-  async upsertLibraryModuleBySlug(_data: any): Promise<any> {
-    throw new Error("upsertLibraryModuleBySlug not implemented (Sprint Biblioteca-2)");
-  }
-  async upsertLibraryLessonBySlug(_data: any): Promise<any> {
-    throw new Error("upsertLibraryLessonBySlug not implemented (Sprint Biblioteca-2)");
-  }
-  async lessonAccessLookup(_userId: string | undefined, _lessonIds: string[]): Promise<Map<string, boolean>> {
-    throw new Error("lessonAccessLookup not implemented (Sprint Biblioteca-2)");
-  }
-  async findLessonAccess(_args: { userId?: string; lessonId: string }): Promise<any | null> {
-    throw new Error("findLessonAccess not implemented (Sprint Biblioteca-2)");
-  }
-  async bulkGrantLessonAccess(_args: any): Promise<any> {
-    throw new Error("bulkGrantLessonAccess not implemented (Sprint Biblioteca-2)");
-  }
-  async recordLibraryEvents(_events: any[]): Promise<void> {
-    throw new Error("recordLibraryEvents not implemented (Sprint Biblioteca-2)");
-  }
-  async createLibraryEvent(_event: any): Promise<any> {
-    throw new Error("createLibraryEvent not implemented (Sprint Biblioteca-2)");
-  }
-  async countLibraryEventsForUserInWindow(_args: { userId: string; windowSeconds: number }): Promise<number> {
-    throw new Error("countLibraryEventsForUserInWindow not implemented (Sprint Biblioteca-2)");
-  }
-  async upsertLibraryProgress(_progress: any): Promise<any> {
-    throw new Error("upsertLibraryProgress not implemented (Sprint Biblioteca-2)");
-  }
-  async getLibraryProgressForLesson(_args: { userId: string; lessonId: string }): Promise<any[]> {
-    throw new Error("getLibraryProgressForLesson not implemented (Sprint Biblioteca-2)");
-  }
-  async findLibraryLessonsByCategory(_categoryId: string, _opts?: any): Promise<any[]> {
-    throw new Error("findLibraryLessonsByCategory not implemented (Sprint Biblioteca-2)");
-  }
-  async findLibraryLessonsByTag(_tag: string, _opts?: any): Promise<any[]> {
-    throw new Error("findLibraryLessonsByTag not implemented (Sprint Biblioteca-2)");
-  }
-  async libraryLessonProgressLookup(_userId: string | undefined, _lessonIds: string[]): Promise<Map<string, any>> {
-    throw new Error("libraryLessonProgressLookup not implemented (Sprint Biblioteca-2)");
-  }
-  async libraryLessonAccessLookup(_userId: string | undefined, _lessonIds: string[]): Promise<Map<string, boolean>> {
-    throw new Error("libraryLessonAccessLookup not implemented (Sprint Biblioteca-2)");
-  }
-
-  // ============================================================================
-  // Sprint F4 — PrimeDope variance simulation + drill-down
-  // ============================================================================
-
-  async findRecentPrimedopeRunByHash(
-    hash: string,
-    withinMinutes: number,
-  ): Promise<any | null> {
-    try {
-      const cutoff = new Date(Date.now() - withinMinutes * 60_000);
-      const rows = await db.execute(
-        sql`SELECT * FROM primedope_runs
-            WHERE input_hash = ${hash}
-              AND created_at >= ${cutoff}
-            ORDER BY created_at DESC
-            LIMIT 1`,
-      );
-      const list: any[] = (rows as any).rows ?? rows;
-      return list?.[0] ?? null;
-    } catch (err) {
-      console.error("[storage] findRecentPrimedopeRunByHash failed", err);
-      return null;
-    }
-  }
-
-  async findFallbackPrimedopeRun(
-    userId: string,
-    profileLetter: string,
-    dayOfWeek: number,
-    withinHours: number,
-  ): Promise<any | null> {
-    try {
-      const cutoff = new Date(Date.now() - withinHours * 3600_000);
-      const rows = await db.execute(
-        sql`SELECT * FROM primedope_runs
-            WHERE user_id = ${userId}
-              AND profile_letter = ${profileLetter}
-              AND day_of_week = ${dayOfWeek}
-              AND created_at >= ${cutoff}
-              AND source IN ('primedope','cache')
-            ORDER BY created_at DESC
-            LIMIT 1`,
-      );
-      const list: any[] = (rows as any).rows ?? rows;
-      return list?.[0] ?? null;
-    } catch (err) {
-      console.error("[storage] findFallbackPrimedopeRun failed", err);
-      return null;
-    }
-  }
-
-  async insertPrimedopeRun(data: any): Promise<any> {
-    try {
-      const id = data.id ?? `pdr_${nanoid(16)}`;
-      const expiresAt = data.expiresAt
-        ? data.expiresAt instanceof Date
-          ? data.expiresAt
-          : new Date(data.expiresAt)
-        : new Date(Date.now() + 90 * 86400_000);
-      const row = await db.execute(
-        sql`INSERT INTO primedope_runs (
-              id, user_id, profile_letter, day_of_week, multiplier,
-              input_hash, input_json, result_json, histogram_path,
-              random_runs_path, latency_ms, source, pinned, expires_at
-            ) VALUES (
-              ${id}, ${data.userId}, ${data.profileLetter}, ${data.dayOfWeek},
-              ${data.multiplier}, ${data.inputHash},
-              ${JSON.stringify(data.inputJson)}, ${JSON.stringify(data.resultJson)},
-              ${data.histogramPath ?? null}, ${data.randomRunsPath ?? null},
-              ${data.latencyMs ?? null}, ${data.source ?? "primedope"},
-              ${data.pinned ?? false}, ${expiresAt}
-            )
-            RETURNING *`,
-      );
-      const list: any[] = (row as any).rows ?? row;
-      return list?.[0] ?? { id, ...data, expiresAt };
-    } catch (err) {
-      console.error("[storage] insertPrimedopeRun failed", err);
-      throw err;
-    }
-  }
-
-  async listPrimedopeRunsForUser(filters: {
-    userId: string;
-    profileLetter?: string;
-    dayOfWeek?: number;
-    limit?: number;
-  }): Promise<any[]> {
-    try {
-      const limit = filters.limit ?? 20;
-      const conditions: any[] = [sql`user_id = ${filters.userId}`];
-      if (filters.profileLetter) {
-        conditions.push(sql`profile_letter = ${filters.profileLetter}`);
-      }
-      if (typeof filters.dayOfWeek === "number") {
-        conditions.push(sql`day_of_week = ${filters.dayOfWeek}`);
-      }
-      const where = conditions.reduce((acc, c, i) =>
-        i === 0 ? c : sql`${acc} AND ${c}`,
-      );
-      const rows = await db.execute(
-        sql`SELECT * FROM primedope_runs
-            WHERE ${where}
-            ORDER BY created_at DESC
-            LIMIT ${limit}`,
-      );
-      const list: any[] = (rows as any).rows ?? rows;
-      return list ?? [];
-    } catch (err) {
-      console.error("[storage] listPrimedopeRunsForUser failed", err);
-      return [];
-    }
-  }
-
-  async getPrimedopeRunById(id: string): Promise<any | null> {
-    try {
-      const rows = await db.execute(
-        sql`SELECT * FROM primedope_runs WHERE id = ${id} LIMIT 1`,
-      );
-      const list: any[] = (rows as any).rows ?? rows;
-      return list?.[0] ?? null;
-    } catch (err) {
-      console.error("[storage] getPrimedopeRunById failed", err);
-      return null;
-    }
-  }
-
-  async setPrimedopeRunPinned(input: {
-    id: string;
-    userId: string;
-    pinned: boolean;
-  }): Promise<any> {
-    try {
-      const expiresAt = input.pinned ? null : new Date(Date.now() + 90 * 86400_000);
-      const rows = await db.execute(
-        sql`UPDATE primedope_runs
-            SET pinned = ${input.pinned}, expires_at = ${expiresAt}
-            WHERE id = ${input.id} AND user_id = ${input.userId}
-            RETURNING *`,
-      );
-      const list: any[] = (rows as any).rows ?? rows;
-      return list?.[0] ?? { id: input.id, pinned: input.pinned };
-    } catch (err) {
-      console.error("[storage] setPrimedopeRunPinned failed", err);
-      throw err;
-    }
-  }
-
-  async listPlannedTournamentsForDayDetail(input: {
-    userId: string;
-    profileLetter: string;
-    dayOfWeek: number;
-  }): Promise<any[]> {
-    try {
-      const rows = await db.execute(
-        sql`SELECT
-              pt.id AS "plannedId",
-              pt.template_id AS "templateId",
-              pt.site,
-              pt.type,
-              pt.speed,
-              pt.buy_in AS "buyIn",
-              pt.guaranteed,
-              pt.name,
-              pt.time,
-              pt.day_of_week AS "dayOfWeek",
-              pt.profile,
-              pt.rebuys,
-              pt.bounty,
-              pt.position,
-              pt.result,
-              t.currency,
-              t.players_avg,
-              t.places_paid_avg,
-              t.rake_pct,
-              1 AS count
-            FROM planned_tournaments pt
-            LEFT JOIN tournaments t ON t.id = pt.template_id
-            WHERE pt.user_id = ${input.userId}
-              AND pt.profile = ${input.profileLetter}
-              AND pt.day_of_week = ${input.dayOfWeek}
-            ORDER BY pt.time ASC`,
-      );
-      const list: any[] = (rows as any).rows ?? rows;
-      return list ?? [];
-    } catch (err) {
-      console.error("[storage] listPlannedTournamentsForDayDetail failed", err);
-      return [];
-    }
-  }
-
-  async listPlannedTournamentsForBucketsPrefill(input: {
-    userId: string;
-    profileLetter: string;
-    dayOfWeek: number;
-  }): Promise<any[]> {
-    try {
-      const rows = await db.execute(
-        sql`SELECT
-              pt.id AS "plannedId",
-              pt.template_id AS "templateId",
-              pt.site,
-              pt.buy_in AS "buyIn",
-              pt.name,
-              pt.type,
-              pt.speed,
-              tt.avg_buyin AS "avgBuyIn",
-              tt.avg_roi AS "avgRoi",
-              tt.avg_field_size AS "avgFieldSize",
-              t.players_avg,
-              t.places_paid_avg,
-              t.rake_pct,
-              t.currency,
-              1 AS count
-            FROM planned_tournaments pt
-            LEFT JOIN tournament_templates tt ON tt.id = pt.template_id
-            LEFT JOIN tournaments t ON t.id = pt.template_id
-            WHERE pt.user_id = ${input.userId}
-              AND pt.profile = ${input.profileLetter}
-              AND pt.day_of_week = ${input.dayOfWeek}
-            ORDER BY pt.time ASC`,
-      );
-      const raw: any[] = (rows as any).rows ?? rows;
-      return (raw ?? []).map((r: any) => ({
-        plannedId: r.plannedId,
-        templateId: r.templateId,
-        site: r.site,
-        currency: r.currency ?? "USD",
-        count: r.count ?? 1,
-        buyIn: r.buyIn,
-        name: r.name,
-        template:
-          r.avgBuyIn != null
-            ? {
-                avgBuyIn: Number(r.avgBuyIn),
-                avgRoi: Number(r.avgRoi ?? 0),
-                avgFieldSize: r.avgFieldSize,
-              }
-            : null,
-        tournamentSample:
-          r.players_avg != null
-            ? {
-                buyIn: Number(r.buyIn ?? 0),
-                players_avg: r.players_avg,
-                places_paid_avg: r.places_paid_avg,
-                rake_pct: r.rake_pct != null ? Number(r.rake_pct) : null,
-              }
-            : null,
-      }));
-    } catch (err) {
-      console.error(
-        "[storage] listPlannedTournamentsForBucketsPrefill failed",
-        err,
-      );
-      return [];
-    }
-  }
-
-  async listTournamentsForBackfillSimulationFields(): Promise<any[]> {
-    try {
-      const rows = await db.execute(
-        sql`SELECT id, user_id, site, field_size, players_avg, places_paid_avg, rake_pct
-            FROM tournaments
-            WHERE players_avg IS NULL OR rake_pct IS NULL`,
-      );
-      const list: any[] = (rows as any).rows ?? rows;
-      return list ?? [];
-    } catch (err) {
-      console.error(
-        "[storage] listTournamentsForBackfillSimulationFields failed",
-        err,
-      );
-      return [];
-    }
+    return row;
   }
 }
 

@@ -198,6 +198,51 @@ export function registerStatsAnalyzerRoutes(app: Express): void {
   });
 
   // ---------------------------------------------------------------------------
+  // Targets (knowledge base, ADR-057)
+  // ---------------------------------------------------------------------------
+
+  app.get("/api/hud-stat-targets", requireAuth, async (req: any, res) => {
+    try {
+      const filters: any = {};
+      if (typeof req.query.format === "string") filters.format = req.query.format;
+      if (typeof req.query.stakeBucket === "string")
+        filters.stakeBucket = req.query.stakeBucket;
+      if (typeof req.query.statKey === "string")
+        filters.statKey = req.query.statKey;
+      const targets = await storage.getHudStatTargets(filters);
+      res.json(targets);
+    } catch (err) {
+      console.error("[stats-analyzer] getHudStatTargets failed", err);
+      res.status(500).json({ message: "Falha ao listar targets." });
+    }
+  });
+
+  app.get(
+    "/api/hud-stat-targets/:statKey",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const format =
+          typeof req.query.format === "string" ? req.query.format : "mtt-6max";
+        const stakeBucket =
+          typeof req.query.stakeBucket === "string"
+            ? req.query.stakeBucket
+            : "mid";
+        const row = await storage.getHudStatTarget(
+          req.params.statKey,
+          format,
+          stakeBucket,
+        );
+        if (!row) return res.status(404).json({ message: "Target nao encontrado." });
+        res.json(row);
+      } catch (err) {
+        console.error("[stats-analyzer] getHudStatTarget failed", err);
+        res.status(500).json({ message: "Falha ao obter target." });
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
   // Compare
   // ---------------------------------------------------------------------------
 
