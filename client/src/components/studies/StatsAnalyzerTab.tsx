@@ -16,18 +16,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, BarChart3 } from "lucide-react";
+import { Plus, BarChart3, Settings, GitCompare } from "lucide-react";
 import StatsSnapshotEditor, {
   type HudLayout,
 } from "./StatsSnapshotEditor";
 import StatsSnapshotList, {
   type HudStatSnapshot,
 } from "./StatsSnapshotList";
+import HudLayoutCustomizer from "./HudLayoutCustomizer";
+import SnapshotComparator from "./SnapshotComparator";
 
 export default function StatsAnalyzerTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editorOpen, setEditorOpen] = useState(false);
+  const [customizerOpen, setCustomizerOpen] = useState(false);
+  const [customizerMode, setCustomizerMode] = useState<"create" | "edit">("create");
+  const [customizerLayout, setCustomizerLayout] = useState<HudLayout | null>(null);
+  const [comparatorOpen, setComparatorOpen] = useState(false);
+  const [compareSelection, setCompareSelection] = useState<string[]>([]);
   const [filterLayoutId, setFilterLayoutId] = useState<string>("__all__");
 
   const layoutsQuery = useQuery<HudLayout[]>({
@@ -89,15 +96,30 @@ export default function StatsAnalyzerTab() {
             Registre stats HUD do seu tracker e compare evolucao.
           </p>
         </div>
-        <Button
-          data-testid="stats-new-snapshot"
-          onClick={() => setEditorOpen(true)}
-          disabled={!defaultLayout}
-          className="bg-[#16a249] text-black font-semibold hover:bg-poker-accent/90"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Novo snapshot
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            data-testid="stats-customize-layout"
+            variant="outline"
+            onClick={() => {
+              setCustomizerMode("create");
+              setCustomizerLayout(null);
+              setCustomizerOpen(true);
+            }}
+            className="border-gray-700 text-gray-200"
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Novo layout
+          </Button>
+          <Button
+            data-testid="stats-new-snapshot"
+            onClick={() => setEditorOpen(true)}
+            disabled={!defaultLayout}
+            className="bg-[#16a249] text-black font-semibold hover:bg-poker-accent/90"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Novo snapshot
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -141,10 +163,48 @@ export default function StatsAnalyzerTab() {
             </Select>
           </div>
 
+          {compareSelection.length === 2 && (
+            <div
+              data-testid="compare-bar"
+              className="bg-gray-800/80 border border-poker-accent/40 rounded-md px-3 py-2 flex items-center justify-between"
+            >
+              <span className="text-sm text-gray-200">
+                2 snapshots selecionados
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setCompareSelection([])}
+                  data-testid="compare-clear"
+                >
+                  Limpar
+                </Button>
+                <Button
+                  size="sm"
+                  data-testid="compare-open"
+                  onClick={() => setComparatorOpen(true)}
+                  className="bg-poker-accent text-black"
+                >
+                  <GitCompare className="w-4 h-4 mr-1" />
+                  Comparar
+                </Button>
+              </div>
+            </div>
+          )}
+
           <StatsSnapshotList
             snapshots={snapshots}
             layouts={layouts}
             onDelete={(id) => deleteSnapshot.mutate(id)}
+            onCompare={(id) => {
+              setCompareSelection((sel) => {
+                if (sel.includes(id)) return sel.filter((x) => x !== id);
+                if (sel.length >= 2) return [sel[1], id];
+                return [...sel, id];
+              });
+            }}
+            selectedForCompare={compareSelection}
           />
         </>
       )}
@@ -153,6 +213,21 @@ export default function StatsAnalyzerTab() {
         open={editorOpen}
         onOpenChange={setEditorOpen}
         layout={defaultLayout}
+      />
+      <HudLayoutCustomizer
+        open={customizerOpen}
+        onOpenChange={setCustomizerOpen}
+        layout={customizerLayout}
+        mode={customizerMode}
+      />
+      <SnapshotComparator
+        open={comparatorOpen}
+        onOpenChange={setComparatorOpen}
+        ids={
+          compareSelection.length === 2
+            ? [compareSelection[0], compareSelection[1]]
+            : null
+        }
       />
     </div>
   );
