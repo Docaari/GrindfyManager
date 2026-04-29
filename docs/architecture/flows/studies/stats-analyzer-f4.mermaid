@@ -1,0 +1,54 @@
+%% Sprint F4 — Stats Analyzer Targets + Sample Size
+%% Spec : Docs/specs/sprint-f4-stats-targets-sample-size.md
+%% ADRs : 057 (knowledge base global), 058 (sample size per stat)
+
+flowchart TD
+  subgraph Client[Client React]
+    Editor[StatsSnapshotEditor<br/>F4: target inline + n por stat]
+    List[StatsSnapshotList<br/>F4: avg n badge]
+    Comparator[SnapshotComparator<br/>F4: coluna Target + vsTarget]
+    Customizer[HudLayoutCustomizer<br/>F4: subGroup edit]
+  end
+
+  subgraph API[Express /api]
+    Layouts[/api/hud-layouts]
+    Snaps[/api/hud-stat-snapshots]
+    Targets[/api/hud-stat-targets<br/>NEW]
+  end
+
+  subgraph Storage[Drizzle storage]
+    Lay[(hud_layouts)]
+    Sn[(hud_stat_snapshots<br/>values: 3 formatos)]
+    Tgt[(hud_stat_targets<br/>NEW knowledge base)]
+  end
+
+  subgraph Helpers[Pure helpers]
+    Resolve[resolveTarget<br/>inline > targetRef > none]
+    Norm[normalizeSnapshotValues<br/>3 formatos -> canonico]
+    Class[classifyVsTarget<br/>below/in/above]
+  end
+
+  subgraph Coach[Coach AI]
+    Tool[read_user_hud_stats<br/>F4: confidence + target]
+  end
+
+  Editor -->|read targets| Targets
+  Editor -->|save snapshot| Snaps
+  Snaps --> Norm --> Sn
+  Comparator -->|fetch| Snaps
+  Comparator --> Resolve
+  Comparator --> Class
+  Customizer -->|CRUD| Layouts
+
+  Targets --> Tgt
+  Layouts --> Lay
+
+  Tool -->|reads| Sn
+  Tool -->|reads| Lay
+  Tool --> Resolve
+  Tool --> Norm
+  Tool --> Class
+
+  classDef new fill:#16a34a,stroke:#0a5e2c,color:#fff;
+  classDef helper fill:#3b82f6,stroke:#1e40af,color:#fff;
+  class Targets,Tgt,Resolve,Norm,Class new;
