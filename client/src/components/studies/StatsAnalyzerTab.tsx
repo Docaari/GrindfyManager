@@ -3,7 +3,7 @@
 // Spec: Docs/specs/sprint-f3-stats-analyzer.md
 // =============================================================================
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -25,11 +25,13 @@ import StatsSnapshotList, {
 } from "./StatsSnapshotList";
 import HudLayoutCustomizer from "./HudLayoutCustomizer";
 import SnapshotComparator from "./SnapshotComparator";
+import StatsWizardFirstUse from "./StatsWizardFirstUse";
 
 export default function StatsAnalyzerTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editorOpen, setEditorOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [customizerMode, setCustomizerMode] = useState<"create" | "edit">("create");
   const [customizerLayout, setCustomizerLayout] = useState<HudLayout | null>(null);
@@ -41,6 +43,19 @@ export default function StatsAnalyzerTab() {
     queryKey: ["/api/hud-layouts"],
   });
   const layouts = layoutsQuery.data ?? [];
+
+  // RF-08: wizard primeiro uso quando layouts.length === 0 apos load
+  useEffect(() => {
+    if (
+      !layoutsQuery.isLoading &&
+      layoutsQuery.isSuccess &&
+      layouts.length === 0 &&
+      !wizardOpen
+    ) {
+      setWizardOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutsQuery.isLoading, layoutsQuery.isSuccess, layouts.length]);
 
   const snapshotsQuery = useQuery<HudStatSnapshot[]>({
     queryKey: [
@@ -228,6 +243,10 @@ export default function StatsAnalyzerTab() {
             ? [compareSelection[0], compareSelection[1]]
             : null
         }
+      />
+      <StatsWizardFirstUse
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
       />
     </div>
   );

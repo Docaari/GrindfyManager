@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { registerTool, type CoachTool } from './registry';
 import { readCooldownHistoryTool } from './handlers/readCooldownHistory';
+import { readUserHudStatsTool } from '../coach/tools/readUserHudStats';
 
 // -----------------------------------------------------------------------------
 // Stubs de regressao Sprint Coach 2A — tools cujo handler real esta na
@@ -83,8 +84,11 @@ function safeRegister(tool: CoachTool): void {
 // Sprint Cooldown-3 (RF-07).
 safeRegister(readCooldownHistoryTool);
 
+// Sprint F3 (ADR-052).
+safeRegister(readUserHudStatsTool);
+
 // Sprint Coach 2A regression stubs (handlers reais na baseline broken).
 safeRegister(findTopLeaksStub);
 safeRegister(simulateBankrollStub);
 
-export { readCooldownHistoryTool };
+export { readCooldownHistoryTool, readUserHudStatsTool };
