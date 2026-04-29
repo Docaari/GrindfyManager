@@ -25,6 +25,11 @@ export interface ComparePayload {
     a: number | null;
     b: number | null;
     delta: number | null;
+    // F4 NOVO
+    aSampleSize?: number | null;
+    bSampleSize?: number | null;
+    target?: { min: number; max: number } | null;
+    vsTarget?: "below_range" | "in_range" | "above_range" | null;
   }>;
 }
 
@@ -104,37 +109,76 @@ export default function SnapshotComparator({ open, onOpenChange, ids }: Props) {
             </div>
 
             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 border-b border-gray-700/40 pb-1">
-              <div className="col-span-4">Stat</div>
-              <div className="col-span-3 text-right">Snapshot A</div>
-              <div className="col-span-3 text-right">Snapshot B</div>
+              <div className="col-span-3">Stat</div>
+              <div className="col-span-2 text-right">Target</div>
+              <div className="col-span-2 text-right">A</div>
+              <div className="col-span-2 text-right">B</div>
+              <div className="col-span-1 text-right">vs</div>
               <div className="col-span-2 text-right">Delta</div>
             </div>
 
             <div data-testid="compare-rows" className="space-y-1">
-              {payload.diffs.map((d) => (
-                <div
-                  key={d.key}
-                  data-testid={`compare-row-${d.key}`}
-                  className="grid grid-cols-12 gap-2 text-sm items-center"
-                >
-                  <div className="col-span-4 font-mono text-gray-300">{d.key}</div>
-                  <div className="col-span-3 text-right text-gray-200">
-                    {fmt(d.a)}
-                  </div>
-                  <div className="col-span-3 text-right text-gray-200">
-                    {fmt(d.b)}
-                  </div>
+              {payload.diffs.map((d) => {
+                const targetStr = d.target ? `${d.target.min}-${d.target.max}` : "—";
+                const vsColor =
+                  d.vsTarget === "in_range"
+                    ? "text-green-400"
+                    : d.vsTarget === "below_range"
+                    ? "text-red-400"
+                    : d.vsTarget === "above_range"
+                    ? "text-yellow-400"
+                    : "text-gray-500";
+                const vsLabel =
+                  d.vsTarget === "in_range"
+                    ? "OK"
+                    : d.vsTarget === "below_range"
+                    ? "↓"
+                    : d.vsTarget === "above_range"
+                    ? "↑"
+                    : "—";
+                return (
                   <div
-                    data-testid={`compare-delta-${d.key}`}
-                    className={`col-span-2 text-right font-mono flex items-center justify-end gap-1 ${deltaColor(
-                      d.delta,
-                    )}`}
+                    key={d.key}
+                    data-testid={`compare-row-${d.key}`}
+                    className="grid grid-cols-12 gap-2 text-sm items-center"
                   >
-                    {deltaIcon(d.delta)}
-                    {d.delta === null ? "—" : (d.delta > 0 ? "+" : "") + d.delta.toFixed(2)}
+                    <div className="col-span-3 font-mono text-gray-300 text-xs">{d.key}</div>
+                    <div
+                      data-testid={`compare-target-${d.key}`}
+                      className="col-span-2 text-right text-gray-500 font-mono text-xs"
+                    >
+                      {targetStr}
+                    </div>
+                    <div className="col-span-2 text-right text-gray-200">
+                      {fmt(d.a)}
+                      {d.aSampleSize ? (
+                        <span className="text-[9px] text-gray-500 ml-1">n={d.aSampleSize}</span>
+                      ) : null}
+                    </div>
+                    <div className="col-span-2 text-right text-gray-200">
+                      {fmt(d.b)}
+                      {d.bSampleSize ? (
+                        <span className="text-[9px] text-gray-500 ml-1">n={d.bSampleSize}</span>
+                      ) : null}
+                    </div>
+                    <div
+                      data-testid={`compare-vs-${d.key}`}
+                      className={`col-span-1 text-right font-mono text-xs ${vsColor}`}
+                    >
+                      {vsLabel}
+                    </div>
+                    <div
+                      data-testid={`compare-delta-${d.key}`}
+                      className={`col-span-2 text-right font-mono text-xs flex items-center justify-end gap-1 ${deltaColor(
+                        d.delta,
+                      )}`}
+                    >
+                      {deltaIcon(d.delta)}
+                      {d.delta === null ? "—" : (d.delta > 0 ? "+" : "") + d.delta.toFixed(2)}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

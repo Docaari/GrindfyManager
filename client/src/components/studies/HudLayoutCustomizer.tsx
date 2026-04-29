@@ -341,7 +341,7 @@ export default function HudLayoutCustomizer({
                           });
                         }}
                         placeholder="Label"
-                        className="col-span-3"
+                        className="col-span-2"
                       />
                       <Input
                         data-testid={`stat-key-${sIdx}-${stIdx}`}
@@ -350,7 +350,44 @@ export default function HudLayoutCustomizer({
                           updateStat(sIdx, stIdx, { key: slugify(e.target.value) })
                         }
                         placeholder="key"
-                        className="col-span-3 font-mono text-xs"
+                        className="col-span-2 font-mono text-xs"
+                      />
+                      <Input
+                        data-testid={`stat-subgroup-${sIdx}-${stIdx}`}
+                        value={(stat as any).subGroup ?? ""}
+                        onChange={(e) =>
+                          updateStat(sIdx, stIdx, {
+                            subGroup: e.target.value || undefined,
+                          } as any)
+                        }
+                        placeholder="sub"
+                        className="col-span-2 text-xs"
+                      />
+                      <Input
+                        type="number"
+                        data-testid={`stat-target-min-${sIdx}-${stIdx}`}
+                        value={(stat as any).targetMin ?? ""}
+                        onChange={(e) =>
+                          updateStat(sIdx, stIdx, {
+                            targetMin:
+                              e.target.value === "" ? undefined : Number(e.target.value),
+                          } as any)
+                        }
+                        placeholder="t-min"
+                        className="col-span-1"
+                      />
+                      <Input
+                        type="number"
+                        data-testid={`stat-target-max-${sIdx}-${stIdx}`}
+                        value={(stat as any).targetMax ?? ""}
+                        onChange={(e) =>
+                          updateStat(sIdx, stIdx, {
+                            targetMax:
+                              e.target.value === "" ? undefined : Number(e.target.value),
+                          } as any)
+                        }
+                        placeholder="t-max"
+                        className="col-span-1"
                       />
                       <Input
                         type="number"
@@ -379,17 +416,6 @@ export default function HudLayoutCustomizer({
                         }
                         placeholder="min"
                         className="col-span-1"
-                      />
-                      <Input
-                        type="number"
-                        value={stat.max ?? ""}
-                        onChange={(e) =>
-                          updateStat(sIdx, stIdx, {
-                            max: e.target.value === "" ? undefined : Number(e.target.value),
-                          })
-                        }
-                        placeholder="max"
-                        className="col-span-2"
                       />
                       <Button
                         size="sm"

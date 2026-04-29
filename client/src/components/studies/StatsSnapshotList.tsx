@@ -15,9 +15,34 @@ export interface HudStatSnapshot {
   layoutId: string;
   capturedAt: string;
   source: string;
-  values: Record<string, number | null>;
+  // F4: aceita V1 number puro OU V2 {value, sampleSize}
+  values: Record<string, number | null | { value: number | null; sampleSize: number | null }>;
   sampleSize: number | null;
   notes: string | null;
+}
+
+export function extractValue(entry: HudStatSnapshot["values"][string]): number | null {
+  if (typeof entry === "number") return entry;
+  if (entry === null || entry === undefined) return null;
+  if (typeof entry === "object" && "value" in entry) return entry.value ?? null;
+  return null;
+}
+
+export function extractSampleSize(entry: HudStatSnapshot["values"][string]): number | null {
+  if (typeof entry === "object" && entry !== null && "sampleSize" in entry) {
+    return (entry as any).sampleSize ?? null;
+  }
+  return null;
+}
+
+export function avgSampleSize(snapshot: HudStatSnapshot): number | null {
+  const sizes: number[] = [];
+  for (const entry of Object.values(snapshot.values ?? {})) {
+    const s = extractSampleSize(entry);
+    if (typeof s === "number" && s > 0) sizes.push(s);
+  }
+  if (sizes.length === 0) return null;
+  return Math.round(sizes.reduce((a, b) => a + b, 0) / sizes.length);
 }
 
 interface Props {
@@ -90,7 +115,7 @@ export default function StatsSnapshotList({
           >
             <CardContent className="p-3 flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="text-sm font-medium text-white">
                     {layout?.name ?? "Layout removido"}
                   </span>
@@ -105,18 +130,31 @@ export default function StatsSnapshotList({
                       {snap.sampleSize} maos
                     </Badge>
                   )}
+                  {(() => {
+                    const avg = avgSampleSize(snap);
+                    if (avg === null) return null;
+                    return (
+                      <Badge
+                        data-testid={`snapshot-avg-n-${snap.id}`}
+                        variant="outline"
+                        className="text-[9px] text-purple-400 border-purple-600/40"
+                      >
+                        avg n={avg}
+                      </Badge>
+                    );
+                  })()}
                 </div>
                 <p className="text-xs text-gray-400 mb-2">
                   {formatDateBR(snap.capturedAt)}
                 </p>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
                   {previewKeys.map((k) => {
-                    const v = snap.values[k];
+                    const v = extractValue(snap.values[k]);
                     return (
                       <span key={k} className="text-gray-300">
                         <span className="text-gray-500">{k}:</span>{" "}
                         <span className="font-mono">
-                          {v === null || v === undefined ? "—" : v.toFixed(1)}
+                          {v === null ? "—" : v.toFixed(1)}
                         </span>
                       </span>
                     );
