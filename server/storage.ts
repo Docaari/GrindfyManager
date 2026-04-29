@@ -98,6 +98,13 @@ import {
   sessionWalletSnapshots,
   type SessionWalletSnapshot,
   type InsertSessionWalletSnapshot,
+  hudLayouts,
+  hudStatSnapshots,
+  type HudLayout,
+  type InsertHudLayout,
+  type UpdateHudLayout,
+  type HudStatSnapshot,
+  type InsertHudStatSnapshot,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
@@ -484,6 +491,29 @@ export interface IStorage {
     userId: string,
     period: "7d" | "30d" | "90d",
   ): Promise<Array<{ token: string; count: number }>>;
+
+  // Sprint F3 — Stats Analyzer (ADR-051)
+  getHudLayouts(userId: string): Promise<HudLayout[]>;
+  getHudLayout(id: string, userId: string): Promise<HudLayout | undefined>;
+  createHudLayout(input: InsertHudLayout): Promise<HudLayout>;
+  updateHudLayout(
+    id: string,
+    userId: string,
+    patch: UpdateHudLayout,
+  ): Promise<HudLayout | undefined>;
+  deleteHudLayout(id: string, userId: string): Promise<boolean>;
+  getHudStatSnapshots(
+    userId: string,
+    opts?: { layoutId?: string; limit?: number },
+  ): Promise<HudStatSnapshot[]>;
+  getHudStatSnapshot(
+    id: string,
+    userId: string,
+  ): Promise<HudStatSnapshot | undefined>;
+  createHudStatSnapshot(
+    input: InsertHudStatSnapshot,
+  ): Promise<HudStatSnapshot>;
+  deleteHudStatSnapshot(id: string, userId: string): Promise<boolean>;
 
   transaction<T>(fn: (tx: IStorage) => Promise<T>): Promise<T>;
 }
@@ -5329,6 +5359,161 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       };
       return await fn(txWrapper);
     });
+  }
+
+  // ===========================================================================
+  // Sprint F3 — Stats Analyzer (ADR-051)
+  // ===========================================================================
+
+  async getHudLayouts(userId: string): Promise<HudLayout[]> {
+    return await db
+      .select()
+      .from(hudLayouts)
+      .where(eq(hudLayouts.userId, userId))
+      .orderBy(desc(hudLayouts.isDefault), asc(hudLayouts.name));
+  }
+
+  async getHudLayout(
+    id: string,
+    userId: string,
+  ): Promise<HudLayout | undefined> {
+    const [row] = await db
+      .select()
+      .from(hudLayouts)
+      .where(and(eq(hudLayouts.id, id), eq(hudLayouts.userId, userId)));
+    return row;
+  }
+
+  async createHudLayout(input: InsertHudLayout): Promise<HudLayout> {
+    const id = nanoid();
+    return await db.transaction(async (tx) => {
+      if (input.isDefault) {
+        await tx
+          .update(hudLayouts)
+          .set({ isDefault: false, updatedAt: new Date() })
+          .where(
+            and(
+              eq(hudLayouts.userId, input.userId),
+              eq(hudLayouts.isDefault, true),
+            ),
+          );
+      }
+      const [row] = await tx
+        .insert(hudLayouts)
+        .values({
+          id,
+          userId: input.userId,
+          name: input.name,
+          isDefault: input.isDefault ?? false,
+          sections: input.sections,
+        })
+        .returning();
+      return row;
+    });
+  }
+
+  async updateHudLayout(
+    id: string,
+    userId: string,
+    patch: UpdateHudLayout,
+  ): Promise<HudLayout | undefined> {
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(hudLayouts)
+        .where(and(eq(hudLayouts.id, id), eq(hudLayouts.userId, userId)));
+      if (!existing) return undefined;
+      if (patch.isDefault === true && !existing.isDefault) {
+        await tx
+          .update(hudLayouts)
+          .set({ isDefault: false, updatedAt: new Date() })
+          .where(
+            and(
+              eq(hudLayouts.userId, userId),
+              eq(hudLayouts.isDefault, true),
+            ),
+          );
+      }
+      const updateData: Record<string, any> = { updatedAt: new Date() };
+      if (patch.name !== undefined) updateData.name = patch.name;
+      if (patch.isDefault !== undefined) updateData.isDefault = patch.isDefault;
+      if (patch.sections !== undefined) updateData.sections = patch.sections;
+      const [row] = await tx
+        .update(hudLayouts)
+        .set(updateData)
+        .where(and(eq(hudLayouts.id, id), eq(hudLayouts.userId, userId)))
+        .returning();
+      return row;
+    });
+  }
+
+  async deleteHudLayout(id: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(hudLayouts)
+      .where(and(eq(hudLayouts.id, id), eq(hudLayouts.userId, userId)))
+      .returning({ id: hudLayouts.id });
+    return result.length > 0;
+  }
+
+  async getHudStatSnapshots(
+    userId: string,
+    opts?: { layoutId?: string; limit?: number },
+  ): Promise<HudStatSnapshot[]> {
+    const conditions = [eq(hudStatSnapshots.userId, userId)];
+    if (opts?.layoutId) {
+      conditions.push(eq(hudStatSnapshots.layoutId, opts.layoutId));
+    }
+    const limit = Math.min(opts?.limit ?? 100, 500);
+    return await db
+      .select()
+      .from(hudStatSnapshots)
+      .where(and(...conditions))
+      .orderBy(desc(hudStatSnapshots.capturedAt))
+      .limit(limit);
+  }
+
+  async getHudStatSnapshot(
+    id: string,
+    userId: string,
+  ): Promise<HudStatSnapshot | undefined> {
+    const [row] = await db
+      .select()
+      .from(hudStatSnapshots)
+      .where(
+        and(eq(hudStatSnapshots.id, id), eq(hudStatSnapshots.userId, userId)),
+      );
+    return row;
+  }
+
+  async createHudStatSnapshot(
+    input: InsertHudStatSnapshot,
+  ): Promise<HudStatSnapshot> {
+    const id = nanoid();
+    const [row] = await db
+      .insert(hudStatSnapshots)
+      .values({
+        id,
+        userId: input.userId,
+        layoutId: input.layoutId,
+        source: input.source ?? "manual",
+        capturedAt: input.capturedAt ?? new Date(),
+        values: input.values,
+        sampleSize: input.sampleSize ?? null,
+        sessionId: input.sessionId ?? null,
+        notes: input.notes ?? null,
+      })
+      .returning();
+    return row;
+  }
+
+  async deleteHudStatSnapshot(id: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(hudStatSnapshots)
+      .where(
+        and(eq(hudStatSnapshots.id, id), eq(hudStatSnapshots.userId, userId)),
+      )
+      .returning({ id: hudStatSnapshots.id });
+    return result.length > 0;
   }
 }
 
