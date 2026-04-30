@@ -25,12 +25,78 @@ export const PLATFORM_CURRENCY: Record<string, { code: string; symbol: string }>
 
 const DEFAULT_CURRENCY = { code: 'USD', symbol: '$' };
 
+// Alias map (case-insensitive) -> canonical site key em PLATFORM_CURRENCY.
+// Cobre variacoes vindas de imports CSV, library labels (ex: "iPoker Network"),
+// e digitacao mista. Manter em sync com SITE_ALIAS_GROUPS de wallet-reconciliation.
+const SITE_ALIASES: Record<string, string> = {
+  // iPoker (EUR)
+  'ipoker': 'iPoker',
+  'ipoker network': 'iPoker',
+  'ipokernetwork': 'iPoker',
+  // PokerStars regional EUR
+  'ps.es': 'PS.ES',
+  'ps.fr': 'PS.ES',
+  'ps.pt': 'PS.ES',
+  'pokerstars.es': 'PS.ES',
+  // Suprema (BRL)
+  'suprema': 'Suprema',
+  'supremapoker': 'SupremaPoker',
+  'liga suprema': 'Suprema',
+  'ligasuprema': 'Suprema',
+  // PPoker (BRL)
+  'ppoker': 'PPoker',
+  // PokerStars (USD global)
+  'pokerstars': 'PokerStars',
+  'stars': 'PokerStars',
+  // GG
+  'gg': 'GGNetwork',
+  'ggpoker': 'GGPoker',
+  'ggnetwork': 'GGNetwork',
+  'natural8': 'GGNetwork',
+  'clubgg': 'GGNetwork',
+  // WPN
+  'wpn': 'WPN',
+  'acr': 'WPN',
+  'americascardroom': 'WPN',
+  'blackchip': 'WPN',
+  'blackchippoker': 'WPN',
+  // Outros
+  'partypoker': 'PartyPoker',
+  'party': 'PartyPoker',
+  '888poker': '888poker',
+  '888': '888poker',
+  'bodog': 'Bodog',
+  'ignition': 'Bodog',
+  'chico': 'Chico',
+  'revolution': 'Revolution',
+  'coinpoker': 'CoinPoker',
+  'coin': 'Coin',
+  'wpt': 'WPT',
+  'wpt global': 'WPT',
+};
+
 /**
  * Returns the currency for a given poker site.
+ * Case-insensitive; resolve aliases comuns (ex: "iPoker Network" -> "iPoker").
  * Defaults to USD for unknown sites.
  */
 export function getCurrencyForSite(site: string): { code: string; symbol: string } {
-  return PLATFORM_CURRENCY[site] || DEFAULT_CURRENCY;
+  if (!site) return DEFAULT_CURRENCY;
+  // Match exato primeiro (preserva keys com chars especiais como '888poker').
+  const direct = PLATFORM_CURRENCY[site];
+  if (direct) return direct;
+  // Normalize: lowercase + trim.
+  const key = site.toLowerCase().trim();
+  const alias = SITE_ALIASES[key];
+  if (alias) {
+    const viaAlias = PLATFORM_CURRENCY[alias];
+    if (viaAlias) return viaAlias;
+  }
+  // Fallback: case-insensitive scan dos canonicos.
+  for (const [canonical, ccy] of Object.entries(PLATFORM_CURRENCY)) {
+    if (canonical.toLowerCase() === key) return ccy;
+  }
+  return DEFAULT_CURRENCY;
 }
 
 /**

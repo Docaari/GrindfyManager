@@ -11,9 +11,27 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   BTC: 'BTC ',
 };
 
+const moneyFormatter = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const integerFormatter = new Intl.NumberFormat('pt-BR', {
+  maximumFractionDigits: 0,
+});
+
+// Formata valor monetario com 2 casas decimais e separador de milhares pt-BR.
+// Lida com NaN/Infinity/null/undefined retornando '0,00'. Substitui
+// formatNumberWithDots para campos financeiros (que produzia strings invalidas
+// quando recebia float, ex: "-120.72.000.000.000.").
+function formatMoney(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value as number)) return '0,00';
+  return moneyFormatter.format(value as number);
+}
+
 function formatNative(currency: string, value: number): string {
   const sym = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  return `${sym}${formatNumberWithDots(value)}`;
+  return `${sym}${formatMoney(value)}`;
 }
 
 interface SessionDashboardProps {
@@ -85,7 +103,7 @@ export default function SessionDashboard({
           <div className="metric-card metric-invested">
             <div className="metric-icon">{'\u{1F4B8}'}</div>
             <div className="metric-value" data-testid="kpi-total-invested">
-              ${formatNumberWithDots(stats.totalInvestidoUSD ?? stats.totalInvestido)}
+              ${formatMoney(stats.totalInvestidoUSD ?? stats.totalInvestido)}
             </div>
             <div className="metric-label">Total Investido</div>
             {stats.breakdown && stats.breakdown.byCurrency.length > 1 && (
@@ -104,7 +122,7 @@ export default function SessionDashboard({
               data-testid="kpi-profit"
               style={{'--value-color': (stats.profitUSD ?? stats.profit) >= 0 ? '#00ff88' : '#ff4444'} as React.CSSProperties}
             >
-              ${formatNumberWithDots(stats.profitUSD ?? stats.profit)}
+              ${formatMoney(stats.profitUSD ?? stats.profit)}
             </div>
             <div className="metric-label">Profit</div>
             {stats.breakdown && stats.breakdown.byCurrency.length > 1 && (
