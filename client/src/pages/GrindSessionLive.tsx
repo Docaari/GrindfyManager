@@ -206,6 +206,35 @@ export default function GrindSessionLive() {
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
+
+  // FX rates "1 USD = N native units" para conversao USD do dashboard live e
+  // do summary final. Combina exchangeRates do user_settings com rate de BRL
+  // derivado de bankroll.maxBuyInDisplay quando o usuario nao configurou BRL.
+  // Definido cedo (antes de mutations que dependem) para evitar TDZ.
+  const usdConversionRates = useMemo<Record<string, number>>(() => {
+    const fromSettings = (exchangeRatesData ?? {}) as Record<string, unknown>;
+    const out: Record<string, number> = {};
+    for (const [code, val] of Object.entries(fromSettings)) {
+      const n = typeof val === 'number' ? val : parseFloat(String(val));
+      if (Number.isFinite(n) && n > 0) out[code] = n;
+    }
+    if (out.BRL == null) {
+      const usd = bankroll?.maxBuyInUSD;
+      const brl = bankroll?.maxBuyInDisplay?.BRL;
+      if (usd != null && brl != null && usd > 0 && brl > 0) {
+        out.BRL = brl / usd;
+      }
+    }
+    // Defaults aproximados quando endpoint /settings/exchange-rates ainda nao
+    // retornou ou usuario nao configurou. Conversao indicativa; founder pode
+    // refinar em Settings -> Exchange rates. Garante dashboard nao zera profit
+    // de redes BRL/EUR/CNY apenas porque rate ausente.
+    if (out.BRL == null) out.BRL = 5.0;
+    if (out.EUR == null) out.EUR = 0.92;
+    if (out.CNY == null) out.CNY = 7.20;
+    return out;
+  }, [exchangeRatesData, bankroll?.maxBuyInUSD, bankroll?.maxBuyInDisplay?.BRL]);
+
   const [sessionAccumulatorUSD, setSessionAccumulatorUSD] = useState(0);
   const [bankrollShotModalOpen, setBankrollShotModalOpen] = useState(false);
   const [bankrollShotPendingData, setBankrollShotPendingData] = useState<any | null>(null);
@@ -342,7 +371,7 @@ export default function GrindSessionLive() {
   const [showPendingTournamentsDialog, setShowPendingTournamentsDialog] = useState(false);
   const [newTournament, setNewTournament] = useState<NewTournamentForm>({
     site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal",
-    scheduledTime: "", fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming",
+    scheduledTime: "", registrationTime: undefined, fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming",
     allowsAddOn: false, addOnCost: "", allowsReentry: false, maxReentries: null,
   });
 
@@ -842,7 +871,7 @@ export default function GrindSessionLive() {
   };
 
   const resetFilters = () => {
-    setNewTournament({ site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal", scheduledTime: "", fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming" });
+    setNewTournament({ site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal", scheduledTime: "", registrationTime: undefined, fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming" });
     toast({ title: "Filtros Limpos", description: "Todos os campos foram resetados" });
   };
 
@@ -1167,6 +1196,7 @@ export default function GrindSessionLive() {
           site: tournamentData.site, name: resolvedName,
           buyIn: String(tournamentData.buyIn), type: tournamentData.type || 'Vanilla', speed: tournamentData.speed || 'Normal',
           time: tournamentData.scheduledTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          registrationTime: tournamentData.registrationTime || null,
           guaranteed: tournamentData.guaranteed ? String(tournamentData.guaranteed) : null, prioridade: 2,
           dayOfWeek: currentDayOfWeek, profile: activeProfile,
           ...addonReaPayload,
@@ -1181,6 +1211,7 @@ export default function GrindSessionLive() {
           fieldSize: tournamentData.fieldSize ? parseInt(tournamentData.fieldSize) : null, position: null,
           startTime: tournamentData.startTime || null, endTime: null,
           time: tournamentData.scheduledTime || tournamentData.time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          registrationTime: tournamentData.registrationTime || null,
           type: tournamentData.type || 'Vanilla', speed: tournamentData.speed || 'Normal',
           guaranteed: tournamentData.guaranteed || null,
           addOnTaken: false,
@@ -1199,7 +1230,7 @@ export default function GrindSessionLive() {
         queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       }
       // RF-12: Keep modal open for adding more, show success toast
-      setNewTournament({ site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal", scheduledTime: "", fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming", allowsAddOn: false, addOnCost: "", allowsReentry: false, maxReentries: null });
+      setNewTournament({ site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal", scheduledTime: "", registrationTime: undefined, fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming", allowsAddOn: false, addOnCost: "", allowsReentry: false, maxReentries: null });
       const isRegistration = variables?.status === 'registered' && variables?.fromPlannedTournament;
       toast({
         title: isRegistration ? "Registrado no Torneio" : "Torneio Adicionado",
@@ -1266,16 +1297,21 @@ export default function GrindSessionLive() {
 
   const endSessionMutation = useMutation({
     mutationFn: async () => {
-      const finalStats = calculateFinalSessionStats(plannedTournaments, sessionTournaments);
+      const finalStats = calculateFinalSessionStats(plannedTournaments, sessionTournaments, usdConversionRates);
       const breakAvgs = calculateBreakAverages(breakFeedbacks);
       // Calcular duracao real descontando tempo pausado
       const sessionStartMs = activeSession?.date ? new Date(activeSession.date).getTime() : Date.now();
       const totalPausedMs = pausedTime + (pauseStartTime ? Date.now() - pauseStartTime : 0);
       const durationMinutes = Math.round((Date.now() - sessionStartMs - totalPausedMs) / 60000);
 
+      // Persistimos profit/abiMed em USD (currency-normalized) para consistencia
+      // historica entre sessoes multi-rede. Fallback ao raw quando rates faltam.
+      const persistedProfit = finalStats.profitUSD ?? finalStats.profit;
+      const persistedAbiMed = finalStats.abiMedUSD ?? finalStats.abiMed;
+
       return await apiRequest("PUT", `/api/grind-sessions/${activeSession?.id}`, {
         status: "completed", endTime: new Date().toISOString(), duration: Math.max(0, durationMinutes), objectiveCompleted: sessionObjectiveCompleted, finalNotes: sessionFinalNotes,
-        volume: finalStats.volume, profit: finalStats.profit.toString(), abiMed: finalStats.abiMed.toString(), roi: finalStats.roi.toString(),
+        volume: finalStats.volume, profit: persistedProfit.toString(), abiMed: persistedAbiMed.toString(), roi: finalStats.roi.toString(),
         fts: finalStats.fts, cravadas: finalStats.cravadas,
         energiaMedia: breakAvgs.energia.toString(), focoMedio: breakAvgs.foco.toString(), confiancaMedia: breakAvgs.confianca.toString(),
         inteligenciaEmocionalMedia: breakAvgs.inteligenciaEmocional.toString(), interferenciasMedia: breakAvgs.interferencias.toString(),
@@ -1569,6 +1605,52 @@ export default function GrindSessionLive() {
     setRegistrationData(prev => { const updated = { ...prev }; delete updated[tournamentId]; return updated; });
   };
 
+  // 2026-04-30: delete agora e session-scoped. Para planned-X cria session_tournament
+  // shadow com status='deleted' (mascara via combineTournaments) — grade-planner
+  // permanece intacto. Para session_tournament real usa DELETE direto (evita
+  // merge-before-validate da rota PUT).
+  const deleteTournamentMutation = useMutation({
+    mutationFn: async ({ id, plannedSource }: { id: string; plannedSource?: any }) => {
+      if (id.startsWith('planned-') && plannedSource && activeSession?.id) {
+        return await apiRequest('POST', '/api/session-tournaments', {
+          userId: activeSession.userId,
+          sessionId: activeSession.id,
+          site: plannedSource.site,
+          name: plannedSource.name,
+          buyIn: String(plannedSource.buyIn ?? '0'),
+          time: plannedSource.time || '20:00',
+          registrationTime: plannedSource.registrationTime || null,
+          type: plannedSource.type || 'Vanilla',
+          speed: plannedSource.speed || 'Normal',
+          guaranteed: plannedSource.guaranteed ?? null,
+          status: 'deleted',
+          fromPlannedTournament: true,
+          plannedTournamentId: plannedSource.id,
+          rebuys: 0,
+          result: '0',
+          bounty: '0',
+          position: null,
+          fieldSize: null,
+        });
+      }
+      return await apiRequest('DELETE', `/api/session-tournaments/${id}`);
+    },
+    onSuccess: () => {
+      const currentDayOfWeek = new Date().getDay();
+      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
+      queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
+      if (activeSession?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments", activeSession.id] });
+      }
+      toast({ title: "Torneio removido", description: "Removido apenas desta sessao. Grade permanece intacta." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro ao remover", description: error?.message || "Falha ao remover torneio.", variant: "destructive" });
+    },
+  });
+
   // GL-H polish (UX-2 2026-04-25): trocar window.confirm() por shadcn
   // AlertDialog. Antes: confirm nativo do browser (sem estilo, bloqueia
   // thread, inacessivel em alguns mobiles). Agora: dialog estilizado com
@@ -1579,7 +1661,12 @@ export default function GrindSessionLive() {
   };
   const handleConfirmDeleteTournament = () => {
     if (!deleteTournamentId) return;
-    updateTournamentMutation.mutate({ id: deleteTournamentId, data: { status: 'deleted' } });
+    let plannedSource: any = undefined;
+    if (deleteTournamentId.startsWith('planned-')) {
+      const actualId = deleteTournamentId.substring(8);
+      plannedSource = plannedTournaments?.find(p => p.id === actualId);
+    }
+    deleteTournamentMutation.mutate({ id: deleteTournamentId, plannedSource });
     setDeleteTournamentId(null);
   };
   const handleCancelDeleteTournament = () => setDeleteTournamentId(null);
@@ -1660,25 +1747,8 @@ export default function GrindSessionLive() {
   // sobrescrevia o conteudo do React via DOM direto, conflitando com re-renders
   // e dificultando testes/SSR. Lookup duplicado eliminado.
 
-  // FX rates "1 USD = N native units" para conversao USD do dashboard live.
-  // Combina exchangeRates do user_settings com rate de BRL derivado de
-  // bankroll.maxBuyInDisplay quando o usuario nao configurou BRL ainda.
-  const usdConversionRates = useMemo<Record<string, number>>(() => {
-    const fromSettings = (exchangeRatesData ?? {}) as Record<string, unknown>;
-    const out: Record<string, number> = {};
-    for (const [code, val] of Object.entries(fromSettings)) {
-      const n = typeof val === 'number' ? val : parseFloat(String(val));
-      if (Number.isFinite(n) && n > 0) out[code] = n;
-    }
-    if (out.BRL == null) {
-      const usd = bankroll?.maxBuyInUSD;
-      const brl = bankroll?.maxBuyInDisplay?.BRL;
-      if (usd != null && brl != null && usd > 0 && brl > 0) {
-        out.BRL = brl / usd;
-      }
-    }
-    return out;
-  }, [exchangeRatesData, bankroll?.maxBuyInUSD, bankroll?.maxBuyInDisplay?.BRL]);
+  // usdConversionRates e definido no topo do componente (linha ~214) para
+  // evitar TDZ em mutations declaradas antes do dashboard.
 
   // Calculate stats
   const stats = useMemo(() => calculateSessionStats(sessionTournaments, plannedTournaments, registrationData, activeSession, usdConversionRates), [plannedTournaments, sessionTournaments, registrationData, activeSession, usdConversionRates]);
@@ -2152,7 +2222,59 @@ export default function GrindSessionLive() {
 
       <EditTournamentDialog open={showEditTournamentDialog} onOpenChange={setShowEditTournamentDialog}
         editingTournament={editingTournament} setEditingTournament={setEditingTournament}
-        onSave={(id, data) => updateTournamentMutation.mutate({ id, data })}
+        onSave={(id, data, opts) => {
+          // 2026-04-30: roteamento por scope.
+          // - 'session' + planned-prefix: cria session_tournament copia com edits
+          //   (mascara o planned via plannedTournamentId; grade-planner intacto).
+          // - 'permanent' OU id session: comportamento atual (PUT no recurso).
+          const isPlannedId = id.startsWith('planned-');
+          if (opts?.scope === 'session' && isPlannedId && activeSession?.id) {
+            const actualId = id.substring(8);
+            const planned = plannedTournaments?.find(p => p.id === actualId);
+            if (planned) {
+              addTournamentMutation.mutate({
+                sessionId: activeSession.id,
+                site: data.site || planned.site,
+                name: planned.name,
+                buyIn: String(data.buyIn ?? planned.buyIn ?? '0'),
+                type: data.type || planned.type || 'Vanilla',
+                speed: data.speed || planned.speed || 'Normal',
+                scheduledTime: data.time || planned.time || '20:00',
+                registrationTime: data.registrationTime ?? planned.registrationTime ?? null,
+                guaranteed: data.guaranteed ?? planned.guaranteed ?? null,
+                fieldSize: null,
+                status: 'upcoming',
+                fromPlannedTournament: true,
+                plannedTournamentId: actualId,
+                allowsAddOn: Boolean(data.allowsAddOn),
+                addOnCost: data.allowsAddOn ? data.addOnCost : null,
+                allowsReentry: Boolean(data.allowsReentry),
+                maxReentries: data.allowsReentry ? data.maxReentries ?? null : null,
+                syncWithGrade: false,
+              });
+            } else {
+              toast({ title: "Erro", description: "Planned source nao encontrado.", variant: "destructive" });
+            }
+          } else {
+            updateTournamentMutation.mutate({ id, data });
+          }
+          // Persiste registrationTime na biblioteca quando user marca opcao no modal.
+          if (opts?.persistRegistrationTimeToLibrary) {
+            const libId = (editingTournament as any)?.libraryTemplateId;
+            if (libId) {
+              apiRequest('PUT', `/api/tournament-library/${libId}`, { registrationTime: data.registrationTime ?? null })
+                .then(() => {
+                  queryClient.invalidateQueries({ queryKey: ["/api/tournament-library"] });
+                  toast({ title: 'Biblioteca atualizada', description: 'Horario de registro salvo permanentemente.' });
+                })
+                .catch((err: any) => {
+                  toast({ title: 'Falha ao atualizar biblioteca', description: err?.message || 'Tente novamente.', variant: 'destructive' });
+                });
+            } else {
+              toast({ title: 'Sem vinculo com biblioteca', description: 'Este torneio nao tem template na biblioteca para salvar permanentemente.', variant: 'destructive' });
+            }
+          }
+        }}
       />
 
       {/* Re-entry confirmation modal (ADR-014 / Spec 3) */}

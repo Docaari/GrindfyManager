@@ -653,18 +653,31 @@ export function registerUploadRoutes(app: Express): void {
   });
 
   // Exchange rates endpoints
+  // Aceita BRL (Suprema/PPoker), CNY (mercado asiatico), EUR (iPoker/PS.ES).
+  // Convencao ADR-033: rate = unidades nativas por 1 USD.
   app.post('/api/settings/exchange-rates', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      const { CNY, EUR } = req.body;
+      const { BRL, CNY, EUR } = req.body;
 
       if (!CNY || !EUR || CNY <= 0 || EUR <= 0) {
         return res.status(400).json({ message: 'Invalid exchange rates provided' });
       }
+      if (BRL !== undefined && (typeof BRL !== 'number' || BRL <= 0)) {
+        return res.status(400).json({ message: 'Invalid BRL exchange rate' });
+      }
+
+      const existing = (await storage.getUserSettings(userId))?.exchangeRates || {};
+      const merged: Record<string, number> = {
+        ...(existing as Record<string, number>),
+        CNY,
+        EUR,
+      };
+      if (typeof BRL === 'number' && BRL > 0) merged.BRL = BRL;
 
       await storage.upsertUserSettings({
         userId,
-        exchangeRates: { CNY, EUR }
+        exchangeRates: merged,
       });
 
       res.json({ message: 'Exchange rates updated successfully' });
@@ -679,7 +692,20 @@ export function registerUploadRoutes(app: Express): void {
       const userId = req.user.userPlatformId;
       const settings = await storage.getUserSettings(userId);
 
-      const exchangeRates = settings?.exchangeRates || { CNY: 7.20, EUR: 0.92 };
+      // Default inclui BRL para Suprema/PPoker funcionar fora-da-caixa.
+      // Usuario pode sobrescrever via Settings.
+      const stored = (settings?.exchangeRates || {}) as Record<string, number>;
+      const exchangeRates: Record<string, number> = {
+        BRL: stored.BRL && stored.BRL > 0 ? stored.BRL : 5.0,
+        CNY: stored.CNY && stored.CNY > 0 ? stored.CNY : 7.20,
+        EUR: stored.EUR && stored.EUR > 0 ? stored.EUR : 0.92,
+      };
+      // Preserva codigos extras (USDT, GBP) ja salvos.
+      for (const [k, v] of Object.entries(stored)) {
+        if (!(k in exchangeRates) && typeof v === 'number' && v > 0) {
+          exchangeRates[k] = v;
+        }
+      }
       res.json(exchangeRates);
     } catch (error) {
       res.status(500).json({ message: 'Failed to get exchange rates' });

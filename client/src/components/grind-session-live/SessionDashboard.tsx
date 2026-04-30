@@ -1,6 +1,21 @@
 import type { SessionStats } from './types';
 import { formatNumberWithDots, getScreenCapColors, countAddOnsPaid } from './helpers';
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$',
+  BRL: 'R$',
+  EUR: '€',
+  GBP: '£',
+  CNY: '¥',
+  USDT: 'USDT ',
+  BTC: 'BTC ',
+};
+
+function formatNative(currency: string, value: number): string {
+  const sym = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
+  return `${sym}${formatNumberWithDots(value)}`;
+}
+
 interface SessionDashboardProps {
   stats: SessionStats;
   showDashboard: boolean;
@@ -68,17 +83,42 @@ export default function SessionDashboard({
         {/* Metricas Financeiras */}
         <div className="metrics-row metrics-financial">
           <div className="metric-card metric-invested">
-            <div className="metric-icon">💸</div>
-            <div className="metric-value">${formatNumberWithDots(stats.totalInvestido)}</div>
+            <div className="metric-icon">{'\u{1F4B8}'}</div>
+            <div className="metric-value" data-testid="kpi-total-invested">
+              ${formatNumberWithDots(stats.totalInvestidoUSD ?? stats.totalInvestido)}
+            </div>
             <div className="metric-label">Total Investido</div>
+            {stats.breakdown && stats.breakdown.byCurrency.length > 1 && (
+              <div className="metric-sub text-[10px] text-gray-400" data-testid="kpi-invested-breakdown">
+                {stats.breakdown.byCurrency
+                  .map((c) => formatNative(c.currency, c.invested))
+                  .join(' + ')}
+              </div>
+            )}
           </div>
 
           <div className="metric-card metric-profit">
-            <div className="metric-icon">💰</div>
-            <div className="metric-value" style={{'--value-color': stats.profit >= 0 ? '#00ff88' : '#ff4444'} as React.CSSProperties}>
-              ${formatNumberWithDots(stats.profit)}
+            <div className="metric-icon">{'\u{1F4B0}'}</div>
+            <div
+              className="metric-value"
+              data-testid="kpi-profit"
+              style={{'--value-color': (stats.profitUSD ?? stats.profit) >= 0 ? '#00ff88' : '#ff4444'} as React.CSSProperties}
+            >
+              ${formatNumberWithDots(stats.profitUSD ?? stats.profit)}
             </div>
             <div className="metric-label">Profit</div>
+            {stats.breakdown && stats.breakdown.byCurrency.length > 1 && (
+              <div className="metric-sub text-[10px] text-gray-400" data-testid="kpi-profit-breakdown">
+                {stats.breakdown.byCurrency
+                  .map((c) => formatNative(c.currency, c.profit))
+                  .join(' + ')}
+              </div>
+            )}
+            {stats.breakdown?.hasMissingRate && (
+              <div className="metric-sub text-[10px] text-amber-400" data-testid="kpi-profit-rate-warning">
+                Cotacao ausente. Configure FX em Settings.
+              </div>
+            )}
           </div>
 
           {/* Add-on + Re-entry KPIs (ADR-014) */}
