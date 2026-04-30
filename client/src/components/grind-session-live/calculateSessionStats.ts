@@ -421,8 +421,15 @@ export const calculateSessionStats = (
     screenCapColors: { bgColor: 'bg-gray-600/20', textColor: 'text-gray-400', borderColor: 'border-gray-500/50' }
   };
 
-  const finishedTournaments = allTournaments.filter((t: any) => t.status === "finished");
-  const registeredTournaments = allTournaments.filter((t: any) => t.status === "registered");
+  // Aceita ambos 'finished' e 'completed' (helpers.ts:405 trata como mesmo
+  // estado terminal) para que torneios encerrados via auto-finish ou outros
+  // fluxos nao escapem do calculo de invested/profit/breakdown.
+  const finishedTournaments = allTournaments.filter(
+    (t: any) => t.status === "finished" || t.status === "completed",
+  );
+  const registeredTournaments = allTournaments.filter(
+    (t: any) => t.status === "registered" || t.status === "active",
+  );
   const upcomingTournaments = allTournaments.filter((t: any) => t.status === "upcoming");
 
   const emAndamento = registeredTournaments.length;

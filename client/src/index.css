@@ -4233,32 +4233,38 @@
 .metrics-row {
   display: grid;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.metrics-status {
-  grid-template-columns: repeat(5, 1fr);
-}
-
-.metrics-financial {
-  grid-template-columns: repeat(2, 1fr);
-  max-width: 800px;
-  margin: 0 auto 1.5rem;
-}
-
+/* Layout 2026-04-30: 3 linhas uniformes de 4 cards cada.
+   - Linha 1 (status): Em Andamento, Registrados, Reentradas, Add-ons
+   - Linha 2 (financeiro): Total Investido, ABI, Media Participantes, ITM
+   - Linha 3 (performance): Profit, ROI, FTs, Cravadas
+   metrics-status / metrics-financial / metrics-performance herdam o grid
+   uniforme do .metrics-row para tamanho de card padronizado. */
+.metrics-status,
+.metrics-financial,
 .metrics-performance {
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: none;
+  margin: 0 0 1rem 0;
 }
 
 .metric-card {
   background: linear-gradient(135deg, #1e293b, #334155);
   border: 1px solid rgba(100, 116, 139, 0.3);
   border-radius: 0.75rem;
-  padding: 1.5rem;
+  padding: 1.25rem 1rem;
   text-align: center;
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .metric-card::before {
@@ -4391,18 +4397,19 @@
   }
 }
 
-/* Responsive Dashboard */
+/* Responsive Dashboard — mantem 4 cols ate 1024 caindo p/ 2 e depois 1.
+   Cada linha mantem mesmo grid (uniformidade preservada). */
 @media (max-width: 1024px) {
-  .metrics-status {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
+  .metrics-row,
+  .metrics-status,
+  .metrics-financial,
   .metrics-performance {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 640px) {
+  .metrics-row,
   .metrics-status,
   .metrics-financial,
   .metrics-performance {
@@ -4410,6 +4417,7 @@
   }
 
   .metric-card {
+    min-height: auto;
     padding: 1rem;
   }
 
@@ -7666,4 +7674,83 @@ body.studies-focus-mode main,
 body.studies-focus-mode [class*="main-content"] {
   margin-left: 0 !important;
   max-width: 100% !important;
+}
+
+/* =====================================================================
+   GRIND-LIVE DASHBOARD: 3 linhas uniformes de 4 cards
+   Reset definitivo (anula todos os @media historicos que quebravam o grid).
+   2026-04-30 — founder pediu cards padronizados em 3 linhas:
+     L1: Em Andamento, Registrados, Reentradas, Add-ons
+     L2: Total Investido, ABI, Media Participantes, ITM
+     L3: Profit, ROI, FTs, Cravadas
+   ===================================================================== */
+.dashboard-section .metrics-row,
+.dashboard-section .metrics-status,
+.dashboard-section .metrics-financial,
+.dashboard-section .metrics-performance {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 1rem !important;
+  margin: 0 0 1rem 0 !important;
+  max-width: none !important;
+}
+
+.dashboard-section .metric-card {
+  min-height: 130px;
+  padding: 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dashboard-section .metric-card .metric-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 0.25rem;
+}
+
+.dashboard-section .metric-card .metric-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgb(148 163 184);
+  font-weight: 600;
+}
+
+.dashboard-section .metric-card .metric-sub {
+  font-size: 0.65rem;
+  margin-top: 0.25rem;
+  line-height: 1.3;
+}
+
+.dashboard-section .metric-card .metric-icon {
+  font-size: 1.25rem;
+  margin-bottom: 0.4rem;
+  opacity: 0.85;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-section .metrics-row,
+  .dashboard-section .metrics-status,
+  .dashboard-section .metrics-financial,
+  .dashboard-section .metrics-performance {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 540px) {
+  .dashboard-section .metrics-row,
+  .dashboard-section .metrics-status,
+  .dashboard-section .metrics-financial,
+  .dashboard-section .metrics-performance {
+    grid-template-columns: 1fr !important;
+  }
+  .dashboard-section .metric-card {
+    min-height: auto;
+  }
 }
