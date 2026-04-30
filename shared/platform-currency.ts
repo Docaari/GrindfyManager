@@ -15,6 +15,8 @@ export const PLATFORM_CURRENCY: Record<string, { code: string; symbol: string }>
   Chico: { code: 'USD', symbol: '$' },
   iPoker: { code: 'EUR', symbol: '\u20ac' },
   'PS.ES': { code: 'EUR', symbol: '\u20ac' },
+  Champion: { code: 'EUR', symbol: '\u20ac' },
+  ChampionsPoker: { code: 'EUR', symbol: '\u20ac' },
   Coin: { code: 'USD', symbol: '$' },
   CoinPoker: { code: 'USD', symbol: '$' },
   WPT: { code: 'USD', symbol: '$' },
@@ -38,6 +40,11 @@ const SITE_ALIASES: Record<string, string> = {
   'ps.fr': 'PS.ES',
   'ps.pt': 'PS.ES',
   'pokerstars.es': 'PS.ES',
+  // Champion (EUR)
+  'champion': 'Champion',
+  'championspoker': 'Champion',
+  'champions poker': 'Champion',
+  'champions': 'Champion',
   // Suprema (BRL)
   'suprema': 'Suprema',
   'supremapoker': 'SupremaPoker',
