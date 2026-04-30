@@ -143,6 +143,117 @@ describe('calculateSessionStats - FX conversion (BRL Suprema)', () => {
   });
 });
 
+describe('calculateSessionStats - iPoker EUR (site overrides legacy t.currency default)', () => {
+  it('iPoker tournament com t.currency="USD" default ainda eh detectado como EUR', () => {
+    // Schema legacy de tournament_library/planned_tournaments tem
+    // currency.default('USD'). Antes do fix, isso sobrescrevia silenciosamente
+    // o lookup de site iPoker (EUR), removendo EUR do breakdown.
+    const tournaments = [
+      {
+        id: 't-ipoker-1',
+        site: 'iPoker',
+        currency: 'USD', // schema default — bug originador
+        buyIn: '50.00',
+        rebuys: 0,
+        reentries: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        position: null,
+        status: 'finished',
+      },
+    ];
+    const rates = { EUR: 0.92 };
+    const stats = calculateSessionStats(tournaments, [], {}, null, rates);
+
+    expect(stats.breakdown.byCurrency).toHaveLength(1);
+    expect(stats.breakdown.byCurrency[0].currency).toBe('EUR');
+    expect(stats.breakdown.byCurrency[0].invested).toBeCloseTo(50, 2);
+    // EUR -> USD: 50 / 0.92 ~= 54.35
+    expect(stats.totalInvestidoUSD).toBeCloseTo(50 / 0.92, 4);
+  });
+
+  it('site alias case-insensitive: "ipoker" e "iPoker Network" ambos resolvem EUR', () => {
+    const tournaments = [
+      {
+        id: 't-ipoker-low',
+        site: 'ipoker',
+        buyIn: '20.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+      {
+        id: 't-ipoker-net',
+        site: 'iPoker Network',
+        buyIn: '30.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+    ];
+    const rates = { EUR: 0.92 };
+    const stats = calculateSessionStats(tournaments, [], {}, null, rates);
+
+    expect(stats.breakdown.byCurrency).toHaveLength(1);
+    expect(stats.breakdown.byCurrency[0].currency).toBe('EUR');
+    expect(stats.breakdown.byCurrency[0].invested).toBeCloseTo(50, 2);
+  });
+
+  it('sessao tripla USD + BRL + EUR: breakdown lista 3 moedas', () => {
+    const tournaments = [
+      {
+        id: 't-stars',
+        site: 'PokerStars',
+        buyIn: '22.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+      {
+        id: 't-suprema',
+        site: 'Suprema',
+        buyIn: '50.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+      {
+        id: 't-ipoker',
+        site: 'iPoker',
+        currency: 'USD', // schema default — nao deve afetar
+        buyIn: '30.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+    ];
+    const rates = { BRL: 5.0, EUR: 0.92 };
+    const stats = calculateSessionStats(tournaments, [], {}, null, rates);
+
+    const codes = stats.breakdown.byCurrency.map((c) => c.currency).sort();
+    expect(codes).toEqual(['BRL', 'EUR', 'USD']);
+    // USD: 22; BRL: 50/5=10; EUR: 30/0.92~=32.61. Total ~64.61
+    expect(stats.totalInvestidoUSD).toBeCloseTo(22 + 10 + 30 / 0.92, 2);
+  });
+});
+
 describe('calculateFinalSessionStats - FX conversion', () => {
   it('summary final converte BRL para USD em profit/abiMed/totalInvested', () => {
     const tournaments = [

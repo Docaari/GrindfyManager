@@ -11,9 +11,24 @@ import { getCurrencyForSite } from '@shared/platform-currency';
 import { convertToNativeCurrency } from '@shared/wallet-reconciliation';
 
 function getTournamentCurrency(t: any): string {
+  // Site eh fonte de verdade quando reconhecido em PLATFORM_CURRENCY (iPoker=EUR,
+  // Suprema=BRL, etc). Schema legacy tem `currency` com default 'USD' em
+  // tournament_library/planned_tournaments — override silencioso quebrava
+  // breakdown EUR de iPoker ate quando t.currency='USD' por default.
+  // Site reconhecido vence; t.currency so vale como fallback quando site eh
+  // desconhecido (caiu em DEFAULT_CURRENCY=USD).
+  const site = t?.site || '';
+  const siteCcy = getCurrencyForSite(site);
+  // Heuristica: site mapeado explicitamente em PLATFORM_CURRENCY se ccy nao
+  // eh USD OU se o site esta na tabela de aliases. Nao podemos detectar
+  // diretamente "site reconhecido" sem expor a tabela; alternativa: confiar no
+  // resultado nao-USD como sinal de match explicito.
+  if (siteCcy.code !== 'USD') return siteCcy.code;
+  // Site retornou USD (default fallback ou genuinamente USD). Honra t.currency
+  // se stored explicitamente diferente de USD; senao USD.
   const explicit = typeof t?.currency === 'string' ? t.currency : '';
-  if (explicit) return explicit;
-  return getCurrencyForSite(t?.site || '').code || 'USD';
+  if (explicit && explicit !== 'USD') return explicit;
+  return 'USD';
 }
 
 function getTournamentInvested(t: any): number {
