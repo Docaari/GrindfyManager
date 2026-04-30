@@ -165,6 +165,26 @@ export default function SessionDashboard({
               </div>
             )}
           </div>
+
+          <div className="metric-card metric-abi" data-testid="kpi-abi">
+            <div className="metric-icon">{'\u{1F4CA}'}</div>
+            <div className="metric-value">${formatMoney(stats.abi)}</div>
+            <div className="metric-label">ABI</div>
+            <div className="metric-sub text-[10px] text-gray-500">
+              Buy-in medio (USD) por torneio
+            </div>
+          </div>
+
+          <div className="metric-card metric-avg-participants" data-testid="kpi-avg-participants">
+            <div className="metric-icon">{'\u{1F465}'}</div>
+            <div className="metric-value">
+              {integerFormatter.format(Math.round(stats.avgParticipants))}
+            </div>
+            <div className="metric-label">Media Participantes</div>
+            <div className="metric-sub text-[10px] text-gray-500">
+              Estimado via Gtd / BI{stats.avgParticipants > 0 ? '' : ' (sem Gtd)'}
+            </div>
+          </div>
         </div>
 
         {/* Metricas de Performance */}

@@ -79,6 +79,11 @@ interface ConversionInfo {
   profit: number;
   investedUSD: number;
   profitUSD: number;
+  buyIn: number;
+  buyInUSD: number;
+  guaranteed: number;
+  guaranteedUSD: number;
+  participantsEstimate: number;
   fxRateNativePerUSD: number;
   rateMissing: boolean;
   currency: string;
@@ -95,14 +100,26 @@ function buildConversionInfo(
   const { prize, bounty } = getTournamentReturn(t, registrationData);
   const profit = prize + bounty - invested;
 
+  const buyIn = parseFloat(t?.buyIn || '0') || 0;
+  const guaranteed = parseFloat(t?.guaranteed || '0') || 0;
+  const addOnTaken = Boolean(t?.addOnTaken);
+  const addOnCost = parseFloat(t?.addOnCost || '0') || 0;
+  const participantsDenom = addOnTaken ? buyIn + addOnCost : buyIn;
+  const participantsEstimate =
+    guaranteed > 0 && participantsDenom > 0 ? guaranteed / participantsDenom : 0;
+
   let investedUSD = 0;
   let profitUSD = 0;
+  let buyInUSD = 0;
+  let guaranteedUSD = 0;
   let rateMissing = false;
   let fxRateNativePerUSD = 1;
 
   if (currency === 'USD') {
     investedUSD = invested;
     profitUSD = profit;
+    buyInUSD = buyIn;
+    guaranteedUSD = guaranteed;
     fxRateNativePerUSD = 1;
   } else {
     const rate = usdConversionRates[currency];
@@ -110,11 +127,15 @@ function buildConversionInfo(
       fxRateNativePerUSD = rate;
       investedUSD = convertToNativeCurrency(invested, currency, 'USD', usdConversionRates);
       profitUSD = convertToNativeCurrency(profit, currency, 'USD', usdConversionRates);
+      buyInUSD = convertToNativeCurrency(buyIn, currency, 'USD', usdConversionRates);
+      guaranteedUSD = convertToNativeCurrency(guaranteed, currency, 'USD', usdConversionRates);
     } else {
       rateMissing = true;
       fxRateNativePerUSD = 0;
       investedUSD = 0;
       profitUSD = 0;
+      buyInUSD = 0;
+      guaranteedUSD = 0;
     }
   }
 
@@ -123,6 +144,11 @@ function buildConversionInfo(
     profit,
     investedUSD,
     profitUSD,
+    buyIn,
+    buyInUSD,
+    guaranteed,
+    guaranteedUSD,
+    participantsEstimate,
     fxRateNativePerUSD,
     rateMissing,
     currency,
@@ -290,6 +316,8 @@ export const calculateSessionStats = (
     profit: 0,
     totalInvestidoUSD: 0,
     profitUSD: 0,
+    abi: 0,
+    avgParticipants: 0,
     breakdown: EMPTY_BREAKDOWN,
     itm: 0,
     itmPercent: 0,
@@ -345,6 +373,18 @@ export const calculateSessionStats = (
   // Profit raw (currency-mixed legado, mantido p/ compat de testes single-currency).
   const profit = conversionInfos.reduce((sum, info) => sum + info.profit, 0);
   const profitUSD = breakdown.profitUSD;
+
+  // ABI (USD): media de buy-in por torneio registrado/finalizado.
+  const abi = conversionInfos.length > 0
+    ? conversionInfos.reduce((sum, info) => sum + info.buyInUSD, 0) / conversionInfos.length
+    : 0;
+
+  // Media participantes: Gtd / (BI + AddOn quando pago). So conta torneios
+  // com guaranteed > 0 e buyIn > 0 (campos opcionais nem sempre preenchidos).
+  const eligibleParticipants = conversionInfos.filter((i) => i.participantsEstimate > 0);
+  const avgParticipants = eligibleParticipants.length > 0
+    ? eligibleParticipants.reduce((sum, i) => sum + i.participantsEstimate, 0) / eligibleParticipants.length
+    : 0;
 
   // ITM deve considerar torneios com campo "Prize" (result) registrado > 0
   const itm = allSessionTournaments.filter((t: any) => {
@@ -424,6 +464,8 @@ export const calculateSessionStats = (
     profit,
     totalInvestidoUSD,
     profitUSD,
+    abi,
+    avgParticipants,
     breakdown,
     itm,
     itmPercent,

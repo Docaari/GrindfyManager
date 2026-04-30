@@ -113,6 +113,14 @@ export interface SessionStats {
   profit: number;
   totalInvestidoUSD: number;
   profitUSD: number;
+  /** Average buy-in (USD) por torneio registrado/finalizado da sessao. */
+  abi: number;
+  /**
+   * Media de participantes estimada via Gtd / BI (ou Gtd / (BI + AddOn) quando
+   * add-on foi pago). Conta apenas torneios com guaranteed > 0 e buyIn > 0.
+   * Zero quando nenhum torneio elegivel.
+   */
+  avgParticipants: number;
   breakdown: SessionFinancialBreakdown;
   itm: number;
   itmPercent: number;
