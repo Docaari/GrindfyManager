@@ -254,6 +254,172 @@ describe('calculateSessionStats - iPoker EUR (site overrides legacy t.currency d
   });
 });
 
+describe('calculateSessionStats - ABI (avg buy-in USD) e Media Participantes', () => {
+  it('ABI: media de buy-in em USD para sessao single-currency USD', () => {
+    const tournaments = [
+      {
+        id: 't-1',
+        site: 'PokerStars',
+        buyIn: '22.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+      {
+        id: 't-2',
+        site: 'PokerStars',
+        buyIn: '55.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+    ];
+    const stats = calculateSessionStats(tournaments, [], {}, null, {});
+    // (22 + 55) / 2 = 38.5
+    expect(stats.abi).toBeCloseTo(38.5, 2);
+  });
+
+  it('ABI: converte BRL para USD antes de mediar', () => {
+    const tournaments = [
+      {
+        id: 't-stars',
+        site: 'PokerStars',
+        buyIn: '20.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+      {
+        id: 't-suprema',
+        site: 'Suprema',
+        buyIn: '50.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+    ];
+    const rates = { BRL: 5.0 };
+    const stats = calculateSessionStats(tournaments, [], {}, null, rates);
+    // USD 20 + (BRL 50 / 5 = USD 10) = 30 / 2 = 15
+    expect(stats.abi).toBeCloseTo(15, 2);
+  });
+
+  it('Media Participantes: Gtd / BI quando sem add-on', () => {
+    const tournaments = [
+      {
+        id: 't-1',
+        site: 'PokerStars',
+        buyIn: '22.00',
+        guaranteed: '4400.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+      {
+        id: 't-2',
+        site: 'PokerStars',
+        buyIn: '11.00',
+        guaranteed: '1100.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+    ];
+    const stats = calculateSessionStats(tournaments, [], {}, null, {});
+    // 4400/22 = 200; 1100/11 = 100; media = 150
+    expect(stats.avgParticipants).toBeCloseTo(150, 2);
+  });
+
+  it('Media Participantes: Gtd / (BI + AddOn) quando add-on pago', () => {
+    const tournaments = [
+      {
+        id: 't-addon',
+        site: 'PokerStars',
+        buyIn: '22.00',
+        guaranteed: '4400.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: true,
+        addOnCost: '22.00',
+        allowsAddOn: true,
+        status: 'finished',
+      },
+    ];
+    const stats = calculateSessionStats(tournaments, [], {}, null, {});
+    // 4400 / (22 + 22) = 100
+    expect(stats.avgParticipants).toBeCloseTo(100, 2);
+  });
+
+  it('Media Participantes: ignora torneios sem guaranteed', () => {
+    const tournaments = [
+      {
+        id: 't-with',
+        site: 'PokerStars',
+        buyIn: '22.00',
+        guaranteed: '4400.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+      {
+        id: 't-without',
+        site: 'PokerStars',
+        buyIn: '22.00',
+        guaranteed: '0',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+    ];
+    const stats = calculateSessionStats(tournaments, [], {}, null, {});
+    // So conta o primeiro: 4400/22 = 200
+    expect(stats.avgParticipants).toBeCloseTo(200, 2);
+  });
+
+  it('Media Participantes: zero quando nenhum torneio elegivel', () => {
+    const tournaments = [
+      {
+        id: 't-no-gtd',
+        site: 'PokerStars',
+        buyIn: '22.00',
+        rebuys: 0,
+        result: '0',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+    ];
+    const stats = calculateSessionStats(tournaments, [], {}, null, {});
+    expect(stats.avgParticipants).toBe(0);
+  });
+});
+
 describe('calculateFinalSessionStats - FX conversion', () => {
   it('summary final converte BRL para USD em profit/abiMed/totalInvested', () => {
     const tournaments = [
