@@ -29,6 +29,7 @@ export interface SessionTournament {
   category?: string;
   speed?: string;
   time?: string;
+  registrationTime?: string | null;
   guaranteed?: string;
   bounty?: string;
   prioridade?: number;
@@ -99,7 +100,16 @@ export interface SessionStats {
   reentradas: number;
   proximos: number;
   concluidos: number;
+  /**
+   * @deprecated Soma raw em moedas nativas (mixed-currency em sessao multi-rede).
+   * Usar `totalInvestidoUSD` para qualquer agregacao financeira nova.
+   * Mantido para compat de tests single-currency e grind_sessions legado.
+   */
   totalInvestido: number;
+  /**
+   * @deprecated Soma raw em moedas nativas (mixed-currency em sessao multi-rede).
+   * Usar `profitUSD`. Veja docs/architecture/lessons-learned.md (2026-04-30 FX).
+   */
   profit: number;
   totalInvestidoUSD: number;
   profitUSD: number;
@@ -150,6 +160,9 @@ export interface NewTournamentForm {
   type: string;
   speed: string;
   scheduledTime: string;
+  // Horario de registro intencional (HH:MM). Opcional. Quando preenchido,
+  // grind-live ordena/exibe por este valor; senao usa scheduledTime (start).
+  registrationTime?: string;
   fieldSize: string;
   rebuys: number;
   result: string;

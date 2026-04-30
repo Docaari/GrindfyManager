@@ -191,10 +191,48 @@ Tambem precisa instalar accessor com setter no proto de Navigator e re-instalar 
 **Erro:** Aplicar `clamp(50 + speedBonus + fieldBonus + timeBonus, 0, 100)` puramente linear nao reproduz os anchors da spec (Normal+medio+nobre=75, Hyper+massivo+madrugada=25). A spec define dois pontos extremos que NAO sao saida da formula linear.
 **Correto:** Aplicar `clamp(sum - hyperMassivoPenalty, 0, 75)` onde `hyperMassivoPenalty = 10 if (speed=Hyper && field=massivo) else 0`. Isso modela "synergy de variancia" e respeita o cap superior 75 (anchor da spec). Documentado em `server/scoring/tournamentScorer.ts` — funcao `computeColdStartScore`.
 
+### 2026-04-30 — calculateSessionStats ignorava 5o argumento usdConversionRates (FX bug grind-live)
+**Contexto:** Founder reportou: torneio Suprema (BRL), result R$53 -> dashboard mostrou profit como -266 USD em vez de converter (R$53 ~ $10 a 5.3 BRL/USD). Caller `GrindSessionLive.tsx` ja passava `usdConversionRates` como 5o arg para `calculateSessionStats`; tipo `SessionStats` ja declarava `totalInvestidoUSD/profitUSD/breakdown`.
+**Erro:** Funcao era 4-arity — JS silenciosamente descartava o 5o argumento. Stats fields USD ficavam `undefined`. UI fallback (`stats.profitUSD ?? stats.profit`) caia em `stats.profit` raw, que somava valores nativos sem conversao. Same bug em `calculateFinalSessionStats` (sem suporte a rates), persistindo profit em moeda mixed-currency no `grind_sessions.profit`.
+**Correto:** Adicionar 5o param `usdConversionRates: Record<string, number> = {}`. Por torneio, derivar currency via `getCurrencyForSite(t.site).code` (`@shared/platform-currency`); converter buyIn/result/bounty/addOn via `convertToNativeCurrency` (`@shared/wallet-reconciliation`). Emitir `totalInvestidoUSD`, `profitUSD`, `breakdown.byCurrency`, `breakdown.byPlatform`, `breakdown.hasMissingRate`. Manter campos legacy `totalInvestido/profit` (raw mixed) para compat de tests single-currency PokerStars. ROI usa USD quando `totalInvestidoUSD > 0`. Dashboard exibe USD com sub-line breakdown native quando ha multiplas moedas; warning `hasMissingRate` quando rate ausente. `usdConversionRates` definido no topo do componente para evitar TDZ em mutations declaradas antes. Tests: `tests/unit/grind-session/calculate-session-stats-fx.test.ts`. Lessons cross-ref: anti-pattern "function silently drops args" — quando tipo/return declara campos USD, signature DEVE consumir rates explicitamente; nao confiar que JS vai propagar via spread.
+
 ### 2026-04-27 — Atomicidade quebrada quando service abre tx propria dentro de outro service (Sprint Session-End Reconciliation V2)
 **Contexto:** `runReconciliation` chamava `walletService.recordWalletTransaction` (que internamente abria `storage.transaction`) e DEPOIS, fora dessa transaction, chamava `storage.createSessionWalletSnapshot`. Resultado: se snapshot falhasse, `wallet_transaction` ja tinha commitado -> snapshot orfao + idempotencia quebrada. Pior: race UNIQUE concorrente — 2 callers passam preflight, cada um commita sua tx, segundo viola UNIQUE em snapshot mas tx duplicada ja gravada -> saldo dobrado.
 **Erro:** Tratar `walletService.recordWalletTransaction` como caixa-preta atomica. Cada chamada ao service abria/commitava uma tx independente, e qualquer escrita externa (snapshot) ficava desprotegida fora dela.
 **Correto:** Service-de-baixo aceita `tx?: any` opcional. Quando passado, NAO abre tx propria — usa o tx do caller (ownership de commit/rollback transferida). Caller (service-de-cima) abre `storage.transaction(tx => ...)` UMA vez, passa o `tx` para todas as escritas filhas. UNIQUE violation (Postgres `23505`) em snapshot dentro da tx -> rollback automatico da `wallet_transaction` da mesma tx -> mapear erro para `already_reconciled` (409). Cache invalidation tambem migra para o caller (so apos commit do outer tx). Pattern reutilizavel para qualquer service que precise compor com outro atomicamente. Detalhes: `server/services/walletService.ts` (parametro `externalTx`), `server/services/sessionReconciliation.ts` (orchestrator), tests `tests/integration/regression/session-end-atomicity.test.ts`.
+
+---
+
+<a name="file-uploads"></a>
+## File Uploads
+
+### 2026-04-30 — Magic bytes > Content-Type, path traversal, FS efemero, stream vs buffer (Sprint Spot-Screenshots)
+
+**Contexto:** Implementando captura de screenshots para `starred_hands` (spec `Docs/specs/spot-screenshots.md`, ADR-057). Endpoint `POST /api/starred-hands` aceita multipart com imagem (PNG/JPEG/WEBP, max 5MB). Endpoint `GET /api/starred-hands/:id/image` serve binario autenticado. Implementacao default `LocalFsSpotImageStorage` em `uploads/spots/{userId}/{sessionId}/{nanoid}.{ext}`; futura `S3SpotImageStorage` no deploy.
+
+**Patterns que vao quebrar (preventivos):**
+
+1. **Confiar no `Content-Type` do cliente para validar MIME.** Multer usa o header do request — qualquer cliente malicioso (ou bug de cliente) manda `image/png` em arquivo executavel. **Correto:** `file-type` lib roda magic bytes contra o `Buffer` real apos multer parser. MIME validado eh o do magic bytes; se divergir do Content-Type do cliente, **usar o do magic bytes** (decisao founder #2 spec). Persistir o MIME real em `image_mime`. Defesa em profundidade: `multer.fileFilter` + magic bytes server-side antes de `Storage.put`.
+
+2. **Compor path com input do cliente direto.** Tentacao: `path.join(uploadsDir, req.body.filename)`. Cliente manda `../../../etc/passwd` → leak. **Correto:** servidor gera `nanoid(21)` + extensao whitelisted (`.png`/`.jpeg`/`.webp`); nunca aceita filename do cliente. `image_key` persistida eh **path relativo** ao root (`{userId}/{sessionId}/{nanoid}.{ext}`), nunca absoluto. Endpoint de leitura **valida** key contra regex (`!contains '..' && !contains '\\' && !startsWith '/'`) ANTES de tocar FS — defesa contra rows corrompidas (SQL injection externa hipotetica). Ver ADR-057 secao "Detalhes-chave do design ponto 5".
+
+3. **FS local efemero em containers.** Codigo que escreve em `uploads/spots/` rodando em Vercel/Railway/Fly.io **perde tudo no proximo deploy** (filesystem nao persiste em maioria dos PaaS). Sintoma: imagens "somem" 100% das vezes apos redeploy, mas DB tem `image_key` apontando pra elas → 404 silencioso. **Correto:** abstrair storage atras de interface (`SpotImageStorage`); FS so em dev local; cloud (S3/R2) obrigatorio em prod. Flagear no checklist do `deployer`: nao deployar se `SPOT_IMAGE_STORAGE_BACKEND !== 's3'`. Lessons learned cross-ref: deploy_strategy_2026-04-24.md (founder mantem tudo local).
+
+4. **Buffer arquivo inteiro em memoria pra servir.** Para 5MB OK; para 50MB sob carga concorrente (10 reqs simultaneas = 500MB de heap) RAM explode. **MVP aceitavel** com cap 5MB e usuarios solo. **Atencao:** quando cap subir (fase comunidade) ou tipos novos (video) entrarem, refatorar para `fs.createReadStream(absPath).pipe(res)` em FS, e `GetObjectCommand` retornando stream em S3. Interface `SpotImageStorage.get` retornaria `Readable` em vez de `Buffer` — breaking change documentado em ADR-057 "Quando rever esta decisao".
+
+5. **Multer escreve em disco antes de validacoes de dominio.** `multer.diskStorage` salva imediatamente; cap atingido (10/sessao, 3/torneio) ou Zod parse falham depois → arquivo orfao no disco em todo 4xx path. **Correto:** `multer.memoryStorage()` mantem em RAM (ja capped a 5MB); controller valida tudo (auth, ownership, caps, magic bytes); SO ENTAO chama `Storage.put` que escreve. Em INSERT row falhar pos-write, controller chama `Storage.delete(key)` em catch (cleanup orfao). Spec NFR Disponibilidade: "salvar arquivo PRIMEIRO, depois INSERT row; se INSERT falhar, deletar arquivo".
+
+6. **Endpoint de leitura retorna 403 quando spot pertence a outro user.** Vaza existencia (atacante itera IDs e diferencia 403 vs 404). **Correto:** sempre 404 — para spot inexistente, para spot de outro user, e para spot sem imagem. RF-10 spec ponto critico.
+
+7. **Cache-Control publico em endpoint autenticado.** Sem cabecalho ou `public` → CDN compartilhada cacheia pra todos. **Correto:** `Cache-Control: private, max-age=86400` — browser do owner cacheia 24h, intermediarios nao.
+
+8. **Cap "hard" via tx serializable em sistema multi-tab.** Tentacao: `BEGIN; SELECT FOR UPDATE COUNT(*); INSERT; COMMIT`. Custo de lock-contention alto, throughput cai. **Para spec atual:** cap virtual best-effort (SELECT COUNT antes do INSERT) com overshoot aceito de +1 em race extrema (EC-14). Cap eh UX, nao invariante critico. Documentar tradeoff explicito; nao prometer estritamente 10/sessao em concurrent paths.
+
+9. **Limpar diretorios pais vazios pos-delete em FS.** YAGNI — FS aguenta diretorios vazios sem custo, e S3 nem tem conceito de diretorio. Cleanup eh complexidade > beneficio.
+
+10. **Esquecer `URL.revokeObjectURL` em preview.** `URL.createObjectURL(file)` aloca handle; sem revoke explicito em unmount/cancel = memory leak crescente em sessoes longas. Hook custom `useObjectURL(file)` com cleanup em `useEffect` evita.
+
+**Cross-refs:** ADR-057 (storage abstraction), spec RF-09/RF-10/NFR-Seguranca/NFR-Disponibilidade, diagramas `diagrams/spot-screenshots-sequences.mermaid`, `diagrams/spot-screenshots-capture-flow.mermaid`.
 
 ---
 

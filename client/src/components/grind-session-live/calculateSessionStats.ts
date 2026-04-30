@@ -3,14 +3,181 @@ import type {
   GrindSession,
   SessionStats,
   RegistrationData,
-  SessionFinancialBreakdown,
   CurrencyBreakdownEntry,
   PlatformBreakdownEntry,
+  SessionFinancialBreakdown,
 } from './types';
 import { getCurrencyForSite } from '@shared/platform-currency';
+import { convertToNativeCurrency } from '@shared/wallet-reconciliation';
 
-/** Mapa "1 USD = N unidades nativas". USD sempre 1.0. */
-export type UsdConversionRates = Record<string, number>;
+function getTournamentCurrency(t: any): string {
+  const explicit = typeof t?.currency === 'string' ? t.currency : '';
+  if (explicit) return explicit;
+  return getCurrencyForSite(t?.site || '').code || 'USD';
+}
+
+function getTournamentInvested(t: any): number {
+  const buyIn = parseFloat(t?.buyIn || '0') || 0;
+  const rebuys = parseInt(String(t?.rebuys ?? 0)) || 0;
+  const reentriesRaw = t?.reentries;
+  const reentries = reentriesRaw == null ? 0 : (parseInt(String(reentriesRaw)) || 0);
+  const addOnTaken = Boolean(t?.addOnTaken);
+  const addOnCost = parseFloat(t?.addOnCost || '0') || 0;
+  return buyIn * (1 + rebuys + reentries) + (addOnTaken ? addOnCost : 0);
+}
+
+function getTournamentReturn(
+  t: any,
+  registrationData: RegistrationData,
+): { prize: number; bounty: number } {
+  const id = t?.id;
+  const sessionPrize = registrationData?.[id]?.prize;
+  const sessionBounty = registrationData?.[id]?.bounty;
+
+  let prize = 0;
+  if (sessionPrize !== undefined && sessionPrize !== null && sessionPrize !== '') {
+    const parsed = parseFloat(sessionPrize);
+    if (!isNaN(parsed)) prize = parsed;
+  } else {
+    const stored = parseFloat(t?.result || '0');
+    if (!isNaN(stored)) prize = stored;
+  }
+
+  let bounty = 0;
+  if (sessionBounty !== undefined && sessionBounty !== null && sessionBounty !== '') {
+    const parsed = parseFloat(sessionBounty);
+    if (!isNaN(parsed)) bounty = parsed;
+  } else {
+    const stored = parseFloat(t?.bounty || '0');
+    if (!isNaN(stored)) bounty = stored;
+  }
+
+  return { prize, bounty };
+}
+
+function isValidUsdRate(rate: number | undefined | null): rate is number {
+  return typeof rate === 'number' && Number.isFinite(rate) && rate > 0;
+}
+
+interface ConversionInfo {
+  invested: number;
+  profit: number;
+  investedUSD: number;
+  profitUSD: number;
+  fxRateNativePerUSD: number;
+  rateMissing: boolean;
+  currency: string;
+  site: string;
+}
+
+function buildConversionInfo(
+  t: any,
+  registrationData: RegistrationData,
+  usdConversionRates: Record<string, number>,
+): ConversionInfo {
+  const currency = getTournamentCurrency(t);
+  const invested = getTournamentInvested(t);
+  const { prize, bounty } = getTournamentReturn(t, registrationData);
+  const profit = prize + bounty - invested;
+
+  let investedUSD = 0;
+  let profitUSD = 0;
+  let rateMissing = false;
+  let fxRateNativePerUSD = 1;
+
+  if (currency === 'USD') {
+    investedUSD = invested;
+    profitUSD = profit;
+    fxRateNativePerUSD = 1;
+  } else {
+    const rate = usdConversionRates[currency];
+    if (isValidUsdRate(rate)) {
+      fxRateNativePerUSD = rate;
+      investedUSD = convertToNativeCurrency(invested, currency, 'USD', usdConversionRates);
+      profitUSD = convertToNativeCurrency(profit, currency, 'USD', usdConversionRates);
+    } else {
+      rateMissing = true;
+      fxRateNativePerUSD = 0;
+      investedUSD = 0;
+      profitUSD = 0;
+    }
+  }
+
+  return {
+    invested,
+    profit,
+    investedUSD,
+    profitUSD,
+    fxRateNativePerUSD,
+    rateMissing,
+    currency,
+    site: t?.site || '',
+  };
+}
+
+function buildBreakdown(
+  infos: ConversionInfo[],
+): SessionFinancialBreakdown {
+  const byCurrencyMap = new Map<string, CurrencyBreakdownEntry>();
+  const byPlatformMap = new Map<string, PlatformBreakdownEntry>();
+  let totalInvestedUSD = 0;
+  let profitUSD = 0;
+  let hasMissingRate = false;
+
+  for (const info of infos) {
+    const ccyEntry = byCurrencyMap.get(info.currency) ?? {
+      currency: info.currency,
+      invested: 0,
+      profit: 0,
+      fxRateNativePerUSD: info.fxRateNativePerUSD,
+      rateMissing: false,
+      investedUSD: 0,
+      profitUSD: 0,
+    };
+    ccyEntry.invested += info.invested;
+    ccyEntry.profit += info.profit;
+    ccyEntry.investedUSD += info.investedUSD;
+    ccyEntry.profitUSD += info.profitUSD;
+    if (info.rateMissing) ccyEntry.rateMissing = true;
+    if (isValidUsdRate(info.fxRateNativePerUSD)) {
+      ccyEntry.fxRateNativePerUSD = info.fxRateNativePerUSD;
+    }
+    byCurrencyMap.set(info.currency, ccyEntry);
+
+    const platformKey = `${info.site}|${info.currency}`;
+    const platEntry = byPlatformMap.get(platformKey) ?? {
+      site: info.site,
+      currency: info.currency,
+      invested: 0,
+      profit: 0,
+      investedUSD: 0,
+      profitUSD: 0,
+      fxRateNativePerUSD: info.fxRateNativePerUSD,
+      rateMissing: false,
+    };
+    platEntry.invested += info.invested;
+    platEntry.profit += info.profit;
+    platEntry.investedUSD += info.investedUSD;
+    platEntry.profitUSD += info.profitUSD;
+    if (info.rateMissing) platEntry.rateMissing = true;
+    if (isValidUsdRate(info.fxRateNativePerUSD)) {
+      platEntry.fxRateNativePerUSD = info.fxRateNativePerUSD;
+    }
+    byPlatformMap.set(platformKey, platEntry);
+
+    totalInvestedUSD += info.investedUSD;
+    profitUSD += info.profitUSD;
+    if (info.rateMissing) hasMissingRate = true;
+  }
+
+  return {
+    byCurrency: Array.from(byCurrencyMap.values()),
+    byPlatform: Array.from(byPlatformMap.values()),
+    totalInvestedUSD,
+    profitUSD,
+    hasMissingRate,
+  };
+}
 
 const EMPTY_BREAKDOWN: SessionFinancialBreakdown = {
   byCurrency: [],
@@ -19,140 +186,6 @@ const EMPTY_BREAKDOWN: SessionFinancialBreakdown = {
   profitUSD: 0,
   hasMissingRate: false,
 };
-
-function nativeToUSD(amount: number, currency: string, rates: UsdConversionRates): {
-  usd: number;
-  rate: number;
-  missing: boolean;
-} {
-  if (currency === 'USD') return { usd: amount, rate: 1, missing: false };
-  const rate = rates[currency];
-  if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) {
-    return { usd: amount, rate: 0, missing: true };
-  }
-  return { usd: amount / rate, rate, missing: false };
-}
-
-interface BreakdownAccumulator {
-  invested: number;
-  profit: number;
-}
-
-function getInvestedFor(t: any): number {
-  const buyIn = parseFloat(t.buyIn || '0') || 0;
-  const rebuys = parseInt(t.rebuys) || 0;
-  const reentriesRaw = t.reentries;
-  const reentries = reentriesRaw == null ? 0 : (parseInt(String(reentriesRaw)) || 0);
-  const addOnTaken = Boolean(t.addOnTaken);
-  const addOnCost = parseFloat(t.addOnCost || '0') || 0;
-  return buyIn * (1 + rebuys + reentries) + (addOnTaken ? addOnCost : 0);
-}
-
-function getResultFor(t: any, registrationData: RegistrationData): number {
-  const tournamentId = t.id;
-  const sessionPrize = registrationData[tournamentId]?.prize;
-  if (sessionPrize !== undefined && sessionPrize !== null && sessionPrize !== '') {
-    const parsed = parseFloat(sessionPrize);
-    if (!isNaN(parsed)) return parsed;
-  }
-  const stored = parseFloat(t.result || '0');
-  return isNaN(stored) ? 0 : stored;
-}
-
-function getBountyFor(t: any, registrationData: RegistrationData): number {
-  const tournamentId = t.id;
-  const sessionBounty = registrationData[tournamentId]?.bounty;
-  if (sessionBounty !== undefined && sessionBounty !== null && sessionBounty !== '') {
-    const parsed = parseFloat(sessionBounty);
-    if (!isNaN(parsed)) return parsed;
-  }
-  const stored = parseFloat(t.bounty || '0');
-  return isNaN(stored) ? 0 : stored;
-}
-
-/**
- * Calcula breakdown financeiro convertido para USD por moeda + por plataforma.
- * Fail-open: se taxa de uma moeda nao for encontrada, soma valor nativo bruto
- * e marca `hasMissingRate=true` para o UI alertar.
- */
-export function aggregateSessionFinancialsUSD(
-  sessionTournaments: any[],
-  registrationData: RegistrationData,
-  rates: UsdConversionRates,
-): SessionFinancialBreakdown {
-  if (!sessionTournaments || sessionTournaments.length === 0) return EMPTY_BREAKDOWN;
-
-  const byCurrencyMap = new Map<string, BreakdownAccumulator>();
-  const byPlatformMap = new Map<string, { invested: number; profit: number; currency: string }>();
-
-  for (const t of sessionTournaments) {
-    const site = t.site || 'Unknown';
-    const currency = getCurrencyForSite(site).code;
-    const invested = getInvestedFor(t);
-    const result = getResultFor(t, registrationData);
-    const bounty = getBountyFor(t, registrationData);
-    const profit = (result + bounty) - invested;
-
-    const cAcc = byCurrencyMap.get(currency) ?? { invested: 0, profit: 0 };
-    cAcc.invested += invested;
-    cAcc.profit += profit;
-    byCurrencyMap.set(currency, cAcc);
-
-    const pKey = `${site}|${currency}`;
-    const pAcc = byPlatformMap.get(pKey) ?? { invested: 0, profit: 0, currency };
-    pAcc.invested += invested;
-    pAcc.profit += profit;
-    byPlatformMap.set(pKey, pAcc);
-  }
-
-  let totalInvestedUSD = 0;
-  let profitUSD = 0;
-  let hasMissingRate = false;
-
-  const byCurrency: CurrencyBreakdownEntry[] = Array.from(byCurrencyMap.entries()).map(([currency, acc]) => {
-    const investedConv = nativeToUSD(acc.invested, currency, rates);
-    const profitConv = nativeToUSD(acc.profit, currency, rates);
-    if (investedConv.missing) hasMissingRate = true;
-    totalInvestedUSD += investedConv.usd;
-    profitUSD += profitConv.usd;
-    return {
-      currency,
-      invested: acc.invested,
-      profit: acc.profit,
-      fxRateNativePerUSD: investedConv.rate,
-      rateMissing: investedConv.missing,
-      investedUSD: investedConv.usd,
-      profitUSD: profitConv.usd,
-    };
-  });
-
-  const byPlatform: PlatformBreakdownEntry[] = Array.from(byPlatformMap.entries()).map(([key, acc]) => {
-    const site = key.split('|')[0];
-    const investedConv = nativeToUSD(acc.invested, acc.currency, rates);
-    const profitConv = nativeToUSD(acc.profit, acc.currency, rates);
-    return {
-      site,
-      currency: acc.currency,
-      invested: acc.invested,
-      profit: acc.profit,
-      investedUSD: investedConv.usd,
-      profitUSD: profitConv.usd,
-      fxRateNativePerUSD: investedConv.rate,
-      rateMissing: investedConv.missing,
-    };
-  });
-
-  byCurrency.sort((a, b) => b.investedUSD - a.investedUSD);
-  byPlatform.sort((a, b) => b.investedUSD - a.investedUSD);
-
-  return {
-    byCurrency,
-    byPlatform,
-    totalInvestedUSD,
-    profitUSD,
-    hasMissingRate,
-  };
-}
 
 // Calculate tournament type and speed percentages
 export const calculateTournamentPercentages = (tournaments: any[]) => {
@@ -194,7 +227,7 @@ export const calculateSessionStats = (
   plannedTournaments: any[],
   registrationData: RegistrationData,
   activeSession: GrindSession | null,
-  usdConversionRates: UsdConversionRates = {}
+  usdConversionRates: Record<string, number> = {}
 ): SessionStats => {
   // Use the same deduplication logic as the tournament display
   const combinedTournaments = new Map();
@@ -276,18 +309,16 @@ export const calculateSessionStats = (
   // Todos os torneios da sessao (registrados + finalizados)
   const allSessionTournaments = [...registeredTournaments, ...finishedTournaments];
 
-  // Calcular total investido: Buy-in + Rebuys + Reentries + Add-on (ADR-014)
-  // Formula: totalInvestido = buyIn * (1 + rebuys + reentries) + (addOnTaken ? addOnCost : 0)
-  const totalInvestido = allSessionTournaments.reduce((sum: number, t: any) => {
-    const buyIn = parseFloat(t.buyIn || '0');
-    const rebuys = parseInt(t.rebuys) || 0;
-    const reentriesRaw = t.reentries;
-    const reentries = reentriesRaw == null ? 0 : (parseInt(String(reentriesRaw)) || 0);
-    const addOnTaken = Boolean(t.addOnTaken);
-    const addOnCost = parseFloat(t.addOnCost || '0') || 0;
-    const invested = buyIn * (1 + rebuys + reentries) + (addOnTaken ? addOnCost : 0);
-    return sum + invested;
-  }, 0);
+  // Per-tournament conversion info (currency-aware) — ADR-033 + Issue grind-live FX bug
+  const conversionInfos = allSessionTournaments.map((t) =>
+    buildConversionInfo(t, registrationData, usdConversionRates)
+  );
+  const breakdown = buildBreakdown(conversionInfos);
+
+  // totalInvestido legado: soma raw (sem conversao). Mantido para compat de testes.
+  // Para display use totalInvestidoUSD (currency-normalized).
+  const totalInvestido = conversionInfos.reduce((sum, info) => sum + info.invested, 0);
+  const totalInvestidoUSD = breakdown.totalInvestedUSD;
 
   // totalEntries (Spec 3): volume + sum(reentries) para torneios registrados/finalizados
   const totalEntries = allSessionTournaments.reduce((sum: number, t: any) => {
@@ -296,50 +327,9 @@ export const calculateSessionStats = (
     return sum + 1 + reentries;
   }, 0);
 
-  // Calcular total de bounties incluindo registrationData
-  const totalBounties = allSessionTournaments.reduce((sum: number, t: any) => {
-    const tournamentId = t.id;
-    const sessionBounty = registrationData[tournamentId]?.bounty;
-
-    let bounty = 0;
-    if (sessionBounty !== undefined && sessionBounty !== null && sessionBounty !== '') {
-      const parsedSessionBounty = parseFloat(sessionBounty);
-      if (!isNaN(parsedSessionBounty)) {
-        bounty = parsedSessionBounty;
-      }
-    } else {
-      const storedBounty = parseFloat(t.bounty || '0');
-      if (!isNaN(storedBounty)) {
-        bounty = storedBounty;
-      }
-    }
-
-    return sum + bounty;
-  }, 0);
-
-  // Calcular total de prizes incluindo registrationData
-  const totalPrizes = allSessionTournaments.reduce((sum: number, t: any) => {
-    const tournamentId = t.id;
-    const sessionPrize = registrationData[tournamentId]?.prize;
-
-    let result = 0;
-    if (sessionPrize !== undefined && sessionPrize !== null && sessionPrize !== '') {
-      const parsedSessionPrize = parseFloat(sessionPrize);
-      if (!isNaN(parsedSessionPrize)) {
-        result = parsedSessionPrize;
-      }
-    } else {
-      const storedResult = parseFloat(t.result || '0');
-      if (!isNaN(storedResult)) {
-        result = storedResult;
-      }
-    }
-
-    return sum + result;
-  }, 0);
-
-  // Formula correta: (Bounties + Prizes) - (Total Buy-in + Total Rebuys)
-  const profit = (totalPrizes + totalBounties) - totalInvestido;
+  // Profit raw (currency-mixed legado, mantido p/ compat de testes single-currency).
+  const profit = conversionInfos.reduce((sum, info) => sum + info.profit, 0);
+  const profitUSD = breakdown.profitUSD;
 
   // ITM deve considerar torneios com campo "Prize" (result) registrado > 0
   const itm = allSessionTournaments.filter((t: any) => {
@@ -365,7 +355,11 @@ export const calculateSessionStats = (
   // ITM% deve usar apenas torneios finalizados (não contar registered sem resultado)
   const finishedCount = finishedTournaments.length;
   const itmPercent = finishedCount > 0 ? (itm / finishedCount) * 100 : 0;
-  const roi = totalInvestido > 0 ? (profit / totalInvestido) * 100 : 0;
+  // ROI usa USD (currency-normalized) quando ha rates disponiveis; senao
+  // cai pra calculo legado raw (em sessao single-currency, USD == raw).
+  const roiBaseInvested = totalInvestidoUSD > 0 ? totalInvestidoUSD : totalInvestido;
+  const roiBaseProfit = totalInvestidoUSD > 0 ? profitUSD : profit;
+  const roi = roiBaseInvested > 0 ? (roiBaseProfit / roiBaseInvested) * 100 : 0;
   const fts = [...registeredTournaments, ...finishedTournaments].filter((t: any) => {
     const pos = parseInt(String(t.position)) || 0;
     return pos <= 9 && pos > 0;
@@ -413,8 +407,8 @@ export const calculateSessionStats = (
     concluidos,
     totalInvestido,
     profit,
-    totalInvestidoUSD: breakdown.totalInvestedUSD,
-    profitUSD: breakdown.profitUSD,
+    totalInvestidoUSD,
+    profitUSD,
     breakdown,
     itm,
     itmPercent,
@@ -437,7 +431,8 @@ export const calculateSessionStats = (
 // Calculate final session statistics for session summary
 export const calculateFinalSessionStats = (
   plannedTournaments: any[],
-  sessionTournaments: any[]
+  sessionTournaments: any[],
+  usdConversionRates: Record<string, number> = {}
 ) => {
   const allTournaments = [
     ...(plannedTournaments || []),
@@ -446,33 +441,23 @@ export const calculateFinalSessionStats = (
   const completedTournaments = allTournaments.filter(t => t.status === "finished" || t.status === "completed");
 
   const volume = completedTournaments.length;
-  // Nova formula Spec 1 (ADR-014): inclui reentries e add-on
-  const totalInvested = completedTournaments.reduce((sum, t) => {
-    const buyIn = parseFloat(t.buyIn) || 0;
-    const rebuys = parseInt(String(t.rebuys ?? 0)) || 0;
-    const reentriesRaw = t.reentries;
-    const reentries = reentriesRaw == null ? 0 : (parseInt(String(reentriesRaw)) || 0);
-    const addOnTaken = Boolean(t.addOnTaken);
-    const addOnCost = parseFloat(t.addOnCost || '0') || 0;
-    const invested = buyIn * (1 + rebuys + reentries) + (addOnTaken ? addOnCost : 0);
-    return sum + invested;
-  }, 0);
 
-  const totalResult = completedTournaments.reduce((sum, t) => {
-    const result = parseFloat(t.result) || 0;
-    return sum + result;
-  }, 0);
+  // Per-tournament currency-aware conversion (parity com calculateSessionStats).
+  const conversionInfos = completedTournaments.map((t) =>
+    buildConversionInfo(t, {}, usdConversionRates)
+  );
+  const breakdown = buildBreakdown(conversionInfos);
 
-  const totalBounties = completedTournaments.reduce((sum, t) => {
-    const bounty = parseFloat(t.bounty) || 0;
-    return sum + bounty;
-  }, 0);
-
-  // CONSISTENT FORMULA: Profit = Prize + Bounties - Buy-in - Rebuys (same as active session dashboard)
-  const profit = (totalResult + totalBounties) - totalInvested;
+  const totalInvested = conversionInfos.reduce((sum, info) => sum + info.invested, 0);
+  const totalInvestedUSD = breakdown.totalInvestedUSD;
+  const profit = conversionInfos.reduce((sum, info) => sum + info.profit, 0);
+  const profitUSD = breakdown.profitUSD;
 
   const abiMed = volume > 0 ? totalInvested / volume : 0;
-  const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
+  const abiMedUSD = volume > 0 ? totalInvestedUSD / volume : 0;
+  const roiBaseInvested = totalInvestedUSD > 0 ? totalInvestedUSD : totalInvested;
+  const roiBaseProfit = totalInvestedUSD > 0 ? profitUSD : profit;
+  const roi = roiBaseInvested > 0 ? (roiBaseProfit / roiBaseInvested) * 100 : 0;
 
   const fts = completedTournaments.filter(t => {
     const position = parseInt(t.position) || 999;
@@ -522,13 +507,17 @@ export const calculateFinalSessionStats = (
   return {
     volume,
     profit,
+    profitUSD,
     abiMed,
+    abiMedUSD,
     roi,
     fts,
     cravadas,
     bestTournament,
     percentages,
     totalInvested,
+    totalInvestedUSD,
+    breakdown,
     totalEntries
   };
 };
