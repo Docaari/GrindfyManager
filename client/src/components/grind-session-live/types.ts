@@ -68,10 +68,14 @@ export interface QuickNote {
 export interface CurrencyBreakdownEntry {
   currency: string;
   invested: number;
+  /** Gross returns (prize + bounty), nao net. Founder convention 2026-04-30. */
+  returns: number;
+  /** Net profit (returns - invested). Mantido para ROI/persistencia. */
   profit: number;
   fxRateNativePerUSD: number;
   rateMissing: boolean;
   investedUSD: number;
+  returnsUSD: number;
   profitUSD: number;
 }
 
@@ -79,8 +83,10 @@ export interface PlatformBreakdownEntry {
   site: string;
   currency: string;
   invested: number;
+  returns: number;
   profit: number;
   investedUSD: number;
+  returnsUSD: number;
   profitUSD: number;
   fxRateNativePerUSD: number;
   rateMissing: boolean;
@@ -90,6 +96,9 @@ export interface SessionFinancialBreakdown {
   byCurrency: CurrencyBreakdownEntry[];
   byPlatform: PlatformBreakdownEntry[];
   totalInvestedUSD: number;
+  /** Gross returns USD (founder convention: results+bounties). */
+  totalReturnsUSD: number;
+  /** Net profit USD (returns - invested). */
   profitUSD: number;
   hasMissingRate: boolean;
 }
@@ -126,6 +135,9 @@ export interface SessionStats {
    */
   profit: number;
   totalInvestidoUSD: number;
+  /** Gross returns (prize+bounty). Founder convention para card "Profit". */
+  totalReturns: number;
+  totalReturnsUSD: number;
   profitUSD: number;
   /** Average buy-in (USD) por torneio registrado/finalizado da sessao. */
   abi: number;
