@@ -441,17 +441,53 @@ export const calculateSessionStats = (
   const proximos = upcomingTournaments.length;
   const concluidos = finishedTournaments.length;
 
-  // Todos os torneios da sessao (registrados + finalizados)
+  // Todos os torneios da sessao (registrados + finalizados) — usado para
+  // Total Investido (committed money) + ABI + Media Participantes.
   const allSessionTournaments = [...registeredTournaments, ...finishedTournaments];
 
-  // Per-tournament conversion info (currency-aware) — ADR-033 + Issue grind-live FX bug
+  // Per-tournament conversion info (currency-aware) — ADR-033 + FX bug fix.
   const conversionInfos = allSessionTournaments.map((t) =>
     buildConversionInfo(t, registrationData, usdConversionRates)
   );
-  const breakdown = buildBreakdown(conversionInfos);
+  // Subset finished-only para profit/ROI — padrao MTT tracking: profit eh
+  // realizado, registered tem buy-in committed mas resultado pendente.
+  const finishedConversionInfos = conversionInfos.filter((info, idx) =>
+    finishedTournaments.includes(allSessionTournaments[idx]),
+  );
 
-  // totalInvestido legado: soma raw (sem conversao). Mantido para compat de testes.
-  // Para display use totalInvestidoUSD (currency-normalized).
+  // Breakdown completo (invested) usa todos; profit-side usa finished only.
+  const breakdownAll = buildBreakdown(conversionInfos);
+  const breakdownFinished = buildBreakdown(finishedConversionInfos);
+
+  // Mescla: invested vem do breakdown ALL, profit vem do FINISHED.
+  // Cada currency entry combina invested (all) + profit (finished only).
+  const breakdown: SessionFinancialBreakdown = {
+    byCurrency: breakdownAll.byCurrency.map((entry) => {
+      const finishedEntry = breakdownFinished.byCurrency.find(
+        (f) => f.currency === entry.currency,
+      );
+      return {
+        ...entry,
+        profit: finishedEntry?.profit ?? 0,
+        profitUSD: finishedEntry?.profitUSD ?? 0,
+      };
+    }),
+    byPlatform: breakdownAll.byPlatform.map((entry) => {
+      const finishedEntry = breakdownFinished.byPlatform.find(
+        (f) => f.site === entry.site && f.currency === entry.currency,
+      );
+      return {
+        ...entry,
+        profit: finishedEntry?.profit ?? 0,
+        profitUSD: finishedEntry?.profitUSD ?? 0,
+      };
+    }),
+    totalInvestedUSD: breakdownAll.totalInvestedUSD,
+    profitUSD: breakdownFinished.profitUSD,
+    hasMissingRate: breakdownAll.hasMissingRate || breakdownFinished.hasMissingRate,
+  };
+
+  // totalInvestido legado: soma raw (sem conversao) — TODOS (committed money).
   const totalInvestido = conversionInfos.reduce((sum, info) => sum + info.invested, 0);
   const totalInvestidoUSD = breakdown.totalInvestedUSD;
 
@@ -462,8 +498,10 @@ export const calculateSessionStats = (
     return sum + 1 + reentries;
   }, 0);
 
-  // Profit raw (currency-mixed legado, mantido p/ compat de testes single-currency).
-  const profit = conversionInfos.reduce((sum, info) => sum + info.profit, 0);
+  // Profit raw realizado (FINISHED only — registered nao tem resultado).
+  // Padrao MTT tracking: registered tourneys committaram buy-in mas o
+  // profit eh pendente ate finalizar.
+  const profit = finishedConversionInfos.reduce((sum, info) => sum + info.profit, 0);
   const profitUSD = breakdown.profitUSD;
 
   // ABI (USD): media de buy-in por torneio registrado/finalizado.
@@ -505,10 +543,19 @@ export const calculateSessionStats = (
   // ITM% deve usar apenas torneios finalizados (não contar registered sem resultado)
   const finishedCount = finishedTournaments.length;
   const itmPercent = finishedCount > 0 ? (itm / finishedCount) * 100 : 0;
-  // ROI usa USD (currency-normalized) quando ha rates disponiveis; senao
-  // cai pra calculo legado raw (em sessao single-currency, USD == raw).
-  const roiBaseInvested = totalInvestidoUSD > 0 ? totalInvestidoUSD : totalInvestido;
-  const roiBaseProfit = totalInvestidoUSD > 0 ? profitUSD : profit;
+  // ROI realizado: profit (finished) / invested-finished. Usar invested
+  // dos finished only para ratio coerente, senao registered inflaria base
+  // e ROI realizado ficaria artificialmente baixo.
+  const investedFinishedUSD = finishedConversionInfos.reduce(
+    (sum, info) => sum + info.investedUSD,
+    0,
+  );
+  const investedFinishedRaw = finishedConversionInfos.reduce(
+    (sum, info) => sum + info.invested,
+    0,
+  );
+  const roiBaseInvested = investedFinishedUSD > 0 ? investedFinishedUSD : investedFinishedRaw;
+  const roiBaseProfit = investedFinishedUSD > 0 ? profitUSD : profit;
   const roi = roiBaseInvested > 0 ? (roiBaseProfit / roiBaseInvested) * 100 : 0;
   const fts = [...registeredTournaments, ...finishedTournaments].filter((t: any) => {
     const pos = parseInt(String(t.position)) || 0;
