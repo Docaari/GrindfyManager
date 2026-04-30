@@ -94,6 +94,20 @@ export interface SessionFinancialBreakdown {
   hasMissingRate: boolean;
 }
 
+export interface AddOnsBreakdownEntry {
+  currency: string;
+  total: number;
+  totalUSD: number;
+  rateMissing: boolean;
+}
+
+export interface AddOnsPaidSummary {
+  count: number;
+  totalUSD: number;
+  byCurrency: AddOnsBreakdownEntry[];
+  hasMissingRate: boolean;
+}
+
 export interface SessionStats {
   emAndamento: number;
   registros: number;
@@ -121,6 +135,8 @@ export interface SessionStats {
    * Zero quando nenhum torneio elegivel.
    */
   avgParticipants: number;
+  /** Add-ons pagos: count, total USD e breakdown por currency native. */
+  addOnsPaid: AddOnsPaidSummary;
   breakdown: SessionFinancialBreakdown;
   itm: number;
   itmPercent: number;

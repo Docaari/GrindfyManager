@@ -420,6 +420,142 @@ describe('calculateSessionStats - ABI (avg buy-in USD) e Media Participantes', (
   });
 });
 
+describe('calculateSessionStats - parseDecimal robusto + fallback chain', () => {
+  it('aceita formato BR "190,00" no result', () => {
+    const tournaments = [
+      {
+        id: 't-br',
+        site: 'Suprema',
+        buyIn: '50,00',
+        rebuys: 0,
+        result: '190,00',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+    ];
+    const rates = { BRL: 5.0 };
+    const stats = calculateSessionStats(tournaments, [], {}, null, rates);
+    // BRL: profit = 190 - 50 = 140
+    expect(stats.profit).toBeCloseTo(140, 2);
+    // USD: 140 / 5 = 28
+    expect(stats.profitUSD).toBeCloseTo(28, 2);
+  });
+
+  it('t.result > 0 vence sobre registrationData.prize="0" stale', () => {
+    const tournaments = [
+      {
+        id: 't-fix',
+        site: 'Suprema',
+        buyIn: '50.00',
+        rebuys: 0,
+        result: '190.00',
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+    ];
+    const registrationData = { 't-fix': { prize: '0', bounty: '0', position: '' } };
+    const rates = { BRL: 5.0 };
+    const stats = calculateSessionStats(tournaments, [], registrationData, null, rates);
+    // Sem fix anterior, registrationData.prize='0' anulava t.result=190.
+    // Profit deveria ser 140 (190-50), nao -50.
+    expect(stats.profit).toBeCloseTo(140, 2);
+  });
+
+  it('fallback t.prize legacy quando t.result=0', () => {
+    const tournaments = [
+      {
+        id: 't-prize',
+        site: 'PokerStars',
+        buyIn: '22.00',
+        rebuys: 0,
+        result: '0',
+        prize: '88.00', // schema legacy field
+        bounty: '0',
+        addOnTaken: false,
+        addOnCost: null,
+        status: 'finished',
+      },
+    ];
+    const stats = calculateSessionStats(tournaments, [], {}, null, {});
+    // profit = 88 - 22 = 66
+    expect(stats.profit).toBeCloseTo(66, 2);
+  });
+});
+
+describe('calculateSessionStats - addOnsPaid currency-aware', () => {
+  it('add-on USD: count + totalUSD nativo', () => {
+    const tournaments = [
+      {
+        id: 't-1',
+        site: 'PokerStars',
+        buyIn: '22.00',
+        addOnCost: '22.00',
+        addOnTaken: true,
+        allowsAddOn: true,
+        status: 'finished',
+      },
+    ];
+    const stats = calculateSessionStats(tournaments, [], {}, null, {});
+    expect(stats.addOnsPaid.count).toBe(1);
+    expect(stats.addOnsPaid.totalUSD).toBeCloseTo(22, 2);
+    expect(stats.addOnsPaid.byCurrency).toHaveLength(1);
+    expect(stats.addOnsPaid.byCurrency[0].currency).toBe('USD');
+  });
+
+  it('add-on misto BRL+USD: totalUSD converte BRL via rate', () => {
+    const tournaments = [
+      {
+        id: 't-stars',
+        site: 'PokerStars',
+        buyIn: '22.00',
+        addOnCost: '22.00',
+        addOnTaken: true,
+        allowsAddOn: true,
+        status: 'finished',
+      },
+      {
+        id: 't-suprema',
+        site: 'Suprema',
+        buyIn: '50.00',
+        addOnCost: '50.00',
+        addOnTaken: true,
+        allowsAddOn: true,
+        status: 'finished',
+      },
+    ];
+    const rates = { BRL: 5.0 };
+    const stats = calculateSessionStats(tournaments, [], {}, null, rates);
+    expect(stats.addOnsPaid.count).toBe(2);
+    // USD: 22 + (50/5)=10 = 32
+    expect(stats.addOnsPaid.totalUSD).toBeCloseTo(32, 2);
+    expect(stats.addOnsPaid.byCurrency).toHaveLength(2);
+    const codes = stats.addOnsPaid.byCurrency.map((c) => c.currency).sort();
+    expect(codes).toEqual(['BRL', 'USD']);
+  });
+
+  it('add-on com rate ausente marca hasMissingRate', () => {
+    const tournaments = [
+      {
+        id: 't-eur',
+        site: 'iPoker',
+        buyIn: '50.00',
+        addOnCost: '50.00',
+        addOnTaken: true,
+        allowsAddOn: true,
+        status: 'finished',
+      },
+    ];
+    const stats = calculateSessionStats(tournaments, [], {}, null, {});
+    expect(stats.addOnsPaid.count).toBe(1);
+    expect(stats.addOnsPaid.totalUSD).toBe(0);
+    expect(stats.addOnsPaid.hasMissingRate).toBe(true);
+  });
+});
+
 describe('calculateFinalSessionStats - FX conversion', () => {
   it('summary final converte BRL para USD em profit/abiMed/totalInvested', () => {
     const tournaments = [

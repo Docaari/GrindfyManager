@@ -1,5 +1,5 @@
 import type { SessionStats } from './types';
-import { formatNumberWithDots, getScreenCapColors, countAddOnsPaid } from './helpers';
+import { getScreenCapColors } from './helpers';
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',
@@ -38,7 +38,7 @@ interface SessionDashboardProps {
   stats: SessionStats;
   showDashboard: boolean;
   onToggleDashboard: () => void;
-  /** Session tournaments used to compute Add-ons Pagos KPI (Spec 2). */
+  /** @deprecated Add-ons Pagos agora vem de stats.addOnsPaid (currency-aware). */
   sessionTournaments?: any[];
 }
 
@@ -46,9 +46,7 @@ export default function SessionDashboard({
   stats,
   showDashboard,
   onToggleDashboard,
-  sessionTournaments,
 }: SessionDashboardProps) {
-  const addOnsPaid = countAddOnsPaid(sessionTournaments || []);
   return (
     <div className="dashboard-section">
       <button
@@ -60,10 +58,10 @@ export default function SessionDashboard({
       </button>
 
       <div className={`dashboard-content ${!showDashboard ? 'collapsed' : ''}`}>
-        {/* Metricas de Status */}
+        {/* Linha 1: Status (Em Andamento, Registrados, Reentradas, Add-ons) */}
         <div className="metrics-row metrics-status">
           <div className={`metric-card screen-cap ${getScreenCapColors(stats.emAndamento, stats.screenCap).alertClass}`}>
-            <div className="metric-icon">🖥️</div>
+            <div className="metric-icon">{'\u{1F5A5}'}</div>
             <div className="metric-value">
               {stats.emAndamento}/{stats.screenCap}
             </div>
@@ -74,31 +72,44 @@ export default function SessionDashboard({
           </div>
 
           <div className="metric-card metric-registered">
-            <div className="metric-icon">🎯</div>
+            <div className="metric-icon">{'\u{1F3AF}'}</div>
             <div className="metric-value">{stats.registros}</div>
             <div className="metric-label">Registrados</div>
           </div>
 
           <div className="metric-card metric-reentries">
-            <div className="metric-icon">🔄</div>
+            <div className="metric-icon">{'\u{1F501}'}</div>
             <div className="metric-value">{stats.reentradas}</div>
             <div className="metric-label">Reentradas</div>
           </div>
 
-          <div className="metric-card metric-upcoming">
-            <div className="metric-icon">⏰</div>
-            <div className="metric-value">{stats.proximos}</div>
-            <div className="metric-label">Proximos</div>
-          </div>
-
-          <div className="metric-card metric-finished">
-            <div className="metric-icon">✅</div>
-            <div className="metric-value">{stats.concluidos}</div>
-            <div className="metric-label">Concluidos</div>
+          <div className="metric-card metric-addon" data-testid="kpi-addons-pagos">
+            <div className="metric-icon">{'\u{2795}'}</div>
+            <div className="metric-value">
+              {stats.addOnsPaid.count}
+              {stats.addOnsPaid.totalUSD > 0 && (
+                <span className="text-xs text-gray-400 ml-1">
+                  (${formatMoney(stats.addOnsPaid.totalUSD)})
+                </span>
+              )}
+            </div>
+            <div className="metric-label">Add-ons</div>
+            {stats.addOnsPaid.byCurrency.length > 1 && (
+              <div className="metric-sub text-[10px] text-gray-400" data-testid="kpi-addons-breakdown">
+                {stats.addOnsPaid.byCurrency
+                  .map((c) => formatNative(c.currency, c.total))
+                  .join(' + ')}
+              </div>
+            )}
+            {stats.addOnsPaid.hasMissingRate && (
+              <div className="metric-sub text-[10px] text-amber-400">
+                Cotacao ausente.
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Metricas Financeiras */}
+        {/* Linha 2: Financeiro + Volume (Total Investido, ABI, Media Part., ITM) */}
         <div className="metrics-row metrics-financial">
           <div className="metric-card metric-invested">
             <div className="metric-icon">{'\u{1F4B8}'}</div>
@@ -115,6 +126,35 @@ export default function SessionDashboard({
             )}
           </div>
 
+          <div className="metric-card metric-abi" data-testid="kpi-abi">
+            <div className="metric-icon">{'\u{1F4CA}'}</div>
+            <div className="metric-value">${formatMoney(stats.abi)}</div>
+            <div className="metric-label">ABI</div>
+            <div className="metric-sub text-[10px] text-gray-500">
+              Buy-in medio (USD) por torneio
+            </div>
+          </div>
+
+          <div className="metric-card metric-avg-participants" data-testid="kpi-avg-participants">
+            <div className="metric-icon">{'\u{1F465}'}</div>
+            <div className="metric-value">
+              {integerFormatter.format(Math.round(stats.avgParticipants))}
+            </div>
+            <div className="metric-label">Media Participantes</div>
+            <div className="metric-sub text-[10px] text-gray-500">
+              Estimado via Gtd / BI{stats.avgParticipants > 0 ? '' : ' (sem Gtd)'}
+            </div>
+          </div>
+
+          <div className="metric-card metric-itm">
+            <div className="metric-icon">{'\u{1F3AF}'}</div>
+            <div className="metric-value">{stats.itmPercent.toFixed(1)}%</div>
+            <div className="metric-label">ITM%</div>
+          </div>
+        </div>
+
+        {/* Linha 3: Performance (Profit, ROI, FTs, Cravadas) */}
+        <div className="metrics-row metrics-performance">
           <div className="metric-card metric-profit">
             <div className="metric-icon">{'\u{1F4B0}'}</div>
             <div
@@ -139,64 +179,8 @@ export default function SessionDashboard({
             )}
           </div>
 
-          {/* Add-on + Re-entry KPIs (ADR-014) */}
-          <div className="metric-card metric-addon" data-testid="kpi-addons-pagos">
-            <div className="metric-icon">➕</div>
-            <div className="metric-value">
-              {addOnsPaid.count}
-              {addOnsPaid.total > 0 && (
-                <span className="text-xs text-gray-400 ml-1">
-                  (${formatNumberWithDots(addOnsPaid.total)})
-                </span>
-              )}
-            </div>
-            <div className="metric-label">Add-ons Pagos</div>
-          </div>
-
-          <div className="metric-card metric-total-entries" data-testid="kpi-entradas-totais">
-            <div className="metric-icon">🔁</div>
-            <div className="metric-value">
-              {stats.totalEntries ?? stats.registros}
-            </div>
-            <div className="metric-label">Entradas Totais</div>
-            {(stats.totalEntries ?? stats.registros) > stats.registros && (
-              <div className="metric-sub text-xs text-gray-500">
-                {stats.registros} torneios + {(stats.totalEntries ?? stats.registros) - stats.registros} re-entries
-              </div>
-            )}
-          </div>
-
-          <div className="metric-card metric-abi" data-testid="kpi-abi">
-            <div className="metric-icon">{'\u{1F4CA}'}</div>
-            <div className="metric-value">${formatMoney(stats.abi)}</div>
-            <div className="metric-label">ABI</div>
-            <div className="metric-sub text-[10px] text-gray-500">
-              Buy-in medio (USD) por torneio
-            </div>
-          </div>
-
-          <div className="metric-card metric-avg-participants" data-testid="kpi-avg-participants">
-            <div className="metric-icon">{'\u{1F465}'}</div>
-            <div className="metric-value">
-              {integerFormatter.format(Math.round(stats.avgParticipants))}
-            </div>
-            <div className="metric-label">Media Participantes</div>
-            <div className="metric-sub text-[10px] text-gray-500">
-              Estimado via Gtd / BI{stats.avgParticipants > 0 ? '' : ' (sem Gtd)'}
-            </div>
-          </div>
-        </div>
-
-        {/* Metricas de Performance */}
-        <div className="metrics-row metrics-performance">
-          <div className="metric-card metric-itm">
-            <div className="metric-icon">🎯</div>
-            <div className="metric-value">{stats.itmPercent.toFixed(1)}%</div>
-            <div className="metric-label">ITM%</div>
-          </div>
-
           <div className="metric-card metric-roi">
-            <div className="metric-icon">📈</div>
+            <div className="metric-icon">{'\u{1F4C8}'}</div>
             <div className="metric-value" style={{'--value-color': stats.roi >= 0 ? '#00ff88' : '#ff4444'} as React.CSSProperties}>
               {stats.roi.toFixed(1)}%
             </div>
@@ -204,13 +188,13 @@ export default function SessionDashboard({
           </div>
 
           <div className="metric-card metric-fts">
-            <div className="metric-icon">🏆</div>
+            <div className="metric-icon">{'\u{1F3C6}'}</div>
             <div className="metric-value">{stats.fts}</div>
             <div className="metric-label">FTs</div>
           </div>
 
           <div className="metric-card metric-wins">
-            <div className="metric-icon">💎</div>
+            <div className="metric-icon">{'\u{1F48E}'}</div>
             <div className="metric-value">{stats.cravadas}</div>
             <div className="metric-label">Cravadas</div>
           </div>

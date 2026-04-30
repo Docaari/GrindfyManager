@@ -6,9 +6,32 @@ import type {
   CurrencyBreakdownEntry,
   PlatformBreakdownEntry,
   SessionFinancialBreakdown,
+  AddOnsPaidSummary,
+  AddOnsBreakdownEntry,
 } from './types';
 import { getCurrencyForSite } from '@shared/platform-currency';
 import { convertToNativeCurrency } from '@shared/wallet-reconciliation';
+
+// Parser robusto que aceita formato brasileiro ("190,00", "1.234,56") e
+// internacional ("190.00", "1,234.56"). Retorna 0 quando invalido.
+function parseDecimal(value: unknown): number {
+  if (value == null) return 0;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  let s = String(value).trim();
+  if (!s) return 0;
+  if (s.includes(',') && s.includes('.')) {
+    // Decide separador decimal pelo ultimo ocorrente (BR usa virgula no fim).
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      s = s.replace(/,/g, '');
+    }
+  } else if (s.includes(',')) {
+    s = s.replace(',', '.');
+  }
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
 
 function getTournamentCurrency(t: any): string {
   // Site eh fonte de verdade quando reconhecido em PLATFORM_CURRENCY (iPoker=EUR,
@@ -32,12 +55,12 @@ function getTournamentCurrency(t: any): string {
 }
 
 function getTournamentInvested(t: any): number {
-  const buyIn = parseFloat(t?.buyIn || '0') || 0;
+  const buyIn = parseDecimal(t?.buyIn);
   const rebuys = parseInt(String(t?.rebuys ?? 0)) || 0;
   const reentriesRaw = t?.reentries;
   const reentries = reentriesRaw == null ? 0 : (parseInt(String(reentriesRaw)) || 0);
   const addOnTaken = Boolean(t?.addOnTaken);
-  const addOnCost = parseFloat(t?.addOnCost || '0') || 0;
+  const addOnCost = parseDecimal(t?.addOnCost);
   return buyIn * (1 + rebuys + reentries) + (addOnTaken ? addOnCost : 0);
 }
 
@@ -49,23 +72,29 @@ function getTournamentReturn(
   const sessionPrize = registrationData?.[id]?.prize;
   const sessionBounty = registrationData?.[id]?.bounty;
 
+  // Fallback chain: stored t.result > 0 wins (registrationData pode ter
+  // stale "0" inicial); senao t.prize legacy; senao registrationData.
+  // 2026-04-30: bug reportado de profit BRL 1.40 vs esperado 190 — causa
+  // suspeita era registrationData['0'] sobrescrevendo t.result populado.
+  const storedResult = parseDecimal(t?.result);
+  const storedPrizeLegacy = parseDecimal(t?.prize);
+  const sessionPrizeNum = parseDecimal(sessionPrize);
+
   let prize = 0;
-  if (sessionPrize !== undefined && sessionPrize !== null && sessionPrize !== '') {
-    const parsed = parseFloat(sessionPrize);
-    if (!isNaN(parsed)) prize = parsed;
-  } else {
-    const stored = parseFloat(t?.result || '0');
-    if (!isNaN(stored)) prize = stored;
+  if (storedResult > 0) prize = storedResult;
+  else if (storedPrizeLegacy > 0) prize = storedPrizeLegacy;
+  else if (sessionPrizeNum > 0) prize = sessionPrizeNum;
+  else if (storedResult !== 0 || storedPrizeLegacy !== 0) {
+    // Negativos (raros mas possiveis) — preserva.
+    prize = storedResult || storedPrizeLegacy;
   }
 
+  const storedBounty = parseDecimal(t?.bounty);
+  const sessionBountyNum = parseDecimal(sessionBounty);
   let bounty = 0;
-  if (sessionBounty !== undefined && sessionBounty !== null && sessionBounty !== '') {
-    const parsed = parseFloat(sessionBounty);
-    if (!isNaN(parsed)) bounty = parsed;
-  } else {
-    const stored = parseFloat(t?.bounty || '0');
-    if (!isNaN(stored)) bounty = stored;
-  }
+  if (storedBounty > 0) bounty = storedBounty;
+  else if (sessionBountyNum > 0) bounty = sessionBountyNum;
+  else if (storedBounty !== 0) bounty = storedBounty;
 
   return { prize, bounty };
 }
@@ -228,6 +257,61 @@ const EMPTY_BREAKDOWN: SessionFinancialBreakdown = {
   hasMissingRate: false,
 };
 
+const EMPTY_ADDONS_PAID: AddOnsPaidSummary = {
+  count: 0,
+  totalUSD: 0,
+  byCurrency: [],
+  hasMissingRate: false,
+};
+
+function buildAddOnsSummary(
+  tournaments: any[],
+  usdConversionRates: Record<string, number>,
+): AddOnsPaidSummary {
+  if (!Array.isArray(tournaments) || tournaments.length === 0) return EMPTY_ADDONS_PAID;
+  const byCurrency = new Map<string, AddOnsBreakdownEntry>();
+  let count = 0;
+  let totalUSD = 0;
+  let hasMissingRate = false;
+
+  for (const t of tournaments) {
+    if (!t?.addOnTaken) continue;
+    const cost = parseDecimal(t?.addOnCost);
+    if (cost <= 0) continue;
+    count += 1;
+    const ccy = getTournamentCurrency(t);
+    const entry = byCurrency.get(ccy) ?? {
+      currency: ccy,
+      total: 0,
+      totalUSD: 0,
+      rateMissing: false,
+    };
+    entry.total += cost;
+    if (ccy === 'USD') {
+      entry.totalUSD += cost;
+      totalUSD += cost;
+    } else {
+      const rate = usdConversionRates[ccy];
+      if (isValidUsdRate(rate)) {
+        const inUsd = convertToNativeCurrency(cost, ccy, 'USD', usdConversionRates);
+        entry.totalUSD += inUsd;
+        totalUSD += inUsd;
+      } else {
+        entry.rateMissing = true;
+        hasMissingRate = true;
+      }
+    }
+    byCurrency.set(ccy, entry);
+  }
+
+  return {
+    count,
+    totalUSD,
+    byCurrency: Array.from(byCurrency.values()),
+    hasMissingRate,
+  };
+}
+
 // Calculate tournament type and speed percentages
 export const calculateTournamentPercentages = (tournaments: any[]) => {
   if (!tournaments || tournaments.length === 0) {
@@ -318,6 +402,7 @@ export const calculateSessionStats = (
     profitUSD: 0,
     abi: 0,
     avgParticipants: 0,
+    addOnsPaid: EMPTY_ADDONS_PAID,
     breakdown: EMPTY_BREAKDOWN,
     itm: 0,
     itmPercent: 0,
@@ -385,6 +470,9 @@ export const calculateSessionStats = (
   const avgParticipants = eligibleParticipants.length > 0
     ? eligibleParticipants.reduce((sum, i) => sum + i.participantsEstimate, 0) / eligibleParticipants.length
     : 0;
+
+  // Add-ons pagos: count + total USD + breakdown por currency native.
+  const addOnsPaid = buildAddOnsSummary(allSessionTournaments, usdConversionRates);
 
   // ITM deve considerar torneios com campo "Prize" (result) registrado > 0
   const itm = allSessionTournaments.filter((t: any) => {
@@ -460,6 +548,7 @@ export const calculateSessionStats = (
     profitUSD,
     abi,
     avgParticipants,
+    addOnsPaid,
     breakdown,
     itm,
     itmPercent,
