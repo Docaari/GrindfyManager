@@ -34,6 +34,14 @@ function formatNative(currency: string, value: number): string {
   return `${sym}${formatMoney(value)}`;
 }
 
+// Mesmo formatNative com sinal explicito para profit (positivos ganham '+').
+function formatNativeSigned(currency: string, value: number): string {
+  const sym = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
+  const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+  const abs = Math.abs(value);
+  return `${sign}${sym}${formatMoney(abs)}`;
+}
+
 interface SessionDashboardProps {
   stats: SessionStats;
   showDashboard: boolean;
@@ -160,16 +168,16 @@ export default function SessionDashboard({
             <div
               className="metric-value"
               data-testid="kpi-profit"
-              style={{'--value-color': (stats.totalReturnsUSD ?? stats.totalReturns) >= 0 ? '#00ff88' : '#ff4444'} as React.CSSProperties}
+              style={{'--value-color': (stats.profitUSD ?? stats.profit) >= 0 ? '#00ff88' : '#ff4444'} as React.CSSProperties}
             >
-              ${formatMoney(stats.totalReturnsUSD ?? stats.totalReturns)}
+              ${formatMoney(stats.profitUSD ?? stats.profit)}
             </div>
             <div className="metric-label">Profit</div>
             {stats.breakdown && stats.breakdown.byCurrency.length > 1 && (
               <div className="metric-sub text-[10px] text-gray-400" data-testid="kpi-profit-breakdown">
                 {stats.breakdown.byCurrency
-                  .map((c) => formatNative(c.currency, c.returns))
-                  .join(' + ')}
+                  .map((c) => formatNativeSigned(c.currency, c.profit))
+                  .join(', ')}
               </div>
             )}
             {stats.breakdown?.hasMissingRate && (
