@@ -160,15 +160,15 @@ export default function SessionDashboard({
             <div
               className="metric-value"
               data-testid="kpi-profit"
-              style={{'--value-color': (stats.profitUSD ?? stats.profit) >= 0 ? '#00ff88' : '#ff4444'} as React.CSSProperties}
+              style={{'--value-color': (stats.totalReturnsUSD ?? stats.totalReturns) >= 0 ? '#00ff88' : '#ff4444'} as React.CSSProperties}
             >
-              ${formatMoney(stats.profitUSD ?? stats.profit)}
+              ${formatMoney(stats.totalReturnsUSD ?? stats.totalReturns)}
             </div>
             <div className="metric-label">Profit</div>
             {stats.breakdown && stats.breakdown.byCurrency.length > 1 && (
               <div className="metric-sub text-[10px] text-gray-400" data-testid="kpi-profit-breakdown">
                 {stats.breakdown.byCurrency
-                  .map((c) => formatNative(c.currency, c.profit))
+                  .map((c) => formatNative(c.currency, c.returns))
                   .join(' + ')}
               </div>
             )}

@@ -105,8 +105,10 @@ function isValidUsdRate(rate: number | undefined | null): rate is number {
 
 interface ConversionInfo {
   invested: number;
+  returns: number;
   profit: number;
   investedUSD: number;
+  returnsUSD: number;
   profitUSD: number;
   buyIn: number;
   buyInUSD: number;
@@ -127,17 +129,19 @@ function buildConversionInfo(
   const currency = getTournamentCurrency(t);
   const invested = getTournamentInvested(t);
   const { prize, bounty } = getTournamentReturn(t, registrationData);
-  const profit = prize + bounty - invested;
+  const returns = prize + bounty;
+  const profit = returns - invested;
 
-  const buyIn = parseFloat(t?.buyIn || '0') || 0;
-  const guaranteed = parseFloat(t?.guaranteed || '0') || 0;
+  const buyIn = parseDecimal(t?.buyIn);
+  const guaranteed = parseDecimal(t?.guaranteed);
   const addOnTaken = Boolean(t?.addOnTaken);
-  const addOnCost = parseFloat(t?.addOnCost || '0') || 0;
+  const addOnCost = parseDecimal(t?.addOnCost);
   const participantsDenom = addOnTaken ? buyIn + addOnCost : buyIn;
   const participantsEstimate =
     guaranteed > 0 && participantsDenom > 0 ? guaranteed / participantsDenom : 0;
 
   let investedUSD = 0;
+  let returnsUSD = 0;
   let profitUSD = 0;
   let buyInUSD = 0;
   let guaranteedUSD = 0;
@@ -146,6 +150,7 @@ function buildConversionInfo(
 
   if (currency === 'USD') {
     investedUSD = invested;
+    returnsUSD = returns;
     profitUSD = profit;
     buyInUSD = buyIn;
     guaranteedUSD = guaranteed;
@@ -155,6 +160,7 @@ function buildConversionInfo(
     if (isValidUsdRate(rate)) {
       fxRateNativePerUSD = rate;
       investedUSD = convertToNativeCurrency(invested, currency, 'USD', usdConversionRates);
+      returnsUSD = convertToNativeCurrency(returns, currency, 'USD', usdConversionRates);
       profitUSD = convertToNativeCurrency(profit, currency, 'USD', usdConversionRates);
       buyInUSD = convertToNativeCurrency(buyIn, currency, 'USD', usdConversionRates);
       guaranteedUSD = convertToNativeCurrency(guaranteed, currency, 'USD', usdConversionRates);
@@ -162,6 +168,7 @@ function buildConversionInfo(
       rateMissing = true;
       fxRateNativePerUSD = 0;
       investedUSD = 0;
+      returnsUSD = 0;
       profitUSD = 0;
       buyInUSD = 0;
       guaranteedUSD = 0;
@@ -170,8 +177,10 @@ function buildConversionInfo(
 
   return {
     invested,
+    returns,
     profit,
     investedUSD,
+    returnsUSD,
     profitUSD,
     buyIn,
     buyInUSD,
@@ -191,6 +200,7 @@ function buildBreakdown(
   const byCurrencyMap = new Map<string, CurrencyBreakdownEntry>();
   const byPlatformMap = new Map<string, PlatformBreakdownEntry>();
   let totalInvestedUSD = 0;
+  let totalReturnsUSD = 0;
   let profitUSD = 0;
   let hasMissingRate = false;
 
@@ -198,15 +208,19 @@ function buildBreakdown(
     const ccyEntry = byCurrencyMap.get(info.currency) ?? {
       currency: info.currency,
       invested: 0,
+      returns: 0,
       profit: 0,
       fxRateNativePerUSD: info.fxRateNativePerUSD,
       rateMissing: false,
       investedUSD: 0,
+      returnsUSD: 0,
       profitUSD: 0,
     };
     ccyEntry.invested += info.invested;
+    ccyEntry.returns += info.returns;
     ccyEntry.profit += info.profit;
     ccyEntry.investedUSD += info.investedUSD;
+    ccyEntry.returnsUSD += info.returnsUSD;
     ccyEntry.profitUSD += info.profitUSD;
     if (info.rateMissing) ccyEntry.rateMissing = true;
     if (isValidUsdRate(info.fxRateNativePerUSD)) {
@@ -219,15 +233,19 @@ function buildBreakdown(
       site: info.site,
       currency: info.currency,
       invested: 0,
+      returns: 0,
       profit: 0,
       investedUSD: 0,
+      returnsUSD: 0,
       profitUSD: 0,
       fxRateNativePerUSD: info.fxRateNativePerUSD,
       rateMissing: false,
     };
     platEntry.invested += info.invested;
+    platEntry.returns += info.returns;
     platEntry.profit += info.profit;
     platEntry.investedUSD += info.investedUSD;
+    platEntry.returnsUSD += info.returnsUSD;
     platEntry.profitUSD += info.profitUSD;
     if (info.rateMissing) platEntry.rateMissing = true;
     if (isValidUsdRate(info.fxRateNativePerUSD)) {
@@ -236,6 +254,7 @@ function buildBreakdown(
     byPlatformMap.set(platformKey, platEntry);
 
     totalInvestedUSD += info.investedUSD;
+    totalReturnsUSD += info.returnsUSD;
     profitUSD += info.profitUSD;
     if (info.rateMissing) hasMissingRate = true;
   }
@@ -244,6 +263,7 @@ function buildBreakdown(
     byCurrency: Array.from(byCurrencyMap.values()),
     byPlatform: Array.from(byPlatformMap.values()),
     totalInvestedUSD,
+    totalReturnsUSD,
     profitUSD,
     hasMissingRate,
   };
@@ -253,6 +273,7 @@ const EMPTY_BREAKDOWN: SessionFinancialBreakdown = {
   byCurrency: [],
   byPlatform: [],
   totalInvestedUSD: 0,
+  totalReturnsUSD: 0,
   profitUSD: 0,
   hasMissingRate: false,
 };
@@ -399,6 +420,8 @@ export const calculateSessionStats = (
     totalInvestido: 0,
     profit: 0,
     totalInvestidoUSD: 0,
+    totalReturns: 0,
+    totalReturnsUSD: 0,
     profitUSD: 0,
     abi: 0,
     avgParticipants: 0,
@@ -459,8 +482,8 @@ export const calculateSessionStats = (
   const breakdownAll = buildBreakdown(conversionInfos);
   const breakdownFinished = buildBreakdown(finishedConversionInfos);
 
-  // Mescla: invested vem do breakdown ALL, profit vem do FINISHED.
-  // Cada currency entry combina invested (all) + profit (finished only).
+  // Mescla: invested vem do breakdown ALL (committed money), returns/profit
+  // vem do FINISHED (resultados realizados — registered ainda nao tem).
   const breakdown: SessionFinancialBreakdown = {
     byCurrency: breakdownAll.byCurrency.map((entry) => {
       const finishedEntry = breakdownFinished.byCurrency.find(
@@ -468,6 +491,8 @@ export const calculateSessionStats = (
       );
       return {
         ...entry,
+        returns: finishedEntry?.returns ?? 0,
+        returnsUSD: finishedEntry?.returnsUSD ?? 0,
         profit: finishedEntry?.profit ?? 0,
         profitUSD: finishedEntry?.profitUSD ?? 0,
       };
@@ -478,11 +503,14 @@ export const calculateSessionStats = (
       );
       return {
         ...entry,
+        returns: finishedEntry?.returns ?? 0,
+        returnsUSD: finishedEntry?.returnsUSD ?? 0,
         profit: finishedEntry?.profit ?? 0,
         profitUSD: finishedEntry?.profitUSD ?? 0,
       };
     }),
     totalInvestedUSD: breakdownAll.totalInvestedUSD,
+    totalReturnsUSD: breakdownFinished.totalReturnsUSD,
     profitUSD: breakdownFinished.profitUSD,
     hasMissingRate: breakdownAll.hasMissingRate || breakdownFinished.hasMissingRate,
   };
@@ -498,11 +526,14 @@ export const calculateSessionStats = (
     return sum + 1 + reentries;
   }, 0);
 
-  // Profit raw realizado (FINISHED only — registered nao tem resultado).
-  // Padrao MTT tracking: registered tourneys committaram buy-in mas o
-  // profit eh pendente ate finalizar.
+  // Profit (legacy NET): finished only. Mantido para ROI + persistencia.
   const profit = finishedConversionInfos.reduce((sum, info) => sum + info.profit, 0);
   const profitUSD = breakdown.profitUSD;
+
+  // Returns (gross): founder convention p/ card "Profit" no dashboard.
+  // Soma prize + bounty dos finished. Registered contribuem 0.
+  const totalReturns = finishedConversionInfos.reduce((sum, info) => sum + info.returns, 0);
+  const totalReturnsUSD = breakdown.totalReturnsUSD;
 
   // ABI (USD): media de buy-in por torneio registrado/finalizado.
   const abi = conversionInfos.length > 0
@@ -605,6 +636,8 @@ export const calculateSessionStats = (
     totalInvestido,
     profit,
     totalInvestidoUSD,
+    totalReturns,
+    totalReturnsUSD,
     profitUSD,
     abi,
     avgParticipants,

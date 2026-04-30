@@ -556,6 +556,90 @@ describe('calculateSessionStats - addOnsPaid currency-aware', () => {
   });
 });
 
+describe('calculateSessionStats - returns gross (founder convention)', () => {
+  it('totalReturns = sum(prize+bounty) finished, profit = returns - invested', () => {
+    const tournaments = [
+      {
+        id: 't-1',
+        site: 'Suprema',
+        buyIn: '15.00',
+        addOnTaken: true,
+        addOnCost: '15.00',
+        allowsAddOn: true,
+        result: '53.00',
+        bounty: '0',
+        rebuys: 0,
+        reentries: 0,
+        status: 'finished',
+      },
+      {
+        id: 't-2',
+        site: 'Suprema',
+        buyIn: '15.00',
+        addOnTaken: true,
+        addOnCost: '15.00',
+        allowsAddOn: true,
+        result: '90.40',
+        bounty: '0',
+        rebuys: 0,
+        reentries: 0,
+        status: 'finished',
+      },
+    ];
+    const rates = { BRL: 5.0 };
+    const stats = calculateSessionStats(tournaments, [], {}, null, rates);
+
+    // returns gross BRL = 53 + 90.40 = 143.40
+    expect(stats.totalReturns).toBeCloseTo(143.40, 2);
+    // returns USD = 143.40 / 5 = 28.68
+    expect(stats.totalReturnsUSD).toBeCloseTo(28.68, 2);
+    // profit BRL = 143.40 - 60 = 83.40
+    expect(stats.profit).toBeCloseTo(83.40, 2);
+    // breakdown.byCurrency.returns matches
+    expect(stats.breakdown.byCurrency[0].returns).toBeCloseTo(143.40, 2);
+    expect(stats.breakdown.byCurrency[0].invested).toBeCloseTo(60, 2);
+    expect(stats.breakdown.byCurrency[0].profit).toBeCloseTo(83.40, 2);
+  });
+
+  it('registered tourneys: invested conta, returns nao (sem resultado)', () => {
+    const tournaments = [
+      {
+        id: 't-fin',
+        site: 'Suprema',
+        buyIn: '15.00',
+        addOnTaken: true,
+        addOnCost: '15.00',
+        result: '53.00',
+        bounty: '0',
+        status: 'finished',
+      },
+      {
+        id: 't-reg',
+        site: 'Suprema',
+        buyIn: '10.00',
+        addOnTaken: true,
+        addOnCost: '15.00',
+        result: '0',
+        bounty: '0',
+        status: 'registered',
+      },
+    ];
+    const rates = { BRL: 5.0 };
+    const stats = calculateSessionStats(tournaments, [], {}, null, rates);
+
+    // invested BRL = 30 (finished) + 25 (registered) = 55
+    expect(stats.totalInvestido).toBeCloseTo(55, 2);
+    // returns BRL = 53 (apenas finished)
+    expect(stats.totalReturns).toBeCloseTo(53, 2);
+    // profit BRL = 53 - 30 = 23 (finished only)
+    expect(stats.profit).toBeCloseTo(23, 2);
+    // breakdown.byCurrency: invested all, returns/profit finished
+    expect(stats.breakdown.byCurrency[0].invested).toBeCloseTo(55, 2);
+    expect(stats.breakdown.byCurrency[0].returns).toBeCloseTo(53, 2);
+    expect(stats.breakdown.byCurrency[0].profit).toBeCloseTo(23, 2);
+  });
+});
+
 describe('calculateFinalSessionStats - FX conversion', () => {
   it('summary final converte BRL para USD em profit/abiMed/totalInvested', () => {
     const tournaments = [
