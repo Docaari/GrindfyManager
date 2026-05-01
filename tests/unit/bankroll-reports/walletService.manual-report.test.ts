@@ -370,9 +370,11 @@ describe('walletService.recordWalletTransaction — reason manual_report (RF-02)
     ).rejects.toThrow(/maior que zero/i);
   });
 
-  it('snapshot insert recebe origin=manual-report e source_ref_id=tx.id (RF-03 storage shape)', async () => {
-    // Verifica que insertBankrollSnapshot da tx interna recebe origin correto
-    let capturedSnapshot: any = null;
+  it('NAO insere snapshot inline para manual_report — fica para createAutoSnapshot pos-commit (RF-03 + ADR-069 C3)', async () => {
+    // ADR-069 / Reviewer R1 (C3): manual_report NAO deve gerar snapshot inline
+    // dentro da tx (causaria duplicacao com createAutoSnapshot pos-commit).
+    // Estrategia unica: snapshot pos-commit via bankrollService.createAutoSnapshot.
+    const insertBankrollSnapshotMock = vi.fn().mockResolvedValue({ id: 'snap_new' });
     (storage.transaction as any).mockImplementationOnce(async (fn: any) => fn({
       selectWalletForUpdate: vi.fn().mockResolvedValue({
         id: 'wlt_ps', userId: 'USER-0001', balance: '1000', status: 'active', nativeCurrency: 'BRL', version: 1,
@@ -381,10 +383,7 @@ describe('walletService.recordWalletTransaction — reason manual_report (RF-02)
       getUserSettings: vi.fn().mockResolvedValue({ exchangeRates: { BRL: 5 } }),
       createWalletTransaction: vi.fn().mockResolvedValue({ id: 'tx_new', reason: 'manual_report', sessionId: null }),
       updateWalletBalance: vi.fn(),
-      insertBankrollSnapshot: vi.fn().mockImplementation(async (snap: any) => {
-        capturedSnapshot = snap;
-        return { id: 'snap_new', ...snap };
-      }),
+      insertBankrollSnapshot: insertBankrollSnapshotMock,
       getActiveWalletsByUser: vi.fn().mockResolvedValue([]),
     }));
 
@@ -395,8 +394,7 @@ describe('walletService.recordWalletTransaction — reason manual_report (RF-02)
       occurredAt: new Date(),
     } as any);
 
-    // RED: snapshot inline nao seta origin='manual-report' ainda
-    expect(capturedSnapshot).toBeTruthy();
-    expect(capturedSnapshot.origin).toBe('manual-report');
+    // Inline insertBankrollSnapshot NAO deve ser chamado para manual_report.
+    expect(insertBankrollSnapshotMock).not.toHaveBeenCalled();
   });
 });
