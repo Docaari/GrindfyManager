@@ -72,6 +72,9 @@ const originalResolveFilename = (Module as any)._resolveFilename;
 // Set required environment variables for tests
 process.env.JWT_SECRET = 'test-jwt-secret-for-vitest';
 process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret-for-vitest';
+// ADR-060 (Sprint Bankroll-3 RF-6): release endpoint default OFF in prod;
+// tests need it ON to assert happy path.
+process.env.ALLOW_STOP_LOCK_RELEASE = 'true';
 
 // Mock database module to prevent DATABASE_URL requirement in unit tests
 vi.mock('../server/db', () => ({
@@ -158,5 +161,26 @@ beforeEach(() => {
     }
   } catch {
     // narrationQueue ainda nao implementado — red phase.
+  }
+
+  // fxResolver cache reset entre testes (Sprint Bankroll-3 RF-11).
+  // HIGH-3 fix round 2: import explicito do reset; antes vivia em globalThis
+  // como anti-pattern. require() funciona porque setup.ts roda via vitest
+  // que ja resolveu .ts.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fxMod = require('../server/services/fxResolver');
+    if (typeof fxMod._resetCacheForTests === 'function') {
+      fxMod._resetCacheForTests();
+    }
+  } catch {
+    // modulo ainda nao carregado — ok
+  }
+  // Compat: zera cache via globalThis se algum teste ainda usar a abordagem antiga.
+  try {
+    const fxCache = (globalThis as any).__fxResolverCache;
+    if (fxCache && typeof fxCache.clear === 'function') fxCache.clear();
+  } catch {
+    // ok
   }
 });

@@ -77,10 +77,13 @@ export const SITE_DEFAULT_CURRENCY: Record<string, string> = {
   "888": "USD",
   Suprema: "BRL",
   SupremaPoker: "BRL",
+  PPoker: "BRL",
   CoinPoker: "USDT",
   Chico: "USD",
   Revolution: "USD",
-  iPoker: "USD",
+  // iPoker eh europeu — defaulta para EUR (ADR Bankroll-3 RF-3).
+  iPoker: "EUR",
+  "PS.ES": "EUR",
   Bodog: "USD",
 };
 
@@ -92,6 +95,59 @@ export function getDefaultCurrencyForSite(site: string | null | undefined): stri
     if (SITE_DEFAULT_CURRENCY[g]) return SITE_DEFAULT_CURRENCY[g];
   }
   return "USD";
+}
+
+// =============================================================================
+// Sprint Bankroll-3 — RF-3: suggestedBindings (auto-bind torneio -> wallet)
+// =============================================================================
+
+export type SuggestedBindingConfidence =
+  | "site_map"
+  | "alias_group"
+  | "fallback_usd";
+
+export interface SuggestedBinding {
+  platform: string;
+  suggestedCurrency: string;
+  confidence: SuggestedBindingConfidence;
+}
+
+/**
+ * Para cada plataforma missing, sugere a moeda esperada.
+ * - site_map: SITE_DEFAULT_CURRENCY[platform] direto.
+ * - alias_group: match via grupo (ex: 'SupremaPoker' agrupa Suprema -> BRL).
+ * - fallback_usd: sem match — sugere USD.
+ */
+export function buildSuggestedBindings(
+  missingPlatforms: string[],
+): SuggestedBinding[] {
+  if (!Array.isArray(missingPlatforms) || missingPlatforms.length === 0) {
+    return [];
+  }
+  return missingPlatforms.map((platform) => {
+    if (SITE_DEFAULT_CURRENCY[platform]) {
+      return {
+        platform,
+        suggestedCurrency: SITE_DEFAULT_CURRENCY[platform],
+        confidence: "site_map" as const,
+      };
+    }
+    const groups = normalizeSiteToGroups(platform);
+    for (const g of groups) {
+      if (SITE_DEFAULT_CURRENCY[g]) {
+        return {
+          platform,
+          suggestedCurrency: SITE_DEFAULT_CURRENCY[g],
+          confidence: "alias_group" as const,
+        };
+      }
+    }
+    return {
+      platform,
+      suggestedCurrency: "USD",
+      confidence: "fallback_usd" as const,
+    };
+  });
 }
 
 export interface ReconcileWalletShape {

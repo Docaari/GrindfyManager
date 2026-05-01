@@ -1,0 +1,57 @@
+%% Sprint Bankroll-3 — RF-11 fxResolver cascade (ADR-061)
+%% resolveExchangeRates(userId) → cascata users.exchangeRates > wallets.exchangeRates > FALLBACK_FX_RATES.
+%% Cache em memoria por userId TTL 5min, invalidado em PUT /user-settings ou /wallets que toquem exchangeRates.
+%% Convencao QW-1 (ADR-033): rates[ccy] = unidades de ccy por 1 USD.
+
+flowchart TD
+    Caller[Caller: bankrollService / walletService / ticketService<br/>RF-2 RF-4 RF-6 RF-7] --> Call[fxResolver.resolveExchangeRates userId]
+
+    Call --> CacheCheck{Cache hit?<br/>userId in Map<br/>expiresAt > now}
+
+    CacheCheck -->|hit| ReturnCached[Retorna FxRates cacheado<br/>source preservada]
+    CacheCheck -->|miss/expired| FetchUser[SELECT exchange_rates FROM users<br/>WHERE user_platform_id=?]
+
+    FetchUser --> UserHas{users.exchangeRates<br/>tem rows?}
+
+    UserHas -->|sim| FetchWallets[SELECT exchange_rates FROM wallets<br/>WHERE user_id=? AND status='active'<br/>ORDER BY updated_at DESC]
+    UserHas -->|nao| FetchWalletsNoUser[SELECT exchange_rates FROM wallets<br/>WHERE user_id=? AND status='active']
+
+    FetchWallets --> Merge[Merge logic:<br/>1. base = FALLBACK_FX_RATES<br/>2. para cada wallet: merge wallets.exchangeRates<br/>   conflito: usa wallet mais recente updated_at<br/>3. users.exchangeRates sobreescreve tudo]
+    FetchWalletsNoUser --> MergeNoUser[Merge logic:<br/>1. base = FALLBACK_FX_RATES<br/>2. para cada wallet: merge wallets.exchangeRates<br/>3. users vazio - skip step 3]
+
+    Merge --> ClassifySource{Origem<br/>dominante?}
+    MergeNoUser --> ClassifySource
+
+    ClassifySource -->|user contribuiu E wallets contribuiram| SourceMixed[source = 'mixed']
+    ClassifySource -->|apenas user| SourceUser[source = 'user']
+    ClassifySource -->|apenas wallets| SourceWallets[source = 'wallets']
+    ClassifySource -->|nenhum - tudo fallback| SourceFallback[source = 'fallback']
+
+    SourceMixed --> Build[Build FxRates:<br/>rates merged, source, resolvedAt = new Date]
+    SourceUser --> Build
+    SourceWallets --> Build
+    SourceFallback --> Build
+
+    Build --> CacheStore[cache.set userId<br/>rates, expiresAt = now + 5min]
+    CacheStore --> ReturnFresh[Retorna FxRates fresh]
+
+    ReturnCached --> Helper[Caller usa helper:<br/>convertToUSD amount, currency, rates<br/>= amount / rates[currency]<br/>QW-1: usd = native / rate]
+    ReturnFresh --> Helper
+
+    Helper --> Result[Valor convertido]
+
+    Invalidate1[PUT /api/user-settings<br/>body.exchangeRates] -.-> InvalidateCall[fxResolver.invalidateCache userId]
+    Invalidate2[POST /api/wallets<br/>body.exchangeRates] -.-> InvalidateCall
+    Invalidate3[PUT /api/wallets/:id<br/>body.exchangeRates] -.-> InvalidateCall
+    InvalidateCall -.->|cache.delete userId| CacheCheck
+
+    UserNull[userId == null<br/>tests, anonymous] --> ReturnFallbackDirect[Retorna FALLBACK_FX_RATES diretamente<br/>sem query, source='fallback']
+    Call --> UserNull
+
+    DBFails[DB falha em FetchUser/FetchWallets] -.-> ReturnFallbackDirect
+
+    Note1[Cascata D9:<br/>users sobreescreve wallets sobreescreve constants.<br/>Currency unknown em rates - cai em FALLBACK_FX_RATES<br/>e em ultimo recurso 1 - currency unknown total]
+    Build -.- Note1
+
+    Note2[Refactor seletivo Bankroll-3:<br/>Migrar bankrollService walletService ticketService<br/>Debt RF-11.5: csvParser misc tournament-selector upload currencyNormalizer storage<br/>F4 followup: primedopeIntegration dayDetailService primedopeBucketsPrefill]
+    Helper -.- Note2

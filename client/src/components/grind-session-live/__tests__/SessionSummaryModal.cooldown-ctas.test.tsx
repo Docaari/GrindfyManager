@@ -13,9 +13,9 @@ import React from 'react';
 // Modulo EXISTE — Implementer DEVE adicionar 3 novos CTAs sem alterar testes
 // existentes. Este arquivo verifica APENAS os adicionais (lessons #11):
 //
-// - summary-modal-cta-quick (Cool-down Rapido ~3min)
-// - summary-modal-cta-full  (Iniciar Cool-down ~5min)
-// - summary-modal-cta-skip  (Finalizar Sessao - Pular cool-down)
+// - cta-start-cooldown-quick (Cool-down Rapido ~3min)
+// - cta-start-cooldown  (Iniciar Cool-down ~5min)
+// - cta-finalize-session  (Finalizar Sessao - Pular cool-down)
 // - summary-modal-flag-warning (mensagem amarela quando hasFlags=true)
 //
 // Comportamento:
@@ -114,19 +114,19 @@ beforeEach(() => {
 // ============================================================================
 
 describe('SessionSummaryModal - CTAs cool-down (RF-01)', () => {
-  it('renderiza summary-modal-cta-quick', () => {
+  it('renderiza cta-start-cooldown-quick', () => {
     render(wrap(<SessionSummaryModal {...baseProps} />));
-    expect(screen.getByTestId('summary-modal-cta-quick')).toBeInTheDocument();
+    expect(screen.getByTestId('cta-start-cooldown-quick')).toBeInTheDocument();
   });
 
-  it('renderiza summary-modal-cta-full', () => {
+  it('renderiza cta-start-cooldown', () => {
     render(wrap(<SessionSummaryModal {...baseProps} />));
-    expect(screen.getByTestId('summary-modal-cta-full')).toBeInTheDocument();
+    expect(screen.getByTestId('cta-start-cooldown')).toBeInTheDocument();
   });
 
-  it('renderiza summary-modal-cta-skip (label "Finalizar Sessao" / "Pular cool-down")', () => {
+  it('renderiza cta-finalize-session (label "Finalizar Sessao" / "Pular cool-down")', () => {
     render(wrap(<SessionSummaryModal {...baseProps} />));
-    expect(screen.getByTestId('summary-modal-cta-skip')).toBeInTheDocument();
+    expect(screen.getByTestId('cta-finalize-session')).toBeInTheDocument();
   });
 
   it('NAO renderiza botao "Continuar Sessao" (Spec V2 RF-01 P4/F-06: removido)', () => {
@@ -147,7 +147,7 @@ describe('SessionSummaryModal - sem red flags', () => {
   it('CTA full tem classe cooldown-cta-neutral', () => {
     render(wrap(<SessionSummaryModal {...baseProps} />));
 
-    const cta = screen.getByTestId('summary-modal-cta-full');
+    const cta = screen.getByTestId('cta-start-cooldown');
     expect(cta.className).toContain('cooldown-cta-neutral');
     expect(cta.className).not.toContain('cooldown-cta-warning');
   });
@@ -164,7 +164,7 @@ describe('SessionSummaryModal - com red flags', () => {
       wrap(<SessionSummaryModal {...baseProps} summaryData={summaryWithFlags as any} />),
     );
 
-    const cta = screen.getByTestId('summary-modal-cta-full');
+    const cta = screen.getByTestId('cta-start-cooldown');
     expect(cta.className).toContain('cooldown-cta-warning');
   });
 
@@ -188,7 +188,7 @@ describe('SessionSummaryModal - click full -> POST {mode:full} + abrir runner', 
     apiRequestMock.mockResolvedValue({ id: 'cd_1', mode: 'full' });
     render(wrap(<SessionSummaryModal {...baseProps} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-full'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown'));
 
     await waitFor(() => {
       const flat = JSON.stringify(apiRequestMock.mock.calls);
@@ -203,7 +203,7 @@ describe('SessionSummaryModal - click quick -> POST {mode:quick}', () => {
     apiRequestMock.mockResolvedValue({ id: 'cd_2', mode: 'quick' });
     render(wrap(<SessionSummaryModal {...baseProps} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-quick'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown-quick'));
 
     await waitFor(() => {
       const flat = JSON.stringify(apiRequestMock.mock.calls);
@@ -229,7 +229,7 @@ describe('SessionSummaryModal - QA fix BUG 2: callbacks de cooldown invocados', 
       ),
     );
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-full'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown'));
 
     await waitFor(() => {
       expect(onStartFullCooldown).toHaveBeenCalledWith('cd_full_99');
@@ -248,7 +248,7 @@ describe('SessionSummaryModal - QA fix BUG 2: callbacks de cooldown invocados', 
       ),
     );
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-quick'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown-quick'));
 
     await waitFor(() => {
       expect(onStartQuickCooldown).toHaveBeenCalledWith('cd_quick_42');
@@ -263,20 +263,24 @@ describe('SessionSummaryModal - click skip', () => {
       wrap(<SessionSummaryModal {...baseProps} onEndSession={onEndSession} />),
     );
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-skip'));
+    fireEvent.click(screen.getByTestId('cta-finalize-session'));
 
     const flat = JSON.stringify(apiRequestMock.mock.calls);
     expect(flat).not.toContain('cooldown-logs');
   });
 
-  it('click skip chama onEndSession (preserva fluxo atual)', () => {
+  it('click skip chama onEndSession (preserva fluxo atual)', async () => {
+    // Sprint Bankroll-3 RF-10: handler unificado eh async (passa por
+    // guardAndReconcile). Test atualizado para await.
     const onEndSession = vi.fn();
     render(
       wrap(<SessionSummaryModal {...baseProps} onEndSession={onEndSession} />),
     );
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-skip'));
-    expect(onEndSession).toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('cta-finalize-session'));
+    await waitFor(() => {
+      expect(onEndSession).toHaveBeenCalled();
+    });
   });
 });
 
@@ -289,10 +293,10 @@ describe('SessionSummaryModal - cool-down ja existe', () => {
     const completed = { ...baseSummaryWithoutFlags, cooldownCompleted: true } as any;
     render(wrap(<SessionSummaryModal {...baseProps} summaryData={completed} />));
 
-    expect(screen.queryByTestId('summary-modal-cta-quick')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('summary-modal-cta-full')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cta-start-cooldown-quick')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cta-start-cooldown')).not.toBeInTheDocument();
     // skip continua presente (sempre permite finalizar)
-    expect(screen.queryByTestId('summary-modal-cta-skip')).toBeInTheDocument();
+    expect(screen.queryByTestId('cta-finalize-session')).toBeInTheDocument();
   });
 });
 
@@ -303,11 +307,11 @@ describe('SessionSummaryModal - cool-down ja existe', () => {
 describe('SessionSummaryModal - summaryData null/show=false', () => {
   it('show=false NAO renderiza modal', () => {
     render(wrap(<SessionSummaryModal {...baseProps} show={false} />));
-    expect(screen.queryByTestId('summary-modal-cta-full')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cta-start-cooldown')).not.toBeInTheDocument();
   });
 
   it('summaryData=null NAO renderiza modal', () => {
     render(wrap(<SessionSummaryModal {...baseProps} summaryData={null as any} />));
-    expect(screen.queryByTestId('summary-modal-cta-full')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cta-start-cooldown')).not.toBeInTheDocument();
   });
 });

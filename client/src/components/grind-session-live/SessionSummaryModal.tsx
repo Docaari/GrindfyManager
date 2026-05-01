@@ -303,53 +303,20 @@ export default function SessionSummaryModal({
     return submitReconcile();
   };
 
-  const handleStartCooldownB2 = async () => {
+  // Sprint Bankroll-3 RF-10: unificacao dos CTAs (legacy testIds removidos).
+  // Restam apenas os 3 CTAs B2: quick, full (cta-start-cooldown),
+  // finalize (cta-finalize-session). Todos passam por guardAndReconcile +
+  // startCooldown async (B2 contract).
+  const handleStartFullCooldown = async () => {
     if (await guardAndReconcile()) await startCooldown("full");
   };
 
-  const handleFinalizeSessionB2 = async () => {
+  const handleStartQuickCooldown = async () => {
+    if (await guardAndReconcile()) await startCooldown("quick");
+  };
+
+  const handleFinalizeSession = async () => {
     if (await guardAndReconcile()) onEndSession();
-  };
-
-  // Legacy CTAs: tambem respeitam guard de missing platforms, mas chamam
-  // a acao sincrona quando nao ha reconcile a fazer (preserva contrato dos
-  // testes pre-B2 que verificam onEndSession sincronicamente).
-  const isReconcileNoOp = !showBankrollSection || walletsWithAdjustment.length === 0;
-
-  const handleStartCooldownLegacy = (mode: "full" | "quick") => {
-    if (hasMissing) {
-      safeTrack("summary_submit_blocked_missing_platforms", {
-        sessionId,
-        missingPlatforms: missing,
-      });
-      toast({ title: "Cadastre as wallets pendentes antes de finalizar." });
-      return;
-    }
-    if (isReconcileNoOp) {
-      void startCooldown(mode);
-      return;
-    }
-    void submitReconcile().then((ok) => {
-      if (ok) void startCooldown(mode);
-    });
-  };
-
-  const handleSkipLegacy = () => {
-    if (hasMissing) {
-      safeTrack("summary_submit_blocked_missing_platforms", {
-        sessionId,
-        missingPlatforms: missing,
-      });
-      toast({ title: "Cadastre as wallets pendentes antes de finalizar." });
-      return;
-    }
-    if (isReconcileNoOp) {
-      onEndSession();
-      return;
-    }
-    void submitReconcile().then((ok) => {
-      if (ok) onEndSession();
-    });
   };
 
   const handleRegisterMissingWallet = () => {
@@ -586,43 +553,28 @@ export default function SessionSummaryModal({
           {!cooldownAlreadyDone && (
             <>
               <button
-                data-testid="summary-modal-cta-quick"
+                data-testid="cta-start-cooldown-quick"
                 className="cooldown-cta-quick"
-                onClick={() => handleStartCooldownLegacy("quick")}
-                disabled={isCreatingCooldown || isReconciling}
+                onClick={handleStartQuickCooldown}
+                disabled={isCreatingCooldown || isReconciling || hasMissing}
               >
                 Cool-down Rapido (~3min)
               </button>
               <button
-                data-testid="summary-modal-cta-full"
-                className={fullCtaClass}
-                onClick={() => handleStartCooldownLegacy("full")}
-                disabled={isCreatingCooldown || isReconciling}
-              >
-                Iniciar Cool-down (~5min)
-              </button>
-              <button
                 data-testid="cta-start-cooldown"
                 className={`${fullCtaClass} bg-primary text-primary-foreground`}
-                onClick={handleStartCooldownB2}
+                onClick={handleStartFullCooldown}
                 disabled={isCreatingCooldown || isReconciling || hasMissing}
               >
-                Iniciar Cool-down
+                Iniciar Cool-down (~5min)
               </button>
             </>
           )}
 
           <button
-            data-testid="summary-modal-cta-skip"
-            className="end-session-btn"
-            onClick={handleSkipLegacy}
-          >
-            {cooldownAlreadyDone ? "Fechar" : "Finalizar Sessao"}
-          </button>
-          <button
             data-testid="cta-finalize-session"
             className="end-session-btn bg-primary text-primary-foreground"
-            onClick={handleFinalizeSessionB2}
+            onClick={handleFinalizeSession}
             disabled={isCreatingCooldown || isReconciling || hasMissing}
           >
             {cooldownAlreadyDone ? "Fechar" : "Finalizar Sessao"}

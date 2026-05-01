@@ -1,0 +1,101 @@
+%% Sprint Bankroll-3 — RF-4 Cross-wallet transfer ER (ADR-059)
+%% Tabela mestra wallet_transfers + 2-3 espelhos em wallet_transactions agrupados via transfer_group_id.
+%% FK ON DELETE RESTRICT em wallets impede delete acidental de wallet com historico (D1).
+%% wallet_pending (RF-5) reservada para deposit_pending/withdrawal_pending com cap 10 (D8).
+
+erDiagram
+    USERS ||--o{ WALLETS : "owns"
+    USERS ||--o{ WALLET_TRANSFERS : "initiates"
+    USERS ||--o{ WALLET_TRANSACTIONS : "owns-via-wallet"
+    USERS ||--o{ WALLET_PENDING : "declares"
+
+    WALLETS ||--o{ WALLET_TRANSACTIONS : "ledger-entries"
+    WALLETS ||--o{ WALLET_PENDING : "tracks-pending"
+    WALLETS ||--o{ WALLET_TRANSFERS : "from-wallet (RESTRICT)"
+    WALLETS ||--o{ WALLET_TRANSFERS : "to-wallet (RESTRICT)"
+    WALLETS ||--o{ WALLET_TRANSFERS : "fee-wallet (RESTRICT)"
+
+    WALLET_TRANSFERS ||--|{ WALLET_TRANSACTIONS : "espelho via transfer_group_id"
+
+    USERS {
+        varchar user_platform_id PK "USER-XXXX"
+        varchar email
+        jsonb exchange_rates "FX freezes (ADR-033)"
+        varchar timezone "ex America/Sao_Paulo"
+    }
+
+    WALLETS {
+        varchar id PK "nanoid"
+        varchar user_id FK "→ users.user_platform_id ON DELETE CASCADE"
+        varchar platform "GG / Suprema / OffPlatform_Bank / OffPlatform_Crypto"
+        varchar native_currency "USD/BRL/EUR/CNY/USDT"
+        decimal balance "current balance native ccy"
+        varchar status "active / archived"
+        boolean is_shot_pocket "exclui de consolidatedUSD"
+        integer version "ADR-038 optimistic concurrency"
+        jsonb exchange_rates "freeze opcional"
+        timestamp updated_at
+    }
+
+    WALLET_TRANSFERS {
+        varchar id PK "nanoid"
+        varchar user_id FK "→ users CASCADE"
+        varchar transfer_group_id UK "agrupa com wallet_transactions"
+        varchar from_wallet_id FK "→ wallets RESTRICT"
+        varchar to_wallet_id FK "→ wallets RESTRICT (CHECK from!=to)"
+        decimal amount_from "CHECK > 0"
+        decimal amount_to "CHECK > 0"
+        varchar from_currency "ex BRL"
+        varchar to_currency "ex USD"
+        decimal fx_rate "obrigatorio se cross-currency (D4)"
+        decimal fee_amount "opcional"
+        varchar fee_currency "opcional"
+        varchar fee_wallet_id FK "→ wallets RESTRICT (pode ser from/to/3a)"
+        varchar reason "transfer / rebalance / cashout_to_bank / site_to_site"
+        text note
+        timestamp occurred_at
+        timestamp created_at
+    }
+
+    WALLET_TRANSACTIONS {
+        varchar id PK
+        varchar user_id FK "→ users CASCADE"
+        varchar wallet_id FK "→ wallets CASCADE"
+        decimal amount "native ccy"
+        varchar currency "redundante com wallet"
+        varchar reason "deposit/withdrawal/session_result/manual_adjustment/rakeback/transfer_in/transfer_out/transfer_fee"
+        varchar direction "in / out"
+        varchar external_reference "para transfers grava transfer_group_id"
+        timestamp occurred_at
+        integer expected_version "ADR-038"
+    }
+
+    WALLET_PENDING {
+        varchar id PK
+        varchar user_id FK "→ users CASCADE"
+        varchar wallet_id FK "→ wallets CASCADE"
+        varchar direction "deposit_pending / withdrawal_pending (D8)"
+        decimal native_amount "CHECK > 0"
+        varchar native_currency
+        varchar reason
+        varchar status "pending / cleared / cancelled"
+        timestamp expected_clear_at
+        timestamp cleared_at
+        timestamp cancelled_at
+        varchar external_reference "novo em RF-5"
+        text note
+    }
+
+    BANKROLL_SNAPSHOTS {
+        varchar id PK
+        varchar user_id FK "→ users CASCADE"
+        decimal new_amount "consolidatedUSD"
+        decimal delta "newAmount - previousAmount"
+        varchar source "auto_session / manual / etc"
+        varchar reason
+        varchar origin "RF-8 NEW: manual / auto-cooldown / transfer / import / migration_v1"
+        varchar source_ref_id "RF-8 NEW: cooldown_log.id ou transfer_group_id"
+        timestamp occurred_at
+    }
+
+    USERS ||--o{ BANKROLL_SNAPSHOTS : "owns (RF-2 auto + RF-8 origin)"

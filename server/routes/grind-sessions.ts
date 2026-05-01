@@ -16,10 +16,95 @@ import { clampBreakFeedback } from "@shared/utils";
 import { ReconcileWalletsBodySchema } from "@shared/reconcile-schemas";
 import { runReconciliation } from "../services/sessionReconciliation";
 import { walletLimiter } from "./wallets";
-import { mapSiteToWallet } from "@shared/wallet-reconciliation";
+import { mapSiteToWallet, buildSuggestedBindings } from "@shared/wallet-reconciliation";
 
 // Track users who already had their duplicate sessions cleaned up (resets on server restart)
 const cleanedUpUsers = new Set<string>();
+
+// =============================================================================
+// Sprint Bankroll-3 RF-6 — handlers extraidos para teste unitario
+// =============================================================================
+
+function userIdOfReq(req: any): string | null {
+  return req?.user?.userPlatformId ?? null;
+}
+
+/**
+ * POST /api/grind-sessions com gate stop_lock_until.
+ * Mantemos o handler legado registrado em registerGrindSessionRoutes para nao
+ * quebrar fluxos existentes; este handler exportado eh um wrapper minimo
+ * usado pelo route e pelos tests para validar o gate RF-6.
+ */
+export async function handleCreateGrindSession(req: any, res: any): Promise<void> {
+  const userId = userIdOfReq(req);
+  if (!userId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  // Stop-lock gate (RF-6) — rodar ANTES de qualquer DB write.
+  try {
+    const { stopService } = await import("../services/stopService");
+    await stopService.assertNotStopLocked(userId);
+  } catch (err: any) {
+    if (err?.code === "STOP_LOCKED" || err?.httpStatus === 423) {
+      res.status(423).json({
+        code: "STOP_LOCKED",
+        message: err?.message ?? "Sessao bloqueada por stop-loss",
+        lockedUntil: err?.lockedUntil ?? err?.body?.lockedUntil,
+        remainingMs: err?.remainingMs ?? err?.body?.remainingMs,
+        reason: err?.body?.reason ?? "stop_loss",
+      });
+      return;
+    }
+    console.error("[handleCreateGrindSession] assertNotStopLocked unexpected error:", err);
+  }
+  try {
+    const session = await storage.createGrindSession({
+      userId,
+      ...((req.body ?? {}) as any),
+    } as any);
+    res.status(201).json(session);
+  } catch (err: any) {
+    console.error("[handleCreateGrindSession] failed:", err);
+    res.status(400).json({ message: err?.message ?? "Failed to create grind session" });
+  }
+}
+
+/**
+ * PUT /api/grind-sessions/:id com avaliacao de stops quando status=completed.
+ */
+export async function handleUpdateGrindSession(req: any, res: any): Promise<void> {
+  const userId = userIdOfReq(req);
+  if (!userId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const id = req?.params?.id;
+  if (!id) {
+    res.status(400).json({ message: "id obrigatorio" });
+    return;
+  }
+  try {
+    const updated = await storage.updateGrindSession(id, (req.body ?? {}) as any);
+    let extra: { stopReached?: string | null; lockedUntil?: string } = {};
+    if (req.body?.status === "completed") {
+      try {
+        const { stopService } = await import("../services/stopService");
+        const result = await stopService.evaluateStops(userId, id);
+        if (result?.stopReached) {
+          extra.stopReached = result.stopReached;
+          if (result.lockedUntil) extra.lockedUntil = result.lockedUntil;
+        }
+      } catch (err: any) {
+        console.error("[handleUpdateGrindSession] evaluateStops failed:", err?.message);
+      }
+    }
+    res.status(200).json({ ...(updated as any), ...extra });
+  } catch (err: any) {
+    console.error("[handleUpdateGrindSession] failed:", err);
+    res.status(400).json({ message: err?.message ?? "Failed to update grind session" });
+  }
+}
 
 // =============================================================================
 // ADR-040 — Reconciliacao de banca ao fim da sessao
@@ -63,6 +148,7 @@ export async function handleGetReconcilableWallets(req: any, res: any): Promise<
         orphanContribution: [],
         playedPlatforms: [],
         missingPlatforms: [],
+        suggestedBindings: [],
       });
       return;
     }
@@ -77,6 +163,7 @@ export async function handleGetReconcilableWallets(req: any, res: any): Promise<
         orphanContribution: [],
         playedPlatforms: [],
         missingPlatforms: [],
+        suggestedBindings: [],
       });
       return;
     }
@@ -150,6 +237,9 @@ export async function handleGetReconcilableWallets(req: any, res: any): Promise<
       missingPlatforms = [];
     }
 
+    // Sprint Bankroll-3 RF-3: suggestedBindings (auto-bind torneio -> wallet).
+    const suggestedBindings = buildSuggestedBindings(missingPlatforms);
+
     res.status(200).json({
       sessionId,
       alreadyReconciled: false,
@@ -157,6 +247,7 @@ export async function handleGetReconcilableWallets(req: any, res: any): Promise<
       orphanContribution,
       playedPlatforms,
       missingPlatforms,
+      suggestedBindings,
     });
   } catch (error: any) {
     console.error("GET /api/grind-sessions/:id/reconcilable-wallets failed:", error);
@@ -277,6 +368,16 @@ export async function handlePostReconcileWallets(req: any, res: any): Promise<vo
     }
     const adjustments = parsed.data.adjustments;
     const skipReconciliation = !!parsed.data.skipReconciliation;
+
+    // HIGH-04 v2: adjustments=[] sem skipReconciliation eh erro semantico
+    // (mesmo que o Zod aceite — RF-9 separou validacao schema vs. semantica de rota).
+    if (adjustments.length === 0 && !skipReconciliation) {
+      res.status(400).json({
+        message: "adjustments vazio so eh permitido quando skipReconciliation=true",
+        code: "empty_adjustments_without_skip",
+      });
+      return;
+    }
 
     // expectedPreviousBalance ausente -> 400 (RF-06)
     for (const adj of adjustments) {
@@ -696,6 +797,25 @@ export function registerGrindSessionRoutes(app: Express): void {
   app.post('/api/grind-sessions', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
+
+      // CRIT-2 fix (Sprint Bankroll-3 RF-6): stop-lock gate ANTES de qualquer DB write.
+      // Bloqueia criacao de sessao quando stop_lock_until > NOW (response 423).
+      try {
+        const { stopService } = await import("../services/stopService");
+        await stopService.assertNotStopLocked(userId);
+      } catch (err: any) {
+        if (err?.code === "STOP_LOCKED" || err?.httpStatus === 423) {
+          return res.status(423).json({
+            code: "STOP_LOCKED",
+            message: err?.message ?? "Sessao bloqueada por stop-loss",
+            lockedUntil: err?.lockedUntil ?? err?.body?.lockedUntil,
+            remainingMs: err?.remainingMs ?? err?.body?.remainingMs,
+            reason: err?.body?.reason ?? "stop_loss",
+          });
+        }
+        console.error("[POST /api/grind-sessions] assertNotStopLocked unexpected error:", err);
+      }
+
       const { resetTournaments, replaceExisting, dayOfWeek, loadFromGradePlanner, ...sessionDataRaw } = req.body;
 
 
@@ -842,10 +962,29 @@ export function registerGrindSessionRoutes(app: Express): void {
 
   app.put('/api/grind-sessions/:id', requireAuth, async (req: any, res) => {
     try {
+      const userId = req.user.userPlatformId;
       const { id } = req.params;
       const sessionData = insertGrindSessionSchema.partial().parse(req.body);
       const session = await storage.updateGrindSession(id, sessionData);
-      res.json(session);
+
+      // CRIT-2 fix (Sprint Bankroll-3 RF-6): quando status='completed', avaliar
+      // stops para potencialmente bloquear futuras sessoes (delta diario).
+      // Falha em evaluateStops eh logada mas NAO quebra o update (D3).
+      let extra: { stopReached?: string | null; lockedUntil?: string } = {};
+      if (req.body?.status === "completed") {
+        try {
+          const { stopService } = await import("../services/stopService");
+          const result = await stopService.evaluateStops(userId, id);
+          if (result?.stopReached) {
+            extra.stopReached = result.stopReached;
+            if (result.lockedUntil) extra.lockedUntil = result.lockedUntil;
+          }
+        } catch (err: any) {
+          console.error("[PUT /api/grind-sessions/:id] evaluateStops failed:", err?.message);
+        }
+      }
+
+      res.json({ ...(session as any), ...extra });
     } catch (error) {
       console.error("Failed to update grind session:", error);
       res.status(400).json({ message: "Failed to update grind session" });

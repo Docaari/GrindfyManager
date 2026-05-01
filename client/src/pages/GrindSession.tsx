@@ -29,6 +29,7 @@ import { mergeWarmupSources } from "@/lib/warmup-persistence-helpers";
 import { CheckCircle, Brain } from "lucide-react";
 import { useWarmupGate } from "@/hooks/useWarmupGate";
 import { useWarmupTelemetry } from "@/hooks/useWarmupTelemetry";
+import { StopBanner } from "@/components/bankroll/StopBanner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -194,6 +195,34 @@ export default function GrindSession() {
     staleTime: 1000,
     refetchOnWindowFocus: true,
   });
+
+  // Sprint Bankroll-3 RF-6 wiring: stop-loss/stop-win status + lock countdown.
+  // Endpoint: GET /api/user-settings/stops -> {stopLockUntil, currentDayDeltaUsd, ...}
+  const { data: stopStatus } = useQuery<{
+    stopLockUntil: string | null;
+    currentDayDeltaUsd: number;
+    stopLossUsd: number | null;
+    stopWinUsd: number | null;
+  }>({
+    queryKey: ["/api/user-settings/stops"],
+    queryFn: async () => {
+      try {
+        return await apiRequest("GET", "/api/user-settings/stops");
+      } catch {
+        return { stopLockUntil: null, currentDayDeltaUsd: 0, stopLossUsd: null, stopWinUsd: null } as any;
+      }
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const stopBannerVariant = useMemo<"loss" | "win" | null>(() => {
+    if (!stopStatus) return null;
+    if (stopStatus.stopLockUntil) return "loss";
+    const delta = stopStatus.currentDayDeltaUsd ?? 0;
+    if (stopStatus.stopWinUsd != null && delta >= stopStatus.stopWinUsd) return "win";
+    return null;
+  }, [stopStatus]);
 
   const activeSession = activeSessions.find((session: Record<string, unknown>) => session.status === "active");
 
@@ -895,6 +924,20 @@ export default function GrindSession() {
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
+      {/* Sprint Bankroll-3 RF-6: Stop-loss/win banner — read-only, dismisses
+          automaticamente quando lockedUntil expira ou stopReached=null. */}
+      {stopBannerVariant && (
+        <div className="mb-4">
+          <StopBanner
+            lockedUntil={stopStatus?.stopLockUntil ?? null}
+            stopReached={stopBannerVariant}
+            dayDeltaUsd={stopStatus?.currentDayDeltaUsd}
+            stopLossUsd={stopStatus?.stopLossUsd ?? null}
+            stopWinUsd={stopStatus?.stopWinUsd ?? null}
+          />
+        </div>
+      )}
+
       {/* Recovery banner for unfinished sessions */}
       {recoveryData && !activeSession && !sessionsLoading && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-4 flex items-center justify-between">

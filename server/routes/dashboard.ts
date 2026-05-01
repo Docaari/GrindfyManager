@@ -5,6 +5,53 @@ import { db } from "../db";
 import { tournaments, grindSessions, plannedTournaments } from "@shared/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { parseFiltersParam, mapFiltersToBackendFormat } from "./helpers";
+import { dashboardService } from "../services/dashboardService";
+
+// =============================================================================
+// Sprint Bankroll-3 RF-7 — handler exportado para teste unitario.
+// =============================================================================
+const VALID_PERIODS = new Set(["7d", "30d", "90d", "180d", "all"]);
+
+export async function handleGetDashboardRoiByPlatform(
+  req: any,
+  res: any,
+): Promise<void> {
+  try {
+    const userId = req?.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const period = (req?.query?.period as string) ?? "30d";
+    if (!VALID_PERIODS.has(period)) {
+      res.status(400).json({ message: `period invalido: ${period}` });
+      return;
+    }
+    const limitRaw = req?.query?.limit;
+    let limit = 10;
+    if (limitRaw !== undefined && limitRaw !== "") {
+      const parsed = Number(limitRaw);
+      if (!Number.isFinite(parsed) || parsed < 1 || parsed > 50) {
+        res.status(400).json({ message: "limit deve ser entre 1 e 50" });
+        return;
+      }
+      limit = Math.floor(parsed);
+    }
+    // Implementer Round UX #3: opt-in delta vs periodo anterior.
+    const compareRaw = req?.query?.compareWithPrevious;
+    const compareWithPrevious =
+      compareRaw === "true" || compareRaw === "1" || compareRaw === true;
+    const result = await dashboardService.getRoiByPlatform(userId, {
+      period: period as any,
+      limit,
+      compareWithPrevious,
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    console.error("[handleGetDashboardRoiByPlatform] failed:", err);
+    res.status(500).json({ message: "Failed to fetch ROI by platform" });
+  }
+}
 
 export function registerDashboardRoutes(app: Express): void {
   // Dashboard routes with filters
@@ -101,4 +148,7 @@ export function registerDashboardRoutes(app: Express): void {
       res.status(500).json({ message: "Failed to fetch performance data" });
     }
   });
+
+  // Sprint Bankroll-3 RF-7
+  app.get('/api/dashboard/roi-by-platform', requireAuth, handleGetDashboardRoiByPlatform);
 }

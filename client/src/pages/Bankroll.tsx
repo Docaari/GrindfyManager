@@ -14,7 +14,8 @@ import { WalletList, type WalletListItem, type WalletSuggestion } from "@/compon
 import { WalletDetailPanel } from "@/components/bankroll/WalletDetailPanel";
 import { WalletCreateDialog } from "@/components/bankroll/WalletCreateDialog";
 import { RakebackDialog } from "@/components/bankroll/RakebackDialog";
-import { Wallet } from "lucide-react";
+import { TransferDialog } from "@/components/bankroll/TransferDialog";
+import { Wallet, ArrowRightLeft } from "lucide-react";
 import type { WalletPlatform } from "@shared/wallet-platforms";
 
 interface ConsolidatedWalletEntry {
@@ -51,6 +52,12 @@ export default function BankrollPage() {
   const [rakebackPreSelectedWalletId, setRakebackPreSelectedWalletId] = useState<
     string | undefined
   >(undefined);
+
+  // Sprint Bankroll-3 (RF-04 wiring): TransferDialog state
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [transferDefaultFromId, setTransferDefaultFromId] = useState<string | undefined>(
+    undefined,
+  );
 
   const { data: consolidated } = useQuery<ConsolidatedResponse>({
     queryKey: ["/api/bankroll/consolidated"],
@@ -122,6 +129,19 @@ export default function BankrollPage() {
     setRakebackDialogOpen(true);
   }
 
+  function openTransferDialog(fromWalletId?: string) {
+    setTransferDefaultFromId(fromWalletId);
+    setTransferDialogOpen(true);
+  }
+
+  // Filtra apenas wallets ativas para transferencia (TransferDialog rejeita
+  // wallets archived no backend, mas a UI nao deve oferecer a opcao).
+  const transferableWallets = useMemo(
+    () => walletItems.filter((w) => w.status === "active"),
+    [walletItems],
+  );
+  const canTransfer = transferableWallets.length >= 2;
+
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <header className="flex items-center justify-between gap-4 rounded-lg border bg-card p-5">
@@ -146,6 +166,16 @@ export default function BankrollPage() {
             title="Registrar rakeback recebido"
           >
             Reportar rakeback
+          </button>
+          <button
+            onClick={() => openTransferDialog()}
+            disabled={!canTransfer}
+            className="px-3 py-2 text-sm rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            data-testid="bankroll-transfer-trigger-header"
+            title={canTransfer ? "Transferir entre wallets" : "Crie ao menos 2 wallets para transferir"}
+          >
+            <ArrowRightLeft className="h-4 w-4" />
+            Transferir
           </button>
           <button
             onClick={() => setLegacyDialogOpen(true)}
@@ -212,6 +242,12 @@ export default function BankrollPage() {
         wallets={walletItems as any}
         preSelectedWalletId={rakebackPreSelectedWalletId}
         source={rakebackSource}
+      />
+      <TransferDialog
+        open={transferDialogOpen}
+        onOpenChange={setTransferDialogOpen}
+        wallets={transferableWallets as any}
+        defaultFromWalletId={transferDefaultFromId}
       />
     </div>
   );
