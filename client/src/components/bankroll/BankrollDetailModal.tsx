@@ -16,6 +16,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { formatUsdSigned, signOf } from "@/lib/bankrollReportsFormat";
 
 interface SnapshotEntry {
   walletId: string;
@@ -63,11 +64,6 @@ interface Props {
 function formatNative(n: number, currency: string): string {
   const symbol = currency === "USD" ? "$" : currency === "BRL" ? "R$" : `${currency} `;
   return `${symbol}${n.toFixed(2)}`;
-}
-
-function formatUsd(n: number): string {
-  const sign = n >= 0 ? "+" : "-";
-  return `${sign}$${Math.abs(n).toFixed(2)}`;
 }
 
 function buildRange(entry: BankrollDetailEntry): { from: string; to: string } {
@@ -196,8 +192,7 @@ export function BankrollDetailModal({ open, onClose, entry }: Props) {
               </thead>
               <tbody>
                 {rows.map(({ delta, before, after }) => {
-                  const sign: "positive" | "negative" | "zero" =
-                    delta.deltaUsd > 0 ? "positive" : delta.deltaUsd < 0 ? "negative" : "zero";
+                  const sign = signOf(delta.deltaUsd);
                   return (
                     <tr
                       key={delta.walletId}
@@ -221,7 +216,7 @@ export function BankrollDetailModal({ open, onClose, entry }: Props) {
                         {Math.abs(delta.deltaNative).toFixed(2)} {delta.currency}
                       </td>
                       <td className="py-2 px-2 font-medium" data-sign={sign}>
-                        {formatUsd(delta.deltaUsd)}
+                        {formatUsdSigned(delta.deltaUsd)}
                       </td>
                     </tr>
                   );
@@ -237,7 +232,7 @@ export function BankrollDetailModal({ open, onClose, entry }: Props) {
                     className="py-2 px-2 font-semibold"
                     data-sign={totalUsd >= 0 ? "positive" : "negative"}
                   >
-                    {formatUsd(totalUsd)}
+                    {formatUsdSigned(totalUsd)}
                   </td>
                 </tr>
               </tfoot>
@@ -248,8 +243,7 @@ export function BankrollDetailModal({ open, onClose, entry }: Props) {
         {!isLoading && data && !data.empty && isMobile && (
           <div data-testid="bankroll-detail-cards" className="space-y-2">
             {rows.map(({ delta, before, after }) => {
-              const sign: "positive" | "negative" | "zero" =
-                delta.deltaUsd > 0 ? "positive" : delta.deltaUsd < 0 ? "negative" : "zero";
+              const sign = signOf(delta.deltaUsd);
               return (
                 <div
                   key={delta.walletId}
@@ -267,7 +261,7 @@ export function BankrollDetailModal({ open, onClose, entry }: Props) {
                       }`}
                       data-sign={sign}
                     >
-                      {formatUsd(delta.deltaUsd)}
+                      {formatUsdSigned(delta.deltaUsd)}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
@@ -290,7 +284,7 @@ export function BankrollDetailModal({ open, onClose, entry }: Props) {
                 className={`font-semibold ${totalUsd >= 0 ? "text-green-600" : "text-destructive"}`}
                 data-sign={totalUsd >= 0 ? "positive" : "negative"}
               >
-                {formatUsd(totalUsd)}
+                {formatUsdSigned(totalUsd)}
               </span>
             </div>
           </div>

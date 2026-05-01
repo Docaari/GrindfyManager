@@ -13,6 +13,12 @@
  */
 
 import React, { useEffect, useMemo, useState } from "react";
+import { formatUsdSigned, signOf } from "@/lib/bankrollReportsFormat";
+import {
+  type GrindHistoryFilter,
+  loadGrindHistoryFilter,
+  persistGrindHistoryFilter,
+} from "@/lib/grindHistoryFilter";
 
 export interface SessionHistoryEntry {
   type: "session";
@@ -37,46 +43,18 @@ export interface ManualReportHistoryEntry {
 
 export type HistoryEntry = SessionHistoryEntry | ManualReportHistoryEntry;
 
-type Filter = "all" | "sessions" | "reports";
-
-const STORAGE_KEY = "grind-history-filter";
-
 interface Props {
   entries: HistoryEntry[];
   onViewBankrollDetail: (entry: HistoryEntry) => void;
 }
 
-function loadFilter(): Filter {
-  try {
-    const v = typeof window !== "undefined" ? window.localStorage.getItem(STORAGE_KEY) : null;
-    if (v === "sessions" || v === "reports" || v === "all") return v;
-  } catch {
-    // ignore — fallback graceful
-  }
-  return "all";
-}
-
-function persistFilter(f: Filter): void {
-  try {
-    if (typeof window !== "undefined") window.localStorage.setItem(STORAGE_KEY, f);
-  } catch {
-    // ignore
-  }
-}
-
-function formatUsd(n: number): string {
-  const sign = n >= 0 ? "+" : "-";
-  const abs = Math.abs(n);
-  return `${sign}$${abs.toFixed(2)}`;
-}
-
 export function SessionHistoryUnified({ entries, onViewBankrollDetail }: Props) {
   // Hooks-first (#1): TODOS antes de qualquer early return.
-  const [filter, setFilter] = useState<Filter>(() => loadFilter());
+  const [filter, setFilter] = useState<GrindHistoryFilter>(() => loadGrindHistoryFilter());
 
   // SSR-safe hydration (#12): re-aplica do localStorage no mount.
   useEffect(() => {
-    setFilter(loadFilter());
+    setFilter(loadGrindHistoryFilter());
   }, []);
 
   const sorted = useMemo(() => {
@@ -93,9 +71,9 @@ export function SessionHistoryUnified({ entries, onViewBankrollDetail }: Props) 
     return sorted;
   }, [sorted, filter]);
 
-  function handleFilterChange(next: Filter) {
+  function handleFilterChange(next: GrindHistoryFilter) {
     setFilter(next);
-    persistFilter(next);
+    persistGrindHistoryFilter(next);
   }
 
   const isEmpty = (entries ?? []).length === 0;
@@ -149,8 +127,7 @@ export function SessionHistoryUnified({ entries, onViewBankrollDetail }: Props) 
 
       {filtered.map((entry) => {
         const isManual = entry.type === "manual_report";
-        const sign: "positive" | "negative" | "zero" =
-          entry.profitUsd > 0 ? "positive" : entry.profitUsd < 0 ? "negative" : "zero";
+        const sign = signOf(entry.profitUsd);
         return (
           <div
             key={entry.id}
@@ -181,7 +158,7 @@ export function SessionHistoryUnified({ entries, onViewBankrollDetail }: Props) 
                       : "text-muted-foreground"
                 }`}
               >
-                {formatUsd(entry.profitUsd)}
+                {formatUsdSigned(entry.profitUsd)}
               </span>
             </div>
 

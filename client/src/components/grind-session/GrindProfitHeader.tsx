@@ -15,10 +15,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-
-type Filter = "all" | "sessions" | "reports";
-
-const STORAGE_KEY = "grind-history-filter";
+import { formatUsdSigned, signOf } from "@/lib/bankrollReportsFormat";
+import {
+  type GrindHistoryFilter,
+  GRIND_HISTORY_FILTER_STORAGE_KEY,
+  loadGrindHistoryFilter,
+} from "@/lib/grindHistoryFilter";
 
 interface HistoryEntry {
   type: "session" | "manual_report";
@@ -27,36 +29,21 @@ interface HistoryEntry {
   profitUsd: number;
 }
 
-function loadFilter(): Filter {
-  try {
-    const v = typeof window !== "undefined" ? window.localStorage.getItem(STORAGE_KEY) : null;
-    if (v === "sessions" || v === "reports" || v === "all") return v;
-  } catch {
-    // ignore
-  }
-  return "all";
-}
-
-function formatUsd(n: number): string {
-  const sign = n >= 0 ? "+" : "-";
-  return `${sign}$${Math.abs(n).toFixed(2)}`;
-}
-
 export function GrindProfitHeader() {
   // Hooks-first (#1)
-  const [filter, setFilter] = useState<Filter>(() => loadFilter());
+  const [filter, setFilter] = useState<GrindHistoryFilter>(() => loadGrindHistoryFilter());
 
   useEffect(() => {
-    setFilter(loadFilter());
+    setFilter(loadGrindHistoryFilter());
     // Listen para storage changes para reagir a filter toggle no SessionHistoryUnified
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) setFilter(loadFilter());
+      if (e.key === GRIND_HISTORY_FILTER_STORAGE_KEY) setFilter(loadGrindHistoryFilter());
     };
     if (typeof window !== "undefined") {
       window.addEventListener("storage", onStorage);
       // Tambem reage a click direto no chip (mesma janela): poll leve via interval.
       const interval = window.setInterval(() => {
-        const cur = loadFilter();
+        const cur = loadGrindHistoryFilter();
         setFilter((prev) => (prev !== cur ? cur : prev));
       }, 500);
       return () => {
@@ -92,7 +79,7 @@ export function GrindProfitHeader() {
     );
   }
 
-  const sign: "positive" | "negative" | "zero" = total > 0 ? "positive" : total < 0 ? "negative" : "zero";
+  const sign = signOf(total);
 
   return (
     <div className="flex items-center gap-2">
@@ -104,7 +91,7 @@ export function GrindProfitHeader() {
           sign === "positive" ? "text-green-600" : sign === "negative" ? "text-destructive" : ""
         }`}
       >
-        {formatUsd(total)}
+        {formatUsdSigned(total)}
       </span>
     </div>
   );
