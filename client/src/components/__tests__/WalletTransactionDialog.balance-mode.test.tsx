@@ -331,7 +331,10 @@ describe('<WalletTransactionDialog> — submit em modo balance (RF-04)', () => {
     expect(body.direction).toBe('in');
     expect(body.nativeAmount).toBeCloseTo(67, 2);
     expect(body.expectedPreviousBalance).toBeCloseTo(1180, 2);
-    expect(body.reason).toBe('session_result');
+    // ADR-069 (Sprint Bankroll-Reports-Detail): modo balance SEM sessionIdProp
+    // gera reason='manual_report' (mutuamente exclusivo com session_result).
+    expect(body.reason).toBe('manual_report');
+    expect(body.sessionId).toBeUndefined();
   });
 
   it('saldo menor: body tem direction=out e nativeAmount = |delta|', async () => {

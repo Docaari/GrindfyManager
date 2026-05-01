@@ -79,11 +79,19 @@ export function SessionHistoryUnified({ entries, onViewBankrollDetail }: Props) 
     setFilter(loadFilter());
   }, []);
 
+  const sorted = useMemo(() => {
+    return [...(entries ?? [])].sort((a, b) => {
+      const ta = new Date(a.occurredAt).getTime();
+      const tb = new Date(b.occurredAt).getTime();
+      return tb - ta;
+    });
+  }, [entries]);
+
   const filtered = useMemo(() => {
-    if (filter === "sessions") return entries.filter((e) => e.type === "session");
-    if (filter === "reports") return entries.filter((e) => e.type === "manual_report");
-    return entries;
-  }, [entries, filter]);
+    if (filter === "sessions") return sorted.filter((e) => e.type === "session");
+    if (filter === "reports") return sorted.filter((e) => e.type === "manual_report");
+    return sorted;
+  }, [sorted, filter]);
 
   function handleFilterChange(next: Filter) {
     setFilter(next);

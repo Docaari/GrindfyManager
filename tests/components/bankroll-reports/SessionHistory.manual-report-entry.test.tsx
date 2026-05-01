@@ -137,7 +137,11 @@ describe('SessionHistoryUnified — render manual_report entry (RF-11)', () => {
       entries={[mockManualReportEntry, mockSessionEntry]}
       onViewBankrollDetail={() => {}}
     />);
-    const allEntries = screen.getAllByTestId(/^history-entry-/);
+    // Filter out child testids (e.g. -profit, -tournaments) to keep only entry parents.
+    const allEntries = screen.getAllByTestId(/^history-entry-(?:session|manual_report)-/).filter((el) => {
+      const tid = el.getAttribute('data-testid') ?? '';
+      return !tid.endsWith('-profit') && !tid.endsWith('-tournaments');
+    });
     expect(allEntries.length).toBe(2);
     const first = allEntries[0].getAttribute('data-testid');
     // session occurredAt 22:00 > manual_report 14:30 -> session aparece primeiro
