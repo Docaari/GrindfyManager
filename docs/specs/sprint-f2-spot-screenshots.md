@@ -330,7 +330,7 @@ NOTA: endpoints existentes em `cooldown.ts` (`POST /api/starred-hands`, `GET /ap
 ### Migration 0012 (DDL preview)
 
 ```sql
--- 0012_spot_screenshots.sql
+-- 0014_spot_screenshots.sql (renomeado de 0012 pos-merge para evitar colisao com 0012_bankroll_management_enabled)
 
 ALTER TABLE starred_hands
   ADD COLUMN image_url     text,

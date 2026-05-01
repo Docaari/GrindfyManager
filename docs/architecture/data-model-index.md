@@ -193,7 +193,7 @@ erDiagram
     }
 ```
 
-Migration `migrations/0012_spot_screenshots.sql` (DDL preview):
+Migration `migrations/0014_spot_screenshots.sql` (DDL preview):
 
 ```sql
 ALTER TABLE starred_hands
