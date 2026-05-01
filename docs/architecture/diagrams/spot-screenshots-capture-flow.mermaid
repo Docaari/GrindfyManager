@@ -1,0 +1,101 @@
+%% Spot Screenshots — fluxograma de captura
+%% Spec: Docs/specs/spot-screenshots.md (RF-01 a RF-05)
+%% Os 3 caminhos (paste / click / drop) convergem no mesmo handler de upload.
+
+flowchart TD
+    Start(["Usuario em GrindSessionLive<br/>OU Cooldown Bloco 1"])
+
+    Start --> Path{"Caminho de captura"}
+
+    Path -->|"Ctrl+V<br/>(paste global)"| Paste["Listener paste em<br/>document"]
+    Path -->|"Click 📸<br/>no TournamentCard<br/>ou bloco torneio"| Click["Click handler<br/>do botao"]
+    Path -->|"Drag-and-drop<br/>arquivo no card/bloco"| Drop["onDrop handler<br/>dropzone"]
+
+    %% ===== PASTE BRANCH =====
+    Paste --> PasteFocus{"document.activeElement<br/>eh input/textarea/<br/>contenteditable?"}
+    PasteFocus -->|"Sim"| Ignore1(["Ignora paste<br/>(deixa navegador<br/>colar texto normal)"])
+    PasteFocus -->|"Nao"| PasteImg{"clipboardData tem<br/>item kind=file<br/>+ MIME image/*?"}
+    PasteImg -->|"Nao"| Ignore2(["Ignora silenciosamente"])
+    PasteImg -->|"Sim"| PasteCompleted{"activeSession<br/>status === completed?"}
+
+    PasteCompleted -->|"Sim<br/>(decisao founder #1)"| BlockedSession(["Listener inativo<br/>(sem toast, sem dialog)"])
+    PasteCompleted -->|"Nao"| ValidateMime
+
+    %% ===== CLICK BRANCH =====
+    Click --> ClickDisabled{"Botao 📸<br/>disabled?"}
+    ClickDisabled -->|"Sim<br/>(cap atingido<br/>OU sessao completed)"| ShowTooltip(["Tooltip mostra motivo<br/>('3 spots no torneio'<br/>'10 spots na sessao'<br/>'Sessao concluida')"])
+    ClickDisabled -->|"Nao"| OpenDialogEmpty["Abre SpotCaptureDialog<br/>com sessionTournamentId<br/>pre-fixado, sem imagem"]
+
+    OpenDialogEmpty --> WaitImage{"Usuario fornece<br/>imagem?"}
+    WaitImage -->|"Cancela"| RevokeURL1(["URL.revokeObjectURL<br/>+ fecha dialog"])
+    WaitImage -->|"file input"| ValidateMime
+    WaitImage -->|"drop dentro<br/>do dialog"| ValidateMime
+    WaitImage -->|"Ctrl+V dentro<br/>do dialog"| ValidateMime
+
+    %% ===== DROP BRANCH =====
+    Drop --> DropFiles{"DataTransfer<br/>tem >= 1 arquivo?"}
+    DropFiles -->|"Nao"| Ignore3(["Sem efeito"])
+    DropFiles -->|"Sim"| DropFirst["Pega PRIMEIRO<br/>arquivo com MIME<br/>image/* (ignora resto)"]
+    DropFirst --> DropMime{"MIME e<br/>image/png|jpeg|webp?"}
+    DropMime -->|"Nao"| ToastUnsupported(["toast 'Formato<br/>nao suportado'"])
+    DropMime -->|"Sim"| ValidateMime
+
+    %% ===== CONVERGENCIA =====
+    ValidateMime{"MIME ∈<br/>{png, jpeg, webp}<br/>(client-side)"}
+    ValidateMime -->|"Nao"| ToastFmt(["toast 'Formato<br/>nao suportado.<br/>Aceitos: PNG, JPEG, WEBP'"])
+    ValidateMime -->|"Sim"| ValidateSize{"Tamanho <= 5MB?"}
+
+    ValidateSize -->|"Nao"| ToastSize(["toast 'Imagem<br/>maior que 5MB'"])
+    ValidateSize -->|"Sim"| CountActive{"Quantos torneios<br/>ativos na sessao?<br/>(playing/registered/break)"}
+
+    CountActive -->|"0"| Toast0(["toast 'Adicione<br/>um torneio primeiro'<br/>sem dialog"])
+    CountActive -->|"1<br/>(auto-attach)"| CapsCheck1
+    CountActive -->|">= 2"| OpenDialogSelect["Abre dialog<br/>COM seletor<br/>obrigatorio de torneio<br/>(ordenado buy-in DESC)"]
+
+    OpenDialogSelect --> UserPicks{"Usuario escolhe<br/>torneio + type + spot"}
+    UserPicks -->|"Cancela"| RevokeURL2(["URL.revokeObjectURL<br/>+ fecha"])
+    UserPicks -->|"Salvar"| CapsCheckN
+
+    CapsCheck1{"Caps OK?<br/>(< 3 no torneio<br/>E < 10 na sessao)"}
+    CapsCheck1 -->|"Nao - 3/torneio"| ToastCapTour(["toast 'Este torneio<br/>ja tem 3 spots'"])
+    CapsCheck1 -->|"Nao - 10/sessao"| ToastCapSess(["toast 'Cap de 10<br/>spots por sessao<br/>atingido'"])
+    CapsCheck1 -->|"Sim"| OpenDialogPrefix["Abre dialog<br/>com torneio<br/>pre-selecionado<br/>(read-only)<br/>+ preview ObjectURL"]
+
+    OpenDialogPrefix --> FillMeta{"Usuario preenche<br/>type + spot<br/>(notes opcional)"}
+    FillMeta -->|"Cancela"| RevokeURL3(["URL.revokeObjectURL<br/>+ fecha"])
+    FillMeta -->|"Salvar"| CapsCheckN
+
+    CapsCheckN{"Caps server-side<br/>(SELECT COUNT)"}
+    CapsCheckN -->|"OK"| MagicBytes
+    CapsCheckN -->|"3/torneio"| Resp400Tour(["400 star_limit_reached<br/>+ inline message"])
+    CapsCheckN -->|"10/sessao"| Resp400Sess(["400 session_spot_limit_reached<br/>+ inline message"])
+    CapsCheckN -->|"sessao completed<br/>(EC-08, decisao #1)"| Resp409(["409 session_completed<br/>+ inline message"])
+
+    MagicBytes["file-type<br/>fileTypeFromBuffer(buffer)<br/>(servidor)"]
+    MagicBytes --> MagicValid{"MIME real ∈<br/>{png, jpeg, webp}?<br/>(decisao founder #2:<br/>magic bytes > Content-Type)"}
+    MagicValid -->|"Nao"| Resp400Mime(["400 'Formato<br/>nao suportado'"])
+    MagicValid -->|"Sim"| StoragePut
+
+    StoragePut["SpotImageStorage.put<br/>(LocalFs OU S3)<br/>{userId, sessionId, ext,<br/>buffer, mime}"]
+    StoragePut --> StorageOk{"Salvou?"}
+    StorageOk -->|"Falha FS/S3"| Resp500FS(["500 'Erro ao<br/>salvar arquivo'"])
+    StorageOk -->|"Sim<br/>retorna {key, size}"| InsertRow
+
+    InsertRow["INSERT INTO starred_hands<br/>(image_key, image_mime,<br/>image_size,<br/>image_width=null,<br/>image_height=null,<br/>captured_during, ...)"]
+    InsertRow --> InsertOk{"Row inserida?"}
+    InsertOk -->|"Falha"| Cleanup["Storage.delete(key)<br/>(cleanup orfao)"]
+    Cleanup --> Resp500Db(["500 'Erro ao<br/>salvar spot'"])
+    InsertOk -->|"Sim"| Resp201
+
+    Resp201(["201 + row completa<br/>com imageKey,<br/>imageMime, capturedDuring"])
+    Resp201 --> InvalidateCache(["UI: invalidate<br/>queryKey ['starred-hands', sessionId]<br/>+ toast 'Spot salvo'<br/>+ fecha dialog"])
+    InvalidateCache --> Done(["Card renderiza<br/>thumbnail (80×60)"])
+
+    %% Estilos
+    classDef terminal fill:#e8f5e9,stroke:#388e3c
+    classDef error fill:#ffebee,stroke:#c62828
+    classDef success fill:#e3f2fd,stroke:#1565c0
+
+    class Start,Done terminal
+    class Toast0,ToastCapTour,ToastCapSess,ToastFmt,ToastSize,ToastUnsupported,Ignore1,Ignore2,Ignore3,BlockedSession,RevokeURL1,RevokeURL2,RevokeURL3,ShowTooltip,Resp400Tour,Resp400Sess,Resp409,Resp400Mime,Resp500FS,Resp500Db error
+    class Resp201,InvalidateCache success

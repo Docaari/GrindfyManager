@@ -19,3 +19,11 @@ CSV Field/
 .tmp_*.ts
 .tmp_*.json
 session-log.txt
+
+# Sprint F2 — spot screenshots (uploads de prints colados pelo jogador,
+# ADR-051: storage local em F2, S3/R2 em F3).
+# IMPORTANTE: pasta esta em `private-uploads/` (NAO em `uploads/`) para evitar
+# exposicao acidental via `express.static("/uploads", ...)` montado em
+# studies-v2.ts:639. Acesso so via GET /api/starred-hands/:id/image
+# (ADR-052 ownership middleware).
+private-uploads/

@@ -155,3 +155,100 @@ Zod schema (insert/update): `optional + default(true)` — lesson learned #7 (de
 - `false`: lista de wallets escondida em `/settings`, secao "Bancas" e banner missing NAO renderizados, snapshot NAO gravado server-side, telemetry `reconcile_skipped_setting_off`.
 
 Banca legada (`bankroll_amount` + `bankroll_rule` em `user_settings`) **continua visivel** em ambos os modos.
+
+---
+
+## Schema Delta — Sprint F2 (`starred_hands` + spot screenshots)
+
+ADR-051 + ADR-052 + ADR-053 (2026-04-27) estendem `starred_hands` para suportar prints
+colados durante o grind live, com expiracao em 14 dias e cron diario de purge.
+**Nenhuma tabela nova** — extensao de `starred_hands` com 8 colunas nullable + back-fill
+de rows criadas pelo cooldown classico (Sprint Cooldown-1).
+
+```mermaid
+erDiagram
+    GRIND_SESSIONS ||--o{ STARRED_HANDS : "1:N"
+    SESSION_TOURNAMENTS ||--o{ STARRED_HANDS : "1:N"
+    USERS ||--o{ STARRED_HANDS : "1:N (CASCADE)"
+    COOLDOWN_LOGS ||--o{ STARRED_HANDS : "1:N (SET NULL)"
+
+    STARRED_HANDS {
+        varchar id PK
+        varchar user_id FK
+        varchar session_id FK
+        varchar session_tournament_id FK
+        varchar cooldown_log_id FK_NULL "ON DELETE SET NULL"
+        varchar type "enum 9 valores (era 8 + 'spot_screenshot')"
+        varchar spot "enum 9 valores (era 8 + 'screenshot_pending')"
+        text notes "max 500"
+        timestamp created_at
+        text image_url "NEW F2 — relativo /uploads/spot-screenshots/&lt;file&gt;"
+        text conclusion "NEW F2 — max 500"
+        timestamp reviewed_at "NEW F2 — null = nao revisado"
+        boolean review_later "NEW F2 — default false"
+        timestamp expires_at "NEW F2 — pastedAt + 14d"
+        timestamp pasted_at "NEW F2 — quando print foi colado"
+        varchar source "NEW F2 — enum paste|upload|manual; default manual"
+        varchar status "NEW F2 — enum pending|reviewed|discarded; default pending"
+    }
+```
+
+Migration `migrations/0012_spot_screenshots.sql` (DDL preview):
+
+```sql
+ALTER TABLE starred_hands
+  ADD COLUMN image_url     text,
+  ADD COLUMN conclusion    text,
+  ADD COLUMN reviewed_at   timestamp,
+  ADD COLUMN review_later  boolean DEFAULT false NOT NULL,
+  ADD COLUMN expires_at    timestamp,
+  ADD COLUMN pasted_at     timestamp,
+  ADD COLUMN source        varchar(20) DEFAULT 'manual' NOT NULL,
+  ADD COLUMN status        varchar(20) DEFAULT 'pending' NOT NULL;
+
+CREATE INDEX idx_starred_user_status    ON starred_hands (user_id, status);
+CREATE INDEX idx_starred_expires        ON starred_hands (expires_at)
+  WHERE status = 'pending';
+CREATE INDEX idx_starred_session_source ON starred_hands (session_id, source);
+
+-- Back-fill rows criadas pelo cooldown classico (sem print)
+-- ja foram explicitamente starradas pelo jogador -> reviewed retroativamente.
+UPDATE starred_hands
+   SET status   = 'reviewed',
+       source   = 'manual',
+       pasted_at = created_at
+ WHERE pasted_at IS NULL;
+```
+
+Drizzle (em `shared/schema.ts`):
+
+```ts
+imageUrl:     text('image_url'),
+conclusion:   text('conclusion'),
+reviewedAt:   timestamp('reviewed_at'),
+reviewLater:  boolean('review_later').notNull().default(false),
+expiresAt:    timestamp('expires_at'),
+pastedAt:     timestamp('pasted_at'),
+source:       varchar('source', { length: 20 }).notNull().default('manual'),
+status:       varchar('status', { length: 20 }).notNull().default('pending'),
+```
+
+Zod schemas (insert/update): `optional + default` nas 8 colunas — lessons learned #7
+(deprecation gradual). Enums novos:
+- `STARRED_HAND_TYPES` += `'spot_screenshot'` (era 8 valores; agora 9).
+- `STARRED_HAND_SPOTS` += `'screenshot_pending'`.
+- `STARRED_HAND_SOURCES = ['paste', 'upload', 'manual'] as const` (novo).
+- `STARRED_HAND_STATUSES = ['pending', 'reviewed', 'discarded'] as const` (novo).
+
+**Lifecycle de uma row F2:**
+- **paste** -> `status='pending'`, `source='paste'`, `pastedAt=NOW()`, `expiresAt=+14d`.
+- **review (cooldown drag ou /studies)** -> `status='reviewed'`, `reviewedAt=NOW()`,
+  `conclusion=...`, `type` e `spot` reclassificados.
+- **review later** -> `reviewLater=true` (sem set `reviewedAt`); cron preserva.
+- **discarded (DELETE soft)** -> `status='discarded'`, `reviewLater=false`. Cron purga.
+- **expired (sem reviewLater + sem reviewedAt + > 14d)** -> cron purga (row + arquivo).
+
+**ADRs relevantes:** 041 (cooldown_logs + starred_hands dedicadas, base), 051 (storage
+local; S3 deferido para F3), 052 (ownership middleware em GET /image), 053 (node-cron
+diario para purge). Detalhes completos em
+[`cooldown-index.md`](cooldown-index.md#f2--spot-screenshots-sprint-f2-branch-featurespot-screenshots).

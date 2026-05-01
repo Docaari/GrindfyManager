@@ -16,6 +16,7 @@ import { CreateThemeDialog } from '@/components/studies-v2/CreateThemeDialog';
 import { SearchResults } from '@/components/studies-v2/SearchResults';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import StatsAnalyzerTab from '@/components/studies/StatsAnalyzerTab';
+import PendingSpotsTab from '@/components/studies/PendingSpotsTab';
 import type { StudyTheme } from '@/components/studies-v2/types';
 import { getStudyTemplates } from '@/lib/study-suggestions-helpers';
 import { getMasteryLevel, calculateThemeProgress } from '@/lib/study-progress-helpers';
@@ -458,6 +459,15 @@ export default function Studies() {
               })}
             </div>
           )}
+        </div>
+
+        {/* Sprint F2 RF-10: Spots Pendentes */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 text-sm text-gray-300 mb-3">
+            <BookOpen className="w-4 h-4 text-poker-accent" />
+            <span className="font-medium">Spots Pendentes</span>
+          </div>
+          <PendingSpotsTab />
         </div>
 
         {/* Search bar */}

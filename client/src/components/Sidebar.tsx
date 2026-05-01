@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiRequest } from '@/lib/queryClient';
 import BugReportModal from '@/components/BugReportModal';
 import ImprovementSuggestionModal from '@/components/ImprovementSuggestionModal';
 import logoImage from '@assets/image_1753377238747.webp';
@@ -34,6 +36,31 @@ const Sidebar: React.FC = () => {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { user, logout, isAdmin } = useAuth();
+
+  // Sprint F2 W4 (RF-10): badge de Spots Pendentes em /estudos.
+  // Hooks first (lesson #1) — antes de qualquer return.
+  const pendingSpotsQuery = useQuery<{ items: unknown[]; total?: number }>({
+    queryKey: ['/api/starred-hands/pending', { reviewLater: 'all' }],
+    queryFn: () =>
+      apiRequest('GET', '/api/starred-hands/pending?reviewLater=all'),
+    enabled: !!user,
+    staleTime: 30_000,
+  });
+
+  const pendingSpotsCount = pendingSpotsQuery.isLoading
+    ? null
+    : typeof pendingSpotsQuery.data?.total === 'number'
+      ? pendingSpotsQuery.data.total
+      : Array.isArray(pendingSpotsQuery.data?.items)
+        ? pendingSpotsQuery.data!.items.length
+        : 0;
+
+  const pendingSpotsBadgeText =
+    pendingSpotsCount === null
+      ? null
+      : pendingSpotsCount > 99
+        ? '99+'
+        : String(pendingSpotsCount);
 
   const menuSections = [
     {
@@ -194,6 +221,12 @@ const Sidebar: React.FC = () => {
                   const isActive = location === item.path ||
                     (item.path === '/' && (location === '/' || location === '/dashboard'));
 
+                  const showPendingSpotsBadge =
+                    item.path === '/estudos' &&
+                    pendingSpotsBadgeText !== null &&
+                    pendingSpotsCount !== null &&
+                    pendingSpotsCount > 0;
+
                   return (
                     <li key={item.path}>
                       <Link href={item.path}>
@@ -207,6 +240,14 @@ const Sidebar: React.FC = () => {
                           <item.icon size={20} className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-400'}`} />
                           {!isCollapsed && (
                             <span className="font-medium">{item.label}</span>
+                          )}
+                          {showPendingSpotsBadge && (
+                            <span
+                              data-testid="sidebar-pending-spots-badge"
+                              className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-semibold"
+                            >
+                              {pendingSpotsBadgeText}
+                            </span>
                           )}
                         </a>
                       </Link>

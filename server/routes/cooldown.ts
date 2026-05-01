@@ -18,6 +18,7 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import rateLimit from "express-rate-limit";
+import multer from "multer";
 import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import {
@@ -29,6 +30,14 @@ import {
   tiltSelfAssessmentSchema,
 } from "../../shared/schema";
 import { nextMorning } from "../services/sleepGateService";
+import { spotImageStorage } from "../services/spotImageStorage";
+// Magic bytes helper importado direto do submodulo. Test integration mocka apenas
+// o barrel `../services/spotImageStorage`; mime helper precisa ficar real para que
+// o handler classifique buffers corretamente (PNG/JPEG/WEBP) durante os tests.
+import {
+  detectMimeFromBuffer,
+  extFromMime,
+} from "../services/spotImageStorage/mime";
 
 // =============================================================================
 // Helpers
@@ -414,8 +423,26 @@ export async function handleListCooldownLogs(req: any, res: Response): Promise<v
 }
 
 // =============================================================================
-// POST /api/starred-hands
+// POST /api/starred-hands  — Sprint Spot-Screenshots
 // =============================================================================
+// Estende handler legado da Cooldown-1 com suporte a upload de imagem
+// (multipart). Body sem file mantem fluxo legado intacto.
+//
+// Spec: Docs/specs/spot-screenshots.md (RF-01..05, RF-08)
+// ADR : 057-spot-image-storage-abstraction.md
+// =============================================================================
+
+const SPOT_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+function isPathUnsafe(value: string): boolean {
+  return (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.includes("..") ||
+    value.includes("/") ||
+    value.includes("\\")
+  );
+}
 
 export async function handleCreateStarredHand(req: any, res: Response): Promise<void> {
   const userId = userIdOf(req);
@@ -424,6 +451,7 @@ export async function handleCreateStarredHand(req: any, res: Response): Promise<
     return;
   }
 
+  const file = req.file;
   const body = { ...(req.body ?? {}), userId };
   const parsed = insertStarredHandSchema.safeParse(body);
   if (!parsed.success) {
@@ -434,7 +462,34 @@ export async function handleCreateStarredHand(req: any, res: Response): Promise<
     return;
   }
 
+  // Defesa em profundidade: rejeita identifiers com path traversal antes de
+  // chegar no storage layer (ADR-057 + lessons-learned #file-uploads).
+  if (
+    isPathUnsafe(parsed.data.sessionId) ||
+    isPathUnsafe(parsed.data.sessionTournamentId)
+  ) {
+    res.status(400).json({
+      code: "invalid_identifier",
+      message: "Identificador contem caracteres invalidos",
+    });
+    return;
+  }
+
   try {
+    // Ownership da sessao + RF-08 (sessao concluida bloqueia novos spots)
+    const session = await storage.getGrindSession(parsed.data.sessionId);
+    if (!session || (session as any).userId !== userId) {
+      res.status(404).json({ message: "Sessao nao encontrada" });
+      return;
+    }
+    if ((session as any).status === "completed") {
+      res.status(409).json({
+        code: "session_completed",
+        message: "Sessao ja concluida",
+      });
+      return;
+    }
+
     // Ownership do session_tournament + FK consistency
     const st = await storage.getSessionTournament(parsed.data.sessionTournamentId);
     if (!st || (st as any).userId !== userId) {
@@ -449,12 +504,12 @@ export async function handleCreateStarredHand(req: any, res: Response): Promise<
       return;
     }
 
-    // Limite 3 stars por torneio
-    const c = await storage.countStarredHandsByTournament(
+    // Cap 3 stars/torneio
+    const cTour = await storage.countStarredHandsByTournament(
       parsed.data.sessionTournamentId,
       userId,
     );
-    if (c >= 3) {
+    if (cTour >= 3) {
       res.status(400).json({
         code: "star_limit_reached",
         message: "Maximo 3 maos por torneio",
@@ -462,11 +517,106 @@ export async function handleCreateStarredHand(req: any, res: Response): Promise<
       return;
     }
 
-    const created = await storage.createStarredHand({
-      ...parsed.data,
+    // Cap 10 spots/sessao cross-tournament (Sprint Spot-Screenshots)
+    const cSession = await storage.countStarredHandsBySession(
       userId,
-    } as any);
-    res.status(201).json(created);
+      parsed.data.sessionId,
+    );
+    if (cSession >= 10) {
+      res.status(400).json({
+        code: "session_spot_limit_reached",
+        message: "Cap de 10 spots por sessao atingido",
+      });
+      return;
+    }
+
+    // ---- Modo com imagem ----
+    let savedKey: string | null = null;
+    let imageMime: string | undefined;
+    let imageSize: number | undefined;
+
+    if (file) {
+      const buffer: Buffer | undefined = file.buffer;
+      const declaredSize: number = typeof file.size === "number" ? file.size : (buffer?.length ?? 0);
+
+      if (declaredSize > SPOT_MAX_FILE_SIZE) {
+        res.status(413).json({
+          code: "file_too_large",
+          message: "Imagem maior que 5MB",
+        });
+        return;
+      }
+
+      const realMime = detectMimeFromBuffer(buffer);
+      if (!realMime) {
+        res.status(400).json({
+          code: "invalid_mime",
+          message: "Formato nao suportado. Aceitos: PNG, JPEG, WEBP",
+        });
+        return;
+      }
+
+      const ext = extFromMime(realMime);
+      try {
+        const putResult = await spotImageStorage.put({
+          userId,
+          sessionId: parsed.data.sessionId,
+          ext,
+          buffer: buffer as Buffer,
+          mime: realMime,
+        });
+        savedKey = putResult.key;
+        imageMime = realMime;
+        imageSize = putResult.size;
+      } catch (err: any) {
+        console.error("POST /api/starred-hands spotImageStorage.put failed:", err);
+        res.status(500).json({ message: "Erro ao salvar imagem" });
+        return;
+      }
+    }
+
+    // capturedDuring: usa valor do body ou default 'cooldown' (D4 backfill).
+    const capturedDuring = parsed.data.capturedDuring ?? "cooldown";
+
+    try {
+      const created = await storage.createStarredHand({
+        ...parsed.data,
+        userId,
+        capturedDuring,
+        ...(savedKey
+          ? {
+              imageKey: savedKey,
+              imageMime,
+              imageSize,
+              imageWidth: null,
+              imageHeight: null,
+            }
+          : {}),
+      } as any);
+      res.status(201).json(created);
+    } catch (insertErr: any) {
+      // D9 cleanup transacional: arquivo salvo mas INSERT falhou -> remove arquivo.
+      console.error(
+        "POST /api/starred-hands createStarredHand failed:",
+        insertErr,
+      );
+      if (savedKey) {
+        try {
+          await spotImageStorage.delete(savedKey);
+        } catch (cleanupErr: any) {
+          // TECH-DEBT-F4-ORPHAN: arquivo orfao em private-uploads/spots/ quando
+          // delete pos-INSERT-fail tambem falha (EACCES/EBUSY/EIO). Tag estruturada
+          // permite alerta + futuro garbage collector reusando node-cron F2.
+          console.error("[spot_orphan_alert] cleanup failed", {
+            tag: "spot_orphan_alert",
+            key: savedKey,
+            errCode: cleanupErr?.code,
+            errMessage: cleanupErr?.message,
+          });
+        }
+      }
+      res.status(500).json({ message: "Erro ao salvar spot" });
+    }
   } catch (err: any) {
     console.error("POST /api/starred-hands failed:", err);
     res.status(500).json({ message: err?.message ?? "Erro ao estrelar mao" });
@@ -507,7 +657,77 @@ export async function handleListStarredHands(req: any, res: Response): Promise<v
 }
 
 // =============================================================================
+// GET /api/starred-hands/:id/image — Sprint Spot-Screenshots (RF-10)
+// =============================================================================
+
+export async function handleGetStarredHandImage(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) {
+    unauthorized(res);
+    return;
+  }
+
+  const id = req.params?.id;
+  if (!id) {
+    res.status(400).json({ message: "id obrigatorio" });
+    return;
+  }
+
+  try {
+    const row = await storage.getStarredHand(id, userId);
+    // 404 (NUNCA 403) — ADR-052/057: nao confirma existencia para outros users.
+    if (!row || (row as any).userId !== userId) {
+      res.status(404).json({ message: "Imagem nao encontrada" });
+      return;
+    }
+
+    const imageKey = (row as any).imageKey as string | null | undefined;
+    if (!imageKey) {
+      res.status(404).json({ message: "Spot sem imagem associada" });
+      return;
+    }
+
+    const imageMime = ((row as any).imageMime as string | undefined) ?? "application/octet-stream";
+    const imageSize = (row as any).imageSize as number | undefined;
+
+    let result: { buffer: Buffer; mime: string } | null;
+    try {
+      result = await spotImageStorage.get(imageKey);
+    } catch (err: any) {
+      console.error("GET /api/starred-hands/:id/image storage.get failed:", err);
+      res.status(404).json({ message: "Imagem nao encontrada" });
+      return;
+    }
+
+    if (!result) {
+      // EC-09: FS sumiu mas row existe. Spec prefere degradacao graciosa (404)
+      // sobre 500 — frontend renderiza placeholder via <img onError>.
+      console.warn("GET /api/starred-hands/:id/image FS missing for row", {
+        id,
+        imageKey,
+      });
+      res.status(404).json({ message: "Imagem nao encontrada" });
+      return;
+    }
+
+    res.setHeader("Content-Type", imageMime);
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    if (typeof imageSize === "number") {
+      res.setHeader("Content-Length", String(imageSize));
+    }
+    res.status(200);
+    res.end(result.buffer);
+  } catch (err: any) {
+    console.error("GET /api/starred-hands/:id/image failed:", err);
+    res.status(500).json({ message: err?.message ?? "Erro ao servir imagem" });
+  }
+}
+
+// =============================================================================
 // DELETE /api/starred-hands/:id
+// =============================================================================
+// Sprint Spot-Screenshots: estende para deletar arquivo via spotImageStorage
+// quando a row tem imageKey. Idempotente — falha do storage (ENOENT) NAO bloqueia.
 // =============================================================================
 
 export async function handleDeleteStarredHand(req: any, res: Response): Promise<void> {
@@ -528,6 +748,20 @@ export async function handleDeleteStarredHand(req: any, res: Response): Promise<
       res.status(404).json({ message: "Mao estrelada nao encontrada" });
       return;
     }
+
+    const imageKey = (existing as any).imageKey as string | null | undefined;
+    if (imageKey) {
+      try {
+        await spotImageStorage.delete(imageKey);
+      } catch (err: any) {
+        // Idempotente: ENOENT ou similar -> log warn, segue para deletar row.
+        console.warn(
+          "DELETE /api/starred-hands/:id spotImageStorage.delete soft-fail:",
+          { id, imageKey, code: err?.code, message: err?.message },
+        );
+      }
+    }
+
     await storage.deleteStarredHand(id, userId);
     res.status(200).json({ ok: true, id });
   } catch (err: any) {
@@ -559,6 +793,47 @@ export const cooldownCreateLimiter = rateLimit({
 });
 
 // =============================================================================
+// Multer middleware — Sprint Spot-Screenshots
+// memoryStorage + 5MB cap. Magic bytes valida APOS chegar ao buffer (D8).
+// =============================================================================
+
+const spotMulterUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: SPOT_MAX_FILE_SIZE },
+  fileFilter: (_req, file, cb) => {
+    // Aceita declared MIME image/*; magic bytes valida no handler (D2).
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else if (!file.mimetype) {
+      cb(null, true);
+    } else {
+      cb(null, false);
+    }
+  },
+});
+
+function spotMulterErrorHandler(req: any, res: Response, next: any): void {
+  spotMulterUpload.single("file")(req, res, (err: any) => {
+    if (err) {
+      if (err?.code === "LIMIT_FILE_SIZE") {
+        res.status(413).json({
+          code: "file_too_large",
+          message: "Imagem maior que 5MB",
+        });
+        return;
+      }
+      console.error("[POST /api/starred-hands] multer error:", err);
+      res.status(400).json({
+        code: "upload_error",
+        message: err?.message ?? "Erro de upload",
+      });
+      return;
+    }
+    next();
+  });
+}
+
+// =============================================================================
 // Express registration
 // =============================================================================
 
@@ -584,11 +859,22 @@ export function registerCooldownRoutes(app: Express): void {
     handleListCooldownLogs(req, res),
   );
 
-  app.post("/api/starred-hands", requireAuth, cooldownLimiter, (req: Request, res: Response) =>
-    handleCreateStarredHand(req, res),
+  // Sprint Spot-Screenshots: POST aceita multipart com `file` opcional.
+  app.post(
+    "/api/starred-hands",
+    requireAuth,
+    cooldownLimiter,
+    spotMulterErrorHandler,
+    (req: Request, res: Response) => handleCreateStarredHand(req, res),
   );
   app.get("/api/starred-hands", requireAuth, (req: Request, res: Response) =>
     handleListStarredHands(req, res),
+  );
+  // Sprint Spot-Screenshots — GET /:id/image (RF-10) com spotImageStorage.
+  app.get(
+    "/api/starred-hands/:id/image",
+    requireAuth,
+    (req: Request, res: Response) => handleGetStarredHandImage(req, res),
   );
   app.delete("/api/starred-hands/:id", requireAuth, (req: Request, res: Response) =>
     handleDeleteStarredHand(req, res),

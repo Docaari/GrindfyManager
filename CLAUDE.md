@@ -81,6 +81,7 @@ Arquivo `.env` na raiz (no `.gitignore`).
 - `STRIPE_SECRET_KEY` — pagamentos
 - `ANTHROPIC_API_KEY` — Coach AI
 - `COACH_MODEL` — override do modelo Claude (ADR-021)
+- `SPOT_IMAGE_STORAGE_BACKEND` — backend de armazenamento de spots (default `local`; `s3` reservado para deploy futuro). Ver ADR-057.
 
 ---
 

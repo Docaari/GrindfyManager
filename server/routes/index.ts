@@ -31,6 +31,9 @@ import { registerTicketRoutes } from "./tickets";
 import { registerCooldownRoutes } from "./cooldown";
 import { registerCooldownAnalyticsRoutes } from "./cooldownAnalytics";
 import { registerStatsAnalyzerRoutes } from "./statsAnalyzer";
+import { registerStarredHandsRoutes } from "./starred-hands";
+import { registerAllJobs } from "../jobs";
+import { spotStorage } from "../lib/spotStorage";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -142,8 +145,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerCooldownRoutes(app);
   registerCooldownAnalyticsRoutes(app);
   registerStatsAnalyzerRoutes(app);
+  // Sprint F2 — print de spots durante grind. Vive em arquivo dedicado para
+  // nao colidir com cooldown.ts (rotas distintas: /:id/discard vs /:id).
+  registerStarredHandsRoutes(app);
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);
+
+  // Sprint F2 — health check do storage de prints + agenda cron de purge.
+  // Falha no health check eh logada mas NAO crasha o boot (graceful degradation).
+  try {
+    const health = await spotStorage.healthCheck();
+    if (!health.ok) {
+      console.error("spot.storage.health_check_failed", health);
+    } else {
+      console.info("spot.storage.health_check_ok", health);
+    }
+  } catch (err: any) {
+    console.error("spot.storage.health_check_error", { err: err?.message ?? err });
+  }
+  await registerAllJobs();
 
   const httpServer = createServer(app);
   return httpServer;
