@@ -5,6 +5,7 @@
 // =============================================================================
 
 import React from "react";
+import { Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -17,6 +18,7 @@ export default function HudOcrUpload({ layoutId, onExtracted }: HudOcrUploadProp
   const [file, setFile] = React.useState<File | null>(null);
   const [preview, setPreview] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [isDragging, setIsDragging] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -45,6 +47,7 @@ export default function HudOcrUpload({ layoutId, onExtracted }: HudOcrUploadProp
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    setIsDragging(false);
     const f = e.dataTransfer.files?.[0] ?? null;
     if (f) handleFileSelect(f);
   };
@@ -86,22 +89,36 @@ export default function HudOcrUpload({ layoutId, onExtracted }: HudOcrUploadProp
   };
 
   return (
-    <div className="flex flex-col gap-3 p-3 bg-slate-900 border border-slate-800 rounded-md">
+    <div className="relative flex flex-col gap-3 p-3 bg-slate-900 border border-slate-800 rounded-md">
       <div
         data-testid="ocr-upload-dropzone"
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
-        className="border-2 border-dashed border-slate-700 rounded-md p-6 text-center text-slate-400 text-sm hover:border-slate-500 transition"
+        onDragEnter={() => setIsDragging(true)}
+        onDragLeave={() => setIsDragging(false)}
+        className={`border-2 border-dashed rounded-md p-6 text-center text-slate-400 text-sm transition ${
+          loading ? "pointer-events-none opacity-60" : ""
+        } ${
+          isDragging
+            ? "border-emerald-400 bg-emerald-950/30 scale-[1.02]"
+            : "border-slate-700 hover:border-slate-500"
+        }`}
       >
-        <p>Arraste um screenshot do HUD aqui</p>
-        <p className="text-xs mt-1">ou</p>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="mt-2 px-3 py-1.5 bg-emerald-700 text-white rounded text-xs hover:bg-emerald-600"
-        >
-          Selecionar arquivo
-        </button>
+        {isDragging ? (
+          <p className="text-emerald-300 font-semibold">Solte aqui!</p>
+        ) : (
+          <>
+            <p>Arraste um screenshot do HUD aqui</p>
+            <p className="text-xs mt-1">ou</p>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-2 px-3 py-1.5 bg-emerald-700 text-white rounded text-xs hover:bg-emerald-600"
+            >
+              Selecionar arquivo
+            </button>
+          </>
+        )}
       </div>
 
       <input
@@ -137,9 +154,16 @@ export default function HudOcrUpload({ layoutId, onExtracted }: HudOcrUploadProp
             data-testid="ocr-upload-submit"
             onClick={handleSubmit}
             disabled={loading}
-            className="px-3 py-1 text-xs bg-emerald-700 text-white rounded hover:bg-emerald-600 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1 text-xs bg-emerald-700 text-white rounded hover:bg-emerald-600 disabled:opacity-50"
           >
-            Extrair
+            {loading ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Extraindo... (~5s)
+              </>
+            ) : (
+              "Extrair"
+            )}
           </button>
         </div>
       )}
@@ -150,19 +174,34 @@ export default function HudOcrUpload({ layoutId, onExtracted }: HudOcrUploadProp
           data-testid="ocr-upload-submit"
           onClick={handleSubmit}
           disabled={loading}
-          className="px-3 py-1.5 text-xs bg-emerald-700 text-white rounded hover:bg-emerald-600 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-700 text-white rounded hover:bg-emerald-600 disabled:opacity-50"
         >
-          Extrair OCR
+          {loading ? (
+            <>
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Extraindo... (~5s)
+            </>
+          ) : (
+            "Extrair OCR"
+          )}
         </button>
       )}
 
       {loading && (
-        <div
-          data-testid="ocr-upload-loading"
-          className="text-xs text-slate-400 italic text-center"
-        >
-          Extraindo stats...
-        </div>
+        <>
+          <div
+            data-testid="ocr-upload-loading"
+            className="text-xs text-slate-400 italic text-center"
+          >
+            Extraindo stats...
+          </div>
+          <div className="absolute inset-0 bg-slate-950/60 flex items-center justify-center backdrop-blur-sm rounded-md z-10 pointer-events-none">
+            <div className="flex items-center gap-2 text-slate-100 text-sm">
+              <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+              <span>Extraindo stats... (~5s)</span>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

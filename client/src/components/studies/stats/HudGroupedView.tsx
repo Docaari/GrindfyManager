@@ -281,6 +281,13 @@ function GroupCard({
       </div>
       {expanded && (
         <div data-testid={`stats-v3-group-${groupId}-body`} className="bg-slate-950">
+          <div
+            className="grid grid-cols-2 sm:grid-cols-3 gap-2 px-3 py-1 text-[10px] uppercase tracking-wide text-slate-500 bg-slate-900/60 border-b border-slate-800"
+          >
+            <span>stat</span>
+            <span className="hidden sm:block">target</span>
+            <span className="text-right">value</span>
+          </div>
           {fields.map((f) => (
             <StatCell
               key={f.id}
@@ -381,6 +388,35 @@ export default function HudGroupedView(props: HudGroupedViewProps) {
     return expandState[g];
   };
 
+  // WIN 6 — Atalho global E (expand all) / C (collapse all). Ignora quando foco
+  // esta em input/textarea/select/contenteditable para nao colidir com search.
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const active = (typeof document !== "undefined" ? document.activeElement : null) as HTMLElement | null;
+      const tag = active?.tagName;
+      const isInputFocused =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        active?.isContentEditable === true;
+      if (isInputFocused) return;
+      if (e.key === "e" || e.key === "E") {
+        e.preventDefault();
+        expandAll();
+      } else if (e.key === "c" || e.key === "C") {
+        e.preventDefault();
+        collapseAll();
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("keydown", handler);
+      return () => window.removeEventListener("keydown", handler);
+    }
+    return undefined;
+  }, []);
+
+  const openCount = HUD_GROUP_IDS.filter((g) => isGroupExpanded(g)).length;
+
   // Field map por grupo (catalog + customs + override)
   const customFields: CustomFieldEntry[] = (
     (layout.fields_json ?? layout.fieldsJson ?? []) as CustomFieldEntry[]
@@ -435,11 +471,13 @@ export default function HudGroupedView(props: HudGroupedViewProps) {
 
   return (
     <div className="flex flex-col gap-1 p-2 bg-slate-950">
-      <div className="flex gap-2 px-2 pb-2 text-xs">
+      <div className="flex items-center gap-2 px-2 pb-2 text-xs">
         <button
           type="button"
           data-testid="stats-v3-expand-all"
           onClick={expandAll}
+          aria-label={`Expandir todos os ${HUD_GROUP_IDS.length} grupos`}
+          title="Expandir tudo (E)"
           className="px-2 py-1 bg-slate-800 text-slate-200 rounded hover:bg-slate-700"
         >
           Expandir tudo
@@ -448,10 +486,15 @@ export default function HudGroupedView(props: HudGroupedViewProps) {
           type="button"
           data-testid="stats-v3-collapse-all"
           onClick={collapseAll}
+          aria-label={`Recolher todos os ${HUD_GROUP_IDS.length} grupos`}
+          title="Recolher tudo (C)"
           className="px-2 py-1 bg-slate-800 text-slate-200 rounded hover:bg-slate-700"
         >
           Recolher tudo
         </button>
+        <span className="text-xs text-slate-500" data-testid="stats-v3-expand-counter">
+          ({openCount}/{HUD_GROUP_IDS.length} abertos)
+        </span>
       </div>
       {visibleGroups.map((g) => {
         const fields = buildGroupFields(g);

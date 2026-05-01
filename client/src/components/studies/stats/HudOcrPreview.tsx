@@ -197,6 +197,26 @@ export default function HudOcrPreview({
           const rowKey = rowKeyFor(s.label, i);
           const r = rows[rowKey] ?? { accepted: false, value: s.value, catalogId: s.id };
           const showSuggestions = s.matchedBy === "fuzzy_lev" || s.matchedBy === "fuzzy_substring";
+          // WIN 7 — Detectar match alterado manualmente + value out-of-range para o
+          // novo target. Lookup do catalog (min/max) e do match original (s.id).
+          const matchChanged = r.catalogId !== s.id;
+          const catalogStat = HUD_STAT_CATALOG.find((c) => c.id === r.catalogId);
+          const numericValue =
+            typeof r.value === "number" ? r.value : Number(r.value);
+          const valueOutOfRange =
+            !!catalogStat &&
+            Number.isFinite(numericValue) &&
+            (numericValue < catalogStat.targetMin ||
+              numericValue > catalogStat.targetMax);
+          const valueInputClass = `col-span-2 bg-slate-800 border rounded px-2 py-0.5 text-xs text-slate-100 ${
+            matchChanged && valueOutOfRange
+              ? "border-red-500"
+              : "border-slate-700"
+          }`;
+          const valueInputTitle =
+            matchChanged && valueOutOfRange && catalogStat
+              ? `Esperado ${catalogStat.targetMin}-${catalogStat.targetMax}`
+              : undefined;
           return (
             <div
               key={rowKey}
@@ -220,7 +240,8 @@ export default function HudOcrPreview({
                 onChange={(e) =>
                   updateRow(rowKey, { value: Number(e.target.value) })
                 }
-                className="col-span-2 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-100"
+                title={valueInputTitle}
+                className={valueInputClass}
               />
               {showSuggestions ? (
                 <select
@@ -249,6 +270,14 @@ export default function HudOcrPreview({
                 onChange={(e) => updateRow(rowKey, { accepted: e.target.checked })}
                 className="col-span-1"
               />
+              {matchChanged && (
+                <span
+                  data-testid={`ocr-preview-match-warning-${s.label}`}
+                  className="col-span-12 text-[10px] text-amber-400"
+                >
+                  [!] Match alterado manualmente - confira valor
+                </span>
+              )}
             </div>
           );
         })}
