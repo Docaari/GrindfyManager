@@ -1,0 +1,166 @@
+%% Sprint Studies-Reform — Sequence: vincular spot a tema (RF-05)
+%% Spec: Docs/specs/sprint-studies-reform.md (RF-05, RF-08)
+%% ADR: 067 (URL state), 068 (recommendations engine reusa storage)
+%% Fluxo: User → SpotsView → SpotReviewCard → vincular → DB → theme atualizado → Coach pode citar
+%% Mostra error paths: cross-user, theme not found, migration ausente (D10).
+
+sequenceDiagram
+    autonumber
+    actor User as Jogador
+    participant SV as SpotsView<br/>(/estudos/spots)
+    participant SRC as SpotReviewCard<br/>(modal)
+    participant SidePanel as SuggestedThemeSidePanel
+    participant Mapping as shared/spot-theme-mapping.ts
+    participant Dropdown as LinkSpotToThemeDropdown
+    participant API as PATCH /api/starred-hands/:id/review
+    participant Auth as requireAuth (JWT)
+    participant Storage as storage.ts
+    participant DB as PostgreSQL<br/>(study_theme_spot_links)
+    participant LS as localStorage
+    participant Cache as TanStack Query
+    participant TD as ThemeDetail<br/>(/estudos/temas/:id)
+    participant Coach as Coach AI<br/>(tool read_theme_with_linked_spots)
+
+    Note over User,Cache: Pre-condicao: spot existe com reviewLater=true,<br/>themes do usuario carregados em cache (queryKey ['study','themes',userId])
+
+    User->>SV: abre /estudos/spots
+    SV->>Cache: useQuery(['starredHands', {reviewLater:true, themeId:null}])
+    Cache-->>SV: lista de spots pendentes
+    SV->>User: render grid com thumbnails
+
+    User->>SV: click em spot X
+    SV->>SRC: open(spotId, sessionTournamentId)
+
+    %% ===== Sugestao automatica via mapping D5 =====
+    SRC->>SidePanel: render(spot.type, spot.spot)
+    SidePanel->>Mapping: getSuggestedThemeTags({type, spot})
+    Mapping-->>SidePanel: ['ip_vs_bb', 'flop_strategy']
+    SidePanel->>Cache: useQuery(['study','themes',userId])
+    Cache-->>SidePanel: lista de themes
+    SidePanel->>SidePanel: fuzzy match tag vs theme.name<br/>(case-insensitive contains)
+
+    alt match encontrado
+        SidePanel->>User: render "Sugerido: IP vs BB"<br/>+ botao "Aplicar sugestao"
+    else nenhum match
+        SidePanel->>User: nao renderiza sugestao<br/>(silencioso)
+    end
+
+    %% ===== User edita revisao =====
+    User->>SRC: preenche conclusion, type, spot, notes
+    SRC->>Dropdown: render(themes from cache)
+    Dropdown->>User: lista de themes (incluindo "Vazio — nao vincular")
+
+    alt User aplica sugestao
+        User->>SidePanel: click "Aplicar sugestao"
+        SidePanel->>Dropdown: setValue(suggestedThemeId)
+        Dropdown-->>User: tema preenchido visualmente
+    else User escolhe manualmente
+        User->>Dropdown: seleciona tema
+    else User nao vincula
+        User->>Dropdown: deixa vazio (nao obrigatorio)
+    end
+
+    User->>SRC: click "Salvar revisao"
+
+    %% ===== Submit =====
+    SRC->>API: PATCH /api/starred-hands/:spotId/review<br/>body: {conclusion, type, spot, notes, themeId?}
+
+    API->>Auth: requireAuth
+    Auth-->>API: req.user.userPlatformId
+    API->>API: Zod parse body<br/>(themeId optional, valida nanoid format se presente)
+
+    %% ===== Cross-user check =====
+    API->>Storage: getStarredHand(spotId, userId)
+    Storage->>DB: SELECT * FROM starred_hands<br/>WHERE id=? AND user_id=?
+    alt spot nao pertence ao user
+        DB-->>Storage: null
+        Storage-->>API: throw NotFoundError
+        API-->>SRC: 404 {error: 'spot_not_found'}
+        SRC-->>User: toast erro "Spot nao encontrado"
+    end
+    DB-->>Storage: spot row
+    Storage-->>API: spot
+
+    alt themeId presente no body
+        API->>Storage: getStudyTheme(themeId, userId)
+        Storage->>DB: SELECT * FROM study_themes<br/>WHERE id=? AND user_id=?
+
+        alt tema de outro user (cross-user attempt)
+            DB-->>Storage: null
+            Storage-->>API: throw ForbiddenError
+            API-->>SRC: 403 {error: 'theme_not_found_or_forbidden'}
+            SRC-->>User: toast erro "Tema invalido"
+            Note over API,DB: Defesa em profundidade<br/>(JWT + storage WHERE user_id)
+        end
+
+        DB-->>Storage: theme row
+        Storage-->>API: theme valid
+    end
+
+    %% ===== Update transacional =====
+    API->>Storage: updateStarredHandReview(spotId, {conclusion, type, spot, notes, status:'reviewed'})
+    Storage->>DB: UPDATE starred_hands SET ... WHERE id=?
+    DB-->>Storage: ok
+
+    alt themeId presente
+        Storage->>Storage: linkSpotToTheme(themeId, spotId, userId)
+
+        alt migration 0021 aplicada (D10 happy path)
+            Storage->>DB: INSERT INTO study_theme_spot_links<br/>(id, theme_id, spot_id, user_id, linked_at)<br/>ON CONFLICT (theme_id, spot_id) DO NOTHING
+
+            alt UNIQUE violation (re-link idempotente)
+                DB-->>Storage: 0 rows affected
+                Storage-->>API: ok (silently)
+            else INSERT ok
+                DB-->>Storage: 1 row inserted
+                Storage-->>API: link created
+            end
+        else migration nao aplicada (D10 fallback)
+            Note over Storage,DB: Tabela study_theme_spot_links nao existe.<br/>Sprint Studies-Reform-2 cobre essa rota.<br/>No MVP atual, RF-08 e pre-requisito para RF-05.
+            Storage-->>API: throw MigrationMissingError
+            API-->>SRC: 500 {error: 'migration_missing', hint: 'run db:push'}
+            SRC-->>User: toast erro tecnico
+        end
+    end
+
+    API-->>SRC: 200 {spot: updated, link?: {themeId}}
+
+    %% ===== Telemetria + cache invalidation =====
+    SRC->>SRC: telemetry('spot.linked_to_theme', {spotId, themeId, suggested})
+    SRC->>Cache: invalidateQueries(['starredHands'])
+    SRC->>Cache: invalidateQueries(['study','recommendations',userId])
+    SRC->>Cache: invalidateQueries(['study','themes',userId,'linked-spots',themeId])
+
+    SRC-->>User: toast "Spot vinculado a IP vs BB.<br/>[Ir para tema]"
+
+    %% ===== Side effect: spot some do filtro padrao =====
+    SV->>Cache: re-fetch ['starredHands', {themeId:null}]
+    Cache-->>SV: lista atualizada (sem o spot vinculado)
+    SV->>User: re-render grid (spot some)
+
+    %% ===== Theme detail atualizado =====
+    User->>TD: navigate /estudos/temas/themeId
+    TD->>API: GET /api/study-themes/:id/linked-spots
+    API->>Auth: requireAuth
+    API->>Storage: getLinkedSpots(themeId, userId)
+    Storage->>DB: SELECT s.* FROM study_theme_spot_links l<br/>JOIN starred_hands s ON s.id = l.spot_id<br/>WHERE l.theme_id=? AND l.user_id=?<br/>ORDER BY l.linked_at DESC
+    DB-->>Storage: linked spots
+    Storage-->>API: spots
+    API-->>TD: 200 {spots}
+    TD->>User: render aba "Spots vinculados"<br/>com o spot recem-vinculado
+
+    %% ===== Coach pode citar =====
+    Note over Coach,DB: Em sessao futura...
+
+    User->>Coach: "Como esta meu jogo IP vs BB?"
+    Coach->>Coach: detecta theme reference<br/>tool call read_theme_with_linked_spots({theme_name:'IP vs BB'})
+    Coach->>API: invoca tool registry
+    API->>Storage: getLinkedSpots(themeId, userId)
+    Storage->>DB: SELECT (mesmo query acima)<br/>limit 10
+    DB-->>Storage: 10 spots vinculados
+    Storage-->>API: spots
+    API-->>Coach: shape {theme, tabs(max 5), linked_spots(max 10), summary}
+
+    Coach-->>User: "Em IP vs BB voce concluiu em 3 spots:<br/>1. ... 2. ... 3. ...<br/>Sua tendencia e overcbet em board paired."
+
+    Note over User,DB: Loop fechado: spot revisado → vinculado → tema atualizado → Coach cita.<br/>Resolve anti-pattern #3 (severidade 5/5).
