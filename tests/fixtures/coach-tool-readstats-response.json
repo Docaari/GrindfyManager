@@ -1,0 +1,36 @@
+{
+  "comment": "Sprint F3 fixture: shape REAL retornado por read_user_hud_stats. Lesson learned 04-23 #3 — mocks idealizados escondem bugs.",
+  "ok_with_data": {
+    "__type": "ToolResult",
+    "tool": "read_user_hud_stats",
+    "ok": true,
+    "data": {
+      "layoutName": "Padrao PT4",
+      "layoutId": "lyt-abc",
+      "latestSnapshot": {
+        "capturedAt": "2026-04-29T12:00:00.000Z",
+        "sampleSize": 1500,
+        "values": {
+          "vpip": 22.5,
+          "pfr": 18.0,
+          "three_bet": 7.2
+        }
+      },
+      "deltaVsAverage": {
+        "vpip": { "current": 22.5, "average": 21.0, "delta": 1.5 },
+        "pfr": { "current": 18.0, "average": 17.5, "delta": 0.5 }
+      },
+      "populationBenchmark": {
+        "vpip": { "healthy": [18, 26], "current": 22.5, "status": "in_range" },
+        "pfr": { "healthy": [14, 22], "current": 18.0, "status": "in_range" }
+      }
+    }
+  },
+  "no_layouts": {
+    "__type": "ToolResult",
+    "tool": "read_user_hud_stats",
+    "ok": false,
+    "code": "no_layouts",
+    "message": "Usuario nao tem layouts HUD configurados. Sugira criar um via /studies."
+  }
+}

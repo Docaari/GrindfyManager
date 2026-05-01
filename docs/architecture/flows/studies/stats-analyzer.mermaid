@@ -1,0 +1,56 @@
+%% Sprint F3 — Stats Analyzer
+%% Spec : Docs/specs/sprint-f3-stats-analyzer.md
+%% ADRs : 051 (layout schema), 052 (Coach tool integration)
+
+flowchart TD
+  subgraph Client[Client React]
+    Studies[/studies page]
+    StudiesTabs{Tabs}
+    TemasTab[Tab: Temas]
+    StatsTab[Tab: Stats Analyzer]
+    Wizard[StatsWizardFirstUse]
+    Editor[StatsSnapshotEditor]
+    List[StatsSnapshotList]
+    Customizer[HudLayoutCustomizer]
+    Compare[SnapshotComparator]
+  end
+
+  subgraph API[Express /api]
+    Hudl[POST/GET/PUT/DELETE /api/hud-layouts]
+    Snap[POST/GET/DELETE /api/hud-stat-snapshots]
+    Cmp[POST /api/hud-stat-snapshots/compare]
+  end
+
+  subgraph Storage[Drizzle storage.ts]
+    Lay[hud_layouts table]
+    Sn[hud_stat_snapshots table]
+  end
+
+  subgraph Coach[Coach AI]
+    Tool[read_user_hud_stats tool]
+    Bench[hudStatsBenchmark static]
+  end
+
+  Studies --> StudiesTabs
+  StudiesTabs -->|active=temas default| TemasTab
+  StudiesTabs -->|active=stats| StatsTab
+  StatsTab -->|first visit, layouts.length=0| Wizard
+  Wizard -->|select template| Hudl
+  Hudl --> Lay
+
+  StatsTab --> Editor
+  Editor -->|save| Snap
+  Snap --> Sn
+  Editor --> List
+  List -->|click compare| Compare
+  Compare -->|ids[a,b]| Cmp
+  Cmp --> Sn
+
+  Customizer -->|CRUD| Hudl
+
+  Tool -->|reads latest snapshot| Sn
+  Tool -->|reads layout| Lay
+  Tool -.uses.-> Bench
+
+  classDef new fill:#16a34a,stroke:#0a5e2c,color:#fff;
+  class StatsTab,Wizard,Editor,List,Customizer,Compare,Hudl,Snap,Cmp,Lay,Sn,Tool,Bench new;

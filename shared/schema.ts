@@ -2911,3 +2911,154 @@ export const insertSessionWalletSnapshotSchema = z.object({
 
 export type SessionWalletSnapshot = typeof sessionWalletSnapshots.$inferSelect;
 export type InsertSessionWalletSnapshot = z.infer<typeof insertSessionWalletSnapshotSchema>;
+
+// =============================================================================
+// Sprint F3 — Stats Analyzer (ADR-051)
+// hud_layouts: presets de stats HUD (PT4 / HM3 / customizado)
+// hud_stat_snapshots: medicoes pontuais de stats por layout
+// =============================================================================
+
+export const STAT_FIELD_GROUPS = [
+  "preflop",
+  "flop",
+  "turn",
+  "river",
+  "showdown",
+  "agg",
+  "other",
+] as const;
+
+export const HUD_SNAPSHOT_SOURCES = ["manual", "ocr-v2", "handhistory"] as const;
+
+const statFieldZodSchema = z.object({
+  key: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9][a-z0-9_]*$/, "key must be snake_case"),
+  label: z.string().min(1).max(64),
+  decimals: z.number().int().min(0).max(4).default(1),
+  suffix: z.string().max(8).optional(),
+  min: z.number().optional(),
+  max: z.number().optional(),
+  group: z.enum(STAT_FIELD_GROUPS).optional(),
+});
+
+const sectionZodSchema = z.object({
+  label: z.string().min(1).max(64),
+  stats: z.array(statFieldZodSchema).min(1),
+  sortOrder: z.number().int().min(0),
+});
+
+export const hudLayoutSectionsZodSchema = z
+  .array(sectionZodSchema)
+  .min(1)
+  .max(20)
+  .superRefine((sections, ctx) => {
+    const seen = new Set<string>();
+    for (const sec of sections) {
+      for (const s of sec.stats) {
+        if (seen.has(s.key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `duplicate stat key: ${s.key}`,
+            path: ["sections"],
+          });
+        }
+        seen.add(s.key);
+      }
+    }
+  });
+
+export type HudStatField = z.infer<typeof statFieldZodSchema>;
+export type HudSection = z.infer<typeof sectionZodSchema>;
+
+export const hudLayouts = pgTable(
+  "hud_layouts",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    name: varchar("name", { length: 80 }).notNull(),
+    isDefault: boolean("is_default").notNull().default(false),
+    sections: jsonb("sections").$type<HudSection[]>().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_hud_layouts_user").on(table.userId),
+    uniqueIndex("uq_hud_layouts_default")
+      .on(table.userId)
+      .where(sql`${table.isDefault} = true`),
+  ],
+);
+
+export const insertHudLayoutSchema = z.object({
+  userId: z.string().min(1),
+  name: z.string().min(1).max(80),
+  isDefault: z.boolean().optional().default(false),
+  sections: hudLayoutSectionsZodSchema,
+});
+
+export const updateHudLayoutSchema = z.object({
+  name: z.string().min(1).max(80).optional(),
+  isDefault: z.boolean().optional(),
+  sections: hudLayoutSectionsZodSchema.optional(),
+});
+
+export type HudLayout = typeof hudLayouts.$inferSelect;
+export type InsertHudLayout = z.infer<typeof insertHudLayoutSchema>;
+export type UpdateHudLayout = z.infer<typeof updateHudLayoutSchema>;
+
+export const hudStatSnapshots = pgTable(
+  "hud_stat_snapshots",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    layoutId: varchar("layout_id")
+      .notNull()
+      .references(() => hudLayouts.id, { onDelete: "cascade" }),
+    capturedAt: timestamp("captured_at").defaultNow().notNull(),
+    source: varchar("source", { length: 16 }).notNull().default("manual"),
+    values: jsonb("values").$type<Record<string, number | null>>().notNull(),
+    sampleSize: integer("sample_size"),
+    sessionId: varchar("session_id").references(() => grindSessions.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_hud_snapshots_user_layout").on(
+      table.userId,
+      table.layoutId,
+      table.capturedAt,
+    ),
+  ],
+);
+
+const snapshotValuesZodSchema = z
+  .record(z.string().min(1).max(64), z.number().nullable())
+  .refine((v) => Object.keys(v).length > 0, {
+    message: "values must contain at least one stat",
+  });
+
+export const insertHudStatSnapshotSchema = z.object({
+  userId: z.string().min(1),
+  layoutId: z.string().min(1),
+  source: z.enum(HUD_SNAPSHOT_SOURCES).optional().default("manual"),
+  capturedAt: z
+    .union([z.string(), z.date()])
+    .optional()
+    .transform((v) => (v ? new Date(v) : undefined)),
+  values: snapshotValuesZodSchema,
+  sampleSize: z.number().int().positive().optional().nullable(),
+  sessionId: z.string().min(1).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+export type HudStatSnapshot = typeof hudStatSnapshots.$inferSelect;
+export type InsertHudStatSnapshot = z.infer<typeof insertHudStatSnapshotSchema>;

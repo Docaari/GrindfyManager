@@ -400,6 +400,70 @@ z.object({
 
 ---
 
+## Tool 6: `read_user_hud_stats`
+
+**Sprint:** F3 — Stats Analyzer (2026-04-29)
+**ADR:** Docs/architecture/decisions/052-stats-analyzer-coach-tool-integration.md
+**Tier gate:** `pro`, `premium`, `admin`
+**Audit:** `log`
+**Confirmation:** nao requer
+
+### Descricao
+
+Le snapshots HUD recentes do usuario (VPIP, PFR, 3Bet, etc.) do layout
+indicado (ou default). Retorna ultimo snapshot, delta vs media historica
+do usuario e benchmark populacional estatico (`server/coach/tools/hudStatsBenchmark.ts`).
+
+### Input
+
+```ts
+{
+  layoutName?: string,      // se omitido, usa layout default; case-insensitive
+  statKeys?: string[],      // se omitido, retorna TODOS do layout
+}
+```
+
+### Output (sucesso)
+
+```ts
+{
+  __type: "ToolResult",
+  tool: "read_user_hud_stats",
+  ok: true,
+  data: {
+    layoutName: "Padrao PT4",
+    layoutId: "...",
+    latestSnapshot: {
+      capturedAt: "2026-04-29T...",
+      sampleSize: 1500,
+      values: { vpip: 22.5, pfr: 18.0, ... },
+    },
+    deltaVsAverage: {
+      vpip: { current: 22.5, average: 21.0, delta: +1.5 }, ...
+    },
+    populationBenchmark: {
+      vpip: { healthy: [18, 26], current: 22.5, status: "in_range" }, ...
+    },
+  },
+}
+```
+
+### Codigos de erro
+
+- `no_layouts`: usuario nao tem layouts configurados. Sugira criar via `/studies`.
+- `storage_error`: falha de DB (logado server-side, mensagem generica retornada).
+
+### Sanitizacao
+
+- `notes` (texto livre) NUNCA exposto no output.
+- Apenas keys numericas + agregados.
+- `populationBenchmark` usa tabela estatica (V1). V2 troca por dados Grindfy agregados.
+
+**Handler:** `server/coach/tools/readUserHudStats.ts`. Builder pure
+(`buildHudStatsPayload`) testavel separadamente do storage.
+
+---
+
 ## Sprints futuros (placeholder)
 
 Espaco reservado para tools dos proximos sprints:
