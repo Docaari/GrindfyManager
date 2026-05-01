@@ -6,8 +6,9 @@
 // =============================================================================
 
 import type { Express } from "express";
+import rateLimit from "express-rate-limit";
 import { z } from "zod";
-import { requireAuth } from "../auth";
+import { requireAuth, requirePermission } from "../auth";
 import { storage } from "../storage";
 import {
   insertHudLayoutSchema,
@@ -15,6 +16,7 @@ import {
   insertHudStatSnapshotSchema,
 } from "@shared/schema";
 import { buildSnapshotDiff } from "../services/hudStatsCompare";
+import { handlePostPasteImportPreview } from "./statsAnalyzerImport";
 
 const compareInputSchema = z.object({
   ids: z.array(z.string().min(1)).length(2),
@@ -96,6 +98,29 @@ export function registerStatsAnalyzerRoutes(app: Express): void {
       res.status(500).json({ message: "Falha ao listar snapshots." });
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Sprint Stats-V2 — Paste import preview (RF-05)
+  //
+  // POST /api/hud-stat-snapshots/preview
+  // Rate limited 30 req/min/IP (paste eh barato, mas evita abuso CPU).
+  // Registrado ANTES de /:id para nao colidir com catch-all.
+  // -------------------------------------------------------------------------
+  const previewRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Muitas requisicoes de preview. Aguarde um minuto." },
+  });
+
+  app.post(
+    "/api/hud-stat-snapshots/preview",
+    requireAuth,
+    requirePermission("studies"),
+    previewRateLimiter,
+    handlePostPasteImportPreview,
+  );
 
   app.get("/api/hud-stat-snapshots/:id", requireAuth, async (req: any, res) => {
     try {

@@ -37,10 +37,13 @@ interface Props {
 // Templates V2
 // -----------------------------------------------------------------------------
 
+// MINOR-1 reviewer: BB nao tem RFI (eh sempre o ultimo a agir pre-flop). Em
+// vez de rfi_bb (id inexistente), inclui rfi_sb_short como variante curta
+// frequente em torneios.
 const COMPACT_IDS = new Set([
   "vpip", "pfr", "wwsf_pct", "wtsd", "wsd",
   "threebet_pf", "fold_to_3bet", "fourbet_pf",
-  "rfi_ep", "rfi_co", "rfi_btn", "rfi_sb", "rfi_bb",
+  "rfi_ep", "rfi_co", "rfi_btn", "rfi_sb", "rfi_sb_short",
   "threebet_total", "threebet_btn", "threebet_sb", "threebet_bb",
   "fold_vs_threebet_oop", "cbet_flop_ip", "cbet_flop_oop", "fold_vs_cbet_oop",
   "second_barrel_vs_bb", "third_barrel_vs_bb",

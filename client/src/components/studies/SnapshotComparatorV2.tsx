@@ -72,10 +72,12 @@ function StatCell({
   valueA: number | null;
   valueB: number | null;
 }) {
-  const color = getStatColor(stat, valueB);
+  const isNull = valueA === null || valueB === null;
+  // MAJOR-4 reviewer: quando A ou B for null, forca cinza (sem informacao
+  // suficiente para colorir target). Tooltip ja diz "Nao reportado".
+  const color: StatColor = isNull ? "gray" : getStatColor(stat, valueB);
   const colorClass = COLOR_CLASSES[color];
   const tooltipText = getDirectionTooltip(stat.direction);
-  const isNull = valueA === null || valueB === null;
   const ariaLabel = isNull
     ? `${stat.label} — Nao reportado (${stat.direction})`
     : `${stat.label} — ${stat.direction}: ${tooltipText}`;

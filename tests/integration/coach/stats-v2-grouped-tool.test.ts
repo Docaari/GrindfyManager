@@ -267,7 +267,12 @@ describe("readUserHudStatsToolV2 handler", () => {
       { userId: "USER-0001", chatSessionId: "x", messageId: "y" },
     );
     expect(result.ok).toBe(true);
+    // MAJOR-5 reviewer: short-circuit garante groups=[] em vez de stats
+    // not_reported para todo o catalogo. Coach economiza tokens.
+    expect(result.data.groups).toEqual([]);
     expect(result.data.summary.total_off_target).toBe(0);
+    expect(result.data.summary.total_on_target).toBe(0);
+    expect(result.data.summary.total_null).toBe(0);
     expect(result.data.summary.biggest_leak).toBeNull();
   });
 });

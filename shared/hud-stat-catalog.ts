@@ -367,7 +367,8 @@ export const HUD_STAT_CATALOG: StatField[] = [
 // Helpers exportados
 // -----------------------------------------------------------------------------
 
-const STAT_INDEX_BY_ID = new Map<string, StatField>(
+// MINOR-2 reviewer: exportado para uso em parsers (evita O(n) .find() em loops).
+export const STAT_INDEX_BY_ID = new Map<string, StatField>(
   HUD_STAT_CATALOG.map((s) => [s.id, s]),
 );
 

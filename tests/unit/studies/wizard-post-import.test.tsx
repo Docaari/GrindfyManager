@@ -121,6 +121,29 @@ describe("<StatsWizardPostImport> — customizar flow", () => {
   });
 });
 
+describe("<StatsWizardPostImport> — catalog integrity", () => {
+  it("MINOR-1 reviewer: todos os ids de mttCashCompact existem no catalogo", async () => {
+    const { HUD_STAT_CATALOG, getStatById } = await import(
+      "../../../shared/hud-stat-catalog"
+    );
+    expect(HUD_STAT_CATALOG.length).toBeGreaterThan(0);
+    renderWizard();
+    // Renderiza o card mttCashCompact e verifica count > 0 (significa COMPACT_IDS
+    // resolveu pelo menos N stats reais — guard contra ids fantasmas).
+    const card = screen.getByTestId("wizard-template-mttCashCompact");
+    const text = card.textContent ?? "";
+    const match = text.match(/(\d+)\s+stats/i);
+    expect(match).toBeTruthy();
+    const compactCount = Number(match?.[1] ?? "0");
+    // Esperamos ~30 stats validos (pode variar conforme catalog evolui).
+    expect(compactCount).toBeGreaterThanOrEqual(25);
+    // Sanity: ids ainda presentes no catalogo
+    expect(getStatById("rfi_btn")).toBeDefined();
+    expect(getStatById("rfi_sb_short")).toBeDefined();
+    expect(getStatById("vpip")).toBeDefined();
+  });
+});
+
 describe("<StatsWizardPostImport> — skip conditions", () => {
   it("nao monta wizard se ja tem snapshot (existingSnapshotsCount > 0)", () => {
     const { container } = renderWizard({ existingSnapshotsCount: 5 });

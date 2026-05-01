@@ -42,6 +42,9 @@ interface Props {
 }
 
 const DEBOUNCE_MS = 1000;
+// MINOR-3 reviewer: bate com o limite server-side em statsAnalyzerImport.ts
+// (50KB). Toast destructive imediato evita upload de arquivos grandes.
+const MAX_CSV_BYTES = 50 * 1024;
 
 // -----------------------------------------------------------------------------
 // FieldInput — uncontrolled input com ref para sync de paste/CSV.
@@ -207,8 +210,10 @@ export default function StatsSnapshotEditorV2({
       }
       valuesRef.current = next;
       setValues(next);
+      // MAJOR-3 reviewer: paste/CSV tambem dispara autosave (debounce 1s).
+      scheduleSave(next);
     },
-    [],
+    [scheduleSave],
   );
 
   const handlePaste = useCallback(
@@ -234,6 +239,16 @@ export default function StatsSnapshotEditorV2({
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
+      // MINOR-3 reviewer: rejeitar antes do .text() para evitar parsing
+      // de arquivos abusivos (>50KB).
+      if (file.size > MAX_CSV_BYTES) {
+        toast({
+          title: "CSV muito grande",
+          description: `Limite ${(MAX_CSV_BYTES / 1024).toFixed(0)}KB. Arquivo: ${(file.size / 1024).toFixed(1)}KB.`,
+          variant: "destructive",
+        });
+        return;
+      }
       try {
         const text = await file.text();
         const parsed = parseCsvSnapshot(text);

@@ -14,7 +14,7 @@
 //   4. Fallback: rawName -> unmatched.
 // =============================================================================
 
-import { HUD_STAT_CATALOG, type StatField } from "./hud-stat-catalog";
+import { HUD_STAT_CATALOG, STAT_INDEX_BY_ID, type StatField } from "./hud-stat-catalog";
 
 export interface ParsedSnapshotResult {
   matched: Record<string, number | null>;
@@ -258,7 +258,8 @@ export function parseCsvSnapshot(csvText: string): ParsedSnapshotResult {
     if (statId) {
       // Out-of-range warning para stats pct
       if (parsed.value !== null) {
-        const stat = HUD_STAT_CATALOG.find((s) => s.id === statId);
+        // MINOR-2 reviewer: lookup O(1) via index (era .find O(n) por linha).
+        const stat = STAT_INDEX_BY_ID.get(statId);
         if (stat?.unit === "pct" && (parsed.value < 0 || parsed.value > 100)) {
           // Estrategia: marcar invalid se claramente fora 0-100 (mais seguro;
           // teste aceita invalid OU warning).

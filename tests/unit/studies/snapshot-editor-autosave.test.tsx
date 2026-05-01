@@ -218,6 +218,39 @@ describe("<StatsSnapshotEditorV2> — paste import", () => {
     expect(vpip.value).toBe("22.5");
     expect(pfr.value).toBe("18.0");
   });
+
+  it("MAJOR-3 reviewer: applyParsedValues dispara autosave (POST 1s apos paste)", async () => {
+    vi.useFakeTimers();
+    try {
+      renderEditor();
+      const pasteArea = screen.getByTestId("snapshot-paste-area");
+      fireEvent.paste(pasteArea, {
+        clipboardData: {
+          getData: () => "VPIP\t22.5\nPFR\t18.0",
+        },
+      });
+      // Antes do debounce — sem POST
+      act(() => {
+        vi.advanceTimersByTime(900);
+      });
+      expect(apiRequestMock).not.toHaveBeenCalled();
+      // Apos debounce — POST
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      await waitFor(() => {
+        expect(apiRequestMock).toHaveBeenCalled();
+      });
+      const lastCall = apiRequestMock.mock.calls.at(-1);
+      expect(lastCall?.[0]).toBe("POST");
+      expect(lastCall?.[1]).toBe("/api/hud-stat-snapshots");
+      const payload = lastCall?.[2];
+      expect(payload?.values?.vpip).toBe(22.5);
+      expect(payload?.values?.pfr).toBe(18.0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("<StatsSnapshotEditorV2> — CSV upload", () => {

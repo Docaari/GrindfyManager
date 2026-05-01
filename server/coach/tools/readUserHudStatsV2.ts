@@ -117,6 +117,25 @@ export function buildHudStatsPayloadV2(
     values?: Record<string, number | null>;
   }>,
 ): HudStatsPayloadV2 {
+  // MAJOR-5 reviewer: short-circuit quando nao ha snapshots — evita iterar
+  // catalogo inteiro retornando 200 stats com not_reported=true (payload
+  // gigante e sem semantica). Coach espera groups=[] e summary zerado.
+  if (!snapshots || snapshots.length === 0) {
+    return {
+      layoutId: layout?.id,
+      layoutName: layout?.name,
+      capturedAt: null,
+      sampleSize: null,
+      groups: [],
+      summary: {
+        total_off_target: 0,
+        total_on_target: 0,
+        total_null: 0,
+        biggest_leak: null,
+      },
+    };
+  }
+
   const fields = extractFields(layout);
 
   // Snapshot mais recente
