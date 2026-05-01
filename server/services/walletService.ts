@@ -486,39 +486,30 @@ async function recordWalletTransaction(
     }
     const prevConsolidatedUSD = otherUSD + (parseDecimal(wallet.balance) / (fxRate || 1));
     const newConsolidatedUSD = otherUSD + (newBalance / (fxRate || 1));
-    // Sprint Bankroll-Reports-Detail (RF-03): para manual_report, snapshot inline
-    // recebe origin='manual-report' + sourceRefId=tx.id (audit). Para session_result
-    // mantem reason original; outros reasons ficam como veem.
-    // bankroll_snapshots.reason eh enum (initial|deposit|withdrawal|session_result|
-    // rakeback|manual_adjustment) — manual_report mapeia para manual_adjustment para
-    // satisfazer a constraint, distincao real fica em origin='manual-report'.
-    const snapshotReason =
-      input.reason === "session_result"
-        ? "session_result"
-        : input.reason === "manual_report"
-          ? "manual_adjustment"
-          : input.reason;
-    const snapshotOrigin =
-      input.reason === "manual_report" ? "manual-report" : "manual";
-    await tx.insertBankrollSnapshot({
-      userId,
-      delta: usdDelta,
-      previousAmount: prevConsolidatedUSD,
-      newAmount: newConsolidatedUSD,
-      reason: snapshotReason,
-      note: input.note ?? null,
-      source: "manual",
-      sessionId: input.sessionId ?? null,
-      occurredAt,
-      // RF-04: colunas v2 populadas no espelho
-      walletId,
-      nativeAmount: String(input.nativeAmount),
-      nativeCurrency: wallet.nativeCurrency,
-      fxRateUSDPerNative: String(fxRate),
-      // Sprint Bankroll-Reports-Detail (RF-03)
-      origin: snapshotOrigin,
-      sourceRefId: input.reason === "manual_report" ? (transaction as any)?.id ?? null : null,
-    });
+    // Sprint Bankroll-Reports-Detail (R2 fix C3): para manual_report o snapshot
+    // eh disparado UMA SO vez via bankrollService.createAutoSnapshot apos commit
+    // da tx (consistente com pattern Bankroll-3 ADR-058). Skipamos o espelho
+    // inline aqui para evitar 2 rows quase identicas em bankroll_snapshots.
+    if (input.reason !== "manual_report") {
+      await tx.insertBankrollSnapshot({
+        userId,
+        delta: usdDelta,
+        previousAmount: prevConsolidatedUSD,
+        newAmount: newConsolidatedUSD,
+        reason: input.reason,
+        note: input.note ?? null,
+        source: "manual",
+        sessionId: input.sessionId ?? null,
+        occurredAt,
+        // RF-04: colunas v2 populadas no espelho
+        walletId,
+        nativeAmount: String(input.nativeAmount),
+        nativeCurrency: wallet.nativeCurrency,
+        fxRateUSDPerNative: String(fxRate),
+        origin: "manual",
+        sourceRefId: null,
+      });
+    }
 
     return {
       transaction,
@@ -1457,31 +1448,83 @@ async function getBalanceSnapshotPair(
     return { before: [], after: [], delta: [], empty: true, emptyReason: "no_snapshot_after" };
   }
 
-  // Constroi entries por wallet. Snapshots consolidados (Sprint B3) tem
-  // newAmount/previousAmount em USD agregado — sem breakdown per-wallet.
-  // Para listar per-wallet, usamos wallets atuais como catalog mas saldos
-  // before/after vem de wallet_transactions agregadas no intervalo.
-  // V1 simplificado: usa balance atual da wallet em catalog para "after"
-  // se nao houver dado mais granular. Founders verem at least the catalog.
-  // TODO V2: per-wallet snapshot (session_wallet_snapshots).
+  // Sprint Bankroll-Reports-Detail (R2 fix H1): deriva per-wallet before/after
+  // via wallet_transactions agregadas no intervalo (D8). Snapshots consolidados
+  // (B3) so guardam USD agregado em previousAmount/newAmount; per-wallet vem
+  // dos transactions reais que ocorreram no intervalo.
+  //
+  //   afterNative  = wallet.balance (saldo atual = mais recente tx)
+  //                  OU last tx.newNativeBalance dentro do intervalo se houver.
+  //   deltaNative  = sum(tx.signed_native) WHERE walletId AND occurredAt IN [from, to]
+  //   beforeNative = afterNative - deltaNative
+  //
+  // Para manual_report (D8): tx.newNativeBalance ja eh o "after"; before = after - delta.
   const settings = await storage.getUserSettings(userId).catch(() => null);
   const exchangeRates = ((settings as any)?.exchangeRates ?? {}) as Record<string, number>;
+
+  // Carrega TODAS as wallet_transactions do user no intervalo [from, to].
+  let txsInRange: any[] = [];
+  try {
+    const storageAny = storage as any;
+    if (typeof storageAny.listWalletTransactionsByUser === "function") {
+      txsInRange =
+        (await storageAny.listWalletTransactionsByUser(userId, {
+          from,
+          to,
+          limit: 500,
+        })) ?? [];
+    }
+  } catch (err) {
+    console.warn(
+      "[walletService.getBalanceSnapshotPair] listWalletTransactionsByUser falhou:",
+      (err as any)?.message,
+    );
+  }
+
+  // Aggrega delta nativo por walletId.
+  const deltaByWallet = new Map<string, { native: number; usd: number; lastNewBalance?: number }>();
+  for (const tx of txsInRange) {
+    const wid = (tx as any).walletId;
+    if (!wid) continue;
+    const native = parseDecimal((tx as any).nativeAmount);
+    const usd = parseDecimal((tx as any).usdAmount);
+    const dir = (tx as any).direction;
+    const signedNative = dir === "in" ? native : -native;
+    const signedUsd = dir === "in" ? usd : -usd;
+    const acc = deltaByWallet.get(wid) ?? { native: 0, usd: 0 };
+    acc.native += signedNative;
+    acc.usd += signedUsd;
+    // Preferimos newNativeBalance da ultima tx do intervalo como "after"
+    // autoritativo (ja contabilizado pelo ledger).
+    const newBal = parseDecimal((tx as any).newNativeBalance);
+    if (Number.isFinite(newBal)) acc.lastNewBalance = newBal;
+    deltaByWallet.set(wid, acc);
+  }
 
   const before: SnapshotEntry[] = [];
   const after: SnapshotEntry[] = [];
   const delta: DeltaEntry[] = [];
 
   for (const w of wallets) {
-    const balanceNative = parseDecimal(w.balance);
-    const { usdAmount } = nativeToUSD(balanceNative, w.nativeCurrency, exchangeRates);
-    // V1: before/after iguais ao saldo atual (placeholder — granular vem em V2).
+    const agg = deltaByWallet.get(w.id) ?? { native: 0, usd: 0, lastNewBalance: undefined };
+    // afterNative: prefere lastNewBalance da tx mais recente no intervalo;
+    // fallback para wallet.balance atual (catalog).
+    const afterNative = Number.isFinite(agg.lastNewBalance as number)
+      ? (agg.lastNewBalance as number)
+      : parseDecimal(w.balance);
+    const beforeNative = afterNative - agg.native;
+
+    const { usdAmount: afterUsd } = nativeToUSD(afterNative, w.nativeCurrency, exchangeRates);
+    const { usdAmount: beforeUsd } = nativeToUSD(beforeNative, w.nativeCurrency, exchangeRates);
+    const deltaUsd = afterUsd - beforeUsd;
+
     before.push({
       walletId: w.id,
       walletName: w.name,
       platform: w.platform,
       currency: w.nativeCurrency,
-      balanceNative,
-      balanceUsd: usdAmount,
+      balanceNative: beforeNative,
+      balanceUsd: beforeUsd,
       snapshotId: beforeSnap?.id ?? null,
       snapshotOrigin: beforeSnap?.origin ?? null,
     });
@@ -1490,8 +1533,8 @@ async function getBalanceSnapshotPair(
       walletName: w.name,
       platform: w.platform,
       currency: w.nativeCurrency,
-      balanceNative,
-      balanceUsd: usdAmount,
+      balanceNative: afterNative,
+      balanceUsd: afterUsd,
       snapshotId: afterSnap?.id ?? null,
       snapshotOrigin: afterSnap?.origin ?? null,
     });
@@ -1500,8 +1543,8 @@ async function getBalanceSnapshotPair(
       walletName: w.name,
       platform: w.platform,
       currency: w.nativeCurrency,
-      deltaNative: 0,
-      deltaUsd: 0,
+      deltaNative: agg.native,
+      deltaUsd,
     });
   }
 

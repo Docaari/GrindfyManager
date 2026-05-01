@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { registerTool, type CoachTool } from './registry';
 import { readCooldownHistoryTool } from './handlers/readCooldownHistory';
 import { readUserHudStatsToolV2 } from '../coach/tools/readUserHudStatsV2';
+import { readUserBankrollHistoryTool } from '../coach/tools/readUserBankrollHistory';
 
 // -----------------------------------------------------------------------------
 // Stubs de regressao Sprint Coach 2A — tools cujo handler real esta na
@@ -91,4 +92,12 @@ safeRegister(readUserHudStatsToolV2);
 safeRegister(findTopLeaksStub);
 safeRegister(simulateBankrollStub);
 
-export { readCooldownHistoryTool, readUserHudStatsToolV2 };
+// Sprint Bankroll-Reports-Detail (RF-07): tool real (Pro+ tier ja gated em
+// readUserBankrollHistoryTool.gateByTier).
+safeRegister(readUserBankrollHistoryTool as unknown as CoachTool);
+
+export {
+  readCooldownHistoryTool,
+  readUserHudStatsToolV2,
+  readUserBankrollHistoryTool,
+};

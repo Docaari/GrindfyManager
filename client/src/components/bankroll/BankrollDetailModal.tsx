@@ -121,8 +121,9 @@ export function BankrollDetailModal({ open, onClose, entry }: Props) {
     },
   });
 
-  if (!open) return null;
-
+  // Lessons #1: TODOS os hooks ANTES do early return. Caso contrario,
+  // alternar `open: true -> false -> true` lanca "Rendered more hooks than
+  // during the previous render".
   const totalUsd = useMemo(() => {
     if (!data?.delta) return 0;
     return data.delta.reduce((acc, d) => acc + (Number(d.deltaUsd) || 0), 0);
@@ -139,6 +140,8 @@ export function BankrollDetailModal({ open, onClose, entry }: Props) {
       after: afterById.get(d.walletId),
     }));
   }, [data]);
+
+  if (!open) return null;
 
   return (
     <div

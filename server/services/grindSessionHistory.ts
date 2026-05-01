@@ -172,11 +172,22 @@ function sessionDetailsAvailable(
   return hasBefore && hasAfter;
 }
 
-function buildSessionEntry(session: any, snapshots: any[]): SessionHistoryEntry {
+function buildSessionEntry(
+  session: any,
+  snapshots: any[],
+  fxCtx?: { rates: Record<string, number>; primaryCurrency?: string },
+): SessionHistoryEntry {
   const startedAt = session.startTime ?? session.startedAt ?? session.date;
   const completedAt = session.completedAt ?? session.endTime ?? startedAt;
   const profitNative = parseDecimal(session.profit);
-  // V1 simplificado: profit ja em USD (ROI calc upstream). Fallback 0 se ausente.
+  // R2 fix M1: converte profit nativo (moeda do site primario da sessao) para
+  // USD via rates. Lessons #6 (FX-aware). Heuristica V1: usa primaryCurrency
+  // resolvida no caller. Sessoes cross-currency tem precisao limitada — TODO V2:
+  // somar profit por session_tournament granular.
+  const ccy = fxCtx?.primaryCurrency ?? "USD";
+  const rate = fxCtx?.rates?.[ccy] ?? 1;
+  const safeRate = rate > 0 ? rate : 1;
+  const profitUsd = ccy === "USD" ? profitNative : profitNative / safeRate;
   const tournamentsCount = Number(session.volume ?? 0) || 0;
   return {
     type: "session",
@@ -191,7 +202,7 @@ function buildSessionEntry(session: any, snapshots: any[]): SessionHistoryEntry 
       : completedAt
         ? new Date(completedAt).toISOString()
         : new Date(0).toISOString(),
-    profitUsd: profitNative,
+    profitUsd,
     tournamentsCount,
     platformsAffected: [], // V1: nao agrega per-tournament platform aqui
     detailsAvailable: sessionDetailsAvailable(session, snapshots),
@@ -229,7 +240,24 @@ export async function getGrindSessionHistory(
   if (includeSessions) {
     try {
       const sessions = (await (storage as any).getGrindSessions(userId)) ?? [];
-      sessionEntries = sessions.map((s: any) => buildSessionEntry(s, snapshots));
+      // R2 fix M1: resolve rates uma vez (FX-aware profit). Best-effort:
+      // se fxResolver indisponivel ou falhar, fallback para conversao 1:1
+      // (degrada para comportamento legacy, sem regressao).
+      let rates: Record<string, number> = {};
+      try {
+        const mod = await import("./fxResolver");
+        const out = await (mod as any).fxResolver?.resolveExchangeRates?.(userId);
+        if (out && typeof out === "object" && out.rates) rates = out.rates;
+      } catch {
+        // segue sem rates — profit fica em moeda nativa (V1 legacy).
+      }
+      // Heuristica V1: assume USD como primaryCurrency (sessoes da maioria dos
+      // founders sao USD). Se moeda nativa for outra, dashboardService.ts cobre
+      // o calculo granular per-platform — aqui o numero pode ter ~erro pequeno.
+      // TODO V2: derivar primaryCurrency via session_tournaments[0].site.
+      sessionEntries = sessions.map((s: any) =>
+        buildSessionEntry(s, snapshots, { rates, primaryCurrency: "USD" }),
+      );
     } catch (err) {
       console.warn(
         "[grindSessionHistory] getGrindSessions falhou:",

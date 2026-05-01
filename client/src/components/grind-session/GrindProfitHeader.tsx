@@ -19,6 +19,7 @@ import { formatUsdSigned, signOf } from "@/lib/bankrollReportsFormat";
 import {
   type GrindHistoryFilter,
   GRIND_HISTORY_FILTER_STORAGE_KEY,
+  GRIND_HISTORY_FILTER_EVENT,
   loadGrindHistoryFilter,
 } from "@/lib/grindHistoryFilter";
 
@@ -35,20 +36,26 @@ export function GrindProfitHeader() {
 
   useEffect(() => {
     setFilter(loadGrindHistoryFilter());
-    // Listen para storage changes para reagir a filter toggle no SessionHistoryUnified
+    // Listen para storage changes (cross-window) + custom event (mesma janela)
+    // emitido por persistGrindHistoryFilter — substitui setInterval polling
+    // (R2 fix M2).
     const onStorage = (e: StorageEvent) => {
       if (e.key === GRIND_HISTORY_FILTER_STORAGE_KEY) setFilter(loadGrindHistoryFilter());
     };
+    const onCustom = (e: Event) => {
+      const detail = (e as CustomEvent).detail as GrindHistoryFilter | undefined;
+      if (detail === "all" || detail === "sessions" || detail === "reports") {
+        setFilter(detail);
+      } else {
+        setFilter(loadGrindHistoryFilter());
+      }
+    };
     if (typeof window !== "undefined") {
       window.addEventListener("storage", onStorage);
-      // Tambem reage a click direto no chip (mesma janela): poll leve via interval.
-      const interval = window.setInterval(() => {
-        const cur = loadGrindHistoryFilter();
-        setFilter((prev) => (prev !== cur ? cur : prev));
-      }, 500);
+      window.addEventListener(GRIND_HISTORY_FILTER_EVENT, onCustom as EventListener);
       return () => {
         window.removeEventListener("storage", onStorage);
-        window.clearInterval(interval);
+        window.removeEventListener(GRIND_HISTORY_FILTER_EVENT, onCustom as EventListener);
       };
     }
     return () => {};

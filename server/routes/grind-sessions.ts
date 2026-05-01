@@ -17,6 +17,10 @@ import { ReconcileWalletsBodySchema } from "@shared/reconcile-schemas";
 import { runReconciliation } from "../services/sessionReconciliation";
 import { walletLimiter } from "./wallets";
 import { mapSiteToWallet, buildSuggestedBindings } from "@shared/wallet-reconciliation";
+import {
+  getGrindSessionHistory,
+  type HistoryFilter,
+} from "../services/grindSessionHistory";
 
 // Track users who already had their duplicate sessions cleaned up (resets on server restart)
 const cleanedUpUsers = new Set<string>();
@@ -520,15 +524,46 @@ export function registerGrindSessionRoutes(app: Express): void {
   });
 
   // Get grind session history with complete statistics
+  // Sprint Bankroll-Reports-Detail (R2 fix C1, RF-05): retorna union de
+  // sessoes + manual_reports clusterizados. Back-compat preservado:
+  //   - sessoes mantem todos os stats antigos (volume/profit/roi/etc)
+  //     + ganham campos novos opcionais: type='session', platformsAffected,
+  //     detailsAvailable.
+  //   - manual_reports vem do helper unificado (type='manual_report').
+  // Query params: filter ('all'|'sessions'|'reports'), limit (default 50).
   app.get('/api/grind-sessions/history', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
+
+      const rawFilter = String(req.query?.filter ?? "all").toLowerCase();
+      const filter: HistoryFilter =
+        rawFilter === "sessions" || rawFilter === "reports" ? rawFilter : "all";
+      const rawLimit = parseInt(String(req.query?.limit ?? "50"), 10);
+      const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 50;
+
+      // 1) Helper unificado fornece type/platformsAffected/detailsAvailable
+      //    + manual_report entries clusterizados (D5).
+      let historyEntries: any[] = [];
+      try {
+        historyEntries = await getGrindSessionHistory(userId, { filter, limit: 200 });
+      } catch (err: any) {
+        console.error("[history] getGrindSessionHistory failed:", err?.message);
+      }
+
+      const includeSessions = filter === "all" || filter === "sessions";
+      const includeReports = filter === "all" || filter === "reports";
+
       const sessions = await storage.getGrindSessions(userId);
       const completedSessions = sessions.filter(s => s.status === "completed");
+      // Map para lookup de campos novos (type, platformsAffected, detailsAvailable)
+      // por id de sessao.
+      const sessionMetaById = new Map<string, any>();
+      for (const e of historyEntries) {
+        if (e?.type === "session" && e?.id) sessionMetaById.set(e.id, e);
+      }
 
-
-      // Get statistics for each completed session
-      const sessionsWithStats = await Promise.all(
+      // Get statistics for each completed session (back-compat: shape antigo).
+      const sessionsWithStats = !includeSessions ? [] : await Promise.all(
         completedSessions.map(async (session) => {
 
           const sessionTournaments = await storage.getSessionTournaments(userId, session.id);
@@ -635,6 +670,11 @@ export function registerGrindSessionRoutes(app: Express): void {
             duration = `${hours}h ${minutes}m`;
           }
 
+          // Sprint Bankroll-Reports-Detail (R2 fix C1): merge campos novos
+          // do helper unificado (type/platformsAffected/detailsAvailable +
+          // profitUsd/occurredAt). Backward compat: campos antigos preservados.
+          const meta = sessionMetaById.get(session.id) ?? {};
+
           return {
             ...session,
             duration,
@@ -657,12 +697,35 @@ export function registerGrindSessionRoutes(app: Express): void {
             // Tournament speed percentages
             normalSpeedPercentage,
             turboSpeedPercentage,
-            hyperSpeedPercentage
+            hyperSpeedPercentage,
+            // Sprint Bankroll-Reports-Detail RF-05 (R2 C1)
+            type: "session" as const,
+            occurredAt: meta.occurredAt ?? (session.startTime ?? session.date ?? null),
+            completedAt: meta.completedAt ?? session.endTime ?? null,
+            profitUsd: typeof meta.profitUsd === "number" ? meta.profitUsd : profit,
+            platformsAffected: Array.isArray(meta.platformsAffected) ? meta.platformsAffected : [],
+            detailsAvailable: typeof meta.detailsAvailable === "boolean" ? meta.detailsAvailable : false,
           };
         })
       );
 
-      res.json(sessionsWithStats);
+      // Manual_report entries vem do helper unificado.
+      const manualReportEntries = !includeReports
+        ? []
+        : historyEntries.filter((e: any) => e?.type === "manual_report");
+
+      // Combina e ordena DESC por occurredAt (mais recente primeiro).
+      const combined: any[] = [...sessionsWithStats, ...manualReportEntries];
+      const tsOf = (v: any): number => {
+        if (!v) return 0;
+        if (v instanceof Date) return v.getTime();
+        const d = new Date(v);
+        return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+      };
+      combined.sort((a, b) => tsOf(b.occurredAt) - tsOf(a.occurredAt));
+      const sliced = combined.slice(0, limit);
+
+      res.json(sliced);
     } catch (error) {
       console.error("Failed to fetch session history:", error);
       res.status(500).json({ message: "Failed to fetch session history" });

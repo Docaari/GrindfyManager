@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, Clock, Target, Trophy, DollarSign, TrendingUp, Coffee, FileText, CheckCircle, XCircle, Edit3, Trash2, Save, X } from "lucide-react";
+import { Calendar, Clock, Target, Trophy, DollarSign, TrendingUp, Coffee, FileText, CheckCircle, XCircle, Edit3, Trash2, Save, X, Wallet } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+// Sprint Bankroll-Reports-Detail (R2 fix H3): wiring de SessionHistoryUnified
+// + GrindProfitHeader + BankrollDetailModal na pagina de historico.
+import {
+  SessionHistoryUnified,
+  type HistoryEntry as UnifiedHistoryEntry,
+} from "@/components/grind-session/SessionHistoryUnified";
+import { GrindProfitHeader } from "@/components/grind-session/GrindProfitHeader";
+import { BankrollDetailModal, type BankrollDetailEntry } from "@/components/bankroll/BankrollDetailModal";
 
 interface SessionHistoryData {
   id: string;
@@ -51,16 +59,56 @@ export default function SessionHistory() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<SessionHistoryData | null>(null);
 
+  // Sprint Bankroll-Reports-Detail (R2 fix H3): state do BankrollDetailModal.
+  const [bankrollDetailEntry, setBankrollDetailEntry] =
+    useState<BankrollDetailEntry | null>(null);
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: sessions = [], isLoading } = useQuery({
+  const { data: sessions = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/grind-sessions/history"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/grind-sessions/history");
       return Array.isArray(response) ? response : [];
     },
   });
+
+  // Mapeia o response unificado para shape do SessionHistoryUnified.
+  const unifiedEntries: UnifiedHistoryEntry[] = useMemo(() => {
+    return (sessions ?? []).map((e: any) => {
+      if (e?.type === "manual_report") {
+        return {
+          type: "manual_report" as const,
+          id: String(e.id ?? ""),
+          occurredAt: e.occurredAt ?? new Date(0).toISOString(),
+          profitUsd: Number(e.profitUsd ?? 0),
+          transactionIds: Array.isArray(e.transactionIds) ? e.transactionIds : [],
+          platformsAffected: Array.isArray(e.platformsAffected) ? e.platformsAffected : [],
+          detailsAvailable: Boolean(e.detailsAvailable),
+        };
+      }
+      // session (default — back-compat com legacy entries sem `type`).
+      return {
+        type: "session" as const,
+        id: String(e.id ?? ""),
+        occurredAt:
+          e.occurredAt ?? e.startTime ?? e.date ?? new Date(0).toISOString(),
+        completedAt:
+          e.completedAt ?? e.endTime ?? e.startTime ?? e.date ?? new Date(0).toISOString(),
+        profitUsd: typeof e.profitUsd === "number" ? e.profitUsd : Number(e.profit ?? 0),
+        tournamentsCount: Number(e.volume ?? 0),
+        platformsAffected: Array.isArray(e.platformsAffected) ? e.platformsAffected : [],
+        detailsAvailable: Boolean(e.detailsAvailable),
+      };
+    });
+  }, [sessions]);
+
+  // Lista legada (Cards detalhados) so renderiza entries de sessao com shape antigo.
+  const legacySessions: SessionHistoryData[] = useMemo(
+    () => (sessions ?? []).filter((s: any) => s?.type !== "manual_report"),
+    [sessions],
+  );
 
   const updateSessionMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<SessionHistoryData> }) => {
@@ -173,10 +221,40 @@ export default function SessionHistory() {
   return (
     <div className="p-6 text-white">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Histórico de Sessões</h1>
-        <p className="text-gray-400">Acompanhe o histórico completo das suas sessões de grind</p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Histórico de Sessões</h1>
+          <p className="text-gray-400">Acompanhe o histórico completo das suas sessões de grind</p>
+        </div>
+        {/* Sprint Bankroll-Reports-Detail (RF-13): profit total agregado */}
+        <GrindProfitHeader />
       </div>
+
+      {/* Sprint Bankroll-Reports-Detail (RF-11 + RF-14): historico unificado
+          + filtros (Tudo / Sessoes / Reports) + botao "Ver detalhes da banca". */}
+      <Card className="bg-poker-surface border-gray-700 mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-poker-accent" />
+            Linha do tempo da banca
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SessionHistoryUnified
+            entries={unifiedEntries}
+            onViewBankrollDetail={(entry) =>
+              setBankrollDetailEntry({
+                type: entry.type,
+                id: entry.id,
+                occurredAt: entry.occurredAt,
+                completedAt: entry.type === "session" ? entry.completedAt : undefined,
+                profitUsd: entry.profitUsd,
+                detailsAvailable: entry.detailsAvailable,
+              })
+            }
+          />
+        </CardContent>
+      </Card>
 
       {/* Filter Controls */}
       <Card className="bg-poker-surface border-gray-700 mb-6">
@@ -207,9 +285,9 @@ export default function SessionHistory() {
         </CardContent>
       </Card>
 
-      {/* Sessions List */}
+      {/* Sessions List (cards detalhados — apenas entries de sessao) */}
       <div className="space-y-4">
-        {sessions.length === 0 ? (
+        {legacySessions.length === 0 ? (
           <Card className="bg-poker-surface border-gray-700">
             <CardContent className="p-8 text-center">
               <Trophy className="w-12 h-12 text-gray-500 mx-auto mb-4" />
@@ -220,7 +298,7 @@ export default function SessionHistory() {
             </CardContent>
           </Card>
         ) : (
-          sessions.map((session: SessionHistoryData) => {
+          legacySessions.map((session: SessionHistoryData) => {
             return (
               <Card key={session.id} className="bg-poker-surface border-gray-700 hover:border-poker-accent/50 transition-colors">
                 <CardHeader className="bg-[#1f1f1f] border-b border-gray-600">
@@ -754,6 +832,15 @@ export default function SessionHistory() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Sprint Bankroll-Reports-Detail (RF-12): BankrollDetailModal. */}
+      {bankrollDetailEntry && (
+        <BankrollDetailModal
+          open={bankrollDetailEntry !== null}
+          onClose={() => setBankrollDetailEntry(null)}
+          entry={bankrollDetailEntry}
+        />
+      )}
     </div>
   );
 }

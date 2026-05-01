@@ -10,6 +10,11 @@ export type GrindHistoryFilter = "all" | "sessions" | "reports";
 
 export const GRIND_HISTORY_FILTER_STORAGE_KEY = "grind-history-filter";
 
+// Sprint Bankroll-Reports-Detail (R2 fix M2): evento custom para mesma janela.
+// `storage` event so dispara cross-window. GrindProfitHeader escuta este evento
+// para reagir ao toggle do SessionHistoryUnified sem polling com setInterval.
+export const GRIND_HISTORY_FILTER_EVENT = "grind-history-filter-changed";
+
 export function loadGrindHistoryFilter(): GrindHistoryFilter {
   try {
     const v = typeof window !== "undefined"
@@ -26,6 +31,9 @@ export function persistGrindHistoryFilter(f: GrindHistoryFilter): void {
   try {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(GRIND_HISTORY_FILTER_STORAGE_KEY, f);
+      window.dispatchEvent(
+        new CustomEvent(GRIND_HISTORY_FILTER_EVENT, { detail: f }),
+      );
     }
   } catch {
     // ignore
