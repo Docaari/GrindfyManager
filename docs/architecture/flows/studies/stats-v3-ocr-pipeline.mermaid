@@ -1,0 +1,137 @@
+%% Sprint Stats-V3 — OCR Pipeline Sequence (upload -> vision -> cache -> preview)
+%% Spec  : docs/specs/sprint-stats-v3.md (RF-08, RF-09, RF-10, RF-11)
+%% ADRs  : 057 (SpotImageStorage), 064 (grouped layout), 065 (Claude vision + cache)
+%% Trigger: usuario clica "Importar via OCR" em /studies > Stats Analyzer
+%% Goal   : extrair stats de print Hand2Note via Haiku 4.5 vision com cache SHA256
+
+sequenceDiagram
+    actor User
+    participant UI as HudOcrUpload<br/>(client/src/components/studies/stats)
+    participant Endpoint as POST /ocr-extract<br/>(server/routes/stats-analyzer.ts)
+    participant RateLimit as ocrLimiter<br/>(express-rate-limit)
+    participant Magic as MagicBytesValidator<br/>(file-type lib)
+    participant Hash as SHA256Hasher<br/>(crypto)
+    participant Cache as OCRCache<br/>(hud_stat_snapshots.ocr_raw_response)
+    participant Storage as SpotImageStorage<br/>(ADR-057)
+    participant Service as hudOcrService.ts
+    participant SDK as Anthropic SDK<br/>(claude-haiku-4-5-20251001)
+    participant Fuzzy as FuzzyMatcher<br/>(Levenshtein + substring)
+    participant Audit as hud_ocr_audit<br/>(telemetry)
+    participant Preview as HudOcrPreview<br/>(component)
+
+    User->>UI: Seleciona PNG/JPEG/WEBP do popup H2N
+
+    UI->>UI: Pre-check size cliente<br/>10MB cap
+
+    UI->>Endpoint: POST multipart imagem<br/>Authorization Bearer JWT
+
+    Endpoint->>Endpoint: requireAuth + tier pro+
+    alt tier nao eh pro+
+        Endpoint-->>UI: 402 Upgrade requerido<br/>CTA upgrade
+    end
+
+    Endpoint->>RateLimit: Check 10 reqs hora user
+    alt limite atingido
+        RateLimit-->>UI: 429 Limite OCR<br/>Retry-After segundos
+        UI-->>User: Toast Tente em X minutos
+    end
+
+    Endpoint->>Magic: Validar magic bytes do buffer
+    alt magic bytes invalido
+        Magic-->>Endpoint: rejected mime mismatch
+        Endpoint-->>UI: 422 Imagem invalida ou corrompida
+    end
+
+    Endpoint->>Endpoint: Verificar ANTHROPIC_API_KEY env
+    alt env ausente
+        Endpoint-->>UI: 503 OCR indisponivel<br/>Configure Coach AI primeiro
+    end
+
+    Endpoint->>Hash: SHA256 do buffer
+    Hash-->>Endpoint: hash hex 64 chars
+
+    Endpoint->>Cache: SELECT WHERE user_id and image_sha256 match
+    alt cache HIT
+        Cache-->>Endpoint: ocr_raw_response existente
+        Endpoint->>Audit: INSERT cache_hit true
+        Endpoint-->>UI: 200 stats matched + unmatched<br/>cached true
+        UI->>Preview: Renderizar preview<br/>com confidence colors
+    end
+
+    Note over Cache: cache MISS<br/>seguir pipeline completo
+
+    Endpoint->>Storage: put userId hud-snapshots ext buffer mime
+    Storage->>Storage: nanoid 21 + magic bytes ja validado
+    Storage-->>Endpoint: imageKey hud-snapshots userId nanoid ext
+
+    Endpoint->>Service: extractStatsFromImage buffer mime layoutFields
+
+    Service->>SDK: messages.create<br/>model haiku-4-5<br/>system OCR_PROMPT cache_control ephemeral<br/>image base64
+
+    alt SDK 5xx Overloaded ou ServerError
+        SDK-->>Service: error
+        Service->>Service: Retry 1x backoff 500ms
+        SDK-->>Service: error persistente
+        Service-->>Endpoint: throw OcrFailedError
+        Endpoint->>Audit: INSERT cache_hit false status error
+        Endpoint-->>UI: 502 OCR indisponivel<br/>console.error hud-ocr-failed
+        Note over Cache: NAO salva poison cache
+    end
+
+    SDK-->>Service: response.content text
+
+    Service->>Service: Parse JSON robust<br/>try parse OR regex fallback
+    alt JSON malformado persistente
+        Service->>Service: fallback unmatched array<br/>raw text preservado
+    end
+
+    Service->>Fuzzy: Match labels OCR vs catalog + customs do layout
+    Note over Fuzzy: Levenshtein dist <= 3<br/>OR substring length >= 80%<br/>matchedBy exact fuzzy_lev fuzzy_substring unmatched
+
+    Fuzzy-->>Service: matched array + unmatched array
+
+    Service->>Cache: INSERT hud_stat_snapshots<br/>capture_method ocr<br/>source_image_key<br/>ocr_raw_response jsonb com image_sha256<br/>values vazio temp
+
+    Service-->>Endpoint: imageKey ocrJobId stats unmatched
+
+    Endpoint->>Audit: INSERT cache_hit false status success<br/>image_size
+
+    Endpoint-->>UI: 200 imageKey ocrJobId stats unmatched<br/>cached false
+
+    UI->>Preview: Render rows com confidence badges
+    Note over Preview: verde >= 0.9<br/>amarelo 0.7-0.89<br/>vermelho < 0.7
+
+    Preview->>User: Tabela editavel<br/>fuzzy suggestions<br/>checkbox aceitar rejeitar
+
+    alt User edita unmatched
+        User->>Preview: Dropdown manual stat OR ignore
+    end
+
+    alt Bulk action
+        User->>Preview: Aceitar todos >= 0.9<br/>Rejeitar todos < 0.7
+    end
+
+    User->>Preview: Click Salvar como snapshot
+
+    Preview->>Endpoint: POST /snapshots/from-ocr<br/>layoutId imageKey values ocrConfidence ocrRawResponse capturedAt
+
+    Endpoint->>Endpoint: Zod validate values<br/>matching catalog + customs
+
+    alt statId desconhecido
+        Endpoint-->>Preview: 400 stat nao mapeado
+    end
+
+    Endpoint->>Cache: UPDATE hud_stat_snapshots<br/>SET values capture_method ocr<br/>WHERE id ocrJobId
+
+    Endpoint-->>Preview: 201 snapshot criado
+    Preview-->>UI: Toast Snapshot OCR salvo
+    UI-->>User: Redirect comparator<br/>snapshot pre-selecionado
+
+    %% Edge cases
+    %% - JSON malformado <2% Haiku: regex fallback OR unmatched array com raw text
+    %% - Imagem corrompida pos magic bytes Sharp passa Anthropic falha: 422 retry user
+    %% - Cache hit retorna OCR antigo apos edit manual: by design
+    %%   edits ficam em values; cache eh ocr_raw_response immutable
+    %% - localStorage cheio: nao afeta endpoint server-side
+    %% - Retry SDK 1x backoff 500ms; falha persistente 502 + log
+    %% - Custos audit-trackable: hud_ocr_audit tabela

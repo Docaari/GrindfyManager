@@ -1,0 +1,85 @@
+%% Sprint Stats-V3 — OCR Cache + Audit ER Diagram
+%% Spec  : docs/specs/sprint-stats-v3.md (RF-08, RF-09, RF-12, schema delta migration 0020)
+%% ADRs  : 057 (SpotImageStorage abstraction), 065 (Claude vision + cache SHA256)
+%% Goal  : modelar relacao logica entre snapshots, imagens persistidas, audit rate-limit
+
+erDiagram
+    USERS ||--o{ HUD_STAT_SNAPSHOTS : "owns"
+    USERS ||--o{ HUD_LAYOUTS : "owns"
+    USERS ||--o{ HUD_OCR_AUDIT : "rate-limit-tracked"
+    HUD_LAYOUTS ||--o{ HUD_STAT_SNAPSHOTS : "configures"
+    HUD_STAT_SNAPSHOTS }o--o| SPOT_IMAGE_STORAGE_OBJECT : "source_image_key (logical FK)"
+
+    USERS {
+        varchar id PK "USER-XXXX"
+        varchar email UK
+        varchar tier "free pro premium"
+        timestamp created_at
+    }
+
+    HUD_LAYOUTS {
+        varchar id PK
+        varchar user_id FK
+        varchar name
+        jsonb fields_json "fields with targets + customs"
+        boolean is_active
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    HUD_STAT_SNAPSHOTS {
+        varchar id PK
+        varchar user_id FK "indexed"
+        varchar layout_id FK "indexed"
+        timestamp captured_at "indexed desc"
+        integer sample_size "nullable"
+        jsonb values "Record statId -> number or null"
+        varchar capture_method "manual paste csv ocr"
+        varchar source_image_key "nullable; opaque ADR-057"
+        jsonb ocr_confidence "nullable; Record statId -> 0-1"
+        jsonb ocr_raw_response "nullable; image_sha256 + raw_stats + matched + model"
+        timestamp created_at
+    }
+
+    HUD_OCR_AUDIT {
+        varchar id PK
+        varchar user_id FK "indexed for rate-limit lookup"
+        timestamp created_at "indexed for rolling 60min window"
+        varchar status "success error 502"
+        boolean cache_hit
+        integer image_size "bytes"
+        varchar image_sha256 "nullable"
+        varchar error_code "nullable; OCR_DISABLED PARSE_FAILED SDK_5XX"
+    }
+
+    SPOT_IMAGE_STORAGE_OBJECT {
+        varchar key PK "userId + sessionId + nanoid21 + ext"
+        varchar user_id "logical FK"
+        varchar mime "image png jpeg webp"
+        integer size_bytes
+        varchar sha256 "logical hash for cache"
+        timestamp uploaded_at
+    }
+
+%% Indices criticos migration 0020:
+%%   idx_hud_snapshots_capture_method (user_id, capture_method)
+%%   idx_hud_snapshots_source_image_key (user_id, source_image_key) WHERE source_image_key IS NOT NULL
+%%   idx_hud_snapshots_image_sha256 ((ocr_raw_response->>'image_sha256')) WHERE ocr_raw_response IS NOT NULL
+%%   idx_hud_ocr_audit_user_window (user_id, created_at DESC) — rate-limit lookup
+
+%% Notas semanticas:
+%%   - source_image_key NAO eh FK formal (ADR-057 keys opacas, storage abstraction).
+%%     SpotImageStorage gerencia ciclo de vida fora do DB (filesystem local DEV; S3/R2 PROD futuro).
+%%   - HUD_OCR_AUDIT eh tabela de telemetria pura. Reset em restart do server eh aceitavel
+%%     (lesson bankroll: low-traffic OK). Migrar Redis em DEBT-V4 quando volume > 10 OCR/s.
+%%   - ocr_raw_response.image_sha256 eh chave de cache. Mesmo SHA256 + mesmo user_id retorna
+%%     resposta cacheada sem chamar Anthropic SDK.
+%%   - capture_method enum CHECK constraint: manual paste csv ocr.
+%%     Snapshots V2 existentes recebem manual via backfill (UPDATE) na migration 0020.
+%%   - SPOT_IMAGE_STORAGE_OBJECT eh entidade LOGICA nao-DB (filesystem ou S3 bucket).
+%%     Renderizada para clareza do contrato cross-layer ADR-057.
+
+%% Cleanup cascade:
+%%   DELETE FROM hud_stat_snapshots WHERE id = X
+%%     -> trigger app-layer chama spotImageStorage.delete(source_image_key)
+%%     -> garante 0 imagens orfas (idempotente, FS ENOENT ignored)
