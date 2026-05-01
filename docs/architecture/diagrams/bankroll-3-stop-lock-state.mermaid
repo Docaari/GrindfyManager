@@ -1,0 +1,52 @@
+%% Sprint Bankroll-3 — RF-6 Stop-loss / Stop-win state machine (ADR-060)
+%% Estados do stop_lock_until em user_settings.
+%% USD consolidado (D3). Reset 00:00 user TZ. Stop-win nao bloqueia (banner only).
+
+stateDiagram-v2
+    [*] --> Idle: PUT /user-settings/stops<br/>stopLossUsd=300, stopWinUsd=800<br/>stop_lock_until=NULL
+
+    Idle --> Tracking: POST /api/grind-sessions ok<br/>(assertNotStopLocked passa)
+
+    Tracking --> NearLimit: PUT /grind-sessions/:id status=completed<br/>evaluateStops calcula deltaUsd diario<br/>|delta| > 0.7 * stopLossUsd<br/>(banner amarelo)
+
+    NearLimit --> Tracking: nova sessao start<br/>delta dentro do limite
+
+    Tracking --> Locked: evaluateStops detecta<br/>deltaUsd <= -stopLossUsd<br/>UPDATE stop_lock_until = NOW + 12h<br/>telemetry stop_loss_triggered
+
+    NearLimit --> Locked: evaluateStops detecta<br/>deltaUsd <= -stopLossUsd
+
+    Tracking --> WinReached: evaluateStops detecta<br/>deltaUsd >= stopWinUsd<br/>telemetry stop_win_reached<br/>SEM lock (D3)
+
+    NearLimit --> WinReached: evaluateStops detecta<br/>deltaUsd >= stopWinUsd
+
+    WinReached --> Tracking: jogador continua<br/>(banner amber sugere encerrar)<br/>nova sessao OK
+
+    WinReached --> Idle: 00:00 user TZ<br/>delta resetado naturalmente
+
+    Locked --> SessionBlocked: POST /api/grind-sessions<br/>assertNotStopLocked throw<br/>423 Locked<br/>telemetry stop_locked_session_blocked
+
+    SessionBlocked --> Locked: cliente exibe banner<br/>countdown ate stop_lock_until
+
+    Locked --> Idle: stop_lock_until <= NOW<br/>(passagem natural do tempo)<br/>OU 00:00 user TZ<br/>(novo dia, delta reseta)
+
+    Locked --> Idle: POST /user-settings/stops/release<br/>(admin/debug, flag opcional)<br/>UPDATE stop_lock_until=NULL<br/>telemetry stop_lock_released_manual
+
+    note right of Idle
+        bankrollManagementEnabled=false
+        → todos os states no-op
+        → assertNotStopLocked retorna ok direto
+        → evaluateStops retorna stopReached=null
+    end note
+
+    note right of Locked
+        Lock dura stop_lock_duration_hours
+        (default 12, range 1-72).
+        Mudanca de duration mid-day
+        NAO retroage no lock atual.
+    end note
+
+    note left of Tracking
+        deltaUsd consolidado em USD
+        via fxResolver (ADR-061).
+        Apenas sessions completed contam.
+    end note

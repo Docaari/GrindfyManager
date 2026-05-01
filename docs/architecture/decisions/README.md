@@ -38,6 +38,10 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [031](031-tournament-types-orthogonal-model.md) | Modelo ortogonal de tipos de torneio (type primario + modificadores booleanos isFlight/isLive) | Aceito | 2026-04-25 |
 | [032](032-deprecation-category-column.md) | Deprecation gradual da coluna `tournaments.category` em 5 sprints | Aceito | 2026-04-25 |
 | [040](040-session-end-wallet-reconciliation.md) | Reconciliacao de banca ao fim da sessao via passo intermediario (endpoint batch fail-fast, idempotente, reuso de ADR-017/034/038, sem schema delta) | Proposto | 2026-04-26 |
+| [058](058-auto-snapshot-cooldown.md) | Auto-snapshot pos-cooldown dentro da TX, falha logada nao bloqueia finish (Bankroll-3 RF-2) | Proposto | 2026-05-01 |
+| [059](059-cross-wallet-transfer.md) | Cross-wallet transfer via tabela `wallet_transfers` + 2 rows espelho em `wallet_transactions` agrupados via transfer_group_id (Bankroll-3 RF-4) | Proposto | 2026-05-01 |
+| [060](060-stop-loss-lock.md) | Stop-loss/stop-win em USD consolidado, lock via `stop_lock_until` em `user_settings` (Bankroll-3 RF-6) | Proposto | 2026-05-01 |
+| [061](061-fx-resolver-unified.md) | `fxResolver` unificado com cascata users > wallets > constants + cache 5min (Bankroll-3 RF-11; RF-12 skip documentado) | Proposto | 2026-05-01 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 

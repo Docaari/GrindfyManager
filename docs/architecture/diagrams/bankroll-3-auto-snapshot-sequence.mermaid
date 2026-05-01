@@ -1,0 +1,66 @@
+%% Sprint Bankroll-3 — RF-2 Auto-snapshot pos-cooldown (ADR-058)
+%% Sequence: cooldown finish handler dispara walletService.getConsolidatedBalanceUSD,
+%% bankrollService.createAutoSnapshot grava bankroll_snapshots com origin='auto-cooldown'.
+%% Falha logada nao bloqueia finish (D2). Idempotencia via unique index parcial.
+
+sequenceDiagram
+    actor Player as Jogador
+    participant Web as Web Client
+    participant CR as routes/cooldown.ts
+    participant SS as setSessionPlanClosed (existente)
+    participant US as updateGrindSession (existente)
+    participant BS as bankrollService.createAutoSnapshot
+    participant WS as walletService.getConsolidatedBalanceUSD
+    participant FX as fxResolver (ADR-061)
+    participant DB as Postgres
+
+    Player->>Web: Click "Finalizar cool-down"
+    Web->>CR: POST /api/cooldown-logs/:id/finish<br/>{ABCD answers, lessons, mode}
+    CR->>CR: Zod parse body
+    CR->>SS: setSessionPlanClosed(sessionId)
+    SS->>DB: UPDATE session_plans SET closed_at=NOW()
+    DB-->>SS: ok
+    CR->>US: updateGrindSession(sessionId, {status: completed})
+    US->>DB: UPDATE grind_sessions SET status='completed'
+    DB-->>US: ok
+    CR->>DB: SELECT bankroll_management_enabled FROM user_settings WHERE user_id=?
+    DB-->>CR: enabled flag
+
+    alt bankrollManagementEnabled = false
+        CR->>CR: skip auto-snapshot (telemetry: auto_snapshot_skipped_setting_off)
+        CR-->>Web: 200 OK { snapshot: null }
+    else bankrollManagementEnabled = true
+        CR->>BS: createAutoSnapshot({userId, cooldownLogId, occurredAt})
+
+        BS->>WS: getConsolidatedBalanceUSD(userId)
+        WS->>DB: SELECT id, balance, native_currency FROM wallets<br/>WHERE user_id=? AND status='active' AND is_shot_pocket=false
+        DB-->>WS: wallet rows
+        WS->>FX: resolveExchangeRates(userId)
+        FX->>DB: SELECT exchange_rates FROM users WHERE user_platform_id=?
+        FX->>DB: SELECT exchange_rates FROM wallets WHERE user_id=?
+        DB-->>FX: rates payload
+        FX-->>WS: { rates, source, resolvedAt }
+        WS->>WS: SUM(convertToUSD(balance, currency, rates)) per wallet
+        WS-->>BS: consolidatedUSD = e.g. 5660.42
+
+        BS->>DB: SELECT new_amount FROM bankroll_snapshots<br/>WHERE user_id=? ORDER BY occurred_at DESC LIMIT 1
+        DB-->>BS: previousAmount = 5680 OR 0 if first
+
+        BS->>BS: delta = consolidatedUSD - previousAmount = -19.58
+
+        BS->>DB: INSERT INTO bankroll_snapshots<br/>(origin='auto-cooldown', source='auto_session',<br/>source_ref_id=cooldownLogId, amount, delta, ...)
+
+        alt INSERT viola uq_bankroll_snapshots_cooldown
+            DB-->>BS: unique violation
+            BS->>BS: catch + log auto_snapshot_duplicate_skipped
+            BS-->>CR: null (sem snapshot)
+        else INSERT ok
+            DB-->>BS: snapshot row
+            BS->>BS: telemetry auto_snapshot_created
+            BS-->>CR: snapshot
+        end
+
+        CR-->>Web: 200 OK { snapshot, ...payloadExistente }
+    end
+
+    Note over CR,DB: Erro inesperado em qualquer ponto do auto-snapshot:<br/>try/catch no handler captura, telemetry auto_snapshot_failed,<br/>response continua 200 OK com snapshot=null. Cool-down finish nunca quebra.

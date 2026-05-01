@@ -1,0 +1,37 @@
+%% Sprint Bankroll-3 — RF-7 Dashboard ROI por plataforma
+%% Flow: GET /api/dashboard/roi-by-platform → query JOIN grind_sessions × session_tournaments × tournaments,
+%% group by tournaments.site, conversao FX em JS via fxResolver, ordena por investedUSD DESC, top N.
+%% Default 30d, top 10 (D5). Apenas sessions completed e tournaments com total_invested > 0.
+
+flowchart TD
+    Start([Cliente: Dashboard.tsx]) --> Q1[useQuery<br/>queryKey: '/api/dashboard/roi-by-platform', userId, period<br/>RF-12 lesson learned: userId no key]
+    Q1 -->|GET ?period=30d&limit=10| EP[GET /api/dashboard/roi-by-platform]
+
+    EP --> Z[Zod parse query<br/>period in 7d/30d/90d/180d/all<br/>limit 1-50, default 10]
+
+    Z --> SQL[SQL query Drizzle:<br/>SELECT t.site, COUNT DISTINCT gs.id, COUNT t.id,<br/>SUM t.total_invested, SUM t.payouts - t.total_invested<br/>FROM grind_sessions gs<br/>JOIN session_tournaments st ON st.session_id = gs.id<br/>JOIN tournaments t ON t.id = st.tournament_id<br/>WHERE gs.user_id=? AND gs.status='completed'<br/>AND t.total_invested > 0<br/>AND gs.completed_at >= NOW - INTERVAL period<br/>GROUP BY t.site]
+
+    SQL --> Rows[Rows native:<br/>site, sessionsCount, tournamentsCount,<br/>investedNative, profitNative]
+
+    Rows --> FX[fxResolver.resolveExchangeRates userId<br/>cascata users → wallets → constants D9<br/>cache 5min]
+    FX --> Map[map row → currency = getCurrencyForSite site<br/>investedUSD = investedNative / rates currency<br/>profitUSD = profitNative / rates currency<br/>roiPct = profitUSD / investedUSD * 100]
+
+    Map --> Sort[sort by investedUSD DESC<br/>slice 0, limit]
+
+    Sort --> Resp[Response 200:<br/>period, generatedAt,<br/>platforms: site, sessionsCount, investedUSD, profitUSD, roiPct]
+
+    Resp --> Card[Dashboard card<br/>Tabela responsiva mobile=stacked<br/>cores: profit > 0 verde, < 0 vermelho]
+
+    Card --> Cache[TanStack Query cache 5min staleTime]
+
+    SQL -.->|0 rows| Empty[Empty state:<br/>Nenhuma sessao no periodo.<br/>Importe historico ou inicie sessao.]
+    Empty --> Resp
+
+    FX -.->|DB falha| Fallback[Fallback FALLBACK_FX_RATES<br/>BRL=5.0 EUR=0.93 CNY=7.2 USDT=1.0]
+    Fallback --> Map
+
+    Map -.->|investedUSD == 0| RoiZero[roiPct = 0 não NaN]
+    RoiZero --> Sort
+
+    Note1[Settings: bankrollManagementEnabled=false<br/>NÃO esconde card RF-7 — ROI é métrica analítica<br/>independente de bankroll mgmt UI]
+    Card -.- Note1
