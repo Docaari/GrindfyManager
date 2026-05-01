@@ -131,6 +131,20 @@ function startOfMonth(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 }
 
+function invalidateBankrollCaches(userId: string): void {
+  const caches = [
+    ["selectorCache", selectorCache],
+    ["bankrollCache", bankrollCache],
+  ] as const;
+  for (const [name, cache] of caches) {
+    try {
+      cache.invalidateAllForUser(userId);
+    } catch (err) {
+      console.error(`bankrollService: ${name}.invalidateAllForUser failed for user`, userId, err);
+    }
+  }
+}
+
 function validateRuleOrThrow(rule: string): number {
   const parsed = parseRule(rule);
   if (!parsed.valid) {
@@ -316,16 +330,7 @@ async function updateBankroll(
   });
 
   if (cacheShouldInvalidate) {
-    try {
-      selectorCache.invalidateAllForUser(userId);
-    } catch (err) {
-      console.error("bankrollService: selectorCache.invalidateAllForUser failed for user", userId, err);
-    }
-    try {
-      bankrollCache.invalidateAllForUser(userId);
-    } catch (err) {
-      console.error("bankrollService: bankrollCache.invalidateAllForUser failed for user", userId, err);
-    }
+    invalidateBankrollCaches(userId);
   }
 
   return getBankrollState(userId);
@@ -384,16 +389,7 @@ async function recordSnapshot(
     return { snapshot: snap, newAmount: next, previousAmount: prev };
   });
 
-  try {
-    selectorCache.invalidateAllForUser(userId);
-  } catch (err) {
-    console.error("bankrollService: selectorCache.invalidateAllForUser failed for user", userId, err);
-  }
-  try {
-    bankrollCache.invalidateAllForUser(userId);
-  } catch (err) {
-    console.error("bankrollService: bankrollCache.invalidateAllForUser failed for user", userId, err);
-  }
+  invalidateBankrollCaches(userId);
 
   const state = await getBankrollState(userId);
   const warning = newAmount < 0 ? "bankroll_negative" : undefined;

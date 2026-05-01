@@ -27,15 +27,16 @@ interface StopLockedError extends Error {
 }
 
 function makeStopLockedError(lockedUntil: Date): StopLockedError {
+  const lockedUntilIso = lockedUntil.toISOString();
   const remainingMs = Math.max(0, lockedUntil.getTime() - Date.now());
-  const err = new Error(`STOP_LOCKED until ${lockedUntil.toISOString()}`) as StopLockedError;
-  (err as any).code = "STOP_LOCKED";
-  (err as any).httpStatus = 423;
-  (err as any).lockedUntil = lockedUntil.toISOString();
-  (err as any).remainingMs = remainingMs;
-  (err as any).body = {
+  const err = new Error(`STOP_LOCKED until ${lockedUntilIso}`) as StopLockedError;
+  err.code = "STOP_LOCKED";
+  err.httpStatus = 423;
+  err.lockedUntil = lockedUntilIso;
+  err.remainingMs = remainingMs;
+  err.body = {
     code: "STOP_LOCKED",
-    lockedUntil: lockedUntil.toISOString(),
+    lockedUntil: lockedUntilIso,
     remainingMs,
     reason: "stop_loss",
   };
@@ -60,22 +61,15 @@ function getStartOfUserDay(timezone?: string | null): Date {
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
         hour12: false,
       });
-      const parts = fmt.formatToParts(new Date());
-      const obj: any = {};
-      for (const p of parts) obj[p.type] = p.value;
-      // Construct date in UTC matching local Y/M/D 00:00
-      const iso = `${obj.year}-${obj.month}-${obj.day}T00:00:00`;
-      const d = new Date(iso);
-      if (!Number.isNaN(d.getTime())) {
-        return d;
-      }
+      const parts: Record<string, string> = {};
+      for (const p of fmt.formatToParts(new Date())) parts[p.type] = p.value;
+      // Construct date in UTC matching local Y/M/D 00:00.
+      const d = new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00`);
+      if (!Number.isNaN(d.getTime())) return d;
     } catch {
-      // fallback
+      // fallback to UTC midnight below
     }
   }
   const d = new Date();
@@ -141,68 +135,59 @@ async function evaluateStops(
   return { stopReached: null };
 }
 
+async function safeCall<T>(fn: () => Promise<T> | T, fallback: T): Promise<T> {
+  try {
+    const result = await fn();
+    return result ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 async function getCurrentDayDeltaUsd(userId: string): Promise<number> {
   if (!userId) return 0;
 
-  let user: any = null;
-  try {
-    user = await (storage as any).getUserById?.(userId);
-  } catch {
-    user = null;
-  }
-  const tz = user?.timezone ?? "UTC";
-  const startOfDay = getStartOfUserDay(tz);
+  const storageAny = storage as any;
+  const user = await safeCall<any>(() => storageAny.getUserById?.(userId), null);
+  const startOfDay = getStartOfUserDay(user?.timezone ?? "UTC");
 
-  let sessions: any[] = [];
-  try {
-    sessions = (await (storage as any).listGrindSessionsByUser?.(userId)) ?? [];
-  } catch {
-    sessions = [];
-  }
+  const sessions: any[] = await safeCall(
+    () => storageAny.listGrindSessionsByUser?.(userId),
+    [] as any[],
+  );
 
-  // Filter sessoes completed do dia
   const completedSessionIds = sessions
-    .filter((s: any) => s.status === "completed")
-    .filter((s: any) => {
+    .filter((s) => s.status === "completed")
+    .filter((s) => {
       const ts = s.completedAt ? new Date(s.completedAt) : null;
-      if (!ts || Number.isNaN(ts.getTime())) return false;
-      return ts.getTime() >= startOfDay.getTime();
+      return !!ts && !Number.isNaN(ts.getTime()) && ts.getTime() >= startOfDay.getTime();
     })
-    .map((s: any) => s.id);
+    .map((s) => s.id);
 
   if (completedSessionIds.length === 0) return 0;
 
-  let tournaments: any[] = [];
-  try {
-    tournaments =
-      (await (storage as any).listSessionTournamentsBySessions?.(
-        userId,
-        completedSessionIds,
-      )) ?? [];
-  } catch {
-    tournaments = [];
-  }
+  const tournaments: any[] = await safeCall(
+    () => storageAny.listSessionTournamentsBySessions?.(userId, completedSessionIds),
+    [] as any[],
+  );
 
-  // Convert to USD via fxResolver + getCurrencyForSite
-  let fx: any;
-  try {
-    fx = await fxResolver.resolveExchangeRates(userId);
-  } catch {
-    fx = { rates: { USD: 1 } };
-  }
-  const rates = fx.rates ?? {};
+  const fx = await safeCall(
+    () => fxResolver.resolveExchangeRates(userId),
+    { rates: { USD: 1 } } as any,
+  );
+  const rates: Record<string, number> = fx?.rates ?? {};
 
   let deltaUsd = 0;
   for (const t of tournaments) {
-    const invested = parseDecimal((t as any).totalInvested ?? (t as any).buyIn ?? 0);
-    const payouts = parseDecimal((t as any).payouts ?? 0)
-      + parseDecimal((t as any).prize ?? 0)
-      + parseDecimal((t as any).bounty ?? 0);
+    const invested = parseDecimal(t.totalInvested ?? t.buyIn ?? 0);
+    const payouts =
+      parseDecimal(t.payouts ?? 0)
+      + parseDecimal(t.prize ?? 0)
+      + parseDecimal(t.bounty ?? 0);
     const native = payouts - invested;
-    const ccy = getCurrencyForSite((t as any).site ?? "USD").code;
+    const ccy = getCurrencyForSite(t.site ?? "USD").code;
     const rate = rates[ccy] ?? 1;
-    const usd = rate > 0 ? native / rate : native;
-    deltaUsd += usd;
+    deltaUsd += rate > 0 ? native / rate : native;
   }
 
   return deltaUsd;

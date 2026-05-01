@@ -66,8 +66,9 @@ export const BankrollReconcileSection: React.FC<BankrollReconcileSectionProps> =
   if (!bankrollManagementEnabled) return null;
   if (wallets.length === 0 && missingPlatforms.length === 0) return null;
 
-  const bindingByPlatform = new Map<string, SuggestedBindingShape>();
-  for (const sb of suggestedBindings ?? []) bindingByPlatform.set(sb.platform, sb);
+  const bindingByPlatform = new Map(
+    (suggestedBindings ?? []).map((sb) => [sb.platform, sb] as const),
+  );
 
   return (
     <section

@@ -50,6 +50,14 @@ function periodToSinceDate(period: RoiPeriod): Date | null {
   return d;
 }
 
+interface RoiRawRow {
+  site: string;
+  sessionsCount: number;
+  tournamentsCount: number;
+  investedNative: string;
+  profitNative: string;
+}
+
 async function getRoiByPlatform(
   userId: string,
   opts: RoiByPlatformOptions = {},
@@ -58,51 +66,46 @@ async function getRoiByPlatform(
   const limit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
   const sinceDate = periodToSinceDate(period);
 
-  let rows: Array<{
-    site: string;
-    sessionsCount: number;
-    tournamentsCount: number;
-    investedNative: string;
-    profitNative: string;
-  }> = [];
-
-  try {
-    const storageAny = storage as any;
-    if (typeof storageAny.getRoiByPlatform === "function") {
-      rows = await storageAny.getRoiByPlatform(userId, { sinceDate, limit });
+  const storageAny = storage as any;
+  let rows: RoiRawRow[] = [];
+  if (typeof storageAny.getRoiByPlatform === "function") {
+    try {
+      rows = (await storageAny.getRoiByPlatform(userId, { sinceDate, limit })) ?? [];
+    } catch (err) {
+      console.error(
+        "[dashboardService.getRoiByPlatform] storage call failed:",
+        (err as any)?.message,
+      );
     }
-  } catch (err) {
-    console.error("[dashboardService.getRoiByPlatform] storage call failed:", (err as any)?.message);
   }
 
-  const fx = await fxResolver.resolveExchangeRates(userId);
-  const rates = fx.rates;
+  const { rates } = await fxResolver.resolveExchangeRates(userId);
 
-  const platforms: RoiByPlatformEntry[] = rows.map((r) => {
-    const currency = getCurrencyForSite(r.site).code;
-    const rate = rates[currency] ?? 1;
-    const investedNative = parseFloat(r.investedNative ?? "0");
-    const profitNative = parseFloat(r.profitNative ?? "0");
-    const investedUSD = rate > 0 ? investedNative / rate : investedNative;
-    const profitUSD = rate > 0 ? profitNative / rate : profitNative;
-    const roiPct = investedUSD > 0 ? (profitUSD / investedUSD) * 100 : 0;
-    return {
-      site: r.site,
-      sessionsCount: Number(r.sessionsCount) || 0,
-      tournamentsCount: Number(r.tournamentsCount) || 0,
-      investedUSD,
-      profitUSD,
-      roiPct,
-    };
-  });
-
-  platforms.sort((a, b) => b.investedUSD - a.investedUSD);
-  const sliced = platforms.slice(0, limit);
+  const platforms: RoiByPlatformEntry[] = rows
+    .map((r) => {
+      const currency = getCurrencyForSite(r.site).code;
+      const rate = rates[currency] ?? 1;
+      const safeRate = rate > 0 ? rate : 1;
+      const investedNative = parseFloat(r.investedNative ?? "0");
+      const profitNative = parseFloat(r.profitNative ?? "0");
+      const investedUSD = investedNative / safeRate;
+      const profitUSD = profitNative / safeRate;
+      return {
+        site: r.site,
+        sessionsCount: Number(r.sessionsCount) || 0,
+        tournamentsCount: Number(r.tournamentsCount) || 0,
+        investedUSD,
+        profitUSD,
+        roiPct: investedUSD > 0 ? (profitUSD / investedUSD) * 100 : 0,
+      };
+    })
+    .sort((a, b) => b.investedUSD - a.investedUSD)
+    .slice(0, limit);
 
   return {
     period,
     generatedAt: new Date().toISOString(),
-    platforms: sliced,
+    platforms,
   };
 }
 

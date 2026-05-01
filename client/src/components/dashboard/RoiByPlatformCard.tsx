@@ -32,6 +32,18 @@ function formatUsd(n: number): string {
   return `${sign}$${Math.abs(n).toFixed(2)}`;
 }
 
+function toneFor(profitUSD: number): "positive" | "negative" | "neutral" {
+  if (profitUSD > 0) return "positive";
+  if (profitUSD < 0) return "negative";
+  return "neutral";
+}
+
+const TONE_COLORS: Record<"positive" | "negative" | "neutral", string> = {
+  positive: "text-emerald-400",
+  negative: "text-red-400",
+  neutral: "text-zinc-300",
+};
+
 export const RoiByPlatformCard: React.FC<RoiByPlatformCardProps> = ({ userId }) => {
   const [period, setPeriod] = useState<Period>("30d");
 
@@ -90,9 +102,8 @@ export const RoiByPlatformCard: React.FC<RoiByPlatformCardProps> = ({ userId }) 
           </thead>
           <tbody>
             {platforms.map((p) => {
-              const tone = p.profitUSD > 0 ? "positive" : p.profitUSD < 0 ? "negative" : "neutral";
-              const color =
-                tone === "positive" ? "text-emerald-400" : tone === "negative" ? "text-red-400" : "text-zinc-300";
+              const tone = toneFor(p.profitUSD);
+              const color = TONE_COLORS[tone];
               return (
                 <tr key={p.site} data-testid={`roi-row-${p.site}`} data-tone={tone} className="border-t border-zinc-800">
                   <td className="py-1 text-zinc-100">{p.site}</td>

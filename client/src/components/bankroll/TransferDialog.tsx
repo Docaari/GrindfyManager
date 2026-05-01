@@ -67,6 +67,8 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
       const url = needsConfirm
         ? "/api/wallets/transfers?confirmFxDiff=true"
         : "/api/wallets/transfers";
+      // Note: needsConfirm both passes ?confirmFxDiff=true (server query gate) and
+      // body.confirmFxDiff=true (route flag) to satisfy both Sprint Bankroll-3 codepaths.
       await apiRequest("POST", url, body);
       toast({ title: "Transferencia criada", description: "A movimentacao foi registrada." });
       onOpenChange(false);

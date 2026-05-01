@@ -107,6 +107,17 @@ function mapErrorToStatus(err: any): number {
   return 500;
 }
 
+// Sprint Bankroll-3 helpers — pending/transfer endpoints share status mapping.
+function statusFor(err: any): number {
+  return err?.httpStatus ?? err?.statusCode ?? 500;
+}
+
+function sendErrorWithCode(res: Response, err: any, fallback: string, logTag: string): void {
+  const status = statusFor(err);
+  if (status >= 500) console.error(`${logTag}:`, err);
+  res.status(status).json({ message: err?.message ?? fallback, code: err?.code });
+}
+
 // =============================================================================
 // Handlers
 // =============================================================================
@@ -469,12 +480,7 @@ export async function handlePostWalletPending(req: any, res: Response): Promise<
     const pending = await (walletService as any).createPending(userId, walletId, body);
     res.status(201).json(pending);
   } catch (err: any) {
-    const status = err?.httpStatus ?? err?.statusCode ?? 500;
-    if (status >= 500) console.error("POST /api/wallets/:walletId/pending failed:", err);
-    res.status(status).json({
-      message: err?.message ?? "Erro ao criar pending",
-      code: err?.code,
-    });
+    sendErrorWithCode(res, err, "Erro ao criar pending", "POST /api/wallets/:walletId/pending failed");
   }
 }
 
@@ -500,9 +506,7 @@ export async function handleDeleteWalletPending(req: any, res: Response): Promis
     const result = await (walletService as any).cancelPending(userId, id);
     res.status(200).json(result);
   } catch (err: any) {
-    const status = err?.httpStatus ?? err?.statusCode ?? 500;
-    if (status >= 500) console.error("DELETE /api/wallets/pending/:id failed:", err);
-    res.status(status).json({ message: err?.message ?? "Erro ao cancelar pending", code: err?.code });
+    sendErrorWithCode(res, err, "Erro ao cancelar pending", "DELETE /api/wallets/pending/:id failed");
   }
 }
 
@@ -514,9 +518,7 @@ export async function handlePostWalletPendingSettle(req: any, res: Response): Pr
     const result = await (walletService as any).settlePending(userId, id, req.body ?? {});
     res.status(200).json(result);
   } catch (err: any) {
-    const status = err?.httpStatus ?? err?.statusCode ?? 500;
-    if (status >= 500) console.error("POST /api/wallets/pending/:id/settle failed:", err);
-    res.status(status).json({ message: err?.message ?? "Erro ao settle pending", code: err?.code });
+    sendErrorWithCode(res, err, "Erro ao settle pending", "POST /api/wallets/pending/:id/settle failed");
   }
 }
 

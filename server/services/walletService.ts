@@ -126,14 +126,17 @@ function nativeToUSD(
 }
 
 function invalidateCaches(userId: string): void {
-  try { selectorCache.invalidateAllForUser(userId); } catch (err) {
-    console.error("walletService: selectorCache.invalidateAllForUser failed", err);
-  }
-  try { bankrollCache.invalidateAllForUser(userId); } catch (err) {
-    console.error("walletService: bankrollCache.invalidateAllForUser failed", err);
-  }
-  try { walletCache.invalidateAllForUser(userId); } catch (err) {
-    console.error("walletService: walletCache.invalidateAllForUser failed", err);
+  const caches = [
+    ["selectorCache", selectorCache],
+    ["bankrollCache", bankrollCache],
+    ["walletCache", walletCache],
+  ] as const;
+  for (const [name, cache] of caches) {
+    try {
+      cache.invalidateAllForUser(userId);
+    } catch (err) {
+      console.error(`walletService: ${name}.invalidateAllForUser failed`, err);
+    }
   }
 }
 
@@ -630,16 +633,13 @@ async function getConsolidatedBalance(userId: string): Promise<ConsolidatedBalan
   }
 
   // totalDisplayCurrency: convert totalUSD to displayCurrency.
+  // ADR-033: USD -> native = usd * rate. nativeToUSD reuse keeps lookup logic single-source.
   let totalDisplayCurrency: string;
   if (displayCurrency === "USD") {
     totalDisplayCurrency = String(totalUSD.toFixed(2));
   } else {
-    const rate =
-      typeof exchangeRates[displayCurrency] === "number" && exchangeRates[displayCurrency] > 0
-        ? exchangeRates[displayCurrency]
-        : DEFAULT_EXCHANGE_RATES[displayCurrency] ?? 1.0;
-    // ADR-033: USD -> native = usd * rate.
-    totalDisplayCurrency = String((totalUSD * rate).toFixed(2));
+    const { fxRate } = nativeToUSD(1, displayCurrency, exchangeRates);
+    totalDisplayCurrency = String((totalUSD * fxRate).toFixed(2));
   }
 
   return {
@@ -876,7 +876,6 @@ async function createTransfer(
     const transactions: any[] = [];
 
     // transfer_out
-    const fromUsd = parseDecimal(fromWallet.balance) - amountFrom;
     const txOut = await tx.createWalletTransaction({
       walletId: fromWallet.id,
       userId,
@@ -1151,12 +1150,9 @@ async function settlePending(
     if (!wallet) throw makeError("Wallet nao encontrada", 404, "WALLET_NOT_FOUND");
 
     const declared = parseDecimal(txPending.nativeAmount);
-    const actual =
-      body.actualNativeAmount != null
-        ? typeof body.actualNativeAmount === "string"
-          ? parseFloat(body.actualNativeAmount)
-          : body.actualNativeAmount
-        : declared;
+    const actual = body.actualNativeAmount != null
+      ? parseDecimal(body.actualNativeAmount)
+      : declared;
     const isDeposit = txPending.direction === "deposit_pending";
     const reason = isDeposit ? "deposit" : "withdrawal";
     const direction = isDeposit ? "in" : "out";
@@ -1170,12 +1166,9 @@ async function settlePending(
     const occurred = body.actualOccurredAt
       ? new Date(body.actualOccurredAt as any)
       : new Date();
-    const fxRate =
-      body.fxRateUSDPerNative != null
-        ? typeof body.fxRateUSDPerNative === "string"
-          ? parseFloat(body.fxRateUSDPerNative)
-          : body.fxRateUSDPerNative
-        : 1;
+    const fxRate = body.fxRateUSDPerNative != null
+      ? parseDecimal(body.fxRateUSDPerNative)
+      : 1;
 
     const transaction = await tx.createWalletTransaction({
       walletId: wallet.id,
