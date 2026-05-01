@@ -15,6 +15,7 @@ import React, { useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { parseSearch } from '@/lib/url';
 import { EmptyState } from './EmptyState';
 import { LinkSpotToThemeDropdown } from './workflow/LinkSpotToThemeDropdown';
 import { SuggestedThemeSidePanel } from './workflow/SuggestedThemeSidePanel';
@@ -76,12 +77,6 @@ interface ThemeRow {
   color?: string;
   emoji?: string;
   tags?: string[];
-}
-
-function parseSearch(path: string): URLSearchParams {
-  const idx = path.indexOf('?');
-  if (idx < 0) return new URLSearchParams();
-  return new URLSearchParams(path.slice(idx + 1));
 }
 
 export function SpotsView() {
@@ -148,12 +143,9 @@ export function SpotsView() {
     },
     onError: (err: any) => {
       const status = err?.status ?? err?.response?.status;
-      const description =
-        status === 403
-          ? 'Acesso negado: tema de outro usuario.'
-          : status === 404
-            ? 'Tema nao encontrado.'
-            : 'Erro ao salvar revisao.';
+      let description = 'Erro ao salvar revisao.';
+      if (status === 403) description = 'Acesso negado: tema de outro usuario.';
+      else if (status === 404) description = 'Tema nao encontrado.';
       toast({
         title: 'Erro',
         description,
@@ -168,11 +160,7 @@ export function SpotsView() {
   }, [spots, showAll]);
 
   function toggleShowAll() {
-    if (showAll) {
-      navigate('/estudos/spots');
-    } else {
-      navigate('/estudos/spots?showAll=1');
-    }
+    navigate(showAll ? '/estudos/spots' : '/estudos/spots?showAll=1');
   }
 
   function openSpotModal(s: SpotRow) {

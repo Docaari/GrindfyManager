@@ -1,7 +1,7 @@
 /**
  * Sprint Studies-Reform — RF-01: Sidebar de navegacao /estudos/*
  *
- * Items: Dashboard, Temas, Stats, Spots, Recomendacoes.
+ * Items: Dashboard, Temas, Stats, Spots, Recomendacoes (definidos em ./navItems).
  * Inclui StudyStreakBadge no rodape.
  *
  * Lessons:
@@ -11,29 +11,8 @@
 
 import React from 'react';
 import { useLocation } from 'wouter';
-import {
-  Home,
-  BookOpen,
-  BarChart3,
-  Bookmark,
-  Sparkles,
-} from 'lucide-react';
 import { StudyStreakBadge } from './StudyStreakBadge';
-
-interface NavItem {
-  view: string;
-  path: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { view: 'dashboard', path: '/estudos/dashboard', label: 'Dashboard', icon: Home },
-  { view: 'temas', path: '/estudos/temas', label: 'Temas', icon: BookOpen },
-  { view: 'stats', path: '/estudos/stats', label: 'Stats', icon: BarChart3 },
-  { view: 'spots', path: '/estudos/spots', label: 'Spots', icon: Bookmark },
-  { view: 'recomendacoes', path: '/estudos/recomendacoes', label: 'Recomendacoes', icon: Sparkles },
-];
+import { STUDIES_NAV_ITEMS, isStudiesNavItemActive } from './navItems';
 
 interface StudiesNavSidebarProps {
   collapsed?: boolean;
@@ -41,14 +20,6 @@ interface StudiesNavSidebarProps {
 
 export function StudiesNavSidebar({ collapsed = false }: StudiesNavSidebarProps) {
   const [location, navigate] = useLocation();
-
-  function isActive(item: NavItem): boolean {
-    const path = item.path;
-    if (item.view === 'dashboard') {
-      return location === '/estudos' || location.startsWith('/estudos/dashboard');
-    }
-    return location === path || location.startsWith(`${path}/`) || location.startsWith(`${path}?`);
-  }
 
   return (
     <aside
@@ -58,8 +29,8 @@ export function StudiesNavSidebar({ collapsed = false }: StudiesNavSidebarProps)
       className={`flex flex-col bg-gray-900 border-r border-gray-800 ${collapsed ? 'w-16' : 'w-56'} h-full`}
     >
       <nav className="flex-1 p-2 space-y-1">
-        {NAV_ITEMS.map((item) => {
-          const active = isActive(item);
+        {STUDIES_NAV_ITEMS.map((item) => {
+          const active = isStudiesNavItemActive(item, location);
           const Icon = item.icon;
           return (
             <button

@@ -152,11 +152,27 @@ function mapDormantTheme(theme: any): RecommendationItem {
 // Public API
 // -----------------------------------------------------------------------------
 
+function unwrapSettled<T>(
+  result: PromiseSettledResult<T[] | undefined | null>,
+  source: string,
+  userId: string,
+): T[] {
+  if (result.status === 'fulfilled') {
+    return result.value ?? [];
+  }
+  // Lesson #9: log antes do fallback para nao engolir erros silenciosamente.
+  console.error(`[studyRecommendationsService] ${source} failed`, {
+    userId,
+    error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+  });
+  return [];
+}
+
 export async function getRecommendations(
   userId: string,
   limit: number = 10,
 ): Promise<RecommendationsResponse> {
-  const results = await Promise.allSettled([
+  const [leaksResult, spotsResult, themesResult] = await Promise.allSettled([
     (storage as any).getStatsLeaks(userId, 5),
     (storage as any).getStaleSpots(userId, STALE_SPOT_DAYS),
     (storage as any).getDormantThemes(
@@ -166,31 +182,9 @@ export async function getRecommendations(
     ),
   ]);
 
-  const [leaksResult, spotsResult, themesResult] = results;
-
-  const leaks = leaksResult.status === 'fulfilled' ? (leaksResult.value ?? []) : [];
-  const staleSpots = spotsResult.status === 'fulfilled' ? (spotsResult.value ?? []) : [];
-  const dormantThemes = themesResult.status === 'fulfilled' ? (themesResult.value ?? []) : [];
-
-  // Log fontes que falharam (lesson #9)
-  if (leaksResult.status === 'rejected') {
-    console.error('[studyRecommendationsService] getStatsLeaks failed', {
-      userId,
-      error: leaksResult.reason instanceof Error ? leaksResult.reason.message : String(leaksResult.reason),
-    });
-  }
-  if (spotsResult.status === 'rejected') {
-    console.error('[studyRecommendationsService] getStaleSpots failed', {
-      userId,
-      error: spotsResult.reason instanceof Error ? spotsResult.reason.message : String(spotsResult.reason),
-    });
-  }
-  if (themesResult.status === 'rejected') {
-    console.error('[studyRecommendationsService] getDormantThemes failed', {
-      userId,
-      error: themesResult.reason instanceof Error ? themesResult.reason.message : String(themesResult.reason),
-    });
-  }
+  const leaks = unwrapSettled<any>(leaksResult, 'getStatsLeaks', userId);
+  const staleSpots = unwrapSettled<any>(spotsResult, 'getStaleSpots', userId);
+  const dormantThemes = unwrapSettled<any>(themesResult, 'getDormantThemes', userId);
 
   const items: RecommendationItem[] = [
     ...leaks.map(mapLeak),

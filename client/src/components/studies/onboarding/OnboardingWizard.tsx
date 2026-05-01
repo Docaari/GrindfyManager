@@ -113,12 +113,7 @@ export function OnboardingWizard({ open, onOpenChange }: OnboardingWizardProps) 
     setStep((s) => Math.max(1, s - 1));
   }
 
-  function skipAll() {
-    setCompleted();
-    onOpenChange(false);
-  }
-
-  function finish() {
+  function close() {
     setCompleted();
     onOpenChange(false);
   }
@@ -187,7 +182,7 @@ export function OnboardingWizard({ open, onOpenChange }: OnboardingWizardProps) 
               <button
                 type="button"
                 data-testid="onboarding-finish"
-                onClick={finish}
+                onClick={close}
                 className="px-4 py-2 rounded bg-poker-accent text-black font-semibold"
               >
                 Concluir
@@ -201,7 +196,7 @@ export function OnboardingWizard({ open, onOpenChange }: OnboardingWizardProps) 
           <button
             type="button"
             data-testid="onboarding-skip"
-            onClick={skipAll}
+            onClick={close}
             className="text-xs text-gray-500 hover:text-gray-300"
           >
             Pular tudo

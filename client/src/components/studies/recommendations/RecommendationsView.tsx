@@ -46,6 +46,15 @@ const TYPE_LABEL: Record<RecType, string> = {
   dormant_theme: 'Tema dormente',
 };
 
+const CTA_LABEL: Record<string, string> = {
+  create_theme: 'Criar tema',
+  review_spot: 'Revisar spot',
+};
+
+function ctaLabelFor(action: string | undefined): string {
+  return (action && CTA_LABEL[action]) ?? 'Abrir';
+}
+
 async function fetchRecs(): Promise<RecResponse> {
   try {
     const res = await fetch('/api/study/recommendations', { credentials: 'include' });
@@ -97,18 +106,14 @@ export function RecommendationsView() {
     );
   }
 
-  const emptyContextual = (() => {
-    if (sourceCounts.leaks > 0) {
-      return `Detectamos ${sourceCounts.leaks} leak(s), mas nenhum tem severidade alta o bastante para sugestao.`;
-    }
-    if (sourceCounts.stale_spots > 0) {
-      return `${sourceCounts.stale_spots} spot(s) antigo(s) ainda nao geram recomendacao.`;
-    }
-    if (sourceCounts.dormant_themes > 0) {
-      return `${sourceCounts.dormant_themes} tema(s) dormente(s) — continue estudando.`;
-    }
-    return 'Voce esta em dia. Continue estudando.';
-  })();
+  let emptyContextual = 'Voce esta em dia. Continue estudando.';
+  if (sourceCounts.leaks > 0) {
+    emptyContextual = `Detectamos ${sourceCounts.leaks} leak(s), mas nenhum tem severidade alta o bastante para sugestao.`;
+  } else if (sourceCounts.stale_spots > 0) {
+    emptyContextual = `${sourceCounts.stale_spots} spot(s) antigo(s) ainda nao geram recomendacao.`;
+  } else if (sourceCounts.dormant_themes > 0) {
+    emptyContextual = `${sourceCounts.dormant_themes} tema(s) dormente(s) — continue estudando.`;
+  }
 
   return (
     <div data-testid="studies-view-recomendacoes" className="p-6 space-y-4">
@@ -181,11 +186,7 @@ export function RecommendationsView() {
                     onClick={() => navigate(r.cta_url!)}
                     className="text-xs px-3 py-1.5 rounded bg-poker-accent text-black font-semibold"
                   >
-                    {r.cta_action === 'create_theme'
-                      ? 'Criar tema'
-                      : r.cta_action === 'review_spot'
-                        ? 'Revisar spot'
-                        : 'Abrir'}
+                    {ctaLabelFor(r.cta_action)}
                   </button>
                 )}
               </article>

@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { parseSearch } from '@/lib/url';
 import { EmptyState } from './EmptyState';
 
 interface ThemeRow {
@@ -31,11 +32,7 @@ interface LeakDelta {
   [themeId: string]: number;
 }
 
-function parseSearch(path: string): URLSearchParams {
-  const idx = path.indexOf('?');
-  if (idx < 0) return new URLSearchParams();
-  return new URLSearchParams(path.slice(idx + 1));
-}
+const SUGGESTED_THRESHOLD = -5;
 
 export function ThemesView() {
   const [location, navigate] = useLocation();
@@ -69,11 +66,9 @@ export function ThemesView() {
   const filtered = useMemo(() => {
     let arr = themes;
     if (fromStats) {
-      arr = arr.filter((t) => Boolean(t.attacksLeakType));
-      // sort by severity desc
-      arr = [...arr].sort(
-        (a, b) => (b.attacksLeakSeverity ?? 0) - (a.attacksLeakSeverity ?? 0),
-      );
+      arr = arr
+        .filter((t) => Boolean(t.attacksLeakType))
+        .sort((a, b) => (b.attacksLeakSeverity ?? 0) - (a.attacksLeakSeverity ?? 0));
     }
     const lc = searchTerm.trim().toLowerCase();
     if (lc) {
@@ -121,17 +116,20 @@ export function ThemesView() {
       </div>
 
       {filtered.length === 0 ? (
-        <EmptyState
-          area="themes"
-          title={fromStats ? 'Nenhum tema vinculado a leaks' : 'Voce ainda nao tem temas'}
-          description={
-            fromStats
-              ? 'Crie um tema baseado em leak para comecar.'
-              : 'Comece criando "IP vs BB" — o tema mais comum entre profissionais.'
-          }
-          ctaLabel="Criar primeiro tema"
-          ctaAction={() => navigate('/estudos/temas/novo')}
-        />
+        <>
+          <EmptyState
+            area="themes"
+            title={fromStats ? 'Nenhum tema vinculado a leaks' : 'Voce ainda nao tem temas'}
+            description={
+              fromStats
+                ? 'Crie um tema baseado em leak para comecar.'
+                : 'Comece criando "IP vs BB" — o tema mais comum entre profissionais.'
+            }
+            ctaLabel="Criar primeiro tema"
+            ctaAction={() => navigate('/estudos/temas/novo')}
+          />
+          <div data-testid="themes-empty" className="hidden" aria-hidden />
+        </>
       ) : (
         <div
           data-testid="themes-grid"
@@ -139,7 +137,7 @@ export function ThemesView() {
         >
           {filtered.map((t) => {
             const delta = leakDelta[t.id] ?? 0;
-            const suggested = delta < -5;
+            const suggested = delta < SUGGESTED_THRESHOLD;
             return (
               <button
                 key={t.id}
@@ -170,14 +168,7 @@ export function ThemesView() {
               </button>
             );
           })}
-          {filtered.length === 0 && (
-            <div data-testid="themes-empty" />
-          )}
         </div>
-      )}
-
-      {filtered.length === 0 && (
-        <div data-testid="themes-empty" className="hidden" aria-hidden />
       )}
     </div>
   );

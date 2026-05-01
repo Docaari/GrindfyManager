@@ -86,8 +86,8 @@ export async function readThemeWithLinkedSpots(
   }
 
   const [tabsRaw, linkedSpotsRaw] = await Promise.all([
-    Promise.resolve((storage as any).getStudyTabsByTheme(theme.id)),
-    Promise.resolve((storage as any).getLinkedSpots(theme.id)),
+    (storage as any).getStudyTabsByTheme(theme.id),
+    (storage as any).getLinkedSpots(theme.id),
   ]);
 
   const tabs = (Array.isArray(tabsRaw) ? tabsRaw : []).slice(0, MAX_TABS).map((t: any) => ({

@@ -146,8 +146,33 @@ export default function Studies() {
     );
   }
 
-  // URL desconhecida: redireciona para dashboard. Render redirect testid AND keep shell.
-  const renderRedirect = view === 'unknown';
+  // URL desconhecida: redireciona para dashboard mas mantem o shell montado.
+  function renderView() {
+    switch (view) {
+      case 'unknown':
+        return <Redirect to="/estudos/dashboard" />;
+      case 'dashboard':
+        return (
+          <div data-testid="studies-view-dashboard">
+            <StudiesDashboard />
+          </div>
+        );
+      case 'temas':
+        return <ThemesView />;
+      case 'stats':
+        return (
+          <div data-testid="studies-view-stats">
+            <StatsView />
+          </div>
+        );
+      case 'spots':
+        return <SpotsView />;
+      case 'recomendacoes':
+        return <RecommendationsView />;
+      default:
+        return null;
+    }
+  }
 
   return (
     <div className="min-h-screen bg-poker-bg text-white" data-testid="studies-layout-main">
@@ -176,23 +201,7 @@ export default function Studies() {
           className={`flex-1 min-w-0 ${showBottomNav ? 'pb-20' : ''}`}
           data-testid="studies-main"
         >
-          {renderRedirect ? (
-            <Redirect to="/estudos/dashboard" />
-          ) : view === 'dashboard' ? (
-            <div data-testid="studies-view-dashboard">
-              <StudiesDashboard />
-            </div>
-          ) : view === 'temas' ? (
-            <ThemesView />
-          ) : view === 'stats' ? (
-            <div data-testid="studies-view-stats">
-              <StatsView />
-            </div>
-          ) : view === 'spots' ? (
-            <SpotsView />
-          ) : view === 'recomendacoes' ? (
-            <RecommendationsView />
-          ) : null}
+          {renderView()}
         </main>
       </div>
       {showBottomNav && <StudiesBottomNav />}

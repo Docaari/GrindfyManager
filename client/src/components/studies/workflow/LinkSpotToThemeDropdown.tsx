@@ -3,10 +3,11 @@
  *
  * Implementa custom dropdown (lista clicavel) ao inves de <select> nativo
  * para que os testes TDD possam clicar diretamente em option-{id} e ver
- * onChange disparado (jsdom limitation com <select>).
+ * onChange disparado (jsdom limitation com <select>). Mantemos um <select>
+ * sr-only espelho para acessibilidade / leitores de tela.
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 
 interface ThemeOption {
   id: string;
@@ -30,7 +31,6 @@ export function LinkSpotToThemeDropdown({
   onChange,
   disabled,
 }: LinkSpotToThemeDropdownProps) {
-  const [expanded, setExpanded] = useState<boolean>(true);
   const selected = themes.find((t) => t.id === value) ?? null;
 
   return (
@@ -72,7 +72,7 @@ export function LinkSpotToThemeDropdown({
           Selecionado: {selected.name}
         </div>
       )}
-      {/* hidden native select para fallback / acessibilidade SR */}
+      {/* Espelho sr-only para acessibilidade. */}
       <select
         aria-hidden
         tabIndex={-1}
@@ -87,8 +87,6 @@ export function LinkSpotToThemeDropdown({
           </option>
         ))}
       </select>
-      {/* Avoid eslint unused warning for expanded state — toggling reserved for future polish */}
-      <span className="hidden">{expanded ? '' : ''}</span>
     </div>
   );
 }
