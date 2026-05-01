@@ -16,7 +16,6 @@ import {
   HUD_GROUP_IDS,
   HUD_GROUP_LABELS,
   type HudGroupId,
-  type StatField,
 } from "../../../../shared/hud-stat-catalog";
 
 interface CatalogEntry {

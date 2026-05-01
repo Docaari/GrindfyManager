@@ -85,16 +85,12 @@ function parseValueToken(rawValue: string, ptDecimal = false): {
   reason?: string;
 } {
   const trimmed = rawValue.trim().replace(/%$/, "").trim();
-  const lower = trimmed.toLowerCase();
-  if (NULL_TOKENS.has(lower)) {
+  if (NULL_TOKENS.has(trimmed.toLowerCase())) {
     return { value: null, invalid: false };
   }
-  let candidate = trimmed;
-  if (ptDecimal && /,\d+$/.test(candidate)) {
-    candidate = candidate.replace(",", ".");
-  } else if (ptDecimal && /^\d+,\d+$/.test(candidate)) {
-    candidate = candidate.replace(",", ".");
-  }
+  const candidate = ptDecimal && /,\d+$/.test(trimmed)
+    ? trimmed.replace(",", ".")
+    : trimmed;
   const num = Number(candidate);
   if (!Number.isFinite(num)) {
     return { value: null, invalid: true, reason: `valor nao numerico: '${rawValue}'` };
@@ -154,8 +150,7 @@ export function parsePastedSnapshot(text: string): ParsedSnapshotResult {
   };
   if (!text || typeof text !== "string") return result;
 
-  const rawLines = text.split(/\r?\n/);
-  const nonEmpty = rawLines.filter((l) => l.trim().length > 0);
+  const nonEmpty = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (nonEmpty.length === 0) return result;
 
   // Detect global separator from first non-empty line
@@ -193,8 +188,7 @@ export function parsePastedSnapshot(text: string): ParsedSnapshotResult {
     if (statId) {
       result.matched[statId] = parsed.value;
       if (result.matchedRaw && parsed.value !== null) {
-        const rawTrimmed = rawValue.trim().replace(/%$/, "").trim();
-        result.matchedRaw[statId] = rawTrimmed;
+        result.matchedRaw[statId] = rawValue.trim().replace(/%$/, "").trim();
       }
     } else {
       result.unmatched.push({ rawName, value: parsed.value });
@@ -218,18 +212,18 @@ export function parseCsvSnapshot(csvText: string): ParsedSnapshotResult {
   if (!csvText || typeof csvText !== "string") return result;
 
   // Strip BOM
-  let text = csvText.replace(/^﻿/, "");
-  const rawLines = text.split(/\r?\n/);
-  const nonEmpty = rawLines.filter((l) => l.trim().length > 0);
+  const text = csvText.replace(/^﻿/, "");
+  const nonEmpty = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (nonEmpty.length === 0) return result;
 
   let skippedHeader = false;
   for (let i = 0; i < nonEmpty.length; i++) {
     const line = nonEmpty[i];
     // CSV: split por virgula. Em decimal PT-BR ("28,5"), 2 fields => detect.
-    const allParts = line.split(",").map((p) => p.trim());
-    // Filtrar apenas separadores vazios (linha "," vazia)
-    const parts = allParts.filter((p) => p.length > 0);
+    const parts = line
+      .split(",")
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
     if (parts.length < 2) continue;
 
     // Skip header if first line and matches header pattern (stat,value)

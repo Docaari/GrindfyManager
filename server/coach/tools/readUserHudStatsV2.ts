@@ -13,13 +13,16 @@ import {
   HUD_GROUP_LABELS,
   HUD_STAT_CATALOG,
   type HudGroupId,
-  type StatField,
 } from "../../../shared/hud-stat-catalog";
 
 const inputSchema = z.object({
   layoutName: z.string().optional(),
   statKeys: z.array(z.string()).optional(),
 });
+
+// Heuristica ADR-062: stats 'context' so entram no ranking de leaks se |delta|
+// exceder esta fracao do range entre targetMin/targetMax.
+const CONTEXT_LEAK_RANGE_FRACTION = 0.5;
 
 export interface PayloadStat {
   id: string;
@@ -79,27 +82,25 @@ function extractFields(layout: any): FieldLike[] {
   if (!layout) return [];
   if (Array.isArray(layout.fields)) return layout.fields as FieldLike[];
   // V1 layout: sections[].stats[].key
-  if (Array.isArray(layout.sections)) {
-    const fields: FieldLike[] = [];
-    for (const sec of layout.sections) {
-      for (const s of sec.stats ?? []) {
-        const id = s.id ?? s.key;
-        if (!id) continue;
-        const catalog = HUD_STAT_CATALOG.find((c) => c.id === id);
-        fields.push({
-          id,
-          label: s.label ?? catalog?.label ?? id,
-          group: catalog?.group ?? "basics",
-          targetMin: catalog?.targetMin ?? 0,
-          targetMax: catalog?.targetMax ?? 100,
-          direction: catalog?.direction ?? "context",
-          unit: catalog?.unit ?? "pct",
-        });
-      }
+  if (!Array.isArray(layout.sections)) return [];
+  const fields: FieldLike[] = [];
+  for (const sec of layout.sections) {
+    for (const s of sec.stats ?? []) {
+      const id = s.id ?? s.key;
+      if (!id) continue;
+      const catalog = HUD_STAT_CATALOG.find((c) => c.id === id);
+      fields.push({
+        id,
+        label: s.label ?? catalog?.label ?? id,
+        group: catalog?.group ?? "basics",
+        targetMin: catalog?.targetMin ?? 0,
+        targetMax: catalog?.targetMax ?? 100,
+        direction: catalog?.direction ?? "context",
+        unit: catalog?.unit ?? "pct",
+      });
     }
-    return fields;
   }
-  return [];
+  return fields;
 }
 
 // -----------------------------------------------------------------------------
@@ -166,23 +167,15 @@ export function buildHudStatsPayloadV2(
       totalNull++;
     } else if (offTarget) {
       totalOffTarget++;
-      // Compute biggest leak only for non-neutral directions
       if (direction !== "neutral" && delta !== null) {
         const absDelta = Math.abs(delta);
-        // Heuristica ADR-062: para 'context', so entra no ranking se |delta|
-        // exceder 50% do range
         const range = Math.abs(targetMax - targetMin);
         const passesContext =
-          direction !== "context" || absDelta >= range * 0.5;
+          direction !== "context"
+          || absDelta >= range * CONTEXT_LEAK_RANGE_FRACTION;
         if (passesContext && absDelta > biggestLeakAbs) {
           biggestLeakAbs = absDelta;
-          biggestLeak = {
-            id: field.id,
-            label,
-            group: groupId,
-            delta,
-            direction,
-          };
+          biggestLeak = { id: field.id, label, group: groupId, delta, direction };
         }
       }
     } else {
@@ -205,18 +198,12 @@ export function buildHudStatsPayloadV2(
     }
   }
 
-  // Construir array de groups: incluir apenas grupos com >=1 stat
-  // (o test "groups respeitam ordem" so verifica ordem relativa entre grupos
-  // que tem stats; stats=[] grupos sao excluidos pra reduzir payload).
+  // Inclui apenas grupos com >=1 stat (reduz payload; ordem segue HUD_GROUP_IDS).
   const groups: PayloadGroup[] = [];
   for (const groupId of HUD_GROUP_IDS) {
     const stats = groupsMap.get(groupId);
     if (stats && stats.length > 0) {
-      groups.push({
-        id: groupId,
-        name: HUD_GROUP_LABELS[groupId],
-        stats,
-      });
+      groups.push({ id: groupId, name: HUD_GROUP_LABELS[groupId], stats });
     }
   }
 

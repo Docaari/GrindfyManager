@@ -125,17 +125,14 @@ export default function StatsSnapshotEditorV2({
       const valuesPayload: Record<string, number | null> = {};
       for (const field of layout.fields) {
         const raw = current[field.id];
-        if (raw === undefined || raw === null || String(raw).trim() === "") {
+        if (raw == null || String(raw).trim() === "") {
           valuesPayload[field.id] = null;
           continue;
         }
         const num = Number(String(raw).replace(",", "."));
         valuesPayload[field.id] = Number.isFinite(num) ? num : null;
       }
-      return {
-        layoutId: layout.id,
-        values: valuesPayload,
-      };
+      return { layoutId: layout.id, values: valuesPayload };
     },
     [layout.fields, layout.id],
   );
@@ -200,9 +197,9 @@ export default function StatsSnapshotEditorV2({
     ) => {
       const next = { ...valuesRef.current };
       for (const [id, val] of Object.entries(matched)) {
-        if (val === null || val === undefined) {
+        if (val == null) {
           next[id] = "";
-        } else if (rawValues && rawValues[id]) {
+        } else if (rawValues?.[id]) {
           next[id] = rawValues[id];
         } else {
           next[id] = String(val);

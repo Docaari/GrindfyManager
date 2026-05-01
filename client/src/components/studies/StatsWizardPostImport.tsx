@@ -13,7 +13,6 @@ import { useState } from "react";
 import {
   HUD_STAT_CATALOG,
   type StatField,
-  HUD_GROUP_IDS,
 } from "../../../../shared/hud-stat-catalog";
 
 export interface WizardTemplate {
@@ -38,100 +37,55 @@ interface Props {
 // Templates V2
 // -----------------------------------------------------------------------------
 
-const allStats = HUD_STAT_CATALOG;
-
-const compactIds = [
-  "vpip",
-  "pfr",
-  "wwsf_pct",
-  "wtsd",
-  "wsd",
-  "threebet_pf",
-  "fold_to_3bet",
-  "fourbet_pf",
-  "rfi_ep",
-  "rfi_co",
-  "rfi_btn",
-  "rfi_sb",
-  "rfi_bb",
-  "threebet_total",
-  "threebet_btn",
-  "threebet_sb",
-  "threebet_bb",
-  "fold_vs_threebet_oop",
-  "cbet_flop_ip",
-  "cbet_flop_oop",
-  "fold_vs_cbet_oop",
-  "second_barrel_vs_bb",
-  "third_barrel_vs_bb",
-  "bb_defend_vs_steal",
-  "bb_3bet_vs_steal",
-  "bb_fold_vs_steal",
-  "bb_fold_vs_btn",
-  "bb_fold_vs_co",
-  "sb_steal_attempt",
-  "bb_per_100",
-];
-
-const earlyGroups = new Set([
-  "basics",
-  "rfi",
-  "threebet",
-  "bb_defense",
-  "blind_war_bb",
+const COMPACT_IDS = new Set([
+  "vpip", "pfr", "wwsf_pct", "wtsd", "wsd",
+  "threebet_pf", "fold_to_3bet", "fourbet_pf",
+  "rfi_ep", "rfi_co", "rfi_btn", "rfi_sb", "rfi_bb",
+  "threebet_total", "threebet_btn", "threebet_sb", "threebet_bb",
+  "fold_vs_threebet_oop", "cbet_flop_ip", "cbet_flop_oop", "fold_vs_cbet_oop",
+  "second_barrel_vs_bb", "third_barrel_vs_bb",
+  "bb_defend_vs_steal", "bb_3bet_vs_steal", "bb_fold_vs_steal",
+  "bb_fold_vs_btn", "bb_fold_vs_co",
+  "sb_steal_attempt", "bb_per_100",
 ]);
 
-const lateGroups = new Set(["basics", "resteal", "threebet"]);
-const lateExtras = new Set([
-  "rfi_btn",
-  "rfi_sb_short",
-  "rfi_sb",
-  "rfi_btn_short",
-  "rfi_co_short",
+const EARLY_GROUPS = new Set([
+  "basics", "rfi", "threebet", "bb_defense", "blind_war_bb",
 ]);
 
-function buildTemplate(
-  id: string,
-  name: string,
-  description: string,
-  filterFn: (stat: StatField) => boolean,
-  recommended?: boolean,
-): WizardTemplate {
-  return {
-    id,
-    name,
-    description,
-    fields: allStats.filter(filterFn),
-    recommended,
-  };
-}
+const LATE_GROUPS = new Set(["basics", "resteal", "threebet"]);
+const LATE_EXTRAS = new Set([
+  "rfi_btn", "rfi_sb_short", "rfi_sb", "rfi_btn_short", "rfi_co_short",
+]);
 
 const TEMPLATES: WizardTemplate[] = [
-  buildTemplate(
-    "mttDefault",
-    "MTT Default (200+ stats)",
-    "Catalogo completo recomendado para MTT.",
-    () => true,
-    true,
-  ),
-  buildTemplate(
-    "mttCashCompact",
-    "MTT/Cash Compact",
-    "Top 30 stats mais usados.",
-    (s) => compactIds.includes(s.id),
-  ),
-  buildTemplate(
-    "tournamentEarly",
-    "Tournament Early Stage",
-    "Foco em jogo profundo (basics + rfi + threebet + bb_defense + blind_war_bb).",
-    (s) => earlyGroups.has(s.group),
-  ),
-  buildTemplate(
-    "tournamentLate",
-    "Tournament Late Stage (push/fold)",
-    "Foco em short stack (basics + resteal + threebet curto + push/fold).",
-    (s) => lateGroups.has(s.group) || lateExtras.has(s.id),
-  ),
+  {
+    id: "mttDefault",
+    name: "MTT Default (200+ stats)",
+    description: "Catalogo completo recomendado para MTT.",
+    fields: HUD_STAT_CATALOG,
+    recommended: true,
+  },
+  {
+    id: "mttCashCompact",
+    name: "MTT/Cash Compact",
+    description: "Top 30 stats mais usados.",
+    fields: HUD_STAT_CATALOG.filter((s) => COMPACT_IDS.has(s.id)),
+  },
+  {
+    id: "tournamentEarly",
+    name: "Tournament Early Stage",
+    description: "Foco em jogo profundo (basics + rfi + threebet + bb_defense + blind_war_bb).",
+    fields: HUD_STAT_CATALOG.filter((s) => EARLY_GROUPS.has(s.group)),
+  },
+  {
+    id: "tournamentLate",
+    name: "Tournament Late Stage (push/fold)",
+    description: "Foco em short stack (basics + resteal + threebet curto + push/fold).",
+    fields: HUD_STAT_CATALOG.filter(
+      (s) => LATE_GROUPS.has(s.group) || LATE_EXTRAS.has(s.id),
+    ),
+  },
 ];
 
 // -----------------------------------------------------------------------------

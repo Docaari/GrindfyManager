@@ -5,7 +5,7 @@
 // Compara 2 snapshots (A vs B) e usa o snapshotB para colorir cells.
 // =============================================================================
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState } from "react";
 import {
   getStatColor,
   getDirectionTooltip,
@@ -107,31 +107,20 @@ export default function SnapshotComparatorV2({
 }: Props) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const handleMouseEnter = useCallback((id: string) => {
-    setHoveredId(id);
-  }, []);
+  const clearHover = () => setHoveredId(null);
 
-  const handleMouseLeave = useCallback(() => {
-    setHoveredId(null);
-  }, []);
-
-  const renderedGroups = useMemo(() => layout.groups, [layout.groups]);
-
-  // Tooltip flutuante: mostrar texto da direction quando hovering em cell
-  // (Radix Tooltip seria ideal mas adiciona overhead — usamos div simples
-  // anexada apos hover dentro do cell).
   const hoveredStat = useMemo(() => {
     if (!hoveredId) return null;
-    for (const group of renderedGroups) {
+    for (const group of layout.groups) {
       const found = group.stats.find((s) => s.id === hoveredId);
       if (found) return found;
     }
     return null;
-  }, [hoveredId, renderedGroups]);
+  }, [hoveredId, layout.groups]);
 
   return (
     <div className="space-y-4" data-testid="comparator-v2-root">
-      {renderedGroups.map((group) => (
+      {layout.groups.map((group) => (
         <section
           key={group.id}
           data-testid={`comparator-group-${group.id}`}
@@ -144,10 +133,10 @@ export default function SnapshotComparatorV2({
             {group.stats.map((stat) => (
               <div
                 key={stat.id}
-                onMouseEnter={() => handleMouseEnter(stat.id)}
-                onMouseLeave={handleMouseLeave}
-                onFocus={() => handleMouseEnter(stat.id)}
-                onBlur={handleMouseLeave}
+                onMouseEnter={() => setHoveredId(stat.id)}
+                onMouseLeave={clearHover}
+                onFocus={() => setHoveredId(stat.id)}
+                onBlur={clearHover}
               >
                 <StatCell
                   stat={stat}

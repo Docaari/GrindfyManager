@@ -91,56 +91,20 @@ export const HUD_GROUP_LABELS: Record<HudGroupId, string> = {
 // Helpers para construir entries em batch sem boilerplate
 // -----------------------------------------------------------------------------
 
-const pct = (
-  id: string,
-  label: string,
-  group: HudGroupId,
-  targetMin: number,
-  targetMax: number,
-  direction: StatDirection,
-): StatField => ({
-  id,
-  label,
-  group,
-  targetMin,
-  targetMax,
-  direction,
-  unit: "pct",
-});
+function entry(unit: StatUnit) {
+  return (
+    id: string,
+    label: string,
+    group: HudGroupId,
+    targetMin: number,
+    targetMax: number,
+    direction: StatDirection,
+  ): StatField => ({ id, label, group, targetMin, targetMax, direction, unit });
+}
 
-const bb = (
-  id: string,
-  label: string,
-  group: HudGroupId,
-  targetMin: number,
-  targetMax: number,
-  direction: StatDirection,
-): StatField => ({
-  id,
-  label,
-  group,
-  targetMin,
-  targetMax,
-  direction,
-  unit: "bb",
-});
-
-const cnt = (
-  id: string,
-  label: string,
-  group: HudGroupId,
-  targetMin: number,
-  targetMax: number,
-  direction: StatDirection,
-): StatField => ({
-  id,
-  label,
-  group,
-  targetMin,
-  targetMax,
-  direction,
-  unit: "count",
-});
+const pct = entry("pct");
+const bb = entry("bb");
+const cnt = entry("count");
 
 // -----------------------------------------------------------------------------
 // Catalogo (>=200 entries)
@@ -397,23 +361,21 @@ export const HUD_STAT_CATALOG: StatField[] = [
   pct("delay_cbet_3bet_pot_oop", "Delay CBet 3Bet OOP", "threebet_pot_oop_vs_lp", 25, 40, "context"),
 ];
 
-// Sanity check em dev (nao roda em prod). Total esperado >=200.
-// 12+15+20+10+14+12+10+12+8+8+16+10+28+26+8+8 = 217 stats.
+// Total = 12+15+20+10+14+12+10+12+8+8+16+10+28+26+8+8 = 217 stats.
 
 // -----------------------------------------------------------------------------
 // Helpers exportados
 // -----------------------------------------------------------------------------
 
-const STAT_INDEX_BY_ID: Map<string, StatField> = new Map(
+const STAT_INDEX_BY_ID = new Map<string, StatField>(
   HUD_STAT_CATALOG.map((s) => [s.id, s]),
 );
 
-const STATS_INDEX_BY_GROUP: Map<HudGroupId, StatField[]> = (() => {
+const STATS_INDEX_BY_GROUP = ((): Map<HudGroupId, StatField[]> => {
   const map = new Map<HudGroupId, StatField[]>();
   for (const g of HUD_GROUP_IDS) map.set(g, []);
   for (const stat of HUD_STAT_CATALOG) {
-    const list = map.get(stat.group);
-    if (list) list.push(stat);
+    map.get(stat.group)?.push(stat);
   }
   return map;
 })();

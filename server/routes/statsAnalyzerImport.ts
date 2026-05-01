@@ -35,9 +35,7 @@ export async function handlePostPasteImportPreview(
     return;
   }
 
-  // Tamanho via Buffer.byteLength (pode tambem ler header content-length)
-  const size = Buffer.byteLength(pasted, "utf8");
-  if (size > MAX_PASTE_BYTES) {
+  if (Buffer.byteLength(pasted, "utf8") > MAX_PASTE_BYTES) {
     res
       .status(413)
       .json({ message: `Paste maior que ${MAX_PASTE_BYTES} bytes.` });

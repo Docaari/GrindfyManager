@@ -39,7 +39,6 @@ export function getStatColor(
 
   const { targetMin, targetMax, direction } = stat;
 
-  // on-target (inclusive borders)
   if (value >= targetMin && value <= targetMax) {
     return "green";
   }
@@ -54,7 +53,6 @@ export function getStatColor(
     case "context":
       return "orange";
     case "neutral":
-      return "gray";
     default:
       return "gray";
   }
@@ -72,8 +70,5 @@ const FALLBACK_TOOLTIP =
   "Stat sem direcao explicita — Coach interpreta caso a caso.";
 
 export function getDirectionTooltip(direction: StatDirection | string): string {
-  if (direction in TOOLTIPS) {
-    return TOOLTIPS[direction as StatDirection];
-  }
-  return FALLBACK_TOOLTIP;
+  return TOOLTIPS[direction as StatDirection] ?? FALLBACK_TOOLTIP;
 }
