@@ -22,6 +22,9 @@ vi.mock('../../../server/storage', () => ({
     getHudStatSnapshot: vi.fn(),
     updateHudStatSnapshot: vi.fn(),
     deleteHudStatSnapshot: vi.fn(),
+    // Reviewer R1 HIGH-3: handler agora valida values contra unit do stat
+    // (catalog OU custom). Mock retorna layout vazio por padrao.
+    getHudLayout: vi.fn(),
   },
 }));
 
@@ -64,6 +67,12 @@ beforeEach(() => {
     ...baseSnapshot,
     values: { ...baseSnapshot.values, ...patch.values },
   }));
+  // Default: layout vazio (catalog stats funcionam, customs nao definidos).
+  (storage.getHudLayout as any).mockResolvedValue({
+    id: 'lyt-1',
+    userId: 'USER-0001',
+    fields_json: [],
+  });
 });
 
 describe('PUT /api/stats-analyzer/snapshots/:id — RF-06', () => {
@@ -137,5 +146,106 @@ describe('PUT /api/stats-analyzer/snapshots/:id — RF-06', () => {
     expect(res.statusCode).toBe(200);
     const patch = (storage.updateHudStatSnapshot as any).mock.calls[0][2];
     expect(patch.values.vpip).toBeNull();
+  });
+});
+
+// =============================================================================
+// Reviewer R1 HIGH-3 — validacao por unit (pct/bb/count)
+// =============================================================================
+
+describe('PUT /api/stats-analyzer/snapshots/:id — HIGH-3 unit validation', () => {
+  it('rejeita 400 quando pct value > 100 (vpip eh pct cap 100)', async () => {
+    const res = makeRes();
+    await handleUpdateSnapshotValues(
+      makeReq({
+        params: { id: 'snap-1' },
+        body: { values: { vpip: 150 } },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toHaveProperty('invalidFields');
+    expect(storage.updateHudStatSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('rejeita 400 quando pct value < 0', async () => {
+    const res = makeRes();
+    await handleUpdateSnapshotValues(
+      makeReq({
+        params: { id: 'snap-1' },
+        body: { values: { vpip: -5 } },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('aceita pct value=100 (boundary inclusive)', async () => {
+    const res = makeRes();
+    await handleUpdateSnapshotValues(
+      makeReq({
+        params: { id: 'snap-1' },
+        body: { values: { vpip: 100 } },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('aceita custom bb stat com value > 100', async () => {
+    (storage.getHudLayout as any).mockResolvedValue({
+      id: 'lyt-1',
+      userId: 'USER-0001',
+      fields_json: [
+        { id: 'custom_bbstack', isCustom: true, unit: 'bb', label: 'BB Stack' },
+      ],
+    });
+    const res = makeRes();
+    await handleUpdateSnapshotValues(
+      makeReq({
+        params: { id: 'snap-1' },
+        body: { values: { custom_bbstack: 150 } },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('rejeita 400 quando custom bb stat value < 0', async () => {
+    (storage.getHudLayout as any).mockResolvedValue({
+      id: 'lyt-1',
+      userId: 'USER-0001',
+      fields_json: [
+        { id: 'custom_bbstack', isCustom: true, unit: 'bb', label: 'BB Stack' },
+      ],
+    });
+    const res = makeRes();
+    await handleUpdateSnapshotValues(
+      makeReq({
+        params: { id: 'snap-1' },
+        body: { values: { custom_bbstack: -10 } },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejeita 400 quando custom count stat tem decimal', async () => {
+    (storage.getHudLayout as any).mockResolvedValue({
+      id: 'lyt-1',
+      userId: 'USER-0001',
+      fields_json: [
+        { id: 'custom_handcount', isCustom: true, unit: 'count', label: 'Hand Count' },
+      ],
+    });
+    const res = makeRes();
+    await handleUpdateSnapshotValues(
+      makeReq({
+        params: { id: 'snap-1' },
+        body: { values: { custom_handcount: 100.5 } },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(400);
   });
 });

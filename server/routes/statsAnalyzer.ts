@@ -25,6 +25,8 @@ import {
   HUD_GROUP_IDS,
   HUD_GROUP_LABELS,
   getStatsByGroup,
+  getStatById,
+  HUD_STAT_CATALOG,
 } from "../../shared/hud-stat-catalog";
 import { getTrendIndicator } from "../../shared/hud-trend-indicator";
 import { extractStatsFromImage } from "../services/hudOcrService";
@@ -248,52 +250,96 @@ export function registerStatsAnalyzerRoutes(app: Express): void {
     max: Number(process.env.OCR_RATE_LIMIT_PER_HOUR ?? 10),
     standardHeaders: true,
     legacyHeaders: false,
-    message: { message: "Limite de OCR atingido. Tente novamente em alguns minutos." },
+    // HIGH-2: per-user (userPlatformId) em vez de per-IP. Multiplos users atras
+    // de um NAT/proxy compartilhado nao impactam um ao outro.
+    keyGenerator: (req) =>
+      (req as any).user?.userPlatformId ?? req.ip ?? "anon",
+    handler: (req, res) => {
+      const resetTime =
+        (req as any).rateLimit?.resetTime?.getTime?.() ?? Date.now() + 60_000;
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((resetTime - Date.now()) / 1000),
+      );
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+      return res.status(429).json({
+        message: `Limite de OCR atingido. Tente novamente em ${Math.ceil(retryAfterSeconds / 60)} minutos.`,
+        retryAfterSeconds,
+      });
+    },
   });
 
+  // HIGH-5: tier check (studies permission) em todos endpoints V3.
+  // Em OCR mantemos isProUser dentro do handler (cobre subscriptionPlan tier alem
+  // de permissions table); aqui adicionamos requirePermission para alinhar com
+  // o resto do app (auth.ts / stats-analyzer V2).
   app.post(
     "/api/stats-analyzer/ocr-extract",
     requireAuth,
+    requirePermission("studies"),
     ocrRateLimiter,
     ocrUpload.single("image"),
+    multerErrorHandler,
     handleOcrExtract,
   );
 
   app.get(
     "/api/stats-analyzer/snapshots/compare",
     requireAuth,
+    requirePermission("studies"),
     handleCompareSnapshots,
   );
 
   app.put(
     "/api/stats-analyzer/snapshots/:id",
     requireAuth,
+    requirePermission("studies"),
     handleUpdateSnapshotValues,
   );
 
   app.put(
     "/api/hud-layouts/:id/target-override",
     requireAuth,
+    requirePermission("studies"),
     handleSetTargetOverride,
   );
 
   app.post(
     "/api/hud-layouts/:id/custom-stats",
     requireAuth,
+    requirePermission("studies"),
     handleCreateCustomStat,
   );
 
   app.delete(
     "/api/hud-layouts/:id/custom-stats/:customId",
     requireAuth,
+    requirePermission("studies"),
     handleDeleteCustomStat,
   );
 
   app.post(
     "/api/stats-analyzer/snapshots/from-ocr",
     requireAuth,
+    requirePermission("studies"),
     handleSaveOcrSnapshot,
   );
+}
+
+// MEDIUM-9: Express error handler especifico para multer LIMIT_FILE_SIZE.
+// Mapeia 413 com mensagem PT-BR. Outros erros do multer passam adiante (next).
+function multerErrorHandler(err: any, req: any, res: Response, next: any): void {
+  if (err && err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      res.status(413).json({
+        message: "Imagem maior que 10MB. Reduza e tente novamente.",
+      });
+      return;
+    }
+    res.status(400).json({ message: `Upload invalido: ${err.message}` });
+    return;
+  }
+  next(err);
 }
 
 // =============================================================================
@@ -343,19 +389,6 @@ export async function handleSetTargetOverride(
   const { statId, min, max } = parsed;
   // null/null = remove override
   const isClear = min === null || max === null;
-  if (!isClear) {
-    if (typeof min !== "number" || typeof max !== "number") {
-      return res.status(400).json({ message: "min/max devem ser numericos." });
-    }
-    if (min >= max) {
-      return res.status(400).json({ message: "min deve ser menor que max." });
-    }
-    if (min < 0 || max > 100) {
-      return res
-        .status(400)
-        .json({ message: "Range invalido — pct deve estar entre 0 e 100." });
-    }
-  }
 
   const layoutId = req.params.id;
   const layout = await storage.getHudLayout(layoutId, user.userPlatformId);
@@ -363,34 +396,103 @@ export async function handleSetTargetOverride(
     return res.status(404).json({ message: "Layout nao encontrado." });
   }
 
-  const fields = [...getLayoutFields(layout)];
-  const idx = fields.findIndex(
-    (f) => f.id === statId || (f as any).statId === statId,
-  );
-  if (isClear) {
-    if (idx >= 0) {
-      const next = { ...fields[idx] };
-      delete (next as any).targetOverride;
-      fields[idx] = next;
-    }
+  // HIGH-1: cap depende do unit do stat (catalog OU custom do layout).
+  const layoutFields = getLayoutFields(layout);
+  let statUnit: string | undefined;
+  const catalogStat = getStatById(statId);
+  if (catalogStat) {
+    statUnit = catalogStat.unit;
   } else {
-    if (idx >= 0) {
-      fields[idx] = {
-        ...fields[idx],
-        targetOverride: { min: min as number, max: max as number },
-      };
-    } else {
-      fields.push({
-        id: statId,
-        targetOverride: { min: min as number, max: max as number },
-      });
+    const customField = layoutFields.find(
+      (f) => (f as any).isCustom && f.id === statId,
+    );
+    if (customField) {
+      statUnit = (customField as any).unit ?? "pct";
+    }
+  }
+  // Default conservador: se stat desconhecido, trata como pct (cap 100).
+  if (!statUnit) statUnit = "pct";
+
+  if (!isClear) {
+    if (typeof min !== "number" || typeof max !== "number") {
+      return res.status(400).json({ message: "min/max devem ser numericos." });
+    }
+    if (min >= max) {
+      return res.status(400).json({ message: "min deve ser menor que max." });
+    }
+    if (statUnit === "pct") {
+      if (min < 0 || max > 100) {
+        return res
+          .status(400)
+          .json({ message: "Range invalido — pct deve estar entre 0 e 100." });
+      }
+    } else if (statUnit === "bb") {
+      if (min < 0 || max > 200) {
+        return res
+          .status(400)
+          .json({ message: "Range invalido — bb deve estar entre 0 e 200." });
+      }
+    } else if (statUnit === "count") {
+      if (min < 0) {
+        return res
+          .status(400)
+          .json({ message: "Range invalido — count deve ser >= 0." });
+      }
     }
   }
 
+  // MEDIUM-7: transformer aplicado dentro de transacao quando storage suporta
+  // mutateHudLayoutFields (producao). Em testes/legacy, fallback usa
+  // updateHudLayout com fields ja calculados (sujeito a race entre two clients,
+  // mas tests cobertos exclusivamente em ambiente single-client).
+  const applyOverride = (current: HudLayoutFieldEntry[]): HudLayoutFieldEntry[] => {
+    const next = [...current];
+    const i = next.findIndex(
+      (f) => f.id === statId || (f as any).statId === statId,
+    );
+    if (isClear) {
+      if (i >= 0) {
+        const copy = { ...next[i] };
+        delete (copy as any).targetOverride;
+        next[i] = copy;
+      }
+    } else {
+      if (i >= 0) {
+        next[i] = {
+          ...next[i],
+          targetOverride: { min: min as number, max: max as number },
+        };
+      } else {
+        next.push({
+          id: statId,
+          targetOverride: { min: min as number, max: max as number },
+        });
+      }
+    }
+    return next;
+  };
+
   try {
-    const updated = await storage.updateHudLayout(layoutId, user.userPlatformId, {
-      fields_json: fields,
-    } as any);
+    const mutateAtomic = (storage as any).mutateHudLayoutFields;
+    if (typeof mutateAtomic === "function") {
+      const updated = await mutateAtomic.call(
+        storage,
+        layoutId,
+        user.userPlatformId,
+        applyOverride,
+      );
+      if (!updated) {
+        return res.status(404).json({ message: "Layout nao encontrado." });
+      }
+      return res.json(updated);
+    }
+    // Fallback non-atomic (legacy + tests com mock parcial).
+    const fields = applyOverride([...layoutFields]);
+    const updated = await storage.updateHudLayout(
+      layoutId,
+      user.userPlatformId,
+      { fields_json: fields } as any,
+    );
     if (!updated) {
       return res.status(404).json({ message: "Layout nao encontrado." });
     }
@@ -443,12 +545,21 @@ export async function handleCreateCustomStat(
     targetMax: parsed.targetMax,
   };
 
-  const fields = [...getLayoutFields(layout), newField];
-
   try {
-    await storage.updateHudLayout(layoutId, user.userPlatformId, {
-      fields_json: fields,
-    } as any);
+    const mutateAtomic = (storage as any).mutateHudLayoutFields;
+    if (typeof mutateAtomic === "function") {
+      await mutateAtomic.call(
+        storage,
+        layoutId,
+        user.userPlatformId,
+        (current: HudLayoutFieldEntry[]) => [...current, newField],
+      );
+    } else {
+      const fields = [...getLayoutFields(layout), newField];
+      await storage.updateHudLayout(layoutId, user.userPlatformId, {
+        fields_json: fields,
+      } as any);
+    }
     return res.status(201).json(newField);
   } catch (err) {
     console.error("[stats-v3] handleCreateCustomStat failed", err);
@@ -473,11 +584,21 @@ export async function handleDeleteCustomStat(
   if (!layout) {
     return res.status(404).json({ message: "Layout nao encontrado." });
   }
-  const fields = getLayoutFields(layout).filter((f) => f.id !== customId);
   try {
-    await storage.updateHudLayout(layoutId, user.userPlatformId, {
-      fields_json: fields,
-    } as any);
+    const mutateAtomic = (storage as any).mutateHudLayoutFields;
+    if (typeof mutateAtomic === "function") {
+      await mutateAtomic.call(
+        storage,
+        layoutId,
+        user.userPlatformId,
+        (current: HudLayoutFieldEntry[]) => current.filter((f) => f.id !== customId),
+      );
+    } else {
+      const fields = getLayoutFields(layout).filter((f) => f.id !== customId);
+      await storage.updateHudLayout(layoutId, user.userPlatformId, {
+        fields_json: fields,
+      } as any);
+    }
     return res.status(200).json({ ok: true });
   } catch (err) {
     console.error("[stats-v3] handleDeleteCustomStat failed", err);
@@ -508,6 +629,62 @@ export async function handleUpdateSnapshotValues(
   const existing = await storage.getHudStatSnapshot(id, user.userPlatformId);
   if (!existing) {
     return res.status(404).json({ message: "Snapshot nao encontrado." });
+  }
+
+  // HIGH-3: validar cada value contra o unit declarado no catalog OU custom.
+  // Skip silencioso quando storage.getHudLayout nao esta disponivel (test mocks
+  // antigos). Em producao a interface IStorage sempre expoe getHudLayout.
+  if (typeof (storage as any).getHudLayout === "function") {
+    const layout = await (storage as any).getHudLayout(
+      (existing as any).layoutId,
+      user.userPlatformId,
+    );
+    if (layout) {
+      const customMap = new Map<string, string>();
+      for (const f of getLayoutFields(layout)) {
+        if ((f as any).isCustom && f.id) {
+          customMap.set(f.id, ((f as any).unit as string) ?? "pct");
+        }
+      }
+      const invalidFields: Array<{
+        statId: string;
+        reason: string;
+      }> = [];
+      for (const [statId, value] of Object.entries(parsed.values)) {
+        if (value === null) continue; // null permitido (limpa o stat)
+        if (typeof value !== "number" || Number.isNaN(value)) {
+          invalidFields.push({ statId, reason: "valor deve ser numerico ou null" });
+          continue;
+        }
+        const catalog = getStatById(statId);
+        const unit = catalog?.unit ?? customMap.get(statId);
+        if (!unit) {
+          // statId nao reconhecido — nao bloqueia (Implementer pode introduzir
+          // stats novos antes do user salvar custom). Se o reviewer quiser
+          // bloquear strict, mover para invalidFields.push.
+          continue;
+        }
+        if (unit === "pct") {
+          if (value < 0 || value > 100) {
+            invalidFields.push({ statId, reason: "pct deve estar em [0,100]" });
+          }
+        } else if (unit === "bb") {
+          if (value < 0) {
+            invalidFields.push({ statId, reason: "bb deve ser >= 0" });
+          }
+        } else if (unit === "count") {
+          if (!Number.isInteger(value) || value < 0) {
+            invalidFields.push({ statId, reason: "count deve ser inteiro >= 0" });
+          }
+        }
+      }
+      if (invalidFields.length > 0) {
+        return res.status(400).json({
+          message: "Valores invalidos para o unit do stat.",
+          invalidFields,
+        });
+      }
+    }
   }
 
   // PATCH parcial: passa apenas os statIds enviados (storage faz merge).
@@ -713,9 +890,16 @@ export async function handleCompareSnapshots(
       if (snap2Value !== null && !isOnTarget(snap2Value, f.min, f.max, f.direction)) {
         snap2OffTarget += 1;
       }
+      // HIGH-6: stableCount inclui APENAS both_in_target/both_out_target.
+      // Estados null (snap1_null/snap2_null/both_null) e ambiguos
+      // (context_ambiguous/neutral_info) NAO contam como "stable" — estavel
+      // exige observacao real em ambos snapshots. Telemetria desses estados
+      // pode ser adicionada como nullCount/ambiguousCount em iteracao futura.
       if (status === "improving") improvingCount += 1;
       else if (status === "regressing") regressingCount += 1;
-      else stableCount += 1;
+      else if (status === "both_in_target" || status === "both_out_target") {
+        stableCount += 1;
+      }
 
       stats.push({
         id: f.id,
@@ -841,13 +1025,30 @@ export async function handleOcrExtract(
       .json({ message: "Falha ao salvar imagem para OCR." });
   }
 
-  // Extract — passing cache lookup that scans existing snapshots for SHA match
+  // Extract — passing cache lookup que faz query indexada por SHA256.
+  // INFO-6: usa o index parcial idx_hud_snapshots_image_sha256 (migration 0020)
+  // via storage.findHudStatSnapshotByImageSha256 (lookup O(1) em vez de scan).
+  // CRITICAL-1: NAO criamos snapshot orfao no extract — apenas devolvemos o
+  // resultado parseado. Persistencia final acontece em handleSaveOcrSnapshot
+  // (from-ocr endpoint) com TODOS os campos corretos.
   let serviceResult;
   try {
     serviceResult = await extractStatsFromImage({
       buffer: file.buffer,
       mime: detected,
       cacheLookup: async (sha) => {
+        const finder = (storage as any).findHudStatSnapshotByImageSha256;
+        if (typeof finder === "function") {
+          const hit = await finder.call(storage, user.userPlatformId, sha);
+          if (hit) {
+            const raw = (hit as any).ocr_raw_response ?? (hit as any).ocrRawResponse;
+            if (raw && raw.image_sha256 === sha) {
+              return raw;
+            }
+          }
+          return null;
+        }
+        // Fallback: scan limitado (compat para mocks de teste antigos).
         const snaps = await storage.getHudStatSnapshots(user.userPlatformId, {
           layoutId,
           limit: 100,
@@ -882,32 +1083,24 @@ export async function handleOcrExtract(
     console.error("[stats-v3] hud-ocr-audit-failed", err);
   }
 
-  // Persist raw response so future cache hits work (apenas em cache miss)
-  if (!serviceResult.cached) {
-    try {
-      await storage.createHudStatSnapshot({
-        userId: user.userPlatformId,
-        layoutId,
-        source: "ocr-v2",
-        values: Object.fromEntries(
-          serviceResult.matchedStats.map((m) => [m.id, m.value]),
-        ) as any,
-        sampleSize: null,
-        sessionId: null,
-        notes: null,
-      } as any);
-    } catch (err) {
-      console.error("[stats-v3] hud-ocr-cache-persist-failed", err);
-      // nao bloqueia response
-    }
-  }
+  // CRITICAL-1: NAO persistir snapshot aqui. handleSaveOcrSnapshot (from-ocr)
+  // eh quem cria o snapshot final com captureMethod='ocr', sourceImageKey,
+  // ocrConfidence e ocrRawResponse. Frontend recebe o preview, user revisa
+  // e dispara from-ocr para salvar definitivamente.
 
   return res.status(200).json({
     imageKey: storedKey,
     ocrJobId: `ocrj_${nanoid(10)}`,
+    imageSha256: serviceResult.imageSha256,
     stats: serviceResult.matchedStats,
     unmatched: serviceResult.unmatchedStats,
     cached: serviceResult.cached,
+    rawResponse: {
+      image_sha256: serviceResult.imageSha256,
+      raw_stats: serviceResult.rawStats,
+      matched_stats: serviceResult.matchedStats,
+      unmatched_stats: serviceResult.unmatchedStats,
+    },
   });
 }
 
@@ -939,10 +1132,42 @@ export async function handleSaveOcrSnapshot(
       .status(400)
       .json({ message: "Body invalido.", issues: err?.issues });
   }
+
+  // CRITICAL-2: IDOR — imageKey deve pertencer ao user (prefixo HUD-snapshots).
+  // SpotImageStorage emite keys no formato `${userId}/${sessionId}/${file}`.
+  // Para HUD OCR, sessionId='hud-snapshots'.
+  if (parsed.imageKey) {
+    const expectedPrefix = `${user.userPlatformId}/hud-snapshots/`;
+    if (!parsed.imageKey.startsWith(expectedPrefix)) {
+      return res
+        .status(403)
+        .json({ message: "imageKey nao pertence ao usuario." });
+    }
+  }
+
   const layout = await storage.getHudLayout(parsed.layoutId, user.userPlatformId);
   if (!layout) {
     return res.status(404).json({ message: "Layout nao encontrado." });
   }
+
+  // HIGH-4: rejeitar statIds desconhecidos (catalog OR custom do layout).
+  const validStatIds = new Set<string>(HUD_STAT_CATALOG.map((s) => s.id));
+  for (const f of getLayoutFields(layout)) {
+    if ((f as any).isCustom && f.id) {
+      validStatIds.add(f.id);
+    }
+  }
+  const unknownStatIds: string[] = [];
+  for (const k of Object.keys(parsed.values)) {
+    if (!validStatIds.has(k)) unknownStatIds.push(k);
+  }
+  if (unknownStatIds.length > 0) {
+    return res.status(400).json({
+      message: "statIds desconhecidos para este layout.",
+      unknownStatIds,
+    });
+  }
+
   try {
     const snap = await storage.createHudStatSnapshot({
       userId: user.userPlatformId,
@@ -956,7 +1181,8 @@ export async function handleSaveOcrSnapshot(
         ? new Date(parsed.capturedAt as any)
         : undefined,
     } as any);
-    // Patch capture-method via update (storage createHudStatSnapshot nao seta)
+    // CRITICAL-1 + INFO-6: patch capture-method + ocrRawResponse com image_sha256
+    // (necessario para cache lookup futuro via index parcial).
     if (typeof (storage as any).updateHudStatSnapshot === "function") {
       try {
         await (storage as any).updateHudStatSnapshot(

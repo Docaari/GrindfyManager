@@ -51,6 +51,14 @@ CREATE INDEX IF NOT EXISTS "idx_hud_snapshots_source_image_key"
   ON "hud_stat_snapshots" ("user_id", "source_image_key")
   WHERE "source_image_key" IS NOT NULL;
 
+-- Reviewer R1 INFO-6: index parcial expression em ocr_raw_response.image_sha256
+-- para cache lookup direto via storage.findHudStatSnapshotByImageSha256.
+-- Antes da R1, lookup usava scan de N snapshots + filtro JS — O(N).
+-- Com este index, busca eh O(log N) usando o expression index do Postgres.
+CREATE INDEX IF NOT EXISTS "idx_hud_snapshots_image_sha256"
+  ON "hud_stat_snapshots" ((ocr_raw_response->>'image_sha256'))
+  WHERE "ocr_raw_response" IS NOT NULL;
+
 -- Tabela de auditoria (RF-12 rate limit + telemetria OCR) — leitura-only por user.
 CREATE TABLE IF NOT EXISTS "hud_ocr_audit" (
   "id" varchar PRIMARY KEY NOT NULL,

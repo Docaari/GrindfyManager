@@ -42,6 +42,8 @@ vi.mock('../../../server/storage', () => ({
     getHudStatSnapshot: vi.fn(),
     createHudStatSnapshot: vi.fn(),
     deleteHudStatSnapshot: vi.fn(),
+    updateHudStatSnapshot: vi.fn(),
+    findHudStatSnapshotByImageSha256: vi.fn(),
   },
 }));
 
@@ -71,7 +73,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
 // Imports (handlers + service NAO existem ainda — red phase)
 // -----------------------------------------------------------------------------
 
-import { handleOcrExtract } from '../../../server/routes/statsAnalyzer';
+import { handleOcrExtract, handleSaveOcrSnapshot } from '../../../server/routes/statsAnalyzer';
 import { storage } from '../../../server/storage';
 
 // -----------------------------------------------------------------------------
@@ -159,6 +161,14 @@ beforeEach(() => {
     id: 'snap-new',
     layoutId: 'lyt-1',
   });
+  // Default: updateHudStatSnapshot patch path retorna row patched
+  (storage.updateHudStatSnapshot as any).mockResolvedValue({
+    id: 'snap-new',
+    layoutId: 'lyt-1',
+    captureMethod: 'ocr',
+  });
+  // Default: cache miss via index parcial INFO-6
+  (storage.findHudStatSnapshotByImageSha256 as any).mockResolvedValue(undefined);
   // Default: messages.create retorna JSON valido
   messagesCreateMock.mockResolvedValue({
     content: [
@@ -304,7 +314,37 @@ describe('POST /api/stats-analyzer/ocr-extract — cache SHA256', () => {
   it('cache HIT por SHA256 retorna sem chamar Anthropic', async () => {
     const buf = pngBuffer();
     const sha = crypto.createHash('sha256').update(buf).digest('hex');
-    // Cache hit: snapshot anterior com mesma sha em ocr_raw_response
+    // Reviewer R1 INFO-6: cache lookup agora usa findHudStatSnapshotByImageSha256
+    // (index parcial expression). Mock retorna snapshot com matching SHA.
+    (storage.findHudStatSnapshotByImageSha256 as any).mockResolvedValue({
+      id: 'snap-cached',
+      userId: 'USER-0001',
+      layoutId: 'lyt-1',
+      ocr_raw_response: {
+        image_sha256: sha,
+        raw_stats: [{ label: 'VPIP', value: 22.5, confidence: 0.94 }],
+        matched_stats: [{ id: 'vpip', label: 'VPIP', value: 22.5, confidence: 0.94, matchedBy: 'exact' }],
+        unmatched_stats: [],
+      },
+      source_image_key: 'USER-0001/hud-snapshots/old.png',
+    });
+    const res = makeRes();
+    await handleOcrExtract(
+      makeReq({ file: multerFile(buf), body: { layoutId: 'lyt-1' } }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body.cached).toBe(true);
+    expect(messagesCreateMock).not.toHaveBeenCalled();
+  });
+
+  it('cache HIT via fallback legacy (storage sem findHudStatSnapshotByImageSha256)', async () => {
+    // Compat: se storage nao expoe finder, usa scan via getHudStatSnapshots.
+    const buf = pngBuffer();
+    const sha = crypto.createHash('sha256').update(buf).digest('hex');
+    // Remove o finder para forcar fallback
+    const origFinder = (storage as any).findHudStatSnapshotByImageSha256;
+    (storage as any).findHudStatSnapshotByImageSha256 = undefined;
     (storage.getHudStatSnapshots as any).mockResolvedValue([
       {
         id: 'snap-cached',
@@ -316,20 +356,27 @@ describe('POST /api/stats-analyzer/ocr-extract — cache SHA256', () => {
           matched_stats: [{ id: 'vpip', label: 'VPIP', value: 22.5, confidence: 0.94, matchedBy: 'exact' }],
           unmatched_stats: [],
         },
-        source_image_key: 'hud-snapshots/USER-0001/old.png',
+        source_image_key: 'USER-0001/hud-snapshots/old.png',
       },
     ]);
-    const res = makeRes();
-    await handleOcrExtract(
-      makeReq({ file: multerFile(buf), body: { layoutId: 'lyt-1' } }) as any,
-      res,
-    );
-    expect(res.statusCode).toBe(200);
-    expect(res.body.cached).toBe(true);
-    expect(messagesCreateMock).not.toHaveBeenCalled();
+    try {
+      const res = makeRes();
+      await handleOcrExtract(
+        makeReq({ file: multerFile(buf), body: { layoutId: 'lyt-1' } }) as any,
+        res,
+      );
+      expect(res.statusCode).toBe(200);
+      expect(res.body.cached).toBe(true);
+      expect(messagesCreateMock).not.toHaveBeenCalled();
+    } finally {
+      (storage as any).findHudStatSnapshotByImageSha256 = origFinder;
+    }
   });
 
-  it('cache MISS chama Anthropic + persiste response', async () => {
+  it('cache MISS chama Anthropic e devolve resultado SEM criar snapshot orfao', async () => {
+    // Reviewer R1 CRITICAL-1: handleOcrExtract NAO persiste snapshot.
+    // Apenas handleSaveOcrSnapshot (from-ocr endpoint) cria snapshot final
+    // com captureMethod='ocr', sourceImageKey, ocrRawResponse com image_sha256.
     const res = makeRes();
     await handleOcrExtract(
       makeReq({ file: multerFile(pngBuffer()), body: { layoutId: 'lyt-1' } }) as any,
@@ -337,7 +384,13 @@ describe('POST /api/stats-analyzer/ocr-extract — cache SHA256', () => {
     );
     expect(res.statusCode).toBe(200);
     expect(messagesCreateMock).toHaveBeenCalledTimes(1);
-    expect(storage.createHudStatSnapshot).toHaveBeenCalled();
+    // Invariante CRITICAL-1: extract NUNCA cria snapshot. Frontend recebe
+    // preview, user revisa e dispara from-ocr para salvar definitivamente.
+    expect(storage.createHudStatSnapshot).not.toHaveBeenCalled();
+    // Resposta inclui rawResponse com image_sha256 para o from-ocr usar.
+    expect(res.body).toHaveProperty('imageSha256');
+    expect(res.body).toHaveProperty('rawResponse');
+    expect(res.body.rawResponse.image_sha256).toBe(res.body.imageSha256);
   });
 
   it('SHA256 hash determinismo: mesmo buffer = mesma key', async () => {
@@ -424,5 +477,120 @@ describe('POST /api/stats-analyzer/ocr-extract — SpotImageStorage', () => {
     expect(putArg.userId).toBe('USER-0001');
     expect(putArg.sessionId).toBe('hud-snapshots');
     expect(['png', 'jpeg', 'webp']).toContain(putArg.ext);
+  });
+});
+
+// =============================================================================
+// Reviewer R1 CRITICAL-2 — IDOR em from-ocr imageKey
+// =============================================================================
+
+describe('POST /api/stats-analyzer/snapshots/from-ocr — IDOR / imageKey', () => {
+  it('403 quando imageKey nao comeca com `${userPlatformId}/hud-snapshots/`', async () => {
+    const res = makeRes();
+    await handleSaveOcrSnapshot(
+      makeReq({
+        body: {
+          layoutId: 'lyt-1',
+          imageKey: 'USER-9999/hud-snapshots/stolen.png', // outro user
+          values: { vpip: 22 },
+        },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(403);
+    expect(storage.createHudStatSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('403 quando imageKey aponta para outro sessionId (path traversal classico)', async () => {
+    const res = makeRes();
+    await handleSaveOcrSnapshot(
+      makeReq({
+        body: {
+          layoutId: 'lyt-1',
+          imageKey: 'USER-0001/spot-screenshots/sneaky.png',
+          values: { vpip: 22 },
+        },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(403);
+    expect(storage.createHudStatSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('201 quando imageKey casa o prefixo correto', async () => {
+    const res = makeRes();
+    await handleSaveOcrSnapshot(
+      makeReq({
+        body: {
+          layoutId: 'lyt-1',
+          imageKey: 'USER-0001/hud-snapshots/legit.png',
+          values: { vpip: 22 },
+          ocrRawResponse: { image_sha256: 'abc' },
+        },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(201);
+    expect(storage.createHudStatSnapshot).toHaveBeenCalled();
+  });
+
+  it('201 quando imageKey ausente (frontend pode salvar manual sem upload)', async () => {
+    const res = makeRes();
+    await handleSaveOcrSnapshot(
+      makeReq({
+        body: {
+          layoutId: 'lyt-1',
+          values: { vpip: 22 },
+        },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(201);
+  });
+});
+
+// =============================================================================
+// Reviewer R1 HIGH-4 — from-ocr rejeita statIds desconhecidos
+// =============================================================================
+
+describe('POST /api/stats-analyzer/snapshots/from-ocr — unknown statIds', () => {
+  it('400 com unknownStatIds list quando values contem statId fora do catalog', async () => {
+    const res = makeRes();
+    await handleSaveOcrSnapshot(
+      makeReq({
+        body: {
+          layoutId: 'lyt-1',
+          imageKey: 'USER-0001/hud-snapshots/x.png',
+          values: { vpip: 22, totally_made_up_stat: 99 },
+        },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toHaveProperty('unknownStatIds');
+    expect(res.body.unknownStatIds).toContain('totally_made_up_stat');
+    expect(storage.createHudStatSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('aceita statId custom_* declarado no layout fields_json', async () => {
+    (storage.getHudLayout as any).mockResolvedValue({
+      id: 'lyt-1',
+      userId: 'USER-0001',
+      fields_json: [
+        { id: 'custom_a8b3c9d1', isCustom: true, label: 'Avg Stack BB', unit: 'bb' },
+      ],
+    });
+    const res = makeRes();
+    await handleSaveOcrSnapshot(
+      makeReq({
+        body: {
+          layoutId: 'lyt-1',
+          imageKey: 'USER-0001/hud-snapshots/x.png',
+          values: { vpip: 22, custom_a8b3c9d1: 50 },
+        },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(201);
   });
 });

@@ -306,8 +306,55 @@ export default function HudGroupedView(props: HudGroupedViewProps) {
     return readExpandState();
   });
 
+  // MEDIUM-6: throttle 500ms (leading edge) para writes em localStorage.
+  // Comportamento: primeira mudanca apos render inicial escreve imediatamente
+  // (leading edge). Mudancas subsequentes dentro de 500ms sao coalescidas em
+  // um trailing flush. Mount inicial NAO escreve (estado lido eh igual ao
+  // persistido — write seria redundante).
+  const lastWriteRef = React.useRef<number>(Number.NEGATIVE_INFINITY);
+  const trailingTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingStateRef = React.useRef<Record<string, boolean>>(expandState);
+  const isInitialMountRef = React.useRef<boolean>(true);
+
   React.useEffect(() => {
-    writeExpandState(expandState);
+    pendingStateRef.current = expandState;
+    if (isInitialMountRef.current) {
+      // Initial mount: nao escreve (estado vem do localStorage). Mantem
+      // lastWriteRef = -Infinity para que primeira mudanca de user dispare
+      // leading edge imediato (test "persiste estado em localStorage" depende).
+      isInitialMountRef.current = false;
+      return;
+    }
+    const now = Date.now();
+    const elapsed = now - lastWriteRef.current;
+    const THROTTLE_MS = 500;
+    if (elapsed >= THROTTLE_MS) {
+      // Leading edge: escreve imediatamente.
+      writeExpandState(expandState);
+      lastWriteRef.current = now;
+      if (trailingTimerRef.current !== null) {
+        clearTimeout(trailingTimerRef.current);
+        trailingTimerRef.current = null;
+      }
+      return;
+    }
+    // Dentro da janela: agenda trailing flush (sobrescreve agendamento anterior).
+    if (trailingTimerRef.current !== null) {
+      clearTimeout(trailingTimerRef.current);
+    }
+    trailingTimerRef.current = setTimeout(() => {
+      writeExpandState(pendingStateRef.current);
+      lastWriteRef.current = Date.now();
+      trailingTimerRef.current = null;
+    }, THROTTLE_MS - elapsed);
+    return () => {
+      // Cleanup so unmount nao deixe timer pendente; flush sincrono se houver.
+      if (trailingTimerRef.current !== null) {
+        clearTimeout(trailingTimerRef.current);
+        trailingTimerRef.current = null;
+        writeExpandState(pendingStateRef.current);
+      }
+    };
   }, [expandState]);
 
   const toggleGroup = (groupId: HudGroupId) => {

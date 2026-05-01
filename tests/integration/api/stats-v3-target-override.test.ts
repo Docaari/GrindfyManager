@@ -162,3 +162,82 @@ describe('PUT /api/hud-layouts/:id/target-override — RF-05', () => {
     }
   });
 });
+
+// =============================================================================
+// Reviewer R1 HIGH-1 — unit-aware caps (pct/bb/count)
+// =============================================================================
+
+describe('PUT /api/hud-layouts/:id/target-override — HIGH-1 unit caps', () => {
+  it('stat unit=bb aceita range > 100 (ex: 0-150)', async () => {
+    // avg_stack_bb existe? Caso nao, usar custom field bb.
+    (storage.getHudLayout as any).mockResolvedValue({
+      ...baseLayout,
+      fields_json: [
+        { id: 'custom_bbstack1', isCustom: true, unit: 'bb', label: 'BB Stack' },
+      ],
+    });
+    const res = makeRes();
+    await handleSetTargetOverride(
+      makeReq({
+        params: { id: 'lyt-1' },
+        body: { statId: 'custom_bbstack1', min: 20, max: 150 },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('stat unit=bb rejeita 400 quando max > 200', async () => {
+    (storage.getHudLayout as any).mockResolvedValue({
+      ...baseLayout,
+      fields_json: [
+        { id: 'custom_bbstack2', isCustom: true, unit: 'bb', label: 'BB Stack' },
+      ],
+    });
+    const res = makeRes();
+    await handleSetTargetOverride(
+      makeReq({
+        params: { id: 'lyt-1' },
+        body: { statId: 'custom_bbstack2', min: 20, max: 250 },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('stat unit=count aceita 0..N (sem cap superior)', async () => {
+    (storage.getHudLayout as any).mockResolvedValue({
+      ...baseLayout,
+      fields_json: [
+        { id: 'custom_handcount', isCustom: true, unit: 'count', label: 'Hand Count' },
+      ],
+    });
+    const res = makeRes();
+    await handleSetTargetOverride(
+      makeReq({
+        params: { id: 'lyt-1' },
+        body: { statId: 'custom_handcount', min: 100, max: 99999 },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('stat unit=count rejeita 400 quando min < 0', async () => {
+    (storage.getHudLayout as any).mockResolvedValue({
+      ...baseLayout,
+      fields_json: [
+        { id: 'custom_handcount2', isCustom: true, unit: 'count', label: 'Hand Count' },
+      ],
+    });
+    const res = makeRes();
+    await handleSetTargetOverride(
+      makeReq({
+        params: { id: 'lyt-1' },
+        body: { statId: 'custom_handcount2', min: -1, max: 100 },
+      }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(400);
+  });
+});

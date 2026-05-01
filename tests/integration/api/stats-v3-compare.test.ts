@@ -300,6 +300,33 @@ describe('GET /api/stats-analyzer/snapshots/compare — trend icon', () => {
 });
 
 // =============================================================================
+// Reviewer R1 HIGH-6 — stableCount exclui null states
+// =============================================================================
+
+describe('GET /api/stats-analyzer/snapshots/compare — HIGH-6 stableCount excludes null', () => {
+  it('snap1Value=null em todos stats nao soma stableCount', async () => {
+    const allNullSnap = {
+      ...snap1Old,
+      values: {} as Record<string, number | null>, // todos null por ausencia
+    };
+    (storage.getHudStatSnapshot as any).mockImplementation(async (id: string) => {
+      if (id === 'snap-old') return allNullSnap;
+      if (id === 'snap-new') return allNullSnap;
+      return undefined;
+    });
+    const res = makeRes();
+    await handleCompareSnapshots(
+      makeReq({ query: { snap1: 'snap-old', snap2: 'snap-new', layoutId: 'lyt-1' } }) as any,
+      res,
+    );
+    expect(res.statusCode).toBe(200);
+    // Antes da R1, stableCount somava all-null como "stable" — falsa estabilidade.
+    // Agora: stableCount soma APENAS both_in_target/both_out_target.
+    expect(res.body.summary.stableCount).toBe(0);
+  });
+});
+
+// =============================================================================
 // Performance
 // =============================================================================
 

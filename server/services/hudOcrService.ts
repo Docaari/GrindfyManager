@@ -107,30 +107,64 @@ export function extractStatsJson(
 
 // -----------------------------------------------------------------------------
 // Fuzzy matching — splits OCR raw stats into matched + unmatched.
+//
+// MEDIUM-5: assignment global greedy. Em vez de iterar rawStats em ordem e
+// tomar o top match (que pode "roubar" um stat melhor servido por outro raw
+// label posterior), construimos uma lista de TODOS os pares (raw, candidato),
+// ordenamos por score desc e atribuimos greedy garantindo que cada raw e cada
+// statId sao usados no maximo uma vez.
 // -----------------------------------------------------------------------------
 export function matchStatsAgainstCatalog(rawStats: OcrExtractedStatRaw[]): {
   matched: OcrMatchedStat[];
   unmatched: OcrUnmatchedStat[];
 } {
-  const matched: OcrMatchedStat[] = [];
-  const unmatched: OcrUnmatchedStat[] = [];
-  const usedIds = new Set<string>();
-
-  for (const raw of rawStats) {
+  interface Pair {
+    rawIdx: number;
+    raw: OcrExtractedStatRaw;
+    statId: string;
+    kind: FuzzyMatchKind;
+    score: number;
+  }
+  const pairs: Pair[] = [];
+  for (let i = 0; i < rawStats.length; i++) {
+    const raw = rawStats[i];
     const candidates = fuzzyMatchStat(raw.label, HUD_STAT_CATALOG, {
-      maxResults: 1,
+      maxResults: 5,
     });
-    const top = candidates[0];
-    if (top && !usedIds.has(top.statId)) {
-      usedIds.add(top.statId);
-      matched.push({
-        id: top.statId,
-        label: raw.label,
-        value: raw.value,
-        confidence: raw.confidence,
-        matchedBy: top.kind,
+    for (const c of candidates) {
+      pairs.push({
+        rawIdx: i,
+        raw,
+        statId: c.statId,
+        kind: c.kind,
+        score: c.score,
       });
-    } else {
+    }
+  }
+  // Ordena por score desc (tie-break: kind exact > substring > lev ja embutido
+  // no score do fuzzy).
+  pairs.sort((a, b) => b.score - a.score);
+
+  const matched: OcrMatchedStat[] = [];
+  const usedRawIdx = new Set<number>();
+  const usedStatIds = new Set<string>();
+  for (const p of pairs) {
+    if (usedRawIdx.has(p.rawIdx) || usedStatIds.has(p.statId)) continue;
+    usedRawIdx.add(p.rawIdx);
+    usedStatIds.add(p.statId);
+    matched.push({
+      id: p.statId,
+      label: p.raw.label,
+      value: p.raw.value,
+      confidence: p.raw.confidence,
+      matchedBy: p.kind,
+    });
+  }
+  // raws nao alocados viram unmatched.
+  const unmatched: OcrUnmatchedStat[] = [];
+  for (let i = 0; i < rawStats.length; i++) {
+    if (!usedRawIdx.has(i)) {
+      const raw = rawStats[i];
       unmatched.push({
         label: raw.label,
         value: raw.value,
@@ -194,9 +228,14 @@ export async function extractStatsFromImage(input: {
     } catch (err: any) {
       lastErr = err;
       const status = err?.status ?? err?.response?.status;
-      // Retry uma vez para 5xx OR sem status (network)
-      if (attempt === 0 && (status === undefined || status >= 500)) {
-        await new Promise((r) => setTimeout(r, 100));
+      // MEDIUM-3: retry SOMENTE para 5xx (status numerico em [500, 600)).
+      // Erros sem status (network/timeout) NAO sao retryados — falham rapido
+      // para nao mascarar bugs de configuracao.
+      // MEDIUM-1: backoff de 500ms (era 100ms — agressivo para Anthropic API).
+      const is5xx =
+        typeof status === "number" && status >= 500 && status < 600;
+      if (attempt === 0 && is5xx) {
+        await new Promise((r) => setTimeout(r, 500));
         continue;
       }
       throw err;

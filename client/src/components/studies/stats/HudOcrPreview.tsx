@@ -56,10 +56,15 @@ export default function HudOcrPreview({
   onSaved,
   onCancel,
 }: HudOcrPreviewProps) {
+  // MEDIUM-4: state-key inclui index para evitar colisao de label duplicado.
+  // Ex: dois raw labels com texto identico (variacao OCR) compartilhariam state
+  // antes desta correcao, fazendo um sobrescrever o outro.
+  const rowKeyFor = (label: string, index: number) => `${label}-${index}`;
   const [rows, setRows] = React.useState<Record<string, RowState>>(() => {
     const initial: Record<string, RowState> = {};
-    for (const s of extraction.stats) {
-      initial[s.label] = {
+    for (let i = 0; i < extraction.stats.length; i++) {
+      const s = extraction.stats[i];
+      initial[rowKeyFor(s.label, i)] = {
         accepted: s.confidence >= 0.7,
         value: typeof s.value === "number" ? s.value : Number(s.value),
         catalogId: s.id,
@@ -69,19 +74,21 @@ export default function HudOcrPreview({
   });
   const { toast } = useToast();
 
-  const updateRow = (label: string, patch: Partial<RowState>) => {
+  const updateRow = (rowKey: string, patch: Partial<RowState>) => {
     setRows((prev) => ({
       ...prev,
-      [label]: { ...(prev[label] ?? { accepted: false, value: 0, catalogId: "" }), ...patch },
+      [rowKey]: { ...(prev[rowKey] ?? { accepted: false, value: 0, catalogId: "" }), ...patch },
     }));
   };
 
   const bulkAcceptHigh = () => {
     setRows((prev) => {
       const next: Record<string, RowState> = { ...prev };
-      for (const s of extraction.stats) {
+      for (let i = 0; i < extraction.stats.length; i++) {
+        const s = extraction.stats[i];
+        const k = rowKeyFor(s.label, i);
         if (s.confidence >= 0.9) {
-          next[s.label] = { ...(next[s.label] ?? {} as any), accepted: true };
+          next[k] = { ...(next[k] ?? {} as any), accepted: true };
         }
       }
       return next;
@@ -91,9 +98,11 @@ export default function HudOcrPreview({
   const bulkRejectLow = () => {
     setRows((prev) => {
       const next: Record<string, RowState> = { ...prev };
-      for (const s of extraction.stats) {
+      for (let i = 0; i < extraction.stats.length; i++) {
+        const s = extraction.stats[i];
+        const k = rowKeyFor(s.label, i);
         if (s.confidence < 0.7) {
-          next[s.label] = { ...(next[s.label] ?? {} as any), accepted: false };
+          next[k] = { ...(next[k] ?? {} as any), accepted: false };
         }
       }
       return next;
@@ -104,8 +113,9 @@ export default function HudOcrPreview({
     // Construir values map a partir das rows aceitas
     const values: Record<string, number> = {};
     const ocrConfidence: Record<string, number> = {};
-    for (const s of extraction.stats) {
-      const r = rows[s.label];
+    for (let i = 0; i < extraction.stats.length; i++) {
+      const s = extraction.stats[i];
+      const r = rows[rowKeyFor(s.label, i)];
       if (r?.accepted && r.catalogId) {
         values[r.catalogId] = r.value;
         ocrConfidence[r.catalogId] = s.confidence;
@@ -183,12 +193,13 @@ export default function HudOcrPreview({
       </div>
 
       <div className="flex flex-col gap-1">
-        {extraction.stats.map((s) => {
-          const r = rows[s.label] ?? { accepted: false, value: s.value, catalogId: s.id };
+        {extraction.stats.map((s, i) => {
+          const rowKey = rowKeyFor(s.label, i);
+          const r = rows[rowKey] ?? { accepted: false, value: s.value, catalogId: s.id };
           const showSuggestions = s.matchedBy === "fuzzy_lev" || s.matchedBy === "fuzzy_substring";
           return (
             <div
-              key={s.label}
+              key={rowKey}
               data-testid={`ocr-preview-row-${s.label}`}
               className="grid grid-cols-12 gap-2 items-center px-2 py-1.5 bg-slate-950 rounded"
             >
@@ -207,7 +218,7 @@ export default function HudOcrPreview({
                 data-testid={`ocr-preview-value-${s.label}`}
                 value={String(r.value)}
                 onChange={(e) =>
-                  updateRow(s.label, { value: Number(e.target.value) })
+                  updateRow(rowKey, { value: Number(e.target.value) })
                 }
                 className="col-span-2 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-100"
               />
@@ -216,7 +227,7 @@ export default function HudOcrPreview({
                   data-testid={`ocr-preview-match-${s.label}`}
                   value={r.catalogId}
                   onChange={(e) =>
-                    updateRow(s.label, { catalogId: e.target.value })
+                    updateRow(rowKey, { catalogId: e.target.value })
                   }
                   className="col-span-4 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-100"
                 >
@@ -235,7 +246,7 @@ export default function HudOcrPreview({
                 type="checkbox"
                 data-testid={`ocr-preview-accept-${s.label}`}
                 checked={r.accepted}
-                onChange={(e) => updateRow(s.label, { accepted: e.target.checked })}
+                onChange={(e) => updateRow(rowKey, { accepted: e.target.checked })}
                 className="col-span-1"
               />
             </div>
