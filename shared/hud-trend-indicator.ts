@@ -66,18 +66,9 @@ export function getTrendIndicator(
     return { icon: "→", kind: "stable" };
   }
 
+  // higher_better: delta>0 = good; lower_better: delta>0 = leak.
+  const isPositive = direction === "higher_better" ? delta > 0 : delta < 0;
   const big = absDelta >= threshold.big;
-
-  // Determinar se delta eh "good" ou "leak" baseado em direction
-  // higher_better: delta>0 = good (positive)
-  // lower_better:  delta>0 = leak (negative)
-  let isPositive: boolean;
-  if (direction === "higher_better") {
-    isPositive = delta > 0;
-  } else {
-    // lower_better
-    isPositive = delta < 0;
-  }
 
   if (big) {
     return isPositive

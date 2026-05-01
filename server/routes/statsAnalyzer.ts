@@ -24,11 +24,7 @@ import { handlePostPasteImportPreview } from "./statsAnalyzerImport";
 import {
   HUD_GROUP_IDS,
   HUD_GROUP_LABELS,
-  HUD_STAT_CATALOG,
-  getStatById,
   getStatsByGroup,
-  type HudGroupId,
-  type StatField,
 } from "../../shared/hud-stat-catalog";
 import { getTrendIndicator } from "../../shared/hud-trend-indicator";
 import { extractStatsFromImage } from "../services/hudOcrService";
@@ -44,6 +40,11 @@ function isProUser(user: any): boolean {
   if (!user) return false;
   const plan = (user.subscriptionPlan ?? user.plan ?? "free").toLowerCase();
   return PRO_PLANS.has(plan);
+}
+
+// Aceita ambos camelCase (Zod schema) e snake_case (raw V3 handlers).
+function getLayoutFields(layout: any): HudLayoutFieldEntry[] {
+  return (layout?.fields_json ?? layout?.fieldsJson ?? []) as HudLayoutFieldEntry[];
 }
 
 const compareInputSchema = z.object({
@@ -362,7 +363,7 @@ export async function handleSetTargetOverride(
     return res.status(404).json({ message: "Layout nao encontrado." });
   }
 
-  const fields = [...(((layout as any).fields_json ?? (layout as any).fieldsJson ?? []) as HudLayoutFieldEntry[])];
+  const fields = [...getLayoutFields(layout)];
   const idx = fields.findIndex(
     (f) => f.id === statId || (f as any).statId === statId,
   );
@@ -442,8 +443,7 @@ export async function handleCreateCustomStat(
     targetMax: parsed.targetMax,
   };
 
-  const existing = (((layout as any).fields_json ?? (layout as any).fieldsJson ?? []) as HudLayoutFieldEntry[]);
-  const fields = [...existing, newField];
+  const fields = [...getLayoutFields(layout), newField];
 
   try {
     await storage.updateHudLayout(layoutId, user.userPlatformId, {
@@ -473,8 +473,7 @@ export async function handleDeleteCustomStat(
   if (!layout) {
     return res.status(404).json({ message: "Layout nao encontrado." });
   }
-  const existing = (((layout as any).fields_json ?? (layout as any).fieldsJson ?? []) as HudLayoutFieldEntry[]);
-  const fields = existing.filter((f) => f.id !== customId);
+  const fields = getLayoutFields(layout).filter((f) => f.id !== customId);
   try {
     await storage.updateHudLayout(layoutId, user.userPlatformId, {
       fields_json: fields,
@@ -624,17 +623,10 @@ export async function handleCompareSnapshots(
   // Auto-reorder por captured_at: snap1 sempre mais antigo
   const t1 = new Date(s1.capturedAt).getTime();
   const t2 = new Date(s2.capturedAt).getTime();
-  let snap1 = s1;
-  let snap2 = s2;
-  if (t1 > t2) {
-    snap1 = s2;
-    snap2 = s1;
-  }
+  const [snap1, snap2] = t1 > t2 ? [s2, s1] : [s1, s2];
 
   // Build override + custom map
-  const fields = (((layout as any).fields_json ??
-    (layout as any).fieldsJson ??
-    []) as HudLayoutFieldEntry[]);
+  const fields = getLayoutFields(layout);
   const overrideMap = new Map<string, { min: number; max: number }>();
   const customStats: HudLayoutFieldEntry[] = [];
   for (const f of fields) {
@@ -747,22 +739,17 @@ export async function handleCompareSnapshots(
     });
   }
 
+  const snapMeta = (s: typeof snap1) => ({
+    id: s.id,
+    capturedAt: s.capturedAt,
+    captureMethod: (s as any).captureMethod ?? (s as any).source ?? "manual",
+    sampleSize: s.sampleSize ?? null,
+  });
+
   return res.json({
     layoutId,
-    snap1: {
-      id: snap1.id,
-      capturedAt: snap1.capturedAt,
-      captureMethod:
-        (snap1 as any).captureMethod ?? (snap1 as any).source ?? "manual",
-      sampleSize: snap1.sampleSize ?? null,
-    },
-    snap2: {
-      id: snap2.id,
-      capturedAt: snap2.capturedAt,
-      captureMethod:
-        (snap2 as any).captureMethod ?? (snap2 as any).source ?? "manual",
-      sampleSize: snap2.sampleSize ?? null,
-    },
+    snap1: snapMeta(snap1),
+    snap2: snapMeta(snap2),
     groups,
     summary: {
       snap1OffTarget,

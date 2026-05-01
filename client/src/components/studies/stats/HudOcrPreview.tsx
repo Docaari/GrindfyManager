@@ -7,10 +7,7 @@
 import React from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import {
-  HUD_STAT_CATALOG,
-  type StatField,
-} from "../../../../../shared/hud-stat-catalog";
+import { HUD_STAT_CATALOG } from "../../../../../shared/hud-stat-catalog";
 
 interface ExtractionStat {
   id: string;

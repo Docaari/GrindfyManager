@@ -67,6 +67,10 @@ function statusAccent(status: string): string {
   return "border-l-slate-700 bg-slate-900 text-slate-300";
 }
 
+function formatValue(v: number | null): string {
+  return v === null ? "—" : v.toString();
+}
+
 export default function HudComparisonView(props: HudComparisonViewProps) {
   const {
     layoutId,
@@ -145,12 +149,8 @@ export default function HudComparisonView(props: HudComparisonViewProps) {
                       {s.target.min}-{s.target.max}
                       {s.unit === "pct" ? "%" : ""}
                     </span>
-                    <span className="text-right">
-                      {s.snap1Value === null ? "—" : s.snap1Value.toString()}
-                    </span>
-                    <span className="text-right">
-                      {s.snap2Value === null ? "—" : s.snap2Value.toString()}
-                    </span>
+                    <span className="text-right">{formatValue(s.snap1Value)}</span>
+                    <span className="text-right">{formatValue(s.snap2Value)}</span>
                     <span
                       data-testid={`compare-trend-${s.id}`}
                       className="text-right tabular-nums"

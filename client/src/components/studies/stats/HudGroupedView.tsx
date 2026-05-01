@@ -12,7 +12,6 @@ import {
   HUD_GROUP_LABELS,
   getStatsByGroup,
   type HudGroupId,
-  type StatField,
 } from "../../../../../shared/hud-stat-catalog";
 
 const LOCAL_STORAGE_KEY = "stats-v3-expand-state";
@@ -88,10 +87,16 @@ function writeExpandState(state: Record<string, boolean>): void {
 }
 
 // -----------------------------------------------------------------------------
-// Status helpers — replicam logica server-side para three_way mode
+// Status helpers — replicam logica server-side para three_way mode (ADR-066)
 // -----------------------------------------------------------------------------
-function isInRange(v: number | null, min: number, max: number): boolean {
-  if (v === null) return false;
+function isOnTarget(
+  v: number,
+  min: number,
+  max: number,
+  direction: string,
+): boolean {
+  if (direction === "higher_better") return v >= min;
+  if (direction === "lower_better") return v <= max;
   return v >= min && v <= max;
 }
 
@@ -107,16 +112,8 @@ function classifyCellStatus(
   if (v2 === null) return "snap2_null";
   if (direction === "context") return "context_ambiguous";
   if (direction === "neutral") return "neutral_info";
-  // higher_better / lower_better usam mesma logica do ADR-066
-  let in1 = isInRange(v1, min, max);
-  let in2 = isInRange(v2, min, max);
-  if (direction === "higher_better") {
-    in1 = v1 !== null && v1 >= min;
-    in2 = v2 !== null && v2 >= min;
-  } else if (direction === "lower_better") {
-    in1 = v1 !== null && v1 <= max;
-    in2 = v2 !== null && v2 <= max;
-  }
+  const in1 = isOnTarget(v1, min, max, direction);
+  const in2 = isOnTarget(v2, min, max, direction);
   if (in1 && in2) return "both_in_target";
   if (!in1 && in2) return "improving";
   if (in1 && !in2) return "regressing";
@@ -150,13 +147,38 @@ function statusAccentClass(status: string, v1: number | null, v2: number | null,
 // -----------------------------------------------------------------------------
 // Cell render
 // -----------------------------------------------------------------------------
+interface GroupField {
+  id: string;
+  label: string;
+  min: number;
+  max: number;
+  direction: string;
+  unit: string;
+  isCustom?: boolean;
+}
+
+function unitSuffix(unit: string): string {
+  if (unit === "pct") return "%";
+  if (unit === "bb") return "bb";
+  return "";
+}
+
+function renderValue(v: number | null): string {
+  return v === null ? "—" : v.toString();
+}
+
+function formatDelta(v1: number, v2: number): string {
+  const d = +(v2 - v1).toFixed(2);
+  return d > 0 ? `+${d}` : `${d}`;
+}
+
 function StatCell({
   field,
   values1,
   values2,
   comparisonMode,
 }: {
-  field: { id: string; label: string; min: number; max: number; direction: string; unit: string; isCustom?: boolean };
+  field: GroupField;
   values1: Record<string, number | null>;
   values2?: Record<string, number | null>;
   comparisonMode: "single" | "three_way";
@@ -165,8 +187,6 @@ function StatCell({
   const v2 = values2 && typeof values2[field.id] === "number" ? (values2[field.id] as number) : null;
   const status = comparisonMode === "three_way" ? classifyCellStatus(v1, v2, field.min, field.max, field.direction) : "single";
   const accent = statusAccentClass(status, v1, v2, field.min, field.max);
-
-  const renderValue = (v: number | null) => (v === null ? "—" : v.toString());
 
   return (
     <div
@@ -186,7 +206,7 @@ function StatCell({
         className="hidden sm:block text-slate-400 text-xs"
       >
         {field.min}-{field.max}
-        {field.unit === "pct" ? "%" : field.unit === "bb" ? "bb" : ""}
+        {unitSuffix(field.unit)}
       </span>
       {comparisonMode === "three_way" ? (
         <span className="flex items-center justify-end gap-2 text-slate-100 text-xs">
@@ -194,12 +214,7 @@ function StatCell({
           <span>→</span>
           <span>{renderValue(v2)}</span>
           {v1 !== null && v2 !== null && (
-            <span className="text-slate-400">
-              {(() => {
-                const d = +(v2 - v1).toFixed(2);
-                return d > 0 ? `+${d}` : `${d}`;
-              })()}
-            </span>
+            <span className="text-slate-400">{formatDelta(v1, v2)}</span>
           )}
         </span>
       ) : (
@@ -222,7 +237,7 @@ function GroupCard({
   comparisonMode,
 }: {
   groupId: HudGroupId;
-  fields: Array<{ id: string; label: string; min: number; max: number; direction: string; unit: string; isCustom?: boolean }>;
+  fields: GroupField[];
   expanded: boolean;
   onToggle: () => void;
   values1: Record<string, number | null>;
@@ -338,16 +353,8 @@ export default function HudGroupedView(props: HudGroupedViewProps) {
     }
   }
 
-  function buildGroupFields(g: HudGroupId): Array<{
-    id: string;
-    label: string;
-    min: number;
-    max: number;
-    direction: string;
-    unit: string;
-    isCustom?: boolean;
-  }> {
-    const list: Array<{ id: string; label: string; min: number; max: number; direction: string; unit: string; isCustom?: boolean }> = [];
+  function buildGroupFields(g: HudGroupId): GroupField[] {
+    const list: GroupField[] = [];
     for (const stat of getStatsByGroup(g)) {
       const ov = overrideMap.get(stat.id);
       list.push({
@@ -359,8 +366,7 @@ export default function HudGroupedView(props: HudGroupedViewProps) {
         unit: stat.unit,
       });
     }
-    const customs = customsByGroup.get(g) ?? [];
-    for (const c of customs) {
+    for (const c of customsByGroup.get(g) ?? []) {
       list.push({
         id: c.id,
         label: c.label ?? c.id,
@@ -371,7 +377,6 @@ export default function HudGroupedView(props: HudGroupedViewProps) {
         isCustom: true,
       });
     }
-    // Apply search filter
     const q = filters.searchQuery.trim().toLowerCase();
     if (q.length === 0) return list;
     return list.filter(
