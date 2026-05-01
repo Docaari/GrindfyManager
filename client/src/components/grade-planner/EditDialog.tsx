@@ -36,6 +36,7 @@ interface EditDialogProps {
   isPending: boolean;
   editingTournament?: any;
   onUpdateEnrichedFields?: (fields: { lateRegMinutes?: number | null; alertMinutesBefore?: number | null }) => void;
+  showDayPicker?: boolean;
 }
 
 export function EditDialog({

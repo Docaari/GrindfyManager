@@ -1,5 +1,158 @@
 import { getScreenCapColor } from './helpers';
-import type { GrindSession, SessionStats, RegistrationData } from './types';
+import type {
+  GrindSession,
+  SessionStats,
+  RegistrationData,
+  SessionFinancialBreakdown,
+  CurrencyBreakdownEntry,
+  PlatformBreakdownEntry,
+} from './types';
+import { getCurrencyForSite } from '@shared/platform-currency';
+
+/** Mapa "1 USD = N unidades nativas". USD sempre 1.0. */
+export type UsdConversionRates = Record<string, number>;
+
+const EMPTY_BREAKDOWN: SessionFinancialBreakdown = {
+  byCurrency: [],
+  byPlatform: [],
+  totalInvestedUSD: 0,
+  profitUSD: 0,
+  hasMissingRate: false,
+};
+
+function nativeToUSD(amount: number, currency: string, rates: UsdConversionRates): {
+  usd: number;
+  rate: number;
+  missing: boolean;
+} {
+  if (currency === 'USD') return { usd: amount, rate: 1, missing: false };
+  const rate = rates[currency];
+  if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) {
+    return { usd: amount, rate: 0, missing: true };
+  }
+  return { usd: amount / rate, rate, missing: false };
+}
+
+interface BreakdownAccumulator {
+  invested: number;
+  profit: number;
+}
+
+function getInvestedFor(t: any): number {
+  const buyIn = parseFloat(t.buyIn || '0') || 0;
+  const rebuys = parseInt(t.rebuys) || 0;
+  const reentriesRaw = t.reentries;
+  const reentries = reentriesRaw == null ? 0 : (parseInt(String(reentriesRaw)) || 0);
+  const addOnTaken = Boolean(t.addOnTaken);
+  const addOnCost = parseFloat(t.addOnCost || '0') || 0;
+  return buyIn * (1 + rebuys + reentries) + (addOnTaken ? addOnCost : 0);
+}
+
+function getResultFor(t: any, registrationData: RegistrationData): number {
+  const tournamentId = t.id;
+  const sessionPrize = registrationData[tournamentId]?.prize;
+  if (sessionPrize !== undefined && sessionPrize !== null && sessionPrize !== '') {
+    const parsed = parseFloat(sessionPrize);
+    if (!isNaN(parsed)) return parsed;
+  }
+  const stored = parseFloat(t.result || '0');
+  return isNaN(stored) ? 0 : stored;
+}
+
+function getBountyFor(t: any, registrationData: RegistrationData): number {
+  const tournamentId = t.id;
+  const sessionBounty = registrationData[tournamentId]?.bounty;
+  if (sessionBounty !== undefined && sessionBounty !== null && sessionBounty !== '') {
+    const parsed = parseFloat(sessionBounty);
+    if (!isNaN(parsed)) return parsed;
+  }
+  const stored = parseFloat(t.bounty || '0');
+  return isNaN(stored) ? 0 : stored;
+}
+
+/**
+ * Calcula breakdown financeiro convertido para USD por moeda + por plataforma.
+ * Fail-open: se taxa de uma moeda nao for encontrada, soma valor nativo bruto
+ * e marca `hasMissingRate=true` para o UI alertar.
+ */
+export function aggregateSessionFinancialsUSD(
+  sessionTournaments: any[],
+  registrationData: RegistrationData,
+  rates: UsdConversionRates,
+): SessionFinancialBreakdown {
+  if (!sessionTournaments || sessionTournaments.length === 0) return EMPTY_BREAKDOWN;
+
+  const byCurrencyMap = new Map<string, BreakdownAccumulator>();
+  const byPlatformMap = new Map<string, { invested: number; profit: number; currency: string }>();
+
+  for (const t of sessionTournaments) {
+    const site = t.site || 'Unknown';
+    const currency = getCurrencyForSite(site).code;
+    const invested = getInvestedFor(t);
+    const result = getResultFor(t, registrationData);
+    const bounty = getBountyFor(t, registrationData);
+    const profit = (result + bounty) - invested;
+
+    const cAcc = byCurrencyMap.get(currency) ?? { invested: 0, profit: 0 };
+    cAcc.invested += invested;
+    cAcc.profit += profit;
+    byCurrencyMap.set(currency, cAcc);
+
+    const pKey = `${site}|${currency}`;
+    const pAcc = byPlatformMap.get(pKey) ?? { invested: 0, profit: 0, currency };
+    pAcc.invested += invested;
+    pAcc.profit += profit;
+    byPlatformMap.set(pKey, pAcc);
+  }
+
+  let totalInvestedUSD = 0;
+  let profitUSD = 0;
+  let hasMissingRate = false;
+
+  const byCurrency: CurrencyBreakdownEntry[] = Array.from(byCurrencyMap.entries()).map(([currency, acc]) => {
+    const investedConv = nativeToUSD(acc.invested, currency, rates);
+    const profitConv = nativeToUSD(acc.profit, currency, rates);
+    if (investedConv.missing) hasMissingRate = true;
+    totalInvestedUSD += investedConv.usd;
+    profitUSD += profitConv.usd;
+    return {
+      currency,
+      invested: acc.invested,
+      profit: acc.profit,
+      fxRateNativePerUSD: investedConv.rate,
+      rateMissing: investedConv.missing,
+      investedUSD: investedConv.usd,
+      profitUSD: profitConv.usd,
+    };
+  });
+
+  const byPlatform: PlatformBreakdownEntry[] = Array.from(byPlatformMap.entries()).map(([key, acc]) => {
+    const site = key.split('|')[0];
+    const investedConv = nativeToUSD(acc.invested, acc.currency, rates);
+    const profitConv = nativeToUSD(acc.profit, acc.currency, rates);
+    return {
+      site,
+      currency: acc.currency,
+      invested: acc.invested,
+      profit: acc.profit,
+      investedUSD: investedConv.usd,
+      profitUSD: profitConv.usd,
+      fxRateNativePerUSD: investedConv.rate,
+      rateMissing: investedConv.missing,
+    };
+  });
+
+  byCurrency.sort((a, b) => b.investedUSD - a.investedUSD);
+  byPlatform.sort((a, b) => b.investedUSD - a.investedUSD);
+
+  return {
+    byCurrency,
+    byPlatform,
+    totalInvestedUSD,
+    profitUSD,
+    hasMissingRate,
+  };
+}
 
 // Calculate tournament type and speed percentages
 export const calculateTournamentPercentages = (tournaments: any[]) => {
@@ -40,7 +193,8 @@ export const calculateSessionStats = (
   sessionTournaments: any[],
   plannedTournaments: any[],
   registrationData: RegistrationData,
-  activeSession: GrindSession | null
+  activeSession: GrindSession | null,
+  usdConversionRates: UsdConversionRates = {}
 ): SessionStats => {
   // Use the same deduplication logic as the tournament display
   const combinedTournaments = new Map();
@@ -86,6 +240,9 @@ export const calculateSessionStats = (
     concluidos: 0,
     totalInvestido: 0,
     profit: 0,
+    totalInvestidoUSD: 0,
+    profitUSD: 0,
+    breakdown: EMPTY_BREAKDOWN,
     itm: 0,
     itmPercent: 0,
     roi: 0,
@@ -242,6 +399,12 @@ export const calculateSessionStats = (
   const turboSpeedPercentage = speedTotal > 0 ? Math.round((turboCount / speedTotal) * 100) : 0;
   const hyperSpeedPercentage = speedTotal > 0 ? Math.round((hyperCount / speedTotal) * 100) : 0;
 
+  const breakdown = aggregateSessionFinancialsUSD(
+    allSessionTournaments,
+    registrationData,
+    usdConversionRates,
+  );
+
   return {
     emAndamento,
     registros,
@@ -250,6 +413,9 @@ export const calculateSessionStats = (
     concluidos,
     totalInvestido,
     profit,
+    totalInvestidoUSD: breakdown.totalInvestedUSD,
+    profitUSD: breakdown.profitUSD,
+    breakdown,
     itm,
     itmPercent,
     roi,

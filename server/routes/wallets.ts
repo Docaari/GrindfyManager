@@ -309,7 +309,7 @@ export async function handlePostWalletTransaction(req: any, res: Response): Prom
       direction: parsed.data.direction,
       nativeAmount: parsed.data.nativeAmount,
       reason: parsed.data.reason,
-      occurredAt: parsed.data.occurredAt,
+      occurredAt: parsed.data.occurredAt ?? new Date(),
       note: parsed.data.note ?? undefined,
       sessionId: parsed.data.sessionId ?? undefined,
       expectedPreviousBalance: parsed.data.expectedPreviousBalance,
