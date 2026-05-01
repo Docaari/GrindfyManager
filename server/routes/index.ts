@@ -32,6 +32,8 @@ import { registerCooldownRoutes } from "./cooldown";
 import { registerCooldownAnalyticsRoutes } from "./cooldownAnalytics";
 import { registerStatsAnalyzerRoutes } from "./statsAnalyzer";
 import { registerStarredHandsRoutes } from "./starred-hands";
+import { registerStudyRecommendationsRoutes } from "./study-recommendations";
+import { registerStudyThemeSpotLinkRoutes } from "./study-theme-spot-links";
 import { registerAllJobs } from "../jobs";
 import { spotStorage } from "../lib/spotStorage";
 
@@ -148,6 +150,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sprint F2 — print de spots durante grind. Vive em arquivo dedicado para
   // nao colidir com cooldown.ts (rotas distintas: /:id/discard vs /:id).
   registerStarredHandsRoutes(app);
+  // Sprint Studies-Reform — RF-05 (theme-spot links) + RF-06 (recommendations)
+  registerStudyRecommendationsRoutes(app);
+  registerStudyThemeSpotLinkRoutes(app);
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);
 

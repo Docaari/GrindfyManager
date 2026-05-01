@@ -1,0 +1,209 @@
+/**
+ * Sprint Studies-Reform — RF-02: StudiesDashboard
+ *
+ * 5 secoes em cards: continue / insights / spots / recomendacoes / streak.
+ * Tolera falha por secao (lesson #9): isEnabled allSettled-like via try/catch
+ * em queryFn — falha de uma query nao bloqueia outras.
+ */
+
+import React, { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
+import { ContinueWhereLeftOff } from './ContinueWhereLeftOff';
+import { WeekInsights } from './WeekInsights';
+import { PendingSpotsPreview } from './PendingSpotsPreview';
+import { RecommendationsPreview } from './RecommendationsPreview';
+import { StudyStreakBadge } from '../StudyStreakBadge';
+import { EmptyState } from '../EmptyState';
+
+interface RecResponse {
+  items: Array<{
+    id: string;
+    type: 'leak' | 'stale_spot' | 'dormant_theme';
+    title: string;
+    description?: string;
+    priority_score: number;
+    cta_action?: string;
+    cta_url?: string;
+    metadata?: Record<string, any>;
+  }>;
+  source_counts?: { leaks: number; stale_spots: number; dormant_themes: number };
+  generated_at?: string;
+}
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
+async function jsonFetch<T>(url: string): Promise<T> {
+  const res = await fetch(url, { credentials: 'include' });
+  if (!res.ok) throw new Error(String(res.status));
+  return (await res.json()) as T;
+}
+
+export function StudiesDashboard() {
+  const [, navigate] = useLocation();
+
+  const themesQ = useQuery<any[]>({
+    queryKey: ['/api/study-themes'],
+    queryFn: () => jsonFetch<any[]>('/api/study-themes').catch(() => []),
+  });
+
+  const spotsQ = useQuery<any[]>({
+    queryKey: ['/api/starred-hands', 'dashboard'],
+    queryFn: () =>
+      jsonFetch<any[]>('/api/starred-hands?reviewLater=true').catch(() => []),
+  });
+
+  const insightsQ = useQuery<{
+    themesOpenedThisWeek: number;
+    spotsReviewedThisWeek: number;
+    hoursStudiedThisWeek: number;
+  }>({
+    queryKey: ['/api/dashboard/insights/week'],
+    queryFn: () =>
+      jsonFetch<any>('/api/dashboard/insights/week').catch(() => ({
+        themesOpenedThisWeek: 0,
+        spotsReviewedThisWeek: 0,
+        hoursStudiedThisWeek: 0,
+      })),
+  });
+
+  const recsQ = useQuery<RecResponse>({
+    queryKey: ['study', 'recommendations'],
+    queryFn: () =>
+      jsonFetch<RecResponse>('/api/study/recommendations').catch(() => ({
+        items: [],
+        source_counts: { leaks: 0, stale_spots: 0, dormant_themes: 0 },
+      })),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const streakQ = useQuery<{ days: number }>({
+    queryKey: ['/api/study/streak'],
+    queryFn: () =>
+      jsonFetch<{ days: number }>('/api/study/streak').catch(() => ({ days: 0 })),
+  });
+
+  const themes = themesQ.data ?? [];
+  const spots = spotsQ.data ?? [];
+  const insights = insightsQ.data ?? {
+    themesOpenedThisWeek: 0,
+    spotsReviewedThisWeek: 0,
+    hoursStudiedThisWeek: 0,
+  };
+  const recs = recsQ.data ?? { items: [], source_counts: { leaks: 0, stale_spots: 0, dormant_themes: 0 } };
+  const streakDays = streakQ.data?.days ?? 0;
+
+  const isFirstFetch =
+    themesQ.isLoading || spotsQ.isLoading || insightsQ.isLoading || streakQ.isLoading;
+
+  const isEmpty = useMemo(
+    () => themes.length === 0 && spots.length === 0,
+    [themes, spots],
+  );
+
+  const greet = greeting();
+
+  if (isFirstFetch) {
+    return (
+      <div data-testid="studies-dashboard" className="p-6 space-y-4">
+        <div className="text-2xl font-semibold text-white">{greet}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <div
+              key={n}
+              data-testid={`studies-dashboard-skeleton-${n}`}
+              className="h-32 rounded-lg bg-gray-800 animate-pulse"
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (isEmpty) {
+    return (
+      <div data-testid="studies-dashboard" className="p-6">
+        <div className="text-2xl font-semibold text-white mb-4">{greet}</div>
+        <EmptyState
+          area="dashboard"
+          title="Comece sua jornada de estudos"
+          description="Crie seu primeiro tema para comecar a organizar seu conhecimento."
+          ctaLabel="Criar primeiro tema"
+          ctaAction={() => navigate('/estudos/temas')}
+        />
+        <button
+          type="button"
+          data-testid="studies-dashboard-empty-cta"
+          onClick={() => navigate('/estudos/temas')}
+          className="hidden"
+        >
+          Criar primeiro tema
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="studies-dashboard" className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-white">{greet}</h1>
+        <p className="text-sm text-gray-400 mt-1">Continue de onde parou nos estudos.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <section
+          data-testid="studies-dashboard-card-continue"
+          aria-label="Continue de onde parou"
+          className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-2"
+        >
+          <h2 className="text-sm font-semibold text-gray-300">Continue de onde parou</h2>
+          <ContinueWhereLeftOff themes={themes as any} />
+        </section>
+
+        <section
+          data-testid="studies-dashboard-card-insights"
+          aria-label="Insights da semana"
+          className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-2"
+        >
+          <h2 className="text-sm font-semibold text-gray-300">Insights da semana</h2>
+          <WeekInsights insights={insights} />
+        </section>
+
+        <section
+          data-testid="studies-dashboard-card-spots"
+          aria-label="Spots pendentes"
+          className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-2"
+        >
+          <h2 className="text-sm font-semibold text-gray-300">Spots pendentes</h2>
+          <PendingSpotsPreview spots={spots as any} />
+        </section>
+
+        <section
+          data-testid="studies-dashboard-card-recomendacoes"
+          aria-label="Recomendacoes"
+          className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-2"
+        >
+          <h2 className="text-sm font-semibold text-gray-300">Recomendacoes</h2>
+          <RecommendationsPreview items={recs.items as any} />
+        </section>
+
+        <section
+          data-testid="studies-dashboard-card-streak"
+          aria-label="Streak de estudos"
+          className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-2"
+        >
+          <h2 className="text-sm font-semibold text-gray-300">Streak</h2>
+          <div className="text-2xl font-bold text-white">{streakDays} dias</div>
+          <StudyStreakBadge />
+        </section>
+      </div>
+    </div>
+  );
+}
+
+export default StudiesDashboard;

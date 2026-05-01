@@ -63,6 +63,9 @@ export const users = pgTable("users", {
   lastLogin: timestamp("last_login"),
   // Sprint Cooldown-2 — Sleep Gate suave (snooze do dashboard ate manha seguinte)
   dashboardSnoozedUntil: timestamp("dashboard_snoozed_until"),
+  // Sprint Studies-Reform RF-12 — streak counter persistente (migration 0021).
+  studyStreakDays: integer("study_streak_days").notNull().default(0),
+  lastStudyActivityAt: timestamp("last_study_activity_at"),
 });
 
 // Auth tokens table - email verification and password reset tokens
@@ -2021,6 +2024,42 @@ export const insertStudyTabSchema = createInsertSchema(studyTabs).omit({
 });
 export type StudyTab = typeof studyTabs.$inferSelect;
 export type InsertStudyTab = z.infer<typeof insertStudyTabSchema>;
+
+// =============================================================================
+// Sprint Studies-Reform RF-08 (ADR-067 / ADR-068)
+// =============================================================================
+// Tabela de ligacao N:N entre temas e spots (starredHands). Usada por:
+//   - SpotsView (RF-05) para vincular spots a temas
+//   - studyRecommendationsService (RF-06) para excluir spots ja vinculados de stale_spots
+//   - Coach tool read_theme_with_linked_spots (RF-07)
+//
+// UNIQUE (theme_id, spot_id) garante idempotencia em re-link.
+// userId redundante (derivavel do theme/spot) mas indexado para queries por usuario.
+// =============================================================================
+export const studyThemeSpotLinks = pgTable("study_theme_spot_links", {
+  id: varchar("id", { length: 21 }).primaryKey().notNull(),
+  themeId: varchar("theme_id", { length: 21 })
+    .notNull()
+    .references(() => studyThemes.id, { onDelete: "cascade" }),
+  spotId: varchar("spot_id", { length: 21 })
+    .notNull()
+    .references(() => starredHands.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 21 }).notNull(),
+  reasoningText: text("reasoning_text"),
+  linkedAt: timestamp("linked_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("uq_study_theme_spot_links_theme_spot").on(table.themeId, table.spotId),
+  index("idx_study_theme_spot_links_theme").on(table.themeId),
+  index("idx_study_theme_spot_links_spot").on(table.spotId),
+  index("idx_study_theme_spot_links_user").on(table.userId),
+]);
+
+export const insertStudyThemeSpotLinkSchema = createInsertSchema(studyThemeSpotLinks).omit({
+  id: true,
+  linkedAt: true,
+});
+export type StudyThemeSpotLink = typeof studyThemeSpotLinks.$inferSelect;
+export type InsertStudyThemeSpotLink = z.infer<typeof insertStudyThemeSpotLinkSchema>;
 
 // Tournament Library - curated list of tournaments for grade planning
 export const tournamentLibrary = pgTable("tournament_library", {
