@@ -311,6 +311,23 @@ export async function handleFinishCooldownLog(req: any, res: Response): Promise<
       );
     }
 
+    // Sprint Bankroll-3 RF-2: auto-snapshot pos-cooldown.
+    // Falha NAO bloqueia finish (D2). Se setting off, service retorna null silencioso.
+    let snapshot: any = null;
+    try {
+      const { bankrollService } = await import("../services/bankrollService");
+      snapshot = await (bankrollService as any).createAutoSnapshot({
+        userId,
+        cooldownLogId: id,
+      });
+    } catch (err: any) {
+      console.error(
+        "POST /api/cooldown-logs/:id/finish createAutoSnapshot failed:",
+        err,
+      );
+      snapshot = null;
+    }
+
     res.status(200).json({
       id: (updated as any).id,
       completedAt: (updated as any).completedAt,
@@ -318,6 +335,7 @@ export async function handleFinishCooldownLog(req: any, res: Response): Promise<
       dashboardSnoozedUntil:
         dashboardSnoozedUntil != null ? dashboardSnoozedUntil.toISOString() : null,
       sessionStatusUpdated,
+      snapshot,
     });
   } catch (err: any) {
     console.error("POST /api/cooldown-logs/:id/finish failed:", err);

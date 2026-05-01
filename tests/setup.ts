@@ -159,4 +159,14 @@ beforeEach(() => {
   } catch {
     // narrationQueue ainda nao implementado — red phase.
   }
+
+  // fxResolver cache reset entre testes (Sprint Bankroll-3 RF-11).
+  // Cache eh exposto via globalThis.__fxResolverCache para evitar circular
+  // require de modulos .ts que importam de ../storage.
+  try {
+    const fxCache = (globalThis as any).__fxResolverCache;
+    if (fxCache && typeof fxCache.clear === 'function') fxCache.clear();
+  } catch {
+    // ok
+  }
 });

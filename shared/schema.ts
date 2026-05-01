@@ -629,6 +629,12 @@ export const userSettings = pgTable("user_settings", {
   // nao mostra secao "Bancas", reconcile nao eh tentado, snapshots nao
   // gravados. Banca legada (bankrollAmount + bankrollRule) continua.
   bankrollManagementEnabled: boolean("bankroll_management_enabled").default(true),
+  // Sprint Bankroll-3 RF-6: Stop-loss / Stop-win em USD consolidado.
+  // Reset diario 00:00 user TZ; lock 12h default.
+  stopLossUsd: decimal("stop_loss_usd"),
+  stopWinUsd: decimal("stop_win_usd"),
+  stopLockUntil: timestamp("stop_lock_until"),
+  stopLockDurationHours: integer("stop_lock_duration_hours").notNull().default(12),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -2310,11 +2316,17 @@ export const bankrollSnapshots = pgTable("bankroll_snapshots", {
   nativeAmount: decimal("native_amount"),
   nativeCurrency: varchar("native_currency", { length: 8 }),
   fxRateUSDPerNative: decimal("fx_rate_usd_per_native"),
+  // Sprint Bankroll-3 RF-8: classificacao de origem do snapshot.
+  // origin: 'manual' | 'auto-cooldown' | 'transfer' | 'import' | 'migration_v1'.
+  // sourceRefId: id da entidade que originou (ex: cooldown_log.id, transfer_group_id).
+  origin: varchar("origin", { length: 32 }).notNull().default("manual"),
+  sourceRefId: varchar("source_ref_id", { length: 64 }),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_bankroll_snapshots_user_occurred").on(table.userId, table.occurredAt),
   index("idx_bankroll_snapshots_user_reason").on(table.userId, table.reason),
   index("idx_bankroll_snapshots_wallet").on(table.walletId),
+  index("idx_bankroll_snapshots_origin").on(table.origin),
 ]);
 
 const BANKROLL_REASON_ENUM = z.enum([
@@ -2327,9 +2339,21 @@ const BANKROLL_REASON_ENUM = z.enum([
 ]);
 const BANKROLL_SOURCE_ENUM = z.enum(["manual", "auto_session", "auto_import"]);
 
+// Sprint Bankroll-3 RF-8: SNAPSHOT_ORIGINS enum (re-declarado aqui para uso
+// no schema; tambem exportado mais abaixo junto com walletTransfers).
+const SNAPSHOT_ORIGIN_ENUM = z.enum([
+  "manual",
+  "auto-cooldown",
+  "transfer",
+  "import",
+  "migration_v1",
+]);
+
 export const insertBankrollSnapshotSchema = z.object({
   userId: z.string().min(1),
   // delta: string decimal ou number; precisa ser != 0
+  // (RF-2 auto-snapshot bypassa este schema chamando storage.insertBankrollSnapshot
+  //  diretamente, entao delta=0 eh permitido apenas no path automatico).
   delta: z.union([z.string(), z.number()])
     .refine((v) => {
       const n = typeof v === "string" ? parseFloat(v) : v;
@@ -2341,6 +2365,9 @@ export const insertBankrollSnapshotSchema = z.object({
   note: z.string().max(500, "note tem limite de 500 caracteres").nullable().optional(),
   source: BANKROLL_SOURCE_ENUM.optional(),
   sessionId: z.string().nullable().optional(),
+  // Sprint Bankroll-3 RF-8: origin/sourceRefId.
+  origin: SNAPSHOT_ORIGIN_ENUM.optional().default("manual"),
+  sourceRefId: z.string().max(64).nullable().optional(),
   occurredAt: z.union([z.date(), z.string()])
     .optional()
     .refine((v) => {
@@ -2437,8 +2464,10 @@ export const walletTransactions = pgTable("wallet_transactions", {
   index("idx_wtx_transfer_group").on(table.transferGroupId),
 ]);
 
-// Wallet pending — schema reservado para specs futuras (ADR-034 Sprint Bankroll-2 P1).
-// Implementacao real (auto-clear, expiracao) virao em spec dedicada.
+// Wallet pending — Sprint Bankroll-3 RF-5 ativa.
+// direction: 'deposit_pending' | 'withdrawal_pending'.
+// status: 'pending' | 'cleared' | 'cancelled'.
+// Cap 10 pending por wallet (D8).
 export const walletPending = pgTable("wallet_pending", {
   id: varchar("id").primaryKey().notNull(),
   walletId: varchar("wallet_id").notNull().references(() => wallets.id, { onDelete: "cascade" }),
@@ -2452,11 +2481,134 @@ export const walletPending = pgTable("wallet_pending", {
   clearedAt: timestamp("cleared_at"),
   cancelledAt: timestamp("cancelled_at"),
   note: text("note"),
+  // Sprint Bankroll-3 RF-5: ID externo herdado para wallet_transactions ao settle.
+  externalReference: varchar("external_reference", { length: 120 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_wallet_pending_wallet_status").on(table.walletId, table.status),
 ]);
+
+// =============================================================================
+// Sprint Bankroll-3 RF-4: wallet_transfers (cross-wallet transfer audit table)
+// ADR-059. Cada transferencia gera 1 row aqui + 2/3 wallet_transactions
+// agrupadas por transfer_group_id.
+// =============================================================================
+
+export const TRANSFER_REASONS = [
+  "transfer",
+  "rebalance",
+  "cashout_to_bank",
+  "site_to_site",
+] as const;
+
+export const walletTransfers = pgTable("wallet_transfers", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  transferGroupId: varchar("transfer_group_id").notNull().unique(),
+  fromWalletId: varchar("from_wallet_id")
+    .notNull()
+    .references(() => wallets.id, { onDelete: "restrict" }),
+  toWalletId: varchar("to_wallet_id")
+    .notNull()
+    .references(() => wallets.id, { onDelete: "restrict" }),
+  amountFrom: decimal("amount_from").notNull(),
+  amountTo: decimal("amount_to").notNull(),
+  fromCurrency: varchar("from_currency", { length: 8 }).notNull(),
+  toCurrency: varchar("to_currency", { length: 8 }).notNull(),
+  fxRate: decimal("fx_rate"),
+  feeAmount: decimal("fee_amount"),
+  feeCurrency: varchar("fee_currency", { length: 8 }),
+  feeWalletId: varchar("fee_wallet_id").references(() => wallets.id, {
+    onDelete: "restrict",
+  }),
+  reason: varchar("reason").notNull(),
+  note: text("note"),
+  occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_wallet_transfers_user_occurred").on(
+    table.userId,
+    table.occurredAt,
+  ),
+  index("idx_wallet_transfers_from_wallet").on(table.fromWalletId),
+  index("idx_wallet_transfers_to_wallet").on(table.toWalletId),
+]);
+
+export type WalletTransfer = typeof walletTransfers.$inferSelect;
+
+export const SNAPSHOT_ORIGINS = [
+  "manual",
+  "auto-cooldown",
+  "transfer",
+  "import",
+  "migration_v1",
+] as const;
+export type SnapshotOrigin = typeof SNAPSHOT_ORIGINS[number];
+
+export const PENDING_DIRECTIONS = [
+  "deposit_pending",
+  "withdrawal_pending",
+] as const;
+export type PendingDirection = typeof PENDING_DIRECTIONS[number];
+
+export const insertWalletTransferSchema = z.object({
+  fromWalletId: z.string().min(1),
+  toWalletId: z.string().min(1),
+  amountFrom: z.union([z.string(), z.number()]).refine((v) => {
+    const n = typeof v === "string" ? parseFloat(v) : v;
+    return Number.isFinite(n) && n > 0;
+  }, { message: "amountFrom deve ser maior que zero" }),
+  amountTo: z.union([z.string(), z.number()]).optional(),
+  fxRate: z.union([z.string(), z.number()]).optional(),
+  feeAmount: z.union([z.string(), z.number()]).optional(),
+  feeCurrency: z.string().min(3).max(8).optional(),
+  feeWalletId: z.string().min(1).optional(),
+  reason: z.enum(TRANSFER_REASONS),
+  note: z.string().max(500).nullable().optional(),
+  occurredAt: z.union([z.date(), z.string()]).optional(),
+  confirmFxDiff: z.boolean().optional(),
+})
+  .refine((d) => d.fromWalletId !== d.toWalletId, {
+    message: "fromWalletId e toWalletId devem ser diferentes",
+    path: ["toWalletId"],
+  })
+  .refine((d) => {
+    const feeAmountSet = d.feeAmount != null;
+    return !feeAmountSet || (d.feeCurrency != null && d.feeWalletId != null);
+  }, {
+    message: "feeAmount exige feeCurrency e feeWalletId",
+    path: ["feeAmount"],
+  });
+
+export const insertWalletPendingSchema = z.object({
+  walletId: z.string().min(1),
+  direction: z.enum(PENDING_DIRECTIONS),
+  nativeAmount: z.union([z.string(), z.number()]).refine((v) => {
+    const n = typeof v === "string" ? parseFloat(v) : v;
+    return Number.isFinite(n) && n > 0;
+  }, { message: "nativeAmount deve ser maior que zero" }),
+  nativeCurrency: z.string().min(2).max(8),
+  reason: z.string().min(1),
+  expectedClearAt: z.union([z.date(), z.string()]).nullable().optional(),
+  note: z.string().max(500).nullable().optional(),
+  externalReference: z.string().max(120).nullable().optional(),
+});
+
+export const settlePendingBodySchema = z.object({
+  actualNativeAmount: z.union([z.string(), z.number()]).optional(),
+  actualOccurredAt: z.union([z.date(), z.string()]).optional(),
+  fxRateUSDPerNative: z.union([z.string(), z.number()]).optional(),
+  note: z.string().max(500).nullable().optional(),
+});
+
+export const updateStopsSchema = z.object({
+  stopLossUsd: z.union([z.number(), z.string(), z.null()]).optional(),
+  stopWinUsd: z.union([z.number(), z.string(), z.null()]).optional(),
+  stopLockDurationHours: z.number().int().min(1).max(72).optional(),
+});
 
 // =============================================================================
 // Wallets — Zod schemas

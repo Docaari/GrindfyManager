@@ -15,6 +15,8 @@ export const WALLET_TX_REASONS = [
   "transfer_out",
   "fee",
   "fx_adjustment",
+  // Sprint Bankroll-3 RF-4 (cross-wallet transfer fee tx)
+  "transfer_fee",
   // Sprint Bankroll-3 (staking) — reservados schema-only
   "staking_payout",
   "staking_buyin",
@@ -23,6 +25,11 @@ export const WALLET_TX_REASONS = [
 
 export type WalletTxReason = typeof WALLET_TX_REASONS[number];
 
+// NOTE: Sprint Bankroll-3 test (wallet-transaction-schema.test.ts:226) expects
+// length === 4 (sem rakeback) — conflict com sprint anterior "reportar rakeback"
+// que adicionou 'rakeback' aqui. Mantemos rakeback (invariante de feature ja
+// shipped). O teste de length === 4 falha como esperado e fica marcado como
+// conhecido (antipattern lesson #8: nunca testar length absoluta de enum).
 export const WALLET_TX_REASONS_P0 = [
   "deposit",
   "withdrawal",

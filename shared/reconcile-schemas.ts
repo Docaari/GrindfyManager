@@ -42,16 +42,10 @@ export type ReconcileAdjustment = z.infer<typeof ReconcileAdjustmentSchema>;
 
 export const ReconcileWalletsBodySchema = z
   .object({
+    // Sprint Bankroll-3 RF-9: empty adjustments == skip total (sem precisar de
+    // skipReconciliation=true explicito). Compat: skipReconciliation segue valido.
     adjustments: z.array(ReconcileAdjustmentSchema).max(50, "Maximo de 50 ajustes por chamada"),
     skipReconciliation: z.boolean().optional(),
-  })
-  .refine(
-    (b) => b.skipReconciliation === true || b.adjustments.length > 0,
-    {
-      message:
-        "adjustments vazio so eh permitido quando skipReconciliation=true",
-      path: ["adjustments"],
-    },
-  );
+  });
 
 export type ReconcileWalletsBody = z.infer<typeof ReconcileWalletsBodySchema>;

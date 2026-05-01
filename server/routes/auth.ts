@@ -670,4 +670,113 @@ export function registerAuthRoutes(app: Express): void {
       res.status(500).json({ valid: false, message: 'Erro interno do servidor' });
     }
   });
+
+  // Sprint Bankroll-3 RF-6 — stops
+  app.get('/api/user-settings/stops', requireAuth, handleGetUserSettingsStops);
+  app.put('/api/user-settings/stops', requireAuth, handlePutUserSettingsStops);
+  app.post('/api/user-settings/stops/release', requireAuth, handlePostUserSettingsStopsRelease);
+}
+
+// =============================================================================
+// Sprint Bankroll-3 RF-6 — User settings stops handlers (exportados para teste).
+// =============================================================================
+
+import { z } from "zod";
+
+const updateStopsBody = z.object({
+  stopLossUsd: z.union([z.number(), z.string(), z.null()]).optional(),
+  stopWinUsd: z.union([z.number(), z.string(), z.null()]).optional(),
+  stopLockDurationHours: z.number().int().min(1).max(72).optional(),
+});
+
+function userIdOfReq(req: any): string | null {
+  return req?.user?.userPlatformId ?? null;
+}
+
+function isPositiveOrNull(v: any): boolean {
+  if (v === null || v === undefined) return true;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return Number.isFinite(n) && n > 0;
+}
+
+export async function handleGetUserSettingsStops(req: any, res: any): Promise<void> {
+  const userId = userIdOfReq(req);
+  if (!userId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  try {
+    const settings: any = (await storage.getUserSettings(userId)) ?? {};
+    let currentDayDeltaUsd = 0;
+    try {
+      const { stopService } = await import("../services/stopService");
+      currentDayDeltaUsd = await stopService.getCurrentDayDeltaUsd(userId);
+    } catch (err) {
+      console.warn("[handleGetUserSettingsStops] getCurrentDayDeltaUsd failed:", (err as any)?.message);
+    }
+    res.status(200).json({
+      stopLossUsd: settings.stopLossUsd ?? null,
+      stopWinUsd: settings.stopWinUsd ?? null,
+      stopLockUntil: settings.stopLockUntil ?? null,
+      stopLockDurationHours: settings.stopLockDurationHours ?? 12,
+      currentDayDeltaUsd,
+    });
+  } catch (err) {
+    console.error("[handleGetUserSettingsStops] failed:", err);
+    res.status(500).json({ message: "Erro ao buscar stops" });
+  }
+}
+
+export async function handlePutUserSettingsStops(req: any, res: any): Promise<void> {
+  const userId = userIdOfReq(req);
+  if (!userId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const parsed = updateStopsBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Body invalido", issues: parsed.error.issues });
+    return;
+  }
+  const { stopLossUsd, stopWinUsd, stopLockDurationHours } = parsed.data;
+  if (!isPositiveOrNull(stopLossUsd)) {
+    res.status(400).json({ message: "stopLossUsd deve ser > 0 ou null" });
+    return;
+  }
+  if (!isPositiveOrNull(stopWinUsd)) {
+    res.status(400).json({ message: "stopWinUsd deve ser > 0 ou null" });
+    return;
+  }
+  try {
+    await storage.upsertUserSettings({
+      userId,
+      stopLossUsd: stopLossUsd === undefined ? undefined : stopLossUsd,
+      stopWinUsd: stopWinUsd === undefined ? undefined : stopWinUsd,
+      stopLockDurationHours: stopLockDurationHours === undefined ? undefined : stopLockDurationHours,
+    } as any);
+    res.status(200).json({
+      stopLossUsd: stopLossUsd ?? null,
+      stopWinUsd: stopWinUsd ?? null,
+      stopLockDurationHours: stopLockDurationHours ?? 12,
+    });
+  } catch (err) {
+    console.error("[handlePutUserSettingsStops] failed:", err);
+    res.status(500).json({ message: "Erro ao atualizar stops" });
+  }
+}
+
+export async function handlePostUserSettingsStopsRelease(req: any, res: any): Promise<void> {
+  const userId = userIdOfReq(req);
+  if (!userId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  try {
+    const { stopService } = await import("../services/stopService");
+    await stopService.releaseLock(userId);
+    res.status(200).json({ released: true });
+  } catch (err) {
+    console.error("[handlePostUserSettingsStopsRelease] failed:", err);
+    res.status(500).json({ message: "Erro ao limpar lock" });
+  }
 }

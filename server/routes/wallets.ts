@@ -347,6 +347,180 @@ export const walletLimiter = rateLimit({
 });
 
 // =============================================================================
+// Sprint Bankroll-3 RF-4 — Transfers
+// =============================================================================
+
+function mapTransferError(err: any): { status: number; body: any } {
+  const status = err?.httpStatus ?? err?.statusCode ?? 500;
+  const body: any = { message: err?.message ?? "Transfer error" };
+  if (err?.code) body.code = err.code;
+  if (err?.providedRate != null) body.providedRate = err.providedRate;
+  if (err?.marketRate != null) body.marketRate = err.marketRate;
+  if (err?.diffPct != null) body.diffPct = err.diffPct;
+  return { status, body };
+}
+
+export async function handlePostWalletTransfer(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) { unauthorized(res); return; }
+
+  const body = req.body ?? {};
+  if (!body.fromWalletId || !body.toWalletId) {
+    res.status(400).json({ message: "fromWalletId e toWalletId obrigatorios" });
+    return;
+  }
+  if (body.fromWalletId === body.toWalletId) {
+    res.status(400).json({ message: "fromWalletId e toWalletId devem ser diferentes" });
+    return;
+  }
+  const amountFrom = typeof body.amountFrom === "string" ? parseFloat(body.amountFrom) : body.amountFrom;
+  if (!Number.isFinite(amountFrom) || amountFrom <= 0) {
+    res.status(400).json({ message: "amountFrom deve ser maior que zero" });
+    return;
+  }
+  if (!body.reason) {
+    res.status(400).json({ message: "reason obrigatorio" });
+    return;
+  }
+
+  try {
+    const confirmFxDiff = req.query?.confirmFxDiff === "true" || body.confirmFxDiff === true;
+    const result = await (walletService as any).createTransfer(userId, {
+      ...body,
+      confirmFxDiff,
+    });
+    res.status(201).json(result);
+  } catch (err: any) {
+    const mapped = mapTransferError(err);
+    if (mapped.status >= 500) console.error("POST /api/wallets/transfers failed:", err);
+    res.status(mapped.status).json(mapped.body);
+  }
+}
+
+export async function handleGetWalletTransfers(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) { unauthorized(res); return; }
+  try {
+    const walletId = req.query?.walletId as string | undefined;
+    const limitRaw = req.query?.limit;
+    let limit = 50;
+    if (limitRaw != null && limitRaw !== "") {
+      const n = parseInt(String(limitRaw), 10);
+      if (Number.isFinite(n) && n > 0) limit = Math.min(n, 200);
+    }
+    const items = await (walletService as any).listTransfers(userId, { walletId, limit });
+    res.status(200).json({ items });
+  } catch (err: any) {
+    console.error("GET /api/wallets/transfers failed:", err);
+    res.status(500).json({ message: err?.message ?? "Erro ao listar transferencias" });
+  }
+}
+
+export async function handleGetWalletTransfer(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) { unauthorized(res); return; }
+  try {
+    const id = req.params?.id;
+    if (!id) { res.status(400).json({ message: "id obrigatorio" }); return; }
+    const result = await (walletService as any).getTransfer(userId, id);
+    if (!result) {
+      res.status(404).json({ message: "Transfer nao encontrada" });
+      return;
+    }
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error("GET /api/wallets/transfers/:id failed:", err);
+    res.status(500).json({ message: err?.message ?? "Erro ao buscar transferencia" });
+  }
+}
+
+// =============================================================================
+// Sprint Bankroll-3 RF-5 — Pending transactions
+// =============================================================================
+
+export async function handlePostWalletPending(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) { unauthorized(res); return; }
+  const walletId = req.params?.walletId;
+  if (!walletId) {
+    res.status(400).json({ message: "walletId obrigatorio" });
+    return;
+  }
+  const body = req.body ?? {};
+  const VALID_DIRS = new Set(["deposit_pending", "withdrawal_pending"]);
+  if (!body.direction || !VALID_DIRS.has(body.direction)) {
+    res.status(400).json({ message: `direction invalida: ${body.direction}` });
+    return;
+  }
+  const amount = typeof body.nativeAmount === "string" ? parseFloat(body.nativeAmount) : body.nativeAmount;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    res.status(400).json({ message: "nativeAmount deve ser maior que zero" });
+    return;
+  }
+  if (!body.nativeCurrency) {
+    res.status(400).json({ message: "nativeCurrency obrigatoria" });
+    return;
+  }
+  if (!body.reason) {
+    res.status(400).json({ message: "reason obrigatoria" });
+    return;
+  }
+  try {
+    const pending = await (walletService as any).createPending(userId, walletId, body);
+    res.status(201).json(pending);
+  } catch (err: any) {
+    const status = err?.httpStatus ?? err?.statusCode ?? 500;
+    if (status >= 500) console.error("POST /api/wallets/:walletId/pending failed:", err);
+    res.status(status).json({
+      message: err?.message ?? "Erro ao criar pending",
+      code: err?.code,
+    });
+  }
+}
+
+export async function handleGetWalletPending(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) { unauthorized(res); return; }
+  try {
+    const walletId = req.params?.walletId;
+    const includeAll = req.query?.includeAll === "true";
+    const items = await (walletService as any).listPending(userId, walletId, { includeAll });
+    res.status(200).json({ items });
+  } catch (err: any) {
+    console.error("GET /api/wallets/:walletId/pending failed:", err);
+    res.status(500).json({ message: err?.message ?? "Erro ao listar pending" });
+  }
+}
+
+export async function handleDeleteWalletPending(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) { unauthorized(res); return; }
+  const id = req.params?.id;
+  try {
+    const result = await (walletService as any).cancelPending(userId, id);
+    res.status(200).json(result);
+  } catch (err: any) {
+    const status = err?.httpStatus ?? err?.statusCode ?? 500;
+    if (status >= 500) console.error("DELETE /api/wallets/pending/:id failed:", err);
+    res.status(status).json({ message: err?.message ?? "Erro ao cancelar pending", code: err?.code });
+  }
+}
+
+export async function handlePostWalletPendingSettle(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) { unauthorized(res); return; }
+  const id = req.params?.id;
+  try {
+    const result = await (walletService as any).settlePending(userId, id, req.body ?? {});
+    res.status(200).json(result);
+  } catch (err: any) {
+    const status = err?.httpStatus ?? err?.statusCode ?? 500;
+    if (status >= 500) console.error("POST /api/wallets/pending/:id/settle failed:", err);
+    res.status(status).json({ message: err?.message ?? "Erro ao settle pending", code: err?.code });
+  }
+}
+
+// =============================================================================
 // Express registration
 // =============================================================================
 
@@ -377,5 +551,30 @@ export function registerWalletRoutes(app: Express): void {
   );
   app.get("/api/bankroll/consolidated", requireAuth, (req: Request, res: Response) =>
     handleGetBankrollConsolidated(req, res),
+  );
+
+  // Sprint Bankroll-3 RF-4 — Transfers
+  app.post("/api/wallets/transfers", requireAuth, walletLimiter, (req: Request, res: Response) =>
+    handlePostWalletTransfer(req, res),
+  );
+  app.get("/api/wallets/transfers", requireAuth, (req: Request, res: Response) =>
+    handleGetWalletTransfers(req, res),
+  );
+  app.get("/api/wallets/transfers/:id", requireAuth, (req: Request, res: Response) =>
+    handleGetWalletTransfer(req, res),
+  );
+
+  // Sprint Bankroll-3 RF-5 — Pending
+  app.post("/api/wallets/:walletId/pending", requireAuth, walletLimiter, (req: Request, res: Response) =>
+    handlePostWalletPending(req, res),
+  );
+  app.get("/api/wallets/:walletId/pending", requireAuth, (req: Request, res: Response) =>
+    handleGetWalletPending(req, res),
+  );
+  app.delete("/api/wallets/pending/:id", requireAuth, walletLimiter, (req: Request, res: Response) =>
+    handleDeleteWalletPending(req, res),
+  );
+  app.post("/api/wallets/pending/:id/settle", requireAuth, walletLimiter, (req: Request, res: Response) =>
+    handlePostWalletPendingSettle(req, res),
   );
 }

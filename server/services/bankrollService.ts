@@ -614,9 +614,108 @@ function buildSeries(
   return Array.from(dedup.values());
 }
 
+// =============================================================================
+// Sprint Bankroll-3 — RF-2: Auto-snapshot pos-cooldown
+// =============================================================================
+
+interface CreateAutoSnapshotInput {
+  userId: string;
+  cooldownLogId: string;
+  occurredAt?: Date | string;
+}
+
+/**
+ * Cria snapshot consolidado pos-cooldown.
+ * - origin='auto-cooldown' (RF-8 nova coluna).
+ * - source='auto_session' (mantem semantica enum existente).
+ * - sourceRefId=cooldownLogId (idempotencia via unique parcial em RF-8).
+ * - delta = newAmount - previousAmount (USD consolidado vs ultimo snapshot).
+ *
+ * Falhas (DB, unique violation, etc) NAO propagam — retorna null + log.
+ * Skip silencioso quando bankrollManagementEnabled=false.
+ */
+async function createAutoSnapshot(
+  input: CreateAutoSnapshotInput,
+): Promise<any | null> {
+  const { userId, cooldownLogId, occurredAt } = input ?? ({} as CreateAutoSnapshotInput);
+
+  // Validacao de entrada — sem DB calls.
+  if (!userId || !cooldownLogId) {
+    return null;
+  }
+
+  try {
+    const settings: any = await storage.getUserSettings(userId).catch(() => null);
+    // bankrollManagementEnabled default true (skip apenas quando explicitamente false).
+    if (settings && settings.bankrollManagementEnabled === false) {
+      return null;
+    }
+  } catch (err) {
+    // Erro ao buscar settings — assume default true (mantem comportamento)
+    console.warn("[bankrollService.createAutoSnapshot] getUserSettings falhou:", (err as any)?.message);
+  }
+
+  // Consolidated balance via walletService (import dinamico para evitar ciclo).
+  let totalUSD = 0;
+  try {
+    const mod = await import("./walletService");
+    const consolidated = await mod.walletService.getConsolidatedBalance(userId);
+    totalUSD = parseDecimal(consolidated?.totalUSD ?? "0");
+  } catch (err) {
+    console.error("[bankrollService.createAutoSnapshot] getConsolidatedBalance falhou:", (err as any)?.message);
+    return null;
+  }
+
+  // Previous amount = newAmount do ultimo snapshot. 0 se nao existe.
+  let previousAmount = 0;
+  try {
+    const snapshots = await storage.getBankrollSnapshots(userId, { limit: 1 } as any);
+    if (Array.isArray(snapshots) && snapshots.length > 0) {
+      previousAmount = parseDecimal((snapshots[0] as any).newAmount);
+    }
+  } catch (err) {
+    console.warn("[bankrollService.createAutoSnapshot] getBankrollSnapshots falhou:", (err as any)?.message);
+    // Continue com previousAmount=0
+  }
+
+  const delta = totalUSD - previousAmount;
+  const occurred = occurredAt
+    ? occurredAt instanceof Date ? occurredAt : new Date(occurredAt)
+    : new Date();
+
+  try {
+    const snapshot = await storage.insertBankrollSnapshot({
+      userId,
+      delta: String(delta),
+      previousAmount: String(previousAmount),
+      newAmount: String(totalUSD),
+      reason: "manual_adjustment",
+      note: `Auto-snapshot pos-cooldown ${cooldownLogId}`,
+      source: "auto_session",
+      origin: "auto-cooldown",
+      sourceRefId: cooldownLogId,
+      occurredAt: occurred,
+    } as any);
+
+    // Invalidate caches
+    try { bankrollCache.invalidateAllForUser(userId); } catch {}
+    try { selectorCache.invalidateAllForUser(userId); } catch {}
+
+    return snapshot;
+  } catch (err: any) {
+    if (err?.code === "23505") {
+      console.warn("[bankrollService.createAutoSnapshot] duplicate (idempotency):", cooldownLogId);
+    } else {
+      console.error("[bankrollService.createAutoSnapshot] insertBankrollSnapshot falhou:", err?.message);
+    }
+    return null;
+  }
+}
+
 export const bankrollService = {
   getBankrollState,
   updateBankroll,
   recordSnapshot,
   getBankrollHistory,
+  createAutoSnapshot,
 };
