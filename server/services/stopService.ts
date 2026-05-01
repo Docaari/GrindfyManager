@@ -51,9 +51,46 @@ function parseDecimal(v: any): number {
 
 /**
  * Calcula o inicio do dia atual no TZ do usuario.
- * TZ invalida ou nao informada -> UTC.
+ * Retorna um Date (UTC instant) representando 00:00:00 do dia local do usuario.
+ * TZ invalida ou nao informada -> UTC midnight.
+ *
+ * CRIT-5 fix (round 2): a versao anterior usava `new Date('YYYY-MM-DDT00:00:00')`,
+ * que parseia como TZ do servidor (Node = UTC) e ignora o offset do TZ do user.
+ * Agora calculamos o offset do TZ alvo via `formatToParts` para a meia-noite UTC
+ * da data alvo e ajustamos.
  */
-function getStartOfUserDay(timezone?: string | null): Date {
+function tzOffsetMs(timeZone: string, atUtc: Date): number {
+  // Computa offset (ms) do timeZone em relacao a UTC para o instante `atUtc`.
+  // Formula: a representacao "local" do instante UTC = atUtc + offset.
+  // Subtraindo de atUtc, obtemos -offset (em wall clock vs utc).
+  try {
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    const parts: Record<string, string> = {};
+    for (const p of fmt.formatToParts(atUtc)) parts[p.type] = p.value;
+    const localAsUtc = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour) === 24 ? 0 : Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second),
+    );
+    return localAsUtc - atUtc.getTime();
+  } catch {
+    return 0;
+  }
+}
+
+function getStartOfUserDay(timezone?: string | null, now: Date = new Date()): Date {
   if (timezone) {
     try {
       const fmt = new Intl.DateTimeFormat("en-US", {
@@ -64,15 +101,24 @@ function getStartOfUserDay(timezone?: string | null): Date {
         hour12: false,
       });
       const parts: Record<string, string> = {};
-      for (const p of fmt.formatToParts(new Date())) parts[p.type] = p.value;
-      // Construct date in UTC matching local Y/M/D 00:00.
-      const d = new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00`);
+      for (const p of fmt.formatToParts(now)) parts[p.type] = p.value;
+      // Date "00:00:00" no calendario local do user, expressa como UTC primeiro.
+      const localMidnightAsUtc = Date.UTC(
+        Number(parts.year),
+        Number(parts.month) - 1,
+        Number(parts.day),
+        0, 0, 0, 0,
+      );
+      // Compensa o offset do TZ no instante alvo (cobre DST da noite do dia local).
+      const offset = tzOffsetMs(timezone, new Date(localMidnightAsUtc));
+      const utcInstant = localMidnightAsUtc - offset;
+      const d = new Date(utcInstant);
       if (!Number.isNaN(d.getTime())) return d;
     } catch {
       // fallback to UTC midnight below
     }
   }
-  const d = new Date();
+  const d = new Date(now);
   d.setUTCHours(0, 0, 0, 0);
   return d;
 }

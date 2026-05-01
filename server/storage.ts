@@ -24,10 +24,14 @@ import {
   tournamentSelectorLogs,
   wallets,
   walletTransactions,
+  walletPending,
+  walletTransfers,
   type Wallet,
   type InsertWallet,
   type WalletTransaction,
   type InsertWalletTransaction,
+  type WalletPending,
+  type WalletTransfer,
   type TournamentSelectorLog,
   type InsertTournamentSelectorLog,
   type User,
@@ -484,6 +488,51 @@ export interface IStorage {
     userId: string,
     period: "7d" | "30d" | "90d",
   ): Promise<Array<{ token: string; count: number }>>;
+
+  // Sprint Bankroll-3 RF-4 — Transfers
+  insertWalletTransfer(data: any, tx?: any): Promise<WalletTransfer>;
+  listWalletTransfers(
+    userId: string,
+    opts?: { walletId?: string; limit?: number },
+    tx?: any,
+  ): Promise<WalletTransfer[]>;
+  getWalletTransferById(
+    userId: string,
+    transferId: string,
+    tx?: any,
+  ): Promise<{ transfer: WalletTransfer; transactions: WalletTransaction[] } | null>;
+
+  // Sprint Bankroll-3 RF-5 — Pending
+  createWalletPending(data: any, tx?: any): Promise<WalletPending>;
+  countWalletPendingActive(walletId: string, tx?: any): Promise<number>;
+  getWalletPendingById(userId: string, pendingId: string, tx?: any): Promise<WalletPending | null>;
+  updateWalletPendingStatus(txOrPayload: any, payload?: any): Promise<void>;
+  listWalletPending(
+    userId: string,
+    walletId: string,
+    opts?: { includeAll?: boolean },
+    tx?: any,
+  ): Promise<WalletPending[]>;
+
+  // Sprint Bankroll-3 RF-6 — Stop service support
+  getUserById(userId: string): Promise<User | undefined>;
+  listGrindSessionsByUser(userId: string): Promise<GrindSession[]>;
+  listSessionTournamentsBySessions(
+    userId: string,
+    sessionIds: string[],
+  ): Promise<SessionTournament[]>;
+
+  // Sprint Bankroll-3 RF-7 — ROI by platform
+  getRoiByPlatform(
+    userId: string,
+    opts?: { sinceDate?: Date | null; limit?: number },
+  ): Promise<Array<{
+    site: string;
+    sessionsCount: number;
+    tournamentsCount: number;
+    investedNative: string;
+    profitNative: string;
+  }>>;
 
   transaction<T>(fn: (tx: IStorage) => Promise<T>): Promise<T>;
 }
@@ -5220,6 +5269,301 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return tokenizeLessons(lessons);
   }
 
+  // ============================================================================
+  // Sprint Bankroll-3 RF-4 — wallet_transfers storage (CRIT-1 fix)
+  // ============================================================================
+
+  async insertWalletTransfer(data: any, tx?: any): Promise<WalletTransfer> {
+    const runner = tx ?? db;
+    const id = data.id ?? data.transferGroupId ?? nanoid();
+    const occurredAt = data.occurredAt instanceof Date
+      ? data.occurredAt
+      : (data.occurredAt ? new Date(data.occurredAt) : new Date());
+    const [inserted] = await runner
+      .insert(walletTransfers)
+      .values({
+        id,
+        userId: data.userId,
+        transferGroupId: data.transferGroupId ?? id,
+        fromWalletId: data.fromWalletId,
+        toWalletId: data.toWalletId,
+        amountFrom: String(data.amountFrom),
+        amountTo: String(data.amountTo),
+        fromCurrency: data.fromCurrency,
+        toCurrency: data.toCurrency,
+        fxRate: data.fxRate != null ? String(data.fxRate) : null,
+        feeAmount: data.feeAmount != null ? String(data.feeAmount) : null,
+        feeCurrency: data.feeCurrency ?? null,
+        feeWalletId: data.feeWalletId ?? null,
+        reason: data.reason,
+        note: data.note ?? null,
+        occurredAt,
+      } as any)
+      .returning();
+    return inserted as WalletTransfer;
+  }
+
+  async listWalletTransfers(
+    userId: string,
+    opts: { walletId?: string; limit?: number } = {},
+    tx?: any,
+  ): Promise<WalletTransfer[]> {
+    const runner = tx ?? db;
+    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+    const conditions: any[] = [eq(walletTransfers.userId, userId)];
+    if (opts.walletId) {
+      conditions.push(
+        or(
+          eq(walletTransfers.fromWalletId, opts.walletId),
+          eq(walletTransfers.toWalletId, opts.walletId),
+        ),
+      );
+    }
+    const rows = await runner
+      .select()
+      .from(walletTransfers)
+      .where(and(...conditions))
+      .orderBy(desc(walletTransfers.occurredAt))
+      .limit(limit);
+    return rows as WalletTransfer[];
+  }
+
+  async getWalletTransferById(
+    userId: string,
+    transferId: string,
+    tx?: any,
+  ): Promise<{ transfer: WalletTransfer; transactions: WalletTransaction[] } | null> {
+    const runner = tx ?? db;
+    const [transfer] = await runner
+      .select()
+      .from(walletTransfers)
+      .where(
+        and(
+          eq(walletTransfers.userId, userId),
+          eq(walletTransfers.id, transferId),
+        ),
+      )
+      .limit(1);
+    if (!transfer) return null;
+    const transactions = await runner
+      .select()
+      .from(walletTransactions)
+      .where(eq(walletTransactions.transferGroupId, (transfer as any).transferGroupId))
+      .orderBy(asc(walletTransactions.occurredAt));
+    return { transfer: transfer as WalletTransfer, transactions: transactions as WalletTransaction[] };
+  }
+
+  // ============================================================================
+  // Sprint Bankroll-3 RF-5 — wallet_pending storage (CRIT-1 fix)
+  // ============================================================================
+
+  async createWalletPending(data: any, tx?: any): Promise<WalletPending> {
+    const runner = tx ?? db;
+    const id = data.id ?? nanoid();
+    const expectedClearAt = data.expectedClearAt
+      ? data.expectedClearAt instanceof Date
+        ? data.expectedClearAt
+        : new Date(data.expectedClearAt)
+      : null;
+    const [inserted] = await runner
+      .insert(walletPending)
+      .values({
+        id,
+        walletId: data.walletId,
+        userId: data.userId,
+        direction: data.direction,
+        nativeAmount: String(data.nativeAmount),
+        nativeCurrency: data.nativeCurrency,
+        reason: data.reason,
+        status: data.status ?? "pending",
+        expectedClearAt,
+        note: data.note ?? null,
+        externalReference: data.externalReference ?? null,
+      } as any)
+      .returning();
+    return inserted as WalletPending;
+  }
+
+  async countWalletPendingActive(walletId: string, tx?: any): Promise<number> {
+    const runner = tx ?? db;
+    const result: any = await runner.execute(
+      sql`SELECT COUNT(*)::int AS cnt
+          FROM wallet_pending
+          WHERE wallet_id = ${walletId}
+            AND status = 'pending'`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    return Number(rows[0]?.cnt ?? 0);
+  }
+
+  async getWalletPendingById(
+    userId: string,
+    pendingId: string,
+    tx?: any,
+  ): Promise<WalletPending | null> {
+    const runner = tx ?? db;
+    const [row] = await runner
+      .select()
+      .from(walletPending)
+      .where(
+        and(
+          eq(walletPending.userId, userId),
+          eq(walletPending.id, pendingId),
+        ),
+      )
+      .limit(1);
+    return (row ?? null) as WalletPending | null;
+  }
+
+  /**
+   * Update wallet_pending status. Test contract:
+   *   storage.updateWalletPendingStatus(tx, payload)
+   *   tx.updateWalletPendingStatus(tx, payload)
+   * First arg is a tx runner (or anything truthy when called bare).
+   * If first arg looks like a Drizzle tx (has .update fn), use it; otherwise db.
+   */
+  async updateWalletPendingStatus(txOrPayload: any, payload?: any): Promise<void> {
+    let runner: any = db;
+    let data: any;
+    // Detect (tx, payload) vs (payload).
+    if (payload && typeof payload === "object" && payload.id) {
+      data = payload;
+      // First arg may be a tx; use only if it has Drizzle-like .update method.
+      if (txOrPayload && typeof txOrPayload.update === "function") {
+        runner = txOrPayload;
+      }
+    } else {
+      data = txOrPayload;
+    }
+    if (!data?.id) return;
+    const updates: any = { updatedAt: new Date() };
+    if (data.status) updates.status = data.status;
+    if (data.clearedAt) updates.clearedAt = data.clearedAt instanceof Date ? data.clearedAt : new Date(data.clearedAt);
+    if (data.cancelledAt) updates.cancelledAt = data.cancelledAt instanceof Date ? data.cancelledAt : new Date(data.cancelledAt);
+    await runner
+      .update(walletPending)
+      .set(updates)
+      .where(eq(walletPending.id, data.id));
+  }
+
+  async listWalletPending(
+    userId: string,
+    walletId: string,
+    opts: { includeAll?: boolean } = {},
+    tx?: any,
+  ): Promise<WalletPending[]> {
+    const runner = tx ?? db;
+    const conditions: any[] = [
+      eq(walletPending.userId, userId),
+      eq(walletPending.walletId, walletId),
+    ];
+    if (!opts.includeAll) {
+      conditions.push(eq(walletPending.status, "pending"));
+    }
+    const rows = await runner
+      .select()
+      .from(walletPending)
+      .where(and(...conditions))
+      .orderBy(desc(walletPending.createdAt));
+    return rows as WalletPending[];
+  }
+
+  // ============================================================================
+  // Sprint Bankroll-3 RF-6 — Stop service support (CRIT-1 fix)
+  // ============================================================================
+
+  async getUserById(userId: string): Promise<User | undefined> {
+    // Resolves by userPlatformId (USER-XXXX), since service contracts use that.
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.userPlatformId, userId))
+      .limit(1);
+    return row;
+  }
+
+  async listGrindSessionsByUser(userId: string): Promise<GrindSession[]> {
+    return await db
+      .select()
+      .from(grindSessions)
+      .where(eq(grindSessions.userId, userId))
+      .orderBy(desc(grindSessions.date));
+  }
+
+  async listSessionTournamentsBySessions(
+    userId: string,
+    sessionIds: string[],
+  ): Promise<SessionTournament[]> {
+    if (!sessionIds || sessionIds.length === 0) return [];
+    return await db
+      .select()
+      .from(sessionTournaments)
+      .where(
+        and(
+          eq(sessionTournaments.userId, userId),
+          inArray(sessionTournaments.sessionId, sessionIds),
+        ),
+      );
+  }
+
+  // ============================================================================
+  // Sprint Bankroll-3 RF-7 — ROI by platform aggregation (CRIT-1 fix)
+  // ============================================================================
+
+  async getRoiByPlatform(
+    userId: string,
+    opts: { sinceDate?: Date | null; limit?: number } = {},
+  ): Promise<Array<{
+    site: string;
+    sessionsCount: number;
+    tournamentsCount: number;
+    investedNative: string;
+    profitNative: string;
+  }>> {
+    const limit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
+    const sinceDate = opts.sinceDate ?? null;
+
+    // Aggregate session_tournaments JOIN grind_sessions on sessionId, filter
+    // status='completed' (and completedAt >= sinceDate when set).
+    const conditions: any[] = [
+      eq(sessionTournaments.userId, userId),
+      eq(grindSessions.status, "completed"),
+    ];
+    if (sinceDate) {
+      conditions.push(gte(grindSessions.date, sinceDate));
+    }
+
+    const rows = await db
+      .select({
+        site: sessionTournaments.site,
+        sessionsCount: sql<number>`COUNT(DISTINCT ${grindSessions.id})::int`,
+        tournamentsCount: sql<number>`COUNT(${sessionTournaments.id})::int`,
+        investedNative: sql<string>`COALESCE(SUM(
+          CAST(${sessionTournaments.buyIn} AS DECIMAL)
+          + CAST(COALESCE(${sessionTournaments.rebuys}, 0) AS DECIMAL) * CAST(${sessionTournaments.buyIn} AS DECIMAL)
+        ), 0)::text`,
+        profitNative: sql<string>`COALESCE(SUM(
+          CAST(COALESCE(${sessionTournaments.result}, '0') AS DECIMAL)
+          + CAST(COALESCE(${sessionTournaments.bounty}, '0') AS DECIMAL)
+          - CAST(${sessionTournaments.buyIn} AS DECIMAL)
+          - CAST(COALESCE(${sessionTournaments.rebuys}, 0) AS DECIMAL) * CAST(${sessionTournaments.buyIn} AS DECIMAL)
+        ), 0)::text`,
+      })
+      .from(sessionTournaments)
+      .innerJoin(grindSessions, eq(sessionTournaments.sessionId, grindSessions.id))
+      .where(and(...conditions))
+      .groupBy(sessionTournaments.site)
+      .limit(limit);
+
+    return rows.map((r: any) => ({
+      site: r.site,
+      sessionsCount: Number(r.sessionsCount) || 0,
+      tournamentsCount: Number(r.tournamentsCount) || 0,
+      investedNative: String(r.investedNative ?? "0"),
+      profitNative: String(r.profitNative ?? "0"),
+    }));
+  }
+
   async transaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {
     return await db.transaction(async (tx) => {
       // Wrap tx com metodos de bankroll que sabem usar tx
@@ -5326,6 +5670,32 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           this.listSessionTournaments(sessionId, userId, tx),
         listSessionWalletSnapshots: (sessionId: string, userId: string) =>
           this.listSessionWalletSnapshots(sessionId, userId, tx),
+        // Sprint Bankroll-3 RF-4 — Transfers (CRIT-1 fix)
+        insertWalletTransfer: (data: any) => this.insertWalletTransfer(data, tx),
+        listWalletTransfers: (userId: string, opts?: any) =>
+          this.listWalletTransfers(userId, opts, tx),
+        getWalletTransferById: (userId: string, transferId: string) =>
+          this.getWalletTransferById(userId, transferId, tx),
+        // Sprint Bankroll-3 RF-5 — Pending (CRIT-1 fix)
+        createWalletPending: (data: any) => this.createWalletPending(data, tx),
+        countWalletPendingActive: (walletId: string) =>
+          this.countWalletPendingActive(walletId, tx),
+        getWalletPendingById: (userId: string, pendingId: string) =>
+          this.getWalletPendingById(userId, pendingId, tx),
+        // Mantem assinatura legada (txOrPayload, payload?) — pendingService usa
+        // tx.updateWalletPendingStatus(tx, payload). Essa wrapper repassa direto
+        // o `tx` real (closure) ignorando o tx redundante do caller.
+        updateWalletPendingStatus: async (txOrPayload: any, payload?: any) => {
+          let data: any;
+          if (payload && typeof payload === "object" && payload.id) {
+            data = payload;
+          } else {
+            data = txOrPayload;
+          }
+          return await this.updateWalletPendingStatus(tx, data);
+        },
+        listWalletPending: (userId: string, walletId: string, opts?: any) =>
+          this.listWalletPending(userId, walletId, opts, tx),
       };
       return await fn(txWrapper);
     });

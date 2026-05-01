@@ -766,6 +766,12 @@ export async function handlePutUserSettingsStops(req: any, res: any): Promise<vo
 }
 
 export async function handlePostUserSettingsStopsRelease(req: any, res: any): Promise<void> {
+  // ADR-060: endpoint release manual default OFF.
+  // Habilitar via env ALLOW_STOP_LOCK_RELEASE=true (admin/debug ou tests).
+  if (process.env.ALLOW_STOP_LOCK_RELEASE !== "true") {
+    res.status(404).json({ error: "NOT_FOUND" });
+    return;
+  }
   const userId = userIdOfReq(req);
   if (!userId) {
     res.status(401).json({ message: "Unauthorized" });

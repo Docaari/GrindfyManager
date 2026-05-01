@@ -45,15 +45,31 @@ interface CacheEntry {
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
-// Expose cache via globalThis so tests/setup.ts can clear without import().
-// The setup file uses CommonJS require which fails on .ts files referencing
-// other .ts modules (Directory import unsupported). globalThis is a stable
-// no-import escape hatch.
+
+// HIGH-3 fix (round 2): cache module-level com fallback para globalThis.
+// PRIMARY: `_resetCacheForTests()` exportado para reset explicito. Test setups
+// devem importar e chamar.
+// COMPAT: o ambiente de teste atual nao consegue `require('./fxResolver')`
+// devido ao import `../storage` que colide com a directory `server/storage/`
+// (Node ESM "Directory import unsupported"). Por isso mantemos o ponteiro de
+// cache em `globalThis.__fxResolverCache` para que setup.ts possa zerar sem
+// precisar dynamicamente importar o modulo.
+//
+// Em prod nao ha tests, e o cache vive como Map module-level normalmente.
+// Em testes, ambos os caminhos zeram a MESMA Map (singleton via globalThis).
 const _g = globalThis as any;
 if (!_g.__fxResolverCache) {
   _g.__fxResolverCache = new Map<string, CacheEntry>();
 }
 const cache: Map<string, CacheEntry> = _g.__fxResolverCache;
+
+/**
+ * Reset interno do cache. Nome com underscore explicito sinaliza:
+ * APIs de teste apenas — nao chamar em prod.
+ */
+export function _resetCacheForTests(): void {
+  cache.clear();
+}
 
 function isPositiveNumber(v: any): v is number {
   return typeof v === "number" && Number.isFinite(v) && v > 0;

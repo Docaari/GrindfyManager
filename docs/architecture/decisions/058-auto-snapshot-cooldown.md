@@ -200,3 +200,31 @@ Quando `false`, snapshot nao eh criado. Skip silencioso server-side. Telemetria 
 - Diagrama: `Docs/architecture/diagrams/bankroll-3-auto-snapshot-sequence.mermaid`
 - Handler atual: `server/routes/cooldown.ts:175`
 - Service: `server/services/bankrollService.ts` (extensao)
+
+## Addendum 2026-05-01 (round 2 — CRIT-6 reviewer trade-off documentado)
+
+Reviewer round 1 do Sprint Bankroll-3 sinalizou que a implementacao do auto-snapshot
+nao roda DENTRO da mesma transacao do `cooldown finish` — chamada acontece **apos** a
+TX que atualiza `cooldown_logs`/`grind_sessions`, em try/catch isolado. A spec original
+falava "dentro da mesma sequencia transacional do request" (linguagem ambigua entre
+"mesmo handler" e "mesma DB transaction").
+
+**Decisao explicita round 2:** mantemos a implementacao atual (`createAutoSnapshot`
+fora do TX do finish). Trade-offs:
+
+- **Atomicidade fraca acceitavel.** Se finish faz commit mas snapshot falha, perdemos
+  1 ponto na serie temporal — ja documentado como "snapshot pendente, sera retentado".
+  A unica garantia que perdemos vs full-atomic eh "se snapshot falha, finish reverte"
+  — porem isso INVERTE prioridade (cooldown eh primario, snapshot eh secundario).
+  Reviewer round 1 reconheceu essa alternativa como aceitavel.
+- **Idempotencia preservada.** Index parcial unique em `(user_id, source_ref_id)` com
+  `WHERE origin='auto-cooldown'` continua garantindo replays seguros (catch 23505 + log).
+- **Operacao simplificada.** Snapshot fora do TX significa que o lock do TX nao segura
+  o `getConsolidatedBalance` (chamada cross-table mais pesada). Reduz contention.
+- **Trade-off vs ADR-058 originalmente proposto:** "atomicidade absoluta" virou
+  "atomicidade weak + idempotencia compensatoria". Smoke test (`tests/integration/routes/
+  bankroll3-route-wiring.smoke.test.ts`) valida que falha em snapshot retorna 200 +
+  `snapshot:null`, garantindo que o contrato observavel nao muda.
+
+Caso futuras telemetrias mostrem `auto_snapshot_failed` rate > 0.5%, considerar
+retry com backoff via worker (vide secao "Retry async futuro" original).

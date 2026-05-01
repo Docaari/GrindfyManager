@@ -533,6 +533,42 @@ export function registerWalletRoutes(app: Express): void {
   app.post("/api/wallets", requireAuth, walletLimiter, (req: Request, res: Response) =>
     handlePostWallet(req, res),
   );
+
+  // HIGH-1 fix (round 2): rotas com path estatico devem vir ANTES das rotas com
+  // `:id`/`:walletId` para evitar collision de routing. Express aplica primeira
+  // match — se `/api/wallets/:id` viesse antes, `/api/wallets/transfers`
+  // seria interpretado como id="transfers".
+
+  // Sprint Bankroll-3 RF-4 — Transfers (path-estatico antes do :id)
+  app.post("/api/wallets/transfers", requireAuth, walletLimiter, (req: Request, res: Response) =>
+    handlePostWalletTransfer(req, res),
+  );
+  app.get("/api/wallets/transfers", requireAuth, (req: Request, res: Response) =>
+    handleGetWalletTransfers(req, res),
+  );
+  app.get("/api/wallets/transfers/:id", requireAuth, (req: Request, res: Response) =>
+    handleGetWalletTransfer(req, res),
+  );
+
+  // Sprint Bankroll-3 RF-5 — Pending (path-estatico antes do :id)
+  app.delete("/api/wallets/pending/:id", requireAuth, walletLimiter, (req: Request, res: Response) =>
+    handleDeleteWalletPending(req, res),
+  );
+  app.post("/api/wallets/pending/:id/settle", requireAuth, walletLimiter, (req: Request, res: Response) =>
+    handlePostWalletPendingSettle(req, res),
+  );
+
+  app.get("/api/bankroll/consolidated", requireAuth, (req: Request, res: Response) =>
+    handleGetBankrollConsolidated(req, res),
+  );
+
+  // Rotas com :walletId/:id depois das estaticas.
+  app.post("/api/wallets/:walletId/pending", requireAuth, walletLimiter, (req: Request, res: Response) =>
+    handlePostWalletPending(req, res),
+  );
+  app.get("/api/wallets/:walletId/pending", requireAuth, (req: Request, res: Response) =>
+    handleGetWalletPending(req, res),
+  );
   app.get("/api/wallets/:id", requireAuth, (req: Request, res: Response) =>
     handleGetWallet(req, res),
   );
@@ -550,33 +586,5 @@ export function registerWalletRoutes(app: Express): void {
   );
   app.post("/api/wallets/:id/transactions", requireAuth, walletLimiter, (req: Request, res: Response) =>
     handlePostWalletTransaction(req, res),
-  );
-  app.get("/api/bankroll/consolidated", requireAuth, (req: Request, res: Response) =>
-    handleGetBankrollConsolidated(req, res),
-  );
-
-  // Sprint Bankroll-3 RF-4 — Transfers
-  app.post("/api/wallets/transfers", requireAuth, walletLimiter, (req: Request, res: Response) =>
-    handlePostWalletTransfer(req, res),
-  );
-  app.get("/api/wallets/transfers", requireAuth, (req: Request, res: Response) =>
-    handleGetWalletTransfers(req, res),
-  );
-  app.get("/api/wallets/transfers/:id", requireAuth, (req: Request, res: Response) =>
-    handleGetWalletTransfer(req, res),
-  );
-
-  // Sprint Bankroll-3 RF-5 — Pending
-  app.post("/api/wallets/:walletId/pending", requireAuth, walletLimiter, (req: Request, res: Response) =>
-    handlePostWalletPending(req, res),
-  );
-  app.get("/api/wallets/:walletId/pending", requireAuth, (req: Request, res: Response) =>
-    handleGetWalletPending(req, res),
-  );
-  app.delete("/api/wallets/pending/:id", requireAuth, walletLimiter, (req: Request, res: Response) =>
-    handleDeleteWalletPending(req, res),
-  );
-  app.post("/api/wallets/pending/:id/settle", requireAuth, walletLimiter, (req: Request, res: Response) =>
-    handlePostWalletPendingSettle(req, res),
   );
 }

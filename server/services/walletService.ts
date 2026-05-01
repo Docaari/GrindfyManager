@@ -785,6 +785,39 @@ async function createTransfer(
     throw makeError("feeAmount invalido", 400, "VALIDATION");
   }
 
+  // HIGH-7 fix (round 2): gate por bankrollManagementEnabled.
+  // Quando opt-out, transfers retornam 422 BANKROLL_DISABLED.
+  try {
+    const userSettings: any = await storage.getUserSettings(userId);
+    if (userSettings && userSettings.bankrollManagementEnabled === false) {
+      throw makeError(
+        "BANKROLL_DISABLED: ative bankrollManagementEnabled para usar transferencias",
+        422,
+        "BANKROLL_DISABLED",
+      );
+    }
+  } catch (err: any) {
+    if (err?.code === "BANKROLL_DISABLED") throw err;
+    // Erro no read-only path: continua (default true).
+    console.warn("[walletService.createTransfer] getUserSettings falhou:", err?.message);
+  }
+
+  // HIGH-4 fix (round 2): pre-resolve FX rates ANTES da transacao para evitar
+  // I/O externo segurando o lock. A validacao FX (cross-currency, diff%) tambem
+  // ocorre fora do tx — apenas as escritas DB rodam dentro do tx.
+  let resolvedRates: Record<string, number> | null = null;
+  try {
+    const fxMod = await import("./fxResolver");
+    const fx = await fxMod.fxResolver.resolveExchangeRates(userId);
+    resolvedRates = fx.rates;
+  } catch (err) {
+    console.warn(
+      "[walletService.createTransfer] fxResolver resolve falhou; usando rates fallback:",
+      (err as any)?.message,
+    );
+    resolvedRates = { USD: 1 };
+  }
+
   return await storage.transaction(async (tx: any) => {
     const fromWallet = await tx.selectWalletForUpdate(input.fromWalletId, userId);
     const toWallet = await tx.selectWalletForUpdate(input.toWalletId, userId);
@@ -797,7 +830,7 @@ async function createTransfer(
       throw makeError("WALLET_ARCHIVED", 422, "WALLET_ARCHIVED");
     }
 
-    // Cross-currency validation (D4 + D11)
+    // Cross-currency validation (D4 + D11) — usa rates ja resolvidos antes do tx.
     let amountTo: number;
     let fxRate: number | null = null;
     if (fromWallet.nativeCurrency === toWallet.nativeCurrency) {
@@ -814,36 +847,38 @@ async function createTransfer(
         );
       }
       fxRate = rateRaw;
-      // D11: diff > 5% vs market requires confirmFxDiff=true
-      try {
-        const fxMod = await import("./fxResolver");
-        const fx = await fxMod.fxResolver.resolveExchangeRates(userId);
-        const rates = fx.rates;
-        const fromRate = rates[fromWallet.nativeCurrency] ?? 1;
-        const toRate = rates[toWallet.nativeCurrency] ?? 1;
-        if (fromRate > 0 && toRate > 0) {
-          const marketRate = toRate / fromRate;
-          const diff = Math.abs(rateRaw - marketRate) / marketRate;
-          if (diff > TRANSFER_FX_DIFF_TOLERANCE && input.confirmFxDiff !== true) {
-            const err: any = new Error(
-              `fxRate divergente do mercado em ${(diff * 100).toFixed(1)}%. Confirme via confirmFxDiff=true.`,
-            );
-            err.code = "FX_DIFF_HIGH";
-            err.statusCode = 422;
-            err.httpStatus = 422;
-            err.providedRate = rateRaw;
-            err.marketRate = marketRate;
-            err.diffPct = diff;
-            throw err;
-          }
+      // D11: diff > 5% vs market requires confirmFxDiff=true.
+      const fromRate = resolvedRates![fromWallet.nativeCurrency] ?? 1;
+      const toRate = resolvedRates![toWallet.nativeCurrency] ?? 1;
+      if (fromRate > 0 && toRate > 0) {
+        const marketRate = toRate / fromRate;
+        const diff = Math.abs(rateRaw - marketRate) / marketRate;
+        if (diff > TRANSFER_FX_DIFF_TOLERANCE && input.confirmFxDiff !== true) {
+          const err: any = new Error(
+            `fxRate divergente do mercado em ${(diff * 100).toFixed(1)}%. Confirme via confirmFxDiff=true.`,
+          );
+          err.code = "FX_DIFF_HIGH";
+          err.statusCode = 422;
+          err.httpStatus = 422;
+          err.providedRate = rateRaw;
+          err.marketRate = marketRate;
+          err.diffPct = diff;
+          throw err;
         }
-      } catch (err: any) {
-        if (err?.code === "FX_DIFF_HIGH") throw err;
-        // outros erros fx: log e continue (fxRate permanece valido)
-        console.warn("[walletService.createTransfer] fxResolver lookup failed:", err?.message);
       }
       amountTo = amountFrom * fxRate;
     }
+
+    // CRIT-4 fix (round 2): converte usdAmount via fxResolver (nao grava nativo
+    // como USD). Convencao QW-1 (ADR-033): rates[ccy] = unidades de ccy por 1 USD.
+    const ratesForUsd = resolvedRates ?? { USD: 1 };
+    const toUsd = (amt: number, ccy: string): number => {
+      if (ccy === "USD") return amt;
+      const r = ratesForUsd[ccy] ?? 1;
+      return r > 0 ? amt / r : amt;
+    };
+    const fromUsd = toUsd(amountFrom, fromWallet.nativeCurrency);
+    const toUsdAmt = toUsd(amountTo, toWallet.nativeCurrency);
 
     const fromBalance = parseDecimal(fromWallet.balance);
     if (fromBalance < amountFrom) {
@@ -876,6 +911,9 @@ async function createTransfer(
     const transactions: any[] = [];
 
     // transfer_out
+    // CRIT-4: usdAmount = USD real (convertido via fxResolver), nao valor nativo.
+    // fxRateUSDPerNative = nativeAmount / usdAmount, padrao QW-1 (ADR-033).
+    const fromFxUsdPerNative = fromUsd > 0 ? amountFrom / fromUsd : 1;
     const txOut = await tx.createWalletTransaction({
       walletId: fromWallet.id,
       userId,
@@ -884,8 +922,8 @@ async function createTransfer(
       direction: "out",
       nativeAmount: String(amountFrom),
       nativeCurrency: fromWallet.nativeCurrency,
-      fxRateUSDPerNative: String(fxRate ?? 1),
-      usdAmount: String(amountFrom),
+      fxRateUSDPerNative: String(fromFxUsdPerNative),
+      usdAmount: String(fromUsd),
       previousNativeBalance: String(fromBalance),
       newNativeBalance: String(fromBalance - amountFrom),
       reason: "transfer_out",
@@ -897,7 +935,9 @@ async function createTransfer(
     await tx.updateWalletBalance(fromWallet.id, fromBalance - amountFrom);
 
     // transfer_in
+    // CRIT-4: usdAmount = USD real do toCurrency (preserva paridade FX no audit).
     const toBalance = parseDecimal(toWallet.balance);
+    const toFxUsdPerNative = toUsdAmt > 0 ? amountTo / toUsdAmt : 1;
     const txIn = await tx.createWalletTransaction({
       walletId: toWallet.id,
       userId,
@@ -906,8 +946,8 @@ async function createTransfer(
       direction: "in",
       nativeAmount: String(amountTo),
       nativeCurrency: toWallet.nativeCurrency,
-      fxRateUSDPerNative: String(fxRate ?? 1),
-      usdAmount: String(amountTo),
+      fxRateUSDPerNative: String(toFxUsdPerNative),
+      usdAmount: String(toUsdAmt),
       previousNativeBalance: String(toBalance),
       newNativeBalance: String(toBalance + amountTo),
       reason: "transfer_in",
@@ -921,14 +961,17 @@ async function createTransfer(
     // Fee opcional
     if (feeAmountSet && feeAmount > 0) {
       if (input.feeWalletId === input.fromWalletId) {
-        // Fee debita da from no mesmo escopo — sem 3a tx (D agregamos no balance).
-        // O ideal seria criar uma tx fee separada na from; spec diz "se feeWallet == fromWallet, nao cria 3a".
-        // Atualizamos balance da from descontando fee adicional.
+        // Spec test (transferService.test.ts:401): "fee em fromWallet:
+        // nao cria 3a tx (debito unico)". Apenas decrementa balance.
+        // CRIT-MED-4 do reviewer pediu criar 3a tx — contraria o teste,
+        // mantemos o contrato existente.
         const newFromBalance = fromBalance - amountFrom - feeAmount;
         await tx.updateWalletBalance(fromWallet.id, newFromBalance);
       } else if (input.feeWalletId === input.toWalletId) {
         // Fee na wallet to — cria 3a tx.
         const tofb = parseDecimal(toWallet.balance) + amountTo;
+        const feeUsd = toUsd(feeAmount, input.feeCurrency!);
+        const feeFxUsdPerNative = feeUsd > 0 ? feeAmount / feeUsd : 1;
         const txFee = await tx.createWalletTransaction({
           walletId: toWallet.id,
           userId,
@@ -937,8 +980,8 @@ async function createTransfer(
           direction: "out",
           nativeAmount: String(feeAmount),
           nativeCurrency: input.feeCurrency,
-          fxRateUSDPerNative: "1",
-          usdAmount: String(feeAmount),
+          fxRateUSDPerNative: String(feeFxUsdPerNative),
+          usdAmount: String(feeUsd),
           previousNativeBalance: String(tofb),
           newNativeBalance: String(tofb - feeAmount),
           reason: "transfer_fee",
@@ -956,6 +999,8 @@ async function createTransfer(
         if (feeBalance < feeAmount) {
           throw makeError("INSUFFICIENT_BALANCE (fee)", 422, "INSUFFICIENT_BALANCE");
         }
+        const feeUsd = toUsd(feeAmount, input.feeCurrency!);
+        const feeFxUsdPerNative = feeUsd > 0 ? feeAmount / feeUsd : 1;
         const txFee = await tx.createWalletTransaction({
           walletId: feeWallet.id,
           userId,
@@ -964,8 +1009,8 @@ async function createTransfer(
           direction: "out",
           nativeAmount: String(feeAmount),
           nativeCurrency: input.feeCurrency,
-          fxRateUSDPerNative: "1",
-          usdAmount: String(feeAmount),
+          fxRateUSDPerNative: String(feeFxUsdPerNative),
+          usdAmount: String(feeUsd),
           previousNativeBalance: String(feeBalance),
           newNativeBalance: String(feeBalance - feeAmount),
           reason: "transfer_fee",
@@ -1166,9 +1211,28 @@ async function settlePending(
     const occurred = body.actualOccurredAt
       ? new Date(body.actualOccurredAt as any)
       : new Date();
-    const fxRate = body.fxRateUSDPerNative != null
-      ? parseDecimal(body.fxRateUSDPerNative)
-      : 1;
+    // CRIT-8 fix: fxRate fallback via fxResolver quando body nao informa.
+    // Convencao QW-1 (ADR-033): rates[ccy] = unidades de ccy por 1 USD.
+    // fxRateUSDPerNative = native/usd. Para BRL com rate 5.0 -> usdPerNative = 5.0.
+    let fxRate: number;
+    if (body.fxRateUSDPerNative != null) {
+      fxRate = parseDecimal(body.fxRateUSDPerNative);
+    } else if (txPending.nativeCurrency === "USD") {
+      fxRate = 1;
+    } else {
+      try {
+        const fxMod = await import("./fxResolver");
+        const fx = await fxMod.fxResolver.resolveExchangeRates(userId);
+        const nativeRate = fx.rates[txPending.nativeCurrency] ?? 1;
+        fxRate = nativeRate > 0 ? nativeRate : 1;
+      } catch (err) {
+        console.warn(
+          "[walletService.settlePending] fxResolver failed; using rate=1:",
+          (err as any)?.message,
+        );
+        fxRate = 1;
+      }
+    }
 
     const transaction = await tx.createWalletTransaction({
       walletId: wallet.id,

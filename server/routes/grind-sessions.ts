@@ -797,6 +797,25 @@ export function registerGrindSessionRoutes(app: Express): void {
   app.post('/api/grind-sessions', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
+
+      // CRIT-2 fix (Sprint Bankroll-3 RF-6): stop-lock gate ANTES de qualquer DB write.
+      // Bloqueia criacao de sessao quando stop_lock_until > NOW (response 423).
+      try {
+        const { stopService } = await import("../services/stopService");
+        await stopService.assertNotStopLocked(userId);
+      } catch (err: any) {
+        if (err?.code === "STOP_LOCKED" || err?.httpStatus === 423) {
+          return res.status(423).json({
+            code: "STOP_LOCKED",
+            message: err?.message ?? "Sessao bloqueada por stop-loss",
+            lockedUntil: err?.lockedUntil ?? err?.body?.lockedUntil,
+            remainingMs: err?.remainingMs ?? err?.body?.remainingMs,
+            reason: err?.body?.reason ?? "stop_loss",
+          });
+        }
+        console.error("[POST /api/grind-sessions] assertNotStopLocked unexpected error:", err);
+      }
+
       const { resetTournaments, replaceExisting, dayOfWeek, loadFromGradePlanner, ...sessionDataRaw } = req.body;
 
 
@@ -943,10 +962,29 @@ export function registerGrindSessionRoutes(app: Express): void {
 
   app.put('/api/grind-sessions/:id', requireAuth, async (req: any, res) => {
     try {
+      const userId = req.user.userPlatformId;
       const { id } = req.params;
       const sessionData = insertGrindSessionSchema.partial().parse(req.body);
       const session = await storage.updateGrindSession(id, sessionData);
-      res.json(session);
+
+      // CRIT-2 fix (Sprint Bankroll-3 RF-6): quando status='completed', avaliar
+      // stops para potencialmente bloquear futuras sessoes (delta diario).
+      // Falha em evaluateStops eh logada mas NAO quebra o update (D3).
+      let extra: { stopReached?: string | null; lockedUntil?: string } = {};
+      if (req.body?.status === "completed") {
+        try {
+          const { stopService } = await import("../services/stopService");
+          const result = await stopService.evaluateStops(userId, id);
+          if (result?.stopReached) {
+            extra.stopReached = result.stopReached;
+            if (result.lockedUntil) extra.lockedUntil = result.lockedUntil;
+          }
+        } catch (err: any) {
+          console.error("[PUT /api/grind-sessions/:id] evaluateStops failed:", err?.message);
+        }
+      }
+
+      res.json({ ...(session as any), ...extra });
     } catch (error) {
       console.error("Failed to update grind session:", error);
       res.status(400).json({ message: "Failed to update grind session" });

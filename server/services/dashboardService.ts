@@ -66,6 +66,25 @@ async function getRoiByPlatform(
   const limit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
   const sinceDate = periodToSinceDate(period);
 
+  // HIGH-7 fix (round 2): gate por bankrollManagementEnabled.
+  // Quando opt-out, dashboard ROI retorna vazio (consistente com createTransfer).
+  try {
+    const settings: any = await storage.getUserSettings(userId);
+    if (settings && settings.bankrollManagementEnabled === false) {
+      return {
+        period,
+        generatedAt: new Date().toISOString(),
+        platforms: [],
+      };
+    }
+  } catch (err) {
+    // Erro ao ler settings: continua com default=true (read-only path).
+    console.warn(
+      "[dashboardService.getRoiByPlatform] getUserSettings falhou:",
+      (err as any)?.message,
+    );
+  }
+
   const storageAny = storage as any;
   let rows: RoiRawRow[] = [];
   if (typeof storageAny.getRoiByPlatform === "function") {

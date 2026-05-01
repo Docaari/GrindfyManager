@@ -640,15 +640,22 @@ async function createAutoSnapshot(
     return null;
   }
 
+  // HIGH-5 fix (round 2): fail closed em erro de getUserSettings.
+  // Antes: try/catch logado e seguia com default=true, podendo violar opt-out
+  // se a query estivesse degradada por permission/perm error.
+  let settings: any = null;
   try {
-    const settings: any = await storage.getUserSettings(userId).catch(() => null);
-    // bankrollManagementEnabled default true (skip apenas quando explicitamente false).
-    if (settings && settings.bankrollManagementEnabled === false) {
-      return null;
-    }
+    settings = await storage.getUserSettings(userId);
   } catch (err) {
-    // Erro ao buscar settings — assume default true (mantem comportamento)
-    console.warn("[bankrollService.createAutoSnapshot] getUserSettings falhou:", (err as any)?.message);
+    console.warn(
+      "[bankrollService.createAutoSnapshot] getUserSettings falhou (fail closed):",
+      (err as any)?.message,
+    );
+    return null;
+  }
+  // bankrollManagementEnabled default true (skip apenas quando explicitamente false).
+  if (settings && settings.bankrollManagementEnabled === false) {
+    return null;
   }
 
   // Consolidated balance via walletService (import dinamico para evitar ciclo).
