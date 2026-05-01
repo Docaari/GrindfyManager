@@ -1,0 +1,99 @@
+%% Sprint Bankroll-Reports-Detail — RF-11 RF-12 RF-06 (ADR-070)
+%% Sequence: founder clica "Ver detalhes da banca" em entry do historico /grind (sessao OU manual_report).
+%% BankrollDetailModal fetch GET /api/wallets/balance-snapshot-pair com from/to derivados do entry.type.
+%% Server resolve precedence D7 (sessao) ou D8 (manual_report). Empty state D6 quando snapshot ausente.
+%% Tabela renderiza Plataforma | Saldo antes | Saldo depois | Delta nativo | Delta USD + footer total USD.
+
+sequenceDiagram
+    actor User as Founder
+    participant Hist as SessionHistory.tsx
+    participant Modal as BankrollDetailModal
+    participant Q as TanStack Query
+    participant API as GET /api/wallets/balance-snapshot-pair
+    participant SVC as walletService.getBalanceSnapshotPair
+    participant DB as Postgres
+    participant Tbl as WalletDeltaTable
+
+    User->>Hist: Abre /grind ve historico
+    Hist->>Hist: render entries (sessions + manual_reports)<br/>filtro D10 ativo (Tudo / Sessoes / Reports)
+    Hist->>User: lista com botoes "Ver detalhes da banca"<br/>(gated por entry.detailsAvailable)
+
+    User->>Hist: Click Ver detalhes em entry X
+    Hist->>Modal: open=true, entry={type, occurredAt, ...}
+
+    alt entry.type = 'session'
+        Modal->>Modal: from = entry.startedAt<br/>to = entry.completedAt
+    else entry.type = 'manual_report'
+        Modal->>Modal: from = entry.occurredAt - 1ms<br/>to = entry.occurredAt + 1ms<br/>(snapshot capturado pelo RF-03)
+    end
+
+    Modal->>Q: useQuery({queryKey: ['wallet-snapshot-pair', from, to]})
+    Q->>API: GET ?from=...&to=...&sessionId=?
+
+    API->>SVC: getBalanceSnapshotPair(userId, from, to, sessionId?)
+
+    alt entry.type = 'session' (D7 precedence)
+
+        opt sessionId presente
+            SVC->>DB: SELECT * FROM bankroll_snapshots<br/>WHERE source_ref_id=cooldownLogId<br/>AND origin='auto-cooldown'<br/>AND user_id=?
+            DB-->>SVC: auto-cooldown snapshot OR null
+        end
+
+        alt auto-cooldown found
+            SVC->>SVC: after = auto-cooldown snapshot
+            SVC->>DB: SELECT * FROM bankroll_snapshots<br/>WHERE occurred_at LT after.occurred_at<br/>ORDER BY occurred_at DESC LIMIT 1
+            DB-->>SVC: before snapshot OR null
+        else fallback temporal
+            SVC->>DB: SELECT * FROM bankroll_snapshots<br/>WHERE occurred_at LE from<br/>ORDER BY occurred_at DESC LIMIT 1
+            DB-->>SVC: before OR null
+            SVC->>DB: SELECT * FROM bankroll_snapshots<br/>WHERE occurred_at GE to<br/>ORDER BY occurred_at ASC LIMIT 1
+            DB-->>SVC: after OR null
+        end
+
+    else entry.type = 'manual_report' (D8 precedence)
+
+        SVC->>DB: SELECT wallet_transactions<br/>WHERE reason='manual_report'<br/>AND occurred_at BETWEEN from AND to<br/>(cluster D5 ja resolvido pelo history)
+        DB-->>SVC: cluster txs
+
+        SVC->>DB: SELECT bankroll_snapshots<br/>WHERE source_ref_id IN (cluster.txIds)<br/>AND origin='manual-report'
+        DB-->>SVC: snapshots OR empty
+
+        alt snapshots existem
+            SVC->>SVC: after = snapshots[0].wallets_balances<br/>before = snapshots[0].wallets_balances - delta
+        else fallback aritmetica
+            SVC->>SVC: per wallet:<br/>after.balanceNative = tx.balance_after_native<br/>before.balanceNative = tx.balance_after_native - tx.deltaNative
+        end
+    end
+
+    alt before E after presentes
+        SVC->>SVC: per wallet:<br/>delta.deltaNative = after - before<br/>delta.deltaUsd = afterUsd - beforeUsd
+        SVC-->>API: {before, after, delta, empty: false}
+    else before OR after ausente
+        SVC-->>API: {before: [], after: [], delta: [],<br/>empty: true,<br/>emptyReason: 'no_snapshot_before' |<br/>'no_snapshot_after' | 'data_corrupt'}
+    end
+
+    API-->>Q: 200 OK payload
+    Q-->>Modal: data ready
+
+    alt loading state
+        Modal->>User: skeleton tabela (3-5 rows shimmer)
+    else data.empty = true (D6)
+        Modal->>User: empty state PT-BR<br/>"Snapshot indisponivel - saldo registrado retroativamente"<br/>+ sugestao "Verifique extrato bancario manualmente"<br/>data-testid bankroll-detail-empty
+    else data carregado
+        Modal->>Tbl: render WalletDeltaTable(delta)
+
+        alt viewport GE 768px
+            Tbl->>User: render Table<br/>colunas Plataforma | Antes | Depois | Delta nativo | Delta USD<br/>Wallets com delta=0 visiveis cinza<br/>delta GT 0 verde, delta LT 0 vermelho<br/>data-testid wallet-delta-row-{walletId}
+        else viewport LT 768px
+            Tbl->>User: render Sheet bottom<br/>cada wallet vira Card<br/>header platform + walletName<br/>body grid 2-col (Antes | Depois)<br/>linha total Delta destaque<br/>data-testid bankroll-detail-card-{walletId}
+        end
+
+        Tbl->>User: footer total<br/>SUM(delta.deltaUsd)<br/>data-testid bankroll-detail-total
+    end
+
+    User->>Modal: Click fechar OR ESC
+    Modal->>Hist: open=false
+
+    Note over Modal,Tbl: Modal sem actions extras (lessons-learned 11):<br/>sem export PDF, sem compartilhar, sem editar.<br/>Foco: visibilidade + auditoria.
+
+    Note over SVC,DB: Sessoes legacy sem snapshot:<br/>history endpoint marca detailsAvailable=false<br/>frontend NAO renderiza botao (UX nao quebra).

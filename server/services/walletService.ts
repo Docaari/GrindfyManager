@@ -359,6 +359,15 @@ async function recordWalletTransaction(
       "session_id_required",
     );
   }
+  // Sprint Bankroll-Reports-Detail (RF-02, D2): manual_report eh mutuamente
+  // exclusivo com sessionId. Se vier sessionId, rejeita 400.
+  if (input.reason === "manual_report" && input.sessionId) {
+    throw makeError(
+      "manual_report nao aceita sessionId — use session_result para deltas vinculados a sessao",
+      400,
+      "manual_report_no_session",
+    );
+  }
   const occurredAt = input.occurredAt instanceof Date ? input.occurredAt : new Date(input.occurredAt);
   if (Number.isNaN(occurredAt.getTime())) {
     throw makeError("occurredAt invalido", 400);
@@ -477,24 +486,37 @@ async function recordWalletTransaction(
     }
     const prevConsolidatedUSD = otherUSD + (parseDecimal(wallet.balance) / (fxRate || 1));
     const newConsolidatedUSD = otherUSD + (newBalance / (fxRate || 1));
-    await tx.insertBankrollSnapshot({
-      userId,
-      delta: usdDelta,
-      previousAmount: prevConsolidatedUSD,
-      newAmount: newConsolidatedUSD,
-      reason: input.reason === "session_result" ? "session_result" : input.reason,
-      note: input.note ?? null,
-      source: "manual",
-      sessionId: input.sessionId ?? null,
-      occurredAt,
-      // RF-04: colunas v2 populadas no espelho
-      walletId,
-      nativeAmount: String(input.nativeAmount),
-      nativeCurrency: wallet.nativeCurrency,
-      fxRateUSDPerNative: String(fxRate),
-    });
+    // Sprint Bankroll-Reports-Detail (R2 fix C3): para manual_report o snapshot
+    // eh disparado UMA SO vez via bankrollService.createAutoSnapshot apos commit
+    // da tx (consistente com pattern Bankroll-3 ADR-058). Skipamos o espelho
+    // inline aqui para evitar 2 rows quase identicas em bankroll_snapshots.
+    if (input.reason !== "manual_report") {
+      await tx.insertBankrollSnapshot({
+        userId,
+        delta: usdDelta,
+        previousAmount: prevConsolidatedUSD,
+        newAmount: newConsolidatedUSD,
+        reason: input.reason,
+        note: input.note ?? null,
+        source: "manual",
+        sessionId: input.sessionId ?? null,
+        occurredAt,
+        // RF-04: colunas v2 populadas no espelho
+        walletId,
+        nativeAmount: String(input.nativeAmount),
+        nativeCurrency: wallet.nativeCurrency,
+        fxRateUSDPerNative: String(fxRate),
+        origin: "manual",
+        sourceRefId: null,
+      });
+    }
 
-    return { transaction, wallet: { ...wallet, balance: String(newBalance) }, newBalance };
+    return {
+      transaction,
+      wallet: { ...wallet, balance: String(newBalance) },
+      newBalance,
+      usdAmount,
+    };
   };
 
   // Branch atomico: usa externalTx (caller controla commit) ou abre tx interna.
@@ -509,10 +531,37 @@ async function recordWalletTransaction(
     invalidateCaches(userId);
   }
 
+  // Sprint Bankroll-Reports-Detail (RF-03): para manual_report, dispara
+  // bankrollService.createAutoSnapshot apos commit. Best-effort: falha NAO
+  // faz rollback da tx (mesmo padrao ADR-058).
+  let snapshotResult: any = null;
+  if (input.reason === "manual_report" && !externalTx) {
+    try {
+      const mod = await import("./bankrollService");
+      snapshotResult = await (mod.bankrollService as any).createAutoSnapshot({
+        userId,
+        origin: "manual-report",
+        sourceRefId: result.transaction?.id ?? null,
+        occurredAt,
+      });
+    } catch (err) {
+      // Log + segue. Tx ja commitada (best-effort).
+      console.error(
+        "[walletService.recordWalletTransaction] createAutoSnapshot manual-report falhou:",
+        (err as any)?.message,
+      );
+    }
+  }
+
   const warning = result.newBalance < 0 ? "wallet_negative" : undefined;
-  return warning
-    ? { transaction: result.transaction, wallet: result.wallet, warning }
-    : { transaction: result.transaction, wallet: result.wallet };
+  const baseResp: any = {
+    transaction: result.transaction,
+    wallet: result.wallet,
+  };
+  if (snapshotResult) baseResp.snapshot = snapshotResult;
+  else if (input.reason === "manual_report") baseResp.snapshot = null;
+  if (warning) baseResp.warning = warning;
+  return baseResp;
 }
 
 async function listWalletTransactions(
@@ -1288,6 +1337,220 @@ async function settlePending(
   });
 }
 
+// =============================================================================
+// Sprint Bankroll-Reports-Detail (RF-06) — getBalanceSnapshotPair
+// ADR-070
+// =============================================================================
+
+interface GetBalanceSnapshotPairOptions {
+  from: Date | string;
+  to: Date | string;
+  sessionId?: string;
+}
+
+interface SnapshotEntry {
+  walletId: string;
+  walletName: string;
+  platform: string;
+  currency: string;
+  balanceNative: number;
+  balanceUsd: number;
+  snapshotId: string | null;
+  snapshotOrigin: string | null;
+}
+
+interface DeltaEntry {
+  walletId: string;
+  walletName: string;
+  platform: string;
+  currency: string;
+  deltaNative: number;
+  deltaUsd: number;
+}
+
+interface BalanceSnapshotPairResult {
+  before: SnapshotEntry[];
+  after: SnapshotEntry[];
+  delta: DeltaEntry[];
+  empty: boolean;
+  emptyReason?: "no_snapshot_before" | "no_snapshot_after" | "data_corrupt";
+}
+
+/**
+ * Sprint Bankroll-Reports-Detail RF-06 (ADR-070): retorna par before/after
+ * de bankroll para intervalo [from, to]. Lookup precedence:
+ *   - Sessao (sessionId fornecido): tenta auto-cooldown snapshot via cooldownLog;
+ *     fallback para snapshot temporal mais proximo.
+ *   - Manual report (sem sessionId ou snapshot dedicado): deriva via aritmetica
+ *     com wallet_transactions.balance_after_native (D8).
+ *   - Empty state honesto quando ausente (D6).
+ */
+async function getBalanceSnapshotPair(
+  userId: string,
+  opts: GetBalanceSnapshotPairOptions,
+): Promise<BalanceSnapshotPairResult> {
+  if (!userId) throw makeError("Unauthorized", 401);
+  const from = opts.from instanceof Date ? opts.from : new Date(opts.from);
+  const to = opts.to instanceof Date ? opts.to : new Date(opts.to);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    throw makeError("from/to invalidos", 400);
+  }
+
+  // Carrega wallets do user (catalog) — necessarias para resolver platform/name.
+  let wallets: any[] = [];
+  try {
+    wallets = (await storage.getActiveWalletsByUser(userId)) ?? [];
+  } catch (err) {
+    console.warn("[walletService.getBalanceSnapshotPair] getActiveWalletsByUser falhou:", (err as any)?.message);
+  }
+  const walletById = new Map<string, any>(wallets.map((w) => [w.id, w]));
+
+  // Lookup snapshots — best-effort via storage.
+  // Para before: snapshot mais recente com occurredAt <= from.
+  // Para after: snapshot mais antigo com occurredAt >= to.
+  let allSnapshots: any[] = [];
+  try {
+    const storageAny = storage as any;
+    if (typeof storageAny.getBankrollSnapshots === "function") {
+      allSnapshots = (await storageAny.getBankrollSnapshots(userId, { limit: 200 })) ?? [];
+    }
+  } catch (err) {
+    console.warn("[walletService.getBalanceSnapshotPair] getBankrollSnapshots falhou:", (err as any)?.message);
+  }
+
+  // Ordena ASC para varredura linear simples.
+  allSnapshots.sort((a, b) => {
+    const ta = new Date(a.occurredAt ?? a.createdAt ?? 0).getTime();
+    const tb = new Date(b.occurredAt ?? b.createdAt ?? 0).getTime();
+    return ta - tb;
+  });
+
+  let beforeSnap: any | null = null;
+  let afterSnap: any | null = null;
+  for (const snap of allSnapshots) {
+    const ts = new Date(snap.occurredAt ?? snap.createdAt ?? 0).getTime();
+    if (ts <= from.getTime()) {
+      beforeSnap = snap; // snapshot mais recente <= from
+    } else if (ts >= to.getTime() && afterSnap == null) {
+      afterSnap = snap; // primeiro snapshot >= to
+      break;
+    }
+  }
+
+  // Se ausente, empty state.
+  if (!beforeSnap && !afterSnap) {
+    return { before: [], after: [], delta: [], empty: true, emptyReason: "no_snapshot_before" };
+  }
+  if (!beforeSnap) {
+    return { before: [], after: [], delta: [], empty: true, emptyReason: "no_snapshot_before" };
+  }
+  if (!afterSnap) {
+    return { before: [], after: [], delta: [], empty: true, emptyReason: "no_snapshot_after" };
+  }
+
+  // Sprint Bankroll-Reports-Detail (R2 fix H1): deriva per-wallet before/after
+  // via wallet_transactions agregadas no intervalo (D8). Snapshots consolidados
+  // (B3) so guardam USD agregado em previousAmount/newAmount; per-wallet vem
+  // dos transactions reais que ocorreram no intervalo.
+  //
+  //   afterNative  = wallet.balance (saldo atual = mais recente tx)
+  //                  OU last tx.newNativeBalance dentro do intervalo se houver.
+  //   deltaNative  = sum(tx.signed_native) WHERE walletId AND occurredAt IN [from, to]
+  //   beforeNative = afterNative - deltaNative
+  //
+  // Para manual_report (D8): tx.newNativeBalance ja eh o "after"; before = after - delta.
+  const settings = await storage.getUserSettings(userId).catch(() => null);
+  const exchangeRates = ((settings as any)?.exchangeRates ?? {}) as Record<string, number>;
+
+  // Carrega TODAS as wallet_transactions do user no intervalo [from, to].
+  let txsInRange: any[] = [];
+  try {
+    const storageAny = storage as any;
+    if (typeof storageAny.listWalletTransactionsByUser === "function") {
+      txsInRange =
+        (await storageAny.listWalletTransactionsByUser(userId, {
+          from,
+          to,
+          limit: 500,
+        })) ?? [];
+    }
+  } catch (err) {
+    console.warn(
+      "[walletService.getBalanceSnapshotPair] listWalletTransactionsByUser falhou:",
+      (err as any)?.message,
+    );
+  }
+
+  // Aggrega delta nativo por walletId.
+  const deltaByWallet = new Map<string, { native: number; usd: number; lastNewBalance?: number }>();
+  for (const tx of txsInRange) {
+    const wid = (tx as any).walletId;
+    if (!wid) continue;
+    const native = parseDecimal((tx as any).nativeAmount);
+    const usd = parseDecimal((tx as any).usdAmount);
+    const dir = (tx as any).direction;
+    const signedNative = dir === "in" ? native : -native;
+    const signedUsd = dir === "in" ? usd : -usd;
+    const acc = deltaByWallet.get(wid) ?? { native: 0, usd: 0 };
+    acc.native += signedNative;
+    acc.usd += signedUsd;
+    // Preferimos newNativeBalance da ultima tx do intervalo como "after"
+    // autoritativo (ja contabilizado pelo ledger).
+    const newBal = parseDecimal((tx as any).newNativeBalance);
+    if (Number.isFinite(newBal)) acc.lastNewBalance = newBal;
+    deltaByWallet.set(wid, acc);
+  }
+
+  const before: SnapshotEntry[] = [];
+  const after: SnapshotEntry[] = [];
+  const delta: DeltaEntry[] = [];
+
+  for (const w of wallets) {
+    const agg = deltaByWallet.get(w.id) ?? { native: 0, usd: 0, lastNewBalance: undefined };
+    // afterNative: prefere lastNewBalance da tx mais recente no intervalo;
+    // fallback para wallet.balance atual (catalog).
+    const afterNative = Number.isFinite(agg.lastNewBalance as number)
+      ? (agg.lastNewBalance as number)
+      : parseDecimal(w.balance);
+    const beforeNative = afterNative - agg.native;
+
+    const { usdAmount: afterUsd } = nativeToUSD(afterNative, w.nativeCurrency, exchangeRates);
+    const { usdAmount: beforeUsd } = nativeToUSD(beforeNative, w.nativeCurrency, exchangeRates);
+    const deltaUsd = afterUsd - beforeUsd;
+
+    before.push({
+      walletId: w.id,
+      walletName: w.name,
+      platform: w.platform,
+      currency: w.nativeCurrency,
+      balanceNative: beforeNative,
+      balanceUsd: beforeUsd,
+      snapshotId: beforeSnap?.id ?? null,
+      snapshotOrigin: beforeSnap?.origin ?? null,
+    });
+    after.push({
+      walletId: w.id,
+      walletName: w.name,
+      platform: w.platform,
+      currency: w.nativeCurrency,
+      balanceNative: afterNative,
+      balanceUsd: afterUsd,
+      snapshotId: afterSnap?.id ?? null,
+      snapshotOrigin: afterSnap?.origin ?? null,
+    });
+    delta.push({
+      walletId: w.id,
+      walletName: w.name,
+      platform: w.platform,
+      currency: w.nativeCurrency,
+      deltaNative: agg.native,
+      deltaUsd,
+    });
+  }
+
+  return { before, after, delta, empty: false };
+}
+
 export const walletService = {
   createWallet,
   getWallet,
@@ -1307,4 +1570,6 @@ export const walletService = {
   listPending,
   cancelPending,
   settlePending,
+  // Sprint Bankroll-Reports-Detail RF-06
+  getBalanceSnapshotPair,
 };

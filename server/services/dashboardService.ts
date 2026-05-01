@@ -139,18 +139,92 @@ async function getRoiByPlatform(
     };
   };
 
-  const platforms: RoiByPlatformEntry[] = rows
-    .map((r) => {
-      const { investedUSD, profitUSD } = toUSD(r);
-      return {
-        site: r.site,
-        sessionsCount: Number(r.sessionsCount) || 0,
-        tournamentsCount: Number(r.tournamentsCount) || 0,
-        investedUSD,
-        profitUSD,
-        roiPct: investedUSD > 0 ? (profitUSD / investedUSD) * 100 : 0,
-      };
-    })
+  // Sprint Bankroll-Reports-Detail (RF-08): inclui delta de manual_reports
+  // por wallet/platform na soma de profitUSD. Wallet -> platform via catalog.
+  // Filtro temporal pelo mesmo sinceDate. Conversao FX usa wallet.nativeCurrency
+  // ou usdAmount (delta_usd_at_time) quando disponivel; fallback fxResolver.
+  const manualReportProfitBySite = new Map<string, number>();
+  try {
+    const fromDate = sinceDate ?? undefined;
+    const userTxs = (await (storageAny.listWalletTransactionsByUser?.(userId, {
+      from: fromDate,
+      reason: ["manual_report"],
+      limit: 1000,
+    })) ?? []) as any[];
+    if (userTxs.length > 0) {
+      let walletsCatalog: any[] = [];
+      try {
+        walletsCatalog = (await storage.getActiveWalletsByUser(userId)) ?? [];
+      } catch (err) {
+        console.warn(
+          "[dashboardService.getRoiByPlatform] getActiveWalletsByUser falhou:",
+          (err as any)?.message,
+        );
+      }
+      const walletById = new Map<string, any>(walletsCatalog.map((w: any) => [w.id, w]));
+      for (const tx of userTxs) {
+        const wallet = walletById.get(tx.walletId);
+        if (!wallet) continue;
+        const site = wallet.platform;
+        if (!site) continue;
+        // Filtro temporal: storage.listWalletTransactionsByUser ja aplica `from`,
+        // mas defesa em profundidade — descarta tx fora do periodo.
+        if (fromDate) {
+          const txTs = new Date(tx.occurredAt ?? 0).getTime();
+          if (txTs < fromDate.getTime()) continue;
+        }
+        // delta USD: usa usdAmount quando presente; senao reconverte via fxResolver.
+        let usd = tx.usdAmount != null ? parseFloat(String(tx.usdAmount)) : NaN;
+        if (!Number.isFinite(usd)) {
+          const native = parseFloat(String(tx.nativeAmount ?? "0"));
+          const ccy = wallet.nativeCurrency ?? "USD";
+          const rate = rates[ccy] ?? 1;
+          const safeRate = rate > 0 ? rate : 1;
+          usd = ccy === "USD" ? native : native / safeRate;
+        }
+        const signed = tx.direction === "in" ? usd : -usd;
+        manualReportProfitBySite.set(site, (manualReportProfitBySite.get(site) ?? 0) + signed);
+      }
+    }
+  } catch (err) {
+    console.warn(
+      "[dashboardService.getRoiByPlatform] manual_report aggregation falhou:",
+      (err as any)?.message,
+    );
+  }
+
+  const platformsBySite = new Map<string, RoiByPlatformEntry>();
+  for (const r of rows) {
+    const { investedUSD, profitUSD } = toUSD(r);
+    platformsBySite.set(r.site, {
+      site: r.site,
+      sessionsCount: Number(r.sessionsCount) || 0,
+      tournamentsCount: Number(r.tournamentsCount) || 0,
+      investedUSD,
+      profitUSD,
+      roiPct: investedUSD > 0 ? (profitUSD / investedUSD) * 100 : 0,
+    });
+  }
+  // Soma manual_reports — cria entry novo se site nao existe ainda em rows.
+  for (const [site, mrProfit] of manualReportProfitBySite.entries()) {
+    if (mrProfit === 0) continue;
+    const existing = platformsBySite.get(site);
+    if (existing) {
+      existing.profitUSD += mrProfit;
+      existing.roiPct = existing.investedUSD > 0 ? (existing.profitUSD / existing.investedUSD) * 100 : 0;
+    } else {
+      platformsBySite.set(site, {
+        site,
+        sessionsCount: 0,
+        tournamentsCount: 0,
+        investedUSD: 0,
+        profitUSD: mrProfit,
+        roiPct: 0,
+      });
+    }
+  }
+
+  const platforms: RoiByPlatformEntry[] = Array.from(platformsBySite.values())
     .sort((a, b) => b.investedUSD - a.investedUSD)
     .slice(0, limit);
 

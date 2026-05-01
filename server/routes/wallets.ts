@@ -290,6 +290,30 @@ export async function handlePostWalletTransaction(req: any, res: Response): Prom
       });
       return;
     }
+    // Sprint Bankroll-Reports-Detail (RF-02, D2): codes estaveis para
+    // session_id_required / manual_report_no_session.
+    const sessionIdIssue = parsed.error.issues.find(
+      (i) => typeof i.message === "string" && i.message.includes("session_id_required"),
+    );
+    if (sessionIdIssue) {
+      res.status(400).json({
+        message: "sessionId obrigatorio quando reason=session_result",
+        code: "session_id_required",
+        issues: parsed.error.issues,
+      });
+      return;
+    }
+    const manualReportIssue = parsed.error.issues.find(
+      (i) => typeof i.message === "string" && i.message.includes("manual_report_no_session"),
+    );
+    if (manualReportIssue) {
+      res.status(400).json({
+        message: "manual_report nao aceita sessionId — use session_result para deltas vinculados a sessao",
+        code: "manual_report_no_session",
+        issues: parsed.error.issues,
+      });
+      return;
+    }
     res.status(400).json({
       message: parsed.error.issues[0]?.message ?? "Body invalido",
       issues: parsed.error.issues,
@@ -329,6 +353,42 @@ export async function handlePostWalletTransaction(req: any, res: Response): Prom
     const payload: any = { message: err?.message ?? "Erro ao registrar movimento" };
     if (err?.code) payload.code = err.code;
     res.status(status).json(payload);
+  }
+}
+
+// =============================================================================
+// Sprint Bankroll-Reports-Detail (RF-06) — GET /api/wallets/balance-snapshot-pair
+// ADR-070
+// =============================================================================
+
+export async function handleGetBalanceSnapshotPair(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) { unauthorized(res); return; }
+  const q = req.query ?? {};
+  const fromRaw = q.from;
+  const toRaw = q.to;
+  if (!fromRaw || !toRaw) {
+    res.status(400).json({ message: "from e to obrigatorios (ISO 8601)" });
+    return;
+  }
+  const from = new Date(String(fromRaw));
+  const to = new Date(String(toRaw));
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    res.status(400).json({ message: "from/to invalidos (use ISO 8601)" });
+    return;
+  }
+  try {
+    const sessionId = q.sessionId ? String(q.sessionId) : undefined;
+    const result = await (walletService as any).getBalanceSnapshotPair(userId, {
+      from,
+      to,
+      sessionId,
+    });
+    res.status(200).json(result);
+  } catch (err: any) {
+    const status = mapErrorToStatus(err);
+    if (status === 500) console.error("GET /api/wallets/balance-snapshot-pair failed:", err);
+    res.status(status).json({ message: err?.message ?? "Erro ao buscar snapshot pair" });
   }
 }
 
@@ -560,6 +620,11 @@ export function registerWalletRoutes(app: Express): void {
 
   app.get("/api/bankroll/consolidated", requireAuth, (req: Request, res: Response) =>
     handleGetBankrollConsolidated(req, res),
+  );
+
+  // Sprint Bankroll-Reports-Detail RF-06 — path estatico antes de :id
+  app.get("/api/wallets/balance-snapshot-pair", requireAuth, (req: Request, res: Response) =>
+    handleGetBalanceSnapshotPair(req, res),
   );
 
   // Rotas com :walletId/:id depois das estaticas.

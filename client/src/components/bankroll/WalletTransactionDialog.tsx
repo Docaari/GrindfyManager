@@ -24,6 +24,12 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   wallet: WalletProp;
   initialReason?: "deposit" | "withdrawal" | "session_result" | "manual_adjustment";
+  /**
+   * Sprint Bankroll-Reports-Detail (RF-09): quando presente em modo "Reportar
+   * saldo", auto-seleciona reason='session_result' + envia sessionId. Quando
+   * ausente, modo balance auto-seleciona reason='manual_report' (standalone).
+   */
+  sessionId?: string;
 }
 
 type Mode = "movement" | "balance";
@@ -40,7 +46,7 @@ function formatPreview(value: number, ccy: string): string {
   return `${symbol} ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function WalletTransactionDialog({ open, onOpenChange, wallet, initialReason }: Props) {
+export function WalletTransactionDialog({ open, onOpenChange, wallet, initialReason, sessionId: sessionIdProp }: Props) {
   const [mode, setMode] = useState<Mode>("movement");
   const [direction, setDirection] = useState<"in" | "out">("in");
   const [reason, setReason] = useState<"deposit" | "withdrawal" | "session_result" | "manual_adjustment">(
@@ -106,6 +112,20 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
     return { deltaUSD, newTotalUSD, pctChange };
   }, [amount, direction, consolidated, wallet.id]);
 
+  // QW-3 (R3): paridade com modo movement — impacto USD consolidado em modo balance.
+  // Usa balanceDelta.absDelta + direction para derivar delta nativo signed.
+  const consolidatedImpactBalance = useMemo(() => {
+    if (balanceDelta.sign !== "positive" && balanceDelta.sign !== "negative") return null;
+    const fxRate = consolidated?.byWallet?.find((w: any) => w.walletId === wallet.id)?.fxRateUSDPerNative;
+    const totalUSD = consolidated?.totalUSD ? parseFloat(consolidated.totalUSD) : null;
+    if (!fxRate || !totalUSD) return null;
+    const signedDeltaNative = balanceDelta.direction === "in" ? balanceDelta.absDelta : -balanceDelta.absDelta;
+    const deltaUSD = signedDeltaNative / parseFloat(String(fxRate));
+    const newTotalUSD = totalUSD + deltaUSD;
+    const pctChange = totalUSD > 0 ? ((deltaUSD / totalUSD) * 100) : 0;
+    return { deltaUSD, newTotalUSD, pctChange };
+  }, [balanceDelta, consolidated, wallet.id]);
+
   if (!open) return null;
 
   function handleModeChange(next: Mode) {
@@ -113,8 +133,14 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
     setError(null);
     setBalanceMismatch(null);
     if (next === "balance") {
-      setNewBalanceInput(wallet.balance);
+      // QW-1 (R3): limpar input para evitar atrito de "apagar antes de digitar"
+      // e edge case de digitar valor identico ao saldo (delta zero silencioso).
+      setNewBalanceInput("");
       setKnownBalance(parseFloat(wallet.balance));
+      // Sprint Bankroll-Reports-Detail (RF-09): em modo balance, reason eh
+      // derivado da prop sessionId (presente -> session_result; ausente ->
+      // manual_report). State `reason` ainda usado em modo movement; aqui
+      // apenas registramos o default visual coerente.
       setReason("session_result");
     }
   }
@@ -147,16 +173,22 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
       if (balanceDelta.sign === "invalid" || balanceDelta.sign === "zero") {
         return;
       }
+      // Sprint Bankroll-Reports-Detail (RF-09, D2):
+      //   - sessionIdProp presente -> reason='session_result' + sessionId no body.
+      //   - sessionIdProp ausente -> reason='manual_report' (sem sessionId).
+      const balanceReason: "session_result" | "manual_report" = sessionIdProp
+        ? "session_result"
+        : "manual_report";
       body = {
         direction: balanceDelta.direction,
         nativeAmount: balanceDelta.nativeAmount,
-        reason,
+        reason: balanceReason,
         note: note || null,
         occurredAt: new Date(occurredAt).toISOString(),
         expectedPreviousBalance: knownBalance,
       };
-      if (reason === "session_result" && sessionId) {
-        body.sessionId = sessionId;
+      if (balanceReason === "session_result" && sessionIdProp) {
+        body.sessionId = sessionIdProp;
       }
     } else {
       const amt = parseFloat(amount);
@@ -187,6 +219,13 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
         queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
         queryClient.invalidateQueries({ queryKey: [`/api/wallets/${wallet.id}/transactions`] });
         queryClient.invalidateQueries({ queryKey: ["/api/bankroll/consolidated"] });
+        // Sprint Bankroll-Reports-Detail (RF-09): invalida historico /grind +
+        // dashboard ROI por plataforma para refletir novo manual_report.
+        queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+        queryClient.invalidateQueries({ queryKey: ["grind-history"] });
+        queryClient.invalidateQueries({ queryKey: ["bankroll-snapshots"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/roi-by-platform"] });
       } catch {
         // ignore
       }
@@ -310,6 +349,8 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
               step="0.01"
               value={newBalanceInput}
               onChange={(e) => setNewBalanceInput(e.target.value)}
+              autoFocus
+              onFocus={(e) => e.currentTarget.select()}
               className="w-full rounded border px-3 py-2 bg-background"
               placeholder="0.00"
             />
@@ -330,6 +371,20 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
               {balanceDelta.sign === "zero" && <span>Saldo igual ao atual</span>}
               {balanceDelta.sign === "invalid" && <span>Informe o saldo</span>}
             </div>
+            {wallet.nativeCurrency !== "USD" && consolidatedImpactBalance && (
+              <div
+                data-testid="wallet-tx-preview-consolidated-impact-balance"
+                className="text-xs text-muted-foreground bg-accent rounded px-3 py-2"
+              >
+                Impacto banca consolidada: {consolidatedImpactBalance.deltaUSD >= 0 ? "+" : ""}
+                {formatPreview(Math.abs(consolidatedImpactBalance.deltaUSD), "USD")}
+                {" -> "}
+                {formatPreview(consolidatedImpactBalance.newTotalUSD, "USD")}
+                {" "}
+                ({consolidatedImpactBalance.pctChange >= 0 ? "+" : ""}
+                {consolidatedImpactBalance.pctChange.toFixed(1)}%)
+              </div>
+            )}
           </div>
         )}
 
@@ -350,7 +405,9 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
           </div>
         )}
 
-        {reason === "session_result" && (
+        {/* Sprint Bankroll-Reports-Detail (RF-09): em modo balance, sessionId vem
+            da prop (auto), nao do input manual. So renderiza em modo movement. */}
+        {mode === "movement" && reason === "session_result" && (
           <div>
             <label className="text-sm font-medium block mb-1">ID da sessao</label>
             <input
@@ -363,6 +420,19 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
           </div>
         )}
 
+        {/* Sprint Bankroll-Reports-Detail (RF-09): helper text dinamico em modo
+            balance — distingue "vinculado a sessao" vs "report manual standalone". */}
+        {mode === "balance" && (
+          <div
+            data-testid="wallet-tx-reason-helper"
+            className="text-xs text-muted-foreground"
+          >
+            {sessionIdProp
+              ? "Vinculado a sessao ativa — sera registrado como Resultado de sessao"
+              : "Sem sessao ativa — sera registrado como Report manual"}
+          </div>
+        )}
+
         <div>
           <label className="text-sm font-medium block mb-1">Quando</label>
           <input
@@ -372,6 +442,11 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
             onChange={(e) => setOccurredAt(e.target.value)}
             className="w-full rounded border px-3 py-2 bg-background"
           />
+          {Date.now() - new Date(occurredAt).getTime() > 86_400_000 && (
+            <div data-testid="wallet-tx-occurred-at-warning" className="text-xs text-amber-500 mt-1">
+              Data retroativa (&gt;24h) — snapshots Antes/Depois podem ficar indisponiveis no detalhamento.
+            </div>
+          )}
         </div>
 
         <div>

@@ -2329,6 +2329,9 @@ export const bankrollSnapshots = pgTable("bankroll_snapshots", {
   index("idx_bankroll_snapshots_origin").on(table.origin),
 ]);
 
+// Sprint Bankroll-Reports-Detail (R2 fix M3): inclui 'manual_report' para
+// que insertBankrollSnapshotSchema aceite snapshots disparados pos manual_report
+// wallet_transactions. ADR-069.
 const BANKROLL_REASON_ENUM = z.enum([
   "initial",
   "deposit",
@@ -2336,17 +2339,21 @@ const BANKROLL_REASON_ENUM = z.enum([
   "session_result",
   "rakeback",
   "manual_adjustment",
+  "manual_report",
 ]);
 const BANKROLL_SOURCE_ENUM = z.enum(["manual", "auto_session", "auto_import"]);
 
 // Sprint Bankroll-3 RF-8: SNAPSHOT_ORIGINS enum (re-declarado aqui para uso
 // no schema; tambem exportado mais abaixo junto com walletTransfers).
+// Sprint Bankroll-Reports-Detail (RF-04): adiciona 'manual-report' (origin de
+// snapshot disparado por manual_report wallet_transaction; ver ADR-069).
 const SNAPSHOT_ORIGIN_ENUM = z.enum([
   "manual",
   "auto-cooldown",
   "transfer",
   "import",
   "migration_v1",
+  "manual-report",
 ]);
 
 export const insertBankrollSnapshotSchema = z.object({
@@ -2539,12 +2546,15 @@ export const walletTransfers = pgTable("wallet_transfers", {
 
 export type WalletTransfer = typeof walletTransfers.$inferSelect;
 
+// Sprint Bankroll-Reports-Detail (R2 fix L1): alinha com SNAPSHOT_ORIGIN_ENUM
+// interno (ADR-069 — snapshot disparado por manual_report wallet_transaction).
 export const SNAPSHOT_ORIGINS = [
   "manual",
   "auto-cooldown",
   "transfer",
   "import",
   "migration_v1",
+  "manual-report",
 ] as const;
 export type SnapshotOrigin = typeof SNAPSHOT_ORIGINS[number];
 

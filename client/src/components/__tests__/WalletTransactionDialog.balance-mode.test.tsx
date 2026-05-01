@@ -167,7 +167,10 @@ describe('<WalletTransactionDialog> — toggle de modo (RF-01)', () => {
 // =============================================================================
 
 describe('<WalletTransactionDialog> — input de saldo (RF-02 + RF-03)', () => {
-  it('balance input pre-preenche com wallet.balance ao entrar no modo', async () => {
+  it('balance input fica vazio ao entrar no modo (Sprint Bankroll-Reports-Detail UX Win 1)', async () => {
+    // UX R3 Win 1: input pre-vazio + autoFocus + select-all evita friccao de
+    // apagar valor mock antes de digitar saldo novo. Hint "Saldo atual: X"
+    // continua mostrando o valor de referencia (testado em outro it).
     const user = userEvent.setup();
     render(wrap(
       <WalletTransactionDialog open onOpenChange={() => {}} wallet={baseWallet} />,
@@ -177,9 +180,7 @@ describe('<WalletTransactionDialog> — input de saldo (RF-02 + RF-03)', () => {
 
     await waitFor(() => {
       const input = screen.getByTestId('wallet-tx-balance-input') as HTMLInputElement;
-      // Aceita "1180", "1180.00", "1180,00" — qualquer parse para 1180
-      const num = parseFloat(input.value.replace(',', '.'));
-      expect(num).toBeCloseTo(1180, 2);
+      expect(input.value).toBe('');
     });
   });
 
@@ -331,7 +332,10 @@ describe('<WalletTransactionDialog> — submit em modo balance (RF-04)', () => {
     expect(body.direction).toBe('in');
     expect(body.nativeAmount).toBeCloseTo(67, 2);
     expect(body.expectedPreviousBalance).toBeCloseTo(1180, 2);
-    expect(body.reason).toBe('session_result');
+    // ADR-069 (Sprint Bankroll-Reports-Detail): modo balance SEM sessionIdProp
+    // gera reason='manual_report' (mutuamente exclusivo com session_result).
+    expect(body.reason).toBe('manual_report');
+    expect(body.sessionId).toBeUndefined();
   });
 
   it('saldo menor: body tem direction=out e nativeAmount = |delta|', async () => {

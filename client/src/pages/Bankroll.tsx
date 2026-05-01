@@ -15,6 +15,7 @@ import { WalletDetailPanel } from "@/components/bankroll/WalletDetailPanel";
 import { WalletCreateDialog } from "@/components/bankroll/WalletCreateDialog";
 import { RakebackDialog } from "@/components/bankroll/RakebackDialog";
 import { TransferDialog } from "@/components/bankroll/TransferDialog";
+import { WalletTransactionDialog } from "@/components/bankroll/WalletTransactionDialog";
 import { Wallet, ArrowRightLeft } from "lucide-react";
 import type { WalletPlatform } from "@shared/wallet-platforms";
 
@@ -58,6 +59,10 @@ export default function BankrollPage() {
   const [transferDefaultFromId, setTransferDefaultFromId] = useState<string | undefined>(
     undefined,
   );
+
+  // Sprint Bankroll-Reports-Detail (R2 fix H3, RF-10): "+ Reportar saldo"
+  // standalone (sem sessionId) — abre WalletTransactionDialog em modo balance.
+  const [reportBalanceDialogOpen, setReportBalanceDialogOpen] = useState(false);
 
   const { data: consolidated } = useQuery<ConsolidatedResponse>({
     queryKey: ["/api/bankroll/consolidated"],
@@ -178,6 +183,15 @@ export default function BankrollPage() {
             Transferir
           </button>
           <button
+            onClick={() => setReportBalanceDialogOpen(true)}
+            disabled={!selectedWallet}
+            className="px-3 py-2 text-sm rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+            data-testid="bankroll-report-balance-btn"
+            title={selectedWallet ? "Reportar saldo atual da carteira selecionada" : "Selecione uma carteira para reportar saldo"}
+          >
+            + Reportar saldo
+          </button>
+          <button
             onClick={() => setLegacyDialogOpen(true)}
             className="px-3 py-2 text-sm rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-foreground"
             data-testid="bankroll-legacy-movement-button"
@@ -249,6 +263,17 @@ export default function BankrollPage() {
         wallets={transferableWallets as any}
         defaultFromWalletId={transferDefaultFromId}
       />
+      {/* Sprint Bankroll-Reports-Detail (R2 fix H3, RF-09 + RF-10):
+          "+ Reportar saldo" standalone (sem sessionId) — auto-seleciona
+          reason='manual_report' no submit. */}
+      {reportBalanceDialogOpen && selectedWallet && (
+        <WalletTransactionDialog
+          open={reportBalanceDialogOpen}
+          onOpenChange={setReportBalanceDialogOpen}
+          wallet={selectedWallet as any}
+          /* sessionId OMITIDO — modo balance auto-derivado para manual_report */
+        />
+      )}
     </div>
   );
 }

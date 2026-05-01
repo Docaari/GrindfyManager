@@ -266,6 +266,9 @@ describe('WalletTxBodyRefinedSchema — backward-compat (RF-08)', () => {
         direction,
         nativeAmount: 10,
         reason: 'session_result',
+        // ADR-069 (Sprint Bankroll-Reports-Detail): session_result exige sessionId
+        // (mutuamente exclusivo com manual_report).
+        sessionId: 'ses_legacy_test',
         occurredAt: futureSafeISO(),
       });
       expect(r.success).toBe(true);
