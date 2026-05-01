@@ -184,7 +184,7 @@ describe("<HudLayoutCustomizerV2> — group filter", () => {
 });
 
 describe("<HudLayoutCustomizerV2> — drag-drop callback", () => {
-  it("drag-drop entre grupos chama onMoveStat com newGroupId", () => {
+  it("dropdown move stat chama onMoveStat com newGroupId", () => {
     const catalog = buildBigCatalog();
     const onMoveStat = vi.fn();
     render(
@@ -195,23 +195,23 @@ describe("<HudLayoutCustomizerV2> — drag-drop callback", () => {
         onMoveStat={onMoveStat}
       />,
     );
-    // Simulamos via testing-library: a UI deve expor um botao/handler
-    // `data-testid="customizer-move-vpip-to-rfi"` (test affordance) que dispara
-    // onMoveStat — desacopla do lib drag-drop.
-    const moveBtn = screen.queryByTestId("customizer-move-vpip-to-rfi");
-    if (moveBtn) {
-      fireEvent.click(moveBtn);
+    // HIGH-1 UX: dropdown <select> em CADA stat para mover entre 16 grupos.
+    // Substitui botao test affordance hardcoded `→ rfi`.
+    // Search "vpip" para auto-expandir grupo basics (collapsed default p/ >50 stats).
+    const search = screen.getByTestId("customizer-search-input");
+    fireEvent.change(search, { target: { value: "vpip" } });
+    const moveSelect = screen.queryByTestId(
+      "customizer-move-vpip-select",
+    ) as HTMLSelectElement | null;
+    expect(moveSelect).toBeTruthy();
+    if (moveSelect) {
+      fireEvent.change(moveSelect, { target: { value: "rfi" } });
       expect(onMoveStat).toHaveBeenCalledWith(
         expect.objectContaining({
           statId: "vpip",
           toGroup: "rfi",
         }),
       );
-    } else {
-      // Fallback: ao menos validar que componente expoe handler de drag.
-      // Se modo drag-drop nao testavel via DOM puro, este test serve como
-      // contrato — Implementer adicionara affordance.
-      expect(moveBtn).toBeDefined();
     }
   });
 });

@@ -31,6 +31,9 @@ interface Props {
   hasCustomLayout?: boolean;
   onApplyTemplate: (template: WizardTemplate) => void;
   onCustomize: (template: WizardTemplate) => void;
+  // MEDIUM-1 UX: bypassa skip conditions (existingSnapshotsCount/hasCustomLayout)
+  // quando user clica em "/studies > Configurar" para reabrir o wizard.
+  forceOpen?: boolean;
 }
 
 // -----------------------------------------------------------------------------
@@ -64,8 +67,9 @@ const LATE_EXTRAS = new Set([
 const TEMPLATES: WizardTemplate[] = [
   {
     id: "mttDefault",
-    name: "MTT Default (200+ stats)",
-    description: "Catalogo completo recomendado para MTT.",
+    name: "MTT Default",
+    // LOW-1 UX: contagem dinamica em vez de "200+" hardcoded.
+    description: `Catalogo completo recomendado para MTT (${HUD_STAT_CATALOG.length} stats).`,
     fields: HUD_STAT_CATALOG,
     recommended: true,
   },
@@ -103,13 +107,17 @@ export default function StatsWizardPostImport({
   hasCustomLayout = false,
   onApplyTemplate,
   onCustomize,
+  forceOpen = false,
 }: Props) {
   // Hooks SEMPRE antes de early return (lesson #1)
   const [selectedId, setSelectedId] = useState<string>("mttDefault");
 
   // Skip conditions (RF-08): nao monta wizard se ja tem snapshot OU layout custom
-  if (existingSnapshotsCount > 0) return null;
-  if (existingLayoutsCount > 0 && hasCustomLayout) return null;
+  // MEDIUM-1 UX: forceOpen sobrescreve as skip conditions (reabrir manual).
+  if (!forceOpen) {
+    if (existingSnapshotsCount > 0) return null;
+    if (existingLayoutsCount > 0 && hasCustomLayout) return null;
+  }
   if (!open) return null;
 
   const selectedTemplate =
@@ -176,8 +184,10 @@ export default function StatsWizardPostImport({
             data-testid="wizard-skip"
             onClick={() => onOpenChange(false)}
             className="text-sm text-poker-muted hover:text-poker-fg"
+            title="Voce pode reabrir em /studies > Configurar"
+            aria-label="Pular por agora — voce pode reabrir em /studies > Configurar"
           >
-            Pular
+            Pular por agora
           </button>
           <div className="flex items-center gap-2">
             <button
