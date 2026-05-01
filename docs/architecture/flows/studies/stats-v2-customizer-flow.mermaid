@@ -1,0 +1,81 @@
+%% Sprint Stats-V2 — Customizer Flow (200 stats, search + filter + drag-drop + virtual scroll)
+%% Spec : docs/specs/sprint-stats-v2.md (RF-04, RF-16)
+%% ADRs : 058 (catalogo estatico), 062 (coach grouped), 063 (direction semantics)
+%% Goal : Render <500ms 200 stats; UX escalavel; mobile-friendly
+
+flowchart TD
+    Start([Usuario clica Editar layout])
+    Start --> Load{Layout existente ou novo}
+
+    Load -->|existente| LoadExist[GET /api/hud-layouts/:id<br/>fields_json: array StatFieldRef]
+    Load -->|novo a partir de template| LoadTpl[POST /api/hud-layouts<br/>body name + base_template<br/>options: mttDefault mttCashCompact tournamentEarly tournamentLate]
+
+    LoadExist --> Init
+    LoadTpl --> Init
+
+    Init[Customizer monta:<br/>- catalog: 200+ HudStatCatalog static<br/>- layout.fields_json: subset selecionado<br/>- 16 group accordions]
+
+    Init --> InitialRender{Stats no layout > 50}
+    InitialRender -->|sim| CollapseAll[Accordion collapse-all default<br/>exceto basics]
+    InitialRender -->|nao| ExpandAll[Accordion expand-all default]
+
+    CollapseAll --> RenderGate
+    ExpandAll --> RenderGate
+
+    RenderGate[Render perf gate:<br/>useMemo grouped stats<br/>react-window virtual scroll por accordion<br/>quando grupo expandido > 50 stats]
+
+    RenderGate --> ReadyUI{UI pronta para edicao}
+
+    ReadyUI -->|user digita search| Search[Search bar<br/>debounce 200ms]
+    ReadyUI -->|user toggla group filter| Filter[Filter pill chip<br/>16 group toggles]
+    ReadyUI -->|user drag stat| Drag[dnd-kit core<br/>aria-grabbed]
+    ReadyUI -->|user edita StatFieldRef| Edit[Inline edit:<br/>label override<br/>decimals<br/>custom_target_min/max<br/>reset to default]
+    ReadyUI -->|user clica Add stat from catalog| AddDialog[Dialog Add Stat<br/>search + group filter sobre catalogo]
+    ReadyUI -->|user clica Save| Save
+
+    Search --> SearchResult{Match contra<br/>id OR label case-insensitive}
+    SearchResult -->|mais de 0 matches| ExpandMatched[Auto-expand grupos<br/>com matches<br/>highlight matched stats]
+    SearchResult -->|0 matches| EmptyState[Empty state<br/>Nenhum stat encontrado para X]
+    ExpandMatched --> ReadyUI
+    EmptyState --> ReadyUI
+
+    Filter --> FilterApply[Mostra so grupos<br/>com chips ativos]
+    FilterApply --> ReadyUI
+
+    Drag --> DragType{Mesmo grupo ou cross-group}
+    DragType -->|mesmo grupo| Reorder[Reorder position dentro<br/>do mesmo group]
+    DragType -->|cross-group| MoveGroup[Update group denorm<br/>+ reorder na nova localizacao]
+    Reorder --> Dirty[Mark layout dirty]
+    MoveGroup --> Dirty
+
+    Edit --> Dirty
+    AddDialog --> AddConfirm[User seleciona stat<br/>+ confirma adicionar]
+    AddConfirm --> Dirty
+
+    Dirty --> AutoSaveOpt{Auto-save habilitado}
+    AutoSaveOpt -->|sim debounce 2s| AutoSave[PUT /api/hud-layouts/:id<br/>body: fields_json + is_custom=true RF-14]
+    AutoSaveOpt -->|nao| WaitSave[User clica Save explicito]
+
+    Save[Save explicito]
+    Save --> AutoSave
+    WaitSave --> Save
+
+    AutoSave --> ZodValid{Server Zod valid RF-10:<br/>id snake_case<br/>direction enum<br/>unit enum<br/>targetMin/Max number}
+    ZodValid -->|400| ToastErr[Toast erro<br/>destaca campo invalido]
+    ZodValid -->|200| ToastOk[Toast Layout salvo]
+
+    ToastErr --> ReadyUI
+    ToastOk --> ReadyUI
+
+    ReadyUI -->|user fecha customizer| End([Fim])
+
+    %% Mobile (<375px)
+    %% RNF-01: drag-drop disabled em touch -> usar arrows up/down
+    %% RNF-01: accordion collapse-all default
+    %% RNF-01: search bar sticky top
+    %% RNF-01: virtual scroll mandatorio em snapshot editor
+
+    %% Performance gates (RF-16)
+    %% AC-16.1: Bench customizer 200 stats < 500ms
+    %% AC-4.2: Render 200 stats < 500ms (React Profiler)
+    %% AC-4.4: Virtual scroll ativo quando layout > 50 stats (e2e snapshot DOM count)

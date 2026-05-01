@@ -1,0 +1,63 @@
+%% Sprint Stats-V2 — Catalog ER + Layout/Snapshot relationship
+%% Spec : docs/specs/sprint-stats-v2.md (RF-01, RF-02, RF-15)
+%% ADRs : 058 (catalogo estatico V2), 062 (coach grouped), 063 (direction semantics)
+%% Note : HudStatCatalog NAO eh tabela DB. Vive em shared/hud-stat-catalog.ts.
+%%        HudLayout.fields_json[] referencia HudStatCatalog.id por string (logical FK).
+
+erDiagram
+    HudStatCatalog {
+        string id PK "snake_case unico ex vpip rfi_co cbet_flop_ip"
+        string label "Human readable ex VPIP RFI CO CBet Flop IP"
+        HudGroupId group "enum 16 grupos basics rfi threebet etc"
+        string subgroup "by_position by_board_texture opcional"
+        number target_min "low end target range"
+        number target_max "high end target range"
+        Direction direction "higher_better lower_better context neutral ADR-063"
+        Unit unit "pct bb count"
+        string formula "descricao opcional ex won_div_showdown"
+    }
+
+    HudLayout {
+        string id PK "nanoid"
+        string user_id FK "users.user_platform_id USER-XXXX"
+        string name "ex MTT Default Custom MTT"
+        boolean is_default "1 default por user server-side enforced"
+        boolean is_custom "false=template seedado V2 true=user-edited RF-14"
+        jsonb fields_json "array StatFieldRef"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    StatFieldRef {
+        string stat_id "logical FK to HudStatCatalog.id string match"
+        number decimals "default 1"
+        string suffix "ex pct bb override unit"
+        number custom_target_min "override catalogo opcional"
+        number custom_target_max "override catalogo opcional"
+        number position "ordering crescente"
+        HudGroupId group "denormalizado cross-group drag-drop"
+    }
+
+    HudStatSnapshot {
+        string id PK "nanoid"
+        string user_id FK "users.user_platform_id"
+        string layout_id FK "hud_layouts.id ON DELETE RESTRICT"
+        timestamp captured_at
+        number sample_size "hands jogadas opcional"
+        string session_id FK "grind_sessions.id opcional"
+        Source source "manual ocr-v2 handhistory"
+        jsonb values "Record stat_id to number or null RF-05"
+        string notes "free text opcional"
+    }
+
+    HudLayout ||--o{ HudStatSnapshot : "1 layout N snapshots FK RESTRICT"
+    HudLayout ||--|{ StatFieldRef : "fields_json contem N StatFieldRef jsonb array"
+    StatFieldRef }o--|| HudStatCatalog : "stat_id matches catalog.id logical FK"
+    HudStatSnapshot }o--|| HudStatCatalog : "values keys match catalog.id logical FK"
+
+    %% Relationship notes:
+    %% - HudStatCatalog: in-code static (shared/hud-stat-catalog.ts), 200+ entries, NO DB table.
+    %% - HudLayout.fields_json[].stat_id: string match contra HudStatCatalog.id (Zod refinement).
+    %% - HudStatSnapshot.values: Record stat_id -> number|null. Stats not_reported = null (RF-05).
+    %% - Migration 0020: ALTER TABLE hud_layouts ADD COLUMN is_custom boolean NOT NULL DEFAULT false.
+    %% - V1 backfill (RF-09): is_custom=false para nomes templates conhecidos, true demais.

@@ -1,6 +1,13 @@
 %% Sprint F3 — Stats Analyzer
 %% Spec : Docs/specs/sprint-f3-stats-analyzer.md
 %% ADRs : 051 (layout schema), 052 (Coach tool integration)
+%%
+%% NOTE: Para Stats-V2 (catalogo 200 stats + direction semantics) ver:
+%%   - stats-v2-catalog-er.mermaid       (catalog ER + layout/snapshot relationships)
+%%   - stats-v2-snapshot-import.mermaid  (paste PT4 / CSV import flow)
+%%   - stats-v2-customizer-flow.mermaid  (200 stats customizer search+drag+vscroll)
+%%   - ADR-058 (catalogo estatico V2), ADR-062 (coach grouped), ADR-063 (direction semantics)
+%% V2 nao quebra V1; layouts customizados V1 preservados via flag is_custom=true.
 
 flowchart TD
   subgraph Client[Client React]
