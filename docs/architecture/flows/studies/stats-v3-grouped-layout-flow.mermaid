@@ -1,0 +1,145 @@
+%% Sprint Stats-V3 — Hand2Note Grouped Layout Render Flow
+%% Spec  : docs/specs/sprint-stats-v3.md (RF-01..RF-07, RF-13..RF-15)
+%% ADRs  : 058 (V2 catalogo estatico), 064 (V3 grouped layout), 066 (3-way compare)
+%% Trigger: usuario abre /studies aba Stats Analyzer ou troca layout/snapshot
+%% Goal   : renderizar 16 cards H2N estilo com presets + filtros + compare mode
+
+flowchart TD
+    Start([User abre /studies > Stats Analyzer])
+    Start --> LoadLayout[Fetch HudLayout ativo<br/>via useQuery layoutId<br/>fields_json com targets + customs]
+
+    LoadLayout --> CheckMode{comparisonMode}
+    CheckMode -->|single| LoadSingle[Fetch ultimo snapshot<br/>useQuery snapshots latest]
+    CheckMode -->|three_way| LoadCompare[Fetch endpoint compare<br/>snap1 + snap2 + layoutId<br/>ADR-066 server-side agg]
+
+    LoadSingle --> CheckSnap1{Snapshot existe}
+    CheckSnap1 -->|0 snapshots| EmptyState[CTA Criar primeiro snapshot<br/>selectors disabled]
+    CheckSnap1 -->|1+ snapshots| RenderInit
+
+    LoadCompare --> CheckCompare{Response 200}
+    CheckCompare -->|200| RenderInit
+    CheckCompare -->|403 outro user| ErrorAuth[Toast Snapshot indisponivel<br/>reset selector]
+    CheckCompare -->|400 layoutId mismatch| ErrorLayout[Toast Layout incompativel<br/>reset selector]
+    CheckCompare -->|404 deleted race| ErrorDeleted[Toast Snapshot indisponivel<br/>selecione outro]
+
+    RenderInit[Carrega ExpandState<br/>localStorage stats-v3-expand-state]
+    RenderInit --> CheckLocalStorage{localStorage disponivel}
+    CheckLocalStorage -->|sim parsed valido| UseLS[expandState = parsed]
+    CheckLocalStorage -->|QuotaExceededError ou parse fail| FallbackLS[expandState = todos true<br/>console.warn fallback memoria]
+
+    UseLS --> InitFilters
+    FallbackLS --> InitFilters
+
+    InitFilters[Estado inicial filters<br/>searchQuery vazio<br/>activeGroups todos 16<br/>preset null]
+
+    InitFilters --> IterateCatalog[Iterar HUD_GROUP_IDS ordem catalog<br/>16 grupos x N stats por grupo]
+
+    IterateCatalog --> ApplyFilters{Filter pipeline AND}
+
+    ApplyFilters -->|searchQuery| FilterSearch[label OR id contains query<br/>case-insensitive debounce 200ms]
+    ApplyFilters -->|activeGroups| FilterGroups[stat.group in activeGroups Set]
+    ApplyFilters -->|preset| FilterPreset
+
+    FilterPreset{Tipo preset}
+    FilterPreset -->|mttDefault mttCash mttSnG mttFinalTable| ApplyTemplate[Subset statId predefinido<br/>shared/hud-templates.ts]
+    FilterPreset -->|offTargetOnly| FilterOffTarget[value not null AND fora min max<br/>requer snapshot]
+    FilterPreset -->|topTenLeaks| FilterTopLeaks[Top 10 stats por delta abs desc<br/>requer snapshot]
+    FilterPreset -->|groupOnly groupX| FilterGroupOnly[Apenas 1 group ativo<br/>16 dynamic chips]
+
+    FilterSearch --> Render
+    FilterGroups --> Render
+    ApplyTemplate --> Render
+    FilterOffTarget --> Render
+    FilterTopLeaks --> Render
+    FilterGroupOnly --> Render
+
+    Render[Render 16 cards header verde<br/>bg-emerald-700 + chevron + badge contagem]
+
+    Render --> CheckExpand{expandState groupId}
+    CheckExpand -->|true expanded| RenderBody[Render tabela completa<br/>stat por linha]
+    CheckExpand -->|false collapsed| RenderCollapsed[Body vazio<br/>content-visibility auto<br/>containIntrinsicSize 0 200px]
+
+    RenderBody --> ChooseLayout{comparisonMode}
+    ChooseLayout -->|single| Render3Col[3 colunas<br/>Stat label - target laranja - hero branco]
+    ChooseLayout -->|three_way| Render5Col[5 colunas ADR-066<br/>Stat label - target - snap1 - snap2 - delta + trend]
+
+    Render3Col --> ApplyCells
+    Render5Col --> ApplyCells
+
+    ApplyCells[Cor coding por cell<br/>direction-aware ADR-063 + 066]
+
+    ApplyCells -->|both_in_target| CellGreen[verde text-emerald-400]
+    ApplyCells -->|improving| CellOrange[laranja text-orange-400]
+    ApplyCells -->|regressing| CellRed[vermelho text-red-400]
+    ApplyCells -->|both_out_target ou null ou context ou neutral| CellGray[cinza text-slate-500]
+
+    CellGreen --> RenderTrend
+    CellOrange --> RenderTrend
+    CellRed --> RenderTrend
+    CellGray --> RenderTrend
+
+    RenderTrend{Trend icon ADR-066}
+    RenderTrend -->|delta abs estavel por unit| TrendStable[seta horizontal cinza]
+    RenderTrend -->|delta abs moderado por unit| TrendMod[seta cima ou baixo verde ou vermelho<br/>direction-aware]
+    RenderTrend -->|delta abs grande por unit| TrendBig[seta dupla cima ou baixo verde ou vermelho]
+    RenderTrend -->|null| TrendNA[sem icone exibe travessao]
+
+    TrendStable --> InteractCell
+    TrendMod --> InteractCell
+    TrendBig --> InteractCell
+    TrendNA --> InteractCell
+
+    InteractCell{User interaction}
+
+    InteractCell -->|click target single mode| EditTarget[Popover min + max + Salvar Cancelar<br/>Validate min menor que max + unit cap]
+    EditTarget --> PutTarget[PUT api hud-layouts id<br/>fields_json target_override<br/>optimistic + rollback]
+
+    InteractCell -->|click hero single mode| EditValue[Input numerico inline<br/>Enter submit + Esc cancel<br/>Validate por unit pct bb count]
+    EditValue --> PutValue[PUT api stats-analyzer snapshots id<br/>values stat_id newValue patch<br/>optimistic + rollback]
+
+    InteractCell -->|click + Stat custom card footer| AddCustom[Dialog form Radix<br/>label unit targetMin targetMax direction]
+    AddCustom --> ValidateCustom{Zod valido}
+    ValidateCustom -->|nao| ToastErr[Toast erro inline]
+    ValidateCustom -->|sim| PostCustom[PUT api hud-layouts id<br/>append fields_json custom_nanoid8]
+
+    InteractCell -->|click chevron card header| ToggleExpand[Toggle expandState groupId<br/>Save throttled 500ms localStorage]
+
+    InteractCell -->|three_way mode click cell| Disabled[Inline edit DESABILITADO<br/>tooltip Volte single mode]
+
+    PutTarget --> Render
+    PutValue --> Render
+    PostCustom --> Render
+    ToggleExpand --> Render
+
+    InteractCell -->|click Expandir todos ou Recolher todos| BulkExpand[Set 16 entries true ou false<br/>Save throttled localStorage]
+    BulkExpand --> Render
+
+    InteractCell -->|change preset selector| ChangePreset[Update preset state]
+    ChangePreset --> ApplyFilters
+
+    InteractCell -->|toggle group pill| ToggleGroup[activeGroups add ou remove groupId]
+    ToggleGroup --> ApplyFilters
+
+    InteractCell -->|search input| TypeSearch[Update searchQuery debounce 200ms]
+    TypeSearch --> ApplyFilters
+
+    InteractCell -->|toggle Modo single 3-way| SwitchMode[setComparisonMode<br/>refetch query]
+    SwitchMode --> CheckMode
+
+    EmptyState --> End([Fim])
+    ErrorAuth --> End
+    ErrorLayout --> End
+    ErrorDeleted --> End
+    Disabled --> End
+    ToastErr --> End
+
+    %% Edge cases
+    %% - localStorage cheio QuotaExceededError: fallback memoria sem persistencia
+    %% - 0 snapshots: empty state CTA criar
+    %% - 1 snapshot 3-way: snap1 = snap2 = unico degraded mode mostra so hero
+    %% - inline edit desabilitado em 3-way: UX trade-off ADR-066
+    %% - content-visibility auto Safari pre 16.4: fallback render React normal sem otimizacao
+    %% - mobile <640px: tabela 2 cols esconde target tooltip on hover hero
+    %% - preset offTargetOnly sem snapshot: empty state Crie snapshot primeiro
+    %% - customs id collision: nanoid 8 chars 36^8 ~2.8e12 colisoes irrelevantes
+    %% - 217 stats render: <300ms RNF-01 garantido via content-visibility + sem virtualizacao manual

@@ -104,11 +104,14 @@ import {
   type InsertSessionWalletSnapshot,
   hudLayouts,
   hudStatSnapshots,
+  hudOcrAudit,
   type HudLayout,
   type InsertHudLayout,
   type UpdateHudLayout,
   type HudStatSnapshot,
   type InsertHudStatSnapshot,
+  type HudOcrAuditRow,
+  type HudLayoutFieldEntry,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, lt, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
@@ -585,6 +588,16 @@ export interface IStorage {
     userId: string,
     patch: UpdateHudLayout,
   ): Promise<HudLayout | undefined>;
+  /**
+   * Sprint Stats-V3 reviewer R1 (MEDIUM-7): mutacao atomica de fields_json.
+   * Le, transforma e escreve dentro de uma transacao para evitar race condition
+   * entre dois clients editando target-override / custom-stats simultaneamente.
+   */
+  mutateHudLayoutFields(
+    id: string,
+    userId: string,
+    transform: (currentFields: HudLayoutFieldEntry[]) => HudLayoutFieldEntry[],
+  ): Promise<HudLayout | undefined>;
   deleteHudLayout(id: string, userId: string): Promise<boolean>;
   getHudStatSnapshots(
     userId: string,
@@ -598,6 +611,29 @@ export interface IStorage {
     input: InsertHudStatSnapshot,
   ): Promise<HudStatSnapshot>;
   deleteHudStatSnapshot(id: string, userId: string): Promise<boolean>;
+  // Sprint Stats-V3 (RF-06, RF-12)
+  updateHudStatSnapshot(
+    id: string,
+    userId: string,
+    patch: {
+      values?: Record<string, number | null>;
+      captureMethod?: string;
+      sourceImageKey?: string | null;
+      ocrConfidence?: Record<string, number> | null;
+      ocrRawResponse?: unknown | null;
+    },
+  ): Promise<HudStatSnapshot | undefined>;
+  insertHudOcrAudit(userId: string): Promise<HudOcrAuditRow>;
+  getHudOcrAudit(userId: string, sinceTs: Date): Promise<HudOcrAuditRow[]>;
+  /**
+   * Sprint Stats-V3 reviewer R1 (INFO-6): cache lookup OCR via index parcial
+   * `idx_hud_snapshots_image_sha256` (jsonb expression index criado em 0020).
+   * Retorna o snapshot mais recente cujo `ocr_raw_response.image_sha256` casa.
+   */
+  findHudStatSnapshotByImageSha256(
+    userId: string,
+    sha: string,
+  ): Promise<HudStatSnapshot | undefined>;
 
   transaction<T>(fn: (tx: IStorage) => Promise<T>): Promise<T>;
 }
@@ -6159,6 +6195,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       if (patch.name !== undefined) updateData.name = patch.name;
       if (patch.isDefault !== undefined) updateData.isDefault = patch.isDefault;
       if (patch.sections !== undefined) updateData.sections = patch.sections;
+      // Stats-V3: aceita ambos camelCase (Zod schema) e snake_case (handlers V3 raw)
+      const fieldsJsonInput =
+        (patch as any).fieldsJson ?? (patch as any).fields_json;
+      if (fieldsJsonInput !== undefined) updateData.fieldsJson = fieldsJsonInput;
       const [row] = await tx
         .update(hudLayouts)
         .set(updateData)
@@ -6174,6 +6214,36 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .where(and(eq(hudLayouts.id, id), eq(hudLayouts.userId, userId)))
       .returning({ id: hudLayouts.id });
     return result.length > 0;
+  }
+
+  /**
+   * Sprint Stats-V3 reviewer R1 (MEDIUM-7): mutacao atomica de fields_json.
+   * Le, transforma e escreve dentro de uma transacao para serializar dois clients
+   * editando target-override / custom-stats simultaneamente.
+   */
+  async mutateHudLayoutFields(
+    id: string,
+    userId: string,
+    transform: (currentFields: HudLayoutFieldEntry[]) => HudLayoutFieldEntry[],
+  ): Promise<HudLayout | undefined> {
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(hudLayouts)
+        .where(and(eq(hudLayouts.id, id), eq(hudLayouts.userId, userId)));
+      if (!existing) return undefined;
+      const current =
+        ((existing as any).fieldsJson ??
+          (existing as any).fields_json ??
+          []) as HudLayoutFieldEntry[];
+      const next = transform([...current]);
+      const [row] = await tx
+        .update(hudLayouts)
+        .set({ fieldsJson: next as any, updatedAt: new Date() } as any)
+        .where(and(eq(hudLayouts.id, id), eq(hudLayouts.userId, userId)))
+        .returning();
+      return row;
+    });
   }
 
   async getHudStatSnapshots(
@@ -6235,6 +6305,112 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       )
       .returning({ id: hudStatSnapshots.id });
     return result.length > 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sprint Stats-V3: snapshot patch (RF-06) + OCR audit (RF-12)
+  // ---------------------------------------------------------------------------
+
+  async updateHudStatSnapshot(
+    id: string,
+    userId: string,
+    patch: {
+      values?: Record<string, number | null>;
+      captureMethod?: string;
+      sourceImageKey?: string | null;
+      ocrConfidence?: Record<string, number> | null;
+      ocrRawResponse?: unknown | null;
+    },
+  ): Promise<HudStatSnapshot | undefined> {
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(hudStatSnapshots)
+        .where(
+          and(
+            eq(hudStatSnapshots.id, id),
+            eq(hudStatSnapshots.userId, userId),
+          ),
+        );
+      if (!existing) return undefined;
+
+      const updateData: Record<string, any> = {};
+      if (patch.values !== undefined) {
+        // Patch parcial: merge sobre values existentes, com null preservado.
+        updateData.values = { ...(existing.values ?? {}), ...patch.values };
+      }
+      if (patch.captureMethod !== undefined) {
+        updateData.captureMethod = patch.captureMethod;
+      }
+      if (patch.sourceImageKey !== undefined) {
+        updateData.sourceImageKey = patch.sourceImageKey;
+      }
+      if (patch.ocrConfidence !== undefined) {
+        updateData.ocrConfidence = patch.ocrConfidence;
+      }
+      if (patch.ocrRawResponse !== undefined) {
+        updateData.ocrRawResponse = patch.ocrRawResponse;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return existing;
+      }
+
+      const [row] = await tx
+        .update(hudStatSnapshots)
+        .set(updateData)
+        .where(
+          and(
+            eq(hudStatSnapshots.id, id),
+            eq(hudStatSnapshots.userId, userId),
+          ),
+        )
+        .returning();
+      return row;
+    });
+  }
+
+  async insertHudOcrAudit(userId: string): Promise<HudOcrAuditRow> {
+    const id = nanoid();
+    const [row] = await db
+      .insert(hudOcrAudit)
+      .values({ id, userId })
+      .returning();
+    return row;
+  }
+
+  async getHudOcrAudit(
+    userId: string,
+    sinceTs: Date,
+  ): Promise<HudOcrAuditRow[]> {
+    return await db
+      .select()
+      .from(hudOcrAudit)
+      .where(and(eq(hudOcrAudit.userId, userId), gte(hudOcrAudit.createdAt, sinceTs)))
+      .orderBy(desc(hudOcrAudit.createdAt));
+  }
+
+  /**
+   * Sprint Stats-V3 reviewer R1 (INFO-6): cache lookup OCR via index parcial.
+   * Usa o index expression `idx_hud_snapshots_image_sha256` (migration 0020)
+   * em vez de scan + .find() em JS.
+   */
+  async findHudStatSnapshotByImageSha256(
+    userId: string,
+    sha: string,
+  ): Promise<HudStatSnapshot | undefined> {
+    const rows = await db
+      .select()
+      .from(hudStatSnapshots)
+      .where(
+        and(
+          eq(hudStatSnapshots.userId, userId),
+          sql`${hudStatSnapshots.ocrRawResponse}->>'image_sha256' = ${sha}`,
+        ),
+      )
+      .orderBy(desc(hudStatSnapshots.capturedAt))
+      .limit(1);
+    return rows[0];
   }
 }
 

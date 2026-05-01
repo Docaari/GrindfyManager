@@ -3216,6 +3216,23 @@ export const hudLayoutSectionsZodSchema = z
 export type HudStatField = z.infer<typeof statFieldZodSchema>;
 export type HudSection = z.infer<typeof sectionZodSchema>;
 
+// Sprint Stats-V3 (ADR-064): fields_json holds custom stats + target overrides
+// per layout. Schema validacao zod abaixo aceita dois shapes (custom + override).
+export interface HudLayoutFieldEntry {
+  // Compartilhado: pode ser id de catalog (override) OU id custom (`custom_*`).
+  id: string;
+  // Custom-only:
+  isCustom?: boolean;
+  label?: string;
+  group?: string;
+  unit?: "pct" | "bb" | "count";
+  direction?: "higher_better" | "lower_better" | "context" | "neutral";
+  // Compartilhado: targetMin/targetMax (custom) ou targetOverride (catalog override)
+  targetMin?: number;
+  targetMax?: number;
+  targetOverride?: { min: number; max: number } | null;
+}
+
 export const hudLayouts = pgTable(
   "hud_layouts",
   {
@@ -3226,6 +3243,10 @@ export const hudLayouts = pgTable(
     name: varchar("name", { length: 80 }).notNull(),
     isDefault: boolean("is_default").notNull().default(false),
     sections: jsonb("sections").$type<HudSection[]>().notNull(),
+    fieldsJson: jsonb("fields_json")
+      .$type<HudLayoutFieldEntry[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -3237,22 +3258,47 @@ export const hudLayouts = pgTable(
   ],
 );
 
+// Stats-V3 (ADR-064/RF-05/RF-07): fields_json entries
+const hudLayoutFieldEntrySchema = z.object({
+  id: z.string().min(1).max(80),
+  isCustom: z.boolean().optional(),
+  label: z.string().min(1).max(60).optional(),
+  group: z.string().min(1).max(60).optional(),
+  unit: z.enum(["pct", "bb", "count"]).optional(),
+  direction: z
+    .enum(["higher_better", "lower_better", "context", "neutral"])
+    .optional(),
+  targetMin: z.number().optional(),
+  targetMax: z.number().optional(),
+  targetOverride: z
+    .object({ min: z.number(), max: z.number() })
+    .nullable()
+    .optional(),
+});
+
 export const insertHudLayoutSchema = z.object({
   userId: z.string().min(1),
   name: z.string().min(1).max(80),
   isDefault: z.boolean().optional().default(false),
   sections: hudLayoutSectionsZodSchema,
+  fieldsJson: z.array(hudLayoutFieldEntrySchema).optional().default([]),
 });
 
 export const updateHudLayoutSchema = z.object({
   name: z.string().min(1).max(80).optional(),
   isDefault: z.boolean().optional(),
   sections: hudLayoutSectionsZodSchema.optional(),
+  fieldsJson: z.array(hudLayoutFieldEntrySchema).optional(),
+  // Aceita snake_case do payload V3 (handlers passam fields_json direto).
+  fields_json: z.array(hudLayoutFieldEntrySchema).optional(),
 });
 
 export type HudLayout = typeof hudLayouts.$inferSelect;
 export type InsertHudLayout = z.infer<typeof insertHudLayoutSchema>;
 export type UpdateHudLayout = z.infer<typeof updateHudLayoutSchema>;
+
+export const HUD_CAPTURE_METHODS = ["manual", "paste", "csv", "ocr"] as const;
+export type HudCaptureMethod = (typeof HUD_CAPTURE_METHODS)[number];
 
 export const hudStatSnapshots = pgTable(
   "hud_stat_snapshots",
@@ -3272,6 +3318,13 @@ export const hudStatSnapshots = pgTable(
       onDelete: "set null",
     }),
     notes: text("notes"),
+    // Stats-V3: capture lineage + OCR metadata (migration 0020)
+    captureMethod: varchar("capture_method", { length: 20 })
+      .notNull()
+      .default("manual"),
+    sourceImageKey: varchar("source_image_key", { length: 255 }),
+    ocrConfidence: jsonb("ocr_confidence").$type<Record<string, number>>(),
+    ocrRawResponse: jsonb("ocr_raw_response").$type<unknown>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
@@ -3282,6 +3335,23 @@ export const hudStatSnapshots = pgTable(
     ),
   ],
 );
+
+// Stats-V3 (ADR-065 / RF-12): audit log de chamadas OCR para rate limit + telemetria.
+export const hudOcrAudit = pgTable(
+  "hud_ocr_audit",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_hud_ocr_audit_user_created").on(table.userId, table.createdAt),
+  ],
+);
+
+export type HudOcrAuditRow = typeof hudOcrAudit.$inferSelect;
 
 const snapshotValuesZodSchema = z
   .record(z.string().min(1).max(64), z.number().nullable())
