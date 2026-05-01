@@ -14,7 +14,7 @@
 import React, { useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { apiRequest, queryClient } from '@/lib/queryClient';
+import { getCsrfToken, queryClient } from '@/lib/queryClient';
 import { parseSearch } from '@/lib/url';
 import { EmptyState } from './EmptyState';
 import { LinkSpotToThemeDropdown } from './workflow/LinkSpotToThemeDropdown';
@@ -118,13 +118,30 @@ export function SpotsView() {
   const reviewMutation = useMutation({
     mutationFn: async (vars: { spotId: string; themeId: string | null }) => {
       const url = `/api/starred-hands/${vars.spotId}/review`;
-      // Test fixture mocks apiRequest com (url, opts). Producao usa
-      // apiRequest(method, url, body) — usamos a forma (url, opts) para que
-      // o mock acerte calls[0] = url; em prod, apiRequest aceita ambos via spread.
-      return await (apiRequest as any)(url, {
+      const csrf = getCsrfToken();
+      const res = await fetch(url, {
         method: 'PATCH',
-        body: { themeId: vars.themeId, reviewedAt: new Date().toISOString() },
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+        },
+        body: JSON.stringify({
+          themeId: vars.themeId,
+          reviewedAt: new Date().toISOString(),
+        }),
       });
+      if (!res.ok) {
+        const err: any = new Error(`HTTP ${res.status}`);
+        err.status = res.status;
+        try {
+          err.body = await res.json();
+        } catch {
+          // ignore
+        }
+        throw err;
+      }
+      return await res.json();
     },
     onSuccess: (_, vars) => {
       toast({

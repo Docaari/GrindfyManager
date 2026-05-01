@@ -109,6 +109,11 @@ import {
   type UpdateHudLayout,
   type HudStatSnapshot,
   type InsertHudStatSnapshot,
+  studyThemes,
+  studyTabs,
+  studyThemeSpotLinks,
+  type StudyTheme,
+  type StudyThemeSpotLink,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, lt, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
@@ -595,6 +600,37 @@ export interface IStorage {
     input: InsertHudStatSnapshot,
   ): Promise<HudStatSnapshot>;
   deleteHudStatSnapshot(id: string, userId: string): Promise<boolean>;
+
+  // Sprint Studies-Reform — RF-05/06/07 (ADR-067/068)
+  getStudyTheme(themeId: string): Promise<StudyTheme | null>;
+  getStudyThemeByName(name: string, userId: string): Promise<StudyTheme | null>;
+  getStudyTabsByTheme(themeId: string): Promise<any[]>;
+  linkSpotToTheme(input: {
+    themeId: string;
+    spotId: string;
+    userId: string;
+    reasoningText?: string | null;
+  }): Promise<StudyThemeSpotLink & { alreadyLinked?: boolean }>;
+  unlinkSpotFromTheme(linkId: string, userId: string): Promise<boolean>;
+  getLinkedSpots(themeId: string): Promise<any[]>;
+  getStatsLeaks(userId: string, top: number): Promise<any[]>;
+  getStaleSpots(userId: string, days: number): Promise<any[]>;
+  getDormantThemes(userId: string, days: number, maxProgress?: number): Promise<any[]>;
+  getStudyStreak(userId: string): Promise<{
+    days: number;
+    last_activity_at: string | null;
+    heatmap_last_7_days: Array<{ date: string; active: boolean }>;
+  }>;
+  bumpStudyStreak(userId: string): Promise<{
+    days: number;
+    last_activity_at: string;
+    bumped: boolean;
+  }>;
+  getDashboardInsightsWeek(userId: string): Promise<{
+    themesOpenedThisWeek: number;
+    spotsReviewedThisWeek: number;
+    hoursStudiedThisWeek: number;
+  }>;
 
   transaction<T>(fn: (tx: IStorage) => Promise<T>): Promise<T>;
 }
@@ -6202,6 +6238,286 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       )
       .returning({ id: hudStatSnapshots.id });
     return result.length > 0;
+  }
+
+  // ===========================================================================
+  // Sprint Studies-Reform — RF-05/06/07 storage methods (ADR-067/068)
+  // Migration 0021_studies_reform.sql
+  // ===========================================================================
+
+  async getStudyTheme(themeId: string): Promise<StudyTheme | null> {
+    const [row] = await db
+      .select()
+      .from(studyThemes)
+      .where(eq(studyThemes.id, themeId))
+      .limit(1);
+    return (row as StudyTheme) ?? null;
+  }
+
+  async getStudyThemeByName(name: string, userId: string): Promise<StudyTheme | null> {
+    const [row] = await db
+      .select()
+      .from(studyThemes)
+      .where(
+        and(
+          eq(studyThemes.userId, userId),
+          sql`lower(${studyThemes.name}) = lower(${name})`,
+        ),
+      )
+      .limit(1);
+    return (row as StudyTheme) ?? null;
+  }
+
+  async getStudyTabsByTheme(themeId: string): Promise<any[]> {
+    const rows = await db
+      .select()
+      .from(studyTabs)
+      .where(eq(studyTabs.themeId, themeId))
+      .orderBy(asc(studyTabs.sortOrder));
+    return rows;
+  }
+
+  async linkSpotToTheme(input: {
+    themeId: string;
+    spotId: string;
+    userId: string;
+    reasoningText?: string | null;
+  }): Promise<StudyThemeSpotLink & { alreadyLinked?: boolean }> {
+    const [existing] = await db
+      .select()
+      .from(studyThemeSpotLinks)
+      .where(
+        and(
+          eq(studyThemeSpotLinks.themeId, input.themeId),
+          eq(studyThemeSpotLinks.spotId, input.spotId),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      return { ...(existing as StudyThemeSpotLink), alreadyLinked: true };
+    }
+
+    const id = nanoid(21);
+    const [row] = await db
+      .insert(studyThemeSpotLinks)
+      .values({
+        id,
+        themeId: input.themeId,
+        spotId: input.spotId,
+        userId: input.userId,
+        reasoningText: input.reasoningText ?? null,
+      })
+      .returning();
+    return row as StudyThemeSpotLink;
+  }
+
+  async unlinkSpotFromTheme(linkId: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(studyThemeSpotLinks)
+      .where(
+        and(
+          eq(studyThemeSpotLinks.id, linkId),
+          eq(studyThemeSpotLinks.userId, userId),
+        ),
+      )
+      .returning({ id: studyThemeSpotLinks.id });
+    return result.length > 0;
+  }
+
+  async getLinkedSpots(themeId: string): Promise<any[]> {
+    const rows = await db
+      .select({
+        link: studyThemeSpotLinks,
+        spot: starredHands,
+      })
+      .from(studyThemeSpotLinks)
+      .innerJoin(starredHands, eq(starredHands.id, studyThemeSpotLinks.spotId))
+      .where(eq(studyThemeSpotLinks.themeId, themeId))
+      .orderBy(desc(studyThemeSpotLinks.linkedAt));
+    return rows.map((r: any) => ({
+      ...(r.spot as object),
+      themeLink: {
+        id: r.link.id,
+        themeId: r.link.themeId,
+        linkedAt: r.link.linkedAt,
+        reasoningText: r.link.reasoningText,
+      },
+    }));
+  }
+
+  async getStatsLeaks(_userId: string, _top: number): Promise<any[]> {
+    // TODO Sprint Studies-Reform-Backend: detectar leaks via hud_stats_snapshots
+    // ou stats_analyzer_history. Por enquanto retorna [] (frontend tolera).
+    return [];
+  }
+
+  async getStaleSpots(userId: string, days: number): Promise<any[]> {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    // Spots reviewLater=true sem link em study_theme_spot_links e mais antigos que cutoff.
+    const rows = await db
+      .select()
+      .from(starredHands)
+      .where(
+        and(
+          eq(starredHands.userId, userId),
+          eq(starredHands.reviewLater, true),
+          lte(starredHands.createdAt, cutoff),
+          sql`NOT EXISTS (SELECT 1 FROM ${studyThemeSpotLinks} WHERE ${studyThemeSpotLinks.spotId} = ${starredHands.id})`,
+        ),
+      )
+      .orderBy(asc(starredHands.createdAt))
+      .limit(20);
+    return rows;
+  }
+
+  async getDormantThemes(
+    userId: string,
+    days: number,
+    maxProgress: number = 100,
+  ): Promise<any[]> {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select()
+      .from(studyThemes)
+      .where(
+        and(
+          eq(studyThemes.userId, userId),
+          lte(studyThemes.updatedAt, cutoff),
+          lt(studyThemes.progress, maxProgress),
+        ),
+      )
+      .orderBy(asc(studyThemes.updatedAt))
+      .limit(10);
+    return rows;
+  }
+
+  async getStudyStreak(userId: string): Promise<{
+    days: number;
+    last_activity_at: string | null;
+    heatmap_last_7_days: Array<{ date: string; active: boolean }>;
+  }> {
+    const [row] = await db
+      .select({
+        days: users.studyStreakDays,
+        lastActivity: users.lastStudyActivityAt,
+      })
+      .from(users)
+      .where(eq(users.userPlatformId, userId))
+      .limit(1);
+
+    const heatmap: Array<{ date: string; active: boolean }> = [];
+    const lastActivity = row?.lastActivity ?? null;
+    const lastActiveStart = lastActivity
+      ? new Date(
+          new Date(lastActivity).getFullYear(),
+          new Date(lastActivity).getMonth(),
+          new Date(lastActivity).getDate(),
+        ).getTime()
+      : 0;
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const start = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      heatmap.push({
+        date: d.toISOString().slice(0, 10),
+        active: lastActiveStart >= start && lastActiveStart < start + 86400000,
+      });
+    }
+
+    return {
+      days: Number(row?.days ?? 0),
+      last_activity_at: lastActivity ? new Date(lastActivity).toISOString() : null,
+      heatmap_last_7_days: heatmap,
+    };
+  }
+
+  async bumpStudyStreak(userId: string): Promise<{
+    days: number;
+    last_activity_at: string;
+    bumped: boolean;
+  }> {
+    const [row] = await db
+      .select({
+        days: users.studyStreakDays,
+        lastActivity: users.lastStudyActivityAt,
+      })
+      .from(users)
+      .where(eq(users.userPlatformId, userId))
+      .limit(1);
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const prevDays = Number(row?.days ?? 0);
+    const prevActivity = row?.lastActivity ? new Date(row.lastActivity) : null;
+    const prevStart = prevActivity
+      ? new Date(prevActivity.getFullYear(), prevActivity.getMonth(), prevActivity.getDate()).getTime()
+      : 0;
+
+    if (prevStart === todayStart) {
+      return {
+        days: prevDays,
+        last_activity_at: prevActivity!.toISOString(),
+        bumped: false,
+      };
+    }
+
+    const diffDays = prevStart > 0 ? Math.round((todayStart - prevStart) / 86400000) : null;
+    const newDays = diffDays === 1 ? prevDays + 1 : 1;
+
+    await db
+      .update(users)
+      .set({
+        studyStreakDays: newDays,
+        lastStudyActivityAt: now,
+      })
+      .where(eq(users.userPlatformId, userId));
+
+    return {
+      days: newDays,
+      last_activity_at: now.toISOString(),
+      bumped: true,
+    };
+  }
+
+  async getDashboardInsightsWeek(userId: string): Promise<{
+    themesOpenedThisWeek: number;
+    spotsReviewedThisWeek: number;
+    hoursStudiedThisWeek: number;
+  }> {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const [{ themes }] = await db
+      .select({
+        themes: sql<number>`cast(count(*) as integer)`,
+      })
+      .from(studyThemes)
+      .where(
+        and(
+          eq(studyThemes.userId, userId),
+          gte(studyThemes.updatedAt, weekAgo),
+        ),
+      );
+
+    const [{ spots }] = await db
+      .select({
+        spots: sql<number>`cast(count(*) as integer)`,
+      })
+      .from(starredHands)
+      .where(
+        and(
+          eq(starredHands.userId, userId),
+          gte(starredHands.reviewedAt, weekAgo),
+        ),
+      );
+
+    return {
+      themesOpenedThisWeek: Number(themes ?? 0),
+      spotsReviewedThisWeek: Number(spots ?? 0),
+      // TODO Sprint Studies-Reform-Backend: somar duracao de grindSessions com tag estudo.
+      hoursStudiedThisWeek: 0,
+    };
   }
 }
 

@@ -12,8 +12,18 @@
 
 import type { Express, Request, Response } from 'express';
 import { z } from 'zod';
+import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../auth';
 import { storage } from '../storage';
+
+const studyLinksMutationLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.user?.userPlatformId || req.ip,
+  message: { message: 'Muitas requisicoes. Tente novamente em 1 minuto.' },
+});
 
 const createLinkSchema = z.object({
   themeId: z.string().min(1),
@@ -46,7 +56,7 @@ export async function handleCreateThemeSpotLink(
       res.status(404).json({ message: 'Tema nao encontrado' });
       return;
     }
-    if ((theme as any).userId !== userPlatformId) {
+    if (theme.userId !== userPlatformId) {
       res.status(403).json({ message: 'Acesso negado: tema de outro usuario' });
       return;
     }
@@ -56,12 +66,12 @@ export async function handleCreateThemeSpotLink(
       res.status(404).json({ message: 'Spot nao encontrado' });
       return;
     }
-    if ((spot as any).userId !== userPlatformId) {
+    if (spot.userId !== userPlatformId) {
       res.status(403).json({ message: 'Acesso negado: spot de outro usuario' });
       return;
     }
 
-    const link = await (storage as any).linkSpotToTheme({
+    const link = await storage.linkSpotToTheme({
       themeId: body.themeId,
       spotId: body.spotId,
       userId: userPlatformId,
@@ -74,10 +84,10 @@ export async function handleCreateThemeSpotLink(
       themeId: body.themeId,
       spotId: body.spotId,
       suggested: body.suggested ?? false,
-      alreadyLinked: Boolean((link as any)?.alreadyLinked),
+      alreadyLinked: Boolean(link.alreadyLinked),
     });
 
-    const status = (link as any)?.alreadyLinked ? 200 : 201;
+    const status = link.alreadyLinked ? 200 : 201;
     res.status(status).json(link);
   } catch (err) {
     console.error('[study-theme-spot-links] create failed', {
@@ -112,12 +122,12 @@ export async function handleGetLinkedSpots(
       res.status(404).json({ message: 'Tema nao encontrado' });
       return;
     }
-    if ((theme as any).userId !== userPlatformId) {
+    if (theme.userId !== userPlatformId) {
       res.status(403).json({ message: 'Acesso negado: tema de outro usuario' });
       return;
     }
 
-    const spots = await (storage as any).getLinkedSpots(themeId);
+    const spots = await storage.getLinkedSpots(themeId);
     res.status(200).json(spots ?? []);
   } catch (err) {
     console.error('[study-theme-spot-links] list failed', {
@@ -149,7 +159,7 @@ export async function handleDeleteThemeSpotLink(
   }
 
   try {
-    const removed = await (storage as any).unlinkSpotFromTheme(linkId, userPlatformId);
+    const removed = await storage.unlinkSpotFromTheme(linkId, userPlatformId);
     if (!removed) {
       res.status(404).json({ message: 'Link nao encontrado' });
       return;
@@ -171,6 +181,7 @@ export function registerStudyThemeSpotLinkRoutes(app: Express): void {
   app.post(
     '/api/study/theme-spot-links',
     requireAuth,
+    studyLinksMutationLimit,
     (req: Request, res: Response) => handleCreateThemeSpotLink(req, res),
   );
   app.get(
@@ -181,6 +192,7 @@ export function registerStudyThemeSpotLinkRoutes(app: Express): void {
   app.delete(
     '/api/study/theme-spot-links/:linkId',
     requireAuth,
+    studyLinksMutationLimit,
     (req: Request, res: Response) => handleDeleteThemeSpotLink(req, res),
   );
 }

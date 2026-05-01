@@ -173,13 +173,9 @@ export async function getRecommendations(
   limit: number = 10,
 ): Promise<RecommendationsResponse> {
   const [leaksResult, spotsResult, themesResult] = await Promise.allSettled([
-    (storage as any).getStatsLeaks(userId, 5),
-    (storage as any).getStaleSpots(userId, STALE_SPOT_DAYS),
-    (storage as any).getDormantThemes(
-      userId,
-      DORMANT_THEME_DAYS,
-      DORMANT_THEME_MAX_PROGRESS,
-    ),
+    storage.getStatsLeaks(userId, 5),
+    storage.getStaleSpots(userId, STALE_SPOT_DAYS),
+    storage.getDormantThemes(userId, DORMANT_THEME_DAYS, DORMANT_THEME_MAX_PROGRESS),
   ]);
 
   const leaks = unwrapSettled<any>(leaksResult, 'getStatsLeaks', userId);

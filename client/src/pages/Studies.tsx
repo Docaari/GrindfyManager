@@ -93,18 +93,16 @@ export default function Studies() {
 
   // Resync breakpoint quando viewport muda (resize listener barato).
   useEffect(() => {
-    function handleResize() {
-      setBreakpoint(detectBreakpoint());
-    }
+    if (typeof window === 'undefined') return;
+    const handleResize = () => setBreakpoint(detectBreakpoint());
     handleResize();
-    if (typeof window !== 'undefined') {
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Cmd/Ctrl+K abre QuickSearchPalette (escopo global enquanto /estudos*).
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     function onKey(e: KeyboardEvent) {
       const isK = e.key === 'k' || e.key === 'K';
       if (isK && (e.metaKey || e.ctrlKey)) {
@@ -112,10 +110,8 @@ export default function Studies() {
         setPaletteOpen(true);
       }
     }
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', onKey);
-      return () => window.removeEventListener('keydown', onKey);
-    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   const view = useMemo(() => viewFromPath(location || '/estudos'), [location]);

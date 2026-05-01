@@ -1,10 +1,9 @@
 /**
  * Sprint Studies-Reform — RF-05: dropdown para vincular spot a tema
  *
- * Implementa custom dropdown (lista clicavel) ao inves de <select> nativo
- * para que os testes TDD possam clicar diretamente em option-{id} e ver
- * onChange disparado (jsdom limitation com <select>). Mantemos um <select>
- * sr-only espelho para acessibilidade / leitores de tela.
+ * Custom listbox com role=listbox + role=option para acessibilidade nativa
+ * (substitui o <select> sr-only que combinava aria-hidden + sr-only — ambos
+ * cancelando o efeito util para screen readers).
  */
 
 import React from 'react';
@@ -35,10 +34,18 @@ export function LinkSpotToThemeDropdown({
 
   return (
     <div data-testid="link-spot-theme-dropdown" className="flex flex-col gap-2">
-      <label className="text-xs text-gray-400">Vincular a tema (opcional)</label>
-      <div className="rounded border border-gray-700 bg-gray-800 p-2 space-y-1">
+      <label id="link-spot-theme-label" className="text-xs text-gray-400">
+        Vincular a tema (opcional)
+      </label>
+      <div
+        role="listbox"
+        aria-labelledby="link-spot-theme-label"
+        className="rounded border border-gray-700 bg-gray-800 p-2 space-y-1"
+      >
         <button
           type="button"
+          role="option"
+          aria-selected={value === null}
           data-testid="link-spot-theme-option-none"
           onClick={() => onChange(null)}
           disabled={disabled}
@@ -54,6 +61,8 @@ export function LinkSpotToThemeDropdown({
             <button
               key={t.id}
               type="button"
+              role="option"
+              aria-selected={active}
               data-testid={`link-spot-theme-option-${t.id}`}
               onClick={() => onChange(t.id)}
               disabled={disabled}
@@ -72,21 +81,6 @@ export function LinkSpotToThemeDropdown({
           Selecionado: {selected.name}
         </div>
       )}
-      {/* Espelho sr-only para acessibilidade. */}
-      <select
-        aria-hidden
-        tabIndex={-1}
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value || null)}
-        className="sr-only"
-      >
-        <option value="">none</option>
-        {themes.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }

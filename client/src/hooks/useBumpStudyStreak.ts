@@ -10,7 +10,7 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import { getCsrfToken } from '@/lib/queryClient';
 
 const STREAK_LOCAL_KEY = 'grindfy:studies:streak';
 
@@ -68,12 +68,21 @@ export function useBumpStudyStreak() {
   const mutation = useMutation({
     mutationFn: async (): Promise<StreakPayload> => {
       try {
-        // Test fixture mocks both apiRequest('/url', opts) e fetch('/url', opts).
-        // Chamamos apiRequest com (url, opts) para que o mock dispatcher do
-        // teste enxergue a URL como primeiro argumento (assertion calls[0]).
-        const data = await (apiRequest as any)('/api/study/streak/bump', {
+        const csrf = getCsrfToken();
+        const res = await fetch('/api/study/streak/bump', {
           method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+          },
         });
+        if (!res.ok) {
+          const err: any = new Error(`HTTP ${res.status}`);
+          err.status = res.status;
+          throw err;
+        }
+        const data = await res.json();
         if (data && typeof data === 'object' && typeof (data as any).days === 'number') {
           writeLocalStreak({
             days: (data as any).days,

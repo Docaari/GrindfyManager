@@ -22,6 +22,7 @@
 
 import { z } from 'zod';
 import { storage } from '../storage';
+import type { StudyTheme } from '@shared/schema';
 
 const MAX_TABS = 5;
 const MAX_SPOTS = 10;
@@ -71,11 +72,11 @@ export async function readThemeWithLinkedSpots(
   }
 
   // Lookup theme
-  let theme: any = null;
+  let theme: StudyTheme | null = null;
   if (input.theme_id) {
-    theme = await (storage as any).getStudyTheme(input.theme_id);
+    theme = await storage.getStudyTheme(input.theme_id);
   } else if (input.theme_name) {
-    theme = await (storage as any).getStudyThemeByName(input.theme_name, userId);
+    theme = await storage.getStudyThemeByName(input.theme_name, userId);
   }
 
   if (!theme) {
@@ -86,8 +87,8 @@ export async function readThemeWithLinkedSpots(
   }
 
   const [tabsRaw, linkedSpotsRaw] = await Promise.all([
-    (storage as any).getStudyTabsByTheme(theme.id),
-    (storage as any).getLinkedSpots(theme.id),
+    storage.getStudyTabsByTheme(theme.id),
+    storage.getLinkedSpots(theme.id),
   ]);
 
   const tabs = (Array.isArray(tabsRaw) ? tabsRaw : []).slice(0, MAX_TABS).map((t: any) => ({
@@ -106,6 +107,10 @@ export async function readThemeWithLinkedSpots(
       screenshotUrl: s.screenshotUrl ?? s.imageUrl ?? null,
     }));
 
+  // lastVisitedAt: nao existe ainda no schema studyThemes. Test fixtures preenchem
+  // o campo para futuros studyThemes.lastVisitedAt; usamos updatedAt como proxy
+  // ate migration adicionar a coluna.
+  const lastVisited = (theme as any).lastVisitedAt ?? theme.updatedAt ?? null;
   return {
     theme: {
       id: theme.id,
@@ -113,14 +118,14 @@ export async function readThemeWithLinkedSpots(
       color: theme.color ?? null,
       emoji: theme.emoji ?? '',
       progress: theme.progress ?? 0,
-      lastVisitedAt: theme.lastVisitedAt ?? null,
+      lastVisitedAt: lastVisited,
     },
     tabs,
     linked_spots: linkedSpots,
     summary: {
       spots_count: linkedSpots.length,
       tabs_count: tabs.length,
-      last_activity_at: theme.lastVisitedAt ?? null,
+      last_activity_at: lastVisited,
     },
   };
 }
