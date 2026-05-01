@@ -1,0 +1,94 @@
+%% Sprint Bankroll-Reports-Detail — RF-09 RF-03 RF-07 RF-08 (ADR-069)
+%% Sequence: usuario abre WalletTransactionDialog SEM sessao ativa, dialog seleciona reason='manual_report' automatico,
+%% submit POST /api/wallets/:id/transactions. walletService valida mutuamente exclusivo (D2), persiste tx (session_id=NULL),
+%% dispara createAutoSnapshot best-effort com origin='manual-report' (D3). Coach tool inclui type='manual_report' (D12).
+%% Dashboard ROI per platform soma deltaUsd (RF-08). Falha de snapshot logada nao bloqueia tx (mesmo trade-off ADR-058 addendum).
+
+sequenceDiagram
+    actor User as Founder
+    participant Dlg as WalletTransactionDialog
+    participant API as POST /api/wallets/:id/transactions
+    participant WS as walletService.recordWalletTransaction
+    participant FX as fxResolver (ADR-061)
+    participant DB as Postgres
+    participant BS as bankrollService.createAutoSnapshot
+    participant Coach as readUserBankrollHistory tool
+    participant Dash as dashboardService profit calc
+
+    User->>Dlg: Abre /bankroll click Reportar saldo<br/>(sem sessao ativa)
+    Dlg->>Dlg: prop sessionId = undefined<br/>auto-select reason='manual_report'
+    Dlg->>Dlg: render helper text PT-BR<br/>"Sem sessao ativa - sera registrado como Report manual"
+    User->>Dlg: Seleciona wallet PokerStars<br/>informa saldo $1247
+    Dlg->>API: POST body<br/>{direction:in, nativeAmount:1247,<br/>reason:'manual_report',<br/>occurredAt: ISO,<br/>sessionId OMITIDO}
+
+    API->>API: WalletTxBodyRefinedSchema.parse(body)
+
+    alt body.sessionId presente E body.reason = manual_report
+        API-->>Dlg: 400 manual_report_no_session
+        Dlg->>User: erro inline "manual_report nao aceita sessionId"
+    else body valido
+        API->>WS: recordWalletTransaction(input)
+
+        WS->>DB: BEGIN<br/>SELECT FOR UPDATE wallets WHERE id=?
+        DB-->>WS: wallet row (balance, version)
+
+        opt expectedPreviousBalance presente
+            WS->>WS: check epsilon 0.01 (ADR-038)
+            alt drift detected
+                WS->>DB: ROLLBACK
+                WS-->>API: throw balance_mismatch 409
+                API-->>Dlg: 409 currentBalance
+            end
+        end
+
+        WS->>FX: resolveExchangeRates(userId)
+        FX->>DB: SELECT exchange_rates FROM users
+        FX->>DB: SELECT exchange_rates FROM wallets
+        DB-->>FX: rates
+        FX-->>WS: {rates, source, resolvedAt}
+
+        WS->>WS: deltaNative = +1247 (in)<br/>deltaUsdAtTime = convertToUSD(1247, BRL, rates)<br/>balanceAfterNative = wallet.balance + 1247
+
+        WS->>DB: INSERT wallet_transactions<br/>(reason='manual_report', session_id=NULL,<br/>delta_usd_at_time, balance_after_native,<br/>previous_native_balance = wallet.balance)
+        DB-->>WS: tx row
+
+        WS->>DB: UPDATE wallets SET balance=balance_after_native,<br/>version=version+1
+        DB-->>WS: ok
+
+        WS->>DB: COMMIT
+        WS-->>API: {transaction, wallet}
+
+        Note over API,BS: Snapshot best-effort POS-tx (mesmo padrao ADR-058 addendum)
+
+        API->>BS: createAutoSnapshot({userId,<br/>origin:'manual-report',<br/>sourceRefId: tx.id,<br/>occurredAt: now})
+
+        BS->>WS: getConsolidatedBalanceUSD(userId)
+        WS-->>BS: consolidatedUSD<br/>+ wallets_balances jsonb
+
+        BS->>DB: INSERT bankroll_snapshots<br/>(origin='manual-report',<br/>source_ref_id=tx.id,<br/>wallets_balances,<br/>exchange_rates_used)
+
+        alt INSERT erro (CHECK constraint, FK, etc)
+            DB-->>BS: error
+            BS->>BS: console.error + telemetry<br/>auto_snapshot_failed
+            BS-->>API: snapshot=null
+        else INSERT ok
+            DB-->>BS: snapshot row
+            BS-->>API: snapshot
+        end
+
+        API-->>Dlg: 200 OK<br/>{transaction, wallet, snapshot?}
+        Dlg->>Dlg: invalidate queries<br/>['wallets', 'bankroll-snapshots',<br/>'grind-history', 'dashboard']
+        Dlg->>User: Toast "Saldo reportado com sucesso"
+
+        Note over Coach,Dash: Consumidores downstream
+
+        Coach->>DB: SELECT wallet_transactions<br/>WHERE reason='manual_report'<br/>OR reason='session_result'
+        DB-->>Coach: ledger entries
+        Coach->>Coach: cluster D5 (5min)<br/>map type: 'session' | 'manual_report'
+        Coach-->>Coach: tool output com type discriminator<br/>(D12 ADR-069)
+
+        Dash->>DB: SELECT SUM(delta_usd_at_time)<br/>FROM wallet_transactions<br/>WHERE reason IN (session_result, manual_report)<br/>GROUP BY platform
+        DB-->>Dash: profit per platform incluindo manual_reports
+    end
+
+    Note over API,DB: Fluxo completo: tx commitada SEMPRE; snapshot best-effort.<br/>Idempotencia futura via external_reference (debt). Falha snapshot = log + 200 OK.

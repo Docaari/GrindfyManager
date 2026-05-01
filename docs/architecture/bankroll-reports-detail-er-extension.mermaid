@@ -1,0 +1,78 @@
+%% Sprint Bankroll-Reports-Detail — Extensao ER (ADR-069 + ADR-070)
+%% wallet_transactions ganha reason 'manual_report' (NOVO destaque): session_id NULL-able + delta USD historicamente congelado.
+%% bankroll_snapshots.origin estende CHECK constraint para 'manual-report' (NOVO destaque) via migration 0022 idempotente.
+%% Helper isStandaloneReason(reason) discrimina movimentos sem sessao no Coach + Dashboard.
+%% Backward-compat 100%: clientes sem conhecimento dos novos enums tratam entries como 'session' default.
+
+erDiagram
+    USERS ||--o{ WALLETS : "owns"
+    USERS ||--o{ WALLET_TRANSACTIONS : "owns-via-wallet"
+    USERS ||--o{ BANKROLL_SNAPSHOTS : "owns (RF-3 manual-report origin)"
+    USERS ||--o{ GRIND_SESSIONS : "plays"
+
+    WALLETS ||--o{ WALLET_TRANSACTIONS : "ledger-entries"
+    GRIND_SESSIONS ||--o{ WALLET_TRANSACTIONS : "session_id (NULL para manual_report)"
+    WALLET_TRANSACTIONS ||--o| BANKROLL_SNAPSHOTS : "source_ref_id (manual-report = tx.id)"
+    GRIND_SESSIONS ||--o| BANKROLL_SNAPSHOTS : "via cooldown_log_id (auto-cooldown legado B3)"
+
+    USERS {
+        varchar user_platform_id PK "USER-XXXX"
+        varchar email
+        jsonb exchange_rates "FX cascata users gt wallets gt fallback (ADR-061)"
+    }
+
+    WALLETS {
+        varchar id PK "nanoid"
+        varchar user_id FK "ON DELETE CASCADE"
+        varchar platform "GG / Suprema / OffPlatform_Bank / etc"
+        varchar native_currency "USD/BRL/EUR/CNY/USDT"
+        decimal balance "current native ccy"
+        varchar status "active / archived"
+        boolean is_shot_pocket
+        integer version "ADR-038 optimistic concurrency"
+    }
+
+    WALLET_TRANSACTIONS {
+        varchar id PK "nanoid"
+        varchar user_id FK "CASCADE"
+        varchar wallet_id FK "CASCADE"
+        varchar session_id FK "NULL para manual_report (D2 ADR-069)"
+        varchar reason "ENUM: deposit/withdrawal/session_result/rakeback/manual_adjustment/MANUAL_REPORT_NEW/transfer_in/transfer_out/transfer_fee"
+        varchar direction "in / out"
+        decimal native_amount "valor reportado pelo cliente"
+        decimal delta_usd_at_time "FX-frozen via fxResolver (ADR-061)"
+        decimal balance_after_native "saldo pos-tx (D8 base para before derivado)"
+        decimal previous_native_balance "ADR-017 invariante"
+        varchar external_reference "transfer_group_id ou null"
+        timestamp occurred_at
+        integer expected_version
+    }
+
+    BANKROLL_SNAPSHOTS {
+        varchar id PK "nanoid"
+        varchar user_id FK "CASCADE"
+        decimal new_amount "consolidatedUSD multi-wallet"
+        decimal delta "newAmount - previousAmount"
+        varchar source "auto_session / manual / etc"
+        varchar reason
+        varchar origin "CHECK ENUM: manual / auto-cooldown / transfer / import / MANUAL_REPORT_NEW (migration 0022)"
+        varchar source_ref_id "cooldown_log.id OR transfer_group_id OR wallet_transaction.id (manual-report)"
+        jsonb wallets_balances "snapshot per-wallet native+USD (ADR-034 immutable FX)"
+        jsonb exchange_rates_used "FX freeze no momento do snapshot"
+        timestamp occurred_at
+        timestamp created_at
+    }
+
+    GRIND_SESSIONS {
+        varchar id PK "SES-XXXX"
+        varchar user_id FK "CASCADE"
+        varchar status "active / cooldown / completed"
+        timestamp started_at
+        timestamp completed_at
+        varchar cooldown_log_id "FK para cooldown_logs"
+    }
+
+    %% Helper conceitual (nao tabela): isStandaloneReason(reason)
+    %% retorna true para 'manual_report' (D1 ADR-069).
+    %% Usado em: Coach tool readUserBankrollHistory, dashboardService profit calc,
+    %% grind-sessions history endpoint para discriminar entries.
