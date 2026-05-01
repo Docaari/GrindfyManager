@@ -27,6 +27,16 @@ ALTER TABLE "hud_stat_snapshots"
 ALTER TABLE "hud_stat_snapshots"
   ADD COLUMN IF NOT EXISTS "ocr_raw_response" jsonb;
 
+-- V3 fields_json: persistencia para custom stats (RF-07) e target overrides
+-- (RF-05). NAO substitui catalog (ADR-058 estatico) — apenas extensoes do user.
+-- Default '[]' por seguranca; back-fill abaixo.
+ALTER TABLE "hud_layouts"
+  ADD COLUMN IF NOT EXISTS "fields_json" jsonb NOT NULL DEFAULT '[]';
+
+UPDATE "hud_layouts"
+  SET "fields_json" = '[]'::jsonb
+  WHERE "fields_json" IS NULL;
+
 -- Backfill seguro: DEFAULT cuida de novas rows; UPDATE sanitiza qualquer existente.
 UPDATE "hud_stat_snapshots"
   SET "capture_method" = 'manual'

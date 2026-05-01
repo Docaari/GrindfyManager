@@ -104,11 +104,13 @@ import {
   type InsertSessionWalletSnapshot,
   hudLayouts,
   hudStatSnapshots,
+  hudOcrAudit,
   type HudLayout,
   type InsertHudLayout,
   type UpdateHudLayout,
   type HudStatSnapshot,
   type InsertHudStatSnapshot,
+  type HudOcrAuditRow,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, lt, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
@@ -595,6 +597,20 @@ export interface IStorage {
     input: InsertHudStatSnapshot,
   ): Promise<HudStatSnapshot>;
   deleteHudStatSnapshot(id: string, userId: string): Promise<boolean>;
+  // Sprint Stats-V3 (RF-06, RF-12)
+  updateHudStatSnapshot(
+    id: string,
+    userId: string,
+    patch: {
+      values?: Record<string, number | null>;
+      captureMethod?: string;
+      sourceImageKey?: string | null;
+      ocrConfidence?: Record<string, number> | null;
+      ocrRawResponse?: unknown | null;
+    },
+  ): Promise<HudStatSnapshot | undefined>;
+  insertHudOcrAudit(userId: string): Promise<HudOcrAuditRow>;
+  getHudOcrAudit(userId: string, sinceTs: Date): Promise<HudOcrAuditRow[]>;
 
   transaction<T>(fn: (tx: IStorage) => Promise<T>): Promise<T>;
 }
@@ -6126,6 +6142,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       if (patch.name !== undefined) updateData.name = patch.name;
       if (patch.isDefault !== undefined) updateData.isDefault = patch.isDefault;
       if (patch.sections !== undefined) updateData.sections = patch.sections;
+      // Stats-V3: aceita ambos camelCase (Zod schema) e snake_case (handlers V3 raw)
+      const fieldsJsonInput =
+        (patch as any).fieldsJson ?? (patch as any).fields_json;
+      if (fieldsJsonInput !== undefined) updateData.fieldsJson = fieldsJsonInput;
       const [row] = await tx
         .update(hudLayouts)
         .set(updateData)
@@ -6202,6 +6222,89 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       )
       .returning({ id: hudStatSnapshots.id });
     return result.length > 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sprint Stats-V3: snapshot patch (RF-06) + OCR audit (RF-12)
+  // ---------------------------------------------------------------------------
+
+  async updateHudStatSnapshot(
+    id: string,
+    userId: string,
+    patch: {
+      values?: Record<string, number | null>;
+      captureMethod?: string;
+      sourceImageKey?: string | null;
+      ocrConfidence?: Record<string, number> | null;
+      ocrRawResponse?: unknown | null;
+    },
+  ): Promise<HudStatSnapshot | undefined> {
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(hudStatSnapshots)
+        .where(
+          and(
+            eq(hudStatSnapshots.id, id),
+            eq(hudStatSnapshots.userId, userId),
+          ),
+        );
+      if (!existing) return undefined;
+
+      const updateData: Record<string, any> = {};
+      if (patch.values !== undefined) {
+        // Patch parcial: merge sobre values existentes, com null preservado.
+        updateData.values = { ...(existing.values ?? {}), ...patch.values };
+      }
+      if (patch.captureMethod !== undefined) {
+        updateData.captureMethod = patch.captureMethod;
+      }
+      if (patch.sourceImageKey !== undefined) {
+        updateData.sourceImageKey = patch.sourceImageKey;
+      }
+      if (patch.ocrConfidence !== undefined) {
+        updateData.ocrConfidence = patch.ocrConfidence;
+      }
+      if (patch.ocrRawResponse !== undefined) {
+        updateData.ocrRawResponse = patch.ocrRawResponse;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return existing;
+      }
+
+      const [row] = await tx
+        .update(hudStatSnapshots)
+        .set(updateData)
+        .where(
+          and(
+            eq(hudStatSnapshots.id, id),
+            eq(hudStatSnapshots.userId, userId),
+          ),
+        )
+        .returning();
+      return row;
+    });
+  }
+
+  async insertHudOcrAudit(userId: string): Promise<HudOcrAuditRow> {
+    const id = nanoid();
+    const [row] = await db
+      .insert(hudOcrAudit)
+      .values({ id, userId })
+      .returning();
+    return row;
+  }
+
+  async getHudOcrAudit(
+    userId: string,
+    sinceTs: Date,
+  ): Promise<HudOcrAuditRow[]> {
+    return await db
+      .select()
+      .from(hudOcrAudit)
+      .where(and(eq(hudOcrAudit.userId, userId), gte(hudOcrAudit.createdAt, sinceTs)))
+      .orderBy(desc(hudOcrAudit.createdAt));
   }
 }
 
