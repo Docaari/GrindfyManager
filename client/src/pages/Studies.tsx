@@ -14,6 +14,8 @@ import { ThemeGrid } from '@/components/studies-v2/ThemeGrid';
 import { ThemeDetail } from '@/components/studies-v2/ThemeDetail';
 import { CreateThemeDialog } from '@/components/studies-v2/CreateThemeDialog';
 import { SearchResults } from '@/components/studies-v2/SearchResults';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import StatsAnalyzerTab from '@/components/studies/StatsAnalyzerTab';
 import type { StudyTheme } from '@/components/studies-v2/types';
 import { getStudyTemplates } from '@/lib/study-suggestions-helpers';
 import { getMasteryLevel, calculateThemeProgress } from '@/lib/study-progress-helpers';
@@ -302,6 +304,17 @@ export default function Studies() {
           </Button>
         </div>
 
+        <Tabs defaultValue="temas" className="w-full">
+          <TabsList data-testid="studies-tabs" className="bg-gray-800 border border-gray-700/40 mb-4">
+            <TabsTrigger value="temas" data-testid="studies-tab-temas" className="data-[state=active]:bg-gray-700">
+              Temas
+            </TabsTrigger>
+            <TabsTrigger value="stats" data-testid="studies-tab-stats" className="data-[state=active]:bg-gray-700">
+              Stats Analyzer
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="temas">
         {/* FP-17: Mini-dashboard de estudos */}
         {studyStats && (
           <div className="mb-6">
@@ -497,6 +510,13 @@ export default function Studies() {
             searchTerm={searchTerm}
           />
         )}
+
+          </TabsContent>
+
+          <TabsContent value="stats">
+            <StatsAnalyzerTab />
+          </TabsContent>
+        </Tabs>
 
         {/* Create theme dialog */}
         <CreateThemeDialog

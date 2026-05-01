@@ -30,6 +30,7 @@ import { registerWarmupRitualsRoutes } from "./warmup-rituals";
 import { registerTicketRoutes } from "./tickets";
 import { registerCooldownRoutes } from "./cooldown";
 import { registerCooldownAnalyticsRoutes } from "./cooldownAnalytics";
+import { registerStatsAnalyzerRoutes } from "./statsAnalyzer";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -140,6 +141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerTicketRoutes(app);
   registerCooldownRoutes(app);
   registerCooldownAnalyticsRoutes(app);
+  registerStatsAnalyzerRoutes(app);
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);
 

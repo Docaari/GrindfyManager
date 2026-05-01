@@ -8,6 +8,25 @@ import fs from 'fs';
 // mas so funcionam se window/document existirem).
 import '@testing-library/jest-dom/vitest';
 
+// =============================================================================
+// jest -> vi shim (compat para @testing-library/react asyncWrapper)
+// RTL detecta fake timers via `typeof jest !== 'undefined'` (jestFakeTimersAreEnabled).
+// Sem shim, `await waitFor` dentro de `vi.useFakeTimers()` trava forever porque
+// o `setTimeout(0)` interno do asyncWrapper nao avanca.
+// =============================================================================
+if (typeof (globalThis as any).jest === 'undefined') {
+  (globalThis as any).jest = {
+    advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms),
+    runAllTimers: () => vi.runAllTimers(),
+    runOnlyPendingTimers: () => vi.runOnlyPendingTimers(),
+    useFakeTimers: () => vi.useFakeTimers(),
+    useRealTimers: () => vi.useRealTimers(),
+    setSystemTime: (now?: number | Date) => vi.setSystemTime(now ?? new Date()),
+    fn: (impl?: any) => vi.fn(impl),
+    spyOn: (obj: any, method: any) => vi.spyOn(obj, method),
+  };
+}
+
 // Polyfills para Radix UI em jsdom: ResizeObserver, IntersectionObserver, scrollIntoView,
 // matchMedia, hasPointerCapture (jsdom nao implementa essas APIs).
 if (typeof globalThis !== 'undefined' && typeof (globalThis as any).window !== 'undefined') {

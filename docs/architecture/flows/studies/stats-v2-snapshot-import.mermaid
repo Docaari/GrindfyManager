@@ -1,0 +1,71 @@
+%% Sprint Stats-V2 — Snapshot Import Flow (paste from PT4 / CSV upload)
+%% Spec : docs/specs/sprint-stats-v2.md (RF-05)
+%% ADRs : 062 (coach grouped), 063 (direction semantics)
+%% Trigger : usuario clica "Importar do PT4" (paste) OU "Importar CSV" (upload)
+%% Goal    : preencher Record<stat_id, number|null> antes de POST snapshot
+
+flowchart TD
+    Start([Usuario abre snapshot editor])
+    Start --> Choice{Origem dos dados}
+
+    Choice -->|paste from PT4| Paste[User cola texto<br/>do clipboard]
+    Choice -->|upload CSV| Upload[User seleciona arquivo<br/>.csv via input file]
+
+    Paste --> Detect{Detectar separador<br/>tab vs comma vs newline}
+    Upload --> Parse[Parser CSV<br/>papaparse ou inline]
+    Detect -->|tab-separated PT4 export| ParsePT4[Linhas: stat_label TAB value]
+    Detect -->|comma-separated| ParseCSV[Linhas: stat,value]
+    Detect -->|formato invalido| ErrorFormat[Toast erro<br/>Formato nao reconhecido<br/>NAO zera inputs existentes]
+
+    Parse --> ParseCSV
+    ParsePT4 --> Match
+    ParseCSV --> Match
+
+    Match[Match cada linha contra catalogo:<br/>1. case-insensitive label exact<br/>2. case-insensitive label trim<br/>3. snake_case id<br/>4. aliases conhecidos ex vpip vp voluntarily-put-money]
+
+    Match --> Categorize{Classificar cada linha}
+    Categorize -->|match unico OK| Matched[matched: stat_id + value]
+    Categorize -->|nenhum match| Unmatched[unmatched: label + value<br/>+ sugestao top-3 stats similares]
+    Categorize -->|mais de 1 match label colidiu| Ambiguous[ambiguous: label + value<br/>+ lista candidatos]
+    Categorize -->|value nao numerico| Invalid[invalid: label + raw value<br/>+ msg Valor nao numerico]
+
+    Matched --> Preview
+    Unmatched --> Preview
+    Ambiguous --> Preview
+    Invalid --> Preview
+
+    Preview[Preview tabela 4 secoes:<br/>matched N - unmatched N - ambiguous N - invalid N]
+
+    Preview --> UserEdit{Usuario revisa preview}
+    UserEdit -->|edita unmatched| FixUnmatched[Dropdown stat para cada<br/>linha unmatched OU descartar]
+    UserEdit -->|resolve ambiguous| FixAmbig[Selecionar 1 stat correto<br/>entre candidatos]
+    UserEdit -->|corrige invalid| FixInvalid[Editar valor manualmente<br/>OU descartar]
+    UserEdit -->|aprovar tudo| Confirm
+
+    FixUnmatched --> Confirm
+    FixAmbig --> Confirm
+    FixInvalid --> Confirm
+
+    Confirm[User clica Aplicar import]
+
+    Confirm --> Validate[Validar Zod:<br/>cada stat_id existe em catalogo<br/>cada value e number ou null<br/>cada value within unit range]
+
+    Validate -->|invalido| ErrorValid[Toast erro Zod<br/>NAO submete]
+    Validate -->|valido| FillForm[Preenche inputs do editor<br/>com values matched + corrigidos]
+
+    FillForm --> AutoSave[Auto-save debounced 1s<br/>POST /api/hud-stat-snapshots<br/>body: layout_id + values:<br/>Record stat_id -> number or null]
+
+    AutoSave --> ApiValid{Server Zod valid}
+    ApiValid -->|400 invalido| ServerErr[Toast erro server<br/>Schema invalido]
+    ApiValid -->|201 OK| Success[Toast Snapshot salvo<br/>+ redirect snapshot detail<br/>OU comparator pre-selected]
+
+    Success --> End([Fim])
+    ErrorFormat --> End
+    ErrorValid --> End
+    ServerErr --> End
+
+    %% Edge cases
+    %% - Paste vazio: nao faz nada (no-op)
+    %% - Stats nao preenchidas no editor mas sem paste: value=null no payload (RF-05)
+    %% - Aliases conhecidos: vpip/vp/voluntarily put $, pfr/pre flop raise, 3bet/three bet, etc.
+    %% - Lesson #11: Aplicar import e botao explicito; preview NAO submete sozinho.
