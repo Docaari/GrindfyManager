@@ -18,6 +18,11 @@ import { HUD_STAT_CATALOG, type StatField } from "./hud-stat-catalog";
 
 export interface ParsedSnapshotResult {
   matched: Record<string, number | null>;
+  /**
+   * String representation preservada (ex: "18.0", "22,5"). Util quando UI quer
+   * exibir o valor exatamente como o usuario digitou.
+   */
+  matchedRaw?: Record<string, string>;
   unmatched: Array<{ rawName: string; value: number | null }>;
   invalid: Array<{ rawName: string; rawValue: string; reason: string }>;
   warnings?: Array<{ id?: string; rawName?: string; reason: string }>;
@@ -143,6 +148,7 @@ function isHeaderLine(parts: string[]): boolean {
 export function parsePastedSnapshot(text: string): ParsedSnapshotResult {
   const result: ParsedSnapshotResult = {
     matched: {},
+    matchedRaw: {},
     unmatched: [],
     invalid: [],
   };
@@ -186,6 +192,10 @@ export function parsePastedSnapshot(text: string): ParsedSnapshotResult {
 
     if (statId) {
       result.matched[statId] = parsed.value;
+      if (result.matchedRaw && parsed.value !== null) {
+        const rawTrimmed = rawValue.trim().replace(/%$/, "").trim();
+        result.matchedRaw[statId] = rawTrimmed;
+      }
     } else {
       result.unmatched.push({ rawName, value: parsed.value });
     }
@@ -200,6 +210,7 @@ export function parsePastedSnapshot(text: string): ParsedSnapshotResult {
 export function parseCsvSnapshot(csvText: string): ParsedSnapshotResult {
   const result: ParsedSnapshotResult = {
     matched: {},
+    matchedRaw: {},
     unmatched: [],
     invalid: [],
     warnings: [],
@@ -266,6 +277,14 @@ export function parseCsvSnapshot(csvText: string): ParsedSnapshotResult {
         }
       }
       result.matched[statId] = parsed.value;
+      if (result.matchedRaw && parsed.value !== null) {
+        // Para CSV preservar valor com decimal . (apos conversao PT-BR)
+        let rawForUi = rawValue.trim().replace(/%$/, "").trim();
+        if (/^\d+,\d+$/.test(rawForUi)) {
+          rawForUi = rawForUi.replace(",", ".");
+        }
+        result.matchedRaw[statId] = rawForUi;
+      }
     } else {
       result.unmatched.push({ rawName, value: parsed.value });
     }

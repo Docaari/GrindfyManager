@@ -1,0 +1,247 @@
+// =============================================================================
+// Sprint Stats-V2 — StatsWizardPostImport (RF-08, lesson #11)
+//
+// Modal mostrado pos-import quando usuario nao tem snapshots/layouts.
+// 4 templates V2: mttDefault (recomendado), mttCashCompact, tournamentEarly,
+// tournamentLate.
+//
+// IMPORTANTE: NAO auto-submit (lesson #11). Click no card so seleciona;
+// user precisa clicar em "Aplicar" ou "Customizar" explicitamente.
+// =============================================================================
+
+import { useState } from "react";
+import {
+  HUD_STAT_CATALOG,
+  type StatField,
+  HUD_GROUP_IDS,
+} from "../../../../shared/hud-stat-catalog";
+
+export interface WizardTemplate {
+  id: string;
+  name: string;
+  description: string;
+  fields: StatField[];
+  recommended?: boolean;
+}
+
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  existingSnapshotsCount: number;
+  existingLayoutsCount: number;
+  hasCustomLayout?: boolean;
+  onApplyTemplate: (template: WizardTemplate) => void;
+  onCustomize: (template: WizardTemplate) => void;
+}
+
+// -----------------------------------------------------------------------------
+// Templates V2
+// -----------------------------------------------------------------------------
+
+const allStats = HUD_STAT_CATALOG;
+
+const compactIds = [
+  "vpip",
+  "pfr",
+  "wwsf_pct",
+  "wtsd",
+  "wsd",
+  "threebet_pf",
+  "fold_to_3bet",
+  "fourbet_pf",
+  "rfi_ep",
+  "rfi_co",
+  "rfi_btn",
+  "rfi_sb",
+  "rfi_bb",
+  "threebet_total",
+  "threebet_btn",
+  "threebet_sb",
+  "threebet_bb",
+  "fold_vs_threebet_oop",
+  "cbet_flop_ip",
+  "cbet_flop_oop",
+  "fold_vs_cbet_oop",
+  "second_barrel_vs_bb",
+  "third_barrel_vs_bb",
+  "bb_defend_vs_steal",
+  "bb_3bet_vs_steal",
+  "bb_fold_vs_steal",
+  "bb_fold_vs_btn",
+  "bb_fold_vs_co",
+  "sb_steal_attempt",
+  "bb_per_100",
+];
+
+const earlyGroups = new Set([
+  "basics",
+  "rfi",
+  "threebet",
+  "bb_defense",
+  "blind_war_bb",
+]);
+
+const lateGroups = new Set(["basics", "resteal", "threebet"]);
+const lateExtras = new Set([
+  "rfi_btn",
+  "rfi_sb_short",
+  "rfi_sb",
+  "rfi_btn_short",
+  "rfi_co_short",
+]);
+
+function buildTemplate(
+  id: string,
+  name: string,
+  description: string,
+  filterFn: (stat: StatField) => boolean,
+  recommended?: boolean,
+): WizardTemplate {
+  return {
+    id,
+    name,
+    description,
+    fields: allStats.filter(filterFn),
+    recommended,
+  };
+}
+
+const TEMPLATES: WizardTemplate[] = [
+  buildTemplate(
+    "mttDefault",
+    "MTT Default (200+ stats)",
+    "Catalogo completo recomendado para MTT.",
+    () => true,
+    true,
+  ),
+  buildTemplate(
+    "mttCashCompact",
+    "MTT/Cash Compact",
+    "Top 30 stats mais usados.",
+    (s) => compactIds.includes(s.id),
+  ),
+  buildTemplate(
+    "tournamentEarly",
+    "Tournament Early Stage",
+    "Foco em jogo profundo (basics + rfi + threebet + bb_defense + blind_war_bb).",
+    (s) => earlyGroups.has(s.group),
+  ),
+  buildTemplate(
+    "tournamentLate",
+    "Tournament Late Stage (push/fold)",
+    "Foco em short stack (basics + resteal + threebet curto + push/fold).",
+    (s) => lateGroups.has(s.group) || lateExtras.has(s.id),
+  ),
+];
+
+// -----------------------------------------------------------------------------
+// Component
+// -----------------------------------------------------------------------------
+
+export default function StatsWizardPostImport({
+  open,
+  onOpenChange,
+  existingSnapshotsCount,
+  existingLayoutsCount,
+  hasCustomLayout = false,
+  onApplyTemplate,
+  onCustomize,
+}: Props) {
+  // Hooks SEMPRE antes de early return (lesson #1)
+  const [selectedId, setSelectedId] = useState<string>("mttDefault");
+
+  // Skip conditions (RF-08): nao monta wizard se ja tem snapshot OU layout custom
+  if (existingSnapshotsCount > 0) return null;
+  if (existingLayoutsCount > 0 && hasCustomLayout) return null;
+  if (!open) return null;
+
+  const selectedTemplate =
+    TEMPLATES.find((t) => t.id === selectedId) ?? TEMPLATES[0];
+
+  return (
+    <div
+      data-testid="stats-wizard-post-import"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wizard-title"
+    >
+      <div className="w-full max-w-3xl rounded-lg border border-poker-border bg-poker-card p-6 max-h-[90vh] overflow-y-auto">
+        <header className="mb-4">
+          <h2 id="wizard-title" className="text-lg font-semibold">
+            Configurar Stats Analyzer
+          </h2>
+          <p className="text-sm text-poker-muted mt-1">
+            Escolha um template para comecar. Voce pode customizar depois.
+          </p>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          {TEMPLATES.map((template) => {
+            const isSelected = template.id === selectedId;
+            const isRecommended = template.recommended;
+            return (
+              <button
+                key={template.id}
+                type="button"
+                data-testid={`wizard-template-${template.id}`}
+                data-default={isRecommended ? "true" : "false"}
+                onClick={() => setSelectedId(template.id)}
+                className={`text-left rounded border p-3 transition-colors ${
+                  isSelected
+                    ? "ring-2 ring-poker-accent border-poker-accent"
+                    : isRecommended
+                      ? "ring-2 ring-poker-accent/40 border-poker-accent"
+                      : "border-poker-border hover:border-poker-accent/50"
+                }`}
+                aria-pressed={isSelected}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="font-medium text-sm">{template.name}</h3>
+                  {isRecommended ? (
+                    <span className="text-xs bg-poker-accent text-poker-bg px-2 py-0.5 rounded-full">
+                      Recomendado
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-xs text-poker-muted">{template.description}</p>
+                <p className="text-xs text-poker-muted mt-1">
+                  {template.fields.length} stats
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
+        <footer className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            data-testid="wizard-skip"
+            onClick={() => onOpenChange(false)}
+            className="text-sm text-poker-muted hover:text-poker-fg"
+          >
+            Pular
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              data-testid="wizard-customize"
+              onClick={() => onCustomize(selectedTemplate)}
+              className="rounded border border-poker-border px-3 py-2 text-sm hover:border-poker-accent"
+            >
+              Customizar
+            </button>
+            <button
+              type="button"
+              data-testid="wizard-confirm"
+              onClick={() => onApplyTemplate(selectedTemplate)}
+              className="rounded bg-poker-accent px-3 py-2 text-sm text-poker-bg font-medium"
+            >
+              Aplicar template
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}
