@@ -191,6 +191,63 @@ export async function getAnthropicClient(): Promise<any> {
 }
 
 // -----------------------------------------------------------------------------
+// Gemini provider (free tier 500/day Flash 2.5 vision)
+// Selected via OCR_PROVIDER=gemini env var.
+// -----------------------------------------------------------------------------
+async function extractStatsFromImageGemini(input: {
+  buffer: Buffer;
+  mime: string;
+}): Promise<{ rawText: string }> {
+  const mod = await import("@google/generative-ai");
+  const GoogleGenerativeAI =
+    (mod as any).GoogleGenerativeAI ?? (mod as any).default;
+  const apiKey = process.env.GOOGLE_API_KEY ?? process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw Object.assign(
+      new Error("GOOGLE_API_KEY ausente — OCR Gemini indisponivel"),
+      { status: 503 },
+    );
+  }
+  const client = new GoogleGenerativeAI(apiKey);
+  const modelName = process.env.OCR_MODEL || "gemini-2.5-flash";
+  const model = client.getGenerativeModel({ model: modelName });
+
+  const { OCR_SYSTEM_PROMPT } = await import("./hudOcrPrompt");
+  const base64 = input.buffer.toString("base64");
+
+  let lastErr: any;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const result = await model.generateContent([
+        { text: OCR_SYSTEM_PROMPT },
+        {
+          inlineData: {
+            mimeType: input.mime,
+            data: base64,
+          },
+        },
+        {
+          text: "Extraia os pares label/value desta imagem seguindo o schema. Retorne apenas JSON.",
+        },
+      ]);
+      const rawText = result?.response?.text?.() ?? "";
+      return { rawText };
+    } catch (err: any) {
+      lastErr = err;
+      const status = err?.status ?? err?.response?.status;
+      const is5xx =
+        typeof status === "number" && status >= 500 && status < 600;
+      if (attempt === 0 && is5xx) {
+        await new Promise((r) => setTimeout(r, 500));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr ?? new Error("Gemini OCR failed without response");
+}
+
+// -----------------------------------------------------------------------------
 // Main entry: extractStatsFromImage
 // -----------------------------------------------------------------------------
 export async function extractStatsFromImage(input: {
@@ -215,41 +272,49 @@ export async function extractStatsFromImage(input: {
     }
   }
 
-  // 2. Anthropic call with retry 1x
-  const client = await getAnthropicClient();
-  const params = buildOcrPrompt({ buffer, mime });
+  // 2. Provider selection — Gemini free tier OR Anthropic Haiku
+  const provider = (process.env.OCR_PROVIDER ?? "anthropic").toLowerCase();
+  let rawText = "";
 
-  let response: any;
-  let lastErr: any;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      response = await client.messages.create(params);
-      break;
-    } catch (err: any) {
-      lastErr = err;
-      const status = err?.status ?? err?.response?.status;
-      // MEDIUM-3: retry SOMENTE para 5xx (status numerico em [500, 600)).
-      // Erros sem status (network/timeout) NAO sao retryados — falham rapido
-      // para nao mascarar bugs de configuracao.
-      // MEDIUM-1: backoff de 500ms (era 100ms — agressivo para Anthropic API).
-      const is5xx =
-        typeof status === "number" && status >= 500 && status < 600;
-      if (attempt === 0 && is5xx) {
-        await new Promise((r) => setTimeout(r, 500));
-        continue;
+  if (provider === "gemini" || provider === "google") {
+    const out = await extractStatsFromImageGemini({ buffer, mime });
+    rawText = out.rawText;
+  } else {
+    const client = await getAnthropicClient();
+    const params = buildOcrPrompt({ buffer, mime });
+
+    let response: any;
+    let lastErr: any;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        response = await client.messages.create(params);
+        break;
+      } catch (err: any) {
+        lastErr = err;
+        const status = err?.status ?? err?.response?.status;
+        // MEDIUM-3: retry SOMENTE para 5xx (status numerico em [500, 600)).
+        // Erros sem status (network/timeout) NAO sao retryados — falham rapido
+        // para nao mascarar bugs de configuracao.
+        // MEDIUM-1: backoff de 500ms (era 100ms — agressivo para Anthropic API).
+        const is5xx =
+          typeof status === "number" && status >= 500 && status < 600;
+        if (attempt === 0 && is5xx) {
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
+        }
+        throw err;
       }
-      throw err;
     }
-  }
-  if (!response) {
-    throw lastErr ?? new Error("Anthropic OCR failed without response");
+    if (!response) {
+      throw lastErr ?? new Error("Anthropic OCR failed without response");
+    }
+    const textBlock = (response.content ?? []).find(
+      (c: any) => c?.type === "text",
+    );
+    rawText = textBlock?.text ?? "";
   }
 
   // 3. Parse JSON robust
-  const textBlock = (response.content ?? []).find(
-    (c: any) => c?.type === "text",
-  );
-  const rawText = textBlock?.text ?? "";
   const parsed = extractStatsJson(rawText);
   const rawStats: OcrExtractedStatRaw[] = parsed?.stats ?? [];
 
