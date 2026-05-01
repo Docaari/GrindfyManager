@@ -1,0 +1,224 @@
+%% Spot Screenshots — sequence diagrams (4 fluxos)
+%% Spec: Docs/specs/spot-screenshots.md
+%% ADR: Docs/architecture/decisions/057-spot-image-storage-abstraction.md
+
+%% ========================================
+%% Fluxo 1 — Upload via paste/click/drop
+%% ========================================
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as GrindSessionLive<br/>(client/src)
+    participant Dialog as SpotCaptureDialog
+    participant API as POST /api/starred-hands<br/>(server/routes)
+    participant Multer as multer.memoryStorage()
+    participant FT as file-type<br/>(magic bytes)
+    participant Storage as SpotImageStorage<br/>(LocalFs)
+    participant DB as Postgres<br/>(starred_hands)
+
+    Note over User,UI: Paste / click 📸 / drop convergem aqui
+    User->>UI: Ctrl+V | click 📸 | drop arquivo
+    UI->>UI: detecta imagem (clipboardData / file input / DataTransfer)
+    UI->>UI: valida MIME basico + size <= 5MB (client-side)
+
+    alt cap atingido (10/sessao ou 3/torneio)
+        UI-->>User: toast "Cap atingido", sem dialog
+    else ok
+        UI->>Dialog: abre com sessionTournamentId pre-fixado<br/>+ preview ObjectURL
+        User->>Dialog: escolhe type, spot, notes opcional
+        User->>Dialog: click "Salvar spot"
+        Dialog->>API: multipart/form-data<br/>(file, sessionId, sessionTournamentId, type, spot, notes?)
+
+        API->>Multer: parse multipart -> req.file.buffer
+        Multer-->>API: Buffer (max 5MB; reject 413 se exceder)
+
+        API->>API: requireAuth(req) -> userPlatformId
+        API->>API: cooldownLimiter (30/min/user)
+        API->>API: Zod parse(body)
+
+        API->>FT: fileTypeFromBuffer(req.file.buffer)
+        FT-->>API: { mime, ext } (magic bytes — fonte de verdade)
+
+        alt mime nao em {png,jpeg,webp}
+            API-->>Dialog: 400 "Formato nao suportado"
+            Dialog-->>User: toast erro
+        end
+
+        Note over API: MIME real do buffer prevalece sobre Content-Type<br/>(decisao founder ponto 2)
+
+        API->>DB: SELECT status FROM grind_sessions WHERE id=? AND userId=?
+        DB-->>API: { status }
+        alt status === 'completed'
+            API-->>Dialog: 409 { code: "session_completed" }<br/>(decisao founder ponto 1)
+            Dialog-->>User: toast "Sessao ja concluida"
+        end
+
+        API->>DB: SELECT COUNT(*) FROM starred_hands<br/>WHERE userId=? AND sessionId=? AND sessionTournamentId=?
+        DB-->>API: count tournament
+        alt count >= 3
+            API-->>Dialog: 400 { code: "star_limit_reached" }
+        end
+
+        API->>DB: SELECT COUNT(*) FROM starred_hands<br/>WHERE userId=? AND sessionId=?<br/>(usa idx_starred_user_session_captured)
+        DB-->>API: count session
+        alt count >= 10
+            API-->>Dialog: 400 { code: "session_spot_limit_reached" }
+        end
+
+        Note over API,Storage: Salvar arquivo PRIMEIRO,<br/>row depois (NFR Disponibilidade)
+        API->>Storage: put({ userId, sessionId, ext, buffer, mime })
+        Storage->>Storage: nanoid(21) -> key = {userId}/{sessionId}/{nanoid}.{ext}
+        Storage->>Storage: fs.mkdirSync(dir, recursive)
+        Storage->>Storage: fs.writeFile(absPath, buffer)
+        Storage-->>API: { key, size }
+
+        API->>DB: INSERT INTO starred_hands<br/>(image_key, image_mime, image_size,<br/>image_width=null, image_height=null,<br/>captured_during, ...)
+        alt INSERT falha
+            API->>Storage: delete(key)<br/>(cleanup orfao)
+            Storage-->>API: ok
+            API-->>Dialog: 500 "Erro ao salvar spot"
+        else ok
+            DB-->>API: row inserida
+            API-->>Dialog: 201 { id, imageKey, imageMime, imageSize, capturedDuring, ... }
+            Dialog->>UI: invalidate ['starred-hands', sessionId]
+            Dialog-->>User: toast "Spot salvo" + fecha
+            UI->>UI: re-render TournamentCard com thumbnail
+        end
+    end
+
+%% ========================================
+%% Fluxo 2 — Serve image (GET autenticado)
+%% ========================================
+sequenceDiagram
+    autonumber
+    actor User
+    participant Browser as <img src="/api/starred-hands/:id/image">
+    participant API as GET /api/starred-hands/:id/image
+    participant DB as Postgres
+    participant Storage as SpotImageStorage
+
+    Browser->>API: GET com cookie/header JWT
+    API->>API: requireAuth -> userPlatformId
+
+    alt sem JWT
+        API-->>Browser: 401 Unauthorized
+    end
+
+    API->>DB: SELECT id, user_id, image_key, image_mime, image_size<br/>FROM starred_hands WHERE id=?
+    DB-->>API: row | null
+
+    alt row null
+        API-->>Browser: 404 (nao vaza existencia)
+    else row.userId !== req.userPlatformId
+        API-->>Browser: 404 (security: 404 nao 403, evita enumeration)
+    else row.imageKey === null
+        API-->>Browser: 404 (spot legado sem imagem)
+    end
+
+    API->>API: validate key (regex !contains '..' && !startsWith '/')
+    alt key invalida
+        API->>API: log warn "invalid imageKey in DB"
+        API-->>Browser: 404
+    end
+
+    API->>Storage: get(imageKey)
+    Storage->>Storage: fs.readFile(absPath)
+    alt ENOENT (arquivo sumiu, row existe)
+        Storage-->>API: null
+        API->>API: log warn "imageKey row exists but file missing"
+        API-->>Browser: 404 (degradacao graciosa)
+    else ok
+        Storage-->>API: { buffer, mime }
+
+        API->>API: setHeader Content-Type = imageMime (DB)
+        API->>API: setHeader Content-Length = imageSize (DB)
+        API->>API: setHeader Cache-Control = "private, max-age=86400"
+        API-->>Browser: 200 + buffer
+        Note over Browser: Cache local 24h (private, nao compartilhado)
+    end
+
+%% ========================================
+%% Fluxo 3 — Delete spot (cascata FS + DB)
+%% ========================================
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Lightbox / Cooldown bloco
+    participant API as DELETE /api/starred-hands/:id
+    participant DB as Postgres
+    participant Storage as SpotImageStorage
+
+    User->>UI: click "Deletar spot"
+    UI->>UI: confirmacao inline ("Confirmar"/"Cancelar")
+    User->>UI: click "Confirmar"
+    UI->>API: DELETE /api/starred-hands/:id
+
+    API->>API: requireAuth
+    API->>DB: SELECT user_id, image_key FROM starred_hands WHERE id=?
+    DB-->>API: row | null
+
+    alt row null
+        API-->>UI: 404
+    else row.userId !== userPlatformId
+        API-->>UI: 404
+    end
+
+    alt row.imageKey !== null
+        API->>Storage: delete(imageKey)
+        alt ENOENT
+            Storage-->>API: ok (idempotente)
+            API->>API: log debug "file already missing"
+        else erro FS
+            Storage-->>API: throw
+            API->>API: log error
+            Note over API: Continua para deletar row mesmo assim?<br/>Spec diz: row preservada se FS falhar.<br/>Aqui: arquivo removido vs row preservada<br/>EC-11: aceitar 500 + log; segunda tentativa idempotente.
+            API-->>UI: 500 "Erro ao deletar arquivo"
+        else ok
+            Storage-->>API: ok
+        end
+    end
+
+    API->>DB: DELETE FROM starred_hands WHERE id=? AND user_id=?
+    DB-->>API: rowsAffected
+    API-->>UI: 200 { ok: true, id }
+    UI->>UI: invalidate ['starred-hands', sessionId]
+    UI-->>User: toast "Spot removido" + fecha lightbox
+
+%% ========================================
+%% Fluxo 4 — Cap 10/sessao race (sem tx distribuida)
+%% ========================================
+sequenceDiagram
+    autonumber
+    participant Tab1 as Tab 1 (POST spot 10)
+    participant Tab2 as Tab 2 (POST spot 10 simultaneo)
+    participant API1 as API instance / req 1
+    participant API2 as API instance / req 2
+    participant DB as Postgres
+
+    Note over Tab1,Tab2: Cenario: usuario tem 9 spots; 2 tabs<br/>tentam criar o 10º simultaneamente
+
+    par Tab 1
+        Tab1->>API1: POST com imagem
+        API1->>DB: SELECT COUNT(*) WHERE userId=? AND sessionId=?<br/>(uses idx_starred_user_session_captured)
+        DB-->>API1: 9
+        Note over API1: cap virtual: 9 < 10, OK
+    and Tab 2
+        Tab2->>API2: POST com imagem
+        API2->>DB: SELECT COUNT(*) WHERE userId=? AND sessionId=?
+        DB-->>API2: 9
+        Note over API2: cap virtual: 9 < 10, OK
+    end
+
+    par Tab 1
+        API1->>DB: INSERT row (commit)
+        DB-->>API1: row #10
+        API1-->>Tab1: 201
+    and Tab 2
+        API2->>DB: INSERT row (commit)
+        DB-->>API2: row #11 (overshoot!)
+        API2-->>Tab2: 201
+    end
+
+    Note over Tab1,DB: EC-14 — overshoot de +1 aceito.<br/>Estrategia: cap virtual best-effort,<br/>NAO tx serializable (custo alto, lock-contention).<br/>Proximo POST do user (tentando 11º real) recebe 400.
+
+    Note over DB: Estado final: 11 spots na sessao.<br/>Aceitavel: cap 10 eh UX, nao invariante critico.<br/>Founder pode tolerar +1 ocasional sem race-tx pesada.

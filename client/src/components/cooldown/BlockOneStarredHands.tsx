@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { Camera } from "lucide-react";
 import { BlockTimer } from "./BlockTimer";
 import { BreathingGuide } from "./BreathingGuide";
 import {
@@ -8,6 +9,10 @@ import {
   type StarredHandSpot,
 } from "../../../../shared/schema";
 import { SPOT_DRAG_MIME } from "@/lib/spotConstants";
+import { useToast } from "@/hooks/use-toast";
+
+const SPOT_MAX_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_SPOT_MIMES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 // Sprint F2 RF-09: select manual NAO deve oferecer placeholders F2 (esses
 // virariam tipo/spot apenas via SpotReviewCard apos drop de print).
@@ -43,6 +48,10 @@ export interface StarredHandLite {
   type?: string;
   spot?: string;
   notes?: string;
+  // Sprint Spot-Screenshots — imagem opcional (via F2 imageUrl ou novo imageKey).
+  imageUrl?: string | null;
+  imageKey?: string | null;
+  imageMime?: string | null;
 }
 
 export interface BlockOneStarredHandsProps {
@@ -65,6 +74,13 @@ export interface BlockOneStarredHandsProps {
     sessionTournamentId?: string | null;
   }>;
   onSpotDropped?: (spotId: string, targetSessionTournamentId: string) => void;
+  // Sprint Spot-Screenshots — captura de imagem por torneio + cap 10/sessao
+  onUploadImage?: (
+    sessionTournamentId: string,
+    buffer: ArrayBuffer,
+    mimeType: string,
+  ) => void;
+  currentSpotsForSession?: number;
 }
 
 export const MAX_STARS_PER_TOURNAMENT = 3;
@@ -77,8 +93,11 @@ export function BlockOneStarredHands({
   breathingEnabled,
   onToggleBreathing,
   onSpotDropped,
+  onUploadImage,
+  currentSpotsForSession = 0,
 }: BlockOneStarredHandsProps) {
   // Hooks first — sem early returns antes deste ponto.
+  const { toast } = useToast();
   const [draftByTournament, setDraftByTournament] = useState<
     Record<string, { type: string; spot: string; notes: string }>
   >({});
@@ -86,6 +105,37 @@ export function BlockOneStarredHands({
   const [dragOverTournamentId, setDragOverTournamentId] = useState<
     string | null
   >(null);
+  // Sprint Spot-Screenshots — refs aos file inputs por torneio.
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  // Lightbox state — abre ao clicar em thumbnail.
+  const [lightboxStarId, setLightboxStarId] = useState<string | null>(null);
+  const sessionCapReached = currentSpotsForSession >= 10;
+
+  async function handleSpotFile(tid: string, file: File) {
+    if (!ALLOWED_SPOT_MIMES.has(file.type)) {
+      toast({
+        title: "Formato nao suportado",
+        description: "Aceitos: PNG, JPEG, WEBP.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (file.size > SPOT_MAX_FILE_SIZE) {
+      toast({
+        title: "Imagem grande demais",
+        description: "Tamanho maximo: 5MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const buffer = await file.arrayBuffer();
+      onUploadImage?.(tid, buffer, file.type);
+    } catch (err) {
+      console.error("[BlockOneStarredHands] arrayBuffer failed:", err);
+      toast({ title: "Erro ao ler imagem", variant: "destructive" });
+    }
+  }
 
   const sortedTournaments = useMemo(() => {
     const list = Array.isArray(sessionTournaments) ? [...sessionTournaments] : [];
@@ -175,7 +225,15 @@ export function BlockOneStarredHands({
               onDrop={(e) => {
                 e.preventDefault();
                 setDragOverTournamentId(null);
-                const spotId = e.dataTransfer.getData(SPOT_DRAG_MIME);
+                let spotId = "";
+                try {
+                  spotId =
+                    typeof e.dataTransfer?.getData === "function"
+                      ? e.dataTransfer.getData(SPOT_DRAG_MIME)
+                      : "";
+                } catch {
+                  spotId = "";
+                }
                 if (!spotId) return;
                 onSpotDropped?.(spotId, t.id);
               }}
@@ -187,37 +245,127 @@ export function BlockOneStarredHands({
                     {t.site} · ${t.buyIn}
                   </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {stars.length}/{MAX_STARS_PER_TOURNAMENT}
+                <div className="flex items-center gap-2">
+                  <div className="text-xs text-muted-foreground">
+                    {stars.length}/{MAX_STARS_PER_TOURNAMENT}
+                  </div>
+                  {/* Sprint Spot-Screenshots — botao captura por torneio */}
+                  <input
+                    ref={(el) => { fileInputRefs.current[t.id] = el; }}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleSpotFile(t.id, f);
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    data-testid={`cooldown-spot-camera-${t.id}`}
+                    title={
+                      sessionCapReached
+                        ? "Cap de 10 spots por sessao atingido"
+                        : "Capturar spot"
+                    }
+                    aria-label="Capturar spot"
+                    disabled={sessionCapReached}
+                    onClick={() => {
+                      if (sessionCapReached) return;
+                      fileInputRefs.current[t.id]?.click();
+                    }}
+                    className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+                  >
+                    <Camera size={12} />
+                  </button>
                 </div>
+              </div>
+
+              {/* Sprint Spot-Screenshots — dropzone por torneio */}
+              <div
+                data-testid={`cooldown-spot-dropzone-${t.id}`}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  // Skip se for spot drag F2 (string handle); senao trata como file drop.
+                  let spotId: string | null = null;
+                  try {
+                    spotId =
+                      typeof e.dataTransfer?.getData === "function"
+                        ? e.dataTransfer.getData(SPOT_DRAG_MIME)
+                        : null;
+                  } catch {
+                    spotId = null;
+                  }
+                  if (spotId) return;
+                  const f = e.dataTransfer?.files?.[0];
+                  if (f) handleSpotFile(t.id, f);
+                }}
+                onDragOver={(e) => {
+                  const types = e.dataTransfer?.types;
+                  const includesSpot =
+                    types && typeof (types as any).includes === "function"
+                      ? (types as any).includes(SPOT_DRAG_MIME)
+                      : false;
+                  if (!includesSpot) {
+                    e.preventDefault();
+                  }
+                }}
+                className="text-[10px] text-muted-foreground italic"
+              >
+                Arraste imagem aqui ou clique no botao acima
               </div>
 
               {stars.length > 0 && (
                 <ul className="space-y-1">
-                  {stars.map((sh) => (
-                    <li
-                      key={sh.id}
-                      className="flex items-center gap-2 text-sm"
-                      data-testid={`cooldown-star-item-${sh.id}`}
-                    >
-                      <span className="rounded bg-muted px-2 py-0.5 text-xs">
-                        {sh.type}
-                      </span>
-                      <span className="text-xs text-muted-foreground">{sh.spot}</span>
-                      {sh.notes && (
-                        <span className="text-xs italic truncate">{sh.notes}</span>
-                      )}
-                      <button
-                        type="button"
-                        data-testid={`cooldown-star-remove-${sh.id}`}
-                        aria-label={`Remover mao ${sh.id}`}
-                        onClick={() => onRemoveStar(sh.id)}
-                        className="ml-auto text-xs text-muted-foreground"
+                  {stars.map((sh) => {
+                    const hasImage = Boolean(sh.imageUrl || sh.imageKey);
+                    return (
+                      <li
+                        key={sh.id}
+                        className="flex items-center gap-2 text-sm"
+                        data-testid={`cooldown-star-item-${sh.id}`}
                       >
-                        ×
-                      </button>
-                    </li>
-                  ))}
+                        {hasImage && (
+                          <img
+                            src={`/api/starred-hands/${sh.id}/image`}
+                            alt={`Spot ${sh.id}`}
+                            data-testid={`spot-thumbnail-${sh.id}`}
+                            onClick={() => setLightboxStarId(sh.id)}
+                            onError={(e) => {
+                              // EC-09: imagem perdida no FS -> degradacao graciosa.
+                              const img = e.currentTarget as HTMLImageElement;
+                              img.style.opacity = "0.4";
+                              img.title = "Imagem indisponivel";
+                            }}
+                            style={{
+                              width: 80,
+                              height: 60,
+                              objectFit: "cover",
+                              cursor: "pointer",
+                              borderRadius: 4,
+                            }}
+                          />
+                        )}
+                        <span className="rounded bg-muted px-2 py-0.5 text-xs">
+                          {sh.type}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{sh.spot}</span>
+                        {sh.notes && (
+                          <span className="text-xs italic truncate">{sh.notes}</span>
+                        )}
+                        <button
+                          type="button"
+                          data-testid={`cooldown-star-remove-${sh.id}`}
+                          aria-label={`Remover mao ${sh.id}`}
+                          onClick={() => onRemoveStar(sh.id)}
+                          className="ml-auto text-xs text-muted-foreground"
+                        >
+                          x
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
 
@@ -298,6 +446,54 @@ export function BlockOneStarredHands({
           );
         })}
       </div>
+
+      {lightboxStarId && (
+        <div
+          data-testid="spot-lightbox"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setLightboxStarId(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        >
+          <div
+            className="max-h-[90vh] max-w-[90vw] overflow-hidden rounded bg-card p-2 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={`/api/starred-hands/${lightboxStarId}/image`}
+              alt={`Spot ${lightboxStarId}`}
+              onError={(e) => {
+                const img = e.currentTarget as HTMLImageElement;
+                img.style.opacity = "0.4";
+                img.title = "Imagem indisponivel";
+              }}
+              className="max-h-[80vh] max-w-full object-contain"
+            />
+            <div className="mt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded border px-3 py-1 text-xs"
+                onClick={() => setLightboxStarId(null)}
+              >
+                Fechar
+              </button>
+              <button
+                type="button"
+                data-testid="spot-lightbox-delete"
+                className="rounded bg-destructive px-3 py-1 text-xs text-destructive-foreground"
+                onClick={() => {
+                  if (lightboxStarId) {
+                    onRemoveStar(lightboxStarId);
+                    setLightboxStarId(null);
+                  }
+                }}
+              >
+                Deletar spot
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

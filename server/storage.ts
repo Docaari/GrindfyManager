@@ -470,6 +470,8 @@ export interface IStorage {
   // foi resolvida no listSpotsForPurge).
   deleteStarredHand(id: string, userId?: string): Promise<boolean | void>;
   countStarredHandsByTournament(sessionTournamentId: string, userId: string): Promise<number>;
+  // Sprint Spot-Screenshots — cap 10/sessao cross-tournament
+  countStarredHandsBySession(userId: string, sessionId: string): Promise<number>;
 
   // Sprint F2 — Spot Screenshots helpers
   getStarredHandById(id: string): Promise<StarredHand | null>;
@@ -5056,6 +5058,30 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         and(
           eq(starredHands.sessionTournamentId, sessionTournamentId),
           eq(starredHands.userId, userId),
+        ),
+      );
+    return Number(c ?? 0);
+  }
+
+  /**
+   * Sprint Spot-Screenshots — cap 10/sessao cross-tournament.
+   * Conta TODOS os spots do user na sessao (sem filtro de source/status — cap
+   * abrange spots legados de cooldown + screenshots de grind).
+   *
+   * NOTA D6: race condition aceita (overshoot 1). Sem SELECT FOR UPDATE em count.
+   * 2 POSTs simultaneos no 10o spot podem inserir ambos. Documentado em ADR-057.
+   */
+  async countStarredHandsBySession(
+    userId: string,
+    sessionId: string,
+  ): Promise<number> {
+    const [{ count: c }] = await db
+      .select({ count: count() })
+      .from(starredHands)
+      .where(
+        and(
+          eq(starredHands.userId, userId),
+          eq(starredHands.sessionId, sessionId),
         ),
       );
     return Number(c ?? 0);

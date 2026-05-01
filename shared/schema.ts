@@ -2722,6 +2722,9 @@ export const STARRED_HAND_STATUSES = [
   "discarded", // soft delete via DELETE /:id/discard
 ] as const;
 
+// Sprint Spot-Screenshots — captured_during enum (kebab-case)
+export const STARRED_HAND_CAPTURED_DURING = ["grind-live", "cooldown"] as const;
+
 export type AbGameAnswers = {
   aGame: string[];
   bGame: string[];
@@ -2787,6 +2790,13 @@ export const starredHands = pgTable("starred_hands", {
   pastedAt: timestamp("pasted_at"),
   source: varchar("source", { length: 20 }).notNull().default("manual"),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
+  // Sprint Spot-Screenshots — colunas adicionadas pela migration 0019
+  imageKey: varchar("image_key", { length: 255 }),
+  imageMime: varchar("image_mime", { length: 50 }),
+  imageSize: integer("image_size"),
+  imageWidth: integer("image_width"),
+  imageHeight: integer("image_height"),
+  capturedDuring: varchar("captured_during", { length: 20 }).notNull().default("cooldown"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_starred_user_session").on(table.userId, table.sessionId),
@@ -2795,6 +2805,12 @@ export const starredHands = pgTable("starred_hands", {
   index("idx_starred_user_status").on(table.userId, table.status),
   index("idx_starred_expires").on(table.expiresAt),
   index("idx_starred_session_source").on(table.sessionId, table.source),
+  // Sprint Spot-Screenshots — index para cap query (10/sessao)
+  index("idx_starred_user_session_captured").on(
+    table.userId,
+    table.sessionId,
+    table.capturedDuring,
+  ),
 ]);
 
 // -----------------------------------------------------------------------------
@@ -2807,6 +2823,8 @@ export const starredHandSpotSchema = z.enum(STARRED_HAND_SPOTS);
 // Sprint F2 — novos enums Zod
 export const starredHandSourceSchema = z.enum(STARRED_HAND_SOURCES);
 export const starredHandStatusSchema = z.enum(STARRED_HAND_STATUSES);
+// Sprint Spot-Screenshots — captured_during enum schema
+export const starredHandCapturedDuringSchema = z.enum(STARRED_HAND_CAPTURED_DURING);
 
 export const abGameAnswersSchema = z.object({
   aGame: z.array(z.string()),
@@ -2861,6 +2879,13 @@ export const insertStarredHandSchema = z.object({
   pastedAt: z.union([z.string(), z.date()]).optional(),
   source: starredHandSourceSchema.optional(),
   status: starredHandStatusSchema.optional(),
+  // Sprint Spot-Screenshots — campos opcionais (lesson #7).
+  imageKey: z.string().max(255).nullable().optional(),
+  imageMime: z.string().max(50).nullable().optional(),
+  imageSize: z.number().int().nonnegative().nullable().optional(),
+  imageWidth: z.number().int().nonnegative().nullable().optional(),
+  imageHeight: z.number().int().nonnegative().nullable().optional(),
+  capturedDuring: starredHandCapturedDuringSchema.optional(),
 }).strict();
 
 // Sprint F2 — body do PATCH /api/starred-hands/:id/review

@@ -171,6 +171,10 @@ export default function SpotScreenshotPaster(props: SpotScreenshotPasterProps) {
     function handlePaste(e: Event) {
       if (disabledRef.current) return;
 
+      // Sprint Spot-Screenshots (2026-05-01): se SpotPasteHandler (F4) estiver
+      // montado, defere para ele — evita duplicacao de spot por Ctrl+V.
+      if ((globalThis as any).__SPOT_PASTE_HANDLER_F4_ACTIVE__) return;
+
       // Guard activeElement: se input/textarea/contenteditable focado, ignora.
       if (isEditableTarget(document.activeElement)) return;
 

@@ -553,10 +553,7 @@ export function registerStarredHandsRoutes(app: Express): void {
     (req: Request, res: Response) => handleDiscardSpot(req, res),
   );
 
-  app.get(
-    "/api/starred-hands/:id/image",
-    requireAuth,
-    spotImageServeLimiter,
-    (req: Request, res: Response) => handleServeSpotImage(req, res),
-  );
+  // Sprint Spot-Screenshots (2026-05-01): GET /:id/image migrado para
+  // cooldown.ts (handleGetStarredHandImage) com spotImageStorage abstraction.
+  // F2 handler permanece exportado para back-compat de testes existentes.
 }
