@@ -616,15 +616,29 @@ function buildSeries(
 
 interface CreateAutoSnapshotInput {
   userId: string;
-  cooldownLogId: string;
+  /** Sprint Bankroll-3 RF-2: cooldownLogId quando origin='auto-cooldown' */
+  cooldownLogId?: string;
   occurredAt?: Date | string;
+  /**
+   * Sprint Bankroll-Reports-Detail (RF-03): permite outras origens (ex:
+   * 'manual-report' disparado por wallet_transactions.reason='manual_report').
+   * Quando ausente, defaults para 'auto-cooldown' (back-compat).
+   */
+  origin?: "auto-cooldown" | "manual-report" | "manual" | "transfer" | "import";
+  /**
+   * Sprint Bankroll-Reports-Detail (RF-03): sourceRefId customizado (ex:
+   * wallet_transactions.id para manual-report). Quando ausente, usa
+   * cooldownLogId.
+   */
+  sourceRefId?: string | null;
 }
 
 /**
- * Cria snapshot consolidado pos-cooldown.
- * - origin='auto-cooldown' (RF-8 nova coluna).
+ * Cria snapshot consolidado pos-cooldown OU pos-manual-report (Sprint
+ * Bankroll-Reports-Detail RF-03).
+ * - origin: 'auto-cooldown' (default) | 'manual-report' (novo).
  * - source='auto_session' (mantem semantica enum existente).
- * - sourceRefId=cooldownLogId (idempotencia via unique parcial em RF-8).
+ * - sourceRefId=cooldownLogId | tx.id (idempotencia via unique parcial em RF-8).
  * - delta = newAmount - previousAmount (USD consolidado vs ultimo snapshot).
  *
  * Falhas (DB, unique violation, etc) NAO propagam — retorna null + log.
@@ -634,9 +648,12 @@ async function createAutoSnapshot(
   input: CreateAutoSnapshotInput,
 ): Promise<any | null> {
   const { userId, cooldownLogId, occurredAt } = input ?? ({} as CreateAutoSnapshotInput);
+  const origin = input?.origin ?? "auto-cooldown";
+  const sourceRefId = input?.sourceRefId ?? cooldownLogId ?? null;
 
   // Validacao de entrada — sem DB calls.
-  if (!userId || !cooldownLogId) {
+  // sourceRefId obrigatorio para qualquer origem (idempotencia + audit).
+  if (!userId || !sourceRefId) {
     return null;
   }
 
@@ -686,6 +703,11 @@ async function createAutoSnapshot(
     ? occurredAt instanceof Date ? occurredAt : new Date(occurredAt)
     : new Date();
 
+  const noteByOrigin =
+    origin === "manual-report"
+      ? `Snapshot pos-manual-report ${sourceRefId}`
+      : `Auto-snapshot pos-cooldown ${sourceRefId}`;
+
   try {
     const snapshot = await storage.insertBankrollSnapshot({
       userId,
@@ -693,10 +715,10 @@ async function createAutoSnapshot(
       previousAmount: String(previousAmount),
       newAmount: String(totalUSD),
       reason: "manual_adjustment",
-      note: `Auto-snapshot pos-cooldown ${cooldownLogId}`,
+      note: noteByOrigin,
       source: "auto_session",
-      origin: "auto-cooldown",
-      sourceRefId: cooldownLogId,
+      origin,
+      sourceRefId,
       occurredAt: occurred,
     } as any);
 
@@ -707,7 +729,7 @@ async function createAutoSnapshot(
     return snapshot;
   } catch (err: any) {
     if (err?.code === "23505") {
-      console.warn("[bankrollService.createAutoSnapshot] duplicate (idempotency):", cooldownLogId);
+      console.warn("[bankrollService.createAutoSnapshot] duplicate (idempotency):", sourceRefId);
     } else {
       console.error("[bankrollService.createAutoSnapshot] insertBankrollSnapshot falhou:", err?.message);
     }

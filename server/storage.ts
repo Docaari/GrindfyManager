@@ -427,6 +427,9 @@ export interface IStorage {
   updateWalletBalance(walletId: string, newBalance: string | number, tx?: any): Promise<void>;
   createWalletTransaction(data: InsertWalletTransaction & { id?: string }, tx?: any): Promise<WalletTransaction>;
   listWalletTransactions(userId: string, walletId: string, filters?: any, tx?: any): Promise<WalletTransaction[]>;
+  // Sprint Bankroll-Reports-Detail (RF-05, RF-08): retorna wallet_transactions
+  // de TODAS as wallets do user (history unificado + dashboard manual_reports).
+  listWalletTransactionsByUser(userId: string, filters?: { from?: Date | string; to?: Date | string; reason?: string[]; limit?: number }, tx?: any): Promise<WalletTransaction[]>;
   getLastWalletTransaction(walletId: string, tx?: any): Promise<WalletTransaction | null>;
   getActiveWalletsByUser(userId: string, tx?: any): Promise<Wallet[]>;
   // ADR-040 Sprint Session-End Reconciliation
@@ -4227,6 +4230,36 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .orderBy(desc(walletTransactions.occurredAt));
     if (filters.limit != null) query = query.limit(filters.limit);
     if (filters.offset != null) query = query.offset(filters.offset);
+    return await query;
+  }
+
+  // Sprint Bankroll-Reports-Detail (RF-05, RF-08): wallet_transactions de
+  // TODAS wallets do user. Sem walletId filter — usado por history unificado +
+  // dashboard ROI calc (manual_reports).
+  async listWalletTransactionsByUser(
+    userId: string,
+    filters: { from?: Date | string; to?: Date | string; reason?: string[]; limit?: number } = {},
+    tx?: any,
+  ): Promise<WalletTransaction[]> {
+    const runner = tx ?? db;
+    const conditions: any[] = [eq(walletTransactions.userId, userId)];
+    if (filters.from) {
+      const d = filters.from instanceof Date ? filters.from : new Date(filters.from);
+      conditions.push(gte(walletTransactions.occurredAt, d));
+    }
+    if (filters.to) {
+      const d = filters.to instanceof Date ? filters.to : new Date(filters.to);
+      conditions.push(lte(walletTransactions.occurredAt, d));
+    }
+    if (filters.reason && Array.isArray(filters.reason) && filters.reason.length > 0) {
+      conditions.push(inArray(walletTransactions.reason, filters.reason));
+    }
+    let query: any = runner
+      .select()
+      .from(walletTransactions)
+      .where(and(...conditions))
+      .orderBy(desc(walletTransactions.occurredAt));
+    if (filters.limit != null) query = query.limit(filters.limit);
     return await query;
   }
 

@@ -2341,12 +2341,15 @@ const BANKROLL_SOURCE_ENUM = z.enum(["manual", "auto_session", "auto_import"]);
 
 // Sprint Bankroll-3 RF-8: SNAPSHOT_ORIGINS enum (re-declarado aqui para uso
 // no schema; tambem exportado mais abaixo junto com walletTransfers).
+// Sprint Bankroll-Reports-Detail (RF-04): adiciona 'manual-report' (origin de
+// snapshot disparado por manual_report wallet_transaction; ver ADR-069).
 const SNAPSHOT_ORIGIN_ENUM = z.enum([
   "manual",
   "auto-cooldown",
   "transfer",
   "import",
   "migration_v1",
+  "manual-report",
 ]);
 
 export const insertBankrollSnapshotSchema = z.object({

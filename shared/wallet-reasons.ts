@@ -10,6 +10,8 @@ export const WALLET_TX_REASONS = [
   "session_result",
   "rakeback",
   "manual_adjustment",
+  // Sprint Bankroll-Reports-Detail (RF-01) — manual report standalone (sem sessionId)
+  "manual_report",
   // P1 — Sprint Bankroll-2 (transferencia, fees) — reservados schema-only
   "transfer_in",
   "transfer_out",
@@ -36,6 +38,8 @@ export const WALLET_TX_REASONS_P0 = [
   "session_result",
   "rakeback",
   "manual_adjustment",
+  // Sprint Bankroll-Reports-Detail (RF-01)
+  "manual_report",
 ] as const;
 
 export type WalletTxReasonP0 = typeof WALLET_TX_REASONS_P0[number];
@@ -52,12 +56,49 @@ export type WalletTxSource = typeof WALLET_TX_SOURCES[number];
 export const WalletTxSourceSchema = z.enum(WALLET_TX_SOURCES);
 
 // =============================================================================
+// Sprint Bankroll-Reports-Detail (RF-01) — Helper para reasons standalone (D1)
+// =============================================================================
+
+/**
+ * Retorna true para reasons que NAO se vinculam a sessao (sessionId proibido).
+ * Usado por validacao mutuamente exclusiva (D2) e por Coach tool para distinguir
+ * "voce reportou perda externa" vs "voce perdeu na sessao registrada".
+ */
+export function isStandaloneReason(reason: string): boolean {
+  return reason === "manual_report";
+}
+
+/**
+ * Mapa de labels PT-BR para reasons (P0 + manual_report). UI consome direto
+ * (chips, badges, history entries). Mantem labels curtos (<=20 chars).
+ */
+export const WALLET_TX_REASON_LABELS_PT: Record<string, string> = {
+  deposit: "Deposito",
+  withdrawal: "Saque",
+  session_result: "Resultado de sessao",
+  rakeback: "Rakeback",
+  manual_adjustment: "Ajuste manual",
+  manual_report: "Report manual",
+  transfer_in: "Entrada de transferencia",
+  transfer_out: "Saida de transferencia",
+  fee: "Taxa",
+  fx_adjustment: "Ajuste cambial",
+  transfer_fee: "Taxa de transferencia",
+  staking_payout: "Pagamento staking",
+  staking_buyin: "Buy-in staking",
+  makeup_clear: "Limpeza de makeup",
+};
+
+// =============================================================================
 // Sprint Bankroll-3 — Reportar rakeback (RF-01, RF-02)
 //
 // WalletTxBodyRefinedSchema: schema combinado para body do POST
 // /api/wallets/:id/transactions com superRefine que aplica regras
 // cross-field (ex: reason='rakeback' exige direction='in').
 // Reusado entre router e tests.
+//
+// Sprint Bankroll-Reports-Detail (RF-01, D2): regras adicionais
+// para manual_report (proibe sessionId) e session_result (exige sessionId).
 // =============================================================================
 
 export const WalletTxBodyRefinedSchema = z
@@ -82,6 +123,22 @@ export const WalletTxBodyRefinedSchema = z
         code: z.ZodIssueCode.custom,
         path: ["direction"],
         message: "invalid_rakeback_direction: rakeback so aceita credito (entrada)",
+      });
+    }
+    // Sprint Bankroll-Reports-Detail (D2): session_result exige sessionId.
+    if (data.reason === "session_result" && (data.sessionId == null || data.sessionId === "")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sessionId"],
+        message: "session_id_required: sessionId obrigatorio quando reason=session_result",
+      });
+    }
+    // Sprint Bankroll-Reports-Detail (D2): manual_report proibe sessionId.
+    if (data.reason === "manual_report" && data.sessionId != null && data.sessionId !== "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sessionId"],
+        message: "manual_report_no_session: manual_report nao aceita sessionId — use session_result",
       });
     }
   });
