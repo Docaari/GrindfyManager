@@ -102,7 +102,7 @@ describe('SessionSummaryModal v2 — sessionId presente (RF-08, fix bug P3)', ()
     apiRequestMock.mockResolvedValue({ id: 'cd_1', mode: 'quick' });
     render(wrap(<SessionSummaryModal {...baseProps} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-quick'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown-quick'));
 
     await waitFor(() => {
       expect(apiRequestMock).toHaveBeenCalled();
@@ -117,7 +117,7 @@ describe('SessionSummaryModal v2 — sessionId presente (RF-08, fix bug P3)', ()
     apiRequestMock.mockResolvedValue({ id: 'cd_2', mode: 'full' });
     render(wrap(<SessionSummaryModal {...baseProps} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-full'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown'));
 
     await waitFor(() => {
       expect(apiRequestMock).toHaveBeenCalled();
@@ -133,7 +133,7 @@ describe('SessionSummaryModal v2 — sessionId ausente -> early return + toast (
     const noSessionSummary = { ...baseSummary, sessionId: undefined };
     render(wrap(<SessionSummaryModal {...baseProps} summaryData={noSessionSummary as any} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-quick'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown-quick'));
 
     // Pequeno delay para garantir que async nao chamou
     await new Promise((r) => setTimeout(r, 10));
@@ -145,7 +145,7 @@ describe('SessionSummaryModal v2 — sessionId ausente -> early return + toast (
     const noSessionSummary = { ...baseSummary, sessionId: undefined };
     render(wrap(<SessionSummaryModal {...baseProps} summaryData={noSessionSummary as any} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-quick'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown-quick'));
 
     await waitFor(() => {
       expect(toastMock).toHaveBeenCalled();
@@ -172,7 +172,7 @@ describe('SessionSummaryModal v2 — RF-12 erros do cooldown-logs mapeados em PT
     );
     render(wrap(<SessionSummaryModal {...baseProps} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-quick'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown-quick'));
 
     await waitFor(() => {
       expect(toastMock).toHaveBeenCalled();
@@ -185,7 +185,7 @@ describe('SessionSummaryModal v2 — RF-12 erros do cooldown-logs mapeados em PT
     apiRequestMock.mockRejectedValue(makeFetchError(401, { message: 'unauthorized' }));
     render(wrap(<SessionSummaryModal {...baseProps} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-full'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown'));
 
     await waitFor(() => {
       expect(toastMock).toHaveBeenCalled();
@@ -207,7 +207,7 @@ describe('SessionSummaryModal v2 — RF-12 erros do cooldown-logs mapeados em PT
     apiRequestMock.mockRejectedValue(makeFetchError(404, { message: 'not found' }));
     render(wrap(<SessionSummaryModal {...baseProps} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-quick'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown-quick'));
 
     await waitFor(() => {
       expect(toastMock).toHaveBeenCalled();
@@ -222,7 +222,7 @@ describe('SessionSummaryModal v2 — RF-12 erros do cooldown-logs mapeados em PT
     );
     render(wrap(<SessionSummaryModal {...baseProps} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-full'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown'));
 
     await waitFor(() => {
       expect(toastMock).toHaveBeenCalled();
@@ -235,7 +235,7 @@ describe('SessionSummaryModal v2 — RF-12 erros do cooldown-logs mapeados em PT
     apiRequestMock.mockRejectedValue(makeFetchError(429, { message: 'rate limited' }));
     render(wrap(<SessionSummaryModal {...baseProps} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-quick'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown-quick'));
 
     await waitFor(() => {
       expect(toastMock).toHaveBeenCalled();
@@ -248,7 +248,7 @@ describe('SessionSummaryModal v2 — RF-12 erros do cooldown-logs mapeados em PT
     apiRequestMock.mockRejectedValue(makeFetchError(500, { message: 'internal' }));
     render(wrap(<SessionSummaryModal {...baseProps} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-quick'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown-quick'));
 
     await waitFor(() => {
       expect(toastMock).toHaveBeenCalled();
@@ -261,7 +261,7 @@ describe('SessionSummaryModal v2 — RF-12 erros do cooldown-logs mapeados em PT
     apiRequestMock.mockRejectedValue(new Error('Failed to fetch'));
     render(wrap(<SessionSummaryModal {...baseProps} />));
 
-    fireEvent.click(screen.getByTestId('summary-modal-cta-quick'));
+    fireEvent.click(screen.getByTestId('cta-start-cooldown-quick'));
 
     await waitFor(() => {
       expect(toastMock).toHaveBeenCalled();
@@ -292,11 +292,11 @@ describe('SessionSummaryModal v2 — cooldownAlreadyDone=true mostra apenas Fech
     const completed = { ...baseSummary, cooldownCompleted: true } as any;
     render(wrap(<SessionSummaryModal {...baseProps} summaryData={completed} />));
 
-    expect(screen.queryByTestId('summary-modal-cta-quick')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('summary-modal-cta-full')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('summary-modal-cta-skip')).toBeInTheDocument();
+    expect(screen.queryByTestId('cta-start-cooldown-quick')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cta-start-cooldown')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cta-finalize-session')).toBeInTheDocument();
     // Botao skip vira "Fechar" quando cooldownAlreadyDone
-    const skipBtn = screen.getByTestId('summary-modal-cta-skip');
+    const skipBtn = screen.getByTestId('cta-finalize-session');
     expect(skipBtn.textContent ?? '').toMatch(/fechar/i);
   });
 });

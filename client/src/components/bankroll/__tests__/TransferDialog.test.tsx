@@ -118,7 +118,9 @@ describe('TransferDialog — RF-4 UI', () => {
     await waitFor(() => {
       expect(apiRequestMock).toHaveBeenCalled();
       const args = apiRequestMock.mock.calls[0];
-      const url = String(args[0] ?? args[1] ?? '');
+      // reviewer R2: oracle was checking method instead of URL
+      // apiRequest signature: (method, url, body) -> URL is args[1]
+      const url = String(args[1] ?? '');
       expect(url).toContain('/api/wallets/transfers');
     });
   });

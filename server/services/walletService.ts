@@ -881,7 +881,12 @@ async function createTransfer(
     const toUsdAmt = toUsd(amountTo, toWallet.nativeCurrency);
 
     const fromBalance = parseDecimal(fromWallet.balance);
-    if (fromBalance < amountFrom) {
+    // Round 3 FIX-1: quando fee paga da fromWallet, validar saldo total
+    // (amountFrom + feeAmount) para evitar balance negativo apos debito unico.
+    const feeFromSameWallet =
+      feeAmountSet && feeAmount > 0 && input.feeWalletId === input.fromWalletId;
+    const requiredFromBalance = feeFromSameWallet ? amountFrom + feeAmount : amountFrom;
+    if (fromBalance < requiredFromBalance) {
       throw makeError("INSUFFICIENT_BALANCE", 422, "INSUFFICIENT_BALANCE");
     }
 
@@ -913,26 +918,36 @@ async function createTransfer(
     // transfer_out
     // CRIT-4: usdAmount = USD real (convertido via fxResolver), nao valor nativo.
     // fxRateUSDPerNative = nativeAmount / usdAmount, padrao QW-1 (ADR-033).
-    const fromFxUsdPerNative = fromUsd > 0 ? amountFrom / fromUsd : 1;
+    //
+    // Round 3 FIX-1: quando fee paga da fromWallet, soma feeAmount ao debito
+    // do transfer_out (debito unico, sem 3a tx). Garante que ultima tx.newNativeBalance
+    // bate com wallets.balance final no DB (audit trail consistente).
+    // Spec sprint-bankroll-3 RF-2 linha 294 + transferService.test.ts:401 ('length===2').
+    const fromOutNative = feeFromSameWallet ? amountFrom + feeAmount : amountFrom;
+    const fromOutUsd = feeFromSameWallet
+      ? fromUsd + toUsd(feeAmount, input.feeCurrency!)
+      : fromUsd;
+    const fromFxUsdPerNative = fromOutUsd > 0 ? fromOutNative / fromOutUsd : 1;
+    const newFromBalance = fromBalance - fromOutNative;
     const txOut = await tx.createWalletTransaction({
       walletId: fromWallet.id,
       userId,
       occurredAt: now,
       effectiveAt: now,
       direction: "out",
-      nativeAmount: String(amountFrom),
+      nativeAmount: String(fromOutNative),
       nativeCurrency: fromWallet.nativeCurrency,
       fxRateUSDPerNative: String(fromFxUsdPerNative),
-      usdAmount: String(fromUsd),
+      usdAmount: String(fromOutUsd),
       previousNativeBalance: String(fromBalance),
-      newNativeBalance: String(fromBalance - amountFrom),
+      newNativeBalance: String(newFromBalance),
       reason: "transfer_out",
       note: input.note ?? null,
       transferGroupId,
       source: "manual",
     });
     transactions.push(txOut);
-    await tx.updateWalletBalance(fromWallet.id, fromBalance - amountFrom);
+    await tx.updateWalletBalance(fromWallet.id, newFromBalance);
 
     // transfer_in
     // CRIT-4: usdAmount = USD real do toCurrency (preserva paridade FX no audit).
@@ -961,12 +976,10 @@ async function createTransfer(
     // Fee opcional
     if (feeAmountSet && feeAmount > 0) {
       if (input.feeWalletId === input.fromWalletId) {
-        // Spec test (transferService.test.ts:401): "fee em fromWallet:
-        // nao cria 3a tx (debito unico)". Apenas decrementa balance.
-        // CRIT-MED-4 do reviewer pediu criar 3a tx — contraria o teste,
-        // mantemos o contrato existente.
-        const newFromBalance = fromBalance - amountFrom - feeAmount;
-        await tx.updateWalletBalance(fromWallet.id, newFromBalance);
+        // Round 3 FIX-1: fee na fromWallet ja foi incorporada no transfer_out
+        // acima (debito unico). Nada a fazer aqui — wallets.balance ja foi
+        // atualizado em sync com tx.newNativeBalance (audit consistente).
+        // Spec test (transferService.test.ts:401): length===2 preservado.
       } else if (input.feeWalletId === input.toWalletId) {
         // Fee na wallet to — cria 3a tx.
         const tofb = parseDecimal(toWallet.balance) + amountTo;
