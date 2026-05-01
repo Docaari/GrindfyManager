@@ -10,6 +10,17 @@ import React, { useMemo, useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+function toNumberSafe(v: string | number | null | undefined): number {
+  if (v == null) return 0;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatBalance(n: number, currency: string): string {
+  if (!Number.isFinite(n)) return `0.00 ${currency}`;
+  return `${n.toFixed(2)} ${currency}`;
+}
+
 export interface TransferDialogWallet {
   id: string;
   name: string;
@@ -49,7 +60,29 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
     fromWallet && toWallet && fromWallet.nativeCurrency !== toWallet.nativeCurrency
   );
 
+  // Implementer Round UX #5: helpers para preview destino + saldo origem.
+  const fromBalanceNum = fromWallet ? toNumberSafe(fromWallet.balance) : 0;
+  const amountFromNum = toNumberSafe(amountFrom);
+  const fxRateNum = toNumberSafe(fxRate);
+  const exceedsBalance =
+    amountFromNum > 0 && fromBalanceNum > 0 && amountFromNum > fromBalanceNum;
+  const previewDestination = (() => {
+    if (!fromWallet || !toWallet) return null;
+    if (amountFromNum <= 0) return null;
+    if (isCrossCurrency) {
+      if (fxRateNum <= 0) return null;
+      return amountFromNum * fxRateNum;
+    }
+    return amountFromNum;
+  })();
+
   if (!open) return null;
+
+  function handleMaxClick() {
+    if (!fromWallet) return;
+    const balance = toNumberSafe(fromWallet.balance);
+    if (balance > 0) setAmountFrom(String(balance));
+  }
 
   async function handleSubmit() {
     setError(null);
@@ -108,7 +141,7 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
           >
             {wallets.map((w) => (
               <option key={w.id} value={w.id}>
-                {w.name} ({w.nativeCurrency})
+                {w.name} ({w.nativeCurrency}) — {formatBalance(toNumberSafe(w.balance), w.nativeCurrency)}
               </option>
             ))}
           </select>
@@ -123,21 +156,42 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
           >
             {wallets.map((w) => (
               <option key={w.id} value={w.id}>
-                {w.name} ({w.nativeCurrency})
+                {w.name} ({w.nativeCurrency}) — {formatBalance(toNumberSafe(w.balance), w.nativeCurrency)}
               </option>
             ))}
           </select>
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-sm">Valor (origem)</span>
-          <input
-            data-testid="transfer-amount-input"
-            type="number"
-            step="0.01"
-            value={amountFrom}
-            onChange={(e) => setAmountFrom(e.target.value)}
-            className="bg-zinc-800 rounded px-2 py-1"
-          />
+          <div className="flex gap-2">
+            <input
+              data-testid="transfer-amount-input"
+              type="number"
+              step="0.01"
+              value={amountFrom}
+              onChange={(e) => setAmountFrom(e.target.value)}
+              className="bg-zinc-800 rounded px-2 py-1 flex-1"
+            />
+            <button
+              type="button"
+              onClick={handleMaxClick}
+              disabled={!fromWallet || fromBalanceNum <= 0}
+              data-testid="transfer-amount-max-btn"
+              className="px-2 py-1 rounded bg-zinc-700 text-xs disabled:opacity-50"
+              title="Preencher com o saldo total disponivel"
+            >
+              Max
+            </button>
+          </div>
+          {fromWallet && (
+            <span
+              data-testid="transfer-from-balance-hint"
+              className={`text-xs ${exceedsBalance ? "text-red-400" : "text-zinc-400"}`}
+            >
+              Saldo disponivel: {formatBalance(fromBalanceNum, fromWallet.nativeCurrency)}
+              {exceedsBalance ? " — valor maior que saldo" : ""}
+            </span>
+          )}
         </label>
         {isCrossCurrency && (
           <label className="flex flex-col gap-1">
@@ -151,6 +205,14 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
               className="bg-zinc-800 rounded px-2 py-1"
             />
           </label>
+        )}
+        {previewDestination != null && toWallet && (
+          <div
+            data-testid="transfer-destination-preview"
+            className="text-xs text-zinc-300 bg-zinc-800/40 rounded px-2 py-1.5"
+          >
+            Destino recebe: <strong>{formatBalance(previewDestination, toWallet.nativeCurrency)}</strong>
+          </div>
         )}
         {error?.code === "FX_DIFF_HIGH" && (
           <div data-testid="transfer-fx-warning" className="bg-amber-900/30 border border-amber-500 rounded p-3 text-sm">

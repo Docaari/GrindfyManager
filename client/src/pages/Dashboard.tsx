@@ -32,6 +32,7 @@ import type { DashboardFiltersState } from '@/components/dashboard/types';
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
 import { DashboardMetrics } from '@/components/dashboard/DashboardMetrics';
 import { BankrollWidget } from '@/components/bankroll/BankrollWidget';
+import { RoiByPlatformCard } from '@/components/dashboard/RoiByPlatformCard';
 import { TicketsWidget } from '@/components/dashboard/TicketsWidget';
 import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
 import { TabEvolution } from '@/components/dashboard/TabEvolution';
@@ -472,6 +473,13 @@ export default function Dashboard() {
       <div className="mb-4" data-testid="dashboard-bankroll-widget">
         <BankrollWidget />
       </div>
+
+      {/* ROI por Plataforma (RF-7 wiring) — visualizacao consolidada por site */}
+      {user?.userPlatformId && (
+        <div className="mb-4" data-testid="dashboard-roi-by-platform">
+          <RoiByPlatformCard userId={user.userPlatformId} />
+        </div>
+      )}
 
       {/* Tickets Widget — Sprint Tickets-1 (RF-04) */}
       <div className="mb-4" data-testid="dashboard-tickets-widget">

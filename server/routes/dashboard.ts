@@ -37,9 +37,14 @@ export async function handleGetDashboardRoiByPlatform(
       }
       limit = Math.floor(parsed);
     }
+    // Implementer Round UX #3: opt-in delta vs periodo anterior.
+    const compareRaw = req?.query?.compareWithPrevious;
+    const compareWithPrevious =
+      compareRaw === "true" || compareRaw === "1" || compareRaw === true;
     const result = await dashboardService.getRoiByPlatform(userId, {
       period: period as any,
       limit,
+      compareWithPrevious,
     });
     res.status(200).json(result);
   } catch (err) {

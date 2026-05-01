@@ -17,6 +17,9 @@ export interface RoiPlatformRow {
   investedUSD: number;
   profitUSD: number;
   roiPct: number;
+  /** Delta opt-in via ?compareWithPrevious=true (Implementer Round UX #3). */
+  previousProfitUSD?: number;
+  previousRoiPct?: number;
 }
 
 export interface RoiByPlatformCardProps {
@@ -47,10 +50,21 @@ const TONE_COLORS: Record<"positive" | "negative" | "neutral", string> = {
 export const RoiByPlatformCard: React.FC<RoiByPlatformCardProps> = ({ userId }) => {
   const [period, setPeriod] = useState<Period>("30d");
 
-  const { data, isLoading } = useQuery<{ period: string; generatedAt: string; platforms: RoiPlatformRow[] }>({
-    queryKey: ["/api/dashboard/roi-by-platform", userId, period],
+  // Implementer Round UX #3: compareWithPrevious habilitado por padrao (exceto 'all').
+  // Servidor ignora a flag para period='all' (sem janela anterior comparavel).
+  const compareWithPrevious = period !== "all";
+  const { data, isLoading } = useQuery<{
+    period: string;
+    generatedAt: string;
+    platforms: RoiPlatformRow[];
+    hasPreviousComparison?: boolean;
+  }>({
+    queryKey: ["/api/dashboard/roi-by-platform", userId, period, compareWithPrevious],
     queryFn: async () =>
-      await apiRequest("GET", `/api/dashboard/roi-by-platform?period=${period}&limit=10`),
+      await apiRequest(
+        "GET",
+        `/api/dashboard/roi-by-platform?period=${period}&limit=10${compareWithPrevious ? "&compareWithPrevious=true" : ""}`,
+      ),
     enabled: !!userId,
     staleTime: 5 * 60 * 1000,
   });
@@ -98,12 +112,24 @@ export const RoiByPlatformCard: React.FC<RoiByPlatformCardProps> = ({ userId }) 
               <th className="text-right py-1">Investido</th>
               <th className="text-right py-1">Profit</th>
               <th className="text-right py-1">ROI%</th>
+              {data?.hasPreviousComparison && (
+                <th
+                  className="text-right py-1"
+                  title={`vs ${period === "7d" ? "7 dias anteriores" : period === "30d" ? "30 dias anteriores" : period === "90d" ? "90 dias anteriores" : "180 dias anteriores"}`}
+                >
+                  Delta
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {platforms.map((p) => {
               const tone = toneFor(p.profitUSD);
               const color = TONE_COLORS[tone];
+              const delta = (p.profitUSD ?? 0) - (p.previousProfitUSD ?? 0);
+              const deltaTone = toneFor(delta);
+              const deltaColor = TONE_COLORS[deltaTone];
+              const arrow = delta > 0 ? "↑" : delta < 0 ? "↓" : "·";
               return (
                 <tr key={p.site} data-testid={`roi-row-${p.site}`} data-tone={tone} className="border-t border-zinc-800">
                   <td className="py-1 text-zinc-100">{p.site}</td>
@@ -111,6 +137,19 @@ export const RoiByPlatformCard: React.FC<RoiByPlatformCardProps> = ({ userId }) 
                   <td className="py-1 text-right text-zinc-200">{formatUsd(p.investedUSD)}</td>
                   <td className={`py-1 text-right ${color}`}>{formatUsd(p.profitUSD)}</td>
                   <td className={`py-1 text-right ${color}`}>{p.roiPct.toFixed(2)}%</td>
+                  {data?.hasPreviousComparison && (
+                    <td
+                      data-testid={`roi-delta-${p.site}`}
+                      data-delta-tone={deltaTone}
+                      className={`py-1 text-right ${deltaColor}`}
+                      title={`Periodo anterior: ${formatUsd(p.previousProfitUSD ?? 0)}`}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        <span aria-hidden="true">{arrow}</span>
+                        <span>{formatUsd(delta)}</span>
+                      </span>
+                    </td>
+                  )}
                 </tr>
               );
             })}

@@ -104,7 +104,7 @@ import {
   type InsertSessionWalletSnapshot,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, and, gte, lte, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
+import { eq, desc, asc, and, gte, lte, lt, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { normalizeTournamentTypePayload } from "./storage/normalizeTournamentTypePayload";
 
@@ -525,7 +525,7 @@ export interface IStorage {
   // Sprint Bankroll-3 RF-7 — ROI by platform
   getRoiByPlatform(
     userId: string,
-    opts?: { sinceDate?: Date | null; limit?: number },
+    opts?: { sinceDate?: Date | null; untilDate?: Date | null; limit?: number },
   ): Promise<Array<{
     site: string;
     sessionsCount: number;
@@ -5512,7 +5512,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   async getRoiByPlatform(
     userId: string,
-    opts: { sinceDate?: Date | null; limit?: number } = {},
+    opts: { sinceDate?: Date | null; untilDate?: Date | null; limit?: number } = {},
   ): Promise<Array<{
     site: string;
     sessionsCount: number;
@@ -5522,15 +5522,20 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }>> {
     const limit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
     const sinceDate = opts.sinceDate ?? null;
+    const untilDate = opts.untilDate ?? null;
 
     // Aggregate session_tournaments JOIN grind_sessions on sessionId, filter
-    // status='completed' (and completedAt >= sinceDate when set).
+    // status='completed' (and completedAt >= sinceDate when set, < untilDate
+    // for previous-period window — Implementer Round UX #3).
     const conditions: any[] = [
       eq(sessionTournaments.userId, userId),
       eq(grindSessions.status, "completed"),
     ];
     if (sinceDate) {
       conditions.push(gte(grindSessions.date, sinceDate));
+    }
+    if (untilDate) {
+      conditions.push(lt(grindSessions.date, untilDate));
     }
 
     const rows = await db
