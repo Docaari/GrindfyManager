@@ -137,11 +137,13 @@ export function SessionHistoryUnified({ entries, onViewBankrollDetail }: Props) 
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 {isManual ? (
-                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-secondary text-secondary-foreground">
+                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
                     Report manual
                   </span>
                 ) : (
-                  <span className="text-xs text-muted-foreground">Sessao</span>
+                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                    Sessao
+                  </span>
                 )}
                 <span className="text-xs text-muted-foreground">
                   {new Date(entry.occurredAt).toLocaleString("pt-BR")}

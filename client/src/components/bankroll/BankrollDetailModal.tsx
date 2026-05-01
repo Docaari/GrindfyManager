@@ -15,6 +15,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { formatUsdSigned, signOf } from "@/lib/bankrollReportsFormat";
 
@@ -174,10 +175,20 @@ export function BankrollDetailModal({ open, onClose, entry }: Props) {
         {!isLoading && data?.empty && (
           <div
             data-testid="bankroll-detail-modal-empty"
-            className="py-8 text-center space-y-2"
+            className="py-8 text-center space-y-3"
           >
             <p className="text-sm font-medium">Snapshot indisponivel — saldo registrado retroativamente</p>
             <p className="text-xs text-muted-foreground">Verifique extrato bancario manualmente</p>
+            <div className="flex justify-center">
+              <Link
+                href="/bankroll"
+                data-testid="bankroll-detail-modal-empty-cta"
+                onClick={onClose}
+                className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded border hover:bg-accent transition-colors"
+              >
+                Reportar saldo agora
+              </Link>
+            </div>
           </div>
         )}
 

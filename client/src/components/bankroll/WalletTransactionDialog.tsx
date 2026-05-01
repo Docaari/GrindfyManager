@@ -112,6 +112,20 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
     return { deltaUSD, newTotalUSD, pctChange };
   }, [amount, direction, consolidated, wallet.id]);
 
+  // QW-3 (R3): paridade com modo movement — impacto USD consolidado em modo balance.
+  // Usa balanceDelta.absDelta + direction para derivar delta nativo signed.
+  const consolidatedImpactBalance = useMemo(() => {
+    if (balanceDelta.sign !== "positive" && balanceDelta.sign !== "negative") return null;
+    const fxRate = consolidated?.byWallet?.find((w: any) => w.walletId === wallet.id)?.fxRateUSDPerNative;
+    const totalUSD = consolidated?.totalUSD ? parseFloat(consolidated.totalUSD) : null;
+    if (!fxRate || !totalUSD) return null;
+    const signedDeltaNative = balanceDelta.direction === "in" ? balanceDelta.absDelta : -balanceDelta.absDelta;
+    const deltaUSD = signedDeltaNative / parseFloat(String(fxRate));
+    const newTotalUSD = totalUSD + deltaUSD;
+    const pctChange = totalUSD > 0 ? ((deltaUSD / totalUSD) * 100) : 0;
+    return { deltaUSD, newTotalUSD, pctChange };
+  }, [balanceDelta, consolidated, wallet.id]);
+
   if (!open) return null;
 
   function handleModeChange(next: Mode) {
@@ -119,7 +133,9 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
     setError(null);
     setBalanceMismatch(null);
     if (next === "balance") {
-      setNewBalanceInput(wallet.balance);
+      // QW-1 (R3): limpar input para evitar atrito de "apagar antes de digitar"
+      // e edge case de digitar valor identico ao saldo (delta zero silencioso).
+      setNewBalanceInput("");
       setKnownBalance(parseFloat(wallet.balance));
       // Sprint Bankroll-Reports-Detail (RF-09): em modo balance, reason eh
       // derivado da prop sessionId (presente -> session_result; ausente ->
@@ -333,6 +349,8 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
               step="0.01"
               value={newBalanceInput}
               onChange={(e) => setNewBalanceInput(e.target.value)}
+              autoFocus
+              onFocus={(e) => e.currentTarget.select()}
               className="w-full rounded border px-3 py-2 bg-background"
               placeholder="0.00"
             />
@@ -353,6 +371,20 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
               {balanceDelta.sign === "zero" && <span>Saldo igual ao atual</span>}
               {balanceDelta.sign === "invalid" && <span>Informe o saldo</span>}
             </div>
+            {wallet.nativeCurrency !== "USD" && consolidatedImpactBalance && (
+              <div
+                data-testid="wallet-tx-preview-consolidated-impact-balance"
+                className="text-xs text-muted-foreground bg-accent rounded px-3 py-2"
+              >
+                Impacto banca consolidada: {consolidatedImpactBalance.deltaUSD >= 0 ? "+" : ""}
+                {formatPreview(Math.abs(consolidatedImpactBalance.deltaUSD), "USD")}
+                {" -> "}
+                {formatPreview(consolidatedImpactBalance.newTotalUSD, "USD")}
+                {" "}
+                ({consolidatedImpactBalance.pctChange >= 0 ? "+" : ""}
+                {consolidatedImpactBalance.pctChange.toFixed(1)}%)
+              </div>
+            )}
           </div>
         )}
 
@@ -410,6 +442,11 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
             onChange={(e) => setOccurredAt(e.target.value)}
             className="w-full rounded border px-3 py-2 bg-background"
           />
+          {Date.now() - new Date(occurredAt).getTime() > 86_400_000 && (
+            <div data-testid="wallet-tx-occurred-at-warning" className="text-xs text-amber-500 mt-1">
+              Data retroativa (&gt;24h) — snapshots Antes/Depois podem ficar indisponiveis no detalhamento.
+            </div>
+          )}
         </div>
 
         <div>
