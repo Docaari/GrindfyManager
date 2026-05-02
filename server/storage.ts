@@ -4517,6 +4517,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       addOnTaken: !!(r.add_on_taken ?? r.addOnTaken),
       addOnCost: parseFloat(String(r.add_on_cost ?? r.addOnCost ?? "0")) || 0,
       status: r.status,
+      // RF-06: ticket bypass — buy-in efetivo = 0 quando entered_via_satellite=true.
+      enteredViaSatellite: !!(r.entered_via_satellite ?? r.enteredViaSatellite),
+      consumedTicketId: r.consumed_ticket_id ?? r.consumedTicketId ?? null,
     }));
 
     const rawRates = (settings as any)?.exchangeRates;

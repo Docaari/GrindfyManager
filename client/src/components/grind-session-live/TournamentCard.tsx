@@ -17,6 +17,8 @@ import {
 } from './helpers';
 import { shouldShowBountyField } from './result-dialog-helpers';
 import type { RegistrationData } from './types';
+import { SatelliteResultDialog } from './SatelliteResultDialog';
+import { RegisterPaymentDialog, useTicketMatchesForTournament } from './RegisterPaymentDialog';
 
 // Reg deadline = start + lateRegMinutes. Card display ordena por reg, mostra
 // reg como tempo principal; start vai como subtitulo (inicio HH:MM).
@@ -59,6 +61,8 @@ interface TournamentCardUpcomingProps {
   tournament: any;
   registered: any[];
   onRegister: (id: string) => void;
+  // Sprint Tickets-2 (RF-05) — registro com ticket. id = id do session_tournament/planned, ticketId = ticket a consumir apos register.
+  onRegisterWithTicket?: (id: string, ticketId: string) => void;
   onEdit: (tournament: any) => void;
   onDelete: (id: string) => void;
   queryClient: any;
@@ -99,6 +103,7 @@ function RegisteredCard({
 }: TournamentCardRegisteredProps) {
   const guaranteedValue = getGuaranteedValue(tournament);
   const [showResultDialog, setShowResultDialog] = useState(false);
+  const isSatellite = tournament?.type === 'Satellite';
   const currency = getCurrencyForSite(tournament.site || '');
   const addOnState = getAddOnButtonState(tournament, updateIsPending);
   const regDeadlineLabel = getRegDeadlineLabel(tournament.time, tournament.lateRegMinutes);
@@ -308,7 +313,17 @@ function RegisteredCard({
         </div>
       </div>
 
-      {/* Item 3 & 4: Result dialog with currency-aware fields */}
+      {/* Sprint Tickets-1 (RF-02) — Satellite usa dialog dedicado com 3 outcomes (ticket/cash/nopass) */}
+      {isSatellite && (
+        <SatelliteResultDialog
+          tournament={tournament}
+          open={showResultDialog}
+          onOpenChange={setShowResultDialog}
+        />
+      )}
+
+      {/* Item 3 & 4: Result dialog with currency-aware fields (Vanilla/PKO/Mystery/etc — nao Satellite) */}
+      {!isSatellite && (
       <Dialog open={showResultDialog} onOpenChange={setShowResultDialog}>
         <DialogContent className="bg-gray-900 border border-gray-700 text-white max-w-sm">
           <DialogHeader>
@@ -413,6 +428,7 @@ function RegisteredCard({
           </div>
         </DialogContent>
       </Dialog>
+      )}
 
       {index < totalCount - 1 && <div className="h-px bg-blue-600/30 my-1" />}
     </div>
@@ -421,11 +437,22 @@ function RegisteredCard({
 
 function UpcomingCard({
   tournament, registered,
-  onRegister, onEdit, onDelete, queryClient,
+  onRegister, onRegisterWithTicket, onEdit, onDelete, queryClient,
   isSelected, onToggleSelect,
   onOpenTournamentAlert,
 }: TournamentCardUpcomingProps) {
   const guaranteedValue = getGuaranteedValue(tournament);
+
+  // Sprint Tickets-2 (RF-05) — payment dialog state
+  const ticketMatches = useTicketMatchesForTournament(tournament);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const handleRegisterClick = () => {
+    if (ticketMatches.length > 0 && typeof onRegisterWithTicket === 'function') {
+      setShowPaymentDialog(true);
+    } else {
+      onRegister(tournament.id);
+    }
+  };
 
   // Late reg countdown - update every 60s
   const [now, setNow] = useState(() => new Date());
@@ -574,14 +601,35 @@ function UpcomingCard({
           {/* REGISTRAR (3 rows span) */}
           <Button
             size="sm"
-            onClick={() => onRegister(tournament.id)}
-            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white row-span-3 h-[136px] px-2 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-blue-400/50"
+            onClick={handleRegisterClick}
+            data-testid={`btn-register-${tournament.id}`}
+            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white row-span-3 h-[136px] px-2 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-blue-400/50 relative"
           >
             <div className="flex flex-col items-center justify-center">
               <UserPlus className="w-4 h-4 mb-1" />
               <span>REGISTRAR</span>
+              {ticketMatches.length > 0 && (
+                <span
+                  data-testid={`ticket-available-badge-${tournament.id}`}
+                  className="mt-1 text-[10px] bg-emerald-500/90 text-white rounded px-1 py-0.5 font-semibold"
+                  title="Ticket disponivel"
+                >
+                  TICKET
+                </span>
+              )}
             </div>
           </Button>
+
+          {/* RF-05 RegisterPaymentDialog */}
+          {ticketMatches.length > 0 && typeof onRegisterWithTicket === 'function' && (
+            <RegisterPaymentDialog
+              tournament={tournament}
+              open={showPaymentDialog}
+              onOpenChange={setShowPaymentDialog}
+              onConfirmCash={() => onRegister(tournament.id)}
+              onConfirmTicket={(ticketId) => onRegisterWithTicket(tournament.id, ticketId)}
+            />
+          )}
 
           {/* Alerta unico (Sprint Alarmes 2.0 — abre TournamentAlertDialog) */}
           <Button

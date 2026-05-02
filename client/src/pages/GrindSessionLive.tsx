@@ -1605,6 +1605,74 @@ export default function GrindSessionLive() {
     setRegistrationData(prev => { const updated = { ...prev }; delete updated[tournamentId]; return updated; });
   };
 
+  // Sprint Tickets-2 (RF-05) — registrar e consumir ticket numa unica acao.
+  // Estrategia: register normal -> aguarda lista atualizada -> identifica session_tournament
+  // resultante -> POST /api/tickets/:id/use. Erro no use NAO desfaz register (ticket fica
+  // available, usuario pode tentar de novo).
+  const handleRegisterTournamentWithTicket = async (tournamentId: string, ticketId: string) => {
+    if (!activeSession?.id) {
+      toast({ title: "Erro", description: "Nenhuma sessao ativa encontrada.", variant: "destructive" });
+      return;
+    }
+
+    // Capture snapshot pre-register para detectar o novo session_tournament (caso planned).
+    const before = new Set((sessionTournaments ?? []).map((st: any) => st.id));
+    const isPlanned = tournamentId.startsWith('planned-');
+    const actualPlannedId = isPlanned ? tournamentId.substring(8) : null;
+
+    // Disparar register normal.
+    handleRegisterTournament(tournamentId);
+
+    // Esperar lista atualizar — ate ~3s polling do queryClient.
+    let resolvedSessionTournamentId: string | null = null;
+    for (let i = 0; i < 12; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      try {
+        await queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
+      } catch { /* noop */ }
+      const fresh: any[] = (queryClient.getQueryData(["/api/session-tournaments", activeSession.id]) as any[])
+        ?? (queryClient.getQueriesData({ queryKey: ["/api/session-tournaments"] })[0]?.[1] as any[])
+        ?? sessionTournaments
+        ?? [];
+      if (!isPlanned) {
+        // session_tournament existente: o id e o proprio tournamentId; checamos se status virou registered.
+        const found = fresh.find((st: any) => st.id === tournamentId && st.status === 'registered');
+        if (found) { resolvedSessionTournamentId = found.id; break; }
+      } else {
+        // planned: procura o novo session_tournament (id que nao existia antes) com plannedTournamentId match.
+        const found = fresh.find((st: any) =>
+          !before.has(st.id) && (st.plannedTournamentId === actualPlannedId || st.fromPlannedTournament),
+        );
+        if (found) { resolvedSessionTournamentId = found.id; break; }
+      }
+    }
+
+    if (!resolvedSessionTournamentId) {
+      toast({
+        title: "Aviso",
+        description: "Torneio registrado, mas nao consegui consumir o ticket automaticamente. Tente de novo no card registrado.",
+        variant: "default",
+      });
+      return;
+    }
+
+    try {
+      await apiRequest("POST", `/api/tickets/${ticketId}/use`, {
+        tournamentId: resolvedSessionTournamentId,
+        kind: "session_tournament",
+      });
+      try { queryClient.invalidateQueries({ queryKey: ["/api/tickets"] }); } catch { /* noop */ }
+      try { queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] }); } catch { /* noop */ }
+      toast({ title: "Ticket consumido", description: "Buy-in pago com ticket. Wallet nao foi debitada.", variant: "default" });
+    } catch (err: any) {
+      toast({
+        title: "Erro ao consumir ticket",
+        description: err?.message ?? "Tente de novo. O torneio ja foi registrado.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // 2026-04-30: delete agora e session-scoped. Para planned-X cria session_tournament
   // shadow com status='deleted' (mascara via combineTournaments) — grade-planner
   // permanece intacto. Para session_tournament real usa DELETE direto (evita
@@ -2114,6 +2182,7 @@ export default function GrindSessionLive() {
                           <TournamentCard key={tournament.id} mode="upcoming"
                             tournament={tournament} registered={registered}
                             onRegister={handleRegisterTournament}
+                            onRegisterWithTicket={handleRegisterTournamentWithTicket}
                             onEdit={(t) => { setEditingTournament(t); setShowEditTournamentDialog(true); }}
                             onDelete={handleDeleteTournament} queryClient={queryClient}
                             isSelected={selectedTournaments.has(tournament.id)}

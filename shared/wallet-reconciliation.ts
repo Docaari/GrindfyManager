@@ -220,6 +220,9 @@ export interface TournamentInput {
   addOnCost: number;
   status: string;
   currency?: string;
+  // Sprint Tickets-2 (RF-06) — quando true, effectiveBuyIn=0 (jogador nao pagou cash, usou ticket).
+  enteredViaSatellite?: boolean;
+  consumedTicketId?: string | null;
 }
 
 export interface WalletDeltaEntry {
@@ -255,15 +258,20 @@ export function calculateExpectedDeltaPerWallet(
   for (const t of tournaments) {
     if (t.status !== "finished") continue;
 
-    const buyIn = Number(t.buyIn) || 0;
+    // RF-06: torneios entrados via ticket tem effectiveBuyIn=0 (cash nao foi gasto).
+    // Re-buy/add-on continuam debitando — sao gastos in-tournament independentes.
+    const enteredViaTicket = t.enteredViaSatellite === true || (t.consumedTicketId != null && t.consumedTicketId !== "");
+    const nominalBuyIn = Number(t.buyIn) || 0;
+    const buyIn = enteredViaTicket ? 0 : nominalBuyIn;
     const prize = Number(t.prize) || 0;
     const bounty = Number(t.bounty) || 0;
     const rebuys = Number(t.rebuys) || 0;
     const addOnCost = Number(t.addOnCost) || 0;
     const addOnTaken = !!t.addOnTaken;
 
+    // Re-buy continua usando buyIn nominal (rebuy nao consome ticket).
     const contribution =
-      prize + bounty - buyIn - rebuys * buyIn - (addOnTaken ? addOnCost : 0);
+      prize + bounty - buyIn - rebuys * nominalBuyIn - (addOnTaken ? addOnCost : 0);
 
     const tournamentCurrency = t.currency ?? getDefaultCurrencyForSite(t.site);
 

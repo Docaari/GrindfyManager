@@ -278,7 +278,7 @@ async function useTicket(
 async function matchTickets(
   userId: string,
   params: { tournamentId: string; kind: "tournament" | "session_tournament" },
-): Promise<{ available: boolean; count: number; oldestEarnedAt?: string }> {
+): Promise<{ available: boolean; count: number; oldestEarnedAt?: string; tickets?: any[] }> {
   // Resolver torneio alvo
   let target: any = null;
   if (params.kind === "tournament") {
@@ -303,10 +303,33 @@ async function matchTickets(
     const e = t.earnedAt instanceof Date ? t.earnedAt.getTime() : new Date(t.earnedAt).getTime();
     if (Number.isFinite(e) && e < oldest) oldest = e;
   }
+  // RF-12: ordenar expiresAt ASC NULLS LAST, earnedAt ASC (FIFO)
+  const sorted = [...tickets].sort((a: any, b: any) => {
+    const ax = a.expiresAt ? new Date(a.expiresAt).getTime() : Infinity;
+    const bx = b.expiresAt ? new Date(b.expiresAt).getTime() : Infinity;
+    if (ax !== bx) return ax - bx;
+    const ae = a.earnedAt ? new Date(a.earnedAt).getTime() : 0;
+    const be = b.earnedAt ? new Date(b.earnedAt).getTime() : 0;
+    return ae - be;
+  });
+  // Lightweight projection para UI (nao expor campos sensiveis)
+  const projected = sorted.map((t: any) => ({
+    id: t.id,
+    ticketValueUSD: t.ticketValueUSD,
+    targetTemplateId: t.targetTemplateId ?? null,
+    targetName: t.targetName ?? null,
+    targetSite: t.targetSite ?? null,
+    earnedAt: t.earnedAt instanceof Date ? t.earnedAt.toISOString() : t.earnedAt,
+    expiresAt: t.expiresAt
+      ? (t.expiresAt instanceof Date ? t.expiresAt.toISOString() : t.expiresAt)
+      : null,
+    note: t.note ?? null,
+  }));
   return {
     available: true,
     count: tickets.length,
     oldestEarnedAt: oldest === Infinity ? undefined : new Date(oldest).toISOString(),
+    tickets: projected,
   };
 }
 
