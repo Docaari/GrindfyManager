@@ -19,6 +19,7 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { tokens } from '@/lib/ui-tokens';
 
 export interface PageHeaderProps {
   title: React.ReactNode;
@@ -55,7 +56,11 @@ export function PageHeader({
           {breadcrumb}
         </nav>
       )}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      {/* RF-09 (N1) — uso semantico de tokens.space para validar link */}
+      <div
+        className="flex flex-col sm:flex-row sm:items-start sm:justify-between"
+        style={{ gap: tokens.space.base }}
+      >
         <div className="flex flex-col gap-1 min-w-0">
           <h1
             data-testid="page-header-title"

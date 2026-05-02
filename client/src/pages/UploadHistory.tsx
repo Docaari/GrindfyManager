@@ -11,6 +11,8 @@ import { Upload, CheckCircle, AlertCircle, FileText, Database, Trash2, AlertTria
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface UploadHistory {
   id: string;
@@ -124,11 +126,11 @@ export default function UploadHistory() {
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-8">
-      {/* Header Section */}
-      <div className="text-center space-y-2">
-        <h1 className="text-3xl font-bold text-white">Histórico de Upload</h1>
-        <p className="text-gray-400 text-lg">Gerencie e monitore suas importações de torneios</p>
-      </div>
+      {/* RF-05 (G5): Header alinhado a esquerda via PageHeader Foundation */}
+      <PageHeader
+        title="Histórico de Upload"
+        subtitle="Gerencie e monitore suas importações de torneios"
+      />
 
       {/* File Upload Section - Modernized */}
       <Card className="bg-poker-surface border-gray-700 shadow-lg">
@@ -180,7 +182,7 @@ export default function UploadHistory() {
       <div className="space-y-4">
         <h2 className="text-xl font-semibold text-white text-center">Estatísticas Resumidas</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-poker-surface border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.02]">
+          <Card className="bg-poker-surface border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl">
             <CardHeader className="text-center pb-3">
               <div className="mx-auto w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mb-2">
                 <Database className="h-6 w-6 text-blue-400" />
@@ -199,7 +201,7 @@ export default function UploadHistory() {
             </CardContent>
           </Card>
 
-          <Card className="bg-poker-surface border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.02]">
+          <Card className="bg-poker-surface border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl">
             <CardHeader className="text-center pb-3">
               <div className="mx-auto w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mb-2">
                 <CheckCircle className="h-6 w-6 text-green-400" />
@@ -218,7 +220,7 @@ export default function UploadHistory() {
             </CardContent>
           </Card>
 
-          <Card className="bg-poker-surface border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.02]">
+          <Card className="bg-poker-surface border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl">
             <CardHeader className="text-center pb-3">
               <div className="mx-auto w-12 h-12 bg-poker-gold/20 rounded-full flex items-center justify-center mb-2">
                 <Upload className="h-6 w-6 text-poker-gold" />
@@ -256,11 +258,25 @@ export default function UploadHistory() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
             </div>
           ) : uploadHistoryQuery.data?.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-              <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Nenhum upload encontrado</p>
-              <p className="text-sm">Faça seu primeiro upload usando o formulário acima</p>
-            </div>
+            // RF-06 (G6): EmptyState canonico com CTA scroll para card de upload
+            <EmptyState
+              icon={<Database className="w-full h-full" />}
+              title="Nenhum upload encontrado"
+              description="Faça seu primeiro upload usando o formulário acima para começar a analisar seus torneios."
+              ctaLabel="Importar primeiro CSV"
+              ctaAction={() => {
+                const target =
+                  document.querySelector('[data-testid="auto-upload"]') ??
+                  document.querySelector('input[type="file"]');
+                if (target) {
+                  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+              }}
+              area="upload"
+              variant="compact"
+            />
           ) : (
             <div className="space-y-4">
               {uploadHistoryQuery.data?.map((upload: any) => (

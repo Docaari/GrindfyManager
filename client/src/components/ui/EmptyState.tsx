@@ -17,6 +17,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { tokens } from '@/lib/ui-tokens';
 
 export type EmptyStateVariant = 'default' | 'compact';
 export type EmptyStateIconSize = 'sm' | 'md' | 'lg';
@@ -82,8 +83,28 @@ export function EmptyState({
         typeof window !== 'undefined'
           ? (window as unknown as { __telemetry?: TelemetryClient }).__telemetry
           : undefined;
-      telemetry?.track?.('ui.empty_state_cta_clicked', { area });
-    } catch {
+      if (telemetry?.track) {
+        telemetry.track('ui.empty_state_cta_clicked', { area });
+      } else if (
+        typeof process !== 'undefined' &&
+        process.env?.NODE_ENV !== 'production'
+      ) {
+        // RF-13 (N5) — log antes de fallback (lesson #9). Dev-only para nao
+        // poluir prod. console.debug eh silenciado por padrao em devtools.
+        // eslint-disable-next-line no-console
+        console.debug(
+          '[EmptyState] telemetry skipped: window.__telemetry unavailable',
+          { area },
+        );
+      }
+    } catch (err) {
+      if (
+        typeof process !== 'undefined' &&
+        process.env?.NODE_ENV !== 'production'
+      ) {
+        // eslint-disable-next-line no-console
+        console.debug('[EmptyState] telemetry error:', err, { area });
+      }
       // telemetria sem panico (lesson #9)
     }
     ctaAction();
@@ -121,7 +142,13 @@ export function EmptyState({
       >
         {title}
       </h3>
-      <p className="text-sm text-muted-foreground mb-6">{description}</p>
+      {/* RF-09 (N1) — uso semantico de tokens.font para validar link */}
+      <p
+        className="text-muted-foreground mb-6"
+        style={{ fontSize: tokens.font.sm }}
+      >
+        {description}
+      </p>
       <Button
         data-testid="empty-state-cta"
         onClick={handleClick}

@@ -7,6 +7,7 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { BankrollWidget } from "@/components/bankroll/BankrollWidget";
 import { BankrollHistoryTable } from "@/components/bankroll/BankrollHistoryTable";
 import { BankrollMovementDialog } from "@/components/bankroll/BankrollMovementDialog";
@@ -66,21 +67,15 @@ export default function BankrollPage() {
 
   const { data: consolidated } = useQuery<ConsolidatedResponse>({
     queryKey: ["/api/bankroll/consolidated"],
-    queryFn: async () => {
-      const r = await fetch("/api/bankroll/consolidated", { credentials: "include" });
-      if (!r.ok) throw new Error("consolidated_unavailable");
-      return r.json();
-    },
+    // RF-04 (G4): apiRequest injeta CSRF, faz refresh+redirect em 401 e
+    // ja retorna o JSON parseado (lanca Error se !ok internamente).
+    queryFn: () => apiRequest("GET", "/api/bankroll/consolidated"),
     staleTime: 30_000,
   });
 
   const { data: walletsResp } = useQuery<{ wallets: any[] }>({
     queryKey: ["/api/wallets"],
-    queryFn: async () => {
-      const r = await fetch("/api/wallets?includeArchived=true", { credentials: "include" });
-      if (!r.ok) throw new Error("wallets_unavailable");
-      return r.json();
-    },
+    queryFn: () => apiRequest("GET", "/api/wallets?includeArchived=true"),
     staleTime: 30_000,
   });
 

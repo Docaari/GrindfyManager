@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Trophy, Eye, AlertCircle, RefreshCw, XCircle, Filter, ChevronUp, ChevronDown } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { FilterChipGroup, type FilterChipGroupChip } from "@/components/ui/FilterChip";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { getConfidenceTooltip, getVolatilityTooltip } from "@/components/tournament-library/tooltip-helpers";
 import { hasActiveFilters } from "@/components/tournament-library/filter-helpers";
@@ -112,6 +115,7 @@ const getCategoryColor = getLibraryCategoryColor;
 const getSpeedColor = getLibrarySpeedColor;
 
 export default function TournamentLibraryNew() {
+  const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("confidence");
   const [sortOrder, setSortOrder] = useState("desc");
@@ -232,6 +236,83 @@ export default function TournamentLibraryNew() {
     setSortBy("confidence");
     setSortOrder("desc");
   }, []);
+
+  // RF-07 (G7): chips canonicos via FilterChipGroup. Memoizado para evitar
+  // re-render. Tons mapeados por semantica do filtro (Foundation tokens).
+  const activeFilterChips = useMemo<FilterChipGroupChip[]>(() => {
+    const chips: FilterChipGroupChip[] = [];
+    if (filters.period !== 'all') {
+      const periodLabel =
+        filters.period === 'month' ? 'Mes atual'
+        : filters.period === 'year' ? 'Ano atual'
+        : filters.period === '90d' ? 'Ultimos 3M'
+        : filters.period === '180d' ? 'Ultimos 6M'
+        : filters.period === '365d' ? 'Ultimos 12M'
+        : filters.period;
+      chips.push({
+        key: 'period',
+        label: `Periodo: ${periodLabel}`,
+        onRemove: () => setFilters(prev => ({ ...prev, period: 'all' })),
+        tone: 'info',
+      });
+    }
+    if (filters.sites.length > 0) {
+      chips.push({
+        key: 'sites',
+        label: `Site: ${filters.sites.join(', ')}`,
+        onRemove: () => setFilters(prev => ({ ...prev, sites: [] })),
+        tone: 'success',
+      });
+    }
+    if (filters.categories.length > 0) {
+      chips.push({
+        key: 'categories',
+        label: `Categoria: ${filters.categories.join(', ')}`,
+        onRemove: () => setFilters(prev => ({ ...prev, categories: [] })),
+        tone: 'neutral',
+      });
+    }
+    if (filters.speeds.length > 0) {
+      chips.push({
+        key: 'speeds',
+        label: `Velocidade: ${filters.speeds.join(', ')}`,
+        onRemove: () => setFilters(prev => ({ ...prev, speeds: [] })),
+        tone: 'warn',
+      });
+    }
+    if (filters.roiFilter !== 'all') {
+      const roiLabel = filters.roiFilter === 'positive' ? 'Lucrativos'
+        : filters.roiFilter === 'negative' ? 'Prejuizo'
+        : filters.roiFilter === 'high' ? 'ROI > 20%'
+        : filters.roiFilter;
+      chips.push({
+        key: 'roi',
+        label: `ROI: ${roiLabel}`,
+        onRemove: () => setFilters(prev => ({ ...prev, roiFilter: 'all' })),
+        tone: 'success',
+      });
+    }
+    if (filters.minimumVolume !== null) {
+      chips.push({
+        key: 'volume',
+        label: `Volume: ${filters.minimumVolume}+`,
+        onRemove: () => setFilters(prev => ({ ...prev, minimumVolume: null })),
+        tone: 'info',
+      });
+    }
+    if (filters.buyinRange.min !== null || filters.buyinRange.max !== null) {
+      chips.push({
+        key: 'buyin',
+        label: `Buy-in: $${filters.buyinRange.min ?? 0} — $${filters.buyinRange.max ?? '∞'}`,
+        onRemove: () => setFilters(prev => ({
+          ...prev,
+          buyinRange: { min: null, max: null },
+        })),
+        tone: 'warn',
+      });
+    }
+    return chips;
+  }, [filters]);
 
   if (isError) {
     return (
@@ -625,51 +706,15 @@ export default function TournamentLibraryNew() {
 
       {/* Area Principal — full width */}
       <div>
-          {/* Tags de Filtros Ativos */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            {filters.period !== 'all' && (
-              <span className="inline-flex items-center px-3 py-1 bg-blue-500/20 text-blue-400 text-sm rounded-full">
-                Periodo: {filters.period === 'month' ? 'Mes atual' : filters.period === 'year' ? 'Ano atual' : filters.period}
-                <button onClick={() => setFilters(prev => ({ ...prev, period: 'all' }))} className="ml-2 hover:text-white">×</button>
-              </span>
-            )}
-            {filters.sites.length > 0 && (
-              <span className="inline-flex items-center px-3 py-1 bg-[#24c25e]/20 text-[#24c25e] text-sm rounded-full">
-                Site: {filters.sites.join(', ')}
-                <button onClick={() => setFilters(prev => ({ ...prev, sites: [] }))} className="ml-2 hover:text-white">×</button>
-              </span>
-            )}
-            {filters.categories.length > 0 && (
-              <span className="inline-flex items-center px-3 py-1 bg-purple-500/20 text-purple-400 text-sm rounded-full">
-                Categoria: {filters.categories.join(', ')}
-                <button onClick={() => setFilters(prev => ({ ...prev, categories: [] }))} className="ml-2 hover:text-white">×</button>
-              </span>
-            )}
-            {filters.speeds.length > 0 && (
-              <span className="inline-flex items-center px-3 py-1 bg-orange-500/20 text-orange-400 text-sm rounded-full">
-                Velocidade: {filters.speeds.join(', ')}
-                <button onClick={() => setFilters(prev => ({ ...prev, speeds: [] }))} className="ml-2 hover:text-white">×</button>
-              </span>
-            )}
-            {filters.roiFilter !== 'all' && (
-              <span className="inline-flex items-center px-3 py-1 bg-[#24c25e]/20 text-[#24c25e] text-sm rounded-full">
-                ROI: {filters.roiFilter === 'positive' ? 'Lucrativos' : filters.roiFilter === 'negative' ? 'Prejuizo' : filters.roiFilter}
-                <button onClick={() => setFilters(prev => ({ ...prev, roiFilter: 'all' }))} className="ml-2 hover:text-white">×</button>
-              </span>
-            )}
-            {filters.minimumVolume !== null && (
-              <span className="inline-flex items-center px-3 py-1 bg-blue-500/20 text-blue-400 text-sm rounded-full">
-                Volume: {filters.minimumVolume}+
-                <button onClick={() => setFilters(prev => ({ ...prev, minimumVolume: null }))} className="ml-2 hover:text-white">×</button>
-              </span>
-            )}
-            {(filters.buyinRange.min !== null || filters.buyinRange.max !== null) && (
-              <span className="inline-flex items-center px-3 py-1 bg-yellow-500/20 text-yellow-400 text-sm rounded-full">
-                Buy-in: ${filters.buyinRange.min || 0} — ${filters.buyinRange.max || '∞'}
-                <button onClick={() => setFilters(prev => ({ ...prev, buyinRange: { min: null, max: null } }))} className="ml-2 hover:text-white">×</button>
-              </span>
-            )}
-          </div>
+          {/* RF-07 (G7): Tags de filtros ativos via FilterChipGroup canonico */}
+          {activeFilterChips.length > 0 && (
+            <div className="mb-4">
+              <FilterChipGroup
+                chips={activeFilterChips}
+                onClearAll={handleClearFilters}
+              />
+            </div>
+          )}
 
           {/* Controles de Visualização */}
           <div className="flex justify-between items-center mb-6">
@@ -711,28 +756,27 @@ export default function TournamentLibraryNew() {
           {/* Cards de Grupo com Metricas Estatisticas */}
           {filteredAndSortedGroups.length === 0 ? (
         <Card className="bg-poker-surface border-gray-700">
-          <CardContent className="p-12 text-center">
+          <CardContent className="p-12">
             {filtersActive ? (
-              <div className="text-gray-400 mb-4">
-                <Search className="h-16 w-16 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Nenhum torneio encontrado com esses filtros</h3>
-                <p>Tente ajustar seus criterios de busca ou limpe os filtros.</p>
-                <Button
-                  variant="outline"
-                  onClick={handleClearFilters}
-                  className="mt-4 border-gray-600 text-gray-300 hover:bg-gray-700"
-                >
-                  <XCircle className="w-4 h-4 mr-2" />
-                  Limpar Filtros
-                </Button>
-              </div>
+              // RF-06 (G6): EmptyState canonico — filtros zerados
+              <EmptyState
+                icon={<Search className="w-full h-full" />}
+                title="Nenhum torneio encontrado com esses filtros"
+                description="Tente ajustar seus criterios de busca ou limpe os filtros para ver todos os grupos."
+                ctaLabel="Limpar filtros"
+                ctaAction={handleClearFilters}
+                area="library"
+              />
             ) : (
-              <div className="text-gray-400 mb-4">
-                <Trophy className="h-16 w-16 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Nenhum Grupo Encontrado</h3>
-                <p>Grupos sao criados automaticamente quando voce tem 50+ torneios similares.</p>
-                <p className="mt-2">Importe mais historico de torneios para ver a biblioteca.</p>
-              </div>
+              // RF-06 (G6): EmptyState canonico — sem grupos
+              <EmptyState
+                icon={<Trophy className="w-full h-full" />}
+                title="Nenhum grupo encontrado"
+                description="Grupos sao criados automaticamente quando voce tem 50+ torneios similares. Importe mais historico para ver a biblioteca."
+                ctaLabel="Importar torneios"
+                ctaAction={() => setLocation('/upload')}
+                area="library"
+              />
             )}
           </CardContent>
         </Card>

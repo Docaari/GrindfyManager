@@ -251,6 +251,30 @@ import { Inbox } from 'lucide-react';
 
 > **Legacy:** `client/src/components/studies/EmptyState.tsx` eh DEPRECATED. Migracao para `@/components/ui/EmptyState` agendada para Sprint UI-QW-1.
 
+### 6.1. Validacao de secondaryLink.href
+
+Quando `secondaryLink` for usado, o **CHAMADOR e responsavel** por validar que `href` nao usa schemas perigosos (`javascript:`, `data:`, `vbscript:`). O componente `<EmptyState>` NAO valida runtime — assume input confiavel.
+
+Helper sugerido:
+
+```ts
+function isSafeHref(href: string): boolean {
+  return /^(https?:|\/|#|mailto:)/.test(href);
+}
+
+// Uso:
+<EmptyState
+  // ...
+  secondaryLink={
+    isSafeHref(linkFromAPI)
+      ? { label: 'Como funciona?', href: linkFromAPI }
+      : undefined
+  }
+/>
+```
+
+> Regra: hrefs vindos de API/usuario PRECISAM passar por `isSafeHref` antes de virar prop. Hrefs hardcoded (literais no fonte) sao seguros por inspecao.
+
 ---
 
 ## 7. Loading state

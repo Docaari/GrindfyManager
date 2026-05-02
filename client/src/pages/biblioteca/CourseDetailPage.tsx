@@ -253,7 +253,7 @@ export function CourseDetailPage({ courseSlug }: CourseDetailPageProps) {
           className="text-center py-12 space-y-3"
         >
           <p className="text-gray-400">
-            Modulos sendo preparados - em breve!
+            Modulos em breve.
           </p>
           <Link
             href="/biblioteca"

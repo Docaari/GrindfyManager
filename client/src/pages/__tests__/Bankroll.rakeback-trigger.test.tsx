@@ -30,7 +30,14 @@ vi.mock('@/hooks/use-toast', () => ({
 }));
 
 vi.mock('@/lib/queryClient', () => ({
-  apiRequest: vi.fn(),
+  // Sprint UI-QW-1 RF-04 (G4): /bankroll passou a usar apiRequest nas queries
+  // consolidated + wallets. Mock delega ao global.fetch para reutilizar
+  // setupFetchMocks() ja existente (sem precisar duplicar fixtures).
+  apiRequest: vi.fn(async (method: string, url: string) => {
+    const r = await (global.fetch as any)(url, { method, credentials: 'include' });
+    if (!r?.ok) throw new Error('mock_fetch_not_ok');
+    return r.json();
+  }),
   queryClient: {
     invalidateQueries: vi.fn(),
     setQueryData: vi.fn(),

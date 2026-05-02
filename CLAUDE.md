@@ -166,6 +166,7 @@ Catalogo completo em `Docs/architecture/lessons-learned.md`. **Consultar antes d
 10. **DRY de prompts** — divergencia silenciosa quebra cache da Anthropic. Extrair para arquivo unico.
 11. **Default minimo em componentes** — spec eh fonte de verdade. Componentes "decorativos" NAO ganham acoes default.
 12. **Estado persistente** — React Query cache (`setQueryData` + `enabled: false`) sobrevive a re-mount; `useState` local nao.
+13. **`apiRequest` retorna JSON parseado, NAO Response** — ao migrar `fetch(url).then(r => r.json())` para `apiRequest(method, url)`, ja receba o objeto direto. Mocks de `apiRequest` em testes precisam retornar o JSON, nao um `{ ok, json: () => ... }`. Sprint UI-QW-1 RF-04: 2 testes Bankroll quebraram quando mock virou `vi.fn()` puro — fix: delegar ao `global.fetch` mock existente e chamar `.json()` no wrapper.
 
 ---
 
@@ -211,6 +212,7 @@ Times configurados em `.claude/teams/` (5 times: feature cross-layer, review mul
 | Escrever testes (vitest 4 / RTL) | `Docs/architecture/lessons-learned.md#testing` (sempre, antes de tocar em test config) |
 | Schema novo / migracao | `data-model-index.md` + ADRs relevantes + `lessons-learned.md#schemas` |
 | Endpoint novo | `endpoints-index.md` para descobrir grupo + `endpoints.md` para padrao de doc |
+| Padronizacao UI / componente novo / decisao visual | `Docs/conventions/ui-patterns.md` (sempre) + `tokens` em `@/lib/ui-tokens` |
 | Decisao arquitetural | criar ADR em `Docs/architecture/decisions/` (numerado, formato Michael Nygard) |
 
 ---

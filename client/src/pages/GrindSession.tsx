@@ -952,28 +952,48 @@ export default function GrindSession() {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // Recover auto-save on edit dialog open
-  useEffect(() => {
-    if (editingSession && isEditDialogOpen) {
-      const recoveredData = recoverAutoSave();
-      if (recoveredData) {
-        const shouldRecover = window.confirm(
-          '🔄 Encontrei dados não salvos desta sessão. Deseja recuperá-los?\n\n' +
-          `Última modificação: ${lastSaved ? lastSaved.toLocaleString() : 'Agora há pouco'}`
-        );
+  // RF-03 (G3): Recovery dialog via AlertDialog Radix (substitui window.confirm).
+  // Estado isolado em objeto unico (lesson #12) para nao misturar com edit dialog.
+  const [recoveryDialog, setRecoveryDialog] = useState<{
+    open: boolean;
+    data: Record<string, any>;
+    lastSaved: Date | null;
+  } | null>(null);
 
-        if (shouldRecover) {
-          Object.entries(recoveredData).forEach(([field, value]) => {
-            updateField(field, value);
-          });
-          toast({
-            title: "📁 Dados recuperados",
-            description: "Suas alterações não salvas foram restauradas.",
-          });
-        }
-      }
+  // Recover auto-save on edit dialog open. Snapshot lastSaved at open time
+  // (later auto-save updates dont mutate the recovery dialog text). Cleanup
+  // closes recoveryDialog if user dismisses edit dialog before responding,
+  // preventing orphan overlay (review M1).
+  useEffect(() => {
+    if (!editingSession || !isEditDialogOpen) {
+      setRecoveryDialog(null);
+      return;
     }
-  }, [editingSession, isEditDialogOpen]);
+    const recoveredData = recoverAutoSave();
+    if (recoveredData) {
+      setRecoveryDialog({
+        open: true,
+        data: recoveredData,
+        lastSaved: lastSaved ?? null,
+      });
+    }
+  }, [editingSession, isEditDialogOpen, lastSaved, recoverAutoSave]);
+
+  const handleRecoveryConfirm = useCallback(() => {
+    if (!recoveryDialog) return;
+    Object.entries(recoveryDialog.data).forEach(([field, value]) => {
+      updateField(field, value);
+    });
+    toast({
+      title: "Dados recuperados",
+      description: "Suas alteracoes nao salvas foram restauradas.",
+    });
+    setRecoveryDialog(null);
+  }, [recoveryDialog, updateField, toast]);
+
+  const handleRecoveryCancel = useCallback(() => {
+    setRecoveryDialog(null);
+  }, []);
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -1250,6 +1270,36 @@ export default function GrindSession() {
               }}
             >
               Ir para warm-up
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* RF-03 (G3): Recovery dialog do auto-save (substitui window.confirm).
+          Acessivel via Radix AlertDialog + estado isolado em recoveryDialog. */}
+      <AlertDialog
+        open={recoveryDialog?.open ?? false}
+        onOpenChange={(open) => {
+          if (!open) handleRecoveryCancel();
+        }}
+      >
+        <AlertDialogContent data-testid="recovery-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Encontrei dados nao salvos</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ultima modificacao:{' '}
+              {recoveryDialog?.lastSaved
+                ? recoveryDialog.lastSaved.toLocaleString()
+                : 'Agora ha pouco'}
+              . Deseja recuperar suas alteracoes nao salvas?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleRecoveryCancel}>
+              Descartar
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleRecoveryConfirm}>
+              Recuperar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

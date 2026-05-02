@@ -215,7 +215,7 @@ const Home: React.FC = () => {
         {/* Welcome Section */}
         <div className="text-center space-y-6">
           <h1 className="text-4xl font-bold text-white">
-            {getGreeting()}, {user?.firstName || user?.name || 'Jogador'}! 🎯
+            {getGreeting()}, {user?.firstName || user?.name || 'Jogador'}!
           </h1>
           <p className="text-xl text-gray-300">
             Bem-vindo ao seu hub central de poker profissional
@@ -259,7 +259,7 @@ const Home: React.FC = () => {
                   <Card className="
                     bg-slate-800/70 hover:bg-slate-800 
                     border-slate-700/50 hover:border-emerald-500/30
-                    hover:scale-[1.02] transition-all duration-300 
+                    transition-all duration-300
                     cursor-pointer h-full
                     hover:shadow-xl hover:shadow-emerald-500/20
                     backdrop-blur-sm
@@ -432,7 +432,7 @@ const Home: React.FC = () => {
                 bg-slate-800/50 border-slate-700/50 
                 hover:bg-slate-800/70 hover:border-emerald-500/30
                 transition-all duration-300 cursor-pointer
-                hover:scale-[1.02] hover:shadow-lg hover:shadow-emerald-500/10
+                hover:shadow-lg hover:shadow-emerald-500/10
                 backdrop-blur-sm
               ">
                 <CardHeader className="pb-4">
@@ -468,7 +468,7 @@ const Home: React.FC = () => {
                 bg-slate-800/50 border-slate-700/50 
                 hover:bg-slate-800/70 hover:border-emerald-500/30
                 transition-all duration-300 cursor-pointer
-                hover:scale-[1.02] hover:shadow-lg hover:shadow-emerald-500/10
+                hover:shadow-lg hover:shadow-emerald-500/10
                 backdrop-blur-sm
               ">
                 <CardHeader className="pb-4">

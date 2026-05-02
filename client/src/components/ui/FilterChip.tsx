@@ -94,6 +94,8 @@ export function FilterChipGroup({ chips, onClearAll }: FilterChipGroupProps) {
   return (
     <div
       data-testid="filter-chip-group"
+      role="region"
+      aria-label="Filtros ativos"
       className="flex flex-wrap items-center gap-2"
     >
       {chips.map((chip) => (

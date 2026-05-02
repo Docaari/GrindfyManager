@@ -1,4 +1,8 @@
 /**
+ * @deprecated Migrar para `@/components/ui/EmptyState` (canonico Sprint UI-FND-1).
+ *             Este componente legacy permanece para compat com Sprint Studies-Reform;
+ *             sera removido em Sprint Studies-Polish.
+ *
  * Sprint Studies-Reform — RF-10 (Empty States Personalizados)
  *
  * Componente reutilizavel para empty states. Aceita icon, title, description,
@@ -31,6 +35,7 @@ interface EmptyStateProps {
   area?: EmptyStateArea;
 }
 
+/** @deprecated Use `@/components/ui/EmptyState` (canonico Sprint UI-FND-1). */
 export function EmptyState({
   icon,
   title,
