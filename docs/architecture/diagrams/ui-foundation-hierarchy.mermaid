@@ -1,0 +1,158 @@
+%% UI Foundation Hierarchy — Sprint UI-FND-1 (ADR-078)
+%% Mostra a hierarquia de dependencias entre tokens, componentes Foundation
+%% e os consumers planejados nos sprints UI-QW-1 + UI-T1-*.
+%%
+%% Convencoes do diagrama:
+%%   - Caixa solida = entrega de UI-FND-1 (existe apos este sprint)
+%%   - Caixa pontilhada = consumer futuro (UI-QW-1 / UI-T1-* / UI-T2-*)
+%%   - Seta solida (-->) = dependencia direta (import/uso atual)
+%%   - Seta tracejada (-.->) = uso planejado em sprint subsequente
+
+flowchart TD
+
+  %% ============================================================
+  %% LAYER 0 — Folha (sem dependencias internas Grindfy)
+  %% ============================================================
+  subgraph Foundation["Layer 0 — Foundation TS (UI-FND-1)"]
+    direction TB
+    tokens["lib/ui-tokens.ts<br/><i>frozen tokens TS</i><br/>space, font, color,<br/>motion, radius, shadow"]
+  end
+
+  %% ============================================================
+  %% LAYER 1 — Componentes utilitarios (consomem tokens + shadcn)
+  %% ============================================================
+  subgraph Components["Layer 1 — Componentes Foundation (UI-FND-1)"]
+    direction TB
+    emptyState["components/ui/EmptyState.tsx<br/><i>icon + title + desc + CTA + secondaryLink</i>"]
+    filterChip["components/ui/FilterChip.tsx<br/><i>pill removivel</i>"]
+    filterGroup["components/ui/FilterChipGroup<br/><i>helper: array + ClearAll</i>"]
+    pageHeader["components/ui/PageHeader.tsx<br/><i>title + subtitle + actions + breadcrumb</i>"]
+  end
+
+  %% ============================================================
+  %% LAYER 1.5 — Deps externas ja instaladas (Radix/shadcn/lucide)
+  %% ============================================================
+  subgraph Externals["Deps existentes (sem mudanca)"]
+    direction TB
+    button["@/components/ui/button<br/><i>shadcn Button</i>"]
+    radixSlot["@radix-ui/react-slot<br/><i>via shadcn (opcional)</i>"]
+    lucide["lucide-react<br/><i>X icon, Search, etc</i>"]
+    wouter["wouter Link<br/><i>navegacao SPA</i>"]
+  end
+
+  %% ============================================================
+  %% LAYER 2 — Documentacao (consome conhecimento de todos)
+  %% ============================================================
+  subgraph Docs["Layer 2 — Guia (UI-FND-1 RF-05)"]
+    direction TB
+    guide["Docs/conventions/ui-patterns.md<br/><i>14 secoes prescritivas PT-BR</i>"]
+  end
+
+  %% ============================================================
+  %% LAYER 3 — LEGACY (deprecated em UI-FND-1, migrado em UI-QW-1)
+  %% ============================================================
+  subgraph Legacy["Layer 3 — Legacy (deprecated, migra UI-QW-1)"]
+    direction TB
+    studiesEmpty["studies/EmptyState.tsx<br/><i>@deprecated R2</i><br/>migra G6 do plan"]
+  end
+
+  %% ============================================================
+  %% LAYER 4 — Consumers Tier 1 (UI-QW-1 + UI-T1-*)
+  %% ============================================================
+  subgraph Tier1["Layer 4 — Paginas Tier 1 (consumers futuros)"]
+    direction TB
+    library["TournamentLibraryNew.tsx<br/><i>UI-T1-Library / UI-QW-1</i>"]
+    dashboard["DashboardPage.tsx<br/><i>UI-T1-Dashboard / UI-QW-1</i>"]
+    grindSession["GrindSession.tsx<br/><i>UI-T1-Grind / UI-QW-1</i>"]
+    upload["UploadHistory.tsx<br/><i>UI-T1-Upload / UI-QW-1</i>"]
+    home["Home.tsx<br/><i>UI-T1-Home (+ HomeHero opt)</i>"]
+  end
+
+  subgraph Tier2["Layer 4 — Paginas Tier 2 (consumers futuros)"]
+    direction TB
+    coach["CoachAI.tsx<br/><i>UI-T2-Coach</i>"]
+    bankroll["BankrollPage.tsx<br/><i>UI-T2-Bankroll</i>"]
+    mental["MentalPrep.tsx<br/><i>UI-T2-MentalPrep</i>"]
+  end
+
+  %% ============================================================
+  %% DEPENDENCIAS (LAYER 1 -> LAYER 0)
+  %% ============================================================
+  emptyState --> tokens
+  filterChip --> tokens
+  filterGroup --> filterChip
+  filterGroup --> tokens
+  pageHeader --> tokens
+
+  %% Componentes -> deps externos (existentes)
+  emptyState --> button
+  emptyState --> wouter
+  emptyState -.optional.-> radixSlot
+  filterChip --> lucide
+  pageHeader --> lucide
+
+  %% ============================================================
+  %% DOC depende de TODOS (referencia)
+  %% ============================================================
+  guide -.referencia.-> tokens
+  guide -.referencia.-> emptyState
+  guide -.referencia.-> filterChip
+  guide -.referencia.-> filterGroup
+  guide -.referencia.-> pageHeader
+
+  %% ============================================================
+  %% LEGACY: deprecation pointer
+  %% ============================================================
+  studiesEmpty -.JSDoc deprecate.-> emptyState
+
+  %% ============================================================
+  %% CONSUMERS FUTUROS (-.uso futuro UI-QW-1+.->)
+  %% ============================================================
+  %% Tier 1 — todas paginas usam tokens + ao menos 1 componente Foundation
+  library -.UI-QW-1 G6+G7.-> emptyState
+  library -.UI-QW-1 G7.-> filterGroup
+  library -.UI-T1-Library.-> pageHeader
+  library -.tokens.-> tokens
+
+  dashboard -.UI-QW-1 G7.-> filterGroup
+  dashboard -.UI-T1-Dashboard.-> pageHeader
+  dashboard -.tokens.-> tokens
+
+  grindSession -.UI-QW-1 G6.-> emptyState
+  grindSession -.UI-QW-1 G7.-> filterGroup
+  grindSession -.UI-T1-Grind.-> pageHeader
+
+  upload -.UI-QW-1 G6.-> emptyState
+  upload -.UI-T1-Upload.-> pageHeader
+  upload -.tokens.-> tokens
+
+  home -.UI-T1-Home.-> pageHeader
+  home -.tokens.-> tokens
+
+  %% Tier 2
+  coach -.UI-T2-Coach.-> emptyState
+  coach -.UI-T2-Coach.-> pageHeader
+  coach -.tokens.-> tokens
+
+  bankroll -.UI-T2-Bankroll.-> pageHeader
+  bankroll -.tokens.-> tokens
+
+  mental -.UI-T2-MentalPrep.-> pageHeader
+  mental -.tokens.-> tokens
+
+  %% ============================================================
+  %% ESTILOS
+  %% ============================================================
+  classDef foundation fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#e0f2fe
+  classDef component  fill:#0f172a,stroke:#22d3ee,stroke-width:2px,color:#cffafe
+  classDef doc        fill:#082f49,stroke:#7dd3fc,stroke-width:2px,color:#e0f2fe
+  classDef external   fill:#1f2937,stroke:#9ca3af,stroke-width:1px,color:#e5e7eb,stroke-dasharray: 0
+  classDef legacy     fill:#3f1d1d,stroke:#f87171,stroke-width:2px,color:#fee2e2,stroke-dasharray: 4 2
+  classDef future     fill:#1f1f3a,stroke:#a78bfa,stroke-width:1px,color:#ede9fe,stroke-dasharray: 4 2
+
+  class tokens foundation
+  class emptyState,filterChip,filterGroup,pageHeader component
+  class guide doc
+  class button,radixSlot,lucide,wouter external
+  class studiesEmpty legacy
+  class library,dashboard,grindSession,upload,home,coach,bankroll,mental future

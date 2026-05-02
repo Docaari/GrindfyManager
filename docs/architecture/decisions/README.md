@@ -52,6 +52,7 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [074](074-library-progress-cross-format-sync.md) | Sync de progresso cross-format por SEGUNDOS absolutos (nao percentual) (Biblioteca-1 RF-08, D5) | Proposto | 2026-05-01 |
 | [075](075-coach-recommend-lesson-tool.md) | Coach tool `recommend_lesson` + hard-block COMPETITOR_BLOCKLIST no system prompt (Biblioteca-1 RF-09/RF-10) | Proposto | 2026-05-01 |
 | [076](076-library-html-article-sanitization.md) | Sanitizacao server-side de HTML de artigos via DOMPurify, allowlist rigorosa (Biblioteca-1 D10/RF-08/RF-11) | Proposto | 2026-05-01 |
+| [078](078-design-tokens-ui-patterns.md) | Design tokens TS-puros + 3 componentes utilitarios canonicos para Foundation UI (UI-FND-1) | Aceito | 2026-05-02 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 
