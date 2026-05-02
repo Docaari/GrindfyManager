@@ -621,12 +621,6 @@ export const calculateSessionStats = (
   const turboSpeedPercentage = speedTotal > 0 ? Math.round((turboCount / speedTotal) * 100) : 0;
   const hyperSpeedPercentage = speedTotal > 0 ? Math.round((hyperCount / speedTotal) * 100) : 0;
 
-  const breakdown = aggregateSessionFinancialsUSD(
-    allSessionTournaments,
-    registrationData,
-    usdConversionRates,
-  );
-
   return {
     emAndamento,
     registros,
