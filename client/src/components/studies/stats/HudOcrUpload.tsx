@@ -74,12 +74,14 @@ export default function HudOcrUpload({ layoutId, onExtracted }: HudOcrUploadProp
       handleCancel();
     } catch (err: any) {
       const status = err?.status ?? err?.response?.status;
-      let msg = "Falha ao extrair OCR. Tente novamente.";
-      if (status === 503) msg = "OCR temporariamente indisponivel.";
+      const serverMsg = err?.response?.data?.message ?? err?.message;
+      console.error("[ocr-upload] failed", { status, serverMsg, err });
+      let msg = serverMsg || "Falha ao extrair OCR. Tente novamente.";
+      if (status === 503) msg = serverMsg || "OCR temporariamente indisponivel.";
       else if (status === 429) msg = "Limite de OCR atingido. Tente novamente mais tarde.";
       else if (status === 422) msg = "Imagem invalida ou corrompida.";
       toast({
-        title: "Erro OCR",
+        title: status ? `Erro OCR (${status})` : "Erro OCR",
         description: msg,
         variant: "destructive" as any,
       });
@@ -159,7 +161,7 @@ export default function HudOcrUpload({ layoutId, onExtracted }: HudOcrUploadProp
             {loading ? (
               <>
                 <Loader2 className="w-3 h-3 animate-spin" />
-                Extraindo... (~5s)
+                Extraindo...
               </>
             ) : (
               "Extrair"
@@ -179,7 +181,7 @@ export default function HudOcrUpload({ layoutId, onExtracted }: HudOcrUploadProp
           {loading ? (
             <>
               <Loader2 className="w-3 h-3 animate-spin" />
-              Extraindo... (~5s)
+              Extraindo...
             </>
           ) : (
             "Extrair OCR"
@@ -193,12 +195,15 @@ export default function HudOcrUpload({ layoutId, onExtracted }: HudOcrUploadProp
             data-testid="ocr-upload-loading"
             className="text-xs text-slate-400 italic text-center"
           >
-            Extraindo stats...
+            Extraindo stats... (pode levar ate 30s)
           </div>
           <div className="absolute inset-0 bg-slate-950/60 flex items-center justify-center backdrop-blur-sm rounded-md z-10 pointer-events-none">
-            <div className="flex items-center gap-2 text-slate-100 text-sm">
-              <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
-              <span>Extraindo stats... (~5s)</span>
+            <div className="flex flex-col items-center gap-2 text-slate-100 text-sm">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+                <span>Extraindo stats...</span>
+              </div>
+              <span className="text-xs text-slate-400">Pode levar ate 30s — nao feche a janela</span>
             </div>
           </div>
         </>
