@@ -21,6 +21,7 @@
 
 import React from 'react';
 import { useQuery, QueryClientContext } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { Flame } from 'lucide-react';
 
 const STREAK_LOCAL_KEY = 'grindfy:studies:streak';
@@ -72,10 +73,36 @@ const STATE_CLASS: Record<StreakState, string> = {
   freeze: 'bg-purple-600/30 text-purple-300 border border-purple-500/40',
 };
 
-function renderBadge(days: number) {
+function BadgeView({
+  days,
+  onActivate,
+}: {
+  days: number;
+  onActivate?: () => void;
+}) {
   const state = pickState(days);
   const label = STATE_LABEL[state];
   const cls = STATE_CLASS[state];
+  const content = (
+    <>
+      <Flame className="w-3.5 h-3.5" aria-hidden="true" />
+      <span>{state === 'inactive' ? label : `${days} dias - ${label}`}</span>
+    </>
+  );
+  if (state === 'inactive' && onActivate) {
+    return (
+      <button
+        type="button"
+        data-testid="study-streak-badge"
+        data-state={state}
+        data-days={days}
+        onClick={onActivate}
+        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium hover:opacity-90 ${cls}`}
+      >
+        {content}
+      </button>
+    );
+  }
   return (
     <div
       data-testid="study-streak-badge"
@@ -83,15 +110,13 @@ function renderBadge(days: number) {
       data-days={days}
       className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${cls}`}
     >
-      <Flame className="w-3.5 h-3.5" aria-hidden="true" />
-      <span>
-        {state === 'inactive' ? label : `${days} dias - ${label}`}
-      </span>
+      {content}
     </div>
   );
 }
 
 function ConnectedStreakBadge() {
+  const [, navigate] = useLocation();
   const { data } = useQuery<StreakResponse>({
     queryKey: ['/api/study/streak'],
     queryFn: async () => {
@@ -111,14 +136,14 @@ function ConnectedStreakBadge() {
   });
 
   const days = Number(data?.days ?? 0);
-  return renderBadge(days);
+  return <BadgeView days={days} onActivate={() => navigate('/grind')} />;
 }
 
 function FallbackStreakBadge() {
   // Sem QueryClient (test direto sem provider): renderiza com localStorage ou 0
   const local = readLocalFallback();
   const days = Number(local?.days ?? 0);
-  return renderBadge(days);
+  return <BadgeView days={days} />;
 }
 
 export function StudyStreakBadge() {

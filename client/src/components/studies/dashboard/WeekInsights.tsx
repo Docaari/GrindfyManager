@@ -38,7 +38,8 @@ export function WeekInsights({ insights }: WeekInsightsProps) {
       <button
         type="button"
         data-testid="insight-hoursStudied"
-        onClick={() => navigate('/estudos/dashboard')}
+        onClick={() => navigate('/estudos/stats')}
+        title="Ver historico de sessoes em Stats"
         className="rounded border border-gray-700 bg-gray-800/70 px-2 py-2 text-left hover:bg-gray-800"
       >
         <div className="text-lg font-bold text-white">

@@ -50,12 +50,14 @@ export function StudiesDashboard() {
   const themesQ = useQuery<any[]>({
     queryKey: ['/api/study-themes'],
     queryFn: () => jsonFetch<any[]>('/api/study-themes').catch(() => []),
+    staleTime: 30 * 1000,
   });
 
   const spotsQ = useQuery<any[]>({
     queryKey: ['/api/starred-hands', 'dashboard'],
     queryFn: () =>
       jsonFetch<any[]>('/api/starred-hands?reviewLater=true').catch(() => []),
+    staleTime: 30 * 1000,
   });
 
   const insightsQ = useQuery<{
@@ -70,6 +72,7 @@ export function StudiesDashboard() {
         spotsReviewedThisWeek: 0,
         hoursStudiedThisWeek: 0,
       })),
+    staleTime: 5 * 60 * 1000,
   });
 
   const recsQ = useQuery<RecResponse>({
@@ -86,6 +89,7 @@ export function StudiesDashboard() {
     queryKey: ['/api/study/streak'],
     queryFn: () =>
       jsonFetch<{ days: number }>('/api/study/streak').catch(() => ({ days: 0 })),
+    staleTime: 5 * 60 * 1000,
   });
 
   const themes = themesQ.data ?? [];
@@ -195,10 +199,10 @@ export function StudiesDashboard() {
         <section
           data-testid="studies-dashboard-card-streak"
           aria-label="Streak de estudos"
+          data-streak-days={streakDays}
           className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-2"
         >
           <h2 className="text-sm font-semibold text-gray-300">Streak</h2>
-          <div className="text-2xl font-bold text-white">{streakDays} dias</div>
           <StudyStreakBadge />
         </section>
       </div>

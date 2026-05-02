@@ -151,12 +151,30 @@ export function RecommendationsView() {
           {filtered.map((r) => {
             const badge = TYPE_BADGE_CLASS[r.type] ?? 'bg-gray-700 text-gray-300';
             const pct = Math.max(0, Math.min(100, r.priority_score));
+            const navigateToCta = () => {
+              if (r.cta_url) navigate(r.cta_url);
+            };
             return (
               <article
                 key={r.id}
                 data-testid={`recommendation-card-${r.id}`}
                 data-rec-type={r.type}
-                className="rounded-lg border border-gray-700 bg-gray-900/40 p-3"
+                role={r.cta_url ? 'button' : undefined}
+                tabIndex={r.cta_url ? 0 : undefined}
+                onClick={r.cta_url ? navigateToCta : undefined}
+                onKeyDown={
+                  r.cta_url
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          navigateToCta();
+                        }
+                      }
+                    : undefined
+                }
+                className={`rounded-lg border border-gray-700 bg-gray-900/40 p-3 ${
+                  r.cta_url ? 'cursor-pointer hover:bg-gray-800/60 focus:outline-none focus:ring-2 focus:ring-poker-accent/40' : ''
+                }`}
               >
                 <header className="flex items-center justify-between mb-2">
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${badge}`}>
@@ -183,7 +201,10 @@ export function RecommendationsView() {
                   <button
                     type="button"
                     data-testid={`recommendation-card-${r.id}-cta`}
-                    onClick={() => navigate(r.cta_url!)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(r.cta_url!);
+                    }}
                     className="text-xs px-3 py-1.5 rounded bg-poker-accent text-black font-semibold"
                   >
                     {ctaLabelFor(r.cta_action)}

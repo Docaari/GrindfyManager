@@ -169,7 +169,7 @@ export function OnboardingWizard({ open, onOpenChange }: OnboardingWizardProps) 
                 onClick={next}
                 className="text-sm text-gray-400 hover:text-white"
               >
-                Pular
+                Importar depois
               </button>
             </div>
           )}

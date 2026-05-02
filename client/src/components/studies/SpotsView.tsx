@@ -11,7 +11,7 @@
  *  #11 sem default actions decorativas
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { getCsrfToken, queryClient } from '@/lib/queryClient';
@@ -83,6 +83,7 @@ export function SpotsView() {
   const [location, navigate] = useLocation();
   const params = useMemo(() => parseSearch(location), [location]);
   const showAll = params.get('showAll') === '1';
+  const focusSpotId = params.get('spot');
 
   const qc = queryClient;
   // Carrega toast em background no primeiro render. Em runtime real, modulo
@@ -184,6 +185,13 @@ export function SpotsView() {
     setActiveSpot(s);
     setLinkedThemeId(s.themeLink?.themeId ?? null);
   }
+
+  // Deep-link via ?spot=<id> abre modal direto quando o spot estiver carregado.
+  useEffect(() => {
+    if (!focusSpotId || activeSpot) return;
+    const found = spots.find((s) => s.id === focusSpotId);
+    if (found) openSpotModal(found);
+  }, [focusSpotId, spots, activeSpot]);
 
   function submitReview() {
     if (!activeSpot) return;

@@ -38,7 +38,7 @@ export function PendingSpotsPreview({ spots }: PendingSpotsPreviewProps) {
           key={s.id}
           type="button"
           data-testid={`dashboard-spot-${s.id}`}
-          onClick={() => navigate(`/estudos/spots`)}
+          onClick={() => navigate(`/estudos/spots?spot=${encodeURIComponent(s.id)}`)}
           className="w-full text-left rounded-md border border-gray-700 bg-gray-800/70 px-3 py-2 hover:bg-gray-800"
         >
           <div className="text-sm font-medium text-white truncate">
