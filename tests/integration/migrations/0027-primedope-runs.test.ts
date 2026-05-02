@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 //
 // Spec: Docs/specs/sprint-f4-primedope-grade-detail.md (Modelos de Dados D.3)
 // ADR-054: PrimeDope external provider + cache + audit trail
-// Migration script: server/scripts/migrate-0015-primedope-runs.ts
+// Migration script: server/scripts/migrate-0027-primedope-runs.ts
 //
 // Schema esperado:
 //   id varchar(21) PK (nanoid)
@@ -42,7 +42,7 @@ vi.mock('../../../server/db', () => ({
 }));
 
 async function importMigration() {
-  return await import('../../../server/scripts/migrate-0015-primedope-runs');
+  return await import('../../../server/scripts/migrate-0027-primedope-runs');
 }
 
 function emittedSql(): string {

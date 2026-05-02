@@ -11,7 +11,7 @@ interface EditTournamentDialogProps {
   onOpenChange: (open: boolean) => void;
   editingTournament: any;
   setEditingTournament: (tournament: any) => void;
-  onSave: (id: string, data: any) => void;
+  onSave: (id: string, data: any, opts?: { scope?: 'session' | 'permanent'; persistRegistrationTimeToLibrary?: boolean }) => void;
 }
 
 export default function EditTournamentDialog({

@@ -24,8 +24,8 @@
  * Idempotente. Index composto + index input_hash.
  *
  * Uso:
- *   tsx server/scripts/migrate-0015-primedope-runs.ts
- *   F4_DRY_RUN=true tsx server/scripts/migrate-0015-primedope-runs.ts
+ *   tsx server/scripts/migrate-0027-primedope-runs.ts
+ *   F4_DRY_RUN=true tsx server/scripts/migrate-0027-primedope-runs.ts
  *
  * REVIEWER FIX (HIGH #3): script anterior chamava `tx.createTableIfNotExists`
  * etc. (helpers que nao existem). Reescrito com `db.execute(sql)` direto +

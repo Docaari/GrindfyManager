@@ -1,0 +1,284 @@
+  // Sprint F4 — PrimeDope variance simulation + drill-down
+  findRecentPrimedopeRunByHash(hash: string, withinMinutes: number): Promise<any | null>;
+  findFallbackPrimedopeRun(
+    userId: string,
+    profileLetter: string,
+    dayOfWeek: number,
+    withinHours: number,
+  ): Promise<any | null>;
+  insertPrimedopeRun(data: any): Promise<any>;
+  listPrimedopeRunsForUser(filters: {
+    userId: string;
+    profileLetter?: string;
+    dayOfWeek?: number;
+    limit?: number;
+  }): Promise<any[]>;
+  getPrimedopeRunById(id: string): Promise<any | null>;
+  setPrimedopeRunPinned(input: {
+    id: string;
+    userId: string;
+    pinned: boolean;
+  }): Promise<any>;
+  listPlannedTournamentsForDayDetail(input: {
+    userId: string;
+    profileLetter: string;
+    dayOfWeek: number;
+  }): Promise<any[]>;
+  listPlannedTournamentsForBucketsPrefill(input: {
+    userId: string;
+    profileLetter: string;
+    dayOfWeek: number;
+  }): Promise<any[]>;
+  listTournamentsForBackfillSimulationFields(): Promise<any[]>;
+
+  // ============================================================================
+  // Sprint F4 — PrimeDope variance simulation + drill-down
+  // ============================================================================
+  async findRecentPrimedopeRunByHash(
+    hash: string,
+    withinMinutes: number,
+  ): Promise<any | null> {
+    try {
+      const cutoff = new Date(Date.now() - withinMinutes * 60_000);
+      const rows = await db.execute(
+        sql`SELECT * FROM primedope_runs
+            WHERE input_hash = ${hash}
+              AND created_at >= ${cutoff}
+            ORDER BY created_at DESC
+            LIMIT 1`,
+      );
+      const list: any[] = (rows as any).rows ?? rows;
+      return list?.[0] ?? null;
+    } catch (err) {
+      console.error("[storage] findRecentPrimedopeRunByHash failed", err);
+      return null;
+    }
+  async findFallbackPrimedopeRun(
+    profileLetter: string,
+    dayOfWeek: number,
+    withinHours: number,
+  ): Promise<any | null> {
+    try {
+      const cutoff = new Date(Date.now() - withinHours * 3600_000);
+      const rows = await db.execute(
+        sql`SELECT * FROM primedope_runs
+            WHERE user_id = ${userId}
+              AND profile_letter = ${profileLetter}
+              AND day_of_week = ${dayOfWeek}
+              AND created_at >= ${cutoff}
+              AND source IN ('primedope','cache')
+            ORDER BY created_at DESC
+            LIMIT 1`,
+      );
+      const list: any[] = (rows as any).rows ?? rows;
+      return list?.[0] ?? null;
+    } catch (err) {
+      console.error("[storage] findFallbackPrimedopeRun failed", err);
+      return null;
+    }
+  async insertPrimedopeRun(data: any): Promise<any> {
+    try {
+      const id = data.id ?? `pdr_${nanoid(16)}`;
+      const expiresAt = data.expiresAt
+        ? data.expiresAt instanceof Date
+          ? data.expiresAt
+          : new Date(data.expiresAt)
+        : new Date(Date.now() + 90 * 86400_000);
+      const row = await db.execute(
+        sql`INSERT INTO primedope_runs (
+              id, user_id, profile_letter, day_of_week, multiplier,
+              input_hash, input_json, result_json, histogram_path,
+              random_runs_path, latency_ms, source, pinned, expires_at
+            ) VALUES (
+              ${id}, ${data.userId}, ${data.profileLetter}, ${data.dayOfWeek},
+              ${data.multiplier}, ${data.inputHash},
+              ${JSON.stringify(data.inputJson)}, ${JSON.stringify(data.resultJson)},
+              ${data.histogramPath ?? null}, ${data.randomRunsPath ?? null},
+              ${data.latencyMs ?? null}, ${data.source ?? "primedope"},
+              ${data.pinned ?? false}, ${expiresAt}
+            )
+            RETURNING *`,
+      );
+      const list: any[] = (row as any).rows ?? row;
+      return list?.[0] ?? { id, ...data, expiresAt };
+    } catch (err) {
+      console.error("[storage] insertPrimedopeRun failed", err);
+      throw err;
+    }
+  async listPrimedopeRunsForUser(filters: {
+    profileLetter?: string;
+    dayOfWeek?: number;
+    limit?: number;
+  }): Promise<any[]> {
+    try {
+      const limit = filters.limit ?? 20;
+      const conditions: any[] = [sql`user_id = ${filters.userId}`];
+      if (filters.profileLetter) {
+        conditions.push(sql`profile_letter = ${filters.profileLetter}`);
+      }
+      if (typeof filters.dayOfWeek === "number") {
+        conditions.push(sql`day_of_week = ${filters.dayOfWeek}`);
+      }
+      const where = conditions.reduce((acc, c, i) =>
+        i === 0 ? c : sql`${acc} AND ${c}`,
+      );
+      const rows = await db.execute(
+        sql`SELECT * FROM primedope_runs
+            WHERE ${where}
+            ORDER BY created_at DESC
+            LIMIT ${limit}`,
+      );
+      const list: any[] = (rows as any).rows ?? rows;
+      return list ?? [];
+    } catch (err) {
+      console.error("[storage] listPrimedopeRunsForUser failed", err);
+      return [];
+  async getPrimedopeRunById(id: string): Promise<any | null> {
+    try {
+      const rows = await db.execute(
+        sql`SELECT * FROM primedope_runs WHERE id = ${id} LIMIT 1`,
+      );
+      const list: any[] = (rows as any).rows ?? rows;
+      return list?.[0] ?? null;
+    } catch (err) {
+      console.error("[storage] getPrimedopeRunById failed", err);
+      return null;
+    }
+  async setPrimedopeRunPinned(input: {
+    id: string;
+    userId: string;
+    pinned: boolean;
+  }): Promise<any> {
+    try {
+      const expiresAt = input.pinned ? null : new Date(Date.now() + 90 * 86400_000);
+      const rows = await db.execute(
+        sql`UPDATE primedope_runs
+            SET pinned = ${input.pinned}, expires_at = ${expiresAt}
+            WHERE id = ${input.id} AND user_id = ${input.userId}
+            RETURNING *`,
+      );
+      const list: any[] = (rows as any).rows ?? rows;
+      return list?.[0] ?? { id: input.id, pinned: input.pinned };
+    } catch (err) {
+      console.error("[storage] setPrimedopeRunPinned failed", err);
+      throw err;
+  async listPlannedTournamentsForDayDetail(input: {
+    userId: string;
+    profileLetter: string;
+    dayOfWeek: number;
+  }): Promise<any[]> {
+    try {
+      const rows = await db.execute(
+        sql`SELECT
+              pt.id AS "plannedId",
+              pt.template_id AS "templateId",
+              pt.site,
+              pt.type,
+              pt.speed,
+              pt.buy_in AS "buyIn",
+              pt.guaranteed,
+              pt.name,
+              pt.time,
+              pt.day_of_week AS "dayOfWeek",
+              pt.profile,
+              pt.rebuys,
+              pt.bounty,
+              pt.position,
+              pt.result,
+              t.currency,
+              t.players_avg,
+              t.places_paid_avg,
+              t.rake_pct,
+              1 AS count
+            FROM planned_tournaments pt
+            LEFT JOIN tournaments t ON t.id = pt.template_id
+            WHERE pt.user_id = ${input.userId}
+              AND pt.profile = ${input.profileLetter}
+              AND pt.day_of_week = ${input.dayOfWeek}
+            ORDER BY pt.time ASC`,
+      );
+      const list: any[] = (rows as any).rows ?? rows;
+      return list ?? [];
+    } catch (err) {
+      console.error("[storage] listPlannedTournamentsForDayDetail failed", err);
+      return [];
+  async listPlannedTournamentsForBucketsPrefill(input: {
+    userId: string;
+    profileLetter: string;
+    dayOfWeek: number;
+  }): Promise<any[]> {
+    try {
+      const rows = await db.execute(
+        sql`SELECT
+              pt.id AS "plannedId",
+              pt.template_id AS "templateId",
+              pt.site,
+              pt.buy_in AS "buyIn",
+              pt.name,
+              pt.type,
+              pt.speed,
+              tt.avg_buyin AS "avgBuyIn",
+              tt.avg_roi AS "avgRoi",
+              tt.avg_field_size AS "avgFieldSize",
+              t.players_avg,
+              t.places_paid_avg,
+              t.rake_pct,
+              t.currency,
+              1 AS count
+            FROM planned_tournaments pt
+            LEFT JOIN tournament_templates tt ON tt.id = pt.template_id
+            LEFT JOIN tournaments t ON t.id = pt.template_id
+            WHERE pt.user_id = ${input.userId}
+              AND pt.profile = ${input.profileLetter}
+              AND pt.day_of_week = ${input.dayOfWeek}
+            ORDER BY pt.time ASC`,
+      const raw: any[] = (rows as any).rows ?? rows;
+      // Reshape para o que o service espera: { template, tournamentSample, ... }
+      return (raw ?? []).map((r: any) => ({
+        plannedId: r.plannedId,
+        templateId: r.templateId,
+        site: r.site,
+        currency: r.currency ?? "USD",
+        count: r.count ?? 1,
+        buyIn: r.buyIn,
+        name: r.name,
+        template:
+          r.avgBuyIn != null
+            ? {
+                avgBuyIn: Number(r.avgBuyIn),
+                avgRoi: Number(r.avgRoi ?? 0),
+                avgFieldSize: r.avgFieldSize,
+              }
+            : null,
+        tournamentSample:
+          r.players_avg != null
+            ? {
+                buyIn: Number(r.buyIn ?? 0),
+                players_avg: r.players_avg,
+                places_paid_avg: r.places_paid_avg,
+                rake_pct: r.rake_pct != null ? Number(r.rake_pct) : null,
+              }
+            : null,
+      }));
+    } catch (err) {
+      console.error(
+        "[storage] listPlannedTournamentsForBucketsPrefill failed",
+        err,
+      return [];
+    }
+  async listTournamentsForBackfillSimulationFields(): Promise<any[]> {
+    try {
+      const rows = await db.execute(
+        sql`SELECT id, user_id, site, field_size, players_avg, places_paid_avg, rake_pct
+            FROM tournaments
+            WHERE players_avg IS NULL OR rake_pct IS NULL`,
+      );
+      const list: any[] = (rows as any).rows ?? rows;
+      return list ?? [];
+    } catch (err) {
+      console.error(
+        "[storage] listTournamentsForBackfillSimulationFields failed",
+        err,
+      );
+      return [];
+    }

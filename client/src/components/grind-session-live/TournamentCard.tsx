@@ -18,6 +18,18 @@ import {
 import { shouldShowBountyField } from './result-dialog-helpers';
 import type { RegistrationData } from './types';
 
+// Reg deadline = start + lateRegMinutes. Card mostra reg como tempo principal;
+// start vai como subtitulo (inicio HH:MM).
+function getRegDeadlineLabel(time?: string | null, lateRegMinutes?: number | null): string | null {
+  if (!time || typeof lateRegMinutes !== 'number' || lateRegMinutes <= 0) return null;
+  const [h, m] = time.split(':').map((n) => parseInt(n, 10));
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  const total = h * 60 + m + lateRegMinutes;
+  const hh = Math.floor(total / 60) % 24;
+  const mm = total % 60;
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
 interface TournamentCardRegisteredProps {
   mode: 'registered';
   tournament: any;
@@ -89,6 +101,8 @@ function RegisteredCard({
   const [showResultDialog, setShowResultDialog] = useState(false);
   const currency = getCurrencyForSite(tournament.site || '');
   const addOnState = getAddOnButtonState(tournament, updateIsPending);
+  const regDeadlineLabel = getRegDeadlineLabel(tournament.time, tournament.lateRegMinutes);
+  const primaryTimeLabel = regDeadlineLabel ?? tournament.time ?? '—';
 
   return (
     <div className={`tournament-card tournament-registered pt-[2px] pb-[2px] ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
@@ -120,8 +134,11 @@ function RegisteredCard({
             <div className="flex items-center gap-2">
               <PlayCircle className="w-4 h-4 text-blue-400 flex-shrink-0" />
               <time dateTime={tournament.time || ''} className="text-emerald-400 font-mono text-sm font-bold">
-                {tournament.time || '\u2014'}
+                {primaryTimeLabel}
               </time>
+              {regDeadlineLabel && tournament.time && (
+                <span className="text-gray-400 text-xs">(inicio {tournament.time})</span>
+              )}
               {!tournament.time && (
                 <span className="text-red-400 text-xs ml-1">(sem horario)</span>
               )}
@@ -429,6 +446,8 @@ function UpcomingCard({
     const mm = String(deadline.getMinutes()).padStart(2, '0');
     return { deadline, minutesRemaining, color, hh, mm };
   })();
+  const regDeadlineLabel = getRegDeadlineLabel(tournament.time, tournament.lateRegMinutes);
+  const primaryTimeLabel = regDeadlineLabel ?? tournament.time ?? '—';
 
   return (
     <div className={`tournament-card tournament-upcoming mt-[6px] mb-[6px] ml-[0px] mr-[0px] pt-[0px] pb-[0px] relative ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
@@ -453,8 +472,11 @@ function UpcomingCard({
             <div className="flex items-center gap-3">
               <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
               <time dateTime={tournament.time || ''} className="text-emerald-400 font-mono text-sm font-bold">
-                {tournament.time || '\u2014'}
+                {primaryTimeLabel}
               </time>
+              {regDeadlineLabel && tournament.time && (
+                <span className="text-gray-400 text-xs">(inicio {tournament.time})</span>
+              )}
               {!tournament.time && (
                 <span className="text-red-400 text-xs ml-1">(sem horario)</span>
               )}

@@ -19,8 +19,8 @@
  * Idempotente (IF NOT EXISTS + skip rows ja preenchidas).
  *
  * Uso:
- *   tsx server/scripts/migrate-0014-tournaments-simulation-fields.ts
- *   F4_DRY_RUN=true tsx server/scripts/migrate-0014-tournaments-simulation-fields.ts
+ *   tsx server/scripts/migrate-0026-tournaments-simulation-fields.ts
+ *   F4_DRY_RUN=true tsx server/scripts/migrate-0026-tournaments-simulation-fields.ts
  *
  * REVIEWER FIX (HIGH #3): script anterior chamava metodos `tx.*` que nao
  * existem no txWrapper de storage.ts. Reescrito usando db.execute(sql) +

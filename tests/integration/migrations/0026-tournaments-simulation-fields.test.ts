@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 //
 // Spec: Docs/specs/sprint-f4-primedope-grade-detail.md (Modelos de Dados D.2)
 // ADR-054: PrimeDope external provider
-// Migration script: server/scripts/migrate-0014-tournaments-simulation-fields.ts
+// Migration script: server/scripts/migrate-0026-tournaments-simulation-fields.ts
 //
 // Comportamento esperado:
 //   - ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS players_avg integer
@@ -41,7 +41,7 @@ vi.mock('../../../server/db', () => ({
 }));
 
 async function importMigration() {
-  return await import('../../../server/scripts/migrate-0014-tournaments-simulation-fields');
+  return await import('../../../server/scripts/migrate-0026-tournaments-simulation-fields');
 }
 
 /**

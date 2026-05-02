@@ -340,7 +340,9 @@ export const organizeTournaments = (tournaments: any[], plannedTournaments: any[
           guaranteed: plannedData.guaranteed || tournament.guaranteed || null,
           type: plannedData.type || tournament.type || 'Vanilla',
           speed: plannedData.speed || tournament.speed || 'Normal',
-          time: plannedData.time || tournament.time || '20:00'
+          time: plannedData.time || tournament.time || '20:00',
+          lateRegMinutes:
+            tournament.lateRegMinutes ?? plannedData.lateRegMinutes ?? null,
         };
       }
     }
@@ -378,6 +380,11 @@ export const organizeTournaments = (tournaments: any[], plannedTournaments: any[
     return tournament;
   });
 
+  // Reg deadline = parseTime(time) + lateRegMinutes. Empate cai em start time
+  // pra estabilizar ordem entre torneios sem late-reg distinto.
+  const regDeadline = (t: any) =>
+    parseTime(t.time) + (typeof t.lateRegMinutes === 'number' ? t.lateRegMinutes : 0);
+
   const upcoming = activeTournaments.filter(t =>
     t.status === 'upcoming' || (!t.status && t.time)
   ).sort((a, b) => {
@@ -386,6 +393,9 @@ export const organizeTournaments = (tournaments: any[], plannedTournaments: any[
     if (priorityA !== priorityB) {
       return priorityA - priorityB;
     }
+    const da = regDeadline(a);
+    const db = regDeadline(b);
+    if (da !== db) return da - db;
     return parseTime(a.time) - parseTime(b.time);
   });
 
@@ -397,6 +407,9 @@ export const organizeTournaments = (tournaments: any[], plannedTournaments: any[
     if (priorityA !== priorityB) {
       return priorityA - priorityB;
     }
+    const da = regDeadline(a);
+    const db = regDeadline(b);
+    if (da !== db) return da - db;
     return parseTime(a.time) - parseTime(b.time);
   });
 

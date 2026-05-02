@@ -31,6 +31,13 @@ import { registerTicketRoutes } from "./tickets";
 import { registerCooldownRoutes } from "./cooldown";
 import { registerCooldownAnalyticsRoutes } from "./cooldownAnalytics";
 import { registerStatsAnalyzerRoutes } from "./statsAnalyzer";
+import { registerStarredHandsRoutes } from "./starred-hands";
+import { registerStudyRecommendationsRoutes } from "./study-recommendations";
+import { registerStudyThemeSpotLinkRoutes } from "./study-theme-spot-links";
+import { registerStudyMiscRoutes } from "./study-misc";
+import { registerLibraryRoutes } from "./library-register";
+import { registerAllJobs } from "../jobs";
+import { spotStorage } from "../lib/spotStorage";
 import primedopeRouter from "./primedope";
 import gradeDayDetailRouter from "./grade-day-detail";
 
@@ -144,6 +151,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerCooldownRoutes(app);
   registerCooldownAnalyticsRoutes(app);
   registerStatsAnalyzerRoutes(app);
+  // Sprint F2 — print de spots durante grind. Vive em arquivo dedicado para
+  // nao colidir com cooldown.ts (rotas distintas: /:id/discard vs /:id).
+  registerStarredHandsRoutes(app);
+  // Sprint Studies-Reform — RF-05 (theme-spot links) + RF-06 (recommendations) + RF-12 (streak) + dashboard
+  registerStudyRecommendationsRoutes(app);
+  registerStudyThemeSpotLinkRoutes(app);
+  registerStudyMiscRoutes(app);
+  // Sprint Biblioteca-1 RF-03/04/05/06/11 — endpoints biblioteca + admin
+  registerLibraryRoutes(app);
 
   // Sprint F4 (PrimeDope variance simulation + drill-down) — routers default-export.
   app.use("/api/primedope", primedopeRouter);

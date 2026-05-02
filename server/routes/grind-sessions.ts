@@ -988,6 +988,12 @@ export function registerGrindSessionRoutes(app: Express): void {
               addOnCost: planned.addOnCost ?? null,
               allowsReentry: planned.allowsReentry ?? false,
               maxReentries: planned.maxReentries ?? null,
+              lateRegMinutes: planned.lateRegMinutes ?? null,
+              startingStack: planned.startingStack ?? null,
+              maxPlayers: planned.maxPlayers ?? null,
+              gameType: planned.gameType ?? null,
+              blindLevelMinutes: planned.blindLevelMinutes ?? null,
+              alertMinutesBefore: planned.alertMinutesBefore ?? null,
             };
 
             await storage.createSessionTournament(sessionTournament as any);
