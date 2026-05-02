@@ -405,7 +405,7 @@ export default function StatsAnalyzerTab() {
             <HudFilters
               filters={filters}
               onChange={setFilters}
-              snapshot={activeSnapshot ?? null}
+              snapshot={(activeSnapshot ?? null) as any}
             />
           )}
 
