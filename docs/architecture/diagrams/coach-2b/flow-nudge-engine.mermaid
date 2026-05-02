@@ -1,0 +1,63 @@
+%% Flowchart — Engine shouldSendNudge(userId, ctx) (ADR-085)
+%% Sprint Coach Sprint 0 RF-03
+%%
+%% Fluxo de 5 checks sequenciais + safe-deny on error.
+%% P95 < 50ms. Cache 30s para prefs (ADR-084).
+
+flowchart TD
+    Start([Caller chama<br/>shouldSendNudge userId ctx]) --> Try{try}
+
+    Try --> CachePrefs[getCoachPreferences userId<br/>cache 30s ADR-084]
+    CachePrefs --> Toggle{prefs nudge<br/>category enabled?}
+
+    Toggle -- "false" --> DenyToggle[/Log coach.nudge.deny<br/>reason=category_disabled/]
+    DenyToggle --> ReturnDeny1([return allow=false<br/>reason=category_disabled])
+
+    Toggle -- "true" --> CriticalCheck{ctx.isCritical?}
+
+    CriticalCheck -- "true" --> SkipQuiet[Bypassa quiet hours<br/>NAO bypassa caps]
+    CriticalCheck -- "false" --> GetTz[getUserTimezone userId<br/>fallback America/Sao_Paulo]
+
+    GetTz --> CalcLocal[localHour = getLocalHour now tz]
+    CalcLocal --> Quiet{isInQuietHours<br/>localHour, quietHoursStart,<br/>quietHoursEnd?}
+
+    Quiet -- "true" --> DenyQuiet[/Log coach.nudge.deny<br/>reason=quiet_hours/]
+    DenyQuiet --> ReturnDeny2([return allow=false<br/>reason=quiet_hours])
+
+    Quiet -- "false" --> SkipQuiet
+    SkipQuiet --> DailyCount[countNudgeLog userId<br/>since=now-24h<br/>excludeStatus=snoozed]
+
+    DailyCount --> DailyCap{count >=<br/>maxNudgesPerDay?}
+
+    DailyCap -- "true" --> DenyDaily[/Log coach.nudge.deny<br/>reason=daily_cap_reached/]
+    DenyDaily --> ReturnDeny3([return allow=false<br/>reason=daily_cap_reached])
+
+    DailyCap -- "false" --> HourlyCount[countNudgeLog userId<br/>since=now-1h<br/>excludeStatus=snoozed]
+    HourlyCount --> HourlyCap{count >=<br/>maxNudgesPerHour?}
+
+    HourlyCap -- "true" --> DenyHourly[/Log coach.nudge.deny<br/>reason=hourly_cap_reached/]
+    DenyHourly --> ReturnDeny4([return allow=false<br/>reason=hourly_cap_reached])
+
+    HourlyCap -- "false" --> CycleCheck{ctx.cycleKey<br/>fornecido?}
+
+    CycleCheck -- "false" --> Allow
+    CycleCheck -- "true" --> FindLog[findNudgeLog userId<br/>category cycleKey<br/>statusIn sent engaged dismissed]
+
+    FindLog --> ExistsCheck{existing?}
+    ExistsCheck -- "true" --> DenyCycle[/Log coach.nudge.deny<br/>reason=already_sent_this_cycle/]
+    DenyCycle --> ReturnDeny5([return allow=false<br/>reason=already_sent_this_cycle])
+
+    ExistsCheck -- "false" --> Allow
+    Allow[/Log coach.nudge.allow<br/>userId category cycleKey/] --> ReturnAllow([return allow=true])
+
+    Try -.->|"qualquer error"| Catch[catch err]
+    Catch --> LogErr[/Log coach.nudge.engine.error<br/>userId category err/]
+    LogErr --> ReturnError([return allow=false<br/>reason=engine_error<br/>SAFE-DENY lesson #9])
+
+    classDef deny fill:#fee2e2,stroke:#dc2626,color:#991b1b
+    classDef allow fill:#dcfce7,stroke:#16a34a,color:#166534
+    classDef error fill:#fef3c7,stroke:#d97706,color:#92400e
+
+    class ReturnDeny1,ReturnDeny2,ReturnDeny3,ReturnDeny4,ReturnDeny5 deny
+    class ReturnAllow allow
+    class ReturnError error

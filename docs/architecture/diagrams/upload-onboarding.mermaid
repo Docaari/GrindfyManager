@@ -1,0 +1,117 @@
+%% Upload Onboarding por Rede — Sprint UI-T1-Upload (ADR-079)
+%% Mostra (1) hierarquia de componentes do <NetworkImportGuide>
+%% e (2) fluxo do usuario novo desde chegar em /upload ate ver dados.
+%%
+%% Convencoes:
+%%   - Caixa solida = entrega de UI-T1-Upload (existe apos este sprint)
+%%   - Caixa pontilhada = consumer/dependencia existente (Foundation, Radix, etc.)
+%%   - Seta solida (-->) = dependencia direta (import/uso)
+%%   - Seta tracejada (-.->) = uso planejado em sprint subsequente
+
+flowchart TD
+
+  %% ============================================================
+  %% PARTE 1 — HIERARQUIA DE COMPONENTES
+  %% ============================================================
+  subgraph PageContainer["Pagina /upload — UploadHistory.tsx"]
+    direction TB
+    pageHeader["PageHeader<br/><i>Foundation (ADR-078)</i><br/>title + subtitle"]
+    networkGuide["NetworkImportGuide<br/><i>NOVO — container Radix Tabs</i><br/>persistencia localStorage"]
+    autoUpload["AutoUpload<br/><i>EXISTENTE — intocado</i><br/>drop-zone + parser"]
+    statsCards["3x StatsCard<br/><i>RF-06: Sparkline + delta</i>"]
+    filterBar["FilterBar<br/><i>RF-05: Status + Site + Filename</i>"]
+    chipGroup["FilterChipGroup<br/><i>Foundation (ADR-078)</i><br/>chips ativos + ClearAll"]
+    uploadList["Lista UploadRow[]<br/><i>RF-04: AlertDialog confirm delete</i>"]
+    emptyState["EmptyState<br/><i>Foundation (ADR-078)</i><br/>filtros zerados / sem uploads"]
+    recoveryLink["recoveryLink<br/><i>Link to=/settings#cleanup</i><br/>discreto no rodape"]
+  end
+
+  subgraph NetworkGuideInternals["NetworkImportGuide internals"]
+    direction TB
+    networkTabs["10x NetworkTab<br/><i>TabsTrigger + logo PNG</i>"]
+    guideContent["NetworkGuideContent<br/><i>renderiza tab ativa apenas</i>"]
+    networkSteps["NetworkSteps<br/><i>3 steps numerados +<br/>slot reservado figure aria-label<br/>(screenshot futuro DP-2)</i>"]
+    sampleDownload["NetworkSampleDownload<br/><i>a download href=asset estatico</i>"]
+    docLink["docLink (DP-6)<br/><i>aria-disabled + tooltip Em breve</i>"]
+  end
+
+  subgraph SampleAssets["client/src/assets/samples/"]
+    direction TB
+    samplesExtracted["4 samples EXTRAIDOS<br/><i>de tests/fixtures/</i><br/>wpn / 888poker /<br/>ggnetwork / ipoker"]
+    samplesCreated["6 samples CRIADOS<br/><i>minimal 3-5 torneios fake</i><br/>pokerstars / partypoker /<br/>bodog / coinpoker /<br/>chico / revolution"]
+  end
+
+  subgraph SettingsPage["Pagina /settings (refactor MINIMO)"]
+    direction TB
+    settingsShell["Settings.tsx<br/><i>shell INTOCADO — 1176 linhas</i><br/>(refactor: Sprint UI-REF-2)"]
+    cleanupSection["Section id=cleanup<br/><i>RF-03: 5-10 linhas JSX</i><br/>useEffect scroll-to-anchor (DP-7)"]
+    granularCleanup["GranularDataCleanup<br/><i>MOVIDO de UploadHistory</i><br/>functional unchanged"]
+  end
+
+  subgraph Helpers["client/src/lib/"]
+    direction TB
+    uploadHelpers["upload-helpers.ts<br/><i>RF-08: invalidateAfterUpload(qc)</i><br/>13 query keys centralized"]
+    uploadStats["upload-stats.ts<br/><i>RF-06: computeStatsTimeseries(uploads, 7)</i>"]
+  end
+
+  subgraph Foundation["Foundation (ADR-078) — INTOCADO"]
+    direction TB
+    tokens["tokens.color.action.bg<br/>tokens.color.danger<br/>tokens.space"]
+    fdEmptyState["EmptyState component"]
+    fdFilterChip["FilterChipGroup"]
+    fdPageHeader["PageHeader"]
+  end
+
+  subgraph Externals["Deps existentes"]
+    direction TB
+    radixTabs["@/components/ui/tabs<br/><i>Radix Tabs</i>"]
+    radixDialog["@/components/ui/alert-dialog<br/><i>Radix AlertDialog</i>"]
+    sparkline["components/Sparkline<br/><i>EXISTENTE</i>"]
+    wouter["wouter Link<br/><i>navegacao SPA</i>"]
+    queryClient["TanStack QueryClient<br/><i>cache + invalidacoes</i>"]
+  end
+
+  %% --- DEPENDENCIAS PageContainer ---
+  pageHeader --> fdPageHeader
+  networkGuide --> networkTabs
+  networkGuide --> guideContent
+  networkGuide --> radixTabs
+  networkGuide --> tokens
+  guideContent --> networkSteps
+  guideContent --> sampleDownload
+  guideContent --> docLink
+  sampleDownload --> samplesExtracted
+  sampleDownload --> samplesCreated
+  statsCards --> sparkline
+  statsCards --> uploadStats
+  filterBar --> chipGroup
+  chipGroup --> fdFilterChip
+  uploadList --> radixDialog
+  emptyState --> fdEmptyState
+  recoveryLink --> wouter
+
+  %% --- DEPENDENCIAS Settings ---
+  settingsShell --> cleanupSection
+  cleanupSection --> granularCleanup
+
+  %% --- DEPENDENCIAS Helpers ---
+  autoUpload --> uploadHelpers
+  uploadHelpers --> queryClient
+
+  %% --- LINK Cross-page ---
+  recoveryLink -.deeplink #cleanup.-> cleanupSection
+
+  %% ============================================================
+  %% ESTILOS
+  %% ============================================================
+  classDef new        fill:#0f172a,stroke:#22d3ee,stroke-width:2px,color:#cffafe
+  classDef foundation fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#e0f2fe
+  classDef existing   fill:#1f2937,stroke:#9ca3af,stroke-width:1px,color:#e5e7eb
+  classDef moved      fill:#3a2f1d,stroke:#fbbf24,stroke-width:2px,color:#fef3c7
+  classDef asset      fill:#082f49,stroke:#7dd3fc,stroke-width:2px,color:#e0f2fe
+
+  class networkGuide,networkTabs,guideContent,networkSteps,sampleDownload,docLink,statsCards,filterBar,chipGroup,uploadList,emptyState,recoveryLink,uploadHelpers,uploadStats,cleanupSection new
+  class tokens,fdEmptyState,fdFilterChip,fdPageHeader,pageHeader foundation
+  class autoUpload,settingsShell,radixTabs,radixDialog,sparkline,wouter,queryClient existing
+  class granularCleanup moved
+  class samplesExtracted,samplesCreated asset

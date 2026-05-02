@@ -320,6 +320,16 @@ export function registerUploadRoutes(app: Express): void {
           } catch (cacheErr) {
             // never block response on cache invalidation failure
           }
+
+          // Sprint Coach-2B / RF-08 — B-LEAK background detection
+          // setImmediate nao bloqueia HTTP 200; falhas isoladas via try/catch.
+          setImmediate(() => {
+            void import('../coach/jobs/processCoachLeakDetection')
+              .then(({ processCoachLeakDetection }) =>
+                processCoachLeakDetection({ userId: userPlatformId, uploadId: undefined }))
+              .catch((err) =>
+                console.error('coach.b_leak.bg.error', { userId: userPlatformId, err }));
+          });
         }
 
 
@@ -620,6 +630,15 @@ export function registerUploadRoutes(app: Express): void {
         } catch (cacheErr) {
           console.error('upload-with-duplicates: cache invalidation failed', cacheErr);
         }
+
+        // Sprint Coach-2B / RF-08 — B-LEAK background detection
+        setImmediate(() => {
+          void import('../coach/jobs/processCoachLeakDetection')
+            .then(({ processCoachLeakDetection }) =>
+              processCoachLeakDetection({ userId: userPlatformId, uploadId: undefined }))
+            .catch((err) =>
+              console.error('coach.b_leak.bg.error', { userId: userPlatformId, err }));
+        });
       }
 
       // Save upload history

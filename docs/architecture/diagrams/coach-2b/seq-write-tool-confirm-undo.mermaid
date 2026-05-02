@@ -1,0 +1,115 @@
+%% Sequence Diagram — Write tool com confirmation + undo (ADR-083)
+%% Sprint Coach-2B RF-01 + RF-02 (record_wallet_transaction como exemplo concreto)
+%%
+%% Cobre 4 outcomes:
+%%   1. Happy path (Confirmar → Desfazer dentro da janela)
+%%   2. Cancelar pending
+%%   3. Undo apos janela expirar (410)
+%%   4. Cleanup automatico de pending > 30min
+
+sequenceDiagram
+    actor User
+    participant FE as CoachActionConfirmCard / UndoBadge
+    participant API as POST /api/coach/chat (SSE)
+    participant LLM as Anthropic Claude
+    participant Runner as coachToolRunner
+    participant DB as Postgres
+    participant REST as POST /api/coach/actions/:id
+
+    Note over User,REST: 1) LLM emite tool_use (write tool)
+    User->>API: "registra deposito $50 na PokerStars wallet"
+    API->>LLM: messages.stream() com tool list
+    LLM-->>API: stream chunks + tool_use (record_wallet_transaction)
+    API->>Runner: dispatch(tool_use, ctx)
+
+    Note over Runner: tool.requiresConfirmation === true
+    Runner->>DB: INSERT coach_actions<br/>(status=pending, input, requires_confirmation=true)
+    DB-->>Runner: actionId
+    Runner-->>API: pending decision
+    API-->>FE: SSE tool_pending_confirmation<br/>{actionId, toolName, input, diffPreview, undoWindowMs:300000}
+    FE-->>User: render CoachActionConfirmCard<br/>(diff Antes/Apos + botoes)
+
+    alt 1) Happy path — Confirmar
+        User->>FE: clica "Confirmar"
+        FE->>REST: POST /actions/:id/confirm
+        REST->>DB: BEGIN TX
+        REST->>DB: SELECT FOR UPDATE coach_actions WHERE id=$1 AND user_id=$2
+        DB-->>REST: row (status=pending)
+        REST->>DB: UPDATE status=executing
+        REST->>Runner: tool.fetchPayloadBefore(input, tx)
+        Runner->>DB: SELECT wallet, balance ANTES da mutacao
+        DB-->>Runner: payloadBefore
+        REST->>DB: UPDATE coach_actions SET payload_before=$1
+        REST->>Runner: tool.executeConfirmed(input, ctx, tx)
+        Runner->>DB: walletService.recordWalletTransaction(tx, ...)
+        DB-->>Runner: txId, newBalance, fxRateUsed
+        REST->>DB: UPDATE coach_actions<br/>SET payload_after, affected_entity_*,<br/>status=completed, confirmed_at=NOW(),<br/>undo_expires_at=NOW()+5min
+        REST->>DB: COMMIT
+        REST-->>FE: 200 OK { payloadAfter, undoExpiresAt, diff }
+        REST-->>API: emit SSE tool_confirmed (via active session)
+        API-->>FE: SSE tool_confirmed
+        FE-->>User: trade Confirm card por UndoBadge<br/>(timer regressivo 5:00)
+        Note over FE: useInterval 1000ms, lendo undoExpiresAt
+
+        rect rgba(150, 230, 150, 0.15)
+        Note over User,REST: 1a) User clica Desfazer dentro da janela
+        User->>FE: clica "Desfazer" (3:42 restante)
+        FE->>REST: POST /actions/:id/undo
+        REST->>DB: BEGIN TX
+        REST->>DB: SELECT FOR UPDATE WHERE id=$1<br/>AND status=completed AND undo_expires_at>NOW()
+        DB-->>REST: row OK
+        REST->>Runner: tool.undo(payloadBefore, payloadAfter, tx)
+        Runner->>DB: walletService.recordWalletTransaction(tx,<br/>{amount: -delta, reason: manual_correction,<br/>reversedByActionId})
+        Note over Runner,DB: NUNCA hard-delete em wallet (ledger imutavel ADR-058)
+        DB-->>Runner: reverseTxId
+        REST->>DB: UPDATE coach_actions<br/>SET status=undone, undone_at=NOW()
+        REST->>DB: COMMIT
+        REST-->>FE: 200 OK
+        FE-->>User: badge "Desfeito" cinza
+        end
+
+        rect rgba(255, 200, 100, 0.15)
+        Note over User,REST: 1b) Janela expira (5min)
+        Note over FE: timer atinge 0:00<br/>botao Desfazer disable
+        User->>FE: clica Desfazer (apos 5:01)
+        FE->>REST: POST /actions/:id/undo
+        REST->>DB: SELECT WHERE id=$1<br/>AND status=completed
+        DB-->>REST: row (mas undo_expires_at <= NOW)
+        REST-->>FE: 410 undo_window_expired
+        FE-->>User: alert "Janela expirada"
+        end
+    end
+
+    alt 2) Cancelar pending
+        User->>FE: clica "Cancelar"
+        FE->>REST: POST /actions/:id/cancel
+        REST->>DB: UPDATE coach_actions SET status=expired<br/>WHERE id=$1 AND status=pending
+        DB-->>REST: 1 row
+        REST-->>FE: 200 OK
+        REST-->>API: SSE tool_cancelled
+        FE-->>User: card removido<br/>Coach segue conversa
+    end
+
+    alt 3) Race — 2 confirmacoes paralelas
+        par
+            User->>FE: clica Confirmar
+            FE->>REST: POST /actions/:id/confirm (request 1)
+        and
+            User->>FE: re-clica (latencia)
+            FE->>REST: POST /actions/:id/confirm (request 2)
+        end
+        Note over REST,DB: SELECT FOR UPDATE serializa
+        REST->>DB: TX1 SELECT FOR UPDATE → status=pending → UPDATE → COMMIT
+        REST->>DB: TX2 SELECT FOR UPDATE → status=completed (TX1 ja foi)
+        REST-->>FE: TX1 = 200 OK
+        REST-->>FE: TX2 = 409 already_confirmed
+    end
+
+    alt 4) Cleanup automatico (cron 1x/min — ADR-087)
+        Note over REST,DB: Apos 30 min sem confirm/cancel
+        Runner->>DB: UPDATE coach_actions<br/>SET status=expired<br/>WHERE status=pending<br/>AND created_at < NOW()-30min
+        DB-->>Runner: N rows
+        Note over Runner: telemetry coach.cron.cleanup_pending {expired:N}
+    end
+
+    Note over User,REST: Audit em /settings/coach-actions (Sprint 0 RF-06)<br/>le coach_actions + coach_nudge_log<br/>permite filtros tipo/categoria/data<br/>Reverter = botao "Desfazer" se undo_expires_at > NOW

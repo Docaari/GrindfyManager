@@ -18,6 +18,9 @@ import { getCoachProfile } from "../coachMemory";
 const VALID_COACH_TYPES = ['mental', 'tournament', 'technical'];
 const RATE_LIMIT_PER_HOUR = 30;
 
+// Sprint Coach Sprint 0 + Coach-2B — imports lazy via dynamic import nos handlers
+// para preservar testabilidade (mocks resolvidos via vi.mock no test file).
+
 // =============================================================================
 // Exported handlers (for unit testing)
 // =============================================================================
@@ -540,4 +543,330 @@ export function registerCoachRoutes(app: Express): void {
       res.status(500).json({ message: error.message || 'Erro interno' });
     }
   });
+
+  // ---------------------------------------------------------------------------
+  // Sprint Coach Sprint 0 — Preferences + Audit
+  // ---------------------------------------------------------------------------
+  app.get('/api/coach/preferences', requireAuth, async (req: any, res: any) => {
+    await handleGetCoachPreferences(req, res);
+  });
+  app.put('/api/coach/preferences', requireAuth, async (req: any, res: any) => {
+    await handlePutCoachPreferences(req, res);
+  });
+  app.get('/api/coach/audit', requireAuth, async (req: any, res: any) => {
+    await handleGetCoachAudit(req, res);
+  });
+  app.post('/api/coach/audit/:id/dismiss', requireAuth, async (req: any, res: any) => {
+    await handlePostCoachAuditDismiss(req, res);
+  });
+  app.post('/api/coach/audit/export', requireAuth, async (req: any, res: any) => {
+    await handlePostCoachAuditExport(req, res);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Sprint Coach-2B — Actions confirm/cancel/undo
+  // ---------------------------------------------------------------------------
+  app.get('/api/coach/actions/:id', requireAuth, async (req: any, res: any) => {
+    await handleGetCoachAction(req, res);
+  });
+  app.post('/api/coach/actions/:id/confirm', requireAuth, async (req: any, res: any) => {
+    await handlePostCoachActionConfirm(req, res);
+  });
+  app.post('/api/coach/actions/:id/cancel', requireAuth, async (req: any, res: any) => {
+    await handlePostCoachActionCancel(req, res);
+  });
+  app.post('/api/coach/actions/:id/undo', requireAuth, async (req: any, res: any) => {
+    await handlePostCoachActionUndo(req, res);
+  });
+}
+
+// =============================================================================
+// Sprint Coach Sprint 0 — handlers (preferences + audit)
+// =============================================================================
+
+function buildPrefsResponse(prefs: any, timezone: string) {
+  return {
+    nudges: {
+      bSnapshot: prefs.nudgeBSnapshot,
+      bLeak: prefs.nudgeBLeak,
+      bStudy: prefs.nudgeBStudy,
+      bVolume: prefs.nudgeBVolume,
+      bGrade: prefs.nudgeBGrade,
+      bDownswing: prefs.nudgeBDownswing,
+      bLife: prefs.nudgeBLife,
+      bMental: prefs.nudgeBMental,
+    },
+    quietHours: {
+      startHour: prefs.quietHoursStart,
+      endHour: prefs.quietHoursEnd,
+      timezone,
+    },
+    frequencyCap: {
+      perDay: prefs.maxNudgesPerDay,
+      perHour: prefs.maxNudgesPerHour,
+    },
+    channels: {
+      inApp: prefs.channelInApp,
+      email: prefs.channelEmail,
+      push: prefs.channelPush,
+    },
+    coachTone: prefs.coachTone,
+    updatedAt: prefs.updatedAt
+      ? (prefs.updatedAt instanceof Date
+          ? prefs.updatedAt.toISOString()
+          : String(prefs.updatedAt))
+      : new Date().toISOString(),
+  };
+}
+
+export async function handleGetCoachPreferences(req: any, res: any): Promise<void> {
+  try {
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: 'Nao autenticado' });
+      return;
+    }
+    const { getCoachPreferences } = await import('../storage/coachPreferences');
+    const { storage } = await import('../storage');
+    const prefs = await getCoachPreferences(userId);
+    const tz = await (storage as any).getUserTimezone?.(userId).catch(() => null) || 'America/Sao_Paulo';
+    res.status(200).json(buildPrefsResponse(prefs, tz || 'America/Sao_Paulo'));
+  } catch (err: any) {
+    console.error('coach.preferences.get.error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+export async function handlePutCoachPreferences(req: any, res: any): Promise<void> {
+  try {
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: 'Nao autenticado' });
+      return;
+    }
+    const { updateCoachPreferencesSchema } = await import('@shared/schema');
+    const parsed = updateCoachPreferencesSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      res.status(400).json({
+        message: 'validation_failed',
+        details: parsed.error.issues,
+      });
+      return;
+    }
+    const { upsertCoachPreferences } = await import('../storage/coachPreferences');
+    const { storage } = await import('../storage');
+    const prefs = await upsertCoachPreferences(userId, parsed.data as any);
+    const tz = await (storage as any).getUserTimezone?.(userId).catch(() => null) || 'America/Sao_Paulo';
+    res.status(200).json(buildPrefsResponse(prefs, tz));
+  } catch (err: any) {
+    console.error('coach.preferences.put.error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+function parseAuditQuery(query: any): { ok: true; opts: any } | { ok: false } {
+  const opts: any = {};
+  const t = query?.type;
+  if (typeof t === 'string' && t.length > 0) opts.type = t;
+  if (typeof query?.category === 'string') opts.category = query.category;
+  if (typeof query?.cursor === 'string') opts.cursor = query.cursor;
+  let limit = 20;
+  if (query?.limit !== undefined) {
+    const n = Number(query.limit);
+    if (Number.isFinite(n)) limit = Math.max(1, Math.min(100, Math.floor(n)));
+  }
+  opts.limit = limit;
+  if (query?.dateFrom) opts.dateFrom = String(query.dateFrom);
+  if (query?.dateTo) opts.dateTo = String(query.dateTo);
+  if (opts.dateFrom && opts.dateTo && opts.dateFrom > opts.dateTo) {
+    return { ok: false };
+  }
+  return { ok: true, opts };
+}
+
+export async function handleGetCoachAudit(req: any, res: any): Promise<void> {
+  try {
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: 'Nao autenticado' });
+      return;
+    }
+    const parsed = parseAuditQuery(req.query || {});
+    if (!parsed.ok) {
+      res.status(400).json({ message: 'validation_failed' });
+      return;
+    }
+    const { storage } = await import('../storage');
+    const result = await (storage as any).listCoachAudit(userId, parsed.opts);
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error('coach.audit.get.error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+export async function handlePostCoachAuditDismiss(req: any, res: any): Promise<void> {
+  try {
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: 'Nao autenticado' });
+      return;
+    }
+    const { id } = req.params || {};
+    if (!id) {
+      res.status(400).json({ message: 'invalid_id' });
+      return;
+    }
+    const { storage } = await import('../storage');
+    const item = await (storage as any).getCoachAuditById(id);
+    if (!item) {
+      res.status(404).json({ message: 'Acao nao encontrada' });
+      return;
+    }
+    if (item.userId !== userId) {
+      res.status(403).json({ message: 'Acesso negado' });
+      return;
+    }
+    await (storage as any).updateNudgeLogStatus(id, 'dismissed', {
+      dismissedAt: new Date(),
+    });
+    res.status(200).json({ id, status: 'dismissed' });
+  } catch (err: any) {
+    console.error('coach.audit.dismiss.error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+export async function handlePostCoachAuditExport(req: any, res: any): Promise<void> {
+  try {
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: 'Nao autenticado' });
+      return;
+    }
+    const { storage } = await import('../storage');
+    const result = await (storage as any).listCoachAudit(userId, { limit: 5000 });
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error('coach.audit.export.error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+// =============================================================================
+// Sprint Coach-2B — Actions handlers
+// =============================================================================
+
+export async function handleGetCoachAction(req: any, res: any): Promise<void> {
+  try {
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: 'Nao autenticado' });
+      return;
+    }
+    const { id } = req.params || {};
+    if (!id) {
+      res.status(400).json({ message: 'invalid_id' });
+      return;
+    }
+    const { getCoachActionForUser } = await import('../coachToolRunner');
+    const out = await getCoachActionForUser(id, { userPlatformId: userId });
+    if (!out.ok) {
+      res.status(out.status).json({ message: out.code });
+      return;
+    }
+    res.status(200).json(out.action);
+  } catch (err: any) {
+    console.error('coach.action.get.error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+export async function handlePostCoachActionConfirm(req: any, res: any): Promise<void> {
+  try {
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: 'Nao autenticado' });
+      return;
+    }
+    const { id } = req.params || {};
+    if (!id) {
+      res.status(400).json({ message: 'invalid_id' });
+      return;
+    }
+    const { confirmCoachAction } = await import('../coachToolRunner');
+    const out = await confirmCoachAction(id, { userPlatformId: userId });
+    if (!out.ok) {
+      res.status(out.status).json({ message: out.code, details: out.details });
+      return;
+    }
+    res.status(200).json({
+      id,
+      status: 'completed',
+      payloadAfter: out.payloadAfter,
+      affectedEntityType: out.affectedEntityType,
+      affectedEntityId: out.affectedEntityId,
+      undoExpiresAt: out.undoExpiresAt instanceof Date
+        ? out.undoExpiresAt.toISOString()
+        : out.undoExpiresAt,
+    });
+  } catch (err: any) {
+    console.error('coach.action.confirm.error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+export async function handlePostCoachActionCancel(req: any, res: any): Promise<void> {
+  try {
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: 'Nao autenticado' });
+      return;
+    }
+    const { id } = req.params || {};
+    if (!id) {
+      res.status(400).json({ message: 'invalid_id' });
+      return;
+    }
+    const { cancelCoachAction } = await import('../coachToolRunner');
+    const out = await cancelCoachAction(id, { userPlatformId: userId });
+    if (!out.ok) {
+      res.status(out.status).json({ message: out.code });
+      return;
+    }
+    res.status(200).json({ id, status: 'expired' });
+  } catch (err: any) {
+    console.error('coach.action.cancel.error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+export async function handlePostCoachActionUndo(req: any, res: any): Promise<void> {
+  try {
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: 'Nao autenticado' });
+      return;
+    }
+    const { id } = req.params || {};
+    if (!id) {
+      res.status(400).json({ message: 'invalid_id' });
+      return;
+    }
+    const { undoCoachAction } = await import('../coachToolRunner');
+    const out = await undoCoachAction(id, { userPlatformId: userId });
+    if (!out.ok) {
+      res.status(out.status).json({ message: out.code });
+      return;
+    }
+    res.status(200).json({
+      id,
+      status: 'undone',
+      reversedEntityType: out.reversedEntityType,
+      reversedEntityId: out.reversedEntityId,
+    });
+  } catch (err: any) {
+    console.error('coach.action.undo.error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
 }

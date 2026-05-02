@@ -1,0 +1,155 @@
+// =============================================================================
+// Coach Preferences Storage — Sprint Coach Sprint 0 / RF-01
+//
+// Fontes:
+//   - Docs/specs/coach-sprint-0.md (RF-01)
+//   - Docs/architecture/decisions/084-user-coach-preferences.md
+//
+// Lessons aplicadas:
+//   - #7 (deprecation gradual): normalizeCoachPreferences aplica defaults via ??.
+//   - #9 (try/catch): DB error -> log + retorna defaults safe (NAO crasha caller).
+//   - #19 (cache stale entre abas): TTL 30s + invalidate em upsert.
+// =============================================================================
+
+import { db } from "../db";
+import { eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { userCoachPreferences } from "@shared/schema";
+
+export interface CoachPreferences {
+  nudgeBSnapshot: boolean;
+  nudgeBLeak: boolean;
+  nudgeBStudy: boolean;
+  nudgeBVolume: boolean;
+  nudgeBGrade: boolean;
+  nudgeBDownswing: boolean;
+  nudgeBLife: boolean;
+  nudgeBMental: boolean;
+  quietHoursStart: number;
+  quietHoursEnd: number;
+  maxNudgesPerDay: number;
+  maxNudgesPerHour: number;
+  channelInApp: boolean;
+  channelEmail: boolean;
+  channelPush: boolean;
+  coachTone: "gentle" | "balanced" | "direct";
+  updatedAt?: Date;
+}
+
+export const COACH_PREFS_DEFAULTS: CoachPreferences = {
+  nudgeBSnapshot: true,
+  nudgeBLeak: true,
+  nudgeBStudy: true,
+  nudgeBVolume: true,
+  nudgeBGrade: true,
+  nudgeBDownswing: true,
+  nudgeBLife: false,
+  nudgeBMental: false,
+  quietHoursStart: 21,
+  quietHoursEnd: 9,
+  maxNudgesPerDay: 3,
+  maxNudgesPerHour: 1,
+  channelInApp: true,
+  channelEmail: true,
+  channelPush: false,
+  coachTone: "balanced",
+};
+
+const CACHE_TTL_MS = 30_000;
+const prefsCache = new Map<string, { value: CoachPreferences; expiresAt: number }>();
+
+/** Lesson #7 — back-fill defaults para qualquer coluna null. */
+export function normalizeCoachPreferences(row: any): CoachPreferences {
+  return {
+    nudgeBSnapshot: row?.nudgeBSnapshot ?? COACH_PREFS_DEFAULTS.nudgeBSnapshot,
+    nudgeBLeak: row?.nudgeBLeak ?? COACH_PREFS_DEFAULTS.nudgeBLeak,
+    nudgeBStudy: row?.nudgeBStudy ?? COACH_PREFS_DEFAULTS.nudgeBStudy,
+    nudgeBVolume: row?.nudgeBVolume ?? COACH_PREFS_DEFAULTS.nudgeBVolume,
+    nudgeBGrade: row?.nudgeBGrade ?? COACH_PREFS_DEFAULTS.nudgeBGrade,
+    nudgeBDownswing: row?.nudgeBDownswing ?? COACH_PREFS_DEFAULTS.nudgeBDownswing,
+    nudgeBLife: row?.nudgeBLife ?? COACH_PREFS_DEFAULTS.nudgeBLife,
+    nudgeBMental: row?.nudgeBMental ?? COACH_PREFS_DEFAULTS.nudgeBMental,
+    quietHoursStart:
+      row?.quietHoursStart ?? COACH_PREFS_DEFAULTS.quietHoursStart,
+    quietHoursEnd: row?.quietHoursEnd ?? COACH_PREFS_DEFAULTS.quietHoursEnd,
+    maxNudgesPerDay:
+      row?.maxNudgesPerDay ?? COACH_PREFS_DEFAULTS.maxNudgesPerDay,
+    maxNudgesPerHour:
+      row?.maxNudgesPerHour ?? COACH_PREFS_DEFAULTS.maxNudgesPerHour,
+    channelInApp: row?.channelInApp ?? COACH_PREFS_DEFAULTS.channelInApp,
+    channelEmail: row?.channelEmail ?? COACH_PREFS_DEFAULTS.channelEmail,
+    channelPush: row?.channelPush ?? COACH_PREFS_DEFAULTS.channelPush,
+    coachTone:
+      (row?.coachTone as CoachPreferences["coachTone"]) ??
+      COACH_PREFS_DEFAULTS.coachTone,
+    updatedAt: row?.updatedAt,
+  };
+}
+
+export async function getCoachPreferences(
+  userId: string,
+): Promise<CoachPreferences> {
+  const cached = prefsCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  try {
+    const rows = await db
+      .select()
+      .from(userCoachPreferences)
+      .where(eq(userCoachPreferences.userId, userId))
+      .limit(1);
+
+    const row = Array.isArray(rows) ? rows[0] : undefined;
+    const value = row
+      ? normalizeCoachPreferences(row)
+      : { ...COACH_PREFS_DEFAULTS };
+
+    // So cacheia sucesso (lesson #9)
+    prefsCache.set(userId, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+    return value;
+  } catch (err) {
+    // Lesson #9 — log estruturado + safe fallback
+    console.error("coach.prefs.read.error", { userId, err });
+    return { ...COACH_PREFS_DEFAULTS };
+  }
+}
+
+export async function upsertCoachPreferences(
+  userId: string,
+  delta: Partial<CoachPreferences>,
+): Promise<CoachPreferences> {
+  const current = await getCoachPreferences(userId);
+  const merged: CoachPreferences = {
+    ...current,
+    ...delta,
+    updatedAt: new Date(),
+  };
+
+  try {
+    await db
+      .insert(userCoachPreferences)
+      .values({
+        id: nanoid(),
+        userId,
+        ...merged,
+      } as any)
+      .onConflictDoUpdate({
+        target: userCoachPreferences.userId,
+        set: { ...merged, updatedAt: new Date() } as any,
+      });
+  } catch (err) {
+    console.error("coach.prefs.upsert.error", { userId, err });
+    throw err;
+  }
+
+  // Invalida cache local (lesson #19)
+  prefsCache.delete(userId);
+  return merged;
+}
+
+/** Helper de teste — limpa cache entre testes. */
+export function _resetPrefsCacheForTests(): void {
+  prefsCache.clear();
+}

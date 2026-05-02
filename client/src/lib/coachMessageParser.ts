@@ -43,16 +43,14 @@ export type CoachNode =
 const CONFIDENCE_REGEX = /\[confianca:\s*(baixa|media|alta)\s*,\s*N\s*=\s*(\d+)\s*\]/gi;
 const UNKNOWN_REGEX = /\[nao sei:\s*([^\]\[]+?)\s*\]/gi;
 
-// Citation regex: [Fonte: <origem>(, N=<n>)?(, janela: <janela>)?]
-// N e janela podem aparecer em qualquer ordem; usamos uma estrategia de extracao
-// flexivel: capturamos o conteudo bruto entre "[Fonte:" e "]" e parseamos por partes.
-const CITATION_OPEN = /\[Fonte:\s*([^\]\[]+?)\s*\]/gi;
+// Citation regex: [Fonte: <origem>(, N=<n>)?(, janela: <janela>)?] — case insensitive
+// Sprint Coach Sprint 0 RF-04 (ADR-086): aceita tambem [fonte: <tool>:<key>:<period>]
+// e [fonte: nao verificado]. N e janela podem aparecer em qualquer ordem.
+const CITATION_OPEN = /\[[Ff]onte:\s*([^\]\[]+?)\s*\]/g;
 
 // Regex combinada para node-based parsing (preserva ordem e posicao).
-// Inclui confianca, nao sei E Fonte. A captura de Fonte e feita em "raw mode":
-// pega tudo entre "[Fonte:" e o primeiro "]" e parseamos depois.
 const COMBINED_REGEX =
-  /\[confianca:\s*(baixa|media|alta)\s*,\s*N\s*=\s*(\d+)\s*\]|\[nao sei:\s*([^\]\[]+?)\s*\]|\[Fonte:\s*([^\]\[]+?)\s*\]/gi;
+  /\[confianca:\s*(baixa|media|alta)\s*,\s*N\s*=\s*(\d+)\s*\]|\[nao sei:\s*([^\]\[]+?)\s*\]|\[[Ff]onte:\s*([^\]\[]+?)\s*\]/g;
 
 // =============================================================================
 // parseCitationContent — parseia o conteudo bruto de uma citation

@@ -74,6 +74,12 @@ export function CitationChip({
   const isInteractive = typeof onClick === 'function';
   const cursorClass = isInteractive ? 'cursor-pointer' : 'cursor-help';
 
+  // Sprint Coach Sprint 0 RF-04: detecta fonte "nao verificado" para tooltip especial
+  const isUnverified = /nao\s+verificado/i.test(source) || /n[aã]o\s+verificado/i.test(source);
+  const finalTooltip = isUnverified
+    ? 'Esse numero NAO foi verificado contra dados reais. Cuidado.'
+    : tooltipText;
+
   // MEDIUM-13: shadcn Tooltip. Mantemos `title` no botao para fallback
   // em ambientes sem JS / hover programatico em testes que checam `getAttribute('title')`.
   return (
@@ -82,9 +88,10 @@ export function CitationChip({
         <TooltipTrigger asChild>
           <button
             type="button"
-            data-testid="citation-chip"
+            data-testid={isUnverified ? 'citation-chip-unverified' : 'citation-chip'}
+            data-source={isUnverified ? 'unverified' : 'verified'}
             aria-label={ariaLabel}
-            title={tooltipText}
+            title={finalTooltip}
             // MEDIUM-5: so passa onClick quando explicitamente fornecido.
             // Default: sem handler, click e no-op (visual-only).
             onClick={isInteractive ? onClick : undefined}
@@ -99,7 +106,7 @@ export function CitationChip({
             {metaText && <span className="opacity-75">{metaText}</span>}
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top">{tooltipText}</TooltipContent>
+        <TooltipContent side="top">{finalTooltip}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

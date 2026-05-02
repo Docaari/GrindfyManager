@@ -84,6 +84,66 @@ Exemplos few-shot:
 `;
 
 // =============================================================================
+// Sprint Coach Sprint 0 / RF-04 — CITATIONS_RULES (ADR-086)
+// DRY: 1 export, 2 imports (coachSystemBuilder + coachPrompts legacy).
+// Lesson #10 — divergencia silenciosa quebra cache key da Anthropic.
+// =============================================================================
+export const CITATIONS_RULES = `
+## Citacoes inline (obrigatorio)
+
+Para QUALQUER numero quantitativo derivado de tools ou contexto (ROI, profit,
+volume, ITM, sample size, contagem, percentual), incluir marcador inline ao
+final da frase:
+
+- Numero de tool: [fonte: <toolName>:<key>:<period>]
+  Ex: [fonte: query_dimension:roi:30d], [fonte: find_top_leaks:negative_roi_pko:90d]
+- Numero de page context: [fonte: <route>:<period>]
+  Ex: [fonte: dashboard:30d], [fonte: tournament-library:all]
+- Numero NAO derivado de tool nem context (estimativa, intuicao, fora dos dados):
+  [fonte: nao verificado]
+
+REGRA: Coach NAO pode mencionar numero sem fonte. Se nao houver fonte segura,
+escrever "nao verificado". Numeros literais em frases qualitativas tambem entram.
+
+Exemplos corretos:
+- "Seu ROI ultimo mes foi +8% [fonte: query_dimension:roi:30d]."
+- "Aproximadamente 30% dos pros zeram esse spot [fonte: nao verificado]."
+- "Voce tem 12 leaks ativos [fonte: find_top_leaks:overall:90d]."
+
+Exemplos errados:
+- "Seu ROI eh 8%" (sem fonte — INACEITAVEL).
+`.trim();
+
+// =============================================================================
+// Sprint Coach Sprint 0 / RF-05 — CONFIDENCE_RULES (ADR-086)
+// =============================================================================
+export const CONFIDENCE_RULES = `
+## Confidence tags (sample size aware)
+
+Quando mencionar metrica que depende de sample size, prefixar a frase com tag
+de confianca:
+
+- Sample N < 30: [confianca: baixa, N=<n>] (amostra menor que 30)
+- Sample 30 <= N < 100: [confianca: media, N=<n>] (amostra entre 30 e 100)
+- Sample N >= 100: [confianca: alta, N=<n>] (amostra maior ou igual a 100)
+- Sample N nao disponivel: omitir tag (nao inventar numero)
+
+REGRA: tag DEVE preceder a afirmacao. Tools que retornam sample
+(query_dimension.totalCount, find_top_leaks.evidence.n,
+read_user_hud_stats.latestSnapshot.sampleSize) ja entregam n — usa-lo no output.
+
+Exemplos corretos:
+- "[confianca: baixa, N=12] Seu ROI em PKO esta -15%, mas amostra muito pequena."
+- "[confianca: alta, N=450] Voce eh +EV em \\$22 regulares (+8% ROI)."
+
+Exemplos errados:
+- "[confianca: alta, N=5]" (n=5 nao eh alta — INVENT).
+- "Seu ROI eh +8%" sem tag quando ha sample disponivel.
+
+Boundary: N=30 inclusive em "media". N=100 inclusive em "alta".
+`.trim();
+
+// =============================================================================
 // formatValue — converte qualquer valor em string preservando decimais
 // =============================================================================
 export function formatValue(value: any): string {

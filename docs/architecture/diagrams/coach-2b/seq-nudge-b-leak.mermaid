@@ -1,0 +1,93 @@
+%% Sequence Diagram — B-LEAK proativo pos-upload CSV (Coach-2B RF-08)
+%% ADR-085 (engine) + ADR-084 (preferences)
+%%
+%% NAO eh cron — eh setImmediate async no request handler de POST /api/upload/csv.
+%% NAO bloqueia HTTP response do upload.
+%%
+%% Detecta leak NOVO (nao mencionado em chat_messages.content nas ultimas 30d)
+%% e dispara conversa proativa via shouldSendNudge.
+%%
+%% cycleKey = YYYY-WW (semanal). Garante max 1 nudge B-LEAK por semana mesmo
+%% se user fizer multiplos uploads.
+
+sequenceDiagram
+    actor User
+    participant Upload as POST /api/upload/csv
+    participant CSVParser as PokerCSVParser
+    participant DB as Postgres
+    participant Async as setImmediate<br/>processCoachLeakDetection
+    participant LeakDet as coachLeakDetection<br/>detectLeaks
+    participant ChatGrep as storage.findRecentLeakMentions<br/>(grep chat_messages content)
+    participant Engine as shouldSendNudge ADR-085
+    participant Storage as server/storage
+
+    User->>Upload: POST CSV (PokerStars histarial.txt)
+    Upload->>CSVParser: parse(file)
+    CSVParser-->>Upload: tournaments[]
+    Upload->>DB: BEGIN<br/>INSERT N tournaments<br/>UPDATE upload_history<br/>COMMIT
+    DB-->>Upload: ok
+
+    Upload-->>User: 200 OK<br/>{ imported: N, ... }
+    Note over Upload: HTTP response retornada<br/>antes do processamento async
+
+    Upload->>Async: setImmediate(<br/>processCoachLeakDetection<br/>{userId, uploadId})
+
+    rect rgba(150, 230, 200, 0.15)
+    Note over Async,Storage: Background processing (lesson #9: per-user try/catch)
+
+    Async->>LeakDet: detectLeaks(userId,<br/>{minSeverity: 'medium', limit: 5})
+    LeakDet->>DB: queries de analise<br/>(roi por categoria, ITM, etc)
+    DB-->>LeakDet: stats
+    LeakDet-->>Async: leaks[] (codes + evidence + sample)
+
+    alt leaks.length === 0
+        Note over Async: skip silently<br/>telemetry coach.leak.no_leaks_detected
+    else leaks.length >= 1
+        Async->>ChatGrep: findRecentLeakMentions(<br/>userId, leakCodes,<br/>since=now-30d)
+        Note over ChatGrep: grep simples em chat_messages.content<br/>WHERE role=assistant AND content LIKE '%{leakCode}%'<br/>AND created_at > now-30d
+        ChatGrep->>DB: SELECT chat_messages WHERE...
+        DB-->>ChatGrep: mentioned[]
+        ChatGrep-->>Async: leakCodesMentioned
+
+        Async->>Async: novelLeaks = leaks.filter(l => !mentionedSet.has(l.code))
+
+        alt novelLeaks.length === 0
+            Note over Async: skip + telemetry coach.leak.all_already_mentioned
+        else novelLeaks.length >= 1
+            Async->>Engine: shouldSendNudge(userId,<br/>{category: 'B-LEAK',<br/>cycleKey: 'YYYY-WW' formato ISO,<br/>now: new Date()})<br/>ADR-085
+
+            Engine-->>Async: decision
+
+            alt decision.allow == false
+                Note over Async: skip + log<br/>(opt-out / quiet hours / cap / cycle ja sent essa semana)
+            else decision.allow == true
+                Note over Async: Begin tx (lesson #194)
+                Async->>DB: BEGIN
+                Async->>Storage: createChatSession<br/>(userId, coachType='technical',<br/>title='Leaks novos detectados')
+                Storage->>DB: INSERT chat_sessions
+                DB-->>Storage: chatSessionId
+
+                Note over Async: Mensagem template:<br/>"Acabei de processar seus N torneios novos.<br/>Detectei M leak(s) que nao discutimos antes:<br/>{lista de leaks com severidade + evidencia + sample}.<br/>Quer revisar agora ou prefere mais tarde?"
+
+                Async->>Storage: createChatMessage<br/>(role='assistant', content=template)
+                Storage->>DB: INSERT chat_messages
+                DB-->>Storage: messageId
+
+                Async->>Storage: createNudgeLog(<br/>userId,<br/>category='B-LEAK',<br/>cycleKey='YYYY-WW',<br/>status='sent',<br/>title_i18n=template title,<br/>body_preview=first 500 chars,<br/>chat_session_id,<br/>triggered_by_event='csv_upload',<br/>metadata={leakCodes: novelLeaks.map(c=>c.code)})
+                Storage->>DB: INSERT coach_nudge_log
+                DB-->>Storage: nudgeLogId
+                Async->>DB: COMMIT
+
+                Note over Async: Telemetria<br/>coach.nudge.b_leak.sent<br/>{userId, cycleKey, leakCodes: [...]}
+            end
+        end
+    end
+    end
+
+    rect rgba(255, 220, 220, 0.15)
+    Note over Async,DB: Failure modes (lesson #9):<br/>- detectLeaks DB error → log + abort (upload nao afetado)<br/>- ChatGrep timeout → log + assume todos novos (false positive aceito)<br/>- shouldSendNudge engine_error → DENY safe (sem nudge)<br/>- INSERT chat_messages falha → ROLLBACK, sem nudge<br/>Em TODOS casos: HTTP 200 ja foi devolvido ao user; falha silenciosa no async
+    end
+
+    rect rgba(220, 200, 255, 0.15)
+    Note over Async,Storage: Edge case — 2 uploads same week<br/>com leaks DIFERENTES:<br/>1o upload: B-LEAK enviado (cycleKey=2026-WK18)<br/>2o upload mesma semana: shouldSendNudge DENY<br/>'already_sent_this_cycle' (mesmo se leaks novos)<br/>Decisao consciente: 1 nudge/semana max<br/>(user pode abrir conversa manual)
+    end

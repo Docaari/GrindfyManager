@@ -52,8 +52,147 @@ ADRs relevantes: 058 (auto-snapshot), 059 (wallet_transfers), 060 (stop-loss loc
 | `coach_messages` | Mensagens (role, content, tokens, model, latencyMs) |
 | `coach_usage` | Tracking de tokens (input/output/cache_*) por conversation |
 | `coach_feedback` | Thumbs up/down + comentarios |
+| `coach_actions` | **NOVA Coach-2B (RF-01 / ADR-077 / ADR-083)**. Audit + state machine para tool calls (read + write). Status: `pending` → `executing` → `completed | failed | undone | expired`. Write tools (`requires_confirmation=true`) usam `payload_before` + `payload_after` + `undo_expires_at` (`confirmed_at + 5min`) para reversao. Read tools com `auditLevel='persist'` gravam apenas `result` wrapped (ADR-024). Indices: `idx_coach_actions_user_status`, `idx_coach_actions_session`, `idx_coach_actions_tool`, `idx_coach_actions_undo_window` (parcial WHERE status='completed'), `idx_coach_actions_pending_cleanup` (parcial WHERE status='pending'). FK CASCADE em userId; FK soft em chat_session_id + message_id. |
+| `user_coach_preferences` | **NOVA Coach Sprint 0 (RF-01 / ADR-084)**. 1 row por usuario, lazy-create (defaults retornados se row ausente). 8 toggles por categoria de nudge (B-SNAPSHOT/B-LEAK/B-STUDY/B-VOLUME/B-GRADE/B-DOWNSWING ON; B-LIFE/B-MENTAL OFF). Quiet hours timezone-aware via `users.timezone`: `quiet_hours_start` + `quiet_hours_end` (0..23, wrap-around aceito). Frequency cap: `max_nudges_per_day=3`, `max_nudges_per_hour=1`. Channels: `channel_in_app`+`channel_email` ON, `channel_push` OFF. Tom: `coach_tone='balanced'` (gentle/balanced/direct, Coach-4 ativa LLM). UNIQUE em user_id. CASCADE em user. Cache memoria 30s (`prefsCache`) reusa logica de `resolveUserTier`. |
+| `coach_nudge_log` | **NOVA Coach Sprint 0 (RF-03 / ADR-085)**. Audit + frequency cap + idempotencia per-cycle. Cada nudge enviado gera 1 row. `category` varchar(32) (B-SNAPSHOT/B-LEAK/B-STUDY/B-VOLUME/B-GRADE/B-DOWNSWING/B-LIFE/B-MENTAL). `cycle_key` varchar(16) nullable ('YYYY-MM' mensal | 'YYYY-WW' semanal | NULL). `status` varchar(16): sent/engaged/dismissed/snoozed/unsubscribed (snoozed NAO consume cap). `triggered_by_event` (cron_28th/csv_upload/session_complete/etc). Engine `shouldSendNudge` (ADR-085) consulta para frequency cap + idempotencia (`already_sent_this_cycle`). Indices: `idx_coach_nudge_log_user_sent`, `idx_coach_nudge_log_user_category_cycle`, `idx_coach_nudge_log_category_status_sent`. FK CASCADE em user; FK soft em chat_session_id (nudge cria sessao). |
+| `coach_leak_focus` | **NOVA Coach-2B (RF-05 / ADR-077)**. Foco de leak escolhido pelo user (1 ou mais por mes). `leak_code` varchar(64) (ex 'low_itm_turbos'); `description` text max 200 pt-BR; `target_month` varchar(7) ('YYYY-MM'); `baseline_stat_key` + `baseline_value` + `baseline_sample_size` capturados no momento do log. `status`: active/resolved/abandoned. UNIQUE em (user_id, leak_code, target_month). FK CASCADE em user. Tool `verify_leak_progress` (RF-05) consulta para comparativo current vs baseline. |
 
 Detalhes: `Docs/api/coach.md`, `Docs/api/coach-tools.md`.
+
+**ADRs relevantes Coach Sprint 0 + Coach-2B (2026-05-02):**
+- **ADR-077** (`coach-actions-migration-and-audit-log`) — schema final write-tool aware; migration unica `0024_coach_2b_actions_leak_focus.sql`; verifica que tabela documentada nos ADRs 023/024 NUNCA foi migrada (zero matches em codigo de producao).
+- **ADR-083** (`coach-confirmation-undo-pattern`) — confirmation + undo 5min via state machine + `payload_before` snapshot dentro da tx (lesson #194); reverse-row em wallet (NAO hard-delete, ADR-058 ledger imutavel).
+- **ADR-084** (`user-coach-preferences`) — tabela dedicada com lazy-create + cache 30s + Zod optional/default; defaults seguros (B-LIFE/B-MENTAL opt-in).
+- **ADR-085** (`coach-nudge-engine`) — `shouldSendNudge` 5 checks sequenciais + safe-deny on error; cycleKey resolve idempotencia.
+- **ADR-086** (`coach-citations-and-confidence-inline-rules`) — CITATIONS_RULES + CONFIDENCE_RULES em arquivo unico `coachSafetyPrompts.ts` (lesson #10 DRY); cache invalidation 1x apos deploy.
+- **ADR-087** (`job-runner-timezone-aware`) — node-cron in-process para Sprint 2B; `iterateUsersWithTimezone` filtra por hora local; migration path para pg-boss em Coach-3.
+
+> Nota numeracao: ADR-078 (design tokens UI-FND-1) foi reservado por sessao paralela em 2026-05-02. Os 6 ADRs Coach Sprint 0 + Coach-2B foram renumerados para 077 + 083-087 evitando colisao.
+
+**Diagramas Mermaid:** ver `Docs/architecture/diagrams/coach-2b/`:
+- `er-coach-2b.mermaid` — ER das 4 tabelas novas + relacionamentos com tabelas existentes.
+- `seq-write-tool-confirm-undo.mermaid` — Sequencia confirmation + undo 5min + race condition + cleanup.
+- `flow-nudge-engine.mermaid` — Flowchart shouldSendNudge (5 checks + safe-deny).
+- `seq-nudge-b-snapshot.mermaid` — B-SNAPSHOT cron mensal dia 28 9h timezone-aware.
+- `seq-nudge-b-leak.mermaid` — B-LEAK setImmediate pos-upload com gap-check + cycleKey semanal.
+- `flow-citation-enrichment.mermaid` — System prompt rules + tool result wrapping + frontend parser.
+
+**Migration prevista:** `migrations/0024_coach_2b_actions_leak_focus.sql` (cria 4 tabelas + indices em uma migration unica).
+
+### Schema Delta — Sprint Coach Sprint 0 + Coach-2B
+
+```mermaid
+erDiagram
+    USERS ||--o{ COACH_ACTIONS : "1:N CASCADE"
+    USERS ||--|| USER_COACH_PREFERENCES : "1:1 CASCADE lazy"
+    USERS ||--o{ COACH_NUDGE_LOG : "1:N CASCADE"
+    USERS ||--o{ COACH_LEAK_FOCUS : "1:N CASCADE"
+    CHAT_SESSIONS ||..o{ COACH_ACTIONS : "FK soft"
+    CHAT_SESSIONS ||..o{ COACH_NUDGE_LOG : "FK soft"
+    COACH_ACTIONS ||--o| COACH_LEAK_FOCUS : "affected_entity (log_leak_focus tool)"
+```
+
+```sql
+-- migrations/0024_coach_2b_actions_leak_focus.sql (preview)
+
+CREATE TABLE coach_actions (
+    id VARCHAR(21) PRIMARY KEY,
+    user_id VARCHAR(21) NOT NULL REFERENCES users(user_platform_id) ON DELETE CASCADE,
+    chat_session_id VARCHAR(21),
+    message_id VARCHAR(21),
+    tool_use_id VARCHAR(64),
+    tool_name VARCHAR(64) NOT NULL,
+    status VARCHAR(16) NOT NULL,
+    input JSONB,
+    result JSONB,
+    error_message TEXT,
+    payload_before JSONB,
+    payload_after JSONB,
+    affected_entity_type VARCHAR(32),
+    affected_entity_id VARCHAR(21),
+    requires_confirmation BOOLEAN NOT NULL DEFAULT FALSE,
+    confirmed_at TIMESTAMP,
+    undo_expires_at TIMESTAMP,
+    undone_at TIMESTAMP,
+    latency_ms INTEGER,
+    executed_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_coach_actions_user_status ON coach_actions(user_id, status, created_at);
+CREATE INDEX idx_coach_actions_session ON coach_actions(chat_session_id);
+CREATE INDEX idx_coach_actions_tool ON coach_actions(tool_name, status, created_at);
+CREATE INDEX idx_coach_actions_undo_window ON coach_actions(user_id, undo_expires_at)
+    WHERE status = 'completed' AND undo_expires_at IS NOT NULL;
+CREATE INDEX idx_coach_actions_pending_cleanup ON coach_actions(status, created_at)
+    WHERE status = 'pending';
+
+CREATE TABLE user_coach_preferences (
+    id VARCHAR(21) PRIMARY KEY,
+    user_id VARCHAR(21) NOT NULL UNIQUE REFERENCES users(user_platform_id) ON DELETE CASCADE,
+    nudge_b_snapshot BOOLEAN NOT NULL DEFAULT TRUE,
+    nudge_b_leak BOOLEAN NOT NULL DEFAULT TRUE,
+    nudge_b_study BOOLEAN NOT NULL DEFAULT TRUE,
+    nudge_b_volume BOOLEAN NOT NULL DEFAULT TRUE,
+    nudge_b_grade BOOLEAN NOT NULL DEFAULT TRUE,
+    nudge_b_downswing BOOLEAN NOT NULL DEFAULT TRUE,
+    nudge_b_life BOOLEAN NOT NULL DEFAULT FALSE,
+    nudge_b_mental BOOLEAN NOT NULL DEFAULT FALSE,
+    quiet_hours_start INTEGER NOT NULL DEFAULT 21,
+    quiet_hours_end INTEGER NOT NULL DEFAULT 9,
+    max_nudges_per_day INTEGER NOT NULL DEFAULT 3,
+    max_nudges_per_hour INTEGER NOT NULL DEFAULT 1,
+    channel_in_app BOOLEAN NOT NULL DEFAULT TRUE,
+    channel_email BOOLEAN NOT NULL DEFAULT TRUE,
+    channel_push BOOLEAN NOT NULL DEFAULT FALSE,
+    coach_tone VARCHAR(20) NOT NULL DEFAULT 'balanced',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE coach_nudge_log (
+    id VARCHAR(21) PRIMARY KEY,
+    user_id VARCHAR(21) NOT NULL REFERENCES users(user_platform_id) ON DELETE CASCADE,
+    category VARCHAR(32) NOT NULL,
+    cycle_key VARCHAR(16),
+    status VARCHAR(16) NOT NULL,
+    title_i18n VARCHAR(200),
+    body_preview TEXT,
+    channel VARCHAR(16) DEFAULT 'in_app',
+    chat_session_id VARCHAR(21),
+    triggered_by_event VARCHAR(64),
+    sent_at TIMESTAMP DEFAULT NOW(),
+    engaged_at TIMESTAMP,
+    dismissed_at TIMESTAMP,
+    snooze_until TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX idx_coach_nudge_log_user_sent ON coach_nudge_log(user_id, sent_at);
+CREATE INDEX idx_coach_nudge_log_user_category_cycle ON coach_nudge_log(user_id, category, cycle_key);
+CREATE INDEX idx_coach_nudge_log_category_status_sent ON coach_nudge_log(category, status, sent_at);
+
+CREATE TABLE coach_leak_focus (
+    id VARCHAR(21) PRIMARY KEY,
+    user_id VARCHAR(21) NOT NULL REFERENCES users(user_platform_id) ON DELETE CASCADE,
+    leak_code VARCHAR(64) NOT NULL,
+    description TEXT NOT NULL,
+    target_month VARCHAR(7) NOT NULL,
+    baseline_stat_key VARCHAR(128) NOT NULL,
+    baseline_value DECIMAL NOT NULL,
+    baseline_sample_size INTEGER NOT NULL,
+    study_plan_notes TEXT,
+    status VARCHAR(16) DEFAULT 'active',
+    resolved_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX idx_coach_leak_focus_user_month ON coach_leak_focus(user_id, target_month);
+CREATE UNIQUE INDEX uniq_coach_leak_focus_user_code_month
+    ON coach_leak_focus(user_id, leak_code, target_month);
+```
+
+Drizzle (em `shared/schema.ts`): Zod `optional + default` em todas as colunas write-tool only de `coach_actions` (lesson #7 — deprecation gradual). Cache 30s em memoria para `getCoachPreferences` (analogo a `resolveUserTier`).
+
+---
 
 ## Estudos
 

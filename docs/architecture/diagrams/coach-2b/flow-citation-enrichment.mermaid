@@ -1,0 +1,92 @@
+%% Flowchart — Citation enrichment via system prompt + tool result wrapping (ADR-086)
+%% Sprint Coach Sprint 0 RF-04 + RF-05
+%%
+%% NAO ha middleware que reescreve texto do LLM (rejeitada Opcao D do ADR-086).
+%% Citations + confidence sao DIRETIVAS no system prompt cacheado (bloco estatico).
+%% Tools entregam sample size (n) no tool result; LLM consome no output.
+
+flowchart TD
+    Start([User envia mensagem<br/>'qual meu ROI por site?']) --> Build[server/coachSystemBuilder.ts<br/>buildStaticSystemBlock]
+
+    Build --> Concat[Concat:<br/>baseCoachPrompt +<br/>SAFETY_RULES +<br/>CITATIONS_RULES ADR-086 +<br/>CONFIDENCE_RULES ADR-086 +<br/>userAiProfile +<br/>statsSnapshot +<br/>lastSummary]
+
+    Concat --> Cache{Anthropic<br/>cache hit?}
+
+    Cache -- "miss<br/>(deploy novo<br/>ou TTL 5min expirou)" --> Write[/Cache write<br/>+25% custo<br/>~150 tokens extras<br/>amortiza em 5min/]
+    Cache -- "hit" --> Read[/Cache read<br/>-90% custo<br/>0ms latencia/]
+
+    Write --> Stream
+    Read --> Stream
+
+    Stream[messages.stream com<br/>system blocks + user msg]
+    Stream --> LLM[Claude Sonnet 4.x<br/>processa system blocks<br/>+ user msg + tools list]
+
+    LLM --> Decision{LLM decide<br/>tool_use?}
+
+    Decision -- "no" --> DirectText[stream text<br/>com citations + confidence]
+    Decision -- "yes" --> ToolUse[emit tool_use block<br/>ex query_dimension<br/>{dimension: site, metric: roi, period: 30d}]
+
+    ToolUse --> Runner[coachToolRunner ADR-023]
+    Runner --> Handler[handler executa query<br/>retorna { rows: [...], totalCount: 450 }]
+    Handler --> Wrap[ADR-024 wrapResult<br/>{__type:ToolResult,<br/>tool:'query_dimension',<br/>ok:true,<br/>data:{ rows, totalCount: 450 }}]
+    Wrap --> Persist{auditLevel?}
+    Persist -- "persist" --> SavePersist[INSERT coach_actions<br/>status=completed result=wrapped]
+    Persist -- "log" --> SaveLog[INSERT coach_actions<br/>status=completed result=null]
+    Persist -- "none" --> SkipSave[no row]
+
+    SavePersist --> Return
+    SaveLog --> Return
+    SkipSave --> Return
+
+    Return[Anthropic continuation<br/>com tool_result block]
+    Return --> LLM2[LLM consume<br/>tool_result data<br/>+ system rule:<br/>'numero quantitativo precisa<br/>fonte e confidence']
+
+    LLM2 --> Generate[stream text final<br/>'Seu ROI em PokerStars eh +8%'<br/>+ inline tags]
+
+    Generate --> Inline{LLM segue<br/>diretivas?}
+
+    Inline -- "sim 95% casos" --> Inline1[/'[confianca: alta, N=450]<br/>Seu ROI em PokerStars<br/>esta +8% no ultimo mes<br/>[fonte: query_dimension:roi:30d]'/]
+
+    Inline -- "5% casos<br/>esquece tag" --> Inline2[/'Seu ROI em PokerStars<br/>esta +8% no ultimo mes'<br/>SEM tag/]
+
+    Inline1 --> Frontend
+    Inline2 --> EvalDetect[Eval Coach-2B+<br/>detecta numero sem fonte<br/>flag em telemetry]
+    EvalDetect --> Frontend
+
+    Frontend[client/src/lib/coachMessageParser.ts<br/>regex parse]
+
+    Frontend --> ParseConf{regex<br/>'[confianca:...]'<br/>match?}
+
+    ParseConf -- "yes" --> ConfBadge[<ConfidenceBadge level='alta' n=450 /><br/>renderiza ✅ green badge]
+    ParseConf -- "no" --> SkipBadge[texto literal<br/>graceful degradation]
+
+    ConfBadge --> ParseSrc{regex<br/>'[fonte:...]'<br/>match?}
+    SkipBadge --> ParseSrc
+
+    ParseSrc -- "yes & verified" --> SrcChip[<CitationChip source='...'><br/>tooltip mostra source path]
+    ParseSrc -- "yes & nao verificado" --> UnverifiedChip[<CitationChip<br/>source='nao verificado'><br/>cursor-help<br/>tooltip 'NAO foi verificado<br/>contra dados reais. Cuidado.']
+    ParseSrc -- "no" --> NoSrcWarn[texto literal<br/>5% casos]
+
+    SrcChip --> User
+    UnverifiedChip --> User
+    NoSrcWarn --> User
+
+    User([User ve resposta com<br/>badges + chips inline])
+
+    classDef miss fill:#fef3c7,stroke:#d97706
+    classDef hit fill:#dbeafe,stroke:#2563eb
+    classDef ok fill:#dcfce7,stroke:#16a34a
+    classDef warn fill:#fee2e2,stroke:#dc2626
+
+    class Write miss
+    class Read hit
+    class Inline1 ok
+    class Inline2,NoSrcWarn warn
+    class UnverifiedChip warn
+
+    %% Notas:
+    %% - CITATIONS_RULES + CONFIDENCE_RULES no bloco ESTATICO (ADR-019 + ADR-086).
+    %% - Lesson #10: 1 export, 2 imports (coachSystemBuilder + coachPrompts).
+    %% - Sample N vem em tool result (n, totalCount, sampleSize) — LLM consome.
+    %% - Frontend parser regex tem fallback graceful (ADR-022).
+    %% - Eval Coach-2B+: LLM-as-judge mede taxa de "numero sem fonte" - alvo < 5%.

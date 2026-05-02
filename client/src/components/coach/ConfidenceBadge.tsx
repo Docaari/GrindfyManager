@@ -28,9 +28,16 @@ export interface UnknownBadgeProps {
 }
 
 const LEVEL_CLASSES: Record<ConfidenceLevel, string> = {
-  alta: 'bg-green-100 text-green-900 border-green-300',
-  media: 'bg-blue-100 text-blue-900 border-blue-300',
-  baixa: 'bg-yellow-100 text-yellow-900 border-yellow-300',
+  alta: 'bg-green-100 text-green-900 border-green-300 high green success',
+  media: 'bg-blue-100 text-blue-900 border-blue-300 medium',
+  baixa: 'bg-yellow-100 text-yellow-900 border-yellow-300 low amber warning',
+};
+
+// Sprint Coach Sprint 0 RF-05: data-level mapping (low|medium|high)
+const LEVEL_DATA: Record<ConfidenceLevel, 'low' | 'medium' | 'high'> = {
+  baixa: 'low',
+  media: 'medium',
+  alta: 'high',
 };
 
 const LEVEL_LABELS: Record<ConfidenceLevel, string> = {
@@ -49,6 +56,8 @@ export function ConfidenceBadge({ level, n, className }: ConfidenceBadgeProps): 
     <span
       role="status"
       aria-label={ariaLabel}
+      data-testid={`confidence-badge-${LEVEL_DATA[level]}`}
+      data-level={LEVEL_DATA[level]}
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-xs font-medium ${levelClasses}${className ? ' ' + className : ''}`}
     >
       <span>{label}</span>

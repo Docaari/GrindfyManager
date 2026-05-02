@@ -18,8 +18,8 @@ import {
 import { shouldShowBountyField } from './result-dialog-helpers';
 import type { RegistrationData } from './types';
 
-// Reg deadline = start + lateRegMinutes. Card mostra reg como tempo principal;
-// start vai como subtitulo (inicio HH:MM).
+// Reg deadline = start + lateRegMinutes. Card display ordena por reg, mostra
+// reg como tempo principal; start vai como subtitulo (inicio HH:MM).
 function getRegDeadlineLabel(time?: string | null, lateRegMinutes?: number | null): string | null {
   if (!time || typeof lateRegMinutes !== 'number' || lateRegMinutes <= 0) return null;
   const [h, m] = time.split(':').map((n) => parseInt(n, 10));

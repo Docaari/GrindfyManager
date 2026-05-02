@@ -14,6 +14,8 @@ import {
   SAFETY_RULES,
   SAFETY_RULES_COMPETITOR_BLOCK,
   CONFIDENCE_AND_CITATIONS_BACKTICKED as CITATION_AND_CONFIDENCE_INSTRUCTIONS,
+  CITATIONS_RULES,
+  CONFIDENCE_RULES,
 } from './coachSafetyPrompts';
 
 export type CoachType = 'mental' | 'tournament' | 'technical';
@@ -92,6 +94,9 @@ export function buildStaticSystemBlock(
   // block para preservar cache hit (atualizar lista quebra cache UMA vez).
   parts.push(SAFETY_RULES_COMPETITOR_BLOCK);
   parts.push(CITATION_AND_CONFIDENCE_INSTRUCTIONS);
+  // Sprint Coach Sprint 0 — RF-04 + RF-05 (ADR-086)
+  parts.push(CITATIONS_RULES);
+  parts.push(CONFIDENCE_RULES);
 
   if (inputs.aiProfile && String(inputs.aiProfile).trim().length > 0) {
     parts.push(`\n## Perfil do Jogador (memoria de longo prazo):\n${inputs.aiProfile}`);

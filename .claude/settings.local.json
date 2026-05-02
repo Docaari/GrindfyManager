@@ -133,7 +133,9 @@
       "Bash(pkill -f \"db:push\")",
       "WebFetch(domain:www.lobbyze.com)",
       "Bash(pkill -f drizzle-kit)",
-      "WebFetch(domain:blog.lobbyze.com)"
+      "WebFetch(domain:blog.lobbyze.com)",
+      "Bash(git worktree *)",
+      "Bash(findstr :3000)"
     ]
   }
 }

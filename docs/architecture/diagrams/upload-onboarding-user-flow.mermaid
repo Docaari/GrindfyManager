@@ -1,0 +1,169 @@
+%% Upload Onboarding USER FLOW — Sprint UI-T1-Upload (ADR-079)
+%% Fluxograma do caminho do usuario novo desde chegar em /upload
+%% ate ver seus dados importados na lista. Cobre happy path + caminhos de erro.
+%%
+%% Cenarios mapeados:
+%%   - Happy path: novo usuario sem dados -> baixa sample -> upload -> ve dados
+%%   - Edge: localStorage indisponivel -> default WPN funciona
+%%   - Edge: parser rejeita upload -> error inline + retry
+%%   - Edge: filtros zeram lista -> EmptyState com Limpar filtros
+%%   - Power user: precisa limpar dados -> recovery link rodape -> Settings#cleanup
+
+flowchart TD
+  start(["Usuario novo<br/>chega em /upload"])
+
+  %% ============================================================
+  %% INICIALIZACAO
+  %% ============================================================
+  loadStorage["useEffect le<br/>localStorage<br/>grindfy.upload.activeNetworkTab"]
+  storageOk{"localStorage<br/>disponivel?"}
+  validKey{"Valor existe<br/>e eh valido<br/>(10 keys)?"}
+  defaultWpn["Default WPN<br/>(rede mais comum)"]
+  setActive["setActiveTab(savedKey)"]
+
+  start --> render
+  render["Renderiza pagina:<br/>PageHeader + NetworkImportGuide<br/>+ AutoUpload + StatsCards<br/>+ FilterBar + EmptyState"]
+  render --> loadStorage
+  loadStorage --> storageOk
+  storageOk -->|"Nao (incognito,<br/>storage disabled)"| defaultWpn
+  storageOk -->|"Sim"| validKey
+  validKey -->|"Nao (corrupted,<br/>missing)"| defaultWpn
+  validKey -->|"Sim"| setActive
+  defaultWpn --> showTab
+  setActive --> showTab
+
+  %% ============================================================
+  %% TUTORIAL + SAMPLE
+  %% ============================================================
+  showTab["Tab ativa renderiza<br/>NetworkGuideContent:<br/>3 steps + sample download<br/>+ doc link inerte"]
+  userAction{"Usuario<br/>faz o que?"}
+
+  showTab --> userAction
+
+  switchTab["Clica outra tab<br/>(ex: PokerStars)"]
+  saveStorage["localStorage.setItem<br/>(activeNetworkTab, newKey)"]
+  switchTab --> saveStorage
+  saveStorage --> showTab
+
+  downloadSample["Clica<br/>'Baixar exemplo CSV'"]
+  triggerDownload["Browser inicia<br/>download de<br/>asset estatico Vite"]
+  downloadSample --> triggerDownload
+  triggerDownload --> userAction
+
+  clickDocLink["Clica<br/>'Ver redes suportadas'"]
+  tooltipBreve["Tooltip:<br/>'Em breve'<br/>(aria-disabled, DP-6)"]
+  clickDocLink --> tooltipBreve
+  tooltipBreve --> userAction
+
+  %% ============================================================
+  %% UPLOAD CSV
+  %% ============================================================
+  uploadCsv["Arrasta/seleciona CSV<br/>via AutoUpload"]
+  parseSuccess{"Parser aceita<br/>CSV?"}
+  invalidateAll["invalidateAfterUpload(qc)<br/>13 query keys<br/>(RF-08 helper)"]
+  toastSuccess["Toast 'Sucesso'<br/>+ lista atualiza"]
+  toastError["Toast 'Erro de parse'<br/>+ mensagem detalhada"]
+
+  userAction -->|"Faz upload"| uploadCsv
+  uploadCsv --> parseSuccess
+  parseSuccess -->|"Sim"| invalidateAll
+  invalidateAll --> toastSuccess
+  toastSuccess --> showData
+  parseSuccess -->|"Nao"| toastError
+  toastError --> userAction
+
+  showData["Lista renderiza<br/>UploadRow[]<br/>StatsCards atualizadas<br/>com sparkline + delta"]
+
+  %% ============================================================
+  %% INTERACAO COM LISTA
+  %% ============================================================
+  listAction{"Usuario<br/>interage<br/>com lista?"}
+
+  showData --> listAction
+  userAction -->|"Ja tem dados"| listAction
+
+  applyFilter["Aplica filtro<br/>(Status / Site / Filename)"]
+  filteredList{"filteredUploads<br/>vazio?"}
+  emptyFiltered["EmptyState:<br/>'Nenhum upload<br/>corresponde aos filtros'<br/>+ btn 'Limpar filtros'"]
+  showFiltered["Lista filtrada<br/>+ FilterChipGroup<br/>com chips ativos"]
+  clearFilters["Click 'Limpar filtros'<br/>ou X em chip"]
+
+  listAction -->|"Filtra"| applyFilter
+  applyFilter --> filteredList
+  filteredList -->|"Sim"| emptyFiltered
+  filteredList -->|"Nao"| showFiltered
+  emptyFiltered --> clearFilters
+  showFiltered --> listAction
+  clearFilters --> showData
+
+  deleteUpload["Click trash em<br/>UploadRow"]
+  alertDialog["AlertDialog abre:<br/>'Excluir N torneios?'"]
+  confirmAction{"Usuario<br/>confirma?"}
+  callMutation["deleteUploadMutation.mutate(id)<br/>+ invalidateAfterUpload(qc)"]
+  cancelDialog["Dialog fecha<br/>SEM mutation"]
+  toastDeleted["Toast 'Excluido'<br/>+ lista re-fetch"]
+
+  listAction -->|"Deleta"| deleteUpload
+  deleteUpload --> alertDialog
+  alertDialog --> confirmAction
+  confirmAction -->|"Confirma<br/>'Excluir N torneios'"| callMutation
+  confirmAction -->|"Cancelar"| cancelDialog
+  cancelDialog --> showData
+  callMutation --> toastDeleted
+  toastDeleted --> showData
+
+  %% ============================================================
+  %% POWER USER: LIMPEZA DE DADOS
+  %% ============================================================
+  cleanupNeeded["Click recovery link<br/>rodape:<br/>'Acesse Settings ><br/>Limpeza de Dados'"]
+  navigateSettings["Navega para<br/>/settings#cleanup<br/>(Wouter Link)"]
+  scrollAnchor["useEffect detecta hash<br/>+ setTimeout(100)<br/>+ scrollIntoView<br/>(RF-03 / DP-7)"]
+  granularUI["GranularDataCleanup<br/>renderiza<br/>(MOVIDO de UploadHistory)"]
+
+  listAction -->|"Power user:<br/>limpar antigos"| cleanupNeeded
+  cleanupNeeded --> navigateSettings
+  navigateSettings --> scrollAnchor
+  scrollAnchor --> granularUI
+
+  %% ============================================================
+  %% ERROR PATHS — STATS / LIST FAILURES
+  %% ============================================================
+  statsError{"Stats query<br/>falha?"}
+  listError{"List query<br/>falha?"}
+  cardErrorInline["StatsCard mostra<br/>'—' + 'Falha — clique<br/>para tentar de novo'<br/>(RF-02 inline)"]
+  listErrorInline["Lista mostra erro inline<br/>+ btn 'Tentar novamente'<br/>(RF-02)"]
+  retrySuccess{"Retry OK?"}
+
+  showData -.continuamente.-> statsError
+  showData -.continuamente.-> listError
+  statsError -->|"Sim"| cardErrorInline
+  listError -->|"Sim"| listErrorInline
+  cardErrorInline --> retrySuccess
+  listErrorInline --> retrySuccess
+  retrySuccess -->|"Sim"| showData
+  retrySuccess -->|"Nao"| cardErrorInline
+
+  %% ============================================================
+  %% OBSERVACAO IMPORTANTE: AutoUpload SEMPRE renderiza
+  %% mesmo com queries falhando (RF-02)
+  %% ============================================================
+  uploadAlwaysAvailable["AutoUpload SEMPRE<br/>renderiza<br/>(independe de queries)"]
+  cardErrorInline -.upload card OK.-> uploadAlwaysAvailable
+  listErrorInline -.upload card OK.-> uploadAlwaysAvailable
+  uploadAlwaysAvailable --> userAction
+
+  %% ============================================================
+  %% ESTILOS
+  %% ============================================================
+  classDef startEnd  fill:#1e3a8a,stroke:#60a5fa,stroke-width:3px,color:#dbeafe
+  classDef happy     fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#dcfce7
+  classDef errorPath fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fee2e2
+  classDef decision  fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#fef3c7
+  classDef action    fill:#0f172a,stroke:#22d3ee,stroke-width:2px,color:#cffafe
+  classDef edge      fill:#3f1d3a,stroke:#c084fc,stroke-width:2px,color:#f3e8ff
+
+  class start startEnd
+  class showTab,showData,toastSuccess,toastDeleted,granularUI happy
+  class toastError,cardErrorInline,listErrorInline,emptyFiltered errorPath
+  class storageOk,validKey,userAction,parseSuccess,listAction,confirmAction,filteredList,statsError,listError,retrySuccess decision
+  class loadStorage,setActive,defaultWpn,switchTab,saveStorage,downloadSample,triggerDownload,clickDocLink,tooltipBreve,uploadCsv,invalidateAll,applyFilter,showFiltered,clearFilters,deleteUpload,alertDialog,callMutation,cancelDialog,cleanupNeeded,navigateSettings,scrollAnchor,render,uploadAlwaysAvailable action

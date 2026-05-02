@@ -2133,6 +2133,9 @@ export const tournamentLibrary = pgTable("tournament_library", {
   addOnCost: decimal("addon_cost"),
   allowsReentry: boolean("allows_reentry").default(false),
   maxReentries: integer("max_reentries"),
+  // Migration 0025: late-reg window preservada no template (antes apenas em
+  // planned_tournaments). Permite re-instanciar template com late-reg correto.
+  lateRegMinutes: integer("late_reg_minutes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -2158,13 +2161,16 @@ export const insertTournamentLibrarySchemaBase = createInsertSchema(tournamentLi
     const num = parseFloat(val);
     return !isNaN(num) && num > 0;
   }),
-  source: z.enum(['manual', 'suprema', 'grind-live']).optional(),
-  type: z.enum(['PKO', 'Vanilla', 'Mystery']).nullable().optional(),
+  source: z.enum(['manual', 'suprema', 'grind-live', 'csv']).optional(),
+  // SSoT: TournamentPrimaryTypeSchema (Vanilla|PKO|Mystery|Satellite) — antes
+  // era enum local sem Satellite, divergindo de planned_tournaments.
+  type: TournamentPrimaryTypeSchema.nullable().optional(),
   speed: z.enum(['Normal', 'Turbo', 'Hyper']).nullable().optional(),
   deletedAt: z.date().nullable().optional(),
   externalId: z.string().nullable().optional(),
   dayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
   currency: z.string().default('USD').optional(),
+  lateRegMinutes: z.number().int().min(0).max(999).nullable().optional(),
   ...addOnReaFieldsConfig,
 });
 
@@ -3877,4 +3883,180 @@ export type LibraryProgress = typeof libraryProgress.$inferSelect;
 export type InsertLibraryProgress = z.infer<typeof insertLibraryProgressSchema>;
 export type LibraryLessonAsset = typeof libraryLessonAssets.$inferSelect;
 export type InsertLibraryLessonAsset = z.infer<typeof insertLibraryLessonAssetSchema>;
+
+// =============================================================================
+// Sprint Coach Sprint 0 + Coach-2B — schemas (ADRs 077, 084, 085, 086, 087)
+// Migration: migrations/0024_coach_2b_actions_leak_focus.sql
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// user_coach_preferences — ADR-084 (RF-01 do Sprint 0)
+// -----------------------------------------------------------------------------
+export const userCoachPreferences = pgTable("user_coach_preferences", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().unique()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+
+  nudgeBSnapshot: boolean("nudge_b_snapshot").notNull().default(true),
+  nudgeBLeak: boolean("nudge_b_leak").notNull().default(true),
+  nudgeBStudy: boolean("nudge_b_study").notNull().default(true),
+  nudgeBVolume: boolean("nudge_b_volume").notNull().default(true),
+  nudgeBGrade: boolean("nudge_b_grade").notNull().default(true),
+  nudgeBDownswing: boolean("nudge_b_downswing").notNull().default(true),
+  nudgeBLife: boolean("nudge_b_life").notNull().default(false),
+  nudgeBMental: boolean("nudge_b_mental").notNull().default(false),
+
+  quietHoursStart: integer("quiet_hours_start").notNull().default(21),
+  quietHoursEnd: integer("quiet_hours_end").notNull().default(9),
+
+  maxNudgesPerDay: integer("max_nudges_per_day").notNull().default(3),
+  maxNudgesPerHour: integer("max_nudges_per_hour").notNull().default(1),
+
+  channelInApp: boolean("channel_in_app").notNull().default(true),
+  channelEmail: boolean("channel_email").notNull().default(true),
+  channelPush: boolean("channel_push").notNull().default(false),
+
+  coachTone: varchar("coach_tone", { length: 20 }).notNull().default("balanced"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uniq_user_coach_preferences_user").on(table.userId),
+]);
+
+export const updateCoachPreferencesSchema = z.object({
+  nudgeBSnapshot: z.boolean().optional(),
+  nudgeBLeak: z.boolean().optional(),
+  nudgeBStudy: z.boolean().optional(),
+  nudgeBVolume: z.boolean().optional(),
+  nudgeBGrade: z.boolean().optional(),
+  nudgeBDownswing: z.boolean().optional(),
+  nudgeBLife: z.boolean().optional(),
+  nudgeBMental: z.boolean().optional(),
+  quietHoursStart: z.number().int().min(0).max(23).optional(),
+  quietHoursEnd: z.number().int().min(0).max(23).optional(),
+  maxNudgesPerDay: z.number().int().min(0).max(10).optional(),
+  maxNudgesPerHour: z.number().int().min(0).max(10).optional(),
+  channelInApp: z.boolean().optional(),
+  channelEmail: z.boolean().optional(),
+  channelPush: z.boolean().optional(),
+  coachTone: z.enum(["gentle", "balanced", "direct"]).optional(),
+}).strict().superRefine((val, ctx) => {
+  if (val.maxNudgesPerHour !== undefined && val.maxNudgesPerDay !== undefined
+      && val.maxNudgesPerHour > val.maxNudgesPerDay) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["maxNudgesPerHour"],
+      message: "maxNudgesPerHour cannot exceed maxNudgesPerDay",
+    });
+  }
+});
+
+export type UserCoachPreferences = typeof userCoachPreferences.$inferSelect;
+export type InsertUserCoachPreferences = typeof userCoachPreferences.$inferInsert;
+export type UpdateCoachPreferencesInput = z.infer<typeof updateCoachPreferencesSchema>;
+
+// -----------------------------------------------------------------------------
+// coach_nudge_log — ADR-085 (RF-03 do Sprint 0)
+// -----------------------------------------------------------------------------
+export const coachNudgeLog = pgTable("coach_nudge_log", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+
+  category: varchar("category", { length: 32 }).notNull(),
+  cycleKey: varchar("cycle_key", { length: 16 }),
+  status: varchar("status", { length: 16 }).notNull(),
+
+  titleI18n: varchar("title_i18n", { length: 200 }),
+  bodyPreview: text("body_preview"),
+  channel: varchar("channel", { length: 16 }).default("in_app"),
+
+  chatSessionId: varchar("chat_session_id"),
+  triggeredByEvent: varchar("triggered_by_event", { length: 64 }),
+
+  sentAt: timestamp("sent_at").defaultNow(),
+  engagedAt: timestamp("engaged_at"),
+  dismissedAt: timestamp("dismissed_at"),
+  snoozeUntil: timestamp("snooze_until"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_coach_nudge_log_user_sent").on(table.userId, table.sentAt),
+  index("idx_coach_nudge_log_user_category_cycle")
+    .on(table.userId, table.category, table.cycleKey),
+  index("idx_coach_nudge_log_category_status_sent")
+    .on(table.category, table.status, table.sentAt),
+]);
+
+export type CoachNudgeLog = typeof coachNudgeLog.$inferSelect;
+export type InsertCoachNudgeLog = typeof coachNudgeLog.$inferInsert;
+
+// -----------------------------------------------------------------------------
+// coach_actions — ADR-077 (RF-01 do Coach-2B)
+// -----------------------------------------------------------------------------
+export const coachActions = pgTable("coach_actions", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  chatSessionId: varchar("chat_session_id"),
+  messageId: varchar("message_id"),
+  toolUseId: varchar("tool_use_id", { length: 64 }),
+  toolName: varchar("tool_name", { length: 64 }).notNull(),
+  status: varchar("status", { length: 16 }).notNull(),
+  input: jsonb("input"),
+  result: jsonb("result"),
+  errorMessage: text("error_message"),
+  payloadBefore: jsonb("payload_before"),
+  payloadAfter: jsonb("payload_after"),
+  affectedEntityType: varchar("affected_entity_type", { length: 32 }),
+  affectedEntityId: varchar("affected_entity_id"),
+  requiresConfirmation: boolean("requires_confirmation").notNull().default(false),
+  confirmedAt: timestamp("confirmed_at"),
+  undoExpiresAt: timestamp("undo_expires_at"),
+  undoneAt: timestamp("undone_at"),
+  latencyMs: integer("latency_ms"),
+  executedAt: timestamp("executed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_coach_actions_user_status")
+    .on(table.userId, table.status, table.createdAt),
+  index("idx_coach_actions_session").on(table.chatSessionId),
+  index("idx_coach_actions_tool")
+    .on(table.toolName, table.status, table.createdAt),
+  index("idx_coach_actions_undo_window")
+    .on(table.userId, table.undoExpiresAt),
+  index("idx_coach_actions_pending_cleanup")
+    .on(table.status, table.createdAt),
+]);
+
+export type CoachAction = typeof coachActions.$inferSelect;
+export type InsertCoachAction = typeof coachActions.$inferInsert;
+
+// -----------------------------------------------------------------------------
+// coach_leak_focus — RF-05 do Coach-2B (log_leak_focus)
+// -----------------------------------------------------------------------------
+export const coachLeakFocus = pgTable("coach_leak_focus", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  leakCode: varchar("leak_code", { length: 64 }).notNull(),
+  description: text("description").notNull(),
+  targetMonth: varchar("target_month", { length: 7 }).notNull(),
+  baselineStatKey: varchar("baseline_stat_key", { length: 128 }).notNull(),
+  baselineValue: decimal("baseline_value").notNull(),
+  baselineSampleSize: integer("baseline_sample_size").notNull(),
+  studyPlanNotes: text("study_plan_notes"),
+  status: varchar("status", { length: 16 }).default("active"),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_coach_leak_focus_user_month").on(table.userId, table.targetMonth),
+  uniqueIndex("uniq_coach_leak_focus_user_code_month")
+    .on(table.userId, table.leakCode, table.targetMonth),
+]);
+
+export type CoachLeakFocus = typeof coachLeakFocus.$inferSelect;
+export type InsertCoachLeakFocus = typeof coachLeakFocus.$inferInsert;
 

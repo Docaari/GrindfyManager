@@ -1,0 +1,152 @@
+%% ER Diagram — Coach Sprint 0 + Coach-2B novas tabelas
+%% ADRs: 077 (coach_actions), 083 (confirm/undo), 084 (user_coach_preferences), 085 (coach_nudge_log), Coach-2B RF-05 (coach_leak_focus)
+%%
+%% 4 tabelas novas:
+%%   - coach_actions          (audit + write tools state machine)
+%%   - user_coach_preferences (opt-out granular + quiet hours + frequency cap)
+%%   - coach_nudge_log        (audit + frequency cap + idempotencia per-cycle)
+%%   - coach_leak_focus       (foco mensal de leak; RF-05 Sprint 2B)
+%%
+%% Relacionamentos com tabelas existentes (users, chat_sessions, chat_messages, wallets,
+%% wallet_transactions, planned_tournaments, grind_sessions, study_sessions).
+
+erDiagram
+    USERS ||--o{ COACH_ACTIONS              : "1:N (CASCADE)"
+    USERS ||--|| USER_COACH_PREFERENCES     : "1:1 (CASCADE, lazy)"
+    USERS ||--o{ COACH_NUDGE_LOG            : "1:N (CASCADE)"
+    USERS ||--o{ COACH_LEAK_FOCUS           : "1:N (CASCADE)"
+
+    CHAT_SESSIONS ||..o{ COACH_ACTIONS      : "1:N (FK soft)"
+    CHAT_MESSAGES ||..o{ COACH_ACTIONS      : "1:N (FK soft)"
+    CHAT_SESSIONS ||..o{ COACH_NUDGE_LOG    : "1:N (FK soft, nudge cria sessao)"
+
+    COACH_ACTIONS ||--o| WALLET_TRANSACTIONS    : "affected_entity (record_wallet_transaction)"
+    COACH_ACTIONS ||--o| GRIND_SESSIONS         : "affected_entity (start/log_session_completed)"
+    COACH_ACTIONS ||--o| PLANNED_TOURNAMENTS    : "affected_entity (register_tournament_in_grade)"
+    COACH_ACTIONS ||--o| STUDY_SESSIONS         : "affected_entity (log_study_session)"
+    COACH_ACTIONS ||--o| COACH_LEAK_FOCUS       : "affected_entity (log_leak_focus)"
+
+    USERS {
+        varchar user_platform_id PK "USER-XXXX"
+        varchar timezone "default America/Sao_Paulo"
+        varchar subscription_plan "trial|active|expired|admin"
+    }
+
+    USER_COACH_PREFERENCES {
+        varchar id PK
+        varchar user_id FK_UNIQUE "users.user_platform_id"
+        boolean nudge_b_snapshot "default TRUE"
+        boolean nudge_b_leak "default TRUE"
+        boolean nudge_b_study "default TRUE"
+        boolean nudge_b_volume "default TRUE (Coach-3)"
+        boolean nudge_b_grade "default TRUE (Coach-3)"
+        boolean nudge_b_downswing "default TRUE (Coach-3+)"
+        boolean nudge_b_life "default FALSE (opt-in)"
+        boolean nudge_b_mental "default FALSE (opt-in)"
+        integer quiet_hours_start "0..23 default 21"
+        integer quiet_hours_end "0..23 default 9"
+        integer max_nudges_per_day "default 3"
+        integer max_nudges_per_hour "default 1"
+        boolean channel_in_app "default TRUE"
+        boolean channel_email "default TRUE"
+        boolean channel_push "default FALSE"
+        varchar coach_tone "gentle|balanced|direct, default balanced"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    COACH_ACTIONS {
+        varchar id PK "nanoid"
+        varchar user_id FK "users.user_platform_id CASCADE"
+        varchar chat_session_id "FK soft (chat_sessions.id)"
+        varchar message_id "FK soft (chat_messages.id)"
+        varchar tool_use_id "Anthropic Tool Use ID, len 64"
+        varchar tool_name "len 64, ex record_wallet_transaction"
+        varchar status "pending|executing|completed|failed|undone|expired"
+        jsonb input "params Zod-validados"
+        jsonb result "wrapped ToolResult, truncado 32KB"
+        text error_message
+        jsonb payload_before "snapshot pre-mutacao (write)"
+        jsonb payload_after "snapshot pos-mutacao"
+        varchar affected_entity_type "wallet_transaction|grind_session|etc"
+        varchar affected_entity_id "id da row mutada"
+        boolean requires_confirmation "default FALSE"
+        timestamp confirmed_at
+        timestamp undo_expires_at "confirmed_at + 5min (ADR-083)"
+        timestamp undone_at
+        integer latency_ms
+        timestamp executed_at
+        timestamp created_at
+    }
+
+    COACH_NUDGE_LOG {
+        varchar id PK "nanoid"
+        varchar user_id FK "users.user_platform_id CASCADE"
+        varchar category "B-SNAPSHOT|B-LEAK|B-STUDY|B-VOLUME|B-GRADE|B-DOWNSWING|B-LIFE|B-MENTAL"
+        varchar cycle_key "YYYY-MM | YYYY-WW | null"
+        varchar status "sent|engaged|dismissed|snoozed|unsubscribed"
+        varchar title_i18n "len 200, pt-BR"
+        text body_preview "max 500 chars, sem HTML"
+        varchar channel "in_app|email|push, default in_app"
+        varchar chat_session_id "FK soft (criada por nudge)"
+        varchar triggered_by_event "cron_28th|csv_upload|session_complete|etc"
+        timestamp sent_at "default NOW"
+        timestamp engaged_at
+        timestamp dismissed_at
+        timestamp snooze_until
+        timestamp created_at
+    }
+
+    COACH_LEAK_FOCUS {
+        varchar id PK "nanoid"
+        varchar user_id FK "users.user_platform_id CASCADE"
+        varchar leak_code "ex low_itm_turbos, negative_roi_pko"
+        text description "pt-BR humano max 200"
+        varchar target_month "YYYY-MM, len 7"
+        varchar baseline_stat_key "ex roi.category=PKO, len 128"
+        decimal baseline_value
+        integer baseline_sample_size
+        text study_plan_notes "max 1000"
+        varchar status "active|resolved|abandoned default active"
+        timestamp resolved_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    CHAT_SESSIONS {
+        varchar id PK
+        varchar user_id FK "CASCADE"
+        varchar coach_type "mental|tournament|technical"
+        varchar status "active|archived|deleted"
+    }
+
+    CHAT_MESSAGES {
+        varchar id PK
+        varchar session_id FK "chat_sessions.id CASCADE"
+        varchar role "user|assistant"
+        text content
+    }
+
+    WALLET_TRANSACTIONS {
+        varchar id PK
+        varchar wallet_id FK
+        decimal amount_native
+    }
+
+    GRIND_SESSIONS {
+        varchar id PK
+        varchar user_id FK
+        varchar status "planned|active|completed"
+    }
+
+    PLANNED_TOURNAMENTS {
+        varchar id PK
+        varchar user_id FK
+        integer day_of_week "0..6"
+    }
+
+    STUDY_SESSIONS {
+        varchar id PK
+        varchar user_id FK
+        integer duration_minutes
+    }

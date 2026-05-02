@@ -117,9 +117,22 @@ import {
   studyThemeSpotLinks,
   type StudyTheme,
   type StudyThemeSpotLink,
+  // Sprint F4 — stats analyzer hud_stat_targets
   hudStatTargets,
   type HudStatTarget,
   type InsertHudStatTarget,
+  // Sprint Coach Sprint 0 + Coach-2B
+  coachActions,
+  coachLeakFocus,
+  coachNudgeLog,
+  type CoachAction,
+  type InsertCoachAction,
+  type CoachLeakFocus,
+  type InsertCoachLeakFocus,
+  type CoachNudgeLog,
+  type InsertCoachNudgeLog,
+  chatSessions,
+  chatMessages,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, lt, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
@@ -6225,6 +6238,12 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         },
         listWalletPending: (userId: string, walletId: string, opts?: any) =>
           this.listWalletPending(userId, walletId, opts, tx),
+        // Sprint Coach-2B — coach helpers dentro da tx (lesson #194)
+        getCoachAction: (id: string) => this.getCoachAction(id, tx),
+        updateCoachAction: (id: string, delta: any, opts?: any) =>
+          this.updateCoachAction(id, delta, { tx: opts?.tx ?? tx }),
+        // Raw drizzle tx para handlers que precisam executar queries diretas.
+        __rawTx: tx,
       };
       return await fn(txWrapper);
     });
@@ -6871,6 +6890,783 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
   async libraryLessonAccessLookup(_userId: string | undefined, _lessonIds: string[]): Promise<Map<string, boolean>> {
     throw new Error("libraryLessonAccessLookup not implemented (Sprint Biblioteca-2)");
+  }
+
+  // ===========================================================================
+  // Sprint Coach Sprint 0 + Coach-2B — Storage methods
+  // ADRs: 077, 084, 085, 086, 087
+  //
+  // Lessons aplicadas:
+  //   - #7  optional + default + back-fill (normalize)
+  //   - #9  try/catch + console.error antes de fallback
+  //   - #194 transaction unica via tx externa
+  // ===========================================================================
+
+  // ---------------------------------------------------------------------------
+  // user metadata
+  // ---------------------------------------------------------------------------
+  async getUserTimezone(userId: string): Promise<string | null> {
+    try {
+      const [row] = await db
+        .select({ timezone: users.timezone })
+        .from(users)
+        .where(eq(users.userPlatformId, userId))
+        .limit(1);
+      return row?.timezone ?? null;
+    } catch (err) {
+      console.error("storage.getUserTimezone.error", { userId, err });
+      return null;
+    }
+  }
+
+  async listUsersForCron(filter: string): Promise<Array<{
+    userPlatformId: string;
+    timezone: string | null;
+    subscriptionPlan: string | null;
+  }>> {
+    try {
+      // Whitelist filter para evitar SQL injection. Parse e converte para sql.
+      // Aceita "subscription_plan IN ('pro','premium')" pattern-only.
+      const safeFilter = String(filter || "").trim();
+      const planMatch = /subscription_plan\s+IN\s*\(\s*('(?:pro|premium|admin|trial|free|active|expired)'(?:\s*,\s*'(?:pro|premium|admin|trial|free|active|expired)')*)\s*\)/i.exec(safeFilter);
+      let where = sql`TRUE`;
+      if (planMatch) {
+        const plansList = (planMatch[0].match(/'([^']+)'/g) || []).map((s: string) => s.replace(/'/g, ""));
+        if (plansList.length > 0) {
+          where = sql`${users.subscriptionPlan} IN (${sql.join(plansList.map((p) => sql`${p}`), sql`, `)})`;
+        }
+      }
+      const rows = await db
+        .select({
+          userPlatformId: users.userPlatformId,
+          timezone: users.timezone,
+          subscriptionPlan: users.subscriptionPlan,
+        })
+        .from(users)
+        .where(where);
+      return rows;
+    } catch (err) {
+      console.error("storage.listUsersForCron.error", { filter, err });
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // coach_nudge_log (ADR-085)
+  // ---------------------------------------------------------------------------
+  async createNudgeLog(input: Partial<InsertCoachNudgeLog>): Promise<string> {
+    try {
+      const id = nanoid();
+      const [row] = await db
+        .insert(coachNudgeLog)
+        .values({
+          id,
+          userId: input.userId!,
+          category: input.category!,
+          status: input.status ?? "sent",
+          cycleKey: input.cycleKey ?? null,
+          titleI18n: input.titleI18n ?? null,
+          bodyPreview: input.bodyPreview ?? null,
+          channel: input.channel ?? "in_app",
+          chatSessionId: input.chatSessionId ?? null,
+          triggeredByEvent: input.triggeredByEvent ?? null,
+          sentAt: input.sentAt ?? new Date(),
+        } as InsertCoachNudgeLog)
+        .returning({ id: coachNudgeLog.id });
+      return row?.id ?? id;
+    } catch (err) {
+      console.error("storage.createNudgeLog.error", { err });
+      throw err;
+    }
+  }
+
+  async countNudgeLog(
+    userId: string,
+    opts: { since: Date; excludeStatus?: string[] },
+  ): Promise<number> {
+    try {
+      const conds: any[] = [
+        eq(coachNudgeLog.userId, userId),
+        gte(coachNudgeLog.sentAt, opts.since),
+      ];
+      if (opts.excludeStatus && opts.excludeStatus.length > 0) {
+        conds.push(not(inArray(coachNudgeLog.status, opts.excludeStatus)));
+      }
+      const [row] = await db
+        .select({ c: count() })
+        .from(coachNudgeLog)
+        .where(and(...conds));
+      return Number(row?.c ?? 0);
+    } catch (err) {
+      console.error("storage.countNudgeLog.error", { userId, err });
+      throw err;
+    }
+  }
+
+  async findNudgeLog(
+    userId: string,
+    category: string,
+    cycleKey: string | null | undefined,
+    opts: { statusIn: string[] },
+  ): Promise<CoachNudgeLog | undefined> {
+    try {
+      const conds: any[] = [
+        eq(coachNudgeLog.userId, userId),
+        eq(coachNudgeLog.category, category),
+      ];
+      if (cycleKey) conds.push(eq(coachNudgeLog.cycleKey, cycleKey));
+      if (opts.statusIn && opts.statusIn.length > 0) {
+        conds.push(inArray(coachNudgeLog.status, opts.statusIn));
+      }
+      const [row] = await db
+        .select()
+        .from(coachNudgeLog)
+        .where(and(...conds))
+        .orderBy(desc(coachNudgeLog.sentAt))
+        .limit(1);
+      return row;
+    } catch (err) {
+      console.error("storage.findNudgeLog.error", { userId, err });
+      throw err;
+    }
+  }
+
+  async updateNudgeLogStatus(
+    id: string,
+    status: string,
+    extra: Record<string, any> = {},
+  ): Promise<void> {
+    try {
+      const updates: any = { status };
+      if (status === "dismissed") updates.dismissedAt = extra.dismissedAt ?? new Date();
+      if (status === "engaged") updates.engagedAt = extra.engagedAt ?? new Date();
+      if (status === "snoozed") updates.snoozeUntil = extra.snoozeUntil ?? null;
+      await db
+        .update(coachNudgeLog)
+        .set(updates)
+        .where(eq(coachNudgeLog.id, id));
+    } catch (err) {
+      console.error("storage.updateNudgeLogStatus.error", { id, err });
+      throw err;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // coach_actions (ADR-077)
+  // ---------------------------------------------------------------------------
+  async createCoachAction(input: Partial<InsertCoachAction>): Promise<CoachAction> {
+    try {
+      const id = nanoid();
+      const [row] = await db
+        .insert(coachActions)
+        .values({
+          id,
+          userId: input.userId!,
+          chatSessionId: input.chatSessionId ?? null,
+          messageId: input.messageId ?? null,
+          toolUseId: input.toolUseId ?? null,
+          toolName: input.toolName!,
+          status: input.status ?? "pending",
+          input: input.input ?? null,
+          requiresConfirmation: input.requiresConfirmation ?? false,
+        } as InsertCoachAction)
+        .returning();
+      return row!;
+    } catch (err) {
+      console.error("storage.createCoachAction.error", { err });
+      throw err;
+    }
+  }
+
+  async getCoachAction(id: string, externalTx?: any): Promise<CoachAction | undefined> {
+    try {
+      const runner: any = externalTx ?? db;
+      const rows = await runner
+        .select()
+        .from(coachActions)
+        .where(eq(coachActions.id, id))
+        .limit(1);
+      return Array.isArray(rows) ? rows[0] : undefined;
+    } catch (err) {
+      console.error("storage.getCoachAction.error", { id, err });
+      throw err;
+    }
+  }
+
+  /**
+   * Atualiza coach_action. Aceita `tx` externa (lesson #194). Em prod usa
+   * runner real do drizzle; em teste o mock fornece query() simulado.
+   */
+  async updateCoachAction(
+    id: string,
+    delta: Partial<InsertCoachAction>,
+    opts: { tx?: any } = {},
+  ): Promise<void> {
+    try {
+      const runner: any = opts.tx ?? db;
+      const updates: any = { ...delta };
+      // Limpa undefined para nao apagar colunas
+      for (const k of Object.keys(updates)) {
+        if (updates[k] === undefined) delete updates[k];
+      }
+      if (Object.keys(updates).length === 0) return;
+      await runner
+        .update(coachActions)
+        .set(updates)
+        .where(eq(coachActions.id, id));
+    } catch (err) {
+      console.error("storage.updateCoachAction.error", { id, err });
+      throw err;
+    }
+  }
+
+  async getCoachAuditById(id: string): Promise<any | undefined> {
+    // RF-06: Sprint 0 le coach_nudge_log; coach_actions vem em Coach-2B.
+    // Tenta nudge_log primeiro, depois actions.
+    try {
+      const [nudge] = await db
+        .select()
+        .from(coachNudgeLog)
+        .where(eq(coachNudgeLog.id, id))
+        .limit(1);
+      if (nudge) {
+        return { ...nudge, type: "nudge" };
+      }
+      const [action] = await db
+        .select()
+        .from(coachActions)
+        .where(eq(coachActions.id, id))
+        .limit(1);
+      if (action) return { ...action, type: "tool" };
+      return undefined;
+    } catch (err) {
+      console.error("storage.getCoachAuditById.error", { id, err });
+      throw err;
+    }
+  }
+
+  async listCoachAudit(
+    userId: string,
+    opts: {
+      type?: string;
+      category?: string;
+      cursor?: string;
+      limit?: number;
+      dateFrom?: string;
+      dateTo?: string;
+    } = {},
+  ): Promise<{ items: any[]; nextCursor: string | null; totalCount: number }> {
+    try {
+      const limit = Math.max(1, Math.min(100, opts.limit ?? 20));
+
+      // Sprint 0: lista nudges + (se Coach-2B existir) actions. Por hora unifica
+      // apenas coach_nudge_log; tools listados quando coach_actions tiver dados.
+      const showNudges = !opts.type || opts.type === "all" || opts.type === "nudge";
+      const showTools = !opts.type || opts.type === "all" || opts.type === "tool";
+
+      const items: any[] = [];
+
+      if (showNudges) {
+        const conds: any[] = [eq(coachNudgeLog.userId, userId)];
+        if (opts.category) conds.push(eq(coachNudgeLog.category, opts.category));
+        if (opts.dateFrom) conds.push(gte(coachNudgeLog.sentAt, new Date(opts.dateFrom)));
+        if (opts.dateTo) conds.push(lte(coachNudgeLog.sentAt, new Date(opts.dateTo)));
+        if (opts.cursor) conds.push(lt(coachNudgeLog.sentAt, new Date(opts.cursor)));
+
+        const rows = await db
+          .select()
+          .from(coachNudgeLog)
+          .where(and(...conds))
+          .orderBy(desc(coachNudgeLog.sentAt))
+          .limit(limit + 1);
+
+        for (const r of rows) {
+          items.push({
+            id: r.id,
+            type: "nudge",
+            timestamp: r.sentAt?.toISOString?.() ?? new Date().toISOString(),
+            title: r.titleI18n ?? "Nudge",
+            description: r.bodyPreview ?? "",
+            category: r.category,
+            status: r.status,
+            canDismiss: r.status === "sent",
+            canUndo: false,
+          });
+        }
+      }
+
+      if (showTools) {
+        const conds: any[] = [eq(coachActions.userId, userId)];
+        if (opts.dateFrom) conds.push(gte(coachActions.createdAt, new Date(opts.dateFrom)));
+        if (opts.dateTo) conds.push(lte(coachActions.createdAt, new Date(opts.dateTo)));
+        if (opts.cursor) conds.push(lt(coachActions.createdAt, new Date(opts.cursor)));
+
+        const rows = await db
+          .select()
+          .from(coachActions)
+          .where(and(...conds))
+          .orderBy(desc(coachActions.createdAt))
+          .limit(limit + 1);
+
+        for (const r of rows) {
+          const undoable =
+            r.status === "completed" &&
+            r.undoExpiresAt &&
+            r.undoExpiresAt > new Date();
+          items.push({
+            id: r.id,
+            type: "tool",
+            timestamp: r.createdAt?.toISOString?.() ?? new Date().toISOString(),
+            title: r.toolName,
+            description: r.affectedEntityType ?? "",
+            status: r.status,
+            canDismiss: false,
+            canUndo: !!undoable,
+            metadata: {
+              affectedEntityId: r.affectedEntityId,
+              undoExpiresAt: r.undoExpiresAt?.toISOString?.(),
+            },
+          });
+        }
+      }
+
+      // Sort + cursor
+      items.sort((a, b) => (b.timestamp > a.timestamp ? 1 : -1));
+      const truncated = items.slice(0, limit);
+      const nextCursor =
+        items.length > limit ? truncated[truncated.length - 1]?.timestamp ?? null : null;
+
+      return { items: truncated, nextCursor, totalCount: items.length };
+    } catch (err) {
+      console.error("storage.listCoachAudit.error", { userId, err });
+      return { items: [], nextCursor: null, totalCount: 0 };
+    }
+  }
+
+  /**
+   * Cron de cleanup (ADR-077): UPDATE pending > 30min para expired.
+   * Retorna numero de rows afetadas.
+   */
+  async markPendingExpired(): Promise<number> {
+    try {
+      const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+      const rows = await db
+        .update(coachActions)
+        .set({ status: "expired" })
+        .where(
+          and(
+            eq(coachActions.status, "pending"),
+            lt(coachActions.createdAt, cutoff),
+          ),
+        )
+        .returning({ id: coachActions.id });
+      return Array.isArray(rows) ? rows.length : 0;
+    } catch (err) {
+      console.error("storage.markPendingExpired.error", { err });
+      return 0;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // coach_leak_focus (Coach-2B RF-05)
+  // ---------------------------------------------------------------------------
+  async createCoachLeakFocus(input: Partial<InsertCoachLeakFocus>): Promise<CoachLeakFocus> {
+    try {
+      const id = nanoid();
+      const [row] = await db
+        .insert(coachLeakFocus)
+        .values({
+          id,
+          userId: input.userId!,
+          leakCode: input.leakCode!,
+          description: input.description!,
+          targetMonth: input.targetMonth!,
+          baselineStatKey: input.baselineStatKey!,
+          baselineValue: String(input.baselineValue ?? "0") as any,
+          baselineSampleSize: input.baselineSampleSize ?? 0,
+          studyPlanNotes: input.studyPlanNotes ?? null,
+          status: input.status ?? "active",
+        } as InsertCoachLeakFocus)
+        .returning();
+      return row!;
+    } catch (err) {
+      console.error("storage.createCoachLeakFocus.error", { err });
+      throw err;
+    }
+  }
+
+  async updateCoachLeakFocus(
+    id: string,
+    delta: Partial<InsertCoachLeakFocus>,
+  ): Promise<void> {
+    try {
+      const updates: any = { ...delta, updatedAt: new Date() };
+      for (const k of Object.keys(updates)) {
+        if (updates[k] === undefined) delete updates[k];
+      }
+      await db.update(coachLeakFocus).set(updates).where(eq(coachLeakFocus.id, id));
+    } catch (err) {
+      console.error("storage.updateCoachLeakFocus.error", { id, err });
+      throw err;
+    }
+  }
+
+  async findCoachLeakFocus(
+    userId: string,
+    leakCode?: string,
+    targetMonth?: string,
+    leakFocusId?: string,
+  ): Promise<CoachLeakFocus | undefined> {
+    try {
+      const conds: any[] = [eq(coachLeakFocus.userId, userId)];
+      if (leakFocusId) conds.push(eq(coachLeakFocus.id, leakFocusId));
+      if (leakCode) conds.push(eq(coachLeakFocus.leakCode, leakCode));
+      if (targetMonth) conds.push(eq(coachLeakFocus.targetMonth, targetMonth));
+      const [row] = await db
+        .select()
+        .from(coachLeakFocus)
+        .where(and(...conds))
+        .orderBy(desc(coachLeakFocus.createdAt))
+        .limit(1);
+      return row;
+    } catch (err) {
+      console.error("storage.findCoachLeakFocus.error", { userId, err });
+      throw err;
+    }
+  }
+
+  async findActiveLeakFocus(userId: string): Promise<CoachLeakFocus | undefined> {
+    try {
+      const now = new Date();
+      const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+      const [row] = await db
+        .select()
+        .from(coachLeakFocus)
+        .where(
+          and(
+            eq(coachLeakFocus.userId, userId),
+            eq(coachLeakFocus.status, "active"),
+            eq(coachLeakFocus.targetMonth, month),
+          ),
+        )
+        .orderBy(desc(coachLeakFocus.createdAt))
+        .limit(1);
+      return row;
+    } catch (err) {
+      console.error("storage.findActiveLeakFocus.error", { userId, err });
+      throw err;
+    }
+  }
+
+  async findActiveLeakFocusList(userId: string): Promise<CoachLeakFocus[]> {
+    try {
+      const now = new Date();
+      const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+      const rows = await db
+        .select()
+        .from(coachLeakFocus)
+        .where(
+          and(
+            eq(coachLeakFocus.userId, userId),
+            eq(coachLeakFocus.status, "active"),
+            eq(coachLeakFocus.targetMonth, month),
+          ),
+        )
+        .orderBy(desc(coachLeakFocus.baselineSampleSize), asc(coachLeakFocus.createdAt));
+      return rows ?? [];
+    } catch (err) {
+      console.error("storage.findActiveLeakFocusList.error", { userId, err });
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // study sessions (suporte a Coach-2B)
+  // ---------------------------------------------------------------------------
+  async deleteStudySession(id: string): Promise<void> {
+    try {
+      await db.delete(studySessions).where(eq(studySessions.id, id));
+    } catch (err) {
+      console.error("storage.deleteStudySession.error", { id, err });
+      throw err;
+    }
+  }
+
+  /**
+   * RF-09 — conta study_sessions do user que matcham leak focus em janela.
+   * Heuristica: studyCardId linked OU insights mencionando leakCode.
+   */
+  async countStudySessionsMatchingFocus(
+    userId: string,
+    focus: { leakCode?: string; baselineStatKey?: string },
+    opts: { sinceDays: number },
+  ): Promise<number> {
+    try {
+      const since = new Date(Date.now() - opts.sinceDays * 24 * 60 * 60 * 1000);
+      const conds: any[] = [
+        eq(studySessions.userId, userId),
+        gte(studySessions.date, since),
+      ];
+      // OR (insights LIKE %leakCode%)
+      if (focus.leakCode) {
+        const like_ = `%${focus.leakCode}%`;
+        conds.push(
+          or(
+            like(studySessions.insights, like_),
+            isNotNull(studySessions.studyCardId),
+          ) as any,
+        );
+      }
+      const [row] = await db
+        .select({ c: count() })
+        .from(studySessions)
+        .where(and(...conds));
+      return Number(row?.c ?? 0);
+    } catch (err) {
+      console.error("storage.countStudySessionsMatchingFocus.error", { userId, err });
+      throw err;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bankroll snapshots — gap-check para B-SNAPSHOT
+  // ---------------------------------------------------------------------------
+  async hasSnapshotThisMonth(userId: string, cycleKey: string): Promise<boolean> {
+    try {
+      // cycleKey = YYYY-MM
+      const [year, month] = cycleKey.split("-").map((s) => Number(s));
+      if (!year || !month) return false;
+      const start = new Date(Date.UTC(year, month - 1, 1));
+      const end = new Date(Date.UTC(year, month, 1));
+      const [row] = await db
+        .select({ c: count() })
+        .from(bankrollSnapshots)
+        .where(
+          and(
+            eq(bankrollSnapshots.userId, userId),
+            gte(bankrollSnapshots.occurredAt, start),
+            lt(bankrollSnapshots.occurredAt, end),
+          ),
+        );
+      return Number(row?.c ?? 0) > 0;
+    } catch (err) {
+      console.error("storage.hasSnapshotThisMonth.error", { userId, err });
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // queryStatByKey — verify_leak_progress lookup
+  // ---------------------------------------------------------------------------
+  async queryStatByKey(
+    userId: string,
+    statKey: string,
+  ): Promise<{ value: number; sampleSize: number } | undefined> {
+    try {
+      // Suporta 'roi.category=PKO', 'roi.site=Stars', 'roi', 'itm.speed=Turbo'
+      const parts = statKey.split(".");
+      const metric = parts[0]; // roi | itm | profit
+      const dim = parts[1]; // category=PKO | site=Stars | undefined
+      let dimField: any = null;
+      let dimValue: string | null = null;
+      if (dim) {
+        const [k, v] = dim.split("=");
+        const map: Record<string, any> = {
+          category: tournaments.category,
+          site: tournaments.site,
+          speed: tournaments.speed,
+        };
+        dimField = map[k];
+        dimValue = v;
+      }
+      const conds: any[] = [eq(tournaments.userId, userId)];
+      if (dimField && dimValue) conds.push(eq(dimField, dimValue));
+
+      const rows = await db
+        .select({
+          buyIn: tournaments.buyIn,
+          rake: tournaments.rake,
+          reentries: tournaments.reentries,
+          prize: tournaments.prize,
+          position: tournaments.position,
+          fieldSize: tournaments.fieldSize,
+        })
+        .from(tournaments)
+        .where(and(...conds));
+
+      const sampleSize = rows.length;
+      if (sampleSize === 0) {
+        // statKey nao retornou nada
+        if (metric !== "roi" && metric !== "itm" && metric !== "profit") {
+          return undefined;
+        }
+        return { value: 0, sampleSize: 0 };
+      }
+
+      let totalPaid = 0;
+      let totalPayout = 0;
+      let itmCount = 0;
+      for (const r of rows) {
+        const buyIn = Number(r.buyIn ?? 0);
+        const reentries = Number(r.reentries ?? 0);
+        totalPaid += buyIn + buyIn * reentries;
+        totalPayout += Number(r.prize ?? 0);
+        // ITM heuristica: top 15% do field
+        if (r.position && r.fieldSize && r.position <= Math.ceil(r.fieldSize * 0.15)) {
+          itmCount++;
+        }
+      }
+      let value = 0;
+      if (metric === "roi") {
+        value = totalPaid > 0 ? ((totalPayout - totalPaid) / totalPaid) * 100 : 0;
+      } else if (metric === "itm") {
+        value = sampleSize > 0 ? (itmCount / sampleSize) * 100 : 0;
+      } else if (metric === "profit") {
+        value = totalPayout - totalPaid;
+      } else {
+        return undefined;
+      }
+      return { value, sampleSize };
+    } catch (err) {
+      console.error("storage.queryStatByKey.error", { userId, statKey, err });
+      return undefined;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // chat_messages helpers
+  // ---------------------------------------------------------------------------
+  async queryRecentChatMessages(
+    userId: string,
+    opts: { sinceDays: number },
+  ): Promise<Array<{ content: string; createdAt: Date | null }>> {
+    try {
+      const since = new Date(Date.now() - opts.sinceDays * 24 * 60 * 60 * 1000);
+      const rows = await db
+        .select({
+          content: chatMessages.content,
+          createdAt: chatMessages.createdAt,
+        })
+        .from(chatMessages)
+        .innerJoin(chatSessions, eq(chatSessions.id, chatMessages.sessionId))
+        .where(
+          and(
+            eq(chatSessions.userId, userId),
+            eq(chatMessages.role, "assistant"),
+            gte(chatMessages.createdAt, since),
+          ),
+        )
+        .orderBy(desc(chatMessages.createdAt))
+        .limit(500);
+      return rows.map((r) => ({
+        content: r.content ?? "",
+        createdAt: r.createdAt,
+      }));
+    } catch (err) {
+      console.error("storage.queryRecentChatMessages.error", { userId, err });
+      return [];
+    }
+  }
+
+  async createChatSession(input: {
+    userId: string;
+    coachType: string;
+    title?: string;
+  }): Promise<{ id: string }> {
+    try {
+      const id = nanoid();
+      await db
+        .insert(chatSessions)
+        .values({
+          id,
+          userId: input.userId,
+          coachType: input.coachType,
+          title: input.title ?? null,
+          status: "active",
+        });
+      return { id };
+    } catch (err) {
+      console.error("storage.createChatSession.error", { err });
+      throw err;
+    }
+  }
+
+  async insertChatMessage(input: {
+    chatSessionId?: string;
+    sessionId?: string;
+    role: string;
+    content: string;
+  }): Promise<{ id: string }> {
+    try {
+      const id = nanoid();
+      const sessionId = input.chatSessionId ?? input.sessionId;
+      if (!sessionId) throw new Error("sessionId obrigatorio");
+      await db
+        .insert(chatMessages)
+        .values({
+          id,
+          sessionId,
+          role: input.role,
+          content: input.content,
+        } as any);
+      return { id };
+    } catch (err) {
+      console.error("storage.insertChatMessage.error", { err });
+      throw err;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // tournament library + planned_tournaments helpers (Coach-2B handlers)
+  // ---------------------------------------------------------------------------
+  async getLibraryTemplate(id: string): Promise<TournamentLibrary | undefined> {
+    try {
+      const [row] = await db
+        .select()
+        .from(tournamentLibrary)
+        .where(eq(tournamentLibrary.id, id))
+        .limit(1);
+      return row;
+    } catch (err) {
+      console.error("storage.getLibraryTemplate.error", { id, err });
+      throw err;
+    }
+  }
+
+  /**
+   * RF-03 — startGrindSession from_planned. Reusa planned_tournaments?
+   * Na verdade o handler espera "planned session" — usamos grindSessions
+   * com status='planned' como source-of-truth.
+   */
+  async getPlannedSession(id: string): Promise<GrindSession | undefined> {
+    try {
+      const [row] = await db
+        .select()
+        .from(grindSessions)
+        .where(eq(grindSessions.id, id))
+        .limit(1);
+      return row;
+    } catch (err) {
+      console.error("storage.getPlannedSession.error", { id, err });
+      throw err;
+    }
+  }
+
+  async updatePlannedSession(
+    id: string,
+    delta: Partial<InsertGrindSession>,
+  ): Promise<GrindSession> {
+    try {
+      const [row] = await db
+        .update(grindSessions)
+        .set({ ...delta, updatedAt: new Date() } as any)
+        .where(eq(grindSessions.id, id))
+        .returning();
+      return row!;
+    } catch (err) {
+      console.error("storage.updatePlannedSession.error", { id, err });
+      throw err;
+    }
   }
 
   // ============================================================================

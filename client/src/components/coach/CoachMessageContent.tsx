@@ -29,7 +29,9 @@ import { ConfidenceBadge, UnknownBadge } from './ConfidenceBadge';
 import { CitationChip } from './CitationChip';
 
 export interface CoachMessageContentProps {
-  content: string;
+  content?: string;
+  /** Sprint Coach Sprint 0 RF-04/05: alias para `content`. */
+  text?: string;
   className?: string;
 }
 
@@ -131,9 +133,11 @@ function splitByBlockConstructs(text: string): SubSegment[] {
 
 export function CoachMessageContent({
   content,
+  text,
   className,
 }: CoachMessageContentProps): JSX.Element {
-  const segments = React.useMemo(() => splitByCodeBlocks(content || ''), [content]);
+  const effective = content ?? text ?? '';
+  const segments = React.useMemo(() => splitByCodeBlocks(effective), [effective]);
 
   return (
     <div className={className}>

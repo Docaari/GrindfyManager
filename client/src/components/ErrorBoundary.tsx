@@ -38,6 +38,13 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-gray-400 mb-6 max-w-md">
             Ocorreu um erro inesperado nesta secao. Tente recarregar a pagina.
           </p>
+          {import.meta.env.DEV && this.state.error && (
+            <pre className="text-left text-xs text-red-300 bg-gray-900 p-3 rounded max-w-3xl max-h-64 overflow-auto mb-6 whitespace-pre-wrap">
+              {this.state.error.message}
+              {'\n\n'}
+              {this.state.error.stack}
+            </pre>
+          )}
           <div className="flex gap-3">
             <Button
               onClick={this.handleReset}

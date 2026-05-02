@@ -1,0 +1,81 @@
+%% Sequence Diagram — B-SNAPSHOT proativo (Coach-2B RF-07)
+%% ADR-085 (engine) + ADR-087 (cron) + ADR-084 (preferences)
+%%
+%% Cron `0 * 28 * *` rodando 1x/h durante o dia 28.
+%% Para cada user com plano pro/premium:
+%%   - converte hora UTC para timezone do user (users.timezone).
+%%   - se != 9h local → skip
+%%   - shouldSendNudge → ALLOW?
+%%   - gap-check: ja tem snapshot do mes? → SKIP se sim
+%%   - cria chatSession + first message com lista de wallets
+%%   - INSERT coach_nudge_log com status=sent + cycleKey
+
+sequenceDiagram
+    participant Cron as node-cron 0 * 28 * *
+    participant Runner as cronRunner.iterateUsersWithTimezone
+    participant Storage as server/storage
+    participant Engine as shouldSendNudge ADR-085
+    participant Snapshot as walletService<br/>hasSnapshotThisMonth
+    participant Wallets as walletService<br/>listWalletsActive
+    participant DB as Postgres
+
+    Note over Cron: Dispara 1x/hora durante dia 28<br/>(servidor em qualquer timezone)
+    Cron->>Runner: tick at UTC time T
+
+    Runner->>Storage: listUsersForCron<br/>filter subscriptionPlan IN pro premium
+    Storage->>DB: SELECT user_platform_id, timezone<br/>FROM users WHERE plan IN (...)
+    DB-->>Storage: users (10-1k rows)
+    Storage-->>Runner: users[]
+
+    loop Per user (try/catch lesson #9)
+        Runner->>Runner: tz = user.timezone or America/Sao_Paulo
+        Runner->>Runner: localHour = getLocalHour(now, tz)
+
+        alt localHour != 9
+            Note over Runner: skip silently (nao eh hora local)
+        else localHour == 9
+            Runner->>Engine: shouldSendNudge userId<br/>category=B-SNAPSHOT<br/>cycleKey=YYYY-MM<br/>now=now
+
+            Note over Engine: 5 checks sequenciais ADR-085<br/>(flow-nudge-engine.mermaid)
+            Engine-->>Runner: decision
+
+            alt decision.allow == false
+                Note over Runner: skip + log<br/>(category disabled / quiet hours / cap / cycle)
+            else decision.allow == true
+                Runner->>Snapshot: hasSnapshotThisMonth(userId, cycleKey)
+                Note over Snapshot: gap-check valida estado real R5 research
+                Snapshot->>DB: SELECT 1 FROM bankroll_snapshots<br/>WHERE user_id=$1 AND DATE_TRUNC('month',created_at)=$2<br/>AND reason IN ('monthly','manual')
+                DB-->>Snapshot: row?
+                Snapshot-->>Runner: hasSnapshot bool
+
+                alt hasSnapshot == true
+                    Note over Runner: skip + telemetry skip_already_snapshotted<br/>(user ja registrou manual)
+                else hasSnapshot == false
+                    Runner->>Wallets: listWalletsActive(userId)
+                    Wallets->>DB: SELECT * FROM wallets WHERE user_id=$1 AND is_active=true
+                    DB-->>Wallets: wallets[]
+                    Wallets-->>Runner: wallets[]
+
+                    Note over Runner: Begin tx (lesson #194)
+                    Runner->>DB: BEGIN
+                    Runner->>DB: INSERT chat_sessions<br/>(coach_type=tournament, status=active,<br/>title='Fechamento de banca - {month}')
+                    DB-->>Runner: chatSessionId
+                    Runner->>DB: INSERT chat_messages<br/>(role=assistant, content=template renderizado<br/>com lista wallets + saldos USD)
+                    DB-->>Runner: messageId
+                    Runner->>DB: INSERT coach_nudge_log<br/>(category=B-SNAPSHOT,<br/>cycle_key=YYYY-MM,<br/>status=sent,<br/>title_i18n='Mes acaba em 3 dias...',<br/>body_preview=primeiros 500 chars,<br/>chat_session_id=above,<br/>triggered_by_event=cron_28th)
+                    DB-->>Runner: nudgeLogId
+                    Runner->>DB: COMMIT
+
+                    Note over Runner: Telemetria coach.nudge.b_snapshot.sent<br/>{userId, cycleKey, chatSessionId}
+                end
+            end
+        end
+    end
+
+    Note over Runner: Cron termina<br/>tick coach.cron.b_snapshot.tick<br/>{usersProcessed, sent, skipped}
+
+    Note over Cron: Proxima execucao em +1h<br/>idempotencia via cycleKey<br/>(engine bloqueia 2a tentativa)
+
+    rect rgba(220, 200, 255, 0.15)
+    Note over Cron,DB: User clica "Lembrar amanha" no nudge<br/>UPDATE coach_nudge_log<br/>SET status=snoozed, snooze_until=NOW()+24h<br/>Cron dia 29 9h: engine ALLOW (snoozed nao consume cap)<br/>+ cycleKey '2026-05' ainda valido<br/>(historicamente snoozed nao bloqueia cycle check)
+    end

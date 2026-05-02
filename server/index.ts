@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { startSupremaAutoSync } from "./supremaAutoSync";
 import { startLibraryCleanup } from "./libraryCleanup";
+import { startCoachCrons } from "./coach/cronRunner";
 
 const app = express();
 // Stripe webhook needs raw body for signature verification — must be BEFORE express.json()
@@ -69,5 +70,6 @@ app.use((req, res, next) => {
     log(`serving on port ${port}`);
     startSupremaAutoSync();
     startLibraryCleanup();
+    startCoachCrons();
   });
 })();

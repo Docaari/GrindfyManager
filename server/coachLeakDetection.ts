@@ -1,5 +1,8 @@
 // =============================================================================
 // Coach Leak Detection — Rule-based leak detector for Technical Coach
+//
+// Sprint Coach-2B / RF-08: detectLeaksForUser(userId, opts) wrapper que
+// gather analytics + transforma shape para Coach-2B (code/evidence.n).
 // =============================================================================
 
 export type Leak = {
@@ -9,6 +12,17 @@ export type Leak = {
   data?: any;
   recommendation?: string;
 };
+
+/**
+ * Sprint Coach-2B output shape (RF-08):
+ *   { code, severity: 'low'|'medium'|'high', evidence: { n, value }, description }
+ */
+export interface CoachLeakSummary {
+  code: string;
+  severity: "low" | "medium" | "high";
+  evidence: { n: number; value?: number };
+  description: string;
+}
 
 type LeakDetectionInput = {
   analyticsByCategory: Array<{
@@ -37,7 +51,31 @@ type LeakDetectionInput = {
 
 const MIN_SAMPLE = 30;
 
-export function detectLeaks(input: LeakDetectionInput): Leak[] {
+/**
+ * Legacy ABI: recebe input pre-gathered. Mantem compat com 22 tests +
+ * coachContext.ts + studies-v2.ts.
+ *
+ * Sprint Coach-2B / RF-08 ABI: detectLeaks(userId, opts) async wrapper
+ * que gather + retorna shape Coach-2B. Implementado abaixo via overload.
+ */
+export function detectLeaks(input: LeakDetectionInput): Leak[];
+export function detectLeaks(
+  userId: string,
+  opts?: { minSeverity?: "low" | "medium" | "high" },
+): Promise<CoachLeakSummary[]>;
+export function detectLeaks(
+  inputOrUserId: any,
+  opts?: any,
+): Leak[] | Promise<CoachLeakSummary[]> {
+  if (typeof inputOrUserId === "string") {
+    // ABI Coach-2B: (userId, opts) async
+    return detectLeaksForUser(inputOrUserId as string, opts as any);
+  }
+  // ABI legacy: (input) sync
+  return detectLeaksLegacy(inputOrUserId as LeakDetectionInput);
+}
+
+export function detectLeaksLegacy(input: LeakDetectionInput): Leak[] {
   // No data = no leaks
   if (input.totalTournaments === 0 && input.analyticsByCategory.length === 0 &&
       input.analyticsBySite.length === 0 && input.analyticsByMonth.length === 0) {
@@ -144,3 +182,82 @@ export function detectLeaks(input: LeakDetectionInput): Leak[] {
 
   return leaks;
 }
+
+// =============================================================================
+// detectLeaksForUser — Sprint Coach-2B / RF-08 wrapper
+//
+// Gather analytics no storage, chama detectLeaks(input), transforma shape
+// para CoachLeakSummary (code/evidence.n).
+// =============================================================================
+
+function severityLevel(num: number): "low" | "medium" | "high" {
+  if (num >= 4) return "high";
+  if (num >= 2) return "medium";
+  return "low";
+}
+
+function severityRank(level: "low" | "medium" | "high"): number {
+  return { low: 1, medium: 2, high: 3 }[level];
+}
+
+export interface DetectLeaksOpts {
+  minSeverity?: "low" | "medium" | "high";
+}
+
+/**
+ * Sprint Coach-2B / RF-08 wrapper interno: gather + transforma shape.
+ * Chamado via detectLeaks(userId, opts) overload acima.
+ */
+async function detectLeaksForUser(
+  userId: string,
+  opts: DetectLeaksOpts = {},
+): Promise<CoachLeakSummary[]> {
+  const minLevel = severityRank(opts.minSeverity ?? "low");
+  // Lazy import para evitar ciclos
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const storageMod = require("./storage");
+  const storage = storageMod.storage;
+
+  let dashboardStats: any = {};
+  let analyticsByCategory: any[] = [];
+  let analyticsBySite: any[] = [];
+  let analyticsByMonth: any[] = [];
+  try {
+    dashboardStats = (await storage.getDashboardStats?.(userId, "all")) ?? {};
+    [analyticsByCategory, analyticsBySite, analyticsByMonth] = await Promise.all([
+      storage.getAnalyticsByCategory?.(userId, "all") ?? [],
+      storage.getAnalyticsBySite?.(userId, "all") ?? [],
+      storage.getAnalyticsByMonth?.(userId, "all") ?? [],
+    ]);
+  } catch (err) {
+    console.error("detectLeaksForUser.gather.error", { userId, err });
+    return [];
+  }
+
+  const leaks = detectLeaksLegacy({
+    analyticsByCategory: (analyticsByCategory || []) as any,
+    analyticsBySite: (analyticsBySite || []) as any,
+    overallRoi: dashboardStats.roi ?? 0,
+    earlyFinishRate: dashboardStats.earlyFinishRate ?? 0,
+    finalTables: dashboardStats.finalTables ?? 0,
+    cravadas: dashboardStats.cravadas ?? 0,
+    analyticsByMonth: (analyticsByMonth || []) as any,
+    totalTournaments: dashboardStats.totalTournaments ?? 0,
+  });
+
+  return leaks
+    .map((l): CoachLeakSummary => {
+      const level = severityLevel(l.severity);
+      const data = l.data ?? {};
+      const n = Number(data.count ?? data.finalTables ?? 0);
+      const value = data.roi ?? data.siteRoi ?? data.conversionRate;
+      return {
+        code: l.type,
+        severity: level,
+        evidence: { n, value: value !== undefined ? Number(value) : undefined },
+        description: l.description,
+      };
+    })
+    .filter((l) => severityRank(l.severity) >= minLevel);
+}
+
