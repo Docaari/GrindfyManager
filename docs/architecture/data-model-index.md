@@ -60,12 +60,13 @@ Detalhes: `Docs/api/coach.md`, `Docs/api/coach-tools.md`.
 | Tabela | Descricao |
 |--------|-----------|
 | `study_cards` | Cards de estudo com topicos de poker (3bet, ICM, etc.) |
-| `study_themes` | Temas (categorizacao) |
-| `study_tabs` | Abas dentro de tema (boards, ranges, hand_notes, tags) |
+| `study_themes` | Temas (categorizacao). **Coluna nova Studies-Reform (RF-03 / ADR-067 / ADR-068)**: `attacks_leak_type` varchar(50) nullable — vincula tema a leak detectado em Stats Analyzer; alimenta filtro `?fromStats=leaks` (D11) e bonus de score em recomendacoes. |
+| `study_tabs` | Abas dentro de tema (boards, ranges, hand_notes, tags). **Coluna opcional Studies-Reform (RF-02 / ADR-067)**: `last_visited_at` timestamp nullable — alimenta "Continue de onde parou" no Dashboard; fallback derivar de `study_sessions.tab_id` mais recente quando nao populada. |
 | `study_materials` | Materiais (video, artigo, pdf) |
 | `study_notes` | Notas de estudo |
 | `study_sessions` | Sessoes de estudo com duracao e scores |
 | `study_schedules` | Agendamentos de estudo |
+| `study_theme_spot_links` | **NOVO Studies-Reform (RF-08 / ADR-068, opcional D10)**. Tabela N:N entre `study_themes` e `starred_hands`. 1 row por vinculo. Colunas: `id` (nanoid), `theme_id` (FK CASCADE), `spot_id` (FK CASCADE), `user_id` (FK CASCADE), `linked_at` timestamp default NOW. UNIQUE constraint em `(theme_id, spot_id)` para idempotencia. Indices: `idx_study_theme_spot_links_theme`, `idx_study_theme_spot_links_spot`, `idx_study_theme_spot_links_user`. Alimenta `storage.getLinkedSpots()` (compartilhado entre `studyRecommendationsService` RF-06 e Coach tool `read_theme_with_linked_spots` RF-07). Spec MVP: 1 spot pode ter multiplos themes (modelado N:N para futuro), mas UI atual sugere 1 tema por spot. |
 
 ## Calendario
 
@@ -101,6 +102,7 @@ Detalhes: `Docs/api/coach.md`, `Docs/api/coach-tools.md`.
 | `analytics_daily` | Resumo diario de analytics |
 | `engagement_metrics` | Metricas de engajamento |
 | `user_settings` | Configuracoes do usuario (moeda, notificacoes, exchange rates, **`bankroll_management_enabled` boolean default true** — Sprint B2/M2). **Colunas novas Bankroll-3 (RF-6 / ADR-060)**: `stop_loss_usd` decimal nullable (limite perda diaria USD), `stop_win_usd` decimal nullable (meta ganho diaria USD), `stop_lock_until` timestamp nullable (lock ativo se > NOW), `stop_lock_duration_hours` integer NOT NULL DEFAULT 12 (range 1-72). Stop-win NAO bloqueia (D3, banner only). Stop-loss bloqueia 12h default. Reset 00:00 user TZ (`users.timezone`, fallback UTC). |
+| `users` (delta) | **Colunas opcionais Studies-Reform (RF-08 / ADR-067 / ADR-068, D10)**: `study_streak_days` integer NOT NULL DEFAULT 0 — cache de streak diario; `last_study_activity_at` timestamp nullable — alimenta `bumpStudyStreak` para detectar dia consecutivo (D3). Indice parcial `idx_users_streak_active` em `study_streak_days WHERE study_streak_days > 0`. Se migration 0021 nao aplicada (D10 fallback), persistencia em `localStorage` (`grindfy:studies:streak`, shape `{ days: number, lastActivityAt: ISO8601 }`) — streak nao sobrevive multi-device nem limpeza de cache. |
 | `custom_groups` | Grupos customizados de templates |
 | `custom_group_templates` | Relacao grupo-template |
 | `coaching_insights` | Insights de coaching |
@@ -111,7 +113,50 @@ Detalhes: `Docs/api/coach.md`, `Docs/api/coach-tools.md`.
 - `userPlatformId` formato `USER-XXXX` (sequencial, separado de `id` interno).
 - Validacao Zod via `drizzle-zod` em `shared/schema.ts`.
 - Snapshots para auditoria (bankroll); soft-delete raro (preferir hard-delete + tracking).
-- ADRs relevantes: 014 (add-on/rea), 017 (snapshot vs derived), 028 (warmup_rituals dedicada), 031-032 (tournament types), 033 (FX rate), 038 (optimistic concurrency wallet), 039 (rakeback as wallet tx), 040 (session-end reconciliation), 041 (cooldown_logs + starred_hands dedicadas), 046 (session_wallet_snapshots), 047 (summary inline reconcile), 048 (wallets eligibility por plataformas jogadas), **058 (auto-snapshot pos-cooldown)**, **059 (cross-wallet transfer ledger)**, **060 (stop-loss/stop-win lock)**, **061 (fxResolver unificado)**.
+- ADRs relevantes: 014 (add-on/rea), 017 (snapshot vs derived), 028 (warmup_rituals dedicada), 031-032 (tournament types), 033 (FX rate), 038 (optimistic concurrency wallet), 039 (rakeback as wallet tx), 040 (session-end reconciliation), 041 (cooldown_logs + starred_hands dedicadas), 046 (session_wallet_snapshots), 047 (summary inline reconcile), 048 (wallets eligibility por plataformas jogadas), **058 (auto-snapshot pos-cooldown)**, **059 (cross-wallet transfer ledger)**, **060 (stop-loss/stop-win lock)**, **061 (fxResolver unificado)**, **067 (studies page IA — sub-paths)**, **068 (cross-feature recommendations engine)**.
+
+---
+
+## Schema Delta — Sprint Studies-Reform (Migration 0021, opcional D10)
+
+ADR-067 (URL state pattern em studies) + ADR-068 (cross-feature recommendations engine) introduzem 1 tabela nova + 2 colunas em `users`. Migration **opcional** (D10): se test-writer red phase nao confirmar necessidade, fallback localStorage para streak; tabela `study_theme_spot_links` e pre-requisito de RF-05 e portanto **bloqueante** para o workflow spot↔tema funcionar end-to-end.
+
+```sql
+-- migrations/0021_studies_reform.sql
+
+CREATE TABLE IF NOT EXISTS study_theme_spot_links (
+    id VARCHAR(21) PRIMARY KEY,
+    theme_id VARCHAR(21) NOT NULL REFERENCES study_themes(id) ON DELETE CASCADE,
+    spot_id VARCHAR(21) NOT NULL REFERENCES starred_hands(id) ON DELETE CASCADE,
+    user_id VARCHAR(21) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    linked_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (theme_id, spot_id)
+);
+CREATE INDEX IF NOT EXISTS idx_study_theme_spot_links_theme ON study_theme_spot_links(theme_id);
+CREATE INDEX IF NOT EXISTS idx_study_theme_spot_links_spot ON study_theme_spot_links(spot_id);
+CREATE INDEX IF NOT EXISTS idx_study_theme_spot_links_user ON study_theme_spot_links(user_id);
+
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS study_streak_days INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS last_study_activity_at TIMESTAMP NULL;
+
+CREATE INDEX IF NOT EXISTS idx_users_streak_active
+    ON users(study_streak_days) WHERE study_streak_days > 0;
+```
+
+Diagrama ER atualizado em `Docs/architecture/data-model-studies.mermaid` (a atualizar quando migration aplicada). Colunas opcionais `study_themes.attacks_leak_type` e `study_tabs.last_visited_at` documentadas na tabela acima — adicao gradual seguindo lesson #7 (deprecation gradual: nullable + default).
+
+Caminho com migration (preferido):
+- `study_theme_spot_links` operacional, RF-05 + RF-06 + RF-07 funcionam end-to-end.
+- Streak persiste em `users.study_streak_days` — sobrevive multi-device.
+- `getLinkedSpots(themeId, userId)` query indexada.
+
+Caminho fallback (sem migration, D10):
+- `study_theme_spot_links` ausente → RF-05 erro 500 `migration_missing` no submit com `themeId`. Sem migration, RF-05 nao pode ser entregue.
+- Streak em `localStorage` (`grindfy:studies:streak`) — perde em limpeza de cache, nao multi-device.
+- `studyRecommendationsService` ainda funciona, mas sem source de "linked spots" para enriquecer dormant themes.
+
+Decisao operacional: **migration 0021 e bloqueante para Sprint Studies-Reform fechar com RF-05 verde**. test-writer red phase de RF-05 produz tests que exigem a tabela; reviewer R3 rejeita merge sem migration aplicada em dev DB.
 
 ---
 

@@ -1,0 +1,269 @@
+%% Sprint Studies-Reform — C4 Component (Level 3) da pagina /estudos
+%% Spec: Docs/specs/sprint-studies-reform.md (RF-01..RF-12)
+%% ADRs: 067 (URL state pattern), 068 (recommendations engine)
+%% Convencao: graph TD; subgraphs por camada; setas com label de protocolo/payload.
+%% NAO inclui internals do StatsAnalyzerTab (Sess 3 — zona protegida).
+
+graph TD
+    User((Jogador<br/><i>browser/mobile</i>))
+    Coach[("Coach AI<br/><i>conversa em /coach</i><br/>tool: read_theme_with_linked_spots")]
+
+    %% ====== FRONTEND - LAYOUT + ROUTING ======
+    subgraph FE["Frontend (React + Vite + Wouter + TanStack Query) — client/src/"]
+        direction TB
+
+        subgraph PageShell["pages/Studies.tsx (shell)"]
+            StudiesShell["Studies.tsx<br/><i>monta StudiesLayout</i>"]
+        end
+
+        subgraph LayoutComp["components/studies/ — Layout (RF-01)"]
+            StudiesLayout["StudiesLayout.tsx<br/><b>Layout pai</b><br/><i>useMediaQuery decide sidebar vs bottom-nav<br/>monta QuickSearchPalette + OnboardingWizard</i>"]
+            StudiesNavSidebar["StudiesNavSidebar.tsx<br/><b>Desktop &gt;=1024px (expandida)<br/>Tablet 768-1023px (icon-only)</b>"]
+            StudiesBottomNav["StudiesBottomNav.tsx<br/><b>Mobile &lt;768px (5 icones)</b>"]
+            StreakBadgeSide["StudyStreakBadge.tsx<br/><i>RF-12 — rodape sidebar</i>"]
+        end
+
+        subgraph Views["components/studies/ — Views por sub-rota"]
+            DashboardView["dashboard/DashboardView.tsx<br/><b>RF-02 — /estudos + /estudos/dashboard</b><br/><i>compoe 5 secoes</i>"]
+            ThemesView["ThemesView.tsx<br/><b>RF-03 — /estudos/temas</b><br/><i>?fromStats=leaks suporta filtro</i>"]
+            StatsView["StatsView.tsx<br/><b>RF-04 — /estudos/stats (WRAPPER)</b><br/><i>breadcrumb + botao Sugerir temas<br/>NAO modifica filhos</i>"]
+            SpotsView["SpotsView.tsx<br/><b>RF-05 — /estudos/spots</b><br/><i>workflow vincular spot↔tema</i>"]
+            RecommendationsView["RecommendationsView.tsx<br/><b>RF-06 — /estudos/recomendacoes</b>"]
+            ThemeDetail["ThemeDetail.tsx<br/><i>existente — /estudos/temas/:id<br/>+ aba 'Spots vinculados' (RF-05)</i>"]
+        end
+
+        subgraph DashSections["components/studies/dashboard/ — Secoes do Dashboard"]
+            ContinueLeftOff["ContinueWhereLeftOff.tsx<br/><i>top 3 themes lastVisitedAt</i>"]
+            WeekInsights["WeekInsights.tsx<br/><i>3 KPIs: themesOpened, spotsReviewed, hoursStudied</i>"]
+            PendingSpotsPreview["PendingSpotsPreview.tsx<br/><i>top 3 starredHands reviewLater</i>"]
+            RecommendationsPreview["RecommendationsPreview.tsx<br/><i>top 5 recomendacoes</i>"]
+            StreakBadgeHero["StudyStreakBadge.tsx<br/><i>RF-12 — hero do dashboard</i>"]
+        end
+
+        subgraph Workflow["components/studies/workflow/ — RF-05"]
+            LinkDropdown["LinkSpotToThemeDropdown.tsx<br/><i>dropdown vincular tema</i>"]
+            SuggestedSidePanel["SuggestedThemeSidePanel.tsx<br/><i>sugestao via SPOT_TO_THEME_MAPPING (D5)</i>"]
+            SpotReviewCard["SpotReviewCard.tsx<br/><i>existente + extensao themeId no submit</i>"]
+        end
+
+        subgraph SharedUtils["components/studies/ — Compartilhado"]
+            QuickSearchPalette["QuickSearchPalette.tsx<br/><b>RF-09 — Cmd/Ctrl+K (cmdk@1.1.1)</b><br/><i>listener so dentro de /estudos/*</i>"]
+            EmptyState["EmptyState.tsx<br/><b>RF-10 — reutilizavel</b><br/><i>icone + title + cta</i>"]
+            OnboardingWizard["onboarding/OnboardingWizard.tsx<br/><b>RF-11 — 4 cards primeira visita</b><br/><i>flag localStorage D8</i>"]
+        end
+
+        subgraph Hooks["hooks/ (NOVOS)"]
+            useStudyActivityInvalidation["useStudyActivityInvalidation.ts<br/><i>invalida cache recomendacoes em<br/>themeOpen/spotReview/snapshotCreate</i>"]
+            useStudyStreak["useStudyStreak.ts<br/><i>useQuery streak + bumpStreak mutation</i>"]
+            useMediaQuery["useMediaQuery.ts<br/><i>existente — D9 breakpoints</i>"]
+        end
+
+        subgraph SessionThree["Sess 3 — Stats Analyzer V2 (NAO TOCAR — zona protegida spec 8.2)"]
+            StatsAnalyzerTab["StatsAnalyzerTab.tsx<br/><b>INTACTO</b><br/><i>renderizado por StatsView wrapper<br/>sem props customizadas</i>"]
+        end
+
+        subgraph CacheLayer["TanStack Query — cache compartilhado"]
+            QueryCache[("queryClient<br/><i>['study','themes',userId]<br/>['study','recommendations',userId]<br/>['study','streak',userId]<br/>staleTime 5min</i>")]
+        end
+
+        subgraph Router["Wouter — sub-routes"]
+            WouterSwitch["Switch / Route<br/><i>/estudos<br/>/estudos/dashboard<br/>/estudos/temas<br/>/estudos/temas/:id<br/>/estudos/stats<br/>/estudos/spots<br/>/estudos/recomendacoes<br/>/estudos/* → redirect dashboard</i>"]
+        end
+
+        subgraph SharedMapping["shared/"]
+            SpotThemeMapping["spot-theme-mapping.ts<br/><b>D5 — SPOT_TO_THEME_MAPPING</b><br/><i>type/spot → theme tags</i>"]
+        end
+    end
+
+    %% ====== BACKEND ======
+    subgraph BE["Backend (Express + Drizzle ORM) — server/"]
+        direction TB
+
+        subgraph Routes["routes/"]
+            StudyRecRoute["routes/study-recommendations.ts<br/><b>RF-06 — GET /api/study/recommendations</b>"]
+            StudyStreakRoute["routes/study-streak.ts<br/><b>RF-12 — POST /bump, GET /</b>"]
+            StarredHandsRoute["routes/starred-hands.ts<br/><i>PATCH /:id/review<br/>+ themeId opcional (RF-05)</i>"]
+            StudyThemesRoute["routes/study-themes.ts<br/><i>GET /:id/linked-spots (novo RF-05)</i>"]
+        end
+
+        subgraph Services["services/"]
+            StudyRecService["studyRecommendationsService.ts<br/><b>RF-06 — pipeline parallel</b><br/><i>getStatsLeaks + getStaleSpots + getDormantThemes<br/>Promise.allSettled<br/>priority_score formula</i>"]
+            StudyStreakService["studyStreakService.ts<br/><b>RF-12 — bump/get/heatmap</b><br/><i>idempotencia por dia</i>"]
+        end
+
+        subgraph CoachTools["coachTools/ — Coach AI"]
+            CoachToolReg["coachTools/index.ts<br/><i>registry pattern (ADR-023)</i>"]
+            ReadThemeTool["readThemeWithLinkedSpots.ts<br/><b>RF-07 — Pro+ tier</b><br/><i>shape: theme + tabs (max 5) + linked_spots (max 10) + summary</i>"]
+        end
+
+        subgraph StorageLayer["storage.ts (Drizzle queries)"]
+            GetLinkedSpots["getLinkedSpots(themeId,userId,opts)<br/><i>fonte unica — usado por service + tool</i>"]
+            GetStaleSpots["getStaleSpots(userId, ageDays)"]
+            GetDormantThemes["getDormantThemes(userId, progress, days)"]
+            LinkSpotTheme["linkSpotToTheme(themeId, spotId, userId)"]
+            UnlinkSpotTheme["unlinkSpotFromTheme(themeId, spotId, userId)"]
+            BumpStreak["bumpStudyStreak(userId)"]
+            GetStreak["getStudyStreak(userId)"]
+        end
+
+        subgraph LeakDetector["server/studies-v2.ts (existente)"]
+            DetectLeaks["detectLeaks(userId)<br/><i>severidade 0-10<br/>requer 50+ MTTs</i>"]
+        end
+
+        subgraph Middleware["middlewares"]
+            RequireAuth["requireAuth (JWT)"]
+            RequirePerm["requirePermission('coach_tools_read')<br/><i>tier Pro+ para RF-07</i>"]
+        end
+    end
+
+    %% ====== BANCO ======
+    subgraph DB["PostgreSQL 16 (Neon)"]
+        StudyThemesTbl[("study_themes<br/><i>existente</i>")]
+        StudyTabsTbl[("study_tabs<br/><i>existente + (opcional) lastVisitedAt</i>")]
+        StarredHandsTbl[("starred_hands<br/><i>existente</i>")]
+        StudyThemeSpotLinks[("study_theme_spot_links<br/><b>NOVO — RF-08 (D10 opcional)</b><br/><i>theme_id, spot_id, user_id, linked_at<br/>UNIQUE(theme_id, spot_id)</i>")]
+        UsersTbl[("users<br/><i>+ study_streak_days (RF-08 opcional)<br/>+ last_study_activity_at</i>")]
+        TournamentsTbl[("tournaments + stats_snapshots<br/><i>fonte de detectLeaks</i>")]
+    end
+
+    %% ====== EXTERNAL ======
+    subgraph External["Externo / Side-effects"]
+        BrowserStorage[("localStorage<br/><i>grindfy:studies:onboarding_completed (D8)<br/>grindfy:studies:streak (D10 fallback)</i>")]
+        Anthropic["Anthropic API<br/><i>Coach prompt cache<br/>tool RF-07 chamada</i>"]
+    end
+
+    %% ===== USER -> SHELL =====
+    User -->|"abre /estudos*"| StudiesShell
+    StudiesShell -->|"renderiza"| StudiesLayout
+
+    %% ===== LAYOUT MOUNTS =====
+    StudiesLayout -->|"useMediaQuery >= 1024px<br/>render expandida"| StudiesNavSidebar
+    StudiesLayout -->|"useMediaQuery 768-1023px<br/>render collapsed"| StudiesNavSidebar
+    StudiesLayout -->|"useMediaQuery < 768px<br/>render"| StudiesBottomNav
+    StudiesLayout -->|"mount global<br/>listener Cmd/Ctrl+K"| QuickSearchPalette
+    StudiesLayout -->|"mount condicional<br/>(D8 flag + queries vazias)"| OnboardingWizard
+    StudiesLayout -->|"renderiza Switch"| WouterSwitch
+
+    StudiesNavSidebar -->|"mount no rodape"| StreakBadgeSide
+    StreakBadgeSide -->|"useStudyStreak"| useStudyStreak
+
+    %% ===== ROUTER -> VIEWS =====
+    WouterSwitch -->|"/estudos<br/>/estudos/dashboard"| DashboardView
+    WouterSwitch -->|"/estudos/temas"| ThemesView
+    WouterSwitch -->|"/estudos/temas/:id"| ThemeDetail
+    WouterSwitch -->|"/estudos/stats"| StatsView
+    WouterSwitch -->|"/estudos/spots"| SpotsView
+    WouterSwitch -->|"/estudos/recomendacoes"| RecommendationsView
+
+    %% ===== DASHBOARD COMPOE =====
+    DashboardView -->|"render hero"| ContinueLeftOff
+    DashboardView -->|"render"| WeekInsights
+    DashboardView -->|"render"| PendingSpotsPreview
+    DashboardView -->|"render"| RecommendationsPreview
+    DashboardView -->|"render hero"| StreakBadgeHero
+
+    %% ===== STATS WRAPPER (ISOLATION CONTRACT) =====
+    StatsView -->|"renderiza intacto<br/>SEM props customizadas"| StatsAnalyzerTab
+    StatsView -->|"botao Sugerir temas<br/>navigate /estudos/temas?fromStats=leaks"| ThemesView
+
+    %% ===== SPOTS WORKFLOW =====
+    SpotsView -->|"click spot"| SpotReviewCard
+    SpotReviewCard -->|"render dropdown"| LinkDropdown
+    SpotReviewCard -->|"render side panel"| SuggestedSidePanel
+    SuggestedSidePanel -->|"consulta"| SpotThemeMapping
+    LinkDropdown -->|"PATCH /api/starred-hands/:id/review<br/>{themeId}"| StarredHandsRoute
+
+    %% ===== THEME DETAIL =====
+    ThemeDetail -->|"aba 'Spots vinculados'<br/>GET /api/study-themes/:id/linked-spots"| StudyThemesRoute
+
+    %% ===== RECOMMENDATIONS =====
+    RecommendationsView -->|"useQuery 5min stale<br/>GET /api/study/recommendations"| StudyRecRoute
+    RecommendationsPreview -->|"reusa cache"| QueryCache
+
+    %% ===== EMPTY STATES (RF-10) =====
+    DashboardView -.->|"render se vazio"| EmptyState
+    ThemesView -.->|"render se vazio"| EmptyState
+    SpotsView -.->|"render se vazio"| EmptyState
+    RecommendationsView -.->|"render se vazio"| EmptyState
+
+    %% ===== QUICK SEARCH =====
+    QuickSearchPalette -->|"busca local"| QueryCache
+    QuickSearchPalette -->|"navigate"| WouterSwitch
+
+    %% ===== ONBOARDING (RF-11) =====
+    OnboardingWizard -->|"escreve flag"| BrowserStorage
+    OnboardingWizard -->|"card 2: cria tema"| StudyThemesRoute
+
+    %% ===== HOOKS / CACHE =====
+    DashboardView -->|"useQuery"| QueryCache
+    ThemesView -->|"useQuery"| QueryCache
+    SpotsView -->|"useQuery"| QueryCache
+    RecommendationsView -->|"useQuery"| QueryCache
+    ThemeDetail -.->|"onMount"| useStudyActivityInvalidation
+    SpotReviewCard -.->|"onSubmit"| useStudyActivityInvalidation
+    useStudyActivityInvalidation -->|"invalidateQueries"| QueryCache
+
+    %% ===== BACKEND PIPELINE =====
+    StudyRecRoute -->|"middleware"| RequireAuth
+    StudyStreakRoute -->|"middleware"| RequireAuth
+    StarredHandsRoute -->|"middleware"| RequireAuth
+    StudyThemesRoute -->|"middleware"| RequireAuth
+
+    StudyRecRoute -->|"chama"| StudyRecService
+    StudyStreakRoute -->|"bump/get"| StudyStreakService
+    StarredHandsRoute -->|"se themeId no body"| LinkSpotTheme
+    StudyThemesRoute -->|"linked-spots"| GetLinkedSpots
+
+    %% ===== SERVICE INTERNALS (RF-06 pipeline) =====
+    StudyRecService -->|"Promise.allSettled #1"| DetectLeaks
+    StudyRecService -->|"Promise.allSettled #2"| GetStaleSpots
+    StudyRecService -->|"Promise.allSettled #3"| GetDormantThemes
+    StudyRecService -->|"merge + sort priority_score<br/>top 10"| QueryCache
+
+    %% ===== STREAK (RF-12) =====
+    StudyStreakService -->|"if migration applied"| BumpStreak
+    StudyStreakService -->|"else"| BrowserStorage
+    BumpStreak -->|"UPDATE users.study_streak_days"| UsersTbl
+
+    %% ===== COACH TOOL (RF-07) =====
+    Coach -->|"tool call<br/>{theme_id OR theme_name}"| Anthropic
+    Anthropic -->|"executa via registry"| CoachToolReg
+    CoachToolReg -->|"resolve tier+invoke"| ReadThemeTool
+    ReadThemeTool -->|"middleware tier"| RequirePerm
+    ReadThemeTool -->|"reusa storage"| GetLinkedSpots
+    ReadThemeTool -->|"theme + tabs"| StudyThemesRoute
+
+    %% ===== STORAGE -> DB =====
+    GetLinkedSpots -->|"SELECT JOIN<br/>WHERE user_id=?"| StudyThemeSpotLinks
+    GetLinkedSpots -->|"JOIN starred_hands"| StarredHandsTbl
+    GetStaleSpots -->|"SELECT WHERE<br/>reviewLater AND age>7d AND theme_id IS NULL"| StarredHandsTbl
+    GetDormantThemes -->|"SELECT WHERE<br/>progress<30 AND lastVisit>30d"| StudyThemesTbl
+    LinkSpotTheme -->|"INSERT idempotent<br/>UNIQUE(theme_id,spot_id)"| StudyThemeSpotLinks
+    UnlinkSpotTheme -->|"DELETE"| StudyThemeSpotLinks
+    DetectLeaks -->|"SELECT analytics"| TournamentsTbl
+    BumpStreak -->|"UPDATE/SELECT"| UsersTbl
+    GetStreak -->|"SELECT"| UsersTbl
+
+    %% ===== TELEMETRIA =====
+    StudyRecService -.->|"telemetry<br/>study_recommendations_generated<br/>study_recommendations_source_failed"| BrowserStorage
+    StudiesLayout -.->|"studies.nav_clicked<br/>studies.cmdk_opened<br/>studies.deep_linked"| BrowserStorage
+
+    %% ===== STYLING =====
+    classDef new fill:#bbf7d0,stroke:#15803d,stroke-width:2px,color:#000
+    classDef wrapper fill:#fef3c7,stroke:#a16207,stroke-width:2px,color:#000
+    classDef protected fill:#fecaca,stroke:#b91c1c,stroke-width:2px,color:#000
+    classDef external fill:#e0e7ff,stroke:#3730a3,stroke-width:1px,color:#000
+    classDef shared fill:#ddd6fe,stroke:#6d28d9,stroke-width:1px,color:#000
+
+    class StudiesLayout,StudiesNavSidebar,StudiesBottomNav,DashboardView,ThemesView,SpotsView,RecommendationsView new
+    class ContinueLeftOff,WeekInsights,PendingSpotsPreview,RecommendationsPreview,StreakBadgeSide,StreakBadgeHero new
+    class QuickSearchPalette,EmptyState,OnboardingWizard,LinkDropdown,SuggestedSidePanel new
+    class StudyRecService,StudyStreakService,ReadThemeTool new
+    class GetLinkedSpots,GetStaleSpots,GetDormantThemes,LinkSpotTheme,UnlinkSpotTheme,BumpStreak,GetStreak new
+    class StudyRecRoute,StudyStreakRoute new
+    class StudyThemeSpotLinks new
+    class StatsView wrapper
+    class StatsAnalyzerTab protected
+    class BrowserStorage,Anthropic,Coach external
+    class SpotThemeMapping shared
+    class QueryCache shared

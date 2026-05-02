@@ -1,0 +1,129 @@
+%% Sprint Studies-Reform — Sequence: recommendations engine pipeline (RF-06)
+%% Spec: Docs/specs/sprint-studies-reform.md (RF-06)
+%% ADR: 068 (cross-feature recommendations engine)
+%% Fluxo: RecommendationsView → endpoint → service parallel pipeline → merge + score → cache → activity invalidation
+
+sequenceDiagram
+    autonumber
+    actor User as Jogador
+    participant RV as RecommendationsView<br/>(/estudos/recomendacoes)
+    participant Cache as TanStack Query<br/>(staleTime 5min)
+    participant API as GET /api/study/recommendations
+    participant Auth as requireAuth (JWT)
+    participant Service as studyRecommendationsService.ts
+    participant DetectLeaks as detectLeaks()<br/>server/studies-v2.ts
+    participant Storage as storage.ts
+    participant DB as PostgreSQL
+    participant ActivityHooks as useStudyActivityInvalidation
+    participant Telemetry as telemetry log
+
+    Note over User,DB: Pre-condicao: usuario autenticado, plano Pro+ opcional<br/>(endpoint open ao authed; tier filtra apenas resultados especificos se aplicavel)
+
+    %% ===== Render inicial =====
+    User->>RV: abre /estudos/recomendacoes
+    RV->>Cache: useQuery(['study','recommendations',userId])
+
+    alt cache fresh (idade &lt; 5min)
+        Cache-->>RV: dados cached
+        RV->>User: render top 10 imediatamente (sem skeleton)
+    else cache stale ou ausente
+        Cache->>API: fetch GET /api/study/recommendations
+        Cache-->>RV: skeleton 5 cards (loading)
+
+        %% ===== Auth + chamada do service =====
+        API->>Auth: requireAuth
+        Auth-->>API: req.user.userPlatformId
+
+        API->>Service: getRecommendations(userId, limit=10)
+
+        %% ===== Pipeline parallel (Promise.allSettled) =====
+        par Source 1: Stats Leaks
+            Service->>DetectLeaks: getStatsLeaks(userId, top=5)
+            DetectLeaks->>DB: SELECT analytics<br/>WHERE user_id=? AND tournaments_count&gt;=50
+            DB-->>DetectLeaks: stats snapshots + tournaments
+            DetectLeaks->>DetectLeaks: severity calculation
+            DetectLeaks-->>Service: [{leak_type, severity, ...}, ...]
+        and Source 2: Stale Spots
+            Service->>Storage: getStaleSpots(userId, ageDays=7)
+            Storage->>DB: SELECT s.* FROM starred_hands s<br/>LEFT JOIN study_theme_spot_links l<br/>  ON l.spot_id = s.id<br/>WHERE s.user_id=?<br/>  AND s.review_later=true<br/>  AND s.created_at &lt; NOW() - INTERVAL '7 days'<br/>  AND l.id IS NULL<br/>ORDER BY s.created_at ASC<br/>LIMIT 20
+            DB-->>Storage: stale spots
+            Storage-->>Service: [{spotId, type, age_days, ...}, ...]
+        and Source 3: Dormant Themes
+            Service->>Storage: getDormantThemes(userId, progress=30, dormancyDays=30)
+            Storage->>DB: SELECT t.* FROM study_themes t<br/>LEFT JOIN study_tabs tb ON tb.theme_id=t.id<br/>WHERE t.user_id=?<br/>  AND t.progress &lt; 30<br/>  AND COALESCE(t.last_visited_at, t.updated_at)<br/>      &lt; NOW() - INTERVAL '30 days'<br/>GROUP BY t.id<br/>ORDER BY t.last_visited_at ASC<br/>LIMIT 20
+            DB-->>Storage: dormant themes
+            Storage-->>Service: [{themeId, progress, dormancy_days, ...}, ...]
+        end
+
+        %% ===== Failure handling (Promise.allSettled) =====
+        Service->>Service: collect Promise.allSettled results
+
+        alt source[0] (leaks) rejected
+            Service->>Telemetry: study_recommendations_source_failed<br/>{source:'leaks', error}
+            Note over Service: Lesson #9 — log antes de fallback.<br/>Usuario com 0 torneios importados:<br/>detectLeaks lanca, mas spots/themes ainda funcionam.
+        end
+        alt source[1] (spots) rejected
+            Service->>Telemetry: study_recommendations_source_failed<br/>{source:'stale_spots', error}
+        end
+        alt source[2] (themes) rejected
+            Service->>Telemetry: study_recommendations_source_failed<br/>{source:'dormant_themes', error}
+        end
+
+        %% ===== Merge + priority score =====
+        Service->>Service: mapLeakToRecommendation(leak)<br/>score = leakSeverity × 1.5 + sourceBonus
+        Service->>Service: mapSpotToRecommendation(spot)<br/>score = spotAgeDays × 0.3 + sourceBonus
+        Service->>Service: mapThemeToRecommendation(theme)<br/>score = themeDormancyDays × 0.1 + sourceBonus
+
+        Service->>Service: merge arrays
+        Service->>Service: sort by priority_score DESC
+        Service->>Service: slice(0, 10)
+        Service->>Service: normalize score to 0-100
+
+        %% ===== Telemetry sucesso =====
+        Service->>Telemetry: study_recommendations_generated<br/>{userId, items_count, source_counts, latency_ms}
+
+        Service-->>API: {items, generated_at, source_counts}
+        API-->>Cache: 200 OK<br/>{items: [...], generated_at, source_counts}
+        Cache->>Cache: store with staleTime: 5min, gcTime: 10min
+        Cache-->>RV: data ready
+    end
+
+    %% ===== Render =====
+    RV->>User: render lista priority_score DESC<br/>com badge type (leak/spot/theme)<br/>+ progress bar score 0-100<br/>+ CTA action
+
+    alt items.length &gt; 0
+        RV->>User: render 10 cards
+    else items.length === 0
+        RV->>User: render EmptyState<br/>"Nenhuma recomendacao agora<br/>— voce esta em dia!<br/>[Continuar estudando]"
+        Note over RV: source_counts permite copy especifico<br/>"Voce tem 5 leaks mas nenhum supera severidade 3"
+    end
+
+    %% ===== Click em recomendacao =====
+    User->>RV: click em card
+    RV->>Telemetry: studies.recommendation_clicked<br/>{rec_type, priority_score, position}
+
+    alt cta_action = 'create_theme'
+        RV->>RV: navigate /estudos/temas?fromStats=leaks<br/>+ pre-fill CreateThemeDialog
+    else cta_action = 'review_spot'
+        RV->>RV: navigate /estudos/spots?spotId=spotId<br/>+ open SpotReviewCard modal
+    else cta_action = 'open_theme'
+        RV->>RV: navigate /estudos/temas/themeId
+    end
+
+    %% ===== Activity invalidation (D3 alinhado com streak) =====
+    Note over User,Cache: Em outras views, activity dispara invalidation:
+
+    User->>ActivityHooks: ThemeDetail mount<br/>(visita tema)
+    ActivityHooks->>Cache: invalidateQueries(['study','recommendations',userId])
+    Note over Cache: Proximo render de RecommendationsView<br/>re-fetch (cache marcado stale)
+
+    User->>ActivityHooks: SpotReviewCard submit<br/>(revisar spot)
+    ActivityHooks->>Cache: invalidateQueries(['study','recommendations',userId])
+
+    User->>ActivityHooks: Stats Analyzer snapshot create
+    ActivityHooks->>Cache: invalidateQueries(['study','recommendations',userId])
+
+    Note over Cache,DB: Cache invalida = proxima visita<br/>regenera recomendacoes baseadas<br/>no novo state do usuario.<br/>Loop de feedback: estudou tema dormente → some da lista → leak fica no topo.
+
+    %% ===== Coach tool reusa storage (RF-07) =====
+    Note over Service,DB: Coach tool read_theme_with_linked_spots reusa<br/>mesmo storage.getLinkedSpots(themeId, userId).<br/>Zero duplicacao = cache Anthropic preservado<br/>(lesson #10).

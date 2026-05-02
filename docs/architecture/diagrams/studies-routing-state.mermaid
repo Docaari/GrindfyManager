@@ -1,0 +1,171 @@
+%% Sprint Studies-Reform — State diagram: routing entre sub-views (RF-01)
+%% Spec: Docs/specs/sprint-studies-reform.md (RF-01, RF-03, RF-06)
+%% ADR: 067 (URL state pattern + sub-paths Wouter)
+%% Estados: cada view + estados especiais (Loading, Error, Onboarding, Filter applied)
+%% Triggers: URL change, sidebar/bottom-nav click, query param, deep link, browser back/forward
+
+stateDiagram-v2
+    [*] --> RouteResolution: User abre /estudos*<br/>(qualquer sub-path)
+
+    RouteResolution --> OnboardingGate: layout monta<br/>useQuery themes/spots/snapshots
+    OnboardingGate --> Onboarding: D8 conditions met<br/>(no themes + no snapshots + no spots<br/>+ !localStorage flag)
+    OnboardingGate --> ViewSelection: dados existentes<br/>OU flag set
+
+    Onboarding --> ViewSelection: completed OR skipped<br/>localStorage flag set
+
+    ViewSelection --> Dashboard: location = '/estudos'<br/>OR '/estudos/dashboard'
+    ViewSelection --> Themes: location startsWith '/estudos/temas'<br/>(sem :id)
+    ViewSelection --> ThemesWithFilter: location = '/estudos/temas'<br/>+ ?fromStats=leaks (D11)
+    ViewSelection --> ThemeDetail: location = '/estudos/temas/:id'<br/>(rota existente)
+    ViewSelection --> Stats: location = '/estudos/stats'
+    ViewSelection --> Spots: location = '/estudos/spots'
+    ViewSelection --> Recommendations: location = '/estudos/recomendacoes'
+    ViewSelection --> CatchAllRedirect: location matches /estudos/* invalid<br/>(ex: /estudos/foo)
+
+    CatchAllRedirect --> Dashboard: navigate('/estudos/dashboard')<br/>telemetry: studies.deep_linked<br/>{source:'invalid_route'}
+
+    %% ===== DASHBOARD =====
+    Dashboard --> Loading: useQuery 5 secoes<br/>(continue + insights + spots + recs + streak)
+    Loading --> Dashboard: todas resolvidas
+    Loading --> ErrorPartial: alguma secao falhou<br/>(lesson #9 — falha por secao)
+
+    Dashboard --> Themes: click sidebar/bottom-nav "Temas"<br/>OR continue card click
+    Dashboard --> Stats: click sidebar/bottom-nav "Stats"
+    Dashboard --> Spots: click sidebar/bottom-nav "Spots"<br/>OR PendingSpotsPreview card click
+    Dashboard --> Recommendations: click sidebar/bottom-nav "Recomendacoes"<br/>OR RecommendationsPreview card click
+    Dashboard --> ThemeDetail: ContinueWhereLeftOff card click<br/>navigate /estudos/temas/:id?tab=:tabId
+    Dashboard --> SpotReviewModal: PendingSpotsPreview thumbnail click
+
+    %% ===== THEMES =====
+    Themes --> ThemesWithFilter: query param ?fromStats=leaks adicionado<br/>(navigate from StatsView botao)
+    ThemesWithFilter --> Themes: click "Limpar filtro"<br/>navigate sem query param
+    Themes --> ThemeDetail: click theme card
+    ThemesWithFilter --> ThemeDetail: click theme card
+
+    Themes --> CreateThemeFlow: click "Criar tema"
+    CreateThemeFlow --> Themes: dialog close<br/>+ refetch list
+
+    %% ===== STATS (wrapper para Sess 3) =====
+    Stats --> ThemesWithFilter: click "Sugerir temas baseado em leaks"<br/>navigate /estudos/temas?fromStats=leaks
+    note right of Stats
+        Wrapper RF-04 monta StatsAnalyzerTab
+        intacto (Sess 3 — zona protegida).
+        Botao "Sugerir temas" desabilitado
+        se leaks=[] (consulta paralela
+        /api/dashboard/leaks/active).
+    end note
+
+    %% ===== SPOTS =====
+    Spots --> SpotReviewModal: click spot thumbnail
+    SpotReviewModal --> SpotLinkFlow: dropdown "Vincular tema" selected
+    SpotLinkFlow --> Spots: submit OK<br/>spot some do filtro<br/>(reviewLater=true AND theme_id IS NULL)
+    SpotReviewModal --> Spots: submit sem theme<br/>(opcional)
+    SpotReviewModal --> ErrorCrossUser: theme_id de outro user<br/>(403)
+    ErrorCrossUser --> SpotReviewModal: toast erro<br/>retry possivel
+
+    Spots --> SpotsWithShowAll: toggle "Mostrar todos"<br/>?showAll=1
+    SpotsWithShowAll --> Spots: toggle off<br/>?showAll removido
+
+    %% ===== RECOMMENDATIONS =====
+    Recommendations --> RecommendationsLoading: useQuery (cold cache)
+    RecommendationsLoading --> Recommendations: data ready
+    RecommendationsLoading --> RecommendationsEmpty: items.length === 0
+    Recommendations --> RecommendationsEmpty: items.length === 0
+
+    Recommendations --> RecommendationsFiltered: filter ?type=leak|stale_spot|dormant_theme
+    RecommendationsFiltered --> Recommendations: filter cleared
+
+    Recommendations --> ThemeDetail: card cta_action=open_theme
+    Recommendations --> SpotReviewModal: card cta_action=review_spot
+    Recommendations --> CreateThemeFlow: card cta_action=create_theme
+
+    RecommendationsEmpty --> Themes: CTA "Continuar estudando ultimos temas"
+
+    %% ===== THEME DETAIL =====
+    ThemeDetail --> ThemeDetailWithSpots: aba "Spots vinculados" (RF-05)<br/>GET /api/study-themes/:id/linked-spots
+    ThemeDetailWithSpots --> SpotReviewModalReadonly: click spot vinculado
+    SpotReviewModalReadonly --> SpotReviewModal: click "Editar conclusao"
+    SpotReviewModal --> ThemeDetailWithSpots: submit (re-fetch linked-spots)
+
+    ThemeDetail --> Themes: back-button OR sidebar click
+    ThemeDetail --> ActivityBumped: useStudyActivityInvalidation<br/>onThemeOpen → invalida cache recomendacoes<br/>+ bumpStudyStreak (D3)
+    ActivityBumped --> ThemeDetail: silently (no UI change)
+
+    %% ===== QUICK SEARCH (RF-09) =====
+    Dashboard --> QuickSearchOpen: Cmd/Ctrl+K
+    Themes --> QuickSearchOpen: Cmd/Ctrl+K
+    Stats --> QuickSearchOpen: Cmd/Ctrl+K
+    Spots --> QuickSearchOpen: Cmd/Ctrl+K
+    Recommendations --> QuickSearchOpen: Cmd/Ctrl+K
+    ThemeDetail --> QuickSearchOpen: Cmd/Ctrl+K
+
+    QuickSearchOpen --> QuickSearchSearching: user types
+    QuickSearchSearching --> QuickSearchOpen: backspace empty
+    QuickSearchOpen --> Dashboard: Esc OR navigate Dashboard
+    QuickSearchOpen --> Themes: Enter on theme item
+    QuickSearchOpen --> ThemeDetail: Enter on tab item
+    QuickSearchOpen --> SpotReviewModal: Enter on spot item
+    QuickSearchOpen --> CreateThemeFlow: Enter on action "Criar tema"
+
+    %% ===== ERROR STATES =====
+    Loading --> ErrorFatal: timeout OR 500
+    ErrorFatal --> Dashboard: retry button click
+
+    ErrorPartial --> Dashboard: secao com erro renderiza<br/>"Falha ao carregar [secao].<br/>[Recarregar]"<br/>outras secoes OK
+
+    %% ===== BROWSER NAVIGATION =====
+    Dashboard --> RouteResolution: browser back<br/>OR popstate event
+    Themes --> RouteResolution: browser back
+    ThemesWithFilter --> RouteResolution: browser back
+    Stats --> RouteResolution: browser back
+    Spots --> RouteResolution: browser back
+    Recommendations --> RouteResolution: browser back
+    ThemeDetail --> RouteResolution: browser back
+
+    %% ===== EXIT (sair de /estudos/*) =====
+    Dashboard --> [*]: navigate fora /estudos<br/>(ex: /grind, /coach)
+    Themes --> [*]: navigate fora
+    Stats --> [*]: navigate fora
+    Spots --> [*]: navigate fora
+    Recommendations --> [*]: navigate fora
+
+    note left of QuickSearchOpen
+        Cmd/Ctrl+K listener vive
+        no StudiesLayout.useEffect.
+        Removido em unmount —
+        nao polui resto do app.
+    end note
+
+    note right of OnboardingGate
+        D8: pula automatico se
+        themes.length &gt;= 1 OR
+        snapshots.length &gt;= 1 OR
+        starredHands.length &gt;= 1.
+        Flag localStorage:
+        grindfy:studies:onboarding_completed
+    end note
+
+    note left of ThemesWithFilter
+        D11: cross-link Stats→Themes
+        via ?fromStats=leaks.
+        Filtro: somente themes com
+        attacks_leak_type populado,
+        ordenados por severidade
+        do leak vinculado.
+    end note
+
+    note right of CatchAllRedirect
+        /estudos/foo (qualquer rota
+        invalida sob /estudos/*)
+        redireciona para Dashboard.
+        Lesson #9: log antes do redirect.
+    end note
+
+    note right of ActivityBumped
+        D3: ad-hoc on activity.
+        Triggers:
+        - ThemeDetail mount
+        - Snapshot create
+        - Spot review submit
+        Bump idempotente por dia.
+    end note
