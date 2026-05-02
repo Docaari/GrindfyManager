@@ -101,32 +101,44 @@ Schema esperado de saida:
 
 ### 4.2 SECTION_ALIASES (novo `shared/hud-section-aliases.ts`)
 
+**Cobertura obrigatoria:** os 16 `HudGroupId` (HUD_GROUP_IDS) DEVEM ter pelo
+menos 3 aliases cada — (a) o label oficial PT-BR (`HUD_GROUP_LABELS[g]`),
+(b) a versao EN canonica derivada do id (`_` -> espaco), (c) variantes
+Hand2Note conhecidas. Sem cobertura completa, headings de grupos nao mapeados
+caem para `null` (degrada graciosamente). Tabela canonica que implementer DEVE
+replicar (todos lowercased, sem pontuacao, espacos normalizados):
+
+| HudGroupId | Aliases minimos |
+|---|---|
+| `basics` | `basics`, `basicos`, `fundamentos` |
+| `rfi` | `rfi`, `rfi por posicao`, `rfi by position`, `open raise` |
+| `threebet` | `3bet`, `three bet`, `threebet`, `3bet pf`, `3 bet preflop` |
+| `resteal` | `resteal`, `re steal`, `resteal pf` |
+| `pos_flop_pfr_ip` | `pos flop pfr ip`, `posflop pfr ip`, `pfr ip`, `as pfr ip` |
+| `pos_flop_pfr_oop` | `pos flop pfr oop`, `posflop pfr oop`, `pfr oop`, `as pfr oop` |
+| `pos_flop_multiway` | `pos flop multiway`, `multiway`, `mw`, `multi way` |
+| `cbets_by_board` | `cbets por textura`, `cbets by board`, `cbet by texture`, `c bet textura` |
+| `caller_pre_flop` | `caller pre flop`, `caller preflop`, `as caller`, `cold call` |
+| `threeway_bb` | `3 way bb`, `3way bb`, `bb 3 way`, `three way bb` |
+| `bb_defense` | `bb defense`, `big blind defense`, `defesa do bb`, `defesa big blind`, `bb defend` |
+| `pos_flop_pfc_ip` | `pos flop pfc ip`, `posflop pfc ip`, `pfc ip`, `as caller ip` |
+| `blind_war_sb` | `blind war sb`, `sb vs bb`, `small blind war`, `sb war`, `sb open vs bb` |
+| `blind_war_bb` | `blind war bb`, `bb vs sb`, `big blind war`, `bb war`, `bb defend vs sb` |
+| `threebet_pot_ip` | `3bet pot ip`, `3 bet pot ip`, `threebet pot ip`, `3bp ip` |
+| `threebet_pot_oop_vs_lp` | `3bet pot oop vs lp`, `3 bet pot oop vs lp`, `3bp oop vs lp`, `threebet pot oop` |
+
+**Regra de duplicidade:** se um alias literal aparecer em duas linhas, implementer
+DEVE escolher a interpretacao mais especifica (ex: "bb defense" fica em
+`bb_defense`, NAO em `blind_war_bb`) e adicionar comentario inline justificando.
+
 ```ts
 // Mapa de heading bruto (normalizado) -> HudGroupId.
-// Aliases cobrem variacoes PT/EN, abreviacoes, e nomes oficiais Hand2Note.
+// Cobre os 16 HudGroupId conforme tabela acima.
 export const SECTION_ALIASES: Record<string, HudGroupId> = {
-  // basics
   "basics": "basics",
   "basicos": "basics",
   "fundamentos": "basics",
-
-  // bb_defense
-  "bb defense": "bb_defense",
-  "big blind defense": "bb_defense",
-  "defesa do bb": "bb_defense",
-  "defesa big blind": "bb_defense",
-
-  // blind_war_sb
-  "blind war sb": "blind_war_sb",
-  "sb vs bb": "blind_war_sb",
-  "small blind war": "blind_war_sb",
-
-  // blind_war_bb
-  "blind war bb": "blind_war_bb",
-  "bb vs sb": "blind_war_bb",
-  "big blind war": "blind_war_bb",
-
-  // ... cobertura para os 16 HudGroupIds
+  // ... (replicar todas as linhas da tabela)
 };
 
 export function resolveSection(rawHeading: string | null | undefined): HudGroupId | null {
@@ -148,11 +160,15 @@ export function fuzzyMatchStat(
 ): FuzzyMatchCandidate[]
 ```
 
-Logica de boost:
+Logica de boost (aplicada APOS calculo de score base, ANTES de ordenar):
 
-- Se `sectionHint` setado e candidata tem `group === sectionHint`: `score += 0.15` (clamped a 1.0).
-- Se `sectionHint` setado e candidata tem `group !== sectionHint`: `score *= 0.6` (penalty).
-- Em caso de empate de score apos boost, candidata com `group === sectionHint` vence.
+- Se `sectionHint == null` (sem hint OR resolveSection retornou null): nenhum ajuste — comportamento 100% legacy preservado.
+- Se `sectionHint` setado e candidata tem `group === sectionHint`: `score = min(1.0, score + 0.15)` (boost aditivo, teto em 1.0).
+- Se `sectionHint` setado e candidata tem `group !== sectionHint`: `score = score * 0.6` (penalty multiplicativo).
+- Tie-breaker: em empate apos boost, candidata com `group === sectionHint` vence; persistindo empate, ordem original do catalog (estavel).
+- `kind` NAO muda: um match `fuzzy_substring` com boost continua `fuzzy_substring` no payload (campo separado opcional `boostedBySection: boolean` no `FuzzyMatchCandidate` para audit).
+
+**Justificativa numerica:** scores `fuzzy_substring` sao 0.85-0.95. Penalty `*0.6` derruba para 0.51-0.57, abaixo do piso de substring (0.85) — garante que candidata fora-de-grupo so vence se a in-grupo nem existir como candidata. Boost `+0.15` em substring ja proximo de 0.95 chega ao teto 1.0, igualando exact — desempate pelo `kindRank` ainda preserva exact > substring quando ambos batem. Para `fuzzy_lev` (<= 0.7), penalty leva a <= 0.42 — efetivamente filtrado.
 
 ### 4.4 hudOcrService (`server/services/hudOcrService.ts`)
 
@@ -164,15 +180,17 @@ Logica de boost:
 
 ### 4.5 Endpoint route (`server/routes/statsAnalyzer.ts`)
 
-- Response payload inclui `section` em cada item de `stats[]` e `unmatched[]`.
-- `ocrRawResponse` (cache) inclui aliases-resolvidos-por-stat para nao reprocessar em cache hit.
+- `/api/stats-analyzer/ocr-extract` response payload inclui `section: HudGroupId | null` em cada item de `stats[]` e `unmatched[]`, alem do `rawSection: string | null` (heading bruto reportado pelo LLM, antes da resolucao).
+- `ocrRawResponse` (cache key por imageSha256) inclui aliases-resolvidos-por-stat (`{ rawSection, resolvedSection }`) para nao reprocessar em cache hit. Cache hit retorna mesma estrutura sem re-chamar LLM.
+- `/api/stats-analyzer/snapshots/from-ocr` ganha campo OPCIONAL `sections: Record<string, HudGroupId | null>` no body (chave = statId, valor = HudGroupId que ganhou o match — ou null se sem secao). Persistido em `ocrRawResponse.sections` (jsonb existente, sem migration). Compat: omitir campo = comportamento legacy.
 
 ### 4.6 HudOcrPreview (frontend)
 
 - Cada linha de preview mostra badge `Secao: {HUD_GROUP_LABELS[section]}` quando detectada.
 - Linhas sem secao detectada: badge cinza "Sem secao".
-- Permite override manual: dropdown com 16 grupos.
-- Ao salvar (from-ocr endpoint), section override eh persistido junto.
+- Permite override manual: dropdown com 17 opcoes (16 grupos + "Sem secao"/null).
+- Override altera ranking client-side: re-roda `fuzzyMatchStat` local com novo `sectionHint` (ja que catalog + helper sao shared). Re-render mostra novo top match.
+- Ao salvar via from-ocr endpoint, frontend monta `sections` map com o HudGroupId vencedor por statId (override ou auto-detectado) e envia junto com `values`/`ocrConfidence`/`ocrRawResponse`.
 
 ---
 
@@ -194,11 +212,17 @@ Logica de boost:
 2. Mock Gemini retorna payload sem `section` — fallback comportamento legacy (sem boost).
 3. Cache hit re-retorna payload com section preservado.
 
-### E2E manual (founder)
+### E2E manual (founder) — **BLOQUEANTE para DONE**
 
 1. Print real Hand2Note com BB defense + Blind war SB no mesmo popup.
 2. "Probe River 37" sob BB defense → mapeia como `bb_probe_river_sb` (NAO `sb_probe_river`).
 3. "SB Probe Turn 28" sob Blind war SB → mapeia como `sb_probe_turn`.
+4. Override manual no preview: trocar secao detectada para outro grupo → top match recalcula client-side.
+5. Salvar via from-ocr → recarregar pagina → snapshot persistiu com sections corretas.
+
+**Quando:** apos implementer entregar green phase E reviewer aprovar code review,
+ANTES de marcar sprint como DONE. Founder roda os 5 cenarios em ambiente local
+(ou stage). Se um falhar, volta para implementer com prints+repro.
 
 ---
 
@@ -225,11 +249,16 @@ Logica de boost:
 
 - [ ] Print Hand2Note com BB defense + Blind war SB → cada "Probe River" cai no grupo correto.
 - [ ] Toast de erro NAO surge em fluxo normal.
-- [ ] Cache funcional (cache hit retorna section sem re-chamar LLM).
-- [ ] Tests unit passando: novos casos de `fuzzyMatchStat` + `resolveSection`.
-- [ ] Tests integration passando: payload mock com 3 secoes.
-- [ ] HudOcrPreview mostra secao detectada + override.
+- [ ] Cache funcional: cache hit retorna section sem re-chamar LLM (verificavel via log de chamadas Gemini contagem).
+- [ ] Comportamento legacy preservado: `fuzzyMatchStat(label, catalog)` (sem options) e `fuzzyMatchStat(label, catalog, { sectionHint: null })` produzem ranking identico ao Sprint Stats-V3.
+- [ ] `SECTION_ALIASES` cobre os 16 `HudGroupId` (test enumera HUD_GROUP_IDS e verifica >= 1 alias por grupo).
+- [ ] Tests unit passando: novos casos de `fuzzyMatchStat` + `resolveSection` + `SECTION_ALIASES` coverage.
+- [ ] Tests integration passando: payload mock com 3 secoes; payload sem section (fallback legacy); cache hit preserva section.
+- [ ] HudOcrPreview mostra secao detectada + dropdown override (17 opcoes incluindo null).
+- [ ] from-ocr endpoint aceita `sections` opcional e persiste em `ocrRawResponse.sections` (jsonb existente, sem migration).
 - [ ] Zero regressao nos 545+ testes do Sprint Stats-V3.
+- [ ] E2E manual founder: 5 cenarios passam (item 5.E2E acima).
+- [ ] Prompt `OCR_SYSTEM_PROMPT` continua sendo single source (lesson #10) — sem duplicacao em hudOcrService.
 - [ ] reviewer: APPROVED-CLEAN.
 
 ---

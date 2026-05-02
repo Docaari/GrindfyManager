@@ -1,11 +1,13 @@
 # ADR-065 — OCR via Claude Vision (Haiku 4.5) + Cache SHA256
 
-- Status: Accepted
+- Status: Accepted (estendido por ADR-067 em 2026-05-01)
 - Date: 2026-05-01
 - Sprint: Stats-V3 / F2 (precede F6/F7 — endpoint OCR + service implementation)
 - Decision owner: autonomous (founder AFK; spec defaults Stats-V3 RF-08..RF-12)
 - Related: ADR-019 (Coach prompt cache), ADR-021 (Coach model selection),
-  ADR-057 (SpotImageStorage abstraction), ADR-062 (grouped tool response)
+  ADR-057 (SpotImageStorage abstraction), ADR-062 (grouped tool response),
+  **ADR-067 (Section-aware OCR mapping — estende schema de response com `section`
+  por stat para desambiguacao via heading visual; ver Sprint Stats-V3.5)**
 
 ## Context
 

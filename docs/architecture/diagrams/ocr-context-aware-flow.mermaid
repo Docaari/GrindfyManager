@@ -1,0 +1,102 @@
+%% Sprint Stats-V3.5 — OCR Context-Aware Mapping
+%% Spec: Docs/specs/sprint-stats-v3.5-ocr-context-aware.md
+%% ADR: Docs/architecture/decisions/067-section-aware-ocr-mapping.md
+%% Fluxo upload -> cache -> LLM (com section) -> resolveSection -> fuzzy boost -> preview/override -> persist.
+
+flowchart TD
+    Start(["Usuario abre HudOcrUpload<br/>e seleciona print Hand2Note"])
+
+    Start --> Validate{"Validacao client<br/>MIME + size <=10MB"}
+    Validate -->|"Invalido"| ToastFmt(["toast 'Formato/tamanho<br/>invalido'"])
+    Validate -->|"OK"| Upload["POST multipart/form-data<br/>/api/stats-analyzer/ocr-extract"]
+
+    Upload --> Auth{"requireAuth<br/>+ tier pro+"}
+    Auth -->|"Free tier"| CtaUpgrade(["403 + CTA upgrade<br/>no frontend"])
+    Auth -->|"Pro+"| Magic{"Magic bytes valido?<br/>(file-type)"}
+
+    Magic -->|"Nao"| Err422(["422 'Imagem invalida'"])
+    Magic -->|"Sim"| Hash["Calcula SHA256<br/>do buffer"]
+
+    Hash --> CacheLookup{"Lookup ocrRawResponse<br/>WHERE image_sha256 = ?"}
+
+    %% ===== CACHE HIT =====
+    CacheLookup -->|"HIT"| HitHasSection{"Cache tem<br/>section por stat?<br/>(pos Stats-V3.5)"}
+    HitHasSection -->|"Sim<br/>(cache pos-deploy)"| ReturnCached(["Retorna stats com<br/>section + rawSection<br/>cached: true<br/>SEM chamar LLM"])
+    HitHasSection -->|"Nao<br/>(cache pre-V3.5)"| TreatAsMiss["Trata como MISS<br/>(re-OCR transparente)"]
+
+    %% ===== CACHE MISS =====
+    CacheLookup -->|"MISS"| CallLLM
+    TreatAsMiss --> CallLLM
+
+    CallLLM["Chama Vision LLM<br/>com OCR_SYSTEM_PROMPT V3.5<br/>(pede section + label + value)"]
+
+    CallLLM --> ProviderPick{"Provider config?<br/>(env OCR_PROVIDER)"}
+    ProviderPick -->|"gemini<br/>(default)"| Gemini["Gemini Flash 2.5<br/>vision call"]
+    ProviderPick -->|"anthropic"| Anthropic["Claude Haiku 4.5<br/>vision call"]
+
+    Gemini --> ParseJson
+    Anthropic --> ParseJson
+
+    ParseJson{"Parse JSON robusto<br/>(JSON.parse + regex fallback)"}
+    ParseJson -->|"Falha persistente"| Err502(["502 + log<br/>'ocr-failed'<br/>cache NAO salva"])
+    ParseJson -->|"OK"| ZodSchema{"Zod schema<br/>{section?, label, value, confidence}"}
+
+    ZodSchema -->|"Invalido"| Err502
+    ZodSchema -->|"Valido"| Loop["Para cada stat<br/>do payload..."]
+
+    Loop --> ResolveSection["resolveSection(rawHeading)<br/>normaliza + lookup<br/>SECTION_ALIASES"]
+    ResolveSection --> SectionResult{"Match em<br/>SECTION_ALIASES?"}
+
+    SectionResult -->|"Sim"| HasHint["sectionHint = HudGroupId"]
+    SectionResult -->|"rawHeading null<br/>OU sem alias"| NoHint["sectionHint = null<br/>(comportamento legacy)"]
+
+    HasHint --> Fuzzy
+    NoHint --> Fuzzy
+
+    Fuzzy["fuzzyMatchStat(label, catalog,<br/>{ sectionHint })"]
+
+    Fuzzy --> ApplyBoost{"sectionHint != null?"}
+    ApplyBoost -->|"Nao"| LegacyRank["Ranking textual puro<br/>(legacy preservado)"]
+    ApplyBoost -->|"Sim"| BoostLoop["Para cada candidata:<br/>group === hint -> score + 0.15<br/>group !== hint -> score * 0.6<br/>marca boostedBySection"]
+
+    BoostLoop --> SortRank["Sort por score desc<br/>tie-breaker:<br/>1) in-group<br/>2) ordem catalog"]
+    LegacyRank --> SortRank
+
+    SortRank --> Build["Monta OcrMatchedStat[]<br/>+ unmatched[]<br/>+ rawSection / resolvedSection"]
+
+    Build --> Persist["Persiste em<br/>ocrRawResponse jsonb<br/>(sem migration)"]
+    Persist --> Response(["Response 200<br/>{stats, unmatched, cached:false<br/>section per stat}"])
+
+    %% ===== FRONTEND PREVIEW =====
+    Response --> Preview["HudOcrPreview renderiza<br/>linha por stat"]
+    ReturnCached --> Preview
+
+    Preview --> Badge{"Stat tem<br/>section detectada?"}
+    Badge -->|"Sim"| BadgeColor(["Badge azul<br/>'Secao: HUD_GROUP_LABELS[s]'"])
+    Badge -->|"Nao"| BadgeGray(["Badge cinza<br/>'Sem secao'"])
+
+    BadgeColor --> Override{"User abre dropdown<br/>de override?"}
+    BadgeGray --> Override
+
+    Override -->|"Nao"| Save
+    Override -->|"Troca section<br/>(17 opcoes)"| Reroda["Re-roda fuzzyMatchStat<br/>client-side com<br/>novo sectionHint<br/>(catalog + helper sao shared)"]
+    Reroda --> Rerender["Re-render top match<br/>com novo statId"]
+    Rerender --> Save
+
+    Save{"User salva?"}
+    Save -->|"Cancela"| End1(["Fim sem persistir"])
+    Save -->|"Salvar"| FromOcr["POST /snapshots/from-ocr<br/>body inclui<br/>sections: Record&lt;statId, HudGroupId|null&gt;"]
+
+    FromOcr --> PersistFinal["Persiste snapshot<br/>+ values<br/>+ ocrConfidence<br/>+ ocrRawResponse.sections"]
+    PersistFinal --> End2(["Snapshot salvo<br/>com audit trail<br/>de sections"])
+
+    %% ===== ESTILOS =====
+    classDef errorNode fill:#fee,stroke:#c33,stroke-width:2px;
+    classDef successNode fill:#efe,stroke:#3c3,stroke-width:2px;
+    classDef cacheNode fill:#eef,stroke:#33c,stroke-width:2px;
+    classDef llmNode fill:#fef,stroke:#c3c,stroke-width:2px;
+
+    class ToastFmt,CtaUpgrade,Err422,Err502 errorNode
+    class ReturnCached,Response,End2 successNode
+    class CacheLookup,HitHasSection,TreatAsMiss cacheNode
+    class CallLLM,Gemini,Anthropic,ParseJson llmNode

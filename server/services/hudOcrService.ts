@@ -22,12 +22,21 @@ import {
   fuzzyMatchStat,
   type FuzzyMatchKind,
 } from "../../shared/hud-fuzzy-match";
-import { HUD_STAT_CATALOG } from "../../shared/hud-stat-catalog";
+import {
+  HUD_STAT_CATALOG,
+  type HudGroupId,
+} from "../../shared/hud-stat-catalog";
+import { resolveSection } from "../../shared/hud-section-aliases";
 
 export interface OcrExtractedStatRaw {
   label: string;
   value: number;
   confidence: number;
+  /**
+   * V3.5 (ADR-067): heading visual bruto extraido pelo LLM. null quando nao
+   * houver heading visivel acima da stat.
+   */
+  section?: string | null;
 }
 
 export interface OcrMatchedStat {
@@ -36,12 +45,24 @@ export interface OcrMatchedStat {
   value: number;
   confidence: number;
   matchedBy: FuzzyMatchKind;
+  /**
+   * V3.5: HudGroupId resolvido a partir de section (raw heading) via
+   * SECTION_ALIASES. null quando heading bruto ausente OR nao ha alias.
+   */
+  section?: HudGroupId | null;
+  /**
+   * V3.5: heading bruto reportado pelo LLM (texto livre antes de
+   * resolveSection). Audit field para debug pos-fato.
+   */
+  rawSection?: string | null;
 }
 
 export interface OcrUnmatchedStat {
   label: string;
   value: number | string;
   confidence: number;
+  section?: HudGroupId | null;
+  rawSection?: string | null;
 }
 
 export interface OcrCacheEntry {
@@ -70,6 +91,7 @@ export function computeBufferSha256(buffer: Buffer): string {
 
 // -----------------------------------------------------------------------------
 // JSON extraction robust — handles markdown ```json fences (lesson #10)
+// V3.5: aceita campo opcional `section` (string livre) por entry.
 // -----------------------------------------------------------------------------
 export function extractStatsJson(
   text: string,
@@ -113,6 +135,12 @@ export function extractStatsJson(
 // label posterior), construimos uma lista de TODOS os pares (raw, candidato),
 // ordenamos por score desc e atribuimos greedy garantindo que cada raw e cada
 // statId sao usados no maximo uma vez.
+//
+// V3.5 (ADR-067): cada rawStat carrega `section` opcional (heading bruto). O
+// matcher chama resolveSection() e passa sectionHint para fuzzyMatchStat,
+// promovendo candidatos in-group e penalizando out-group. matched_stats e
+// unmatched_stats ganham campos `section` (HudGroupId | null) e `rawSection`
+// (string | null) para audit.
 // -----------------------------------------------------------------------------
 export function matchStatsAgainstCatalog(rawStats: OcrExtractedStatRaw[]): {
   matched: OcrMatchedStat[];
@@ -125,11 +153,17 @@ export function matchStatsAgainstCatalog(rawStats: OcrExtractedStatRaw[]): {
     kind: FuzzyMatchKind;
     score: number;
   }
+  // Pre-resolve sections para cada raw (1x lookup por raw, evita recompute).
+  const resolvedSections: Array<HudGroupId | null> = rawStats.map((r) =>
+    resolveSection(r.section ?? null),
+  );
+
   const pairs: Pair[] = [];
   for (let i = 0; i < rawStats.length; i++) {
     const raw = rawStats[i];
     const candidates = fuzzyMatchStat(raw.label, HUD_STAT_CATALOG, {
       maxResults: 5,
+      sectionHint: resolvedSections[i],
     });
     for (const c of candidates) {
       pairs.push({
@@ -152,12 +186,15 @@ export function matchStatsAgainstCatalog(rawStats: OcrExtractedStatRaw[]): {
     if (usedRawIdx.has(p.rawIdx) || usedStatIds.has(p.statId)) continue;
     usedRawIdx.add(p.rawIdx);
     usedStatIds.add(p.statId);
+    const rawSection = p.raw.section ?? null;
     matched.push({
       id: p.statId,
       label: p.raw.label,
       value: p.raw.value,
       confidence: p.raw.confidence,
       matchedBy: p.kind,
+      section: resolvedSections[p.rawIdx],
+      rawSection,
     });
   }
   // raws nao alocados viram unmatched.
@@ -169,6 +206,8 @@ export function matchStatsAgainstCatalog(rawStats: OcrExtractedStatRaw[]): {
         label: raw.label,
         value: raw.value,
         confidence: raw.confidence,
+        section: resolvedSections[i],
+        rawSection: raw.section ?? null,
       });
     }
   }

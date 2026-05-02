@@ -27,6 +27,7 @@ import {
   getStatsByGroup,
   getStatById,
   HUD_STAT_CATALOG,
+  type HudGroupId,
 } from "../../shared/hud-stat-catalog";
 import { getTrendIndicator } from "../../shared/hud-trend-indicator";
 import { extractStatsFromImage } from "../services/hudOcrService";
@@ -1119,12 +1120,24 @@ export async function handleOcrExtract(
 // -----------------------------------------------------------------------------
 // POST /api/stats-analyzer/snapshots/from-ocr (RF-11)
 // -----------------------------------------------------------------------------
+// V3.5 (ADR-067): sections eh um mapa opcional statId -> HudGroupId | null que
+// o frontend envia com a section vencedora (auto-detectado OU override manual).
+// Campo opcional — omitir mantem comportamento legacy.
+//
+// Reviewer fix [MEDIUM] V3.5: validar valores aceitos como HudGroupId
+// canonico (z.enum sobre HUD_GROUP_IDS) ao inves de z.string() arbitraria.
+const HUD_GROUP_ID_ENUM = z.enum(
+  HUD_GROUP_IDS as unknown as [HudGroupId, ...HudGroupId[]],
+);
 const fromOcrSchema = z.object({
   layoutId: z.string().min(1),
   imageKey: z.string().min(1).optional(),
   values: z.record(z.string(), z.number().nullable()),
   ocrConfidence: z.record(z.string(), z.number()).optional(),
   ocrRawResponse: z.unknown().optional(),
+  sections: z
+    .record(z.string(), z.union([HUD_GROUP_ID_ENUM, z.null()]))
+    .optional(),
   capturedAt: z.union([z.string(), z.date()]).optional(),
 });
 
@@ -1180,6 +1193,30 @@ export async function handleSaveOcrSnapshot(
     });
   }
 
+  // Reviewer fix [MEDIUM] V3.5: orphan audit defense-in-depth.
+  // Drop silently (compat) keys de `sections` que nao aparecem em `values`
+  // — incoerentes com a snapshot. Logamos a ocorrencia para visibilidade
+  // sem rejeitar a request (preferencia: drop + log vs 400).
+  if (parsed.sections) {
+    const valueKeys = new Set(Object.keys(parsed.values));
+    const orphanKeys: string[] = [];
+    const filteredSections: Record<string, HudGroupId | null> = {};
+    for (const [k, v] of Object.entries(parsed.sections)) {
+      if (valueKeys.has(k)) {
+        filteredSections[k] = v as HudGroupId | null;
+      } else {
+        orphanKeys.push(k);
+      }
+    }
+    if (orphanKeys.length > 0) {
+      console.warn(
+        "[stats-v3.5] from-ocr orphan section keys dropped",
+        { userId: user.userPlatformId, orphanKeys },
+      );
+      parsed.sections = filteredSections;
+    }
+  }
+
   try {
     const snap = await storage.createHudStatSnapshot({
       userId: user.userPlatformId,
@@ -1195,8 +1232,22 @@ export async function handleSaveOcrSnapshot(
     } as any);
     // CRITICAL-1 + INFO-6: patch capture-method + ocrRawResponse com image_sha256
     // (necessario para cache lookup futuro via index parcial).
+    // V3.5 (ADR-067): se body trouxer `sections`, mescla em
+    // ocrRawResponse.sections (jsonb existente) para audit + cache hit
+    // futuro preservar a section vencedora por statId.
     if (typeof (storage as any).updateHudStatSnapshot === "function") {
       try {
+        let mergedRawResponse: any = parsed.ocrRawResponse ?? null;
+        if (parsed.sections) {
+          if (mergedRawResponse && typeof mergedRawResponse === "object") {
+            mergedRawResponse = {
+              ...(mergedRawResponse as Record<string, unknown>),
+              sections: parsed.sections,
+            };
+          } else {
+            mergedRawResponse = { sections: parsed.sections };
+          }
+        }
         await (storage as any).updateHudStatSnapshot(
           (snap as any).id,
           user.userPlatformId,
@@ -1204,7 +1255,7 @@ export async function handleSaveOcrSnapshot(
             captureMethod: "ocr",
             sourceImageKey: parsed.imageKey ?? null,
             ocrConfidence: parsed.ocrConfidence ?? null,
-            ocrRawResponse: parsed.ocrRawResponse ?? null,
+            ocrRawResponse: mergedRawResponse,
           },
         );
       } catch (err) {
