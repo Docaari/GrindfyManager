@@ -286,8 +286,12 @@ export default function HudOcrPreview({
   }
 
   return (
-    <div className="flex flex-col gap-3 p-3 bg-slate-900 border border-slate-800 rounded-md max-h-[60vh] overflow-y-auto">
-      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+    // [Stats-UX-Polish Item 9] Layout com header + footer sticky e conteudo
+    // central scrollavel. Container externo perde max-h, ganha flex-col +
+    // max-h-[80vh] para suportar mais rows visiveis.
+    <div className="flex flex-col p-3 bg-slate-900 border border-slate-800 rounded-md max-h-[80vh]">
+      {/* Header (flex-column + middle overflow-y-auto mantem fixo no top) */}
+      <div className="-mx-3 px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-100">Resultado OCR</h3>
         <div className="flex gap-2">
           <button
@@ -309,7 +313,8 @@ export default function HudOcrPreview({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1">
+      {/* Conteudo scrollavel */}
+      <div className="flex-1 overflow-y-auto flex flex-col gap-1 py-3">
         {extraction.stats.map((s, i) => {
           const rowKey = rowKeyFor(s.label, i);
           const r: RowState =
@@ -396,9 +401,20 @@ export default function HudOcrPreview({
                   ))}
                 </select>
               ) : (
-                <span className="col-span-4 text-xs text-slate-400 truncate">
-                  → {s.id} ({s.matchedBy})
-                </span>
+                // [Stats-UX-Polish Item 4] Mostrar label do catalogo (verde) em
+                // vez do id cru. ID + matchedBy ficam no title (tooltip nativo)
+                // para auditoria.
+                (() => {
+                  const stat = HUD_STAT_CATALOG.find((c) => c.id === s.id);
+                  return (
+                    <span
+                      className="col-span-4 text-xs text-emerald-300 truncate"
+                      title={`${s.id} (${s.matchedBy})`}
+                    >
+                      → {stat?.label ?? s.id}
+                    </span>
+                  );
+                })()
               )}
               <input
                 type="checkbox"
@@ -475,6 +491,7 @@ export default function HudOcrPreview({
                       type="button"
                       data-testid={`ocr-preview-section-reset-${s.label}`}
                       aria-label="Restaurar secao auto-detectada"
+                      title="Restaurar secao auto-detectada"
                       onClick={() =>
                         handleSectionOverride(rowKey, s.label, s.section ?? null)
                       }
@@ -514,25 +531,26 @@ export default function HudOcrPreview({
             </div>
           );
         })}
+
+        {extraction.unmatched && extraction.unmatched.length > 0 && (
+          <div
+            data-testid="ocr-preview-unmatched"
+            className="border-t border-slate-800 pt-2 mt-2"
+          >
+            <p className="text-xs text-slate-400 mb-1">Stats sem match no catalogo:</p>
+            <ul className="text-xs text-slate-500">
+              {extraction.unmatched.map((u, i) => (
+                <li key={i}>
+                  {u.label}: {String(u.value)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
-      {extraction.unmatched && extraction.unmatched.length > 0 && (
-        <div
-          data-testid="ocr-preview-unmatched"
-          className="border-t border-slate-800 pt-2"
-        >
-          <p className="text-xs text-slate-400 mb-1">Stats sem match no catalogo:</p>
-          <ul className="text-xs text-slate-500">
-            {extraction.unmatched.map((u, i) => (
-              <li key={i}>
-                {u.label}: {String(u.value)}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="flex justify-end gap-2 border-t border-slate-800 pt-2">
+      {/* Footer (flex-column + middle overflow-y-auto mantem fixo no bottom) */}
+      <div className="-mx-3 px-3 py-2 bg-slate-900 border-t border-slate-800 flex justify-end gap-2">
         <button
           type="button"
           onClick={onCancel}
