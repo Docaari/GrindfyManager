@@ -53,12 +53,15 @@ export default function GrindSession() {
   const [, setLocation] = useLocation();
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showWarmupGateDialog, setShowWarmupGateDialog] = useState(false);
+  const [gateBypassedOnce, setGateBypassedOnce] = useState(false);
+  const [pendingStartSource, setPendingStartSource] = useState<"quick_start" | "personalizar" | null>(null);
   const { canStartGrind, reason: warmupGateReason, isLoading: warmupGateLoading } = useWarmupGate();
   const { track: trackWarmup } = useWarmupTelemetry();
   // Gate so eh aplicado quando o user tem permission de warm-up E a query nao
   // esta em loading (durante loading, fail-open para nao bloquear UX nem poluir
-  // telemetria com `reason: 'loading'`).
-  const warmupGateActive = hasWarmupPermission && !warmupGateLoading && !canStartGrind;
+  // telemetria com `reason: 'loading'`). Snooze "Agora nao" libera 1 start.
+  const warmupGateActive =
+    hasWarmupPermission && !warmupGateLoading && !canStartGrind && !gateBypassedOnce;
 
   // Filter state with localStorage persistence
   const defaultFilters: FilterState = {
@@ -381,6 +384,7 @@ export default function GrindSession() {
     // Sprint W-1 RF-14: Gate Go/No-Go — exigir warm-up valido antes de iniciar grind
     if (warmupGateActive) {
       trackWarmup("grind_blocked_by_gate", { reason: warmupGateReason, source: "quick_start" });
+      setPendingStartSource("quick_start");
       setShowWarmupGateDialog(true);
       return;
     }
@@ -657,6 +661,7 @@ export default function GrindSession() {
     // Sprint W-1 RF-14: Gate Go/No-Go — exigir warm-up valido antes de iniciar grind
     if (warmupGateActive) {
       trackWarmup("grind_blocked_by_gate", { reason: warmupGateReason, source: "personalizar" });
+      setPendingStartSource("personalizar");
       setShowWarmupGateDialog(true);
       return;
     }
@@ -1262,10 +1267,29 @@ export default function GrindSession() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Agora nao</AlertDialogCancel>
+            <AlertDialogCancel
+              onClick={() => {
+                trackWarmup("grind_gate_bypassed", {
+                  reason: warmupGateReason,
+                  source: pendingStartSource ?? "unknown",
+                });
+                setGateBypassedOnce(true);
+                setShowWarmupGateDialog(false);
+                const source = pendingStartSource;
+                setPendingStartSource(null);
+                // Retry no proximo tick — warmupGateActive ja sera false (bypass)
+                setTimeout(() => {
+                  if (source === "quick_start") handleQuickStart();
+                  else if (source === "personalizar") checkExistingSessionBeforePreparation();
+                }, 0);
+              }}
+            >
+              Iniciar mesmo assim
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setShowWarmupGateDialog(false);
+                setPendingStartSource(null);
                 setLocation("/mental");
               }}
             >
