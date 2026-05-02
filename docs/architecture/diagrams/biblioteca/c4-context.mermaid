@@ -1,0 +1,67 @@
+%% C4 Container — Biblioteca (LMS embedded MVP)
+%% Spec: Docs/specs/biblioteca-spec-1.md
+%% Refs: ADR-071 (mediaStorage), ADR-072 (Mux), ADR-073 (entitlements), ADR-075 (Coach tool)
+%%
+%% Mostra: user → frontend → backend → (Postgres + Mux + storage local) + Coach AI
+
+graph TB
+    user["<b>Alpha tester / Founder</b><br/><i>Browser desktop ou mobile</i>"]
+
+    subgraph grindfy["Grindfy Manager (Monolito Express na porta 3000)"]
+        direction TB
+
+        web["<b>Web App (SPA)</b><br/><i>React 18 + Wouter + TanStack Query<br/>Pages: /biblioteca, /biblioteca/curso/:slug,<br/>/biblioteca/curso/:slug/:lesson</i>"]
+
+        api["<b>API Server</b><br/><i>Express + Drizzle ORM<br/>Routes: /api/library/*, /api/admin/library/*<br/>11 endpoints novos (RF-04 a RF-11)</i>"]
+
+        coach["<b>Coach AI Service</b><br/><i>Anthropic SDK + tool registry<br/>Tool nova: recommend_lesson (ADR-075)<br/>Block-list: COMPETITOR_BLOCKLIST</i>"]
+
+        sanitize["<b>HTML Sanitizer</b><br/><i>isomorphic-dompurify<br/>Allowlist rigorosa (D10/ADR-076)</i>"]
+
+        media["<b>MediaStorage Service</b><br/><i>scope=spots | library/audio | library/covers<br/>Backend: local | s3 (futuro)<br/>ADR-071</i>"]
+
+        muxprov["<b>MuxMediaProvider</b><br/><i>uploadAsset + createPlaybackToken<br/>JWT signed URL TTL 4h (ADR-072)</i>"]
+    end
+
+    subgraph storage_block["Storage local (FS)"]
+        fs[("<b>uploads/</b><br/>library/audio/...<br/>library/covers/...<br/>spots/...")]
+    end
+
+    subgraph db_block["Postgres 16 (Neon serverless prod)"]
+        db_lib[("<b>Library tables</b><br/>library_courses<br/>library_modules<br/>library_lessons<br/>user_lesson_access<br/>library_events<br/>library_progress")]
+
+        db_core[("<b>Core tables</b><br/>users<br/>coach_messages<br/>permissions")]
+    end
+
+    subgraph external["Servicos externos"]
+        mux["<b>Mux Video</b><br/><i>HLS chunked + signed URLs<br/>CDN global + Mux Data telemetria<br/>ADR-072</i>"]
+
+        anthropic["<b>Anthropic API</b><br/><i>Claude Opus 4.7 (ADR-021)<br/>Prompt cache 2 blocos (ADR-019)</i>"]
+    end
+
+    user -->|"HTTPS<br/>HTML/JS/CSS"| web
+    web -->|"REST/JSON<br/>Bearer JWT"| api
+    web -.->|"HLS stream<br/>signed URL"| mux
+
+    api -->|"SQL"| db_lib
+    api -->|"SQL"| db_core
+    api -->|"sanitize ANTES de salvar"| sanitize
+    api -->|"put/get/delete buffer"| media
+    api -->|"createPlaybackToken<br/>uploadAsset"| muxprov
+    api -->|"chat + tool calls"| coach
+
+    coach -->|"recommend_lesson:<br/>query DB lessons + access"| db_lib
+    coach -->|"messages + tools"| anthropic
+
+    muxprov -->|"REST API<br/>API token + signing key"| mux
+    media -->|"FS R/W"| fs
+
+    classDef ext fill:#fef3c7,stroke:#f59e0b
+    classDef db fill:#dbeafe,stroke:#3b82f6
+    classDef storage fill:#e0e7ff,stroke:#6366f1
+    classDef internal fill:#d1fae5,stroke:#10b981
+
+    class mux,anthropic ext
+    class db_lib,db_core db
+    class fs storage
+    class web,api,coach,sanitize,media,muxprov internal

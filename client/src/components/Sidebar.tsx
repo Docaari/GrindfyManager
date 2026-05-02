@@ -29,7 +29,8 @@ import {
   Lightbulb,
   CreditCard,
   MessageSquare,
-  Wallet
+  Wallet,
+  GraduationCap
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
@@ -69,7 +70,9 @@ const Sidebar: React.FC = () => {
         { path: '/', icon: User, label: 'Home', adminOnly: false },
         { path: '/dashboard', icon: BarChart3, label: 'Dashboard', adminOnly: false },
         { path: '/upload', icon: Upload, label: 'Import', adminOnly: false },
-        { path: '/library', icon: BookOpen, label: 'Biblioteca', adminOnly: false },
+        // Sprint Biblioteca-1 RF-12 / D1: rotulo "Torneios" para Tournament Library
+        // (rota /library mantida — zero migration de URL).
+        { path: '/library', icon: BookOpen, label: 'Torneios', adminOnly: false },
       ]
     },
     {
@@ -85,6 +88,9 @@ const Sidebar: React.FC = () => {
       title: 'FERRAMENTAS',
       items: [
         { path: '/estudos', icon: BookOpen, label: 'Estudos', adminOnly: false },
+        // Sprint Biblioteca-1 RF-12 / D1: novo item Biblioteca → /biblioteca
+        // com icone GraduationCap (diferencia visualmente de /library).
+        { path: '/biblioteca', icon: GraduationCap, label: 'Biblioteca', adminOnly: false },
         { path: '/calculadoras', icon: Wrench, label: 'Ferramentas', adminOnly: false },
         { path: '/bankroll', icon: Wallet, label: 'Banca', adminOnly: false },
       ]
@@ -218,8 +224,15 @@ const Sidebar: React.FC = () => {
               {/* Section Items */}
               <ul className="space-y-1">
                 {section.items.map((item) => {
-                  const isActive = location === item.path ||
-                    (item.path === '/' && (location === '/' || location === '/dashboard'));
+                  // F7: prefix-match for sub-routes so "/biblioteca/curso/X"
+                  // and "/admin/users/Y" highlight their parent nav item.
+                  // Root '/' keeps strict equality plus the '/dashboard' alias.
+                  const isActive =
+                    location === item.path ||
+                    (item.path === '/' &&
+                      (location === '/' || location === '/dashboard')) ||
+                    (item.path !== '/' &&
+                      location.startsWith(item.path + '/'));
 
                   const showPendingSpotsBadge =
                     item.path === '/estudos' &&
@@ -227,10 +240,36 @@ const Sidebar: React.FC = () => {
                     pendingSpotsCount !== null &&
                     pendingSpotsCount > 0;
 
+                  // F9: "Novo" badge ao lado de "Biblioteca" enquanto user nao
+                  // visitou. Pulse nas 3 primeiras visitas. Read localStorage
+                  // diretamente (defer ate render — ok porque component re-
+                  // renderiza ao trocar rota).
+                  const showLibraryNewBadge =
+                    item.path === '/biblioteca' &&
+                    (() => {
+                      try {
+                        return localStorage.getItem('library:visited') !== 'true';
+                      } catch {
+                        return false;
+                      }
+                    })();
+
                   return (
                     <li key={item.path}>
                       <Link href={item.path}>
-                        <a className={`
+                        <a
+                          onClick={() => {
+                            // F9: marca biblioteca como visitada para esconder
+                            // o badge "Novo" em proximas renderizacoes.
+                            if (item.path === '/biblioteca') {
+                              try {
+                                localStorage.setItem('library:visited', 'true');
+                              } catch {
+                                // ignore
+                              }
+                            }
+                          }}
+                          className={`
                           flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
                           ${isActive
                             ? 'bg-green-600/20 text-green-400 border-l-2 border-green-400'
@@ -240,6 +279,14 @@ const Sidebar: React.FC = () => {
                           <item.icon size={20} className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-400'}`} />
                           {!isCollapsed && (
                             <span className="font-medium">{item.label}</span>
+                          )}
+                          {showLibraryNewBadge && !isCollapsed && (
+                            <span
+                              data-testid="sidebar-library-new-badge"
+                              className="ml-auto inline-flex items-center justify-center px-1.5 h-5 rounded-full bg-green-500/20 border border-green-500/40 text-green-300 text-[10px] font-semibold animate-pulse"
+                            >
+                              Novo
+                            </span>
                           )}
                           {showPendingSpotsBadge && (
                             <span

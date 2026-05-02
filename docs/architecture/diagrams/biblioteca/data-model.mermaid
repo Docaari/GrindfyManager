@@ -1,0 +1,117 @@
+%% ER diagram — Biblioteca (Library/LMS)
+%% Spec: Docs/specs/biblioteca-spec-1.md RF-01
+%% Refs: ADR-073 (entitlements), ADR-074 (progress sync)
+%%
+%% 7 tabelas novas + relacionamento com `users` (FK userPlatformId)
+%% Categorias = enum hardcoded em codigo (D13), NAO tabela.
+
+erDiagram
+    users ||--o{ user_lesson_access : "owns"
+    users ||--o{ library_events : "produces"
+    users ||--o{ library_progress : "tracks"
+
+    library_courses ||--o{ library_modules : "contains"
+    library_courses ||--o{ library_lessons : "denorm courseId"
+
+    library_modules ||--o{ library_lessons : "groups"
+
+    library_lessons ||--o{ library_lesson_assets : "files"
+    library_lessons ||--o{ user_lesson_access : "granted"
+    library_lessons ||--o{ library_events : "tracked"
+    library_lessons ||--o{ library_progress : "progressed"
+
+    users {
+        text userPlatformId PK "USER-XXXX"
+        text email
+        text role
+    }
+
+    library_courses {
+        text id PK "nanoid"
+        text slug UK "kebab, max 60"
+        text title
+        text subtitle
+        text description
+        text coverKey "FS path opaca"
+        int displayOrder
+        bool isPublished "default false"
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    library_modules {
+        text id PK "nanoid"
+        text courseId FK "CASCADE"
+        text slug "unique per course"
+        text title
+        text description
+        text coverKey
+        int displayOrder
+        timestamp createdAt
+    }
+
+    library_lessons {
+        text id PK "nanoid"
+        text moduleId FK "CASCADE"
+        text courseId FK "CASCADE denorm"
+        text slug "unique per course"
+        text title
+        text subtitle
+        text categoryId "enum hardcoded D13"
+        text_array tags "default []"
+        text coverKey
+        text videoMuxAssetId
+        text videoMuxPlaybackId
+        int videoDurationSeconds
+        text audioKey "media storage key"
+        int audioDurationSeconds
+        text audioMimeType "default audio/mp4"
+        text articleHtml "ja sanitizado D10"
+        int articleWordCount
+        int displayOrder
+        bool isPublished "default false"
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    library_lesson_assets {
+        text id PK "nanoid"
+        text lessonId FK "CASCADE"
+        text kind "cover | inline_image | attachment"
+        text storageKey "media storage path"
+        text mimeType
+        int sizeBytes
+        timestamp createdAt
+    }
+
+    user_lesson_access {
+        text id PK "nanoid"
+        text userId FK "CASCADE"
+        text lessonId FK "CASCADE"
+        text source "enum admin/purchase/bundle/subscription"
+        timestamp grantedAt
+        text grantedBy "nullable"
+        timestamp expiresAt "null = vitalicio"
+    }
+
+    library_events {
+        text id PK "nanoid"
+        text userId FK "CASCADE"
+        text lessonId FK "CASCADE"
+        text eventType "enum view/play/pause/seek/complete/note_create/coach_recommend/access_blocked"
+        text format "enum video/podcast/article nullable"
+        int positionSeconds
+        jsonb metadata "default {}"
+        timestamp eventTimestamp "server-side D11"
+    }
+
+    library_progress {
+        text id PK "nanoid"
+        text userId FK "CASCADE"
+        text lessonId FK "CASCADE"
+        text format "enum video/podcast/article"
+        int lastPositionSeconds "default 0"
+        int totalDurationSeconds "snapshot"
+        timestamp completedAt "preenchido em 95% D12"
+        timestamp updatedAt
+    }

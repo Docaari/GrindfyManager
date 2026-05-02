@@ -36,12 +36,36 @@ export async function initCsrf() {
   }
 }
 
+export interface ApiRequestOptions {
+  /**
+   * F3b: quando true, NAO faz refresh+redirect em 401. Apenas lanca o erro
+   * com `error.response.status === 401` para que o caller possa reagir
+   * (ex: registrar telemetria access_blocked sem perder a sessao). Use com
+   * cuidado: callers que dependem do refresh automatico devem deixar default.
+   */
+  silentMode?: boolean;
+}
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: any,
-  customHeaders?: Record<string, string>
+  customHeadersOrOptions?: Record<string, string> | ApiRequestOptions,
+  maybeOptions?: ApiRequestOptions
 ): Promise<any> {
+  // Backward-compat: 4th arg pode ser headers (legado) ou options. Detectamos
+  // por presenca de `silentMode` (so options tem essa key).
+  let customHeaders: Record<string, string> | undefined;
+  let options: ApiRequestOptions = {};
+  if (customHeadersOrOptions) {
+    if ("silentMode" in customHeadersOrOptions) {
+      options = customHeadersOrOptions as ApiRequestOptions;
+    } else {
+      customHeaders = customHeadersOrOptions as Record<string, string>;
+    }
+  }
+  if (maybeOptions) options = maybeOptions;
+
   const headers: Record<string, string> = {
     ...customHeaders
   };
@@ -56,7 +80,7 @@ export async function apiRequest(
     headers['X-CSRF-Token'] = csrfToken;
   }
 
-  const options: RequestInit = {
+  const fetchOptions: RequestInit = {
     method,
     headers,
     credentials: 'include',
@@ -64,13 +88,20 @@ export async function apiRequest(
 
   if (data && method !== 'GET') {
     // For FormData, send directly; for other data, stringify
-    options.body = data instanceof FormData ? data : JSON.stringify(data);
+    fetchOptions.body = data instanceof FormData ? data : JSON.stringify(data);
   }
 
-  const response = await fetch(url, options);
+  const response = await fetch(url, fetchOptions);
 
   // Handle 401 responses - token might be expired
   if (response.status === 401) {
+    // F3b: silentMode skip refresh+redirect — apenas lanca o erro com
+    // shape padrao (error.response.status === 401) para o caller decidir.
+    if (options.silentMode) {
+      await throwIfResNotOk(response);
+      return response.json();
+    }
+
     try {
       // Try to refresh the token (cookie-based, no body needed)
       const refreshRes = await fetch('/api/auth/refresh', {
@@ -85,7 +116,7 @@ export async function apiRequest(
       if (refreshRes.ok) {
         // Retry the original request (cookies automatically updated by server)
         const retryRes = await fetch(url, {
-          ...options,
+          ...fetchOptions,
           credentials: 'include',
         });
 

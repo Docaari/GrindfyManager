@@ -1,0 +1,70 @@
+%% State machine — Estados de uma lesson na perspectiva do user
+%% Spec: Docs/specs/biblioteca-spec-1.md RF-05 + RF-06 + RF-07 + D7 + D12
+%% Refs: ADR-073 (entitlements), ADR-074 (progress sync)
+%%
+%% Estados ortogonais combinam acesso (locked/previewable/accessible) com
+%% engajamento (in_progress/completed). Maquina simplificada para clarity.
+
+stateDiagram-v2
+    [*] --> locked: lesson criada<br/>isPublished=false
+
+    locked --> previewable: founder marca isPublished=true<br/>(SQL UPDATE — sem UI MVP)
+    note right of locked
+        User NAO ve a lesson
+        no /biblioteca.
+        Founder usa para preparar
+        conteudo antes de publicar.
+    end note
+
+    previewable --> accessible: admin grant via<br/>POST /api/admin/library/grant-access<br/>(insert user_lesson_access)
+    note right of previewable
+        User ve capa em /biblioteca
+        (catalogo aspiracional D7).
+        CTA "Em breve" cinza,
+        cursor not-allowed.
+        Click = log evento
+        access_blocked.
+    end note
+
+    accessible --> in_progress: user assiste/le primeiro segundo<br/>PATCH /lessons/:id/progress<br/>(lastPositionSeconds > 0)
+    note right of accessible
+        User pode abrir viewer.
+        Tabs renderizam apenas
+        formatos disponiveis.
+        Sem progresso ainda.
+        Default tab = video > podcast > article.
+    end note
+
+    in_progress --> in_progress: continua consumindo<br/>(throttle 15s client + 5s server)
+    note left of in_progress
+        Cross-format sync por
+        SEGUNDOS absolutos (ADR-074).
+        Trocar tab podcast→video:
+        startPos = oldPos se cabe
+        em newTotalDur, senao 0.
+    end note
+
+    in_progress --> completed: lastPositionSeconds >=<br/>totalDurationSeconds * 0.95<br/>(D12 — UPDATE completedAt=NOW)
+    note right of completed
+        Marcador para refund job
+        (Spec 4 — < 25% consumido
+        em janela 7d = elegivel).
+    end note
+
+    completed --> in_progress: user re-consome<br/>(seek inicial ou novo formato)<br/>completedAt PRESERVADO
+
+    accessible --> revoked: admin DELETE row<br/>OU expiresAt < NOW (subscription)
+    in_progress --> revoked: idem
+    completed --> revoked: idem
+
+    revoked --> previewable: re-grant<br/>(novo INSERT user_lesson_access)
+    note left of revoked
+        Soft-delete via DELETE row
+        ou expiresAt expirado.
+        Progress permanece em
+        library_progress (audit).
+    end note
+
+    previewable --> locked: founder marca isPublished=false<br/>(reverso, esconde do catalogo)
+
+    completed --> [*]: lesson hard-delete<br/>(CASCADE limpa<br/>access + events + progress)

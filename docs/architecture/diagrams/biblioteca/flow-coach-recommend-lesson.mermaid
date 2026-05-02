@@ -1,0 +1,88 @@
+%% Sequence — Coach detecta leak no chat e invoca tool recommend_lesson
+%% Spec: Docs/specs/biblioteca-spec-1.md RF-10
+%% Ref: ADR-075 (Coach tool), ADR-073 (entitlements), ADR-019 (prompt cache)
+%%
+%% User pergunta sobre leak; Coach decide invocar recommend_lesson(leakTopic, urgency).
+%% Tool consulta DB, anexa hasAccess, grava events coach_recommend, retorna cards.
+%% UI renderiza CoachLessonRecommendationCard com CTA conditional ao hasAccess.
+
+sequenceDiagram
+    actor U as User
+    participant Chat as CoachChat UI<br/>(React)
+    participant API as POST /api/coach/chat
+    participant Coach as CoachService<br/>(continuation loop)
+    participant Tools as coachTools registry
+    participant Tool as recommendLessonHandler
+    participant Storage as storage.ts
+    participant DB as Postgres
+    participant Anth as Anthropic API
+    participant UI as CoachMessage<br/>+ LessonRecommendationCard
+
+    U->>Chat: "Acho que estou foldando demais em 3-bet pots"
+    Chat->>API: POST /chat {message, conversationId}
+    activate API
+    API->>Coach: continuation(messages, tools=[...])
+    activate Coach
+
+    Note over Coach,Anth: 1. Bloco static cacheado (ADR-019)<br/>contem COMPETITOR_BLOCKLIST + SAFETY_RULES_COMPETITOR_BLOCK
+
+    Coach->>Anth: messages.create<br/>(system: cached + dynamic; tools incluem recommend_lesson<br/>filtrado por tier user — Pro ve tool, Free nao)
+    activate Anth
+    Anth-->>Coach: {role:assistant, content:[<br/>{type:'tool_use', name:'recommend_lesson',<br/>input:{leakTopic:'postflop', urgency:'medium', maxResults:3}}<br/>]}
+    deactivate Anth
+
+    Coach->>Tools: invoke('recommend_lesson', input, ctx)
+    Tools->>Tool: handler(input, {user, conversationId})
+    activate Tool
+
+    Note over Tool,DB: 2. Ranking determinista (D14)
+
+    Tool->>Storage: findLessonsByCategory('postflop', limit=9)
+    Storage->>DB: SELECT l.*, c.slug AS courseSlug, c.title AS courseTitle<br/>FROM library_lessons l<br/>JOIN library_courses c ON c.id = l.courseId<br/>WHERE l.categoryId='postflop' AND l.isPublished=true<br/>ORDER BY l.displayOrder LIMIT 9
+    DB-->>Storage: [lesson1, lesson2, lesson3]
+    Storage-->>Tool: lessons (3 matches)
+
+    alt lessons.length < maxResults
+        Tool->>Storage: findLessonsByTag('postflop', exclude=ids, limit=remaining)
+        Storage->>DB: SELECT ... WHERE 'postflop' = ANY(tags) AND id NOT IN (...) LIMIT n
+        DB-->>Storage: tagged lessons
+        Storage-->>Tool: appended
+    end
+
+    Tool->>Storage: lessonProgressLookup(userId, lessonIds)
+    Storage->>DB: SELECT lessonId, format, completedAt<br/>FROM library_progress<br/>WHERE userId=$u AND lessonId IN (...)
+    DB-->>Storage: progress map
+    Storage-->>Tool: rank: nao-iniciada > iniciada > completa
+
+    Tool->>Storage: lessonAccessLookup(userId, lessonIds)
+    Storage->>DB: SELECT lessonId FROM user_lesson_access<br/>WHERE userId=$u AND lessonId IN (...)<br/>AND (expiresAt IS NULL OR expiresAt > NOW())
+    DB-->>Storage: Set<lessonId>
+    Storage-->>Tool: access map
+
+    Note over Tool,DB: 3. Side-effect: events coach_recommend (best-effort)
+
+    Tool->>Storage: recordLibraryEvents([{userId, lessonId, eventType:'coach_recommend', metadata:{leakTopic, urgency}} x N])
+    Storage->>DB: INSERT INTO library_events ... (try/catch, log error mas nao falha tool)
+    DB-->>Storage: ok
+    Tool-->>Tools: {__type:'ToolResult', tool:'recommend_lesson', ok:true,<br/>data:{lessons:[{id, slug, courseSlug, title, courseTitle, coverUrl,<br/>durationMinutes, categoryId, hasAccess, url}]}}
+    deactivate Tool
+
+    Tools-->>Coach: tool result wrapped (ADR-024)
+
+    Coach->>Anth: messages.create<br/>(append tool_result)
+    activate Anth
+    Anth-->>Coach: {role:assistant, content:[<br/>{type:'text', text:'Vejo no seu HUD que voce esta foldando 19% das vezes em<br/>3-bet pots — leak classico de postflop OOP. Aqui estao 3 aulas que vao destravar isso:'}]}
+    deactivate Anth
+
+    Coach-->>API: final response {messageId, content, toolResults}
+    deactivate Coach
+    API-->>Chat: 200 {messages, toolResults}
+    deactivate API
+
+    Chat->>UI: render CoachMessage com tool result
+    UI->>UI: detect tool='recommend_lesson' →<br/>render CoachLessonRecommendationCard (carousel se >1)
+    UI-->>U: 3 cards: "M3 - 3-bet" (Assistir), "M5 - OOP" (Assistir), "M7 - C-bet" (Em breve)
+
+    U->>UI: click "Assistir agora" no Card 1
+    UI->>UI: window.open(url, '_blank')
+    UI-->>U: nova aba com /biblioteca/curso/anatomia-spot/m3-3bet

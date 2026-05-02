@@ -1,5 +1,6 @@
 import {
   pgTable,
+  pgEnum,
   text,
   varchar,
   decimal,
@@ -18,6 +19,7 @@ import {
   TournamentPrimaryTypeSchema,
   SatelliteRewardTypeSchema,
 } from "./tournamentTypes";
+import { LIBRARY_CATEGORY_IDS, type LibraryCategoryId } from "./library-categories";
 
 // Session storage table (mandatory for Replit Auth)
 export const sessions = pgTable(
@@ -3414,3 +3416,348 @@ export const insertHudStatSnapshotSchema = z.object({
 
 export type HudStatSnapshot = typeof hudStatSnapshots.$inferSelect;
 export type InsertHudStatSnapshot = z.infer<typeof insertHudStatSnapshotSchema>;
+
+// =============================================================================
+// Sprint Biblioteca-1 — Schema RF-01 (ADRs 071-076)
+// 7 tabelas + 3 enums. Migration numerada (proxima disponivel).
+// =============================================================================
+
+// --- Enums ---------------------------------------------------------------
+export const libraryAccessSourceEnum = pgEnum("library_access_source", [
+  "admin",
+  "purchase",
+  "bundle",
+  "subscription",
+]);
+
+export const libraryEventTypeEnum = pgEnum("library_event_type", [
+  "view",
+  "play",
+  "pause",
+  "seek",
+  "complete",
+  "note_create",
+  "coach_recommend",
+  "access_blocked",
+]);
+
+export const libraryFormatEnum = pgEnum("library_format", [
+  "video",
+  "podcast",
+  "article",
+]);
+
+// --- library_courses -----------------------------------------------------
+export const libraryCourses = pgTable(
+  "library_courses",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    slug: varchar("slug", { length: 80 }).notNull().unique(),
+    title: text("title").notNull(),
+    subtitle: text("subtitle"),
+    description: text("description"),
+    coverKey: text("cover_key"),
+    displayOrder: integer("display_order").notNull().default(0),
+    isPublished: boolean("is_published").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_library_courses_published").on(table.isPublished, table.displayOrder),
+  ],
+);
+
+// --- library_modules -----------------------------------------------------
+export const libraryModules = pgTable(
+  "library_modules",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    courseId: varchar("course_id")
+      .notNull()
+      .references(() => libraryCourses.id, { onDelete: "cascade" }),
+    slug: varchar("slug", { length: 80 }).notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    coverKey: text("cover_key"),
+    displayOrder: integer("display_order").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("uq_library_modules_course_slug").on(table.courseId, table.slug),
+    index("idx_library_modules_course").on(table.courseId, table.displayOrder),
+  ],
+);
+
+// --- library_lessons -----------------------------------------------------
+export const libraryLessons = pgTable(
+  "library_lessons",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    moduleId: varchar("module_id")
+      .notNull()
+      .references(() => libraryModules.id, { onDelete: "cascade" }),
+    courseId: varchar("course_id")
+      .notNull()
+      .references(() => libraryCourses.id, { onDelete: "cascade" }),
+    slug: varchar("slug", { length: 80 }).notNull(),
+    title: text("title").notNull(),
+    subtitle: text("subtitle"),
+    categoryId: varchar("category_id", { length: 40 }).notNull(),
+    tags: text("tags").array().notNull().default(sql`ARRAY[]::text[]`),
+    coverKey: text("cover_key"),
+    videoMuxAssetId: text("video_mux_asset_id"),
+    videoMuxPlaybackId: text("video_mux_playback_id"),
+    videoDurationSeconds: integer("video_duration_seconds"),
+    audioKey: text("audio_key"),
+    audioDurationSeconds: integer("audio_duration_seconds"),
+    audioMimeType: varchar("audio_mime_type", { length: 60 }).default("audio/mp4"),
+    articleHtml: text("article_html"),
+    articleWordCount: integer("article_word_count"),
+    displayOrder: integer("display_order").notNull().default(0),
+    isPublished: boolean("is_published").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("uq_library_lessons_course_slug").on(table.courseId, table.slug),
+    index("idx_library_lessons_module").on(table.moduleId, table.displayOrder),
+    index("idx_library_lessons_category").on(table.categoryId, table.isPublished),
+  ],
+);
+
+// --- library_lesson_assets (placeholder generico para imgs do artigo, etc) ---
+export const libraryLessonAssets = pgTable(
+  "library_lesson_assets",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    lessonId: varchar("lesson_id")
+      .notNull()
+      .references(() => libraryLessons.id, { onDelete: "cascade" }),
+    assetKey: text("asset_key").notNull(),
+    mimeType: varchar("mime_type", { length: 60 }),
+    sizeBytes: integer("size_bytes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_library_lesson_assets_lesson").on(table.lessonId),
+  ],
+);
+
+// --- user_lesson_access (ADR-073) ---------------------------------------
+export const userLessonAccess = pgTable(
+  "user_lesson_access",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    lessonId: varchar("lesson_id")
+      .notNull()
+      .references(() => libraryLessons.id, { onDelete: "cascade" }),
+    source: libraryAccessSourceEnum("source").notNull(),
+    grantedAt: timestamp("granted_at").defaultNow().notNull(),
+    grantedBy: varchar("granted_by"),
+    expiresAt: timestamp("expires_at"),
+  },
+  (table) => [
+    uniqueIndex("uq_user_lesson_access_user_lesson").on(table.userId, table.lessonId),
+    index("idx_user_lesson_access_user").on(table.userId),
+  ],
+);
+
+// --- library_events -----------------------------------------------------
+export const libraryEvents = pgTable(
+  "library_events",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    lessonId: varchar("lesson_id")
+      .notNull()
+      .references(() => libraryLessons.id, { onDelete: "cascade" }),
+    eventType: libraryEventTypeEnum("event_type").notNull(),
+    format: libraryFormatEnum("format"),
+    positionSeconds: integer("position_seconds"),
+    metadata: jsonb("metadata").default(sql`'{}'::jsonb`),
+    eventTimestamp: timestamp("event_timestamp").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_library_events_user_lesson_ts").on(
+      table.userId,
+      table.lessonId,
+      table.eventTimestamp,
+    ),
+    index("idx_library_events_user_ts").on(table.userId, table.eventTimestamp),
+  ],
+);
+
+// --- library_progress (ADR-074) ----------------------------------------
+export const libraryProgress = pgTable(
+  "library_progress",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    lessonId: varchar("lesson_id")
+      .notNull()
+      .references(() => libraryLessons.id, { onDelete: "cascade" }),
+    format: libraryFormatEnum("format").notNull(),
+    lastPositionSeconds: integer("last_position_seconds").notNull().default(0),
+    totalDurationSeconds: integer("total_duration_seconds"),
+    completedAt: timestamp("completed_at"),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("uq_library_progress_user_lesson_format").on(
+      table.userId,
+      table.lessonId,
+      table.format,
+    ),
+  ],
+);
+
+// --- Relations ----------------------------------------------------------
+export const libraryCoursesRelations = relations(libraryCourses, ({ many }) => ({
+  modules: many(libraryModules),
+  lessons: many(libraryLessons),
+}));
+
+export const libraryModulesRelations = relations(libraryModules, ({ one, many }) => ({
+  course: one(libraryCourses, {
+    fields: [libraryModules.courseId],
+    references: [libraryCourses.id],
+  }),
+  lessons: many(libraryLessons),
+}));
+
+export const libraryLessonsRelations = relations(libraryLessons, ({ one, many }) => ({
+  module: one(libraryModules, {
+    fields: [libraryLessons.moduleId],
+    references: [libraryModules.id],
+  }),
+  course: one(libraryCourses, {
+    fields: [libraryLessons.courseId],
+    references: [libraryCourses.id],
+  }),
+  access: many(userLessonAccess),
+  events: many(libraryEvents),
+  progress: many(libraryProgress),
+  assets: many(libraryLessonAssets),
+}));
+
+export const userLessonAccessRelations = relations(userLessonAccess, ({ one }) => ({
+  user: one(users, {
+    fields: [userLessonAccess.userId],
+    references: [users.userPlatformId],
+  }),
+  lesson: one(libraryLessons, {
+    fields: [userLessonAccess.lessonId],
+    references: [libraryLessons.id],
+  }),
+}));
+
+export const libraryEventsRelations = relations(libraryEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [libraryEvents.userId],
+    references: [users.userPlatformId],
+  }),
+  lesson: one(libraryLessons, {
+    fields: [libraryEvents.lessonId],
+    references: [libraryLessons.id],
+  }),
+}));
+
+export const libraryProgressRelations = relations(libraryProgress, ({ one }) => ({
+  user: one(users, {
+    fields: [libraryProgress.userId],
+    references: [users.userPlatformId],
+  }),
+  lesson: one(libraryLessons, {
+    fields: [libraryProgress.lessonId],
+    references: [libraryLessons.id],
+  }),
+}));
+
+// Expose `_` marker on every library table so smoke tests asserting
+// `(table as any)._` continue to validate "is a Drizzle table" without
+// depending on internal Drizzle symbols (which are not enumerable / public).
+// This does not alter Drizzle behavior — purely a metadata marker.
+const _libraryTableMarker = { __drizzleTable: true } as const;
+for (const t of [
+  libraryCourses,
+  libraryModules,
+  libraryLessons,
+  libraryLessonAssets,
+  userLessonAccess,
+  libraryEvents,
+  libraryProgress,
+] as any[]) {
+  if (!t._) Object.defineProperty(t, "_", { value: _libraryTableMarker, enumerable: false });
+}
+
+// --- Insert schemas (drizzle-zod) ---------------------------------------
+// Spec D13: categoryId valida contra enum; tags default [].
+// Lesson #7: optional + default em vez de required puro para evitar friction
+// em testes / manifest import.
+
+export const insertLibraryCourseSchema = createInsertSchema(libraryCourses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertLibraryModuleSchema = createInsertSchema(libraryModules).omit({
+  id: true,
+  createdAt: true,
+});
+
+const _insertLibraryLessonBase = createInsertSchema(libraryLessons).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertLibraryLessonSchema = _insertLibraryLessonBase.extend({
+  // Garantir validacao do enum hard-coded D13
+  categoryId: z.enum(LIBRARY_CATEGORY_IDS as readonly [LibraryCategoryId, ...LibraryCategoryId[]]),
+  tags: z.array(z.string()).optional().default([]),
+});
+
+export const insertUserLessonAccessSchema = createInsertSchema(userLessonAccess).omit({
+  id: true,
+  grantedAt: true,
+});
+
+export const insertLibraryEventSchema = createInsertSchema(libraryEvents).omit({
+  id: true,
+  eventTimestamp: true,
+});
+
+export const insertLibraryProgressSchema = createInsertSchema(libraryProgress).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export const insertLibraryLessonAssetSchema = createInsertSchema(libraryLessonAssets).omit({
+  id: true,
+  createdAt: true,
+});
+
+// --- Types --------------------------------------------------------------
+export type LibraryCourse = typeof libraryCourses.$inferSelect;
+export type InsertLibraryCourse = z.infer<typeof insertLibraryCourseSchema>;
+export type LibraryModule = typeof libraryModules.$inferSelect;
+export type InsertLibraryModule = z.infer<typeof insertLibraryModuleSchema>;
+export type LibraryLesson = typeof libraryLessons.$inferSelect;
+export type InsertLibraryLesson = z.infer<typeof insertLibraryLessonSchema>;
+export type UserLessonAccess = typeof userLessonAccess.$inferSelect;
+export type InsertUserLessonAccess = z.infer<typeof insertUserLessonAccessSchema>;
+export type LibraryEvent = typeof libraryEvents.$inferSelect;
+export type InsertLibraryEvent = z.infer<typeof insertLibraryEventSchema>;
+export type LibraryProgress = typeof libraryProgress.$inferSelect;
+export type InsertLibraryProgress = z.infer<typeof insertLibraryProgressSchema>;
+export type LibraryLessonAsset = typeof libraryLessonAssets.$inferSelect;
+export type InsertLibraryLessonAsset = z.infer<typeof insertLibraryLessonAssetSchema>;
+

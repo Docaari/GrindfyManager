@@ -22,6 +22,32 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { useCoachChat, type CoachType, type ChatMessage } from '@/hooks/useCoachChat';
+import {
+  CoachLessonRecommendationCard,
+  type CoachLessonRecommendation,
+} from '@/components/coach/CoachLessonRecommendationCard';
+
+// F3: extract lesson recommendations from message metadata. We accept several
+// shapes so the UI is forward-compatible with however backend persists them:
+//   metadata.recommendedLessons       -> CoachLessonRecommendation[]
+//   metadata.toolResults[].tool === 'recommend_lesson' -> { data: { lessons } }
+function extractLessonRecommendations(
+  message: ChatMessage,
+): CoachLessonRecommendation[] {
+  const meta: any = message.metadata;
+  if (!meta || typeof meta !== 'object') return [];
+  if (Array.isArray(meta.recommendedLessons)) {
+    return meta.recommendedLessons as CoachLessonRecommendation[];
+  }
+  const tools = Array.isArray(meta.toolResults) ? meta.toolResults : [];
+  const out: CoachLessonRecommendation[] = [];
+  for (const tr of tools) {
+    if (tr?.tool === 'recommend_lesson' && Array.isArray(tr?.data?.lessons)) {
+      out.push(...tr.data.lessons);
+    }
+  }
+  return out;
+}
 
 const COACH_TABS = [
   { value: 'mental' as CoachType, label: 'Mental', icon: Brain },
@@ -39,6 +65,8 @@ function coachLabel(type: CoachType): string {
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
+  // F3: surface recommend_lesson cards inline below assistant messages.
+  const recommendations = !isUser ? extractLessonRecommendations(message) : [];
 
   return (
     <div className={cn('flex w-full mb-4', isUser ? 'justify-end' : 'justify-start')}>
@@ -57,6 +85,11 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {message.content}
             </ReactMarkdown>
+          </div>
+        )}
+        {recommendations.length > 0 && (
+          <div className="mt-3" data-testid="coach-message-recommendations">
+            <CoachLessonRecommendationCard lessons={recommendations} />
           </div>
         )}
         <p className="text-xs text-gray-500 mt-1">

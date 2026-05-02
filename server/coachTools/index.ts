@@ -18,6 +18,7 @@ import { readCooldownHistoryTool } from './handlers/readCooldownHistory';
 import { readUserHudStatsToolV2 } from '../coach/tools/readUserHudStatsV2';
 import { readUserBankrollHistoryTool } from '../coach/tools/readUserBankrollHistory';
 import { readThemeWithLinkedSpotsTool } from './readThemeWithLinkedSpots';
+import { recommendLessonTool } from './recommendLesson';
 
 // -----------------------------------------------------------------------------
 // Stubs de regressao Sprint Coach 2A — tools cujo handler real esta na
@@ -100,11 +101,15 @@ safeRegister(readUserBankrollHistoryTool as unknown as CoachTool);
 // Sprint Studies-Reform RF-07 — read_theme_with_linked_spots
 safeRegister(readThemeWithLinkedSpotsTool as any);
 
+// Sprint Biblioteca-1 RF-10 — recommend_lesson (ADR-075)
+safeRegister(recommendLessonTool as unknown as CoachTool);
+
 export {
   readCooldownHistoryTool,
   readUserHudStatsToolV2,
   readUserBankrollHistoryTool,
   readThemeWithLinkedSpotsTool,
+  recommendLessonTool,
 };
 
 // Sprint Studies-Reform RF-07 — agregado para introspeccao por testes.
@@ -116,4 +121,5 @@ export const coachTools = [
   simulateBankrollStub,
   readUserBankrollHistoryTool,
   readThemeWithLinkedSpotsTool,
+  recommendLessonTool,
 ];

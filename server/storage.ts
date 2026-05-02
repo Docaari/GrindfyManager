@@ -672,6 +672,33 @@ export interface IStorage {
   }>;
 
   transaction<T>(fn: (tx: IStorage) => Promise<T>): Promise<T>;
+
+  // ---------------------------------------------------------------------------
+  // Sprint Biblioteca-1 — lesson library methods.
+  // Concrete implementations land in Sprint Biblioteca-2; stubs declared here
+  // so callers (routes/library.ts, coachTools/recommendLesson.ts,
+  // services/manifestImporter.ts) get type checking instead of (storage as any).
+  // Loose typing (any) deliberate — full payload shapes finalize in Sprint 2.
+  // ---------------------------------------------------------------------------
+  listLibraryCourses(opts?: { userId?: string; onlyPublished?: boolean }): Promise<any[]>;
+  getLibraryCourseBySlug(slug: string): Promise<any | null>;
+  getLibraryLesson(id: string): Promise<any | null>;
+  getLibraryLessonBySlug(courseSlug: string, lessonSlug: string): Promise<any | null>;
+  upsertLibraryCourseBySlug(data: any): Promise<any>;
+  upsertLibraryModuleBySlug(data: any): Promise<any>;
+  upsertLibraryLessonBySlug(data: any): Promise<any>;
+  lessonAccessLookup(userId: string | undefined, lessonIds: string[]): Promise<Map<string, boolean>>;
+  findLessonAccess(args: { userId?: string; lessonId: string }): Promise<any | null>;
+  bulkGrantLessonAccess(args: any): Promise<any>;
+  recordLibraryEvents(events: any[]): Promise<void>;
+  createLibraryEvent(event: any): Promise<any>;
+  countLibraryEventsForUserInWindow(args: { userId: string; windowSeconds: number }): Promise<number>;
+  upsertLibraryProgress(progress: any): Promise<any>;
+  getLibraryProgressForLesson(args: { userId: string; lessonId: string }): Promise<any[]>;
+  findLibraryLessonsByCategory(categoryId: string, opts?: any): Promise<any[]>;
+  findLibraryLessonsByTag(tag: string, opts?: any): Promise<any[]>;
+  libraryLessonProgressLookup(userId: string | undefined, lessonIds: string[]): Promise<Map<string, any>>;
+  libraryLessonAccessLookup(userId: string | undefined, lessonIds: string[]): Promise<Map<string, boolean>>;
 }
 
 export interface BankrollSnapshotsFilters {
@@ -6733,6 +6760,68 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       // TODO Sprint Studies-Reform-Backend: somar duracao de grindSessions com tag estudo.
       hoursStudiedThisWeek: 0,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sprint Biblioteca-1 — lesson library stubs.
+  // Real implementations in Sprint Biblioteca-2. Tests mock at module level.
+  // ---------------------------------------------------------------------------
+  async listLibraryCourses(_opts?: { userId?: string; onlyPublished?: boolean }): Promise<any[]> {
+    throw new Error("listLibraryCourses not implemented (Sprint Biblioteca-2)");
+  }
+  async getLibraryCourseBySlug(_slug: string): Promise<any | null> {
+    throw new Error("getLibraryCourseBySlug not implemented (Sprint Biblioteca-2)");
+  }
+  async getLibraryLesson(_id: string): Promise<any | null> {
+    throw new Error("getLibraryLesson not implemented (Sprint Biblioteca-2)");
+  }
+  async getLibraryLessonBySlug(_courseSlug: string, _lessonSlug: string): Promise<any | null> {
+    throw new Error("getLibraryLessonBySlug not implemented (Sprint Biblioteca-2)");
+  }
+  async upsertLibraryCourseBySlug(_data: any): Promise<any> {
+    throw new Error("upsertLibraryCourseBySlug not implemented (Sprint Biblioteca-2)");
+  }
+  async upsertLibraryModuleBySlug(_data: any): Promise<any> {
+    throw new Error("upsertLibraryModuleBySlug not implemented (Sprint Biblioteca-2)");
+  }
+  async upsertLibraryLessonBySlug(_data: any): Promise<any> {
+    throw new Error("upsertLibraryLessonBySlug not implemented (Sprint Biblioteca-2)");
+  }
+  async lessonAccessLookup(_userId: string | undefined, _lessonIds: string[]): Promise<Map<string, boolean>> {
+    throw new Error("lessonAccessLookup not implemented (Sprint Biblioteca-2)");
+  }
+  async findLessonAccess(_args: { userId?: string; lessonId: string }): Promise<any | null> {
+    throw new Error("findLessonAccess not implemented (Sprint Biblioteca-2)");
+  }
+  async bulkGrantLessonAccess(_args: any): Promise<any> {
+    throw new Error("bulkGrantLessonAccess not implemented (Sprint Biblioteca-2)");
+  }
+  async recordLibraryEvents(_events: any[]): Promise<void> {
+    throw new Error("recordLibraryEvents not implemented (Sprint Biblioteca-2)");
+  }
+  async createLibraryEvent(_event: any): Promise<any> {
+    throw new Error("createLibraryEvent not implemented (Sprint Biblioteca-2)");
+  }
+  async countLibraryEventsForUserInWindow(_args: { userId: string; windowSeconds: number }): Promise<number> {
+    throw new Error("countLibraryEventsForUserInWindow not implemented (Sprint Biblioteca-2)");
+  }
+  async upsertLibraryProgress(_progress: any): Promise<any> {
+    throw new Error("upsertLibraryProgress not implemented (Sprint Biblioteca-2)");
+  }
+  async getLibraryProgressForLesson(_args: { userId: string; lessonId: string }): Promise<any[]> {
+    throw new Error("getLibraryProgressForLesson not implemented (Sprint Biblioteca-2)");
+  }
+  async findLibraryLessonsByCategory(_categoryId: string, _opts?: any): Promise<any[]> {
+    throw new Error("findLibraryLessonsByCategory not implemented (Sprint Biblioteca-2)");
+  }
+  async findLibraryLessonsByTag(_tag: string, _opts?: any): Promise<any[]> {
+    throw new Error("findLibraryLessonsByTag not implemented (Sprint Biblioteca-2)");
+  }
+  async libraryLessonProgressLookup(_userId: string | undefined, _lessonIds: string[]): Promise<Map<string, any>> {
+    throw new Error("libraryLessonProgressLookup not implemented (Sprint Biblioteca-2)");
+  }
+  async libraryLessonAccessLookup(_userId: string | undefined, _lessonIds: string[]): Promise<Map<string, boolean>> {
+    throw new Error("libraryLessonAccessLookup not implemented (Sprint Biblioteca-2)");
   }
 }
 

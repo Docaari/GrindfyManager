@@ -1,0 +1,65 @@
+%% Sequence — Admin libera acesso a N aulas para 1 user (idempotente)
+%% Spec: Docs/specs/biblioteca-spec-1.md RF-04
+%% Ref: ADR-073 (entitlements model — composite unique permite re-grant)
+%%
+%% Cenario MVP: founder libera acesso para alpha tester via 1 chamada.
+%% Sem checkout Stripe — Spec 4 substitui handler por webhook.
+
+sequenceDiagram
+    actor Admin as Founder/Admin
+    participant API as POST /api/admin/library/grant-access
+    participant Auth as requireAuth + requirePermission('admin_full')
+    participant Validate as Zod parse + cap 500
+    participant Storage as storage.ts
+    participant DB as Postgres<br/>user_lesson_access
+
+    Admin->>API: POST {userId:'USER-1234',<br/>lessonIds:['L1','L2','L3'],<br/>source:'admin', expiresAt:null}
+    activate API
+
+    Note over API,Auth: 1. Auth + permission check
+
+    API->>Auth: validate JWT + permission admin_full
+    Auth-->>API: ok (ou 403 forbidden)
+
+    API->>Validate: parse body schema<br/>(lessonIds.length <= 500, source enum)
+    Validate-->>API: ok (ou 400 validation_error)
+
+    Note over API,DB: 2. Verify user exists
+
+    API->>Storage: getUserByPlatformId('USER-1234')
+    Storage->>DB: SELECT 1 FROM users WHERE userPlatformId='USER-1234'
+    DB-->>Storage: row or null
+    alt user not found
+        Storage-->>API: null
+        API-->>Admin: 404 {message:'user_not_found'}
+    else user exists
+        Storage-->>API: user
+
+        Note over API,DB: 3. Idempotent grant via composite unique
+
+        API->>Storage: bulkGrantLessonAccess({<br/>  userId: 'USER-1234',<br/>  lessonIds: ['L1','L2','L3'],<br/>  source: 'admin',<br/>  grantedBy: req.user.userPlatformId,<br/>  expiresAt: null<br/>})
+
+        loop por lessonId
+            Storage->>DB: INSERT INTO user_lesson_access<br/>(userId, lessonId, source, grantedAt, grantedBy, expiresAt)<br/>VALUES (...)<br/>ON CONFLICT (userId, lessonId) DO NOTHING
+            alt insert sucesso
+                DB-->>Storage: 1 row affected → granted++
+            else conflict (ja existia)
+                DB-->>Storage: 0 rows affected → alreadyHadAccess++
+            end
+        end
+
+        alt lesson nao existe (FK violation)
+            Storage->>Storage: catch FK error<br/>push to errors[]: {lessonId, reason: 'lesson_not_found'}
+        end
+
+        Storage-->>API: {granted: 2, alreadyHadAccess: 1, errors: []}
+
+        API-->>Admin: 200 {granted:2, alreadyHadAccess:1, errors:[]}
+    end
+
+    deactivate API
+
+    Note over Admin,DB: 4. Admin retry com mesma payload — idempotente
+
+    Admin->>API: POST mesma payload (rerun)
+    API-->>Admin: 200 {granted:0, alreadyHadAccess:3, errors:[]}<br/>(nenhuma row nova; composite unique preservou)

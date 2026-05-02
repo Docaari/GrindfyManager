@@ -1,0 +1,64 @@
+%% Sequence — Viewer 3 formatos sincroniza progresso por SEGUNDOS absolutos
+%% Spec: Docs/specs/biblioteca-spec-1.md RF-08 + D5 + D12
+%% Ref: ADR-074 (cross-format progress sync)
+%%
+%% Cenario: user esta no podcast aos 720s, troca para tab Video.
+%% Video totalDur=1320s (>720s), entao retoma em 720s (preserva ponto narrativo).
+
+sequenceDiagram
+    actor U as User (mobile/desktop)
+    participant V as LessonViewer<br/>(React)
+    participant API as API<br/>/api/library
+    participant DB as Postgres<br/>library_progress
+    participant Mux as Mux<br/>(HLS)
+
+    Note over U,Mux: 1. Mount viewer e carregar progresso de TODOS os formatos
+
+    U->>V: navega /biblioteca/curso/X/Y?tab=podcast
+    activate V
+    V->>API: GET /lessons/Y/progress<br/>(JWT + lessonAccess check)
+    activate API
+    API->>DB: SELECT * FROM library_progress<br/>WHERE userId=$u AND lessonId=Y
+    DB-->>API: [{format:'podcast',pos:720,totalDur:1500,completedAt:null},<br/>{format:'video',pos:0,totalDur:1320,completedAt:null}]
+    API-->>V: progressMap
+    deactivate API
+    V->>V: render PodcastPanel<br/>currentTime=720s
+
+    Note over U,Mux: 2. User troca para tab Video — sync por SEGUNDOS
+
+    U->>V: click tab "Video"
+    V->>V: oldFormat=podcast, newFormat=video<br/>oldPos=720, newTotalDur=1320<br/>startPos = oldPos <= newTotalDur ? oldPos : 0<br/>= 720s
+    V->>API: GET /lessons/Y/playback-token<br/>(JWT + lessonAccess)
+    activate API
+    API->>API: muxProvider.createPlaybackToken<br/>(playbackId, userPlatformId)
+    API-->>V: {url, expiresAt: now+4h, watermarkText: USER-1234}
+    deactivate API
+    V->>Mux: <MuxPlayer playbackId tokens currentTime=720>
+    Mux-->>V: HLS chunked stream
+    V->>V: VideoPlayer.currentTime=720<br/>player.play()
+
+    Note over U,Mux: 3. User assiste 30s do video (debounced 15s send PATCH)
+
+    loop a cada 15s ou em pause/seek/close
+        V->>API: PATCH /lessons/Y/progress<br/>{format:'video',lastPositionSeconds:735,totalDurationSeconds:1320}
+        activate API
+        API->>API: throttle: ultimo update < 5s atras?<br/>se sim → 429 Retry-After:5
+        API->>DB: INSERT ... ON CONFLICT (userId,lessonId,format)<br/>DO UPDATE SET lastPositionSeconds=735,<br/>completedAt = CASE WHEN 735 >= 1320*0.95 ...
+        DB-->>API: ok
+        API-->>V: 200 {updated:true, completed:false}
+        deactivate API
+    end
+
+    Note over U,Mux: 4. Edge case: user troca para tab Article (totalDur=720s)<br/>e oldPos=735 EXCEDE newTotalDur
+
+    U->>V: click tab "Artigo"
+    V->>V: oldPos=735 > newTotalDur=720<br/>FALLBACK: startPos=0 (lesson #11 default minimo)
+    V->>V: render ArticlePanel scrollTop=0
+    V->>API: PATCH /progress<br/>{format:'article',lastPositionSeconds:0,totalDurationSeconds:720}
+    deactivate V
+
+    Note over U,Mux: 5. User navega para /dashboard com podcast tocando<br/>StickyAudioBar mobile aparece (D6)
+
+    U->>V: navega /dashboard (Wouter)
+    V->>V: AudioPlayerContext detecta isPlaying=true<br/>+ viewport mobile<br/>renderiza <StickyAudioBar />
+    V-->>U: bar flutuante na base com<br/>capa + titulo + play/pause + close

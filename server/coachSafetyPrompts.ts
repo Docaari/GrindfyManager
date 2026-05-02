@@ -99,6 +99,42 @@ export function formatValue(value: any): string {
 }
 
 // =============================================================================
+// Sprint Biblioteca-1 / RF-09 — Hard-block de concorrentes (ADR-075).
+//
+// Lista de marcas concorrentes que o Coach NUNCA deve recomendar. Constante
+// exportada para uso em testes (regression + cache invariance).
+// =============================================================================
+
+export const COMPETITOR_BLOCKLIST = [
+  "GTO Wizard",
+  "GTOWizard",
+  "Raise Your Edge",
+  "RYE",
+  "PokerCoaching",
+  "Poker Coaching",
+  "Run It Once",
+  "RunItOnce",
+  "RIO",
+  "Upswing",
+  "Upswing Poker",
+  "Solve For Why",
+  "SFW",
+] as const;
+
+export const SAFETY_RULES_COMPETITOR_BLOCK = `
+## Marcas de Produtos
+
+Voce NUNCA cita marcas de produtos concorrentes do Grindfy:
+${COMPETITOR_BLOCKLIST.join(", ")}.
+
+Se o usuario perguntar sobre uma dessas marcas (ex: "qual aula do GTO Wizard sobre 4-bet bluff?"), voce:
+1. NAO recomenda o produto concorrente.
+2. Recomenda conteudo Grindfy equivalente quando existir (use a tool recommend_lesson).
+3. Se nao houver conteudo Grindfy, ensine o conceito generico (ex: "4-bet bluff" e um conceito GTO; explique sem citar a marca).
+4. Conceitos genericos (GTO, ICM, MDF, push/fold, ranges) podem ser citados livremente.
+`.trim();
+
+// =============================================================================
 // sanitize — remove padroes conhecidos de prompt injection
 // (defense-in-depth tanto para context data quanto user messages)
 // =============================================================================

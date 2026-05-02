@@ -1,0 +1,91 @@
+%% Flowchart — Admin batch upload de curso completo via CSV manifest + arquivos
+%% Spec: Docs/specs/biblioteca-spec-1.md RF-11
+%% Ref: ADR-071 (mediaStorage), ADR-072 (Mux upload), ADR-076 (HTML sanitize)
+%%
+%% Founder sobe 1 curso (Curso 00 - Antes das Cartas) em uma chamada:
+%% manifest.csv (rows: course / module / lesson) + files[] (HTML + M4A + capas + opcional MP4)
+
+flowchart TD
+    Start(["POST /api/admin/library/import-manifest<br/>multipart/form-data:<br/>- manifest: File CSV<br/>- files[]: HTML/M4A/JPG/MP4"])
+
+    Start --> AuthCheck{"Auth<br/>requireAuth +<br/>requirePermission(admin_full)"}
+    AuthCheck -- "fail" --> Resp403["403 Forbidden"]
+    AuthCheck -- "ok" --> CapCheck{"Cap check<br/>payload <= 50MB?<br/>rows <= 100?"}
+
+    CapCheck -- "exceeds" --> Resp413["413 Payload Too Large"]
+    CapCheck -- "ok" --> ParseCSV["Parse CSV manifest<br/>(papaparse)"]
+
+    ParseCSV --> CSVValid{"CSV valido?<br/>headers + tipos esperados"}
+    CSVValid -- "no" --> Resp400["400 {message: 'csv_malformed'}"]
+    CSVValid -- "yes" --> InitErrors["errors[] = []<br/>created = {courses:0, modules:0, lessons:0}"]
+
+    InitErrors --> RowLoop{"Para cada row do CSV"}
+
+    RowLoop -- "type=course" --> UpsertCourse["library_courses upsert<br/>por slug<br/>(coverFilename → mediaStorage.put scope=library/covers)"]
+    UpsertCourse --> RowLoop
+
+    RowLoop -- "type=module" --> UpsertModule["library_modules upsert<br/>composite (courseId, slug)<br/>(coverFilename → mediaStorage.put)"]
+    UpsertModule --> RowLoop
+
+    RowLoop -- "type=lesson" --> ValidateCat{"categoryId valido?<br/>(enum library-categories)"}
+    ValidateCat -- "no" --> ErrCat["push errors: {row, reason: invalid_category}<br/>SKIP row"]
+    ErrCat --> RowLoop
+    ValidateCat -- "yes" --> ReadHTML{"article_filename<br/>presente?"}
+
+    ReadHTML -- "no" --> SkipHTML["articleHtml = null<br/>articleWordCount = null"]
+    ReadHTML -- "yes" --> FileFound1{"file existe<br/>em files[]?"}
+    FileFound1 -- "no" --> ErrHTML["push errors: {row, reason: html_file_not_found}"]
+    ErrHTML --> ReadAudio
+    FileFound1 -- "yes" --> Sanitize["isomorphic-dompurify<br/>sanitizeArticleHtml(rawHtml)<br/>(ADR-076)"]
+    Sanitize --> SanitizeOk{"clean !== ''?"}
+    SanitizeOk -- "no" --> ErrSan["push errors: {row, reason: html_invalid}<br/>articleHtml = null"]
+    ErrSan --> ReadAudio
+    SanitizeOk -- "yes" --> AudioReady["articleHtml = clean<br/>articleWordCount = countWords(clean)"]
+    AudioReady --> ReadAudio
+    SkipHTML --> ReadAudio
+
+    ReadAudio{"audio_filename<br/>presente?"}
+    ReadAudio -- "no" --> SkipAudio["audioKey = null<br/>audioDurationSeconds = null"]
+    ReadAudio -- "yes" --> FileFound2{"file existe<br/>em files[]?"}
+    FileFound2 -- "no" --> ErrAudio["push errors: {row, reason: audio_file_not_found}"]
+    ErrAudio --> ReadVideo
+    FileFound2 -- "yes" --> StoreAudio["mediaStorage.put({<br/>scope: 'library/audio',<br/>userId: undefined, // global<br/>ext: 'm4a',<br/>buffer, mime: 'audio/mp4'<br/>}) → key (ADR-071)"]
+    StoreAudio --> ParseDur["music-metadata.parseBuffer<br/>→ audioDurationSeconds"]
+    ParseDur --> AudioStored["audioKey = key<br/>audioMimeType = 'audio/mp4'"]
+    AudioStored --> ReadVideo
+    SkipAudio --> ReadVideo
+
+    ReadVideo{"video_filename<br/>presente?"}
+    ReadVideo -- "no" --> SkipVideo["videoMuxAssetId = null<br/>videoMuxPlaybackId = null<br/>videoDurationSeconds = null"]
+    ReadVideo -- "yes" --> MuxReady{"Mux env vars<br/>configurados?"}
+    MuxReady -- "no" --> ErrMux1["push errors: {row, reason: mux_not_configured}<br/>videoFields = null"]
+    ErrMux1 --> ReadCover
+    MuxReady -- "yes" --> MuxUpload["muxProvider.uploadAsset({<br/>fileBuffer, mimeType<br/>}) → {assetId, playbackId} (ADR-072)"]
+    MuxUpload --> MuxOk{"upload sucesso?"}
+    MuxOk -- "no" --> ErrMux2["push errors: {row, reason: mux_upload_failed}<br/>marcar isPublished=false"]
+    ErrMux2 --> ReadCover
+    MuxOk -- "yes" --> MuxPoll["polling Mux assetReady<br/>timeout 60s"]
+    MuxPoll --> MuxReady2{"asset ready?"}
+    MuxReady2 -- "no" --> MuxPending["videoDurationSeconds = null<br/>isPublished = false<br/>(founder rerun depois)"]
+    MuxPending --> ReadCover
+    MuxReady2 -- "yes" --> VideoStored["videoMuxAssetId = assetId<br/>videoMuxPlaybackId = playbackId<br/>videoDurationSeconds = duration"]
+    VideoStored --> ReadCover
+    SkipVideo --> ReadCover
+
+    ReadCover["cover_filename →<br/>mediaStorage.put({<br/>scope: 'library/covers',<br/>ext: 'jpg/png/webp'<br/>}) → coverKey"]
+    ReadCover --> InsertLesson["library_lessons upsert<br/>composite (courseId, slug)<br/>+ tags parsed (split ',')<br/>isPublished = false (default)"]
+    InsertLesson --> RowLoop
+
+    RowLoop -- "loop done" --> Response["200 {<br/>courseId,<br/>modulesCreated,<br/>lessonsCreated,<br/>errors: [...]<br/>}"]
+
+    Response --> End(["End — founder rerun com diff CSV<br/>se errors[] nao vazio (idempotente via upsert)"])
+
+    classDef errNode fill:#fee2e2,stroke:#ef4444
+    classDef successNode fill:#d1fae5,stroke:#10b981
+    classDef decisionNode fill:#fef3c7,stroke:#f59e0b
+    classDef storeNode fill:#dbeafe,stroke:#3b82f6
+
+    class Resp403,Resp413,Resp400,ErrCat,ErrHTML,ErrSan,ErrAudio,ErrMux1,ErrMux2 errNode
+    class Response,End successNode
+    class AuthCheck,CapCheck,CSVValid,RowLoop,ValidateCat,ReadHTML,FileFound1,SanitizeOk,ReadAudio,FileFound2,ReadVideo,MuxReady,MuxOk,MuxReady2 decisionNode
+    class UpsertCourse,UpsertModule,Sanitize,StoreAudio,ParseDur,MuxUpload,MuxPoll,ReadCover,InsertLesson storeNode

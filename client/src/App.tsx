@@ -14,6 +14,8 @@ import MiniChat from "@/components/MiniChat";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { NotificationModals } from "@/components/NotificationModals";
 import Sidebar from "@/components/Sidebar";
+import { AudioPlayerProvider } from "@/contexts/AudioPlayerContext";
+import { StickyAudioBar } from "@/components/biblioteca/StickyAudioBar";
 
 // Lazy-loaded pages for code splitting
 const Landing = lazy(() => import("@/pages/Landing"));
@@ -47,6 +49,10 @@ const Calculadoras = lazy(() => import("@/pages/Calculadoras"));
 const CalculadoraPopup = lazy(() => import("@/pages/CalculadoraPopup"));
 const CoachAI = lazy(() => import("@/pages/CoachAI"));
 const Bankroll = lazy(() => import("@/pages/Bankroll"));
+// Sprint Biblioteca-1 RF-12 — pagina /biblioteca + viewer + detalhe (F2)
+const BibliotecaPage = lazy(() => import("@/pages/biblioteca/BibliotecaPage").then(m => ({ default: m.BibliotecaPage })));
+const LessonViewerPage: any = lazy(() => import("@/pages/biblioteca/LessonViewer").then(m => ({ default: m.LessonViewer as any })));
+const CourseDetailPage: any = lazy(() => import("@/pages/biblioteca/CourseDetailPage").then(m => ({ default: m.CourseDetailPage as any })));
 
 function PageLoader() {
   return (
@@ -120,6 +126,25 @@ function Router() {
                   <Route path="/subscription-demo" component={() => (<ProtectedRoute><SubscriptionDemo /></ProtectedRoute>)} />
                   <Route path="/coach-ai" component={() => (<ProtectedRoute><CoachAI /></ProtectedRoute>)} />
                   <Route path="/bankroll" component={() => (<ProtectedRoute><Bankroll /></ProtectedRoute>)} />
+                  {/* Sprint Biblioteca-1 RF-07 + RF-08 + RF-12 (D2) + F2 drill-down */}
+                  <Route path="/biblioteca" component={() => (<ProtectedRoute><BibliotecaPage /></ProtectedRoute>)} />
+                  <Route path="/biblioteca/curso/:courseSlug">
+                    {(params: any) => (
+                      <ProtectedRoute>
+                        <CourseDetailPage courseSlug={params.courseSlug} />
+                      </ProtectedRoute>
+                    )}
+                  </Route>
+                  <Route path="/biblioteca/curso/:courseSlug/:lessonSlug">
+                    {(params: any) => (
+                      <ProtectedRoute>
+                        <LessonViewerPage
+                          courseSlug={params.courseSlug}
+                          lessonSlug={params.lessonSlug}
+                        />
+                      </ProtectedRoute>
+                    )}
+                  </Route>
                   <Route component={NotFound} />
                 </Switch>
               </Suspense>
@@ -138,8 +163,11 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>
-            <Toaster />
-            <Router />
+            <AudioPlayerProvider>
+              <Toaster />
+              <Router />
+              <StickyAudioBar />
+            </AudioPlayerProvider>
           </TooltipProvider>
         </AuthProvider>
       </QueryClientProvider>

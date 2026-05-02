@@ -35,6 +35,7 @@ import { registerStarredHandsRoutes } from "./starred-hands";
 import { registerStudyRecommendationsRoutes } from "./study-recommendations";
 import { registerStudyThemeSpotLinkRoutes } from "./study-theme-spot-links";
 import { registerStudyMiscRoutes } from "./study-misc";
+import { registerLibraryRoutes } from "./library-register";
 import { registerAllJobs } from "../jobs";
 import { spotStorage } from "../lib/spotStorage";
 
@@ -155,6 +156,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerStudyRecommendationsRoutes(app);
   registerStudyThemeSpotLinkRoutes(app);
   registerStudyMiscRoutes(app);
+  // Sprint Biblioteca-1 RF-03/04/05/06/11 — endpoints biblioteca + admin
+  registerLibraryRoutes(app);
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);
 

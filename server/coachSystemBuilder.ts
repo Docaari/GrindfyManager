@@ -12,6 +12,7 @@
 
 import {
   SAFETY_RULES,
+  SAFETY_RULES_COMPETITOR_BLOCK,
   CONFIDENCE_AND_CITATIONS_BACKTICKED as CITATION_AND_CONFIDENCE_INSTRUCTIONS,
 } from './coachSafetyPrompts';
 
@@ -87,6 +88,9 @@ export function buildStaticSystemBlock(
   const parts: string[] = [];
   parts.push(getBasePrompt(coachType));
   parts.push(SAFETY_RULES);
+  // Sprint Biblioteca-1 / RF-09 (ADR-075): hard-block concorrentes em STATIC
+  // block para preservar cache hit (atualizar lista quebra cache UMA vez).
+  parts.push(SAFETY_RULES_COMPETITOR_BLOCK);
   parts.push(CITATION_AND_CONFIDENCE_INSTRUCTIONS);
 
   if (inputs.aiProfile && String(inputs.aiProfile).trim().length > 0) {
