@@ -6406,22 +6406,28 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .where(eq(users.userPlatformId, userId))
       .limit(1);
 
+    // Heatmap em UTC consistente — date string e comparison usam mesmo fuso.
     const heatmap: Array<{ date: string; active: boolean }> = [];
     const lastActivity = row?.lastActivity ?? null;
-    const lastActiveStart = lastActivity
-      ? new Date(
-          new Date(lastActivity).getFullYear(),
-          new Date(lastActivity).getMonth(),
-          new Date(lastActivity).getDate(),
-        ).getTime()
+    const lastActiveStartUtc = lastActivity
+      ? Date.UTC(
+          new Date(lastActivity).getUTCFullYear(),
+          new Date(lastActivity).getUTCMonth(),
+          new Date(lastActivity).getUTCDate(),
+        )
       : 0;
+    const nowUtc = new Date();
+    const todayStartUtc = Date.UTC(
+      nowUtc.getUTCFullYear(),
+      nowUtc.getUTCMonth(),
+      nowUtc.getUTCDate(),
+    );
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const start = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      const startUtc = todayStartUtc - i * 86400000;
+      const dateStr = new Date(startUtc).toISOString().slice(0, 10);
       heatmap.push({
-        date: d.toISOString().slice(0, 10),
-        active: lastActiveStart >= start && lastActiveStart < start + 86400000,
+        date: dateStr,
+        active: lastActiveStartUtc === startUtc,
       });
     }
 

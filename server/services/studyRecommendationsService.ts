@@ -77,8 +77,12 @@ function scoreStaleSpot(spot: {
 function scoreDormantTheme(theme: {
   progress?: number | null;
   lastVisitedAt?: Date | string | null;
+  updatedAt?: Date | string | null;
 }): number {
-  const dormancy = Math.min(30, ageInDays(theme.lastVisitedAt));
+  // lastVisitedAt nao existe ainda no schema studyThemes; usa updatedAt como
+  // proxy de "ultima atividade" ate migration adicionar a coluna dedicada.
+  const reference = theme.lastVisitedAt ?? theme.updatedAt ?? null;
+  const dormancy = Math.min(30, ageInDays(reference));
   const progressBonus = (theme.progress ?? 0) < 10 ? 1 : 0;
   const raw = dormancy * 0.1 + progressBonus;
   return Math.min(100, Math.round(raw * 2));
@@ -143,7 +147,7 @@ function mapDormantTheme(theme: any): RecommendationItem {
     metadata: {
       theme_id: id,
       theme_progress: theme.progress ?? 0,
-      theme_dormancy_days: ageInDays(theme.lastVisitedAt),
+      theme_dormancy_days: ageInDays(theme.lastVisitedAt ?? theme.updatedAt),
     },
   };
 }
