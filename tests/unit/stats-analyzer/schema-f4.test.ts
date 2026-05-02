@@ -166,7 +166,7 @@ describe("StatField novos campos F4 (target + subGroup)", () => {
   });
 });
 
-describe("Snapshot.values 3 formatos (ADR-058)", () => {
+describe("Snapshot.values 3 formatos (ADR-089)", () => {
   it("V1 number puro continua valido", () => {
     const parsed = insertHudStatSnapshotSchema.parse({
       userId: "USER-0001",

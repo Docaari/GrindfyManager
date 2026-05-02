@@ -198,7 +198,7 @@ export function registerStatsAnalyzerRoutes(app: Express): void {
   });
 
   // ---------------------------------------------------------------------------
-  // Targets (knowledge base, ADR-057)
+  // Targets (knowledge base, ADR-088)
   // ---------------------------------------------------------------------------
 
   app.get("/api/hud-stat-targets", requireAuth, async (req: any, res) => {

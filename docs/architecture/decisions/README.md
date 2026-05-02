@@ -65,6 +65,8 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [054](054-primedope-external-provider-vs-native-engine.md) | PrimeDope como provider externo (interim) vs engine Monte Carlo nativo (Sprint F4) | Aceito | 2026-04-28 |
 | [055](055-tracker-stub-vs-analytics-events-table.md) | `tracker.ts` stub minimo via console.log vs tabela `analytics_events` persistida (Sprint F4) | Aceito | 2026-04-28 |
 | [056](056-onboarding-dismiss-localstorage.md) | Onboarding educativo dismiss via `localStorage` vs coluna `users.preferences` JSONB (Sprint F4) | Aceito | 2026-04-28 |
+| [088](088-hud-stat-targets-knowledge-base.md) | hud_stat_targets knowledge base global + override inline (Sprint F4 stats-analyzer, ex-057) | Aceito | 2026-04-29 |
+| [089](089-hud-snapshot-sample-size-per-stat.md) | sample size per stat em snapshots.values com 3 formatos back-compat (Sprint F4 stats-analyzer, ex-058) | Aceito | 2026-04-29 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 
@@ -89,5 +91,9 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
   051-stats-analyzer e 052-stats-analyzer existem em `feature/stats-analyzer`. ADRs
   054-056 (Sprint F4 PrimeDope) sao independentes e podem coexistir em ambas branches
   sem conflito de numeracao.
+- **Renumeracao 2026-05-02 (orphan-merge):** ADR-057 (hud-stat-targets) renumerado
+  para **088** + ADR-058 (hud-snapshot-sample-size) renumerado para **089** apos
+  merge da branch `feature/stats-analyzer-f4` (numbers 057/058 ja ocupados por
+  spot-image-storage e auto-snapshot-cooldown em main).
 - **Hiato 003 → 007:** ADRs 004-006 reservados/nunca escritos durante consolidacao
   inicial.

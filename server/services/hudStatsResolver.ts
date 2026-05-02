@@ -71,7 +71,7 @@ export function normalizeSnapshotValues(
 }
 
 // -----------------------------------------------------------------------------
-// Target resolver (ADR-057)
+// Target resolver (ADR-088)
 //
 // Precedencia:
 //   1. inline `targetMin/targetMax` em StatField
