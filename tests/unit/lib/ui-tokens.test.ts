@@ -136,9 +136,9 @@ describe('RF-01 — tokens.font (D3)', () => {
 // color (D4 + R8 — objeto {text, bg, border})
 // ============================================================================
 describe('RF-01 — tokens.color (D4 + R8 resolved)', () => {
-  it('tem 6 namespaces semanticos: success, danger, warn, info, action, neutral', () => {
+  it('tem 7 namespaces semanticos: success, danger, warn, info, action, neutral, accent', () => {
     const keys = Object.keys(tokens.color).sort();
-    expect(keys).toEqual(['action', 'danger', 'info', 'neutral', 'success', 'warn']);
+    expect(keys).toEqual(['accent', 'action', 'danger', 'info', 'neutral', 'success', 'warn']);
   });
 
   describe.each([
@@ -148,6 +148,7 @@ describe('RF-01 — tokens.color (D4 + R8 resolved)', () => {
     ['info'],
     ['action'],
     ['neutral'],
+    ['accent'],
   ])('tokens.color.%s', (ns) => {
     it(`expoe estrutura { text, bg, border }`, () => {
       const swatch = (tokens.color as any)[ns];
@@ -330,8 +331,8 @@ describe('RF-01 — tipos exportados (D11)', () => {
     expect(tokens.font[k]).toBe(20);
   });
 
-  it('ColorKey aceita os 6 namespaces semanticos', () => {
-    const keys: ColorKey[] = ['success', 'danger', 'warn', 'info', 'action', 'neutral'];
+  it('ColorKey aceita os 7 namespaces semanticos', () => {
+    const keys: ColorKey[] = ['success', 'danger', 'warn', 'info', 'action', 'neutral', 'accent'];
     for (const k of keys) {
       expect(tokens.color[k]).toBeDefined();
     }

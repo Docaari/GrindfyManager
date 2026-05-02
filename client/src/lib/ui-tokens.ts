@@ -103,6 +103,12 @@ const _color = {
     bg: 'bg-muted',
     border: 'border-border',
   },
+  /** Roxo — categorias/grupos sem mapeamento semantico em success/danger/warn/info. UI-T1-Library RF-13 + ADR-078 amendment. */
+  accent: {
+    text: 'text-purple-300',
+    bg: 'bg-purple-500/15',
+    border: 'border-purple-500/40',
+  },
 } as const;
 
 /**
