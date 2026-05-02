@@ -7,6 +7,7 @@
 // =============================================================================
 
 import React from "react";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface CompareStat {
   id: string;
@@ -97,7 +98,8 @@ export default function HudComparisonView(props: HudComparisonViewProps) {
   return (
     <div className="flex flex-col gap-2 bg-slate-950 p-2">
       {/* Selector duplo */}
-      <div className="flex gap-3 px-3 py-2 bg-slate-900 border-b border-slate-800">
+      {/* [Stats-UX-Polish Item 7] Sticky header. */}
+      <div className="sticky top-0 z-10 flex gap-3 px-3 py-2 bg-slate-900 border-b border-slate-800 shadow-md">
         <label className="flex items-center gap-2 text-xs text-slate-300">
           Antes:
           <select
@@ -155,7 +157,25 @@ export default function HudComparisonView(props: HudComparisonViewProps) {
                       data-testid={`compare-trend-${s.id}`}
                       className="text-right tabular-nums"
                     >
+                      {/* [Stats-UX-Polish Item 8] Mantem emoji (testes esperam textContent)
+                          + adiciona icone Lucide a11y ao lado. */}
                       {s.trendIcon ?? "—"}
+                      {s.status === "improving" ? (
+                        <TrendingUp
+                          className="w-3 h-3 text-emerald-400 inline ml-1"
+                          aria-label="melhorando"
+                        />
+                      ) : s.status === "regressing" ? (
+                        <TrendingDown
+                          className="w-3 h-3 text-red-400 inline ml-1"
+                          aria-label="regredindo"
+                        />
+                      ) : (
+                        <Minus
+                          className="w-3 h-3 text-slate-500 inline ml-1"
+                          aria-label="estavel"
+                        />
+                      )}
                       {s.delta !== null && (
                         <span className="text-slate-400 ml-1">
                           {s.delta > 0 ? `+${s.delta}` : `${s.delta}`}

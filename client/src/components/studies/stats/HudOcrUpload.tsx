@@ -8,6 +8,7 @@ import React from "react";
 import { Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 
 export interface HudOcrUploadProps {
   layoutId: string;
@@ -23,11 +24,29 @@ export default function HudOcrUpload({ layoutId, onExtracted }: HudOcrUploadProp
   const { toast } = useToast();
 
   const handleFileSelect = (selected: File | null) => {
-    setFile(selected);
     if (!selected) {
+      setFile(null);
       setPreview(null);
       return;
     }
+    // [Stats-UX-Polish Item 12] Validacao client-side antes de aceitar arquivo.
+    if (selected.size > 10 * 1024 * 1024) {
+      toast({
+        title: "Imagem grande demais",
+        description: "Maximo 10MB",
+        variant: "destructive" as any,
+      });
+      return;
+    }
+    if (!["image/png", "image/jpeg", "image/webp"].includes(selected.type)) {
+      toast({
+        title: "Formato invalido",
+        description: "Use PNG, JPG ou WebP",
+        variant: "destructive" as any,
+      });
+      return;
+    }
+    setFile(selected);
     // Set placeholder preview imediatamente para que o testid esteja no DOM.
     // Atualizado posteriormente via FileReader (best effort).
     setPreview("data:image/png;base64,");
@@ -76,14 +95,30 @@ export default function HudOcrUpload({ layoutId, onExtracted }: HudOcrUploadProp
       const status = err?.status ?? err?.response?.status;
       const serverMsg = err?.response?.data?.message ?? err?.message;
       console.error("[ocr-upload] failed", { status, serverMsg, err });
-      let msg = serverMsg || "Falha ao extrair OCR. Tente novamente.";
-      if (status === 503) msg = serverMsg || "OCR temporariamente indisponivel.";
-      else if (status === 429) msg = "Limite de OCR atingido. Tente novamente mais tarde.";
-      else if (status === 422) msg = "Imagem invalida ou corrompida.";
+      // [Stats-UX-Polish Item 2] Mensagens didaticas + retry action.
+      let title = status ? `Erro OCR (${status})` : "Erro OCR";
+      let description = serverMsg || "Falha ao extrair OCR. Tente novamente.";
+      if (status === 503) {
+        title = "OCR fora do ar";
+        description =
+          "Servico indisponivel — pode tentar manual ou aguardar.";
+      } else if (status === 422) {
+        title = "Imagem invalida";
+        description =
+          "Verifique se eh PNG/JPG do print HUD do Hand2Note.";
+      } else if (status === 429) {
+        title = "Limite atingido";
+        description = "Tente em 1h ou faca insercao manual.";
+      }
       toast({
-        title: status ? `Erro OCR (${status})` : "Erro OCR",
-        description: msg,
+        title,
+        description,
         variant: "destructive" as any,
+        action: (
+          <ToastAction altText="Tentar novamente" onClick={handleSubmit}>
+            Tentar novamente
+          </ToastAction>
+        ),
       });
     } finally {
       setLoading(false);

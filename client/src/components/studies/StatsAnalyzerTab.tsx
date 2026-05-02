@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { Plus, BarChart3, Settings, GitCompare, ScanLine, ListOrdered } from "lucide-react";
 import StatsSnapshotEditor, {
   type HudLayout,
@@ -52,13 +53,62 @@ export default function StatsAnalyzerTab() {
   const [comparatorOpen, setComparatorOpen] = useState(false);
   const [compareSelection, setCompareSelection] = useState<string[]>([]);
   const [filterLayoutId, setFilterLayoutId] = useState<string>("__all__");
-  const [view, setView] = useState<ViewMode>("grouped");
-  const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<HudFiltersState>({
-    searchQuery: "",
-    activeGroups: new Set<HudGroupId>(HUD_GROUP_IDS),
-    preset: null,
+  // [Stats-UX-Polish Item 11] Persistir view tab em localStorage.
+  const [view, setView] = useState<ViewMode>(() => {
+    try {
+      const v = localStorage.getItem("stats-v3-view");
+      return v === "grouped" || v === "ocr" || v === "compare" || v === "list"
+        ? (v as ViewMode)
+        : "grouped";
+    } catch {
+      return "grouped";
+    }
   });
+  useEffect(() => {
+    try {
+      localStorage.setItem("stats-v3-view", view);
+    } catch {
+      /* best-effort */
+    }
+  }, [view]);
+  const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null);
+  // [Stats-UX-Polish Item 6] Persistir filters em localStorage.
+  const [filters, setFilters] = useState<HudFiltersState>(() => {
+    try {
+      const raw = localStorage.getItem("stats-v3-filters");
+      if (raw) {
+        const p = JSON.parse(raw);
+        return {
+          searchQuery: typeof p.searchQuery === "string" ? p.searchQuery : "",
+          activeGroups: new Set(
+            Array.isArray(p.activeGroups) ? p.activeGroups : HUD_GROUP_IDS,
+          ) as Set<HudGroupId>,
+          preset: typeof p.preset === "string" ? p.preset : null,
+        };
+      }
+    } catch {
+      /* fall through to default */
+    }
+    return {
+      searchQuery: "",
+      activeGroups: new Set<HudGroupId>(HUD_GROUP_IDS),
+      preset: null,
+    };
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "stats-v3-filters",
+        JSON.stringify({
+          searchQuery: filters.searchQuery,
+          activeGroups: Array.from(filters.activeGroups),
+          preset: filters.preset,
+        }),
+      );
+    } catch {
+      /* best-effort */
+    }
+  }, [filters]);
 
   const [extraction, setExtraction] = useState<ExtractionPayload | null>(null);
   const [customStatOpen, setCustomStatOpen] = useState(false);
@@ -191,6 +241,15 @@ export default function StatsAnalyzerTab() {
           <h2 className="text-xl font-semibold text-white flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-poker-accent" />
             Stats Analyzer
+            {/* [Stats-UX-Polish Item 13] Badge com nome do layout ativo. */}
+            {activeLayout && (
+              <Badge
+                variant="outline"
+                className="ml-2 text-xs text-slate-400 border-slate-600"
+              >
+                {activeLayout.name}
+              </Badge>
+            )}
           </h2>
           <p className="text-sm text-gray-400 mt-1">
             Registre stats HUD do seu tracker e compare evolucao.
