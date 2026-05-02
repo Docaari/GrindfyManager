@@ -48,7 +48,8 @@ export interface StatField {
 }
 
 // Ordem dos grupos preservada em iteracao por payload V2 (ADR-062).
-export const HUD_GROUP_IDS: HudGroupId[] = [
+// V3.5: `as const` para enable Zod enum validation (readonly tuple).
+export const HUD_GROUP_IDS = [
   "basics",
   "rfi",
   "threebet",
@@ -65,7 +66,7 @@ export const HUD_GROUP_IDS: HudGroupId[] = [
   "blind_war_bb",
   "threebet_pot_ip",
   "threebet_pot_oop_vs_lp",
-];
+] as const satisfies readonly HudGroupId[];
 
 // Labels PT-BR por grupo (RF-02).
 export const HUD_GROUP_LABELS: Record<HudGroupId, string> = {

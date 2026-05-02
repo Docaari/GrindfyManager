@@ -42,6 +42,8 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [059](059-cross-wallet-transfer.md) | Cross-wallet transfer via tabela `wallet_transfers` + 2 rows espelho em `wallet_transactions` agrupados via transfer_group_id (Bankroll-3 RF-4) | Proposto | 2026-05-01 |
 | [060](060-stop-loss-lock.md) | Stop-loss/stop-win em USD consolidado, lock via `stop_lock_until` em `user_settings` (Bankroll-3 RF-6) | Proposto | 2026-05-01 |
 | [061](061-fx-resolver-unified.md) | `fxResolver` unificado com cascata users > wallets > constants + cache 5min (Bankroll-3 RF-11; RF-12 skip documentado) | Proposto | 2026-05-01 |
+| [065](065-ocr-via-claude-vision.md) | OCR via Claude/Gemini Vision + cache SHA256 (Stats-V3 RF-08..RF-12) | Aceito | 2026-05-01 |
+| [067](067-section-aware-ocr-mapping.md) | Section-aware OCR mapping com SECTION_ALIASES (Stats-V3.5; estende ADR-065) | Aceito | 2026-05-01 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 
