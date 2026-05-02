@@ -14,6 +14,26 @@ Catalogo cronologico de erros recorrentes que a IA cometeu durante implementacao
 <a name="testing"></a>
 ## Testing
 
+### 2026-05-02 — Empty-state com testid alternativo evita conflito com selector "starts-with" do test existente (Sprint Biblioteca UX Round 2)
+**Contexto:** CoachLessonRecommendationCard inicialmente retornava `null` em `lessons=[]` (UX ruim). Test existente assertava `container.querySelector('[data-testid^="coach-lesson-recommendation-card-"]')` retorna `null`. Round 2 quis adicionar mensagem "Nenhuma aula relevante encontrada" sem quebrar esse teste.
+**Erro:** Tentar reusar o mesmo prefix de testid (`coach-lesson-recommendation-card-empty`) faria o selector matchar e quebrar o teste.
+**Correto:** Usar prefix DIFERENTE para o empty-state (`coach-lesson-recommendation-empty` em vez de `coach-lesson-recommendation-card-empty`). O selector `[data-testid^="coach-lesson-recommendation-card-"]` (note trailing dash) nao matcha. Adicionar test novo cobrindo o empty-state explicitamente. Permite implementar UX correto + manter teste legado verde.
+
+### 2026-05-01 — Wouter v3 Link mistura padrao v2 (`<Link><a/></Link>`) e v3 (`<Link href data-testid/>`) -- mock simplificado quebra (Sprint Biblioteca UX Round)
+**Contexto:** UX Round Implementer wrappou CourseDetailPage's "Voltar" em `<Link href><a data-testid>...</a></Link>` (padrao wouter v2). Wouter v3 trata `Link` como elemento `<a>` direto, entao no DOM real existe `<a><a/></a>` e o testid fica no anchor INTERNO (sem href). Test que mocka wouter como `Link: ({href, children, ...rest}) => <a href={href} {...rest}>{children}</a>` espelha v3: o testid passa pra `rest` MAS o `href` fica no wrapper externo, dependendo do shape.
+**Erro:** O test assertava `getByTestId(...).getAttribute('href') === '/biblioteca'` e recebia null porque o `<a data-testid>` estava aninhado dentro de `<a href>` -- o testid achava o anchor SEM href.
+**Correto:** Usar wouter v3 idiom em codigo novo: `<Link href="/x" data-testid="..." className="..."> Texto </Link>` (Link gera o `<a>`). Nunca aninhar `<a>` dentro de `<Link>`. Para componentes legados que ja usam `<Link><a/></Link>`, deixar como esta -- migrar quando o teste falhar.
+
+### 2026-05-01 — Radix Tooltip exige TooltipProvider ancestral; render isolado quebra com "must be used within TooltipProvider" (Sprint Biblioteca UX Round)
+**Contexto:** CourseCard ganhou tooltip explicando "Liberacao manual durante alpha". BibliotecaPage.test.tsx renderiza sem TooltipProvider, quebrando ao montar o card.
+**Erro:** Componentes que devem ser renderizaveis em isolamento (cards, badges, items de lista) nao podem assumir TooltipProvider ancestral. App.tsx tem provider global, mas tests focados em um componente nao reproduzem essa arvore.
+**Correto:** Embrulhar Tooltip + TooltipTrigger + TooltipContent em um TooltipProvider local DENTRO do componente: `<TooltipProvider><Tooltip>...</Tooltip></TooltipProvider>`. Isso e idempotente -- providers aninhados nao quebram. Resolve ambos casos: testes isolados e producao.
+
+### 2026-05-01 — useAudioPlayer() throwing exclui componente de tests sem provider; criar useOptionalAudioPlayer() para fallback (Sprint Biblioteca UX Round)
+**Contexto:** PodcastPlayer custom (F10) depende de AudioPlayerContext. LessonViewer.test.tsx renderiza sem provider. Trocar `<audio>` puro por `<PodcastPlayer>` quebrou todos os 8 testes existentes do LessonViewer.
+**Erro:** Hook obrigatorio (`if (!ctx) throw`) impede renderizar o componente em tests/contextos onde o provider nao foi mountado, mesmo quando o codigo de producao SEMPRE mounta.
+**Correto:** Adicionar variant opcional do hook que retorna `null` em vez de throw: `useOptionalAudioPlayer(): AudioPlayerCtx | null = () => useContext(Ctx)`. Componente consumidor faz fallback: `audioCtx ? <CustomPlayer> : <BareAudio>`. Mantem comportamento de producao + tests passam sem AudioPlayerProvider.
+
 ### 2026-04-26 — vi.spyOn(console, 'log') compartilha mock instance entre tests; mock.calls acumula (Sprint Bankroll-3 Rakeback)
 **Contexto:** Test `Bankroll.rakeback-trigger.test.tsx` tem 2 testes que cada um usa `const consoleSpy = vi.spyOn(console, 'log').mockImplementation(...)` e depois `consoleSpy.mock.calls.find(...)` para validar telemetria. Test 2 usa source='page_header' e Test 4 usa source='wallet_menu'. Test 4 falhava com `expected 'wallet_menu', received 'page_header'`.
 **Erro:** Em vitest 4, `vi.spyOn(obj, 'method')` chamado duas vezes no mesmo método retorna o MESMO `MockInstance` — `mock.calls` persiste entre tests. `find()` retorna primeira ocorrencia, que era do Test 2.

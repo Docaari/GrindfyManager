@@ -46,6 +46,12 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [067](067-studies-page-information-architecture.md) | Information Architecture da pagina /estudos: sidebar collapsivel + URL routing sub-paths Wouter (Studies-Reform RF-01) | Proposto | 2026-05-01 |
 | [067-ocr](067-section-aware-ocr-mapping.md) | Section-aware OCR mapping com SECTION_ALIASES (Stats-V3.5; estende ADR-065) — duplicidade numerica historica | Aceito | 2026-05-01 |
 | [068](068-cross-feature-recommendations-engine.md) | Cross-feature recommendations engine: pipeline server-side parallel + priority score formula (Studies-Reform RF-06/RF-07) | Proposto | 2026-05-01 |
+| [071](071-media-storage-backend-generic.md) | Generalizar storage abstraction para `MEDIA_STORAGE_BACKEND` cobrindo audio + image + video (Biblioteca-1 RF-02, refatora ADR-057 com retrocompat) | Proposto | 2026-05-01 |
+| [072](072-mux-video-integration.md) | Adotar Mux para video, signed URLs TTL 4h, watermark CSS overlay (Biblioteca-1 RF-03) | Proposto | 2026-05-01 |
+| [073](073-library-entitlements-model.md) | Entitlements granulares por aula via `user_lesson_access` + source enum (Biblioteca-1 RF-01/RF-04) | Proposto | 2026-05-01 |
+| [074](074-library-progress-cross-format-sync.md) | Sync de progresso cross-format por SEGUNDOS absolutos (nao percentual) (Biblioteca-1 RF-08, D5) | Proposto | 2026-05-01 |
+| [075](075-coach-recommend-lesson-tool.md) | Coach tool `recommend_lesson` + hard-block COMPETITOR_BLOCKLIST no system prompt (Biblioteca-1 RF-09/RF-10) | Proposto | 2026-05-01 |
+| [076](076-library-html-article-sanitization.md) | Sanitizacao server-side de HTML de artigos via DOMPurify, allowlist rigorosa (Biblioteca-1 D10/RF-08/RF-11) | Proposto | 2026-05-01 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 

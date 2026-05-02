@@ -107,6 +107,38 @@ Detalhes: `Docs/api/coach.md`, `Docs/api/coach-tools.md`.
 | `custom_group_templates` | Relacao grupo-template |
 | `coaching_insights` | Insights de coaching |
 
+## Library / LMS (Sprint Biblioteca-1, Migration 0023+)
+
+7 tabelas novas para a Biblioteca embedded (LMS): cursos proprios em 3 formatos sincronizados (video Mux + podcast M4A + artigo HTML), entitlements granulares por aula, eventos + progresso. Categorias hardcoded em `shared/library-categories.ts` (D13) — **NAO** ha tabela `library_categories` no MVP.
+
+| Tabela | Descricao | Campos-chave |
+|--------|-----------|--------------|
+| `library_courses` | Cursos da Biblioteca (Curso 00 - Antes das Cartas, Curso 01 - Anatomia de um Spot) | id, slug (UNIQUE), title, subtitle, description, coverKey, displayOrder, isPublished (default false), createdAt, updatedAt |
+| `library_modules` | Modulos dentro de um curso (Bloco A, Bloco B, Modulo 1...) | id, courseId (FK CASCADE), slug (composite UNIQUE com courseId), title, description, coverKey, displayOrder, createdAt |
+| `library_lessons` | Aulas individuais. Pode ter 1, 2 ou 3 formatos (video/podcast/article) | id, moduleId (FK CASCADE), courseId (FK CASCADE denormalizado), slug (composite UNIQUE com courseId), title, subtitle, categoryId (enum hardcoded D13), tags text[], coverKey, videoMuxAssetId, videoMuxPlaybackId, videoDurationSeconds, audioKey, audioDurationSeconds, audioMimeType (default audio/mp4), articleHtml (ja sanitizado D10/ADR-076), articleWordCount, displayOrder, isPublished (default false), createdAt, updatedAt |
+| `library_lesson_assets` | Assets ligados a aula (capa, imagens inline, anexos). Storage opaca via mediaStorage (ADR-071) | id, lessonId (FK CASCADE), kind (cover/inline_image/attachment), storageKey, mimeType, sizeBytes, createdAt |
+| `user_lesson_access` | **Entitlements granulares por aula** (ADR-073). Composite UNIQUE (userId, lessonId) — re-grant idempotente | id, userId (FK users.userPlatformId CASCADE), lessonId (FK CASCADE), source (enum library_access_source: admin/purchase/bundle/subscription), grantedAt, grantedBy (nullable, userPlatformId do admin), expiresAt (nullable, null = vitalicio) |
+| `library_events` | Telemetria de consumo (view/play/pause/complete/coach_recommend...). Fire-and-forget client (D11) | id, userId (FK CASCADE), lessonId (FK CASCADE), eventType (enum library_event_type), format (enum library_format nullable), positionSeconds, metadata jsonb (default {}), eventTimestamp (server-side D11). Index `(userId, lessonId, eventTimestamp DESC)` |
+| `library_progress` | Ponto de retomada por (user × lesson × format). Composite UNIQUE. Sync por SEGUNDOS absolutos (ADR-074) | id, userId (FK CASCADE), lessonId (FK CASCADE), format (enum library_format), lastPositionSeconds (default 0), totalDurationSeconds (snapshot denormalizado), completedAt (preenchido em 95% — D12), updatedAt |
+
+**Enums novos:**
+- `library_access_source`: `'admin' | 'purchase' | 'bundle' | 'subscription'` — MVP so usa `'admin'`. Spec 4 popula `'purchase'/'bundle'/'subscription'` via Stripe webhook.
+- `library_event_type`: `'view' | 'play' | 'pause' | 'seek' | 'complete' | 'note_create' | 'coach_recommend' | 'access_blocked'`.
+- `library_format`: `'video' | 'podcast' | 'article'`.
+
+**ADRs relevantes Library/LMS:**
+- **ADR-071** (`media-storage-backend-generic`) — refactor de `SPOT_IMAGE_STORAGE_BACKEND` para `MEDIA_STORAGE_BACKEND` generico (audio + image + cover). Wrapper retrocompat preserva spotImageStorage.
+- **ADR-072** (`mux-video-integration`) — Mux como provider de video, signed URLs TTL 4h, watermark CSS overlay com userPlatformId.
+- **ADR-073** (`library-entitlements-model`) — granularidade por AULA (nao por curso/modulo). Permite refund + bundles + subscription sem migration futura.
+- **ADR-074** (`library-progress-cross-format-sync`) — sync por SEGUNDOS absolutos (D5), nao percentual. Fallback "abre no inicio" se exceder duracao destino.
+- **ADR-075** (`coach-recommend-lesson-tool`) — nova tool no Coach + COMPETITOR_BLOCKLIST hard-block via system prompt cacheado.
+- **ADR-076** (`library-html-article-sanitization`) — DOMPurify server-side ANTES de salvar; allowlist rigorosa; img src bloqueado a `/api/library/assets/...`.
+
+**Diagramas Mermaid:** ver `Docs/architecture/diagrams/biblioteca/data-model.mermaid` (ER), `c4-context.mermaid` (containers), `flow-viewer-3-format-sync.mermaid` (RF-08), `flow-coach-recommend-lesson.mermaid` (RF-10), `flow-admin-grant-access.mermaid` (RF-04), `flow-batch-upload-manifest.mermaid` (RF-11), `state-machine-lesson-access.mermaid` (estados).
+
+**Spec:** `Docs/specs/biblioteca-spec-1.md` (1161 linhas, 12 RFs, defaults D1-D15).
+**API docs:** `Docs/api/library.md` (11 endpoints novos).
+
 ## Convencoes
 
 - IDs `varchar` via `nanoid()` — nunca auto-increment.
