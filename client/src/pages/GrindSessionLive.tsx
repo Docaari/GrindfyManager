@@ -1055,8 +1055,8 @@ export default function GrindSessionLive() {
 
     const settings = userAlertSettings as any;
     const alertSettings = {
-      lateRegAlertMinutes: settings?.lateRegAlertMinutes ?? 10,
-      lateRegAlertEnabled: settings?.lateRegAlertEnabled ?? true,
+      lateRegAlertMinutes: settings?.lateRegAlertMinutes ?? 1,
+      lateRegAlertEnabled: settings?.lateRegAlertEnabled ?? false,
       lateRegAlertSound: settings?.lateRegAlertSound ?? true,
     };
 

@@ -713,8 +713,8 @@ export const userSettings = pgTable("user_settings", {
   preferredCurrency: varchar("preferred_currency").default("BRL"),
   darkMode: boolean("dark_mode").default(false),
   exchangeRates: jsonb("exchange_rates").$type<Record<string, number>>().default({}), // e.g. {"CNY": 7.25, "EUR": 0.93}
-  lateRegAlertMinutes: integer("late_reg_alert_minutes").default(10),
-  lateRegAlertEnabled: boolean("late_reg_alert_enabled").default(true),
+  lateRegAlertMinutes: integer("late_reg_alert_minutes").default(1),
+  lateRegAlertEnabled: boolean("late_reg_alert_enabled").default(false),
   lateRegAlertSound: boolean("late_reg_alert_sound").default(true),
   gradeStartHour: integer("grade_start_hour").default(12),
   gradeEndHour: integer("grade_end_hour").default(3),

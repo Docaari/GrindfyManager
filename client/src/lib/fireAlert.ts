@@ -7,7 +7,7 @@
  *  - prefers-reduced-data forca beep.
  */
 
-import { enqueue } from './tts/narrationQueue';
+import { enqueue, stopAlertById } from './tts/narrationQueue';
 import { pickVoice } from './ttsVoices';
 import { generateClientId } from '@shared/ids';
 
@@ -33,6 +33,7 @@ interface FireAlertOptions {
     description: string;
     variant?: 'default' | 'destructive' | null;
     duration?: number;
+    onOpenChange?: (open: boolean) => void;
   }) => void;
 }
 
@@ -83,12 +84,21 @@ function playBeep() {
   }
 }
 
-function fireToast(toast: FireAlertOptions['toast'], title: string, description: string, duration: number) {
+function fireToast(
+  toast: FireAlertOptions['toast'],
+  title: string,
+  description: string,
+  duration: number,
+  alertId: string,
+) {
   toast({
     title,
     description,
     variant: 'destructive',
     duration,
+    onOpenChange: (open) => {
+      if (!open) stopAlertById(alertId);
+    },
   });
 }
 
@@ -127,8 +137,11 @@ export function fireAlert(opts: FireAlertOptions): void {
   // Backward compat: se soundEnabled passado e soundMode ausente, infere.
   let soundMode: SoundMode = soundModeRaw ?? (soundEnabled === false ? 'mute' : 'beep');
 
-  // Layer 1: Toast — sempre dispara.
-  fireToast(toast, title, description, duration);
+  // alertId compartilhado entre toast (onOpenChange -> stopAlertById) e enqueue.
+  const alertId = providedAlertId ?? generateClientId('alert');
+
+  // Layer 1: Toast — sempre dispara. Fechar toast = parar TTS associado.
+  fireToast(toast, title, description, duration, alertId);
 
   // Layer 2: Sound.
   if (soundMode === 'mute') {
@@ -140,7 +153,7 @@ export function fireAlert(opts: FireAlertOptions): void {
       playBeep();
     } else {
       enqueue({
-        alertId: providedAlertId ?? generateClientId('alert'),
+        alertId,
         priority,
         text: narrationText ?? description,
         voice: pickVoice(voiceURI ?? null, voices),
