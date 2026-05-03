@@ -19,7 +19,7 @@
 // =============================================================================
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Headphones, PlayCircle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
@@ -28,8 +28,12 @@ import MuxPlayerRaw from "@mux/mux-player-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOptionalAudioPlayer } from "@/contexts/AudioPlayerContext";
 import { PodcastPlayer } from "@/components/biblioteca/PodcastPlayer";
-// Sprint Biblioteca-2 / RF-06 + RF-07: artigo via iframe sandbox + watermark overlay.
 import { ArticleIframeWithWatermark } from "@/components/biblioteca/ArticleIframeWithWatermark";
+import {
+  readVideoSpeed,
+  writeVideoSpeed,
+} from "@/lib/library-video-speed-storage";
+import { NextLessonCTA } from "@/components/biblioteca/NextLessonCTA";
 
 // MuxPlayer module shape varies (default export vs namespace). Resolve once.
 const MuxPlayer = (MuxPlayerRaw as any)?.default ?? MuxPlayerRaw;
@@ -211,8 +215,9 @@ export function LessonViewer({
   const [articleFontSize, setArticleFontSize] = useState<ArticleFontSize>(
     () => readStoredFontSize(),
   );
-  // Sprint Bloco-A-Polish / RF-07 + D4: trava re-fire do toast "Proxima aula".
-  const nextLessonToastFiredRef = useRef(false);
+  const nextLessonCtaShownRef = useRef(false);
+  const [showNextLessonCta, setShowNextLessonCta] = useState<boolean>(false);
+  const [, setLocation] = useLocation();
 
   const lesson = lessonQuery.data;
   const progress = progressQuery.data ?? {};
@@ -341,22 +346,14 @@ export function LessonViewer({
     return next ?? null;
   }, [courseQuery.data, lesson]);
 
-  // Sprint Bloco-A-Polish / RF-07 + D4: dispara toast "Proxima aula" UMA vez
-  // por mount quando maxProgressPct cruza 90 e existe proxima aula.
   useEffect(() => {
-    if (nextLessonToastFiredRef.current) return;
+    if (nextLessonCtaShownRef.current) return;
     if (maxProgressPct < 90) return;
     if (!nextLessonRef) return;
     if (!lesson) return;
-    nextLessonToastFiredRef.current = true;
-    const nextLabel = nextLessonRef.displayLabel ?? "";
-    const nextTitle = nextLessonRef.title;
-    toast({
-      title: `Proxima aula: ${nextLabel} - ${nextTitle}`,
-      description: "Continue de onde voce parou.",
-      duration: 8000,
-    });
-  }, [maxProgressPct, nextLessonRef, lesson, toast]);
+    nextLessonCtaShownRef.current = true;
+    setShowNextLessonCta(true);
+  }, [maxProgressPct, nextLessonRef, lesson]);
 
   // F4: when user switches tab and there's progress carried from another
   // format, surface a toast "Continuando de MM:SS" with a "Voltar ao inicio"
@@ -771,7 +768,9 @@ export function LessonViewer({
       <div className="space-y-1">
         <p
           data-testid="lesson-progress-label"
-          className="text-xs text-gray-400 flex items-center justify-between"
+          className={`text-xs flex items-center justify-between transition-colors duration-300 ${progressLabelColorClass(
+            maxProgressPct,
+          )}`}
         >
           <span>
             Progresso da aula: {maxProgressPct}%
@@ -779,6 +778,22 @@ export function LessonViewer({
               <span className="text-gray-500">
                 {" "}
                 (do {FORMAT_LABELS[maxProgressFormat]})
+              </span>
+            )}
+            {maxProgressPct >= 90 && maxProgressPct < 100 && (
+              <span
+                data-testid="lesson-progress-badge-almost"
+                className="ml-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-500/20 text-green-300 border border-green-500/40"
+              >
+                Quase la
+              </span>
+            )}
+            {maxProgressPct === 100 && (
+              <span
+                data-testid="lesson-progress-badge-completed"
+                className="ml-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-500/30 text-green-200 border border-green-400/60"
+              >
+                Concluida
               </span>
             )}
           </span>
@@ -792,22 +807,66 @@ export function LessonViewer({
           className="w-full h-2 bg-gray-800 rounded-full overflow-hidden"
         >
           <div
-            className="h-full bg-green-500 transition-all"
+            className={`h-full transition-all ${
+              maxProgressPct === 100 ? "bg-green-400" : "bg-green-500"
+            }`}
             style={{ width: `${maxProgressPct}%` }}
           />
         </div>
       </div>
+
+      {showNextLessonCta && nextLessonRef && (
+        <NextLessonCTA
+          nextLesson={{
+            id: nextLessonRef.id,
+            displayLabel: nextLessonRef.displayLabel ?? undefined,
+            title: nextLessonRef.title,
+          }}
+          onGo={() => {
+            setLocation(
+              `/biblioteca/curso/${courseSlug}/${nextLessonRef.slug}`,
+            );
+          }}
+          onCancel={() => {}}
+        />
+      )}
       </div>
     </div>
   );
 }
 
+function progressLabelColorClass(pct: number): string {
+  if (pct >= 100) return "text-green-300 font-semibold";
+  if (pct >= 90) return "text-green-300";
+  if (pct >= 50) return "text-green-400";
+  return "text-gray-400";
+}
+
+const VIDEO_PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
+
 function VideoPanel({ playbackId }: { playbackId: string }) {
+  const initialSpeed = useMemo(() => readVideoSpeed(), []);
   if (!MuxPlayer) {
     return <div data-testid="mux-player-fallback">Player indisponivel</div>;
   }
   const Cmp = MuxPlayer as any;
-  return <Cmp playbackId={playbackId} />;
+  function handleRateChange(ev: any) {
+    const target = ev?.target ?? ev?.detail;
+    const rate =
+      target?.playbackRate ??
+      (typeof ev?.detail === "number" ? ev.detail : undefined);
+    if (typeof rate === "number") {
+      writeVideoSpeed(rate);
+    }
+  }
+  return (
+    <Cmp
+      playbackId={playbackId}
+      playbackRates={VIDEO_PLAYBACK_RATES}
+      defaultPlaybackRate={initialSpeed}
+      onRateChange={handleRateChange}
+    />
+  );
 }
 
 export default LessonViewer;

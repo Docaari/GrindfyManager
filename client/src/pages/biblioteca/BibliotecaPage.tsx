@@ -1,20 +1,11 @@
-// =============================================================================
-// BibliotecaPage - Sprint Biblioteca-1 / RF-07 + UX Round Implementer.
-//
-// Pagina raiz `/biblioteca`. Hero + grid de cursos via CourseCard.
-//
-// UX Round Implementer:
-//   F5  - empty state rico (gradient + categorias + "avise-me")
-//   F11 - banner alpha sticky com link "Pedir liberacao"
-//   F13 - grid 5 colunas no xl viewport
-// =============================================================================
-
-import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GraduationCap, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { CourseCard } from "@/components/biblioteca/CourseCard";
+import { AccessRequestDialog } from "@/components/biblioteca/AccessRequestDialog";
 import { LIBRARY_CATEGORIES } from "@shared/library-categories";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface CourseListItem {
   id: string;
@@ -28,6 +19,16 @@ interface CourseListItem {
   totalDurationMinutes?: number;
   primaryCategory?: string | null;
 }
+
+interface AccessRequestMe {
+  id: string;
+  status: "pending" | "approved" | "denied";
+  createdAt: string;
+  name?: string;
+  reason?: string;
+}
+
+const ACCESS_REQUEST_QUERY_KEY = ["library-access-request-me"] as const;
 
 const ALPHA_BANNER_KEY = "library:alpha:dismissed";
 const NOTIFY_KEY = "library:notify:requested";
@@ -65,7 +66,8 @@ function writeNotifyRequested(): void {
 }
 
 export function BibliotecaPage() {
-  // Hooks first (lesson #1).
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery<CourseListItem[]>({
     queryKey: ["library-courses"],
     queryFn: async () => {
@@ -75,10 +77,44 @@ export function BibliotecaPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const accessRequestQuery = useQuery<AccessRequestMe | null>({
+    queryKey: ACCESS_REQUEST_QUERY_KEY,
+    queryFn: async () => {
+      return await apiRequest("GET", "/api/library/access-requests/me");
+    },
+    retry: false,
+    staleTime: 60 * 1000,
+  });
+
   const [bannerDismissed, setBannerDismissed] = useState<boolean>(readDismissed);
   const [notifyRequested, setNotifyRequested] = useState<boolean>(
     readNotifyRequested,
   );
+  const [accessRequestDialogOpen, setAccessRequestDialogOpen] =
+    useState<boolean>(false);
+
+  const dialogUser = useMemo(() => {
+    if (!user) return null;
+    return {
+      id: user.id,
+      userPlatformId: user.userPlatformId,
+      email: user.email ?? undefined,
+      username: user.username ?? undefined,
+      name: user.name ?? undefined,
+      firstName: user.firstName ?? undefined,
+      lastName: user.lastName ?? undefined,
+      subscriptionPlan: user.subscriptionPlan ?? "trial",
+    };
+  }, [
+    user?.id,
+    user?.userPlatformId,
+    user?.email,
+    user?.username,
+    user?.name,
+    user?.firstName,
+    user?.lastName,
+    user?.subscriptionPlan,
+  ]);
 
   function handleDismissBanner() {
     writeDismissed();
@@ -88,8 +124,6 @@ export function BibliotecaPage() {
   function handleNotifyClick() {
     writeNotifyRequested();
     setNotifyRequested(true);
-    // Fire-and-forget: register intent. Endpoint may not exist yet; ignore
-    // failure - localStorage flag preserves the user's intent.
     apiRequest(
       "POST",
       "/api/library/events",
@@ -99,12 +133,33 @@ export function BibliotecaPage() {
         metadata: { intent: "notify_when_published" },
       },
       { silentMode: true },
-    ).catch(() => {});
+    ).catch((err) => {
+      console.warn("[notify-click] telemetry failed", err);
+    });
+  }
+
+  const accessRequestStatus = accessRequestQuery.data?.status ?? null;
+  const isPending = accessRequestStatus === "pending";
+
+  function handleOpenAccessRequest() {
+    if (isPending) return;
+    setAccessRequestDialogOpen(true);
+  }
+
+  function handleAccessRequestSubmitted(result: {
+    id: string;
+    status: string;
+    createdAt: string;
+  }) {
+    queryClient.setQueryData<AccessRequestMe>(ACCESS_REQUEST_QUERY_KEY, {
+      id: result.id,
+      status: "pending",
+      createdAt: result.createdAt,
+    });
   }
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      {/* F11: alpha banner */}
       {!bannerDismissed && (
         <div
           data-testid="library-alpha-banner"
@@ -112,13 +167,19 @@ export function BibliotecaPage() {
         >
           <p className="text-sm text-amber-200">
             Estamos em alpha. Acesso liberado manualmente.{" "}
-            <a
-              href="mailto:suporte@grindfy.com?subject=Liberar%20acesso%20Biblioteca"
+            <button
+              type="button"
               data-testid="library-alpha-banner-cta"
-              className="underline hover:text-amber-100 font-medium"
+              onClick={handleOpenAccessRequest}
+              disabled={isPending}
+              className={`underline font-medium ${
+                isPending
+                  ? "text-amber-300/70 cursor-not-allowed"
+                  : "hover:text-amber-100"
+              }`}
             >
-              Pedir liberacao
-            </a>
+              {isPending ? "Pedido em analise" : "Pedir liberacao"}
+            </button>
           </p>
           <button
             type="button"
@@ -130,6 +191,15 @@ export function BibliotecaPage() {
             <X size={18} />
           </button>
         </div>
+      )}
+
+      {dialogUser && (
+        <AccessRequestDialog
+          open={accessRequestDialogOpen}
+          onOpenChange={setAccessRequestDialogOpen}
+          user={dialogUser}
+          onSubmitted={handleAccessRequestSubmitted}
+        />
       )}
 
       <header className="mb-6">

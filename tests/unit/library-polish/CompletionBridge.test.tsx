@@ -60,9 +60,12 @@ vi.mock('@/lib/queryClient', () => ({
   queryClient: { invalidateQueries: vi.fn() },
 }));
 
+// Sprint UX-Biblioteca-1 / RF-05B: LessonViewer agora usa useLocation pra
+// auto-nav do NextLessonCTA. Adicionamos mock no-op aqui.
 vi.mock('wouter', () => ({
   Link: ({ href, children, ...rest }: any) =>
     React.createElement('a', { href, ...rest }, children),
+  useLocation: () => ['/biblioteca/curso/x/y', vi.fn()],
 }));
 
 // Mock useToast pra capturar chamadas.
@@ -254,10 +257,12 @@ describe('<LessonViewer> badge "Concluida" (RF-07 + D5)', () => {
 });
 
 // =============================================================================
-// Toast "Proxima aula" — RF-07 + D4
+// Sprint UX-Biblioteca-1 / RF-05B — toast "Proxima aula" REMOVIDO. Substituido
+// por <NextLessonCTA> inline. Testes invertidos: toast NAO disparado + CTA
+// inline presente quando aplicavel.
 // =============================================================================
-describe('<LessonViewer> toast "Proxima aula" (RF-07 + D4)', () => {
-  it('deve disparar toast quando maxProgressPct >= 90 e existe proxima aula', async () => {
+describe('<LessonViewer> RF-05B — toast "Proxima aula" removido (inline CTA)', () => {
+  it('NAO deve disparar toast "Proxima aula" quando maxProgressPct >= 90', async () => {
     apiRequestMock.mockImplementation(async (method: string, url: string) => {
       if (method === 'GET' && url.includes('/by-slug/')) return lessonFixture;
       if (method === 'GET' && url.includes('/api/library/courses/'))
@@ -265,7 +270,7 @@ describe('<LessonViewer> toast "Proxima aula" (RF-07 + D4)', () => {
       if (method === 'GET' && url.includes('/progress')) {
         return {
           article: {
-            lastPositionSeconds: 540, // 90%
+            lastPositionSeconds: 540,
             totalDurationSeconds: 600,
             completedAt: null,
           },
@@ -282,17 +287,45 @@ describe('<LessonViewer> toast "Proxima aula" (RF-07 + D4)', () => {
       </QueryClientProvider>,
     );
     await waitFor(() => {
-      const found = toastSpy.mock.calls.some((c) => {
-        const arg = c[0];
-        if (!arg || typeof arg !== 'object') return false;
-        const t = `${arg.title ?? ''} ${arg.description ?? ''}`;
-        return /Pr[oó]xima aula/i.test(t) || /A\.2/.test(t);
-      });
-      expect(found).toBe(true);
+      expect(screen.getByTestId('lesson-viewer')).toBeInTheDocument();
+    });
+    // Toast removido pelo RF-05B — substituido por CTA inline.
+    const proxAulaToast = toastSpy.mock.calls.some((c) =>
+      /Pr[oó]xima aula:/i.test(`${c[0]?.title ?? ''}`),
+    );
+    expect(proxAulaToast).toBe(false);
+  });
+
+  it('deve renderizar <NextLessonCTA> inline quando maxProgressPct >= 90 e existe proxima aula', async () => {
+    apiRequestMock.mockImplementation(async (method: string, url: string) => {
+      if (method === 'GET' && url.includes('/by-slug/')) return lessonFixture;
+      if (method === 'GET' && url.includes('/api/library/courses/'))
+        return courseWithNext;
+      if (method === 'GET' && url.includes('/progress')) {
+        return {
+          article: {
+            lastPositionSeconds: 540,
+            totalDurationSeconds: 600,
+            completedAt: null,
+          },
+        };
+      }
+      return null;
+    });
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <LessonViewer
+          courseSlug="antes-das-cartas"
+          lessonSlug="a1-mentalidade"
+        />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('next-lesson-cta')).toBeInTheDocument();
     });
   });
 
-  it('NAO deve disparar toast quando nao existe proxima aula (ultima do curso)', async () => {
+  it('NAO deve renderizar CTA quando nao existe proxima aula (ultima)', async () => {
     apiRequestMock.mockImplementation(async (method: string, url: string) => {
       if (method === 'GET' && url.includes('/by-slug/')) return lessonFixture;
       if (method === 'GET' && url.includes('/api/library/courses/'))
@@ -319,47 +352,10 @@ describe('<LessonViewer> toast "Proxima aula" (RF-07 + D4)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lesson-viewer')).toBeInTheDocument();
     });
-    // Sem proxima aula -> toast nao dispara.
-    const found = toastSpy.mock.calls.some((c) =>
-      /Pr[oó]xima aula/i.test(`${c[0]?.title ?? ''}`),
-    );
-    expect(found).toBe(false);
+    expect(screen.queryByTestId('next-lesson-cta')).toBeNull();
   });
 
-  it('toast deve ter duration 8000ms (auto-dismiss D4)', async () => {
-    apiRequestMock.mockImplementation(async (method: string, url: string) => {
-      if (method === 'GET' && url.includes('/by-slug/')) return lessonFixture;
-      if (method === 'GET' && url.includes('/api/library/courses/'))
-        return courseWithNext;
-      if (method === 'GET' && url.includes('/progress')) {
-        return {
-          article: {
-            lastPositionSeconds: 580,
-            totalDurationSeconds: 600,
-            completedAt: null,
-          },
-        };
-      }
-      return null;
-    });
-    render(
-      <QueryClientProvider client={makeClient()}>
-        <LessonViewer
-          courseSlug="antes-das-cartas"
-          lessonSlug="a1-mentalidade"
-        />
-      </QueryClientProvider>,
-    );
-    await waitFor(() => {
-      const nextToast = toastSpy.mock.calls.find((c) =>
-        /Pr[oó]xima aula/i.test(`${c[0]?.title ?? ''}`),
-      );
-      expect(nextToast).toBeTruthy();
-      expect(nextToast?.[0]?.duration).toBe(8000);
-    });
-  });
-
-  it('NAO deve disparar toast quando maxProgressPct < 90', async () => {
+  it('NAO deve renderizar CTA quando maxProgressPct < 90', async () => {
     apiRequestMock.mockImplementation(async (method: string, url: string) => {
       if (method === 'GET' && url.includes('/by-slug/')) return lessonFixture;
       if (method === 'GET' && url.includes('/api/library/courses/'))
@@ -386,56 +382,6 @@ describe('<LessonViewer> toast "Proxima aula" (RF-07 + D4)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lesson-viewer')).toBeInTheDocument();
     });
-    const found = toastSpy.mock.calls.some((c) =>
-      /Pr[oó]xima aula/i.test(`${c[0]?.title ?? ''}`),
-    );
-    expect(found).toBe(false);
-  });
-
-  it('toast deve disparar UMA vez (ref previne re-fire mesmo com re-render)', async () => {
-    apiRequestMock.mockImplementation(async (method: string, url: string) => {
-      if (method === 'GET' && url.includes('/by-slug/')) return lessonFixture;
-      if (method === 'GET' && url.includes('/api/library/courses/'))
-        return courseWithNext;
-      if (method === 'GET' && url.includes('/progress')) {
-        return {
-          article: {
-            lastPositionSeconds: 540,
-            totalDurationSeconds: 600,
-            completedAt: null,
-          },
-        };
-      }
-      return null;
-    });
-    const { rerender } = render(
-      <QueryClientProvider client={makeClient()}>
-        <LessonViewer
-          courseSlug="antes-das-cartas"
-          lessonSlug="a1-mentalidade"
-        />
-      </QueryClientProvider>,
-    );
-    await waitFor(() => {
-      const nextCount = toastSpy.mock.calls.filter((c) =>
-        /Pr[oó]xima aula/i.test(`${c[0]?.title ?? ''}`),
-      ).length;
-      expect(nextCount).toBeGreaterThanOrEqual(1);
-    });
-    // Re-render sem mudar progress.
-    rerender(
-      <QueryClientProvider client={makeClient()}>
-        <LessonViewer
-          courseSlug="antes-das-cartas"
-          lessonSlug="a1-mentalidade"
-        />
-      </QueryClientProvider>,
-    );
-    const nextCount = toastSpy.mock.calls.filter((c) =>
-      /Pr[oó]xima aula/i.test(`${c[0]?.title ?? ''}`),
-    ).length;
-    // Ainda deve ser <= 1 (idempotente por mount). Em re-mount aceitavel reset
-    // do ref — spec D4 + R10 confirma "1x por mount aceito".
-    expect(nextCount).toBeLessThanOrEqual(2);
+    expect(screen.queryByTestId('next-lesson-cta')).toBeNull();
   });
 });

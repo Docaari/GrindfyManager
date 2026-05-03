@@ -1,0 +1,70 @@
+%% Sequencia — Pedido de acesso alpha (RF-02)
+%% Spec: Docs/specs/ux-biblioteca-1.md RF-02
+%% Refs: ADR-103 (library_access_requests + UNIQUE INDEX parcial)
+%%
+%% Fluxo: user clica banner alpha -> abre modal -> POST -> banner update via refetch GET /me
+
+sequenceDiagram
+    actor User
+    participant Banner as Banner Alpha<br/>(BibliotecaPage)
+    participant Modal as AccessRequestDialog
+    participant API as POST /access-requests
+    participant DB as PostgreSQL<br/>library_access_requests
+    participant GetMe as GET /access-requests/me
+    participant Toast as useToast
+
+    Note over Banner: Mount: useQuery GET /me<br/>(checa pending preexistente)
+    Banner->>GetMe: GET /api/library/access-requests/me
+    GetMe->>DB: SELECT WHERE user_id=? ORDER BY created_at DESC LIMIT 1
+    DB-->>GetMe: null (sem pending)
+    GetMe-->>Banner: 200 null
+    Banner->>Banner: state.banner = "Pedir liberacao"
+
+    User->>Banner: click "Pedir liberacao"
+    Banner->>Modal: open()
+    Modal->>Modal: pre-fill name (user.name)<br/>pre-fill plan (user.subscriptionPlan, read-only)<br/>focus inicial em textarea reason
+
+    User->>Modal: preenche reason (>= 20 chars)
+    User->>Modal: click "Enviar pedido"
+    Modal->>Modal: Zod validate { name, reason }<br/>(plan NAO no payload, anti-spoofing)
+
+    alt Validacao OK
+        Modal->>API: POST /api/library/access-requests<br/>body { name, reason }
+        API->>API: requireAuth + rate limit (5/h)
+        API->>API: pega plan = req.user.subscriptionPlan<br/>(server-side, anti-spoofing)
+        API->>DB: INSERT { id, userId, name,<br/>subscriptionPlanSnapshot, reason,<br/>status='pending' }
+
+        alt INSERT bem-sucedido
+            DB-->>API: 1 row inserted
+            API-->>Modal: 201 { id, status: "pending", createdAt }
+            Modal->>Toast: success "Pedido enviado, retorno em 24h"
+            Modal->>Banner: close()
+            Banner->>GetMe: refetch GET /me
+            GetMe-->>Banner: { status: "pending", id: ... }
+            Banner->>Banner: state.banner = "Pedido em analise" (disabled)
+        else 23505 unique violation<br/>(uniq_user_pending)
+            DB-->>API: ERROR 23505
+            API->>API: storage.ts converte em<br/>LibraryAccessRequestPendingError
+            API-->>Modal: 409 { message: "request_already_pending",<br/>existingId: "..." }
+            Modal->>Toast: warning "Voce ja tem um pedido em analise"
+            Modal->>Banner: close()
+            Banner->>GetMe: refetch GET /me
+            GetMe-->>Banner: { status: "pending" }
+            Banner->>Banner: state.banner = "Pedido em analise"
+        else Rate limit (5/h)
+            API-->>Modal: 429 { message: "rate_limit_exceeded" }
+            Modal->>Toast: destructive "Muitas tentativas, aguarde"
+            Note over Modal: Modal permanece aberto<br/>(user pode tentar mais tarde)
+        else 5xx erro
+            API-->>Modal: 500 erro
+            Modal->>Toast: destructive "Falha ao enviar.<br/>Tente novamente em instantes."
+            Note over Modal: Modal permanece aberto<br/>(input preservado)
+        end
+
+    else Validacao Zod falha (name < 2, reason < 20...)
+        Modal->>Modal: render erro inline no campo
+        Note over Modal: Modal NAO fecha,<br/>NAO chama API
+    end
+
+    Note over User,DB: Founder revisa pedidos via DB direto<br/>(SELECT * FROM library_access_requests<br/>WHERE status='pending' ORDER BY created_at DESC)
+    Note over User,DB: UI admin entra em UX-Biblioteca-2

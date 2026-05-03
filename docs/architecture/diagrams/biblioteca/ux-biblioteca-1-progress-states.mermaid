@@ -1,0 +1,88 @@
+%% State diagram — Estados visuais do progress label da aula (RF-05 Parte A)
+%% Spec: Docs/specs/ux-biblioteca-1.md RF-05 Parte A
+%% Refs: ADR-074 (progress sync cross-format), ADR-105 (NextLessonCTA pattern)
+%%
+%% Faixas: <50% / >=50% / >=90% (engatilha CTA Parte B) / =100%
+%% Transicao: transition-colors duration-300
+
+stateDiagram-v2
+    [*] --> sub50: lesson aberta<br/>maxProgressPct = 0
+
+    sub50 --> sub50: progresso continua<br/>(maxProgressPct < 50)
+    note right of sub50
+        Visual:
+        - Cor texto: text-gray-400
+        - Cor barra: bg-green-500
+        - Badge: nenhum
+        - Label: "Progresso da aula: N%"
+
+        Semantica: ainda na ingestao
+        inicial. Sem destaque visual
+        (densidade < 40%).
+    end note
+
+    sub50 --> mid: maxProgressPct >= 50
+
+    mid --> mid: progresso continua<br/>(50 <= maxProgressPct < 90)
+    note right of mid
+        Visual:
+        - Cor texto: text-green-400
+        - Cor barra: bg-green-500
+        - Badge: nenhum
+        - Label: "Progresso da aula: N%"
+
+        Semantica: passou da metade.
+        Tom verde claro reconforta
+        sem ser celebratorio.
+    end note
+
+    mid --> almostDone: maxProgressPct >= 90
+
+    almostDone --> almostDone: progresso continua<br/>(90 <= maxProgressPct < 100)
+    note right of almostDone
+        Visual:
+        - Cor texto: text-green-300
+        - Cor barra: bg-green-500
+        - Badge: "Quase la" (verde sutil)
+        - Label: "Progresso da aula: N%"
+
+        EFEITO COLATERAL CRITICO:
+        engatilha NextLessonCTA inline
+        (RF-05 Parte B / ADR-105).
+        Ref guard previne re-aparicao
+        no mesmo mount.
+
+        Toast original "Proxima aula"
+        REMOVIDO (RF-05B).
+    end note
+
+    almostDone --> done: maxProgressPct >= 100<br/>(completedAt set ADR-074)
+
+    done --> done: progresso ja maxed
+    note right of done
+        Visual:
+        - Cor texto: text-green-300 font-semibold
+        - Cor barra: bg-green-400 (mais saturada)
+        - Badge: "Concluida ✓" (proeminente)
+        - Label: "Progresso da aula: 100%"
+
+        Semantica: aula terminada.
+        Badge celebratorio sutil
+        (sem confetti, sem sound,
+        sem nudge — D-FOUNDER-1
+        anti-gamificacao parcial).
+
+        NextLessonCTA se ainda
+        renderizado (cancel sticky)
+        permanece com botao "Ir agora".
+    end note
+
+    done --> [*]: troca de aula<br/>(re-mount em proxima)
+
+    note left of [*]
+        Edge cases (nao mudam estado):
+        - User da seek pra back -> CTA permanece (ref guard).
+        - User troca tab video/audio/article -> maxProgressPct
+          recalcula entre formatos (ADR-074).
+        - Progress oscila >= 90 -> < 90 -> >= 90 -> CTA mostra 1x.
+    end note

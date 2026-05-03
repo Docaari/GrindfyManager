@@ -117,14 +117,11 @@ export function LessonHero({
 
   const reducedMotionAttr = prefersReducedMotion ? "true" : "false";
 
-  // Stagger delays (ms) — espelham tabela em RF-01 da spec. Mantidos como
-  // numeros para ser introspectaveis via data-animation-delay.
   const DELAY_LABEL = prefersReducedMotion ? 0 : 100;
   const DELAY_TITLE = prefersReducedMotion ? 0 : 200;
   const DELAY_SUBTITLE = prefersReducedMotion ? 0 : 350;
   const DELAY_CHIPS = prefersReducedMotion ? 0 : 500;
   const DELAY_CTA_PRIMARY = prefersReducedMotion ? 0 : 750;
-  const DELAY_CTA_SECONDARY = prefersReducedMotion ? 0 : 850;
 
   // Animation helpers — quando reduced motion, mounting eh instantaneo.
   const animProps = (delayMs: number, fromY: number, duration: number) =>
@@ -294,24 +291,6 @@ export function LessonHero({
             {ctaPrimaryText}
           </motion.button>
 
-          <motion.button
-            type="button"
-            data-testid="lesson-hero-cta-add-list"
-            data-animation-delay={DELAY_CTA_SECONDARY}
-            disabled
-            aria-disabled="true"
-            title="Em breve"
-            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{
-              duration: prefersReducedMotion ? 0 : 0.35,
-              delay: prefersReducedMotion ? 0 : DELAY_CTA_SECONDARY / 1000,
-            }}
-            className="px-6 py-3 rounded-md border border-white/30 text-white/60 text-base font-medium cursor-not-allowed inline-flex items-center justify-center gap-2"
-          >
-            <span aria-hidden>+</span>
-            Adicionar lista (Em breve)
-          </motion.button>
         </div>
 
         {/* Audio concorrente — chip "Tocando agora" (RF-06 + D12) */}

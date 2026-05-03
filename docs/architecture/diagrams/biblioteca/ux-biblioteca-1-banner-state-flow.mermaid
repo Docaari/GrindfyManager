@@ -1,0 +1,52 @@
+%% Flowchart — Estados do banner alpha em BibliotecaPage (RF-02)
+%% Spec: Docs/specs/ux-biblioteca-1.md RF-02 (Idempotencia)
+%% Refs: ADR-103 (library_access_requests)
+%%
+%% 4 estados visiveis: sem-pedido / pending / approved / denied
+%% Decisao: approved/denied ambos voltam para "Pedir liberacao" (re-pedido permitido)
+
+flowchart TD
+    Start(["Mount BibliotecaPage"])
+    Start --> Query["useQuery GET /api/library/access-requests/me"]
+
+    Query --> Decide{"Resposta?"}
+
+    Decide -->|"null<br/>(sem registros)"| StateNoRequest["Estado: SEM PEDIDO<br/><br/>Banner CTA: 'Pedir liberacao'<br/>Tom: amber primario<br/>Click: abre AccessRequestDialog"]
+
+    Decide -->|"{ status: pending, ... }"| StatePending["Estado: PENDING<br/><br/>Banner CTA: 'Pedido em analise'<br/>Disabled: true<br/>Tom: amber muted<br/>Tooltip: 'Resposta em ate 24h'<br/>Click: no-op"]
+
+    Decide -->|"{ status: approved, ... }"| StateApproved["Estado: APPROVED<br/>(comportamento contra-intuitivo)<br/><br/>User esta vendo banner =<br/>provavelmente entitlement nao chegou<br/><br/>Banner CTA: 'Pedir liberacao'<br/>Permite re-pedir<br/>(rationale: nao bloquear,<br/>founder esclarece via suporte)"]
+
+    Decide -->|"{ status: denied, ... }"| StateDenied["Estado: DENIED<br/><br/>Banner CTA: 'Pedir liberacao'<br/>Tom: amber primario (igual SEM PEDIDO)<br/>Permite re-pedir<br/>(rationale: user pode justificar melhor)<br/><br/>SEM mensagem de denied no UI<br/>(reduce shame)"]
+
+    StateNoRequest --> ClickRequest{"User click<br/>'Pedir liberacao'?"}
+    StateDenied --> ClickRequest
+    StateApproved --> ClickRequest
+
+    ClickRequest -->|"Sim"| OpenModal["Abre AccessRequestDialog<br/>(ver sequence diagram<br/>access-request-sequence)"]
+    ClickRequest -->|"Nao"| StayCurrent["Permanece estado atual"]
+
+    OpenModal --> SubmitOrCancel{"Modal resultado?"}
+
+    SubmitOrCancel -->|"Submit OK 201"| RefetchSuccess["refetch GET /me<br/>resposta agora: pending"]
+    SubmitOrCancel -->|"Submit 409 pending existente"| RefetchSuccess
+    SubmitOrCancel -->|"Cancelar / Esc"| StayCurrent
+
+    RefetchSuccess --> StatePending
+
+    StatePending --> NoAction["No-op (botao disabled)<br/>Aguarda founder review"]
+
+    NoAction -.->|"Founder UPDATE status=approved<br/>+ INSERT user_lesson_access"| RecheckApproved["User refresh / proxima visita<br/>refetch GET /me"]
+    NoAction -.->|"Founder UPDATE status=denied"| RecheckDenied["User refresh / proxima visita<br/>refetch GET /me"]
+
+    RecheckApproved --> EntitlementCheck{"User tem<br/>entitlement<br/>(user_lesson_access)?"}
+    EntitlementCheck -->|"Sim (esperado)"| BannerHidden["BANNER OCULTO<br/>(user navega cursos)"]
+    EntitlementCheck -->|"Nao (founder esqueceu)"| StateApproved
+
+    RecheckDenied --> StateDenied
+
+    style StateNoRequest fill:#fef3c7,stroke:#d97706
+    style StatePending fill:#fef9c3,stroke:#a16207,stroke-dasharray: 5 5
+    style StateApproved fill:#fef3c7,stroke:#d97706
+    style StateDenied fill:#fef3c7,stroke:#d97706
+    style BannerHidden fill:#d1fae5,stroke:#065f46

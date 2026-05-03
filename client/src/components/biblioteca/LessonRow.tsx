@@ -17,6 +17,7 @@ import {
   CircleDashed,
   FileText,
   Headphones,
+  Lock,
   PlayCircle,
 } from "lucide-react";
 
@@ -154,8 +155,22 @@ export function LessonRow({ lesson, courseSlug }: LessonRowProps) {
               </span>
             );
           })}
+          {/* TODO(UX-Biblioteca-2): distinguir locked-by-entitlement vs
+              not-published quando lesson.isPublished for propagado para este
+              componente. Hoje todos !hasAccess viram "Acesso restrito". */}
           {!lesson.hasAccess && (
-            <span className="ml-auto text-amber-300">Em breve</span>
+            <span
+              data-testid={`${testId}-locked-label`}
+              className="ml-auto text-gray-400 inline-flex items-center gap-1"
+            >
+              <Lock
+                size={12}
+                data-testid={`${testId}-locked-icon`}
+                aria-hidden
+                className="opacity-80"
+              />
+              Acesso restrito
+            </span>
           )}
         </div>
       </div>
@@ -191,7 +206,7 @@ export function LessonRow({ lesson, courseSlug }: LessonRowProps) {
     <div
       data-testid={testId}
       className="cursor-not-allowed opacity-70"
-      title="Em breve"
+      title="Acesso restrito"
     >
       {content}
     </div>

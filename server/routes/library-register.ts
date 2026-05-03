@@ -7,6 +7,7 @@
 
 import type { Express, NextFunction, Request, Response } from "express";
 import multer, { MulterError } from "multer";
+import rateLimit from "express-rate-limit";
 import { requireAuth, requirePermission } from "../auth";
 import {
   handleListLibraryCourses,
@@ -21,6 +22,9 @@ import {
   handleGetArticleStyles,
   handleGetArticleScripts,
   handleAdminUploadStaticAsset,
+  // Sprint UX-Biblioteca-1 / RF-02 — access requests.
+  handleCreateLibraryAccessRequest,
+  handleGetMyLibraryAccessRequest,
 } from "./library";
 import { handleAdminGrantAccess } from "./adminLibrary";
 import { createMediaStorage } from "../services/mediaStorage";
@@ -120,6 +124,32 @@ export function registerLibraryRoutes(app: Express) {
     "/api/library/lessons/:id/progress",
     requireAuth,
     handlePatchLibraryProgress,
+  );
+
+  // Rate limit assume requireAuth rodou antes — req.user sempre existe.
+  const accessRequestRateLimit = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req: Request) => {
+      const user = (req as any).user;
+      return `user:${user?.userPlatformId ?? "anonymous"}`;
+    },
+    message: {
+      message: "rate_limit_exceeded",
+    },
+  });
+  app.post(
+    "/api/library/access-requests",
+    requireAuth,
+    accessRequestRateLimit,
+    handleCreateLibraryAccessRequest,
+  );
+  app.get(
+    "/api/library/access-requests/me",
+    requireAuth,
+    handleGetMyLibraryAccessRequest,
   );
 
   // Audio stream (D9): serve M4A com Range. Bloqueio: 401 sem grant.

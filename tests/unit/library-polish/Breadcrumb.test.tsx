@@ -55,9 +55,12 @@ vi.mock('@/lib/queryClient', () => ({
   queryClient: { invalidateQueries: vi.fn() },
 }));
 
+// Sprint UX-Biblioteca-1 / RF-05B: LessonViewer agora usa useLocation pra
+// auto-nav do NextLessonCTA. Adicionamos mock no-op aqui.
 vi.mock('wouter', () => ({
   Link: ({ href, children, ...rest }: any) =>
     React.createElement('a', { href, ...rest }, children),
+  useLocation: () => ['/biblioteca/curso/x/y', vi.fn()],
 }));
 
 import { LessonViewer } from '../../../client/src/pages/biblioteca/LessonViewer';

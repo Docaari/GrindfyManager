@@ -527,6 +527,104 @@ export async function handleGetArticleScripts(req: Request, res: Response) {
   );
 }
 
+const accessRequestBodySchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  reason: z.string().trim().min(20).max(1000),
+});
+
+export async function handleCreateLibraryAccessRequest(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const user = (req as any).user;
+    if (!user || !user.userPlatformId) {
+      return res.status(401).json({ message: "auth_required" });
+    }
+
+    const parsed = accessRequestBodySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "validation_error",
+        errors: parsed.error.format(),
+      });
+    }
+
+    const existing = await storage.findPendingLibraryAccessRequest(
+      user.userPlatformId,
+    );
+    if (existing) {
+      return res.status(409).json({
+        message: "request_already_pending",
+        existingId: existing.id,
+      });
+    }
+
+    const subscriptionPlanSnapshot = String(user.subscriptionPlan ?? "trial");
+
+    try {
+      const created = await storage.createLibraryAccessRequest({
+        userId: user.userPlatformId,
+        name: parsed.data.name,
+        reason: parsed.data.reason,
+        subscriptionPlanSnapshot,
+      });
+      return res.status(201).json({
+        id: created.id,
+        status: created.status,
+        createdAt: created.createdAt,
+      });
+    } catch (insertErr: any) {
+      // UNIQUE INDEX parcial WHERE status='pending' rejeita 2o pedido em
+      // analise. Convertemos 23505 em 409 com id do pedido vencedor.
+      const isUniqueViolation =
+        insertErr?.code === "23505" ||
+        /uniq_library_access_requests_user_pending/.test(
+          String(insertErr?.constraint ?? insertErr?.message ?? ""),
+        );
+      if (isUniqueViolation) {
+        let existingId: string | undefined;
+        try {
+          const found = await storage.findPendingLibraryAccessRequest(
+            user.userPlatformId,
+          );
+          existingId = found?.id;
+        } catch {
+          // ignore
+        }
+        return res.status(409).json({
+          message: "request_already_pending",
+          ...(existingId ? { existingId } : {}),
+        });
+      }
+      console.error("[handleCreateLibraryAccessRequest] insert failed", insertErr);
+      return res.status(500).json({ message: "internal_error" });
+    }
+  } catch (err) {
+    console.error("[handleCreateLibraryAccessRequest] error", err);
+    return res.status(500).json({ message: "internal_error" });
+  }
+}
+
+export async function handleGetMyLibraryAccessRequest(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const user = (req as any).user;
+    if (!user || !user.userPlatformId) {
+      return res.status(401).json({ message: "auth_required" });
+    }
+    const latest = await storage.getLatestLibraryAccessRequestForUser(
+      user.userPlatformId,
+    );
+    return res.status(200).json(latest);
+  } catch (err) {
+    console.error("[handleGetMyLibraryAccessRequest] error", err);
+    return res.status(500).json({ message: "internal_error" });
+  }
+}
+
 // -----------------------------------------------------------------------------
 // RF-11: POST /api/admin/library/static-asset
 // -----------------------------------------------------------------------------

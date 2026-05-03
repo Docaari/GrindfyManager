@@ -246,7 +246,9 @@ describe('<LessonHero> — CTAs primary/secondary', () => {
     expect(cta.textContent?.toLowerCase()).toMatch(/iniciar aula/);
   });
 
-  it('CTA secundario "Adicionar lista" deve estar disabled (D7)', () => {
+  // Sprint UX-Biblioteca-1 / RF-04 — botao "Adicionar lista" REMOVIDO (lesson #11
+  // default minimo). Testes invertidos para asserer AUSENCIA.
+  it('CTA secundario "Adicionar lista" foi REMOVIDO (RF-04 — default minimo)', () => {
     render(
       <LessonHero
         lesson={baseLesson}
@@ -255,26 +257,20 @@ describe('<LessonHero> — CTAs primary/secondary', () => {
         onStart={vi.fn()}
       />,
     );
-    const cta = screen.getByTestId(
-      'lesson-hero-cta-add-list',
-    ) as HTMLButtonElement;
-    expect(cta).toBeDisabled();
+    expect(screen.queryByTestId('lesson-hero-cta-add-list')).toBeNull();
   });
 
-  it('CTA secundario disabled NAO dispara nada quando clicado', async () => {
-    const onStart = vi.fn();
+  it('hero NAO deve mostrar texto "Adicionar lista" no DOM (RF-04)', () => {
     render(
       <LessonHero
         lesson={baseLesson}
         episodeNumber={1}
         blockLabel="Bloco A"
-        onStart={onStart}
+        onStart={vi.fn()}
       />,
     );
-    const cta = screen.getByTestId('lesson-hero-cta-add-list');
-    const user = userEvent.setup();
-    await user.click(cta);
-    expect(onStart).not.toHaveBeenCalled();
+    const root = screen.getByTestId('lesson-hero');
+    expect(root.textContent ?? '').not.toMatch(/Adicionar lista/i);
   });
 });
 

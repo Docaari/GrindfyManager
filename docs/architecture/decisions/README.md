@@ -69,6 +69,9 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [089](089-hud-snapshot-sample-size-per-stat.md) | sample size per stat em snapshots.values com 3 formatos back-compat (Sprint F4 stats-analyzer, ex-058) | Aceito | 2026-04-29 |
 | [090](090-tournament-series-single-source-of-truth.md) | Tournament Series como single source of truth — deprecar flags inline ADR-031 (Sprint Flight-1) | Aceito | 2026-05-02 |
 | [091](091-stack-mode-enum-single-combined.md) | Stack mode enum: `single` \| `combined` (best-stack fora MVP, defer Flight-2) | Aceito | 2026-05-02 |
+| [103](103-library-access-requests-table.md) | Tabela `library_access_requests` + UNIQUE INDEX parcial WHERE status='pending' (Sprint UX-Biblioteca-1) | Aceito | 2026-05-03 |
+| [104](104-library-video-speed-global-localstorage.md) | Velocidade video global via localStorage `library-video-speed` (Sprint UX-Biblioteca-1) | Aceito | 2026-05-03 |
+| [105](105-auto-navigation-countdown-pattern.md) | Padrao auto-navegacao countdown 5s + cancel sticky (NextLessonCTA, Sprint UX-Biblioteca-1) | Aceito | 2026-05-03 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 
