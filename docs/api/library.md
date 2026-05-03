@@ -1,26 +1,30 @@
 # API — Biblioteca (LMS embedded)
 
-> Spec: `Docs/specs/biblioteca-spec-1.md`
+> Specs: `Docs/specs/biblioteca-spec-1.md` + `Docs/specs/biblioteca-spec-2.md`
 > Schema: `Docs/architecture/data-model-index.md` secao "Library / LMS"
-> ADRs: 071 (mediaStorage), 072 (Mux), 073 (entitlements), 074 (progress sync), 075 (Coach tool), 076 (HTML sanitize)
-> Diagramas: `Docs/architecture/diagrams/biblioteca/`
+> ADRs: 071 (mediaStorage), 072 (Mux), 073 (entitlements), 074 (progress sync), 075 (Coach tool), 076 (HTML sanitize — DEPRECATED parcialmente por 093), **092 (iframe sandbox), 093 (trusted bypass dual-policy), 094 (article bundle protocol), 095 (learning_objectives extraction)**
+> Diagramas: `Docs/architecture/diagrams/biblioteca/` + `Docs/architecture/diagrams/biblioteca-spec-2-*.mermaid`
 > Status: skeleton — request/response bodies detalhados em **TBD pos-implementer**.
 
-## Indice rapido (11 endpoints novos)
+## Indice rapido (15 endpoints; 11 Spec 1 + 4 Spec 2)
 
-| Metodo | Rota | Auth | Permission | RF | Resumo |
-|--------|------|------|------------|------|--------|
-| GET | `/api/library/courses` | JWT | — | RF-05 | Lista cursos publicados + `hasAnyAccess` por curso |
-| GET | `/api/library/courses/:slug` | JWT | — | RF-05 | Detalhe curso + modulos + lessons (com `hasAccess` por lesson) |
-| GET | `/api/library/lessons/:id` | JWT | lesson access | RF-05 | Detalhe aula com 3 formatos disponiveis (video/podcast/article) |
-| GET | `/api/library/lessons/:id/playback-token` | JWT | lesson access | RF-03 | Mux signed HLS URL TTL 4h + watermark text |
-| GET | `/api/library/lessons/:id/audio` | JWT | lesson access | D9 | Stream M4A com Range header |
-| GET | `/api/library/lessons/:id/progress` | JWT | lesson access | RF-06 | Progresso atual nos 3 formatos |
-| PATCH | `/api/library/lessons/:id/progress` | JWT | lesson access | RF-06 | Upsert atomico (throttle servidor 5s) |
-| POST | `/api/library/events` | JWT | lesson access | RF-06 | Evento fire-and-forget (rate limit 60/min/user) |
-| GET | `/api/library/assets/:key` | JWT | — | RF-05 | Serve capa/asset generico via mediaStorage |
-| POST | `/api/admin/library/grant-access` | JWT | admin_full | RF-04 | Libera N aulas para 1 user (idempotente, cap 500) |
-| POST | `/api/admin/library/import-manifest` | JWT | admin_full | RF-11 | Batch upload curso completo via CSV manifest + arquivos |
+| Metodo | Rota | Auth | Permission | Spec | RF | Resumo |
+|--------|------|------|------------|------|------|--------|
+| GET | `/api/library/courses` | JWT | — | 1 | RF-05 | Lista cursos publicados + `hasAnyAccess` por curso |
+| GET | `/api/library/courses/:slug` | JWT | — | 1 | RF-05 | Detalhe curso + modulos + lessons (com `hasAccess` por lesson) |
+| GET | `/api/library/lessons/:id` | JWT | lesson access | 1 | RF-05 | Detalhe aula com 3 formatos disponiveis (video/podcast/article) |
+| GET | `/api/library/lessons/:id/playback-token` | JWT | lesson access | 1 | RF-03 | Mux signed HLS URL TTL 4h + watermark text |
+| GET | `/api/library/lessons/:id/audio` | JWT | lesson access | 1 | D9 | Stream M4A com Range header |
+| GET | `/api/library/lessons/:id/progress` | JWT | lesson access | 1 | RF-06 | Progresso atual nos 3 formatos |
+| PATCH | `/api/library/lessons/:id/progress` | JWT | lesson access | 1 | RF-06 | Upsert atomico (throttle servidor 5s) |
+| POST | `/api/library/events` | JWT | lesson access | 1 | RF-06 | Evento fire-and-forget (rate limit 60/min/user) |
+| GET | `/api/library/assets/:key` | JWT | — | 1 | RF-05 | Serve capa/asset generico via mediaStorage |
+| POST | `/api/admin/library/grant-access` | JWT | admin_full | 1 | RF-04 | Libera N aulas para 1 user (idempotente, cap 500) |
+| POST | `/api/admin/library/import-manifest` | JWT | admin_full | 1 | RF-11 | Batch upload curso completo via CSV manifest + arquivos |
+| **GET** | **`/api/library/lessons/:id/article-bundle`** | **JWT** | **lesson access** | **2** | **RF-04** | **NEW — bundle html + stylesUrl + scriptsUrl + version + meta para iframe srcdoc** |
+| **GET** | **`/api/library/static/article-styles.css`** | **nenhuma** | **—** | **2** | **RF-03** | **NEW — serve CSS do _assets/, publico, Cache 30d, ETag** |
+| **GET** | **`/api/library/static/article-scripts.js`** | **nenhuma** | **—** | **2** | **RF-03** | **NEW — serve JS transformed do _assets/, publico, Cache 30d, ETag** |
+| **POST** | **`/api/admin/library/static-asset`** | **JWT** | **admin_full** | **2** | **RF-11** | **NEW — upload styles/scripts fixos via mediaStorage.putAtFixedKey** |
 
 ---
 
@@ -276,9 +280,157 @@ Cache-key Anthropic recalculado quando lista atualiza (1 cache miss, depois esta
 
 ---
 
+---
+
+## Endpoints novos — Sprint Biblioteca-2 (Spec 2)
+
+### `GET /api/library/lessons/:id/article-bundle` — RF-04 / ADR-094
+
+Endpoint dedicado que retorna tudo necessario pro frontend montar o `srcdoc`
+do iframe da aula em uma chamada unica.
+
+**Auth:** `requireAuth` + lesson access (`user_lesson_access` row exigida).
+
+**Response 200:**
+```json
+{
+  "html": "<sanitized HTML interno (admin-trusted policy)>",
+  "stylesUrl": "/api/library/static/article-styles.css?v=abc123def456",
+  "scriptsUrl": "/api/library/static/article-scripts.js?v=789xyz012345",
+  "version": "<sha256(stylesHash + scriptsHash).slice(0, 16)>",
+  "meta": {
+    "title": "A.1 - Mentalidade Fixa vs Mentalidade de Crescimento",
+    "learningObjectives": [
+      "Diferenca entre mentalidade fixa e crescimento neuro-cientificamente",
+      "4 armadilhas da versao falsa pra evitar",
+      "3 ferramentas pra usar na proxima sessao",
+      "Base cientifica: Mueller & Dweck 1998, Moser 2011"
+    ]
+  }
+}
+```
+
+**Response 401:** `{ "message": "access_denied" }` — sem auth ou sem grant.
+
+**Response 404:**
+- `{ "message": "lesson_not_found" }` — lesson inexistente.
+- `{ "message": "article_not_available" }` — lesson sem `articleHtml`.
+
+**Response 503:** `{ "message": "static_assets_not_uploaded" }` — founder
+nao rodou RF-11 (script `library-upload-static-assets.ts`).
+
+**Cache:** servidor nao adiciona Cache-Control (frontend gerencia via TanStack
+Query staleTime 5min). `version` muda quando founder reupload assets;
+TanStack Query usa como queryKey pra invalidacao.
+
+**Implementacao** (alta-nivel):
+1. `findLessonAccess({userId, lessonId})` — sem grant → 401.
+2. `getLibraryLesson(id)` — sem articleHtml → 404.
+3. `computeStaticAssetHash('library/static/article-styles.css')` (cache em-memory 5min) — null → 503.
+4. `computeStaticAssetHash('library/static/article-scripts.js')` (cache em-memory 5min) — null → 503.
+5. Monta URLs com `?v={hash:12}` + `version` unificado sha256(cssHash + jsHash):16.
+6. Retorna JSON + `meta.learningObjectives` extraido do schema.
+
+Diagrama: `Docs/architecture/diagrams/biblioteca-spec-2-article-bundle-flow.mermaid`.
+
+---
+
+### `GET /api/library/static/article-styles.css` — RF-03 / ADR-094
+
+Serve `_assets/styles.css` (~26KB) que o iframe srcdoc referencia via
+`<link rel="stylesheet" href="/api/library/static/article-styles.css?v={hash:12}">`.
+
+**Auth:** **nenhuma** (publico — sem PII; CSS generico de estilo).
+
+**Query params:** `?v={hash}` (opcional, cache-busting). Servidor ignora
+o valor para conteudo, usa apenas como cache-key client-side.
+
+**Response 200:**
+- `Content-Type: text/css`
+- `Cache-Control: public, max-age=2592000, immutable` (30d)
+- `ETag: "{hash:12}"` (sha256 truncado do conteudo)
+- `Vary: Accept-Encoding`
+- Body: bytes do CSS
+
+**Response 304:** se `If-None-Match: "{hash}"` bate com hash atual.
+
+**Response 503:** `{ "message": "asset_not_uploaded" }` — founder nao
+rodou RF-11.
+
+**CSP:** `Content-Security-Policy: default-src 'none'` (defesa adicional).
+
+---
+
+### `GET /api/library/static/article-scripts.js` — RF-03 / ADR-094
+
+Identico ao endpoint CSS mas serve `lesson.js.transformed` (~2-5KB pos-transform).
+
+**Auth:** nenhuma. **Cache:** 30d. **ETag/304:** mesmo padrao. **503:** mesmo padrao.
+
+**Response 200:**
+- `Content-Type: application/javascript`
+
+**Conteudo do JS** (RF-11):
+- `ResizeObserver` em `document.body` → reporta altura via `parent.postMessage('grindfy:library:resize', {height})`.
+- Throttle 1s em `scroll` event → reporta percent via `parent.postMessage('grindfy:library:scroll', {percent})`.
+- `addEventListener('click')` em `[data-flashcard-toggle]`, `[data-accordion-toggle]`, `[data-recall-check]` (substitui `onclick=` inline removidos pelo sanitizer).
+- Helpers globais migrados do `lesson.js` original (`toggleTOC`, `openLightbox`, etc) via `addEventListener` no `DOMContentLoaded`.
+
+---
+
+### `POST /api/admin/library/static-asset` — RF-11
+
+Upload one-shot de CSS ou JS estatico com chave fixa em `library/static/`.
+
+**Auth:** `requireAuth` + `requirePermission('admin_full')`.
+**Content-Type:** `multipart/form-data`.
+
+**Fields:**
+- `kind`: `'styles' | 'scripts'` — controla extensao + MIME + key.
+- `file`: arquivo (cap 5MB, generoso).
+
+**Response 200:**
+```json
+{
+  "kind": "styles",
+  "key": "library/static/article-styles.css",
+  "size": 26420,
+  "sha256": "abc123def456..."
+}
+```
+
+**Response 400:** `{ "message": "invalid_kind" }`.
+**Response 403:** sem permission.
+**Response 413:** payload > 5MB.
+
+**Comportamento:**
+1. `kind='styles'` → `ext='css'`, `mime='text/css'`, key `library/static/article-styles.css`.
+2. `kind='scripts'` → `ext='js'`, `mime='application/javascript'`, key `library/static/article-scripts.js`.
+3. `mediaStorage.putAtFixedKey(key, buffer, mime)` sobrescreve chave fixa (idempotente).
+4. Retorna size + sha256 (truncado em 12 chars vira ETag nos endpoints CSS/JS).
+
+**Cache invalidation:** apos upload, novos requests `/article-bundle` retornam
+`stylesUrl`/`scriptsUrl` com `?v={novoHash}` em ate 5min (cache em-memory).
+Clients TanStack Query reagem ao `version` mudar.
+
+**Helper novo no mediaStorage:**
+```ts
+mediaStorage.putAtFixedKey(
+  key: string,
+  buffer: Buffer,
+  mime: string,
+): Promise<{ size: number; sha256: string }>
+```
+Diferente de `put({scope, ext, buffer, mime})` que gera `nanoid()` em
+runtime — esta versao aceita `key` explicito e sobrescreve em-place.
+
+Diagrama: `Docs/architecture/diagrams/biblioteca-spec-2-manifest-import-flow.mermaid`.
+
+---
+
 ## Test plan resumido
 
-Detalhes em `Docs/specs/biblioteca-spec-1.md` secao 10.
+Detalhes em `Docs/specs/biblioteca-spec-1.md` secao 10 + `Docs/specs/biblioteca-spec-2.md` secao 9.
 
 **Unit (server, node project):**
 - `mediaStorage.put/get/delete/exists` + alias env + path traversal

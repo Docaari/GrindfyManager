@@ -1,11 +1,11 @@
 # ADR-076 — Sanitizacao server-side de HTML de artigos via DOMPurify, allowlist rigorosa
 
-- Status: Proposto
+- Status: **DEPRECATED PARCIALMENTE pelo ADR-093 (2026-05-03)** — sanitizer continua existindo, mas allowlist rigorosa virou `'user-content'` policy. Conteudo admin-imported usa `'admin-trusted'` policy com allowlist expandida + iframe sandbox como camada 2. Esta ADR permanece valida para descrever a base do sanitizer.
 - Data: 2026-05-01
 - Sprint: Biblioteca-1 (RF-08 + RF-11)
 - Decision owner: system-architect (formaliza founder D10 da spec)
-- Related: ADR-071 (media storage — img src=/api/library/assets/...), ADR-073 (entitlements)
-- Spec: `Docs/specs/biblioteca-spec-1.md` D10 + RF-08 + RF-11
+- Related: ADR-071 (media storage — img src=/api/library/assets/...), ADR-073 (entitlements), **ADR-092 (iframe sandbox), ADR-093 (trusted bypass dual-policy)**
+- Spec: `Docs/specs/biblioteca-spec-1.md` D10 + RF-08 + RF-11; **`Docs/specs/biblioteca-spec-2.md` RF-02 (revisao)**
 
 ## Contexto
 
