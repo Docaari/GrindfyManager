@@ -144,12 +144,15 @@ import {
   userLessonAccess,
   libraryEvents,
   libraryProgress,
+  // Sprint UX-Biblioteca-1 / RF-02 (ADR-103) — access requests.
+  libraryAccessRequests,
   type LibraryCourse,
   type LibraryModule,
   type LibraryLesson,
   type UserLessonAccess,
   type LibraryEvent,
   type LibraryProgress,
+  type LibraryAccessRequest,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, lt, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
@@ -742,6 +745,16 @@ export interface IStorage {
   findLibraryLessonsByTag(tag: string, opts?: any): Promise<any[]>;
   libraryLessonProgressLookup(userId: string | undefined, lessonIds: string[]): Promise<Map<string, any>>;
   libraryLessonAccessLookup(userId: string | undefined, lessonIds: string[]): Promise<Map<string, boolean>>;
+
+  // Sprint UX-Biblioteca-1 / RF-02 — library_access_requests (ADR-103).
+  createLibraryAccessRequest(input: {
+    userId: string;
+    name: string;
+    reason: string;
+    subscriptionPlanSnapshot: string;
+  }): Promise<LibraryAccessRequest>;
+  findPendingLibraryAccessRequest(userId: string): Promise<LibraryAccessRequest | null>;
+  getLatestLibraryAccessRequestForUser(userId: string): Promise<LibraryAccessRequest | null>;
 
   // Sprint F4 — hud_stat_targets (knowledge base global, ADR-088)
   getHudStatTargets(filters?: {
@@ -7626,6 +7639,84 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Sprint UX-Biblioteca-1 / RF-02 — library_access_requests (ADR-103).
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Cria pedido de acesso. UNIQUE INDEX parcial WHERE status='pending'
+   * garante idempotencia. Em race condition o INSERT bate 23505 (handler
+   * converte em 409). Erros nao-23505 sao re-lancados para o handler.
+   */
+  async createLibraryAccessRequest(input: {
+    userId: string;
+    name: string;
+    reason: string;
+    subscriptionPlanSnapshot: string;
+  }): Promise<LibraryAccessRequest> {
+    const id = nanoid();
+    const rows = await db
+      .insert(libraryAccessRequests)
+      .values({
+        id,
+        userId: input.userId,
+        name: input.name,
+        reason: input.reason,
+        subscriptionPlanSnapshot: input.subscriptionPlanSnapshot,
+      } as any)
+      .returning();
+    return rows?.[0] as LibraryAccessRequest;
+  }
+
+  /**
+   * Retorna o pedido pending atual do user (ou null). Index secundario
+   * idx_library_access_requests_user_status cobre essa query.
+   */
+  async findPendingLibraryAccessRequest(
+    userId: string,
+  ): Promise<LibraryAccessRequest | null> {
+    if (!userId) return null;
+    try {
+      const rows = await db
+        .select()
+        .from(libraryAccessRequests)
+        .where(
+          and(
+            eq(libraryAccessRequests.userId, userId),
+            eq(libraryAccessRequests.status, "pending"),
+          ),
+        )
+        .limit(1);
+      return (rows?.[0] as LibraryAccessRequest) ?? null;
+    } catch (err) {
+      console.error("[findPendingLibraryAccessRequest] failed", err);
+      return null;
+    }
+  }
+
+  /**
+   * Retorna o pedido mais recente do user (qualquer status) ou null.
+   * Usado pelo GET /api/library/access-requests/me — frontend trata
+   * status pending como banner em "Pedido em analise".
+   */
+  async getLatestLibraryAccessRequestForUser(
+    userId: string,
+  ): Promise<LibraryAccessRequest | null> {
+    if (!userId) return null;
+    try {
+      const rows = await db
+        .select()
+        .from(libraryAccessRequests)
+        .where(eq(libraryAccessRequests.userId, userId))
+        .orderBy(desc(libraryAccessRequests.createdAt))
+        .limit(1);
+      return (rows?.[0] as LibraryAccessRequest) ?? null;
+    } catch (err) {
+      console.error("[getLatestLibraryAccessRequestForUser] failed", err);
+      return null;
+    }
+  }
+
   /**
    * 13. countLibraryEventsForUserInWindow — rate limit support.
    */
@@ -9470,6 +9561,171 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // Onda 1: stub. Sprint follow-up filtra tournament_series WHERE status='active'.
     return null;
   }
+
+  // ===========================================================================
+  // Sprint home-reform-1-5 — RF-25.2 / RF-25.4 detectPlayerProfile
+  // ADR-107: smart auto-adapt baseado em counts.
+  // ===========================================================================
+  async detectPlayerProfile(userId: string): Promise<{
+    profile: 'upload-only' | 'session-only' | 'hybrid' | 'new';
+    totalUploads: number;
+    totalSessions: number;
+    sessionTournamentCount: number;
+    detectedAt: string;
+  }> {
+    try {
+      // totalUploads = COUNT tournaments para o user (todos vem via CSV import).
+      const uploadsRows: any[] = await (db as any)
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(tournaments)
+        .where(eq(tournaments.userId, userId));
+      const totalUploads = Number(uploadsRows?.[0]?.count ?? 0);
+
+      // totalSessions = COUNT grind_sessions.
+      const sessionsRows: any[] = await (db as any)
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(grindSessions)
+        .where(eq(grindSessions.userId, userId));
+      const totalSessions = Number(sessionsRows?.[0]?.count ?? 0);
+
+      // sessionTournamentCount = COUNT session_tournaments para o user (via JOIN com grind_sessions).
+      const sessionTournamentRows: any[] = await (db as any)
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(sessionTournaments)
+        .innerJoin(
+          grindSessions,
+          eq(sessionTournaments.sessionId, grindSessions.id),
+        )
+        .where(eq(grindSessions.userId, userId));
+      const sessionTournamentCount = Number(sessionTournamentRows?.[0]?.count ?? 0);
+
+      const profile = detectProfileHeuristic({
+        totalUploads,
+        sessionTournamentCount,
+      });
+
+      return {
+        profile,
+        totalUploads,
+        totalSessions,
+        sessionTournamentCount,
+        detectedAt: new Date().toISOString(),
+      };
+    } catch (err) {
+      console.error('[storage.detectPlayerProfile] failed', err);
+      throw err;
+    }
+  }
+
+  // ===========================================================================
+  // Sprint home-reform-1-5 — RF-28 / hasLibraryAccess
+  // Onda 1.5 minimo: retorna true sempre (acesso liberal). Onda 2 real:
+  // verificar entitlements (user_lesson_access) por curso/lesson.
+  // ===========================================================================
+  async hasLibraryAccess(_userId: string): Promise<boolean> {
+    return true;
+  }
+
+  // ===========================================================================
+  // Sprint home-reform-1-5 — RF-28 getContinueWatching
+  // Query lessons em progresso do user (completedAt NULL, lastPositionSeconds > 0).
+  // ===========================================================================
+  async getContinueWatching(
+    userId: string,
+    limit: number = 3,
+  ): Promise<Array<{
+    lessonId: string;
+    lessonTitle: string;
+    courseTitle: string;
+    moduleTitle: string;
+    coverImageUrl: string | null;
+    format: 'video' | 'podcast' | 'article';
+    lastPositionSeconds: number;
+    totalDurationSeconds: number | null;
+    progressPct: number;
+    remainingSeconds: number | null;
+    updatedAt: string;
+  }>> {
+    try {
+      const safeLimit = Math.min(Math.max(1, Math.floor(limit)), 10);
+      const rows: any[] = await (db as any)
+        .select({
+          lessonId: libraryLessons.id,
+          lessonTitle: libraryLessons.title,
+          courseId: libraryLessons.courseId,
+          courseTitle: libraryCourses.title,
+          moduleId: libraryLessons.moduleId,
+          moduleTitle: libraryModules.title,
+          coverKey: libraryLessons.coverKey,
+          format: libraryProgress.format,
+          lastPositionSeconds: libraryProgress.lastPositionSeconds,
+          totalDurationSeconds: libraryProgress.totalDurationSeconds,
+          updatedAt: libraryProgress.updatedAt,
+        })
+        .from(libraryProgress)
+        .innerJoin(libraryLessons, eq(libraryProgress.lessonId, libraryLessons.id))
+        .innerJoin(libraryModules, eq(libraryLessons.moduleId, libraryModules.id))
+        .innerJoin(libraryCourses, eq(libraryLessons.courseId, libraryCourses.id))
+        .where(
+          and(
+            eq(libraryProgress.userId, userId),
+            sql`${libraryProgress.completedAt} IS NULL`,
+            sql`${libraryProgress.lastPositionSeconds} > 0`,
+          ),
+        )
+        .orderBy(desc(libraryProgress.updatedAt))
+        .limit(safeLimit);
+
+      return (rows ?? []).map((r) => {
+        const last = Number(r.lastPositionSeconds ?? 0);
+        const total = r.totalDurationSeconds != null ? Number(r.totalDurationSeconds) : null;
+        const progressPct =
+          total && total > 0 ? Math.min(100, Math.round((last / total) * 100)) : 0;
+        const remainingSeconds = total != null ? Math.max(0, total - last) : null;
+        return {
+          lessonId: String(r.lessonId ?? ''),
+          lessonTitle: String(r.lessonTitle ?? ''),
+          courseTitle: String(r.courseTitle ?? ''),
+          moduleTitle: String(r.moduleTitle ?? ''),
+          coverImageUrl: r.coverKey ? String(r.coverKey) : null,
+          format: (r.format as 'video' | 'podcast' | 'article') ?? 'video',
+          lastPositionSeconds: last,
+          totalDurationSeconds: total,
+          progressPct,
+          remainingSeconds,
+          updatedAt:
+            r.updatedAt instanceof Date
+              ? r.updatedAt.toISOString()
+              : String(r.updatedAt ?? ''),
+        };
+      });
+    } catch (err) {
+      console.error('[storage.getContinueWatching] failed', err);
+      throw err;
+    }
+  }
+}
+
+// Helper exportado para teste unit isolado da heuristica.
+export function detectProfileHeuristic(stats: {
+  totalUploads: number;
+  sessionTournamentCount: number;
+}): 'upload-only' | 'session-only' | 'hybrid' | 'new' {
+  const csv = Number(stats.totalUploads) || 0;
+  const sess = Number(stats.sessionTournamentCount) || 0;
+  // Regra 1: ambos zero => 'new'.
+  if (csv === 0 && sess === 0) return 'new';
+  // Regra 2: hybrid (>=50 uploads E >=20 sessions).
+  if (csv >= 50 && sess >= 20) return 'hybrid';
+  // Regra 3: upload-only (>=50 uploads E <20 sessions).
+  if (csv >= 50 && sess < 20) return 'upload-only';
+  // Regra 4: session-only (<50 uploads E >=20 sessions).
+  if (csv < 50 && sess >= 20) return 'session-only';
+  // Regra 5: caso ambiguo (range central). Dominio absoluto.
+  if (csv > sess) return 'upload-only';
+  if (sess > csv) return 'session-only';
+  // Empate => default seguro.
+  return 'hybrid';
 }
 
 export const storage = new DatabaseStorage();

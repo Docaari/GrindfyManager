@@ -84,8 +84,20 @@ interface PendenciasKpi {
   cooldownAlerts: number;
 }
 
+// Sprint home-reform-1-5 RF-25.1: profile + profileMeta.
+type PlayerProfile = 'upload-only' | 'session-only' | 'hybrid' | 'new';
+
+interface ProfileMeta {
+  totalUploads: number;
+  totalSessions: number;
+  sessionTournamentCount: number;
+  detectedAt: string;
+}
+
 interface HomeOverviewBody {
   userState: 'empty' | 'power';
+  profile: PlayerProfile;
+  profileMeta: ProfileMeta;
   statusStrip: {
     banca: BancaKpi | null;
     roi30d: RoiKpi | null;
@@ -264,6 +276,8 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       timed('cooldown', () => (storage as any).getActiveCooldown(userId), timings),
       timed('flight', () => (storage as any).getActiveFlightSeries(userId), timings),
       timed('news', () => fetchNewsItems('poker-software', 5), timings),
+      // Sprint home-reform-1-5 RF-25.3: subquery profile-detect.
+      timed('profileDetect', () => (storage as any).detectPlayerProfile(userId), timings),
     ]);
 
     const unwrap = <T,>(idx: number): T | null => {
@@ -280,6 +294,13 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     const cooldown = unwrap<any>(7);
     const flightSeries = unwrap<any>(8);
     const newsItemsResult = unwrap<NewsItem[]>(9);
+    const profileDetectResult = unwrap<{
+      profile: PlayerProfile;
+      totalUploads: number;
+      totalSessions: number;
+      sessionTournamentCount: number;
+      detectedAt: string;
+    }>(10);
 
     // Tipos usados localmente (cast porque mocks retornam any).
     const qs = quickStats as any;
@@ -436,8 +457,19 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
 
     const totalElapsed = Date.now() - t0;
 
+    // RF-25.3: defensive fallback se subquery falhar — default seguro 'hybrid'.
+    const playerProfile: PlayerProfile = profileDetectResult?.profile ?? 'hybrid';
+    const playerProfileMeta: ProfileMeta = {
+      totalUploads: profileDetectResult?.totalUploads ?? 0,
+      totalSessions: profileDetectResult?.totalSessions ?? 0,
+      sessionTournamentCount: profileDetectResult?.sessionTournamentCount ?? 0,
+      detectedAt: profileDetectResult?.detectedAt ?? new Date().toISOString(),
+    };
+
     const body: HomeOverviewBody = {
       userState,
+      profile: playerProfile,
+      profileMeta: playerProfileMeta,
       statusStrip: {
         banca,
         roi30d,

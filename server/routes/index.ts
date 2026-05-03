@@ -44,6 +44,8 @@ import gradeDayDetailRouter from "./grade-day-detail";
 // Sprint home-reform-1 (RF-01, RF-02): operations cockpit + news stub.
 import { registerHomeRoutes } from "./home";
 import { registerNewsRoutes } from "./news";
+// Sprint home-reform-1-5 (RF-28): /api/library/continue.
+import { registerLibraryContinueRoutes } from "./library-continue";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -173,6 +175,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sprint home-reform-1 (RF-01 + RF-02): /api/home/overview + /api/news.
   registerHomeRoutes(app);
   registerNewsRoutes(app);
+  // Sprint home-reform-1-5 (RF-28): /api/library/continue.
+  registerLibraryContinueRoutes(app);
 
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);

@@ -20,8 +20,12 @@ interface OnboardingData {
   gradeDays: number;
 }
 
+// Sprint home-reform-1-5 RF-25.5/RF-26: profile-aware copy.
+type PlayerProfile = 'upload-only' | 'session-only' | 'hybrid' | 'new';
+
 interface Props {
   data: OnboardingData;
+  profile?: PlayerProfile;
 }
 
 interface StepProps {
@@ -72,7 +76,17 @@ function Step(props: StepProps): JSX.Element {
   );
 }
 
-export default function EmptyHomeOnboarding({ data }: Props): JSX.Element {
+function descriptionForProfile(profile?: PlayerProfile): string {
+  if (profile === 'upload-only') {
+    return 'Voce ja importa CSVs. Complete os 4 passos abaixo para destravar grind-live e analise completa.';
+  }
+  if (profile === 'session-only') {
+    return 'Voce ja reporta sessoes live. Complete os 4 passos para popular o dashboard com seus historicos.';
+  }
+  return 'Complete os 4 passos abaixo para destravar o cockpit completo.';
+}
+
+export default function EmptyHomeOnboarding({ data, profile }: Props): JSX.Element {
   const handleSkip = () => {
     try {
       localStorage.setItem('home:skipOnboarding', 'true');
@@ -92,12 +106,15 @@ export default function EmptyHomeOnboarding({ data }: Props): JSX.Element {
   return (
     <div
       data-testid="home-empty-onboarding"
+      data-profile-variant={profile ?? undefined}
       className="max-w-2xl mx-auto p-4"
     >
       <header className="mb-4">
         <h1 className="text-xl font-bold">Bem-vindo ao Grindfy</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Complete os 4 passos abaixo para destravar o cockpit completo.
+          {profile === 'hybrid' || !profile
+            ? 'Complete os 4 passos abaixo para destravar o cockpit completo.'
+            : descriptionForProfile(profile)}
         </p>
       </header>
 

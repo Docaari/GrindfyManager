@@ -17,6 +17,12 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useCoachChat, type CoachType, type ChatMessage } from '@/hooks/useCoachChat';
+import { emit } from '@/lib/tracker';
+
+// Sprint home-reform-1-5 RF-27 (B6): Coach FAB hint badge.
+interface MiniChatProps {
+  hintCount?: number;
+}
 
 const HIDDEN_PATHS = [
   '/coach-ai',
@@ -61,12 +67,13 @@ function MiniMessage({ message }: { message: ChatMessage }) {
   );
 }
 
-export default function MiniChat() {
+export default function MiniChat({ hintCount = 0 }: MiniChatProps = {}) {
   const [location, setLocation] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [coachType, setCoachType] = useState<CoachType>('mental');
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hintShownEmittedRef = useRef(false);
 
   const {
     messages,
@@ -80,6 +87,20 @@ export default function MiniChat() {
   const shouldHide = HIDDEN_PATHS.some((path) =>
     location === path || location.startsWith(path + '/')
   );
+
+  // RF-27 tracker: emit hint shown 1x quando badge fica visivel.
+  useEffect(() => {
+    if (shouldHide) return;
+    if (hintCount > 0 && !hintShownEmittedRef.current) {
+      hintShownEmittedRef.current = true;
+      emit('coach_fab_hint_shown', { hintCount });
+    }
+  }, [hintCount, shouldHide]);
+
+  const handleHintClick = useCallback(() => {
+    emit('coach_fab_hint_clicked', { hintCount });
+    setIsOpen(true);
+  }, [hintCount]);
 
   // Auto-scroll
   useEffect(() => {
@@ -116,6 +137,20 @@ export default function MiniChat() {
         title="Coach IA"
       >
         <MessageSquare size={22} />
+        {hintCount > 0 && (
+          <span
+            data-testid="coach-fab-hint-badge"
+            role="status"
+            aria-label={`${hintCount} insight novo`}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleHintClick();
+            }}
+            className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border border-gray-900"
+          >
+            {hintCount}
+          </span>
+        )}
       </button>
     );
   }

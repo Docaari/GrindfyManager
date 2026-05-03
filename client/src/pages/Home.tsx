@@ -20,6 +20,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { WelcomeNameModal } from '@/components/WelcomeNameModal';
 import { emit } from '@/lib/tracker';
+import HeaderLogo from '@/components/branding/HeaderLogo';
 
 import StatusStrip from '@/components/home/StatusStrip';
 import TodayCard from '@/components/home/TodayCard';
@@ -33,6 +34,9 @@ import PendingHandsList from '@/components/home/PendingHandsList';
 import NewsSlot from '@/components/home/NewsSlot';
 import HomeFooter from '@/components/home/HomeFooter';
 import EmptyHomeOnboarding from '@/components/home/EmptyHomeOnboarding';
+// Sprint home-reform-1-5 (RF-22 + RF-23): forward-looking blocks.
+import DailyInsight from '@/components/home/DailyInsight';
+import LibraryResume from '@/components/home/LibraryResume';
 
 import type { NewsItem } from '@shared/types/news';
 
@@ -102,6 +106,14 @@ interface HomeOverviewResponse {
     ageRelative: string;
   }>;
   news: { enabled: boolean; items: NewsItem[] };
+  // Sprint home-reform-1-5 RF-25.1: profile + profileMeta.
+  profile?: 'upload-only' | 'session-only' | 'hybrid' | 'new';
+  profileMeta?: {
+    totalUploads: number;
+    totalSessions: number;
+    sessionTournamentCount: number;
+    detectedAt: string;
+  };
   meta: { generatedAt: string; cacheHit: boolean; subqueryTimingsMs: Record<string, number> };
 }
 
@@ -119,6 +131,7 @@ const Home: React.FC = () => {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [skipOnboarding, setSkipOnboarding] = useState<boolean>(() => readSkipOnboarding());
   const homeViewEmittedRef = useRef(false);
+  const profileDetectedEmittedRef = useRef(false);
 
   const { data, isLoading } = useQuery<HomeOverviewResponse>({
     queryKey: ['/api/home/overview'],
@@ -159,6 +172,19 @@ const Home: React.FC = () => {
     });
   }, [data]);
 
+  // Sprint home-reform-1-5 RF-25.5: home_profile_detected 1x por mount.
+  useEffect(() => {
+    if (!data || profileDetectedEmittedRef.current) return;
+    if (!data.profile) return;
+    profileDetectedEmittedRef.current = true;
+    emit('home_profile_detected', {
+      profile: data.profile,
+      totalUploads: data.profileMeta?.totalUploads ?? 0,
+      totalSessions: data.profileMeta?.totalSessions ?? 0,
+      sessionTournamentCount: data.profileMeta?.sessionTournamentCount ?? 0,
+    });
+  }, [data]);
+
   const handleWelcomeComplete = () => {
     setShowWelcomeModal(false);
     if (user) {
@@ -187,6 +213,14 @@ const Home: React.FC = () => {
   return (
     <div className="min-h-screen p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-3">
+        <div className="flex items-center justify-center pt-2 pb-4">
+          <HeaderLogo
+            variant="full"
+            alt="Grindfy"
+            className="h-20 md:h-28 w-auto object-contain"
+          />
+        </div>
+
         {isEmpty ? (
           <EmptyHomeOnboarding
             data={{
@@ -195,6 +229,7 @@ const Home: React.FC = () => {
               walletsConfigured: !!data.statusStrip.banca,
               gradeDays: data.today?.plannedCount ?? 0,
             }}
+            profile={data.profile}
           />
         ) : (
           <>
@@ -203,6 +238,9 @@ const Home: React.FC = () => {
             <CooldownBanner banner={data.banners.cooldown} />
 
             <StatusStrip data={data.statusStrip} />
+
+            {/* Sprint home-reform-1-5 RF-22: Insight do Dia (forward-looking). */}
+            <DailyInsight data={data} />
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="md:col-span-2">
@@ -220,7 +258,11 @@ const Home: React.FC = () => {
               <PendingHandsList data={data.pendingHands} />
             </div>
 
-            <PerformanceMini data={data.performance} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Sprint home-reform-1-5 RF-23: Continue Assistindo. */}
+              <LibraryResume />
+              <PerformanceMini data={data.performance} />
+            </div>
 
             <NewsSlot enabled={data.news.enabled} items={data.news.items} />
           </>
