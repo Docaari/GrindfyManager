@@ -508,6 +508,13 @@ export interface IStorage {
     pastedAt?: Date | string;
     source?: string;
     status?: string;
+    // Sprint Spot-Screenshots (migration 0019)
+    imageKey?: string | null;
+    imageMime?: string | null;
+    imageSize?: number | null;
+    imageWidth?: number | null;
+    imageHeight?: number | null;
+    capturedDuring?: string;
   }): Promise<StarredHand>;
   getStarredHand(id: string, userId: string): Promise<any | null>;
   listStarredHands(userId: string, filter?: { sessionId?: string; type?: string; period?: "7d" | "30d" | "all" }): Promise<any[]>;
@@ -5366,6 +5373,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     }
     if ((input as any).source !== undefined) values.source = (input as any).source;
     if ((input as any).status !== undefined) values.status = (input as any).status;
+    // Sprint Spot-Screenshots — campos opcionais (migration 0019).
+    if ((input as any).imageKey !== undefined) values.imageKey = (input as any).imageKey;
+    if ((input as any).imageMime !== undefined) values.imageMime = (input as any).imageMime;
+    if ((input as any).imageSize !== undefined) values.imageSize = (input as any).imageSize;
+    if ((input as any).imageWidth !== undefined) values.imageWidth = (input as any).imageWidth;
+    if ((input as any).imageHeight !== undefined) values.imageHeight = (input as any).imageHeight;
+    if ((input as any).capturedDuring !== undefined) values.capturedDuring = (input as any).capturedDuring;
     const [row] = await db.insert(starredHands).values(values as any).returning();
     return row as StarredHand;
   }

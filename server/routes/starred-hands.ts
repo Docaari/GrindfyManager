@@ -29,6 +29,8 @@ import fs from "fs";
 import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import { spotStorage, resolveSpotPath } from "../lib/spotStorage";
+import { spotImageStorage } from "../services/spotImageStorage";
+import { extFromMime, detectMimeFromBuffer } from "../services/spotImageStorage/mime";
 import {
   updateSpotReviewSchema,
   starredHandSourceSchema,
@@ -81,19 +83,11 @@ function ensureMulterDir(): void {
   multerDirEnsured = true;
 }
 
-const spotDiskStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    ensureMulterDir();
-    cb(null, SPOT_UPLOADS_DIR);
-  },
-  filename: (_req, file, cb) => {
-    const ext = spotExtFromMime(file.mimetype);
-    cb(null, `${nanoid(16)}.${ext}`);
-  },
-});
-
+// Memory storage: handler grava via spotImageStorage.put() (ADR-057), nao
+// disk direto. Layout final eh `private-uploads/spots/<userId>/<sessionId>/<id>.<ext>`,
+// alinhado com o GET /image migrado para cooldown.ts:handleGetStarredHandImage.
 export const spotScreenshotUpload = multer({
-  storage: spotDiskStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: SPOT_MAX_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
     if (SPOT_ALLOWED_MIMES.has(file.mimetype)) {
@@ -118,25 +112,24 @@ function unauthorized(res: Response) {
 }
 
 /**
- * Apaga o arquivo gravado pelo Multer apos uma falha de validacao/ownership/limit.
- * Use sempre antes de retornar 4xx ou 5xx pos-upload.
- *
- * Resolve a key relativa para chamar `spotStorage.delete()` (mesma abstracao
- * que o cron usa). Se nao houver req.file, no-op.
+ * No-op com memory storage: nada gravado em disco antes do handler decidir.
+ * Mantido como helper para o caso de retomarmos disk storage no futuro.
  */
-async function rollbackMulterUpload(req: any): Promise<void> {
-  const file = req?.file;
-  if (!file) return;
-  // Construir a key relativa: /uploads/spot-screenshots/<filename>
-  const filename = file.filename ?? path.basename(file.path ?? "");
-  if (!filename) return;
-  const key = `${SPOT_URL_PREFIX}/${filename}`;
+async function rollbackMulterUpload(_req: any): Promise<void> {
+  return;
+}
+
+/**
+ * Rollback de imagem ja persistida via spotImageStorage (apos put bem-sucedido
+ * mas antes de createStarredHand confirmar). Idempotente em ENOENT.
+ */
+async function rollbackSpotImage(key: string | null): Promise<void> {
+  if (!key) return;
   try {
-    await spotStorage.delete(key);
+    await spotImageStorage.delete(key);
   } catch (err: any) {
-    // ENOENT eh OK: arquivo ja foi removido por outra request concorrente.
     if (err?.code !== "ENOENT") {
-      console.warn("rollbackMulterUpload failed", { filename, err: err?.message });
+      console.warn("rollbackSpotImage failed", { key, err: err?.message });
     }
   }
 }
@@ -237,35 +230,71 @@ export async function handleCreateSpotScreenshot(req: any, res: Response): Promi
       sessionTournamentId = resolved;
     }
 
-    // Construir imageUrl a partir do filename gravado pelo Multer.
-    const filename = file.filename ?? path.basename(file.path ?? "");
-    const imageUrl = `${SPOT_URL_PREFIX}/${filename}`;
+    // Persistir imagem via spotImageStorage (ADR-057). Layout:
+    // private-uploads/spots/<userId>/<sessionId>/<nanoid>.<ext>
+    // MIME detectado por magic bytes (founder decision #2 — source of truth).
+    const detectedMime = detectMimeFromBuffer(file.buffer);
+    if (!detectedMime) {
+      res.status(400).json({
+        message: "Formato invalido. Aceitos: PNG, JPEG, WebP",
+        code: "invalid_mime",
+      });
+      return;
+    }
+    const ext = extFromMime(detectedMime);
+    let imageKey: string | null = null;
+    let imageSize: number | null = null;
+    try {
+      const putResult = await spotImageStorage.put({
+        userId,
+        sessionId,
+        ext,
+        buffer: file.buffer,
+        mime: detectedMime,
+      });
+      imageKey = putResult.key;
+      imageSize = putResult.size;
+    } catch (err: any) {
+      console.error("POST /api/starred-hands/screenshot spotImageStorage.put failed:", err);
+      res.status(500).json({ message: "Erro ao salvar imagem" });
+      return;
+    }
+
+    const imageUrl = `/api/starred-hands/__placeholder__/image`;
     const now = new Date();
     const expiresAt = new Date(now.getTime() + SPOT_EXPIRES_MS);
 
-    const created = await storage.createStarredHand({
-      userId,
-      sessionId,
-      sessionTournamentId,
-      type: "spot_screenshot",
-      spot: "screenshot_pending",
-      imageUrl,
-      pastedAt: now,
-      expiresAt,
-      status: "pending",
-      source,
-    });
+    try {
+      const created = await storage.createStarredHand({
+        userId,
+        sessionId,
+        sessionTournamentId,
+        type: "spot_screenshot",
+        spot: "screenshot_pending",
+        imageUrl,
+        imageKey,
+        imageMime: detectedMime,
+        imageSize: imageSize ?? file.size ?? undefined,
+        capturedDuring: "grind-live",
+        pastedAt: now,
+        expiresAt,
+        status: "pending",
+        source,
+      });
 
-    res.status(201).json({
-      id: created.id,
-      imageUrl,
-      expiresAt,
-      sessionTournamentId,
-      pastedAt: now,
-    });
+      res.status(201).json({
+        id: created.id,
+        imageUrl: `/api/starred-hands/${created.id}/image`,
+        expiresAt,
+        sessionTournamentId,
+        pastedAt: now,
+      });
+    } catch (err: any) {
+      await rollbackSpotImage(imageKey);
+      throw err;
+    }
   } catch (err: any) {
     console.error("POST /api/starred-hands/screenshot failed:", err);
-    await rollbackMulterUpload(req);
     res.status(500).json({ message: err?.message ?? "Erro ao criar print" });
   }
 }

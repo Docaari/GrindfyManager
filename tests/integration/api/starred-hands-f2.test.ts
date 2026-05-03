@@ -71,6 +71,20 @@ vi.mock('../../../server/lib/spotStorage', () => ({
   resolveSpotPath: vi.fn((imageUrl: string) => path.resolve('uploads' + imageUrl.replace('/uploads', ''))),
 }));
 
+// Sprint Grind-Live Spot Notes (2026-05-03) — handler migrou de disk Multer
+// para memory + spotImageStorage.put (alinhado com handler do cooldown.ts).
+vi.mock('../../../server/services/spotImageStorage', () => ({
+  spotImageStorage: {
+    put: vi.fn(async ({ userId, sessionId, ext }: any) => ({
+      key: `${userId}/${sessionId}/test-key.${ext}`,
+      size: 1024,
+    })),
+    get: vi.fn(),
+    delete: vi.fn(),
+    exists: vi.fn(),
+  },
+}));
+
 // Imports DEPOIS dos mocks — modulos NAO existem ainda (Implementer cria).
 import {
   handleCreateSpotScreenshot,
@@ -133,24 +147,45 @@ function makeRes() {
  * multer.diskStorage.fileFilter+filename faria. O handler recebe `req.file`
  * com `path` apontando para o arquivo real, permitindo testar rollback (unlink).
  */
+// Magic bytes por MIME — handler agora usa detectMimeFromBuffer (founder
+// decision #2 — source of truth = magic bytes, ignora Content-Type cliente).
+function magicBytesFor(mime: string): Buffer {
+  if (mime === 'image/png') {
+    return Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  }
+  if (mime === 'image/jpeg' || mime === 'image/jpg') {
+    return Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+  }
+  if (mime === 'image/webp') {
+    const head = Buffer.from('RIFF\x00\x00\x00\x00WEBP', 'binary');
+    return head;
+  }
+  // Mime invalido: bytes zerados (detector retorna null → 400).
+  return Buffer.alloc(0);
+}
+
 function makeMulterFile(opts: { mime?: string; sizeBytes?: number; ext?: string } = {}) {
+  const mime = opts.mime ?? 'image/png';
   const ext = opts.ext ?? 'png';
   const filename = `nano${Math.random().toString(36).slice(2, 10)}.${ext}`;
   const absolutePath = path.join(tmpDir, filename);
   const size = opts.sizeBytes ?? 1024;
-  // Cria um arquivo de tamanho `size` com bytes zerados.
-  fs.writeFileSync(absolutePath, Buffer.alloc(size));
+  // Cria buffer com magic bytes corretos + padding para atingir o size.
+  const magic = magicBytesFor(mime);
+  const padding = Math.max(0, size - magic.length);
+  const buffer = Buffer.concat([magic, Buffer.alloc(padding)], magic.length + padding);
+  fs.writeFileSync(absolutePath, buffer);
   createdFiles.push(absolutePath);
   return {
     fieldname: 'screenshot',
     originalname: 'spot.png',
     encoding: '7bit',
-    mimetype: opts.mime ?? 'image/png',
-    size,
+    mimetype: mime,
+    size: buffer.length,
     destination: tmpDir,
     filename,
     path: absolutePath,
-    buffer: undefined as any,
+    buffer,
   };
 }
 
@@ -207,7 +242,8 @@ describe('POST /api/starred-hands/screenshot — happy path', () => {
     expect(res.statusCode).toBe(201);
     expect(res.body.id).toBe('sh_new_1');
     expect(typeof res.body.imageUrl).toBe('string');
-    expect(res.body.imageUrl).toContain('/uploads/spot-screenshots/');
+    expect(res.body.imageUrl).toContain('/api/starred-hands/');
+    expect(res.body.imageUrl).toContain('/image');
     expect(res.body.expiresAt).toBeDefined();
   });
 
@@ -336,7 +372,9 @@ describe('POST /api/starred-hands/screenshot — sessionTournamentId resolution 
       res,
     );
     expect(res.statusCode).toBe(422);
-    expect(spotStorage.delete).toHaveBeenCalled();
+    // Memory storage: nada gravado em disco antes do put. Falhas anteriores
+    // ao put (count/ownership/no-tournament) NAO precisam rollback.
+    expect(spotStorage.delete).not.toHaveBeenCalled();
   });
 
   it('quando sessionTournamentId fornecido: NAO chama resolver', async () => {
@@ -438,7 +476,9 @@ describe('POST /api/starred-hands/screenshot — ownership da sessao', () => {
       res,
     );
     expect(res.statusCode).toBe(404);
-    expect(spotStorage.delete).toHaveBeenCalled();
+    // Memory storage: nada gravado em disco antes do put. Falhas anteriores
+    // ao put (count/ownership/no-tournament) NAO precisam rollback.
+    expect(spotStorage.delete).not.toHaveBeenCalled();
   });
 });
 
@@ -483,7 +523,9 @@ describe('POST /api/starred-hands/screenshot — limite 10 por sessao (RF-02)', 
       res,
     );
     expect(res.statusCode).toBe(409);
-    expect(spotStorage.delete).toHaveBeenCalled();
+    // Memory storage: nada gravado em disco antes do put. Falhas anteriores
+    // ao put (count/ownership/no-tournament) NAO precisam rollback.
+    expect(spotStorage.delete).not.toHaveBeenCalled();
   });
 
   it('counter de spots EXCLUI rows status=discarded (filtro source IN paste/upload)', async () => {
