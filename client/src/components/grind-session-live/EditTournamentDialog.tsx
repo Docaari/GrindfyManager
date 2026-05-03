@@ -151,7 +151,7 @@ export default function EditTournamentDialog({
               />
             </div>
             <div>
-              <Label htmlFor="edit-time" className="text-gray-300">Horario</Label>
+              <Label htmlFor="edit-time" className="text-gray-300">Horario de Inicio</Label>
               <Input
                 id="edit-time"
                 type="time"
@@ -159,6 +159,38 @@ export default function EditTournamentDialog({
                 onChange={(e) => setEditingTournament({...editingTournament, time: e.target.value})}
                 className="bg-gray-800 border-gray-600 text-white"
               />
+            </div>
+            <div>
+              <Label htmlFor="edit-registrationTime" className="text-gray-300">
+                Horario de Registro
+                <span className="ml-2 text-xs text-gray-500 font-normal">(usado pra ordenacao e blocos de break)</span>
+              </Label>
+              <Input
+                id="edit-registrationTime"
+                type="time"
+                value={editingTournament.registrationTime || ""}
+                onChange={(e) => setEditingTournament({...editingTournament, registrationTime: e.target.value || null})}
+                className="bg-gray-800 border-gray-600 text-white"
+                data-testid="edit-input-registration-time"
+              />
+              {editingTournament.libraryTemplateId && (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="edit-persist-regtime-library"
+                    checked={Boolean(editingTournament._persistRegistrationTimeToLibrary)}
+                    onChange={(e) => setEditingTournament({
+                      ...editingTournament,
+                      _persistRegistrationTimeToLibrary: e.target.checked,
+                    })}
+                    className="w-4 h-4 text-emerald-500 bg-gray-800 border-gray-600 rounded"
+                    data-testid="edit-checkbox-persist-regtime-library"
+                  />
+                  <Label htmlFor="edit-persist-regtime-library" className="text-xs text-gray-400 cursor-pointer">
+                    Salvar este horario tambem na biblioteca (permanente)
+                  </Label>
+                </div>
+              )}
             </div>
             <div>
               <Label htmlFor="edit-result" className="text-gray-300">Resultado/Prize ({currency.symbol})</Label>
@@ -331,6 +363,7 @@ export default function EditTournamentDialog({
                     buyIn: editingTournament.buyIn,
                     guaranteed: editingTournament.guaranteed,
                     time: editingTournament.time,
+                    registrationTime: editingTournament.registrationTime || null,
                     result: editingTournament.result || '0',
                     bounty: editingTournament.bounty || '0',
                     position: editingTournament.position || null,
@@ -347,6 +380,8 @@ export default function EditTournamentDialog({
                     reentries: editingTournament.allowsReentry
                       ? parseInt(String(editingTournament.reentries ?? 0)) || 0
                       : 0,
+                  }, {
+                    persistRegistrationTimeToLibrary: Boolean(editingTournament._persistRegistrationTimeToLibrary),
                   });
                   onOpenChange(false);
                 }}

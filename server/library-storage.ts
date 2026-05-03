@@ -43,6 +43,8 @@ export async function createLibraryTournament(
     addOnCost: (data as any).addOnCost ?? null,
     allowsReentry: (data as any).allowsReentry ?? false,
     maxReentries: (data as any).maxReentries ?? null,
+    lateRegMinutes: (data as any).lateRegMinutes ?? null,
+    registrationTime: (data as any).registrationTime ?? null,
     createdAt: now,
     updatedAt: now,
   };

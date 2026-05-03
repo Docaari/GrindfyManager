@@ -1267,6 +1267,7 @@ export function registerGrindSessionRoutes(app: Express): void {
         startTime: req.body.startTime || null,
         endTime: req.body.endTime || null,
         time: req.body.time,
+        registrationTime: req.body.registrationTime ?? null,
         type: req.body.type,
         speed: req.body.speed,
         guaranteed: req.body.guaranteed,

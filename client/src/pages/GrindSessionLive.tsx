@@ -123,6 +123,7 @@ export default function GrindSessionLive() {
   const [sessionObjectiveCompleted, setSessionObjectiveCompleted] = useState(false);
   const [sessionFinalNotes, setSessionFinalNotes] = useState("");
   const [showCompletedTournaments, setShowCompletedTournaments] = useState(false);
+  const [showActiveTournaments, setShowActiveTournaments] = useState(true);
   const [preparationPercentage, setPreparationPercentage] = useState<number[]>([50]);
   const [preparationObservations, setPreparationObservations] = useState("");
   const [dailyGoals, setDailyGoals] = useState("");
@@ -2364,24 +2365,35 @@ export default function GrindSessionLive() {
           )}
           {/* EM ANDAMENTO */}
           <div className="tournament-category" id="activeCategory">
-            <div className="category-header category-registered"><div className="category-icon"></div><div className="category-title">Em Andamento</div><div className="category-count">{filteredRegistered.length}</div></div>
-            <div className="tournaments-list">
-              {filteredRegistered.length > 0 ? filteredRegistered.map((tournament: any, index: number) => (
-                <TournamentCard key={tournament.id} mode="registered"
-                  tournament={tournament} index={index} totalCount={filteredRegistered.length}
-                  registrationData={registrationData} maxLateStates={maxLateStates} editingPriority={editingPriority}
-                  onUnregister={handleUnregisterTournament} onRebuy={handleRebuyTournament}
-                  onFinishDirect={handleFinishTournamentDirect} onPriorityClickCycle={handlePriorityClickCycle}
-                  onPriorityClick={(id, e) => { e.preventDefault(); e.stopPropagation(); setEditingPriority(id); }}
-                  onUpdatePriority={handleUpdatePriority} setEditingPriority={setEditingPriority}
-                  onSetRegistrationData={setRegistrationData} onSetMaxLateStates={setMaxLateStates}
-                  updateIsPending={updateTournamentMutation.isPending}
-                  isSelected={selectedTournaments.has(tournament.id)}
-                  onToggleSelect={toggleTournamentSelection}
-                  onAddOnTaken={handleAddOnTaken}
-                />
-              )) : <div className="category-empty">Nenhum torneio em andamento</div>}
-            </div>
+            <Collapsible open={showActiveTournaments} onOpenChange={setShowActiveTournaments}>
+              <CollapsibleTrigger asChild>
+                <div className="category-header category-registered cursor-pointer hover:opacity-80 transition-opacity" data-testid="active-tournaments-toggle">
+                  <div className="category-icon"></div>
+                  <div className="category-title">Em Andamento</div>
+                  <div className="category-count">{filteredRegistered.length}</div>
+                  {showActiveTournaments ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="tournaments-list">
+                  {filteredRegistered.length > 0 ? filteredRegistered.map((tournament: any, index: number) => (
+                    <TournamentCard key={tournament.id} mode="registered"
+                      tournament={tournament} index={index} totalCount={filteredRegistered.length}
+                      registrationData={registrationData} maxLateStates={maxLateStates} editingPriority={editingPriority}
+                      onUnregister={handleUnregisterTournament} onRebuy={handleRebuyTournament}
+                      onFinishDirect={handleFinishTournamentDirect} onPriorityClickCycle={handlePriorityClickCycle}
+                      onPriorityClick={(id, e) => { e.preventDefault(); e.stopPropagation(); setEditingPriority(id); }}
+                      onUpdatePriority={handleUpdatePriority} setEditingPriority={setEditingPriority}
+                      onSetRegistrationData={setRegistrationData} onSetMaxLateStates={setMaxLateStates}
+                      updateIsPending={updateTournamentMutation.isPending}
+                      isSelected={selectedTournaments.has(tournament.id)}
+                      onToggleSelect={toggleTournamentSelection}
+                      onAddOnTaken={handleAddOnTaken}
+                    />
+                  )) : <div className="category-empty">Nenhum torneio em andamento</div>}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
 
           {/* PROXIMOS */}

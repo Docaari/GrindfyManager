@@ -514,6 +514,8 @@ export function registerTournamentLibraryRoutes(app: Express): void {
           updates[key] = String(value || '0');
         } else if (key === 'fieldSize') {
           updates[key] = value === null || value === undefined ? null : parseInt(String(value));
+        } else if (key === 'registrationTime') {
+          updates[key] = value === null || value === undefined || value === '' ? null : String(value);
         }
       }
 

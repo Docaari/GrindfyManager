@@ -308,6 +308,27 @@ export const getGuaranteedValue = (tournament: any): number | null => {
   return guaranteedValue;
 };
 
+/**
+ * Sort key (em minutos do dia) usado pra ordenar torneios upcoming/registered
+ * e agrupar blocos de break.
+ *
+ * Prioridade:
+ * 1. `registrationTime` explicito (HH:MM) — horario que jogador escolhe registrar.
+ * 2. `time` + `lateRegMinutes` (deadline de late reg).
+ * 3. `time` cru.
+ *
+ * Founder convention 2026-05-03: registrationTime e a fonte de verdade pra
+ * ordenacao no /grind-live; usuario pode alterar quando quiser.
+ */
+export const getRegSortKey = (t: any): number => {
+  if (t?.registrationTime && typeof t.registrationTime === 'string' && t.registrationTime.trim() !== '') {
+    return parseTime(t.registrationTime);
+  }
+  const baseTime = parseTime(t?.time);
+  const lateReg = typeof t?.lateRegMinutes === 'number' ? t.lateRegMinutes : 0;
+  return baseTime + lateReg;
+};
+
 // Functions to organize tournaments by status
 export const organizeTournaments = (tournaments: any[], plannedTournaments: any[]) => {
   // Filter out deleted tournaments and prevent duplicates by ID
@@ -380,36 +401,27 @@ export const organizeTournaments = (tournaments: any[], plannedTournaments: any[
     return tournament;
   });
 
-  // Reg deadline = parseTime(time) + lateRegMinutes. Empate cai em start time
-  // pra estabilizar ordem entre torneios sem late-reg distinto.
-  const regDeadline = (t: any) =>
-    parseTime(t.time) + (typeof t.lateRegMinutes === 'number' ? t.lateRegMinutes : 0);
-
   const upcoming = activeTournaments.filter(t =>
     t.status === 'upcoming' || (!t.status && t.time)
   ).sort((a, b) => {
+    const da = getRegSortKey(a);
+    const db = getRegSortKey(b);
+    if (da !== db) return da - db;
     const priorityA = a.prioridade || 2;
     const priorityB = b.prioridade || 2;
-    if (priorityA !== priorityB) {
-      return priorityA - priorityB;
-    }
-    const da = regDeadline(a);
-    const db = regDeadline(b);
-    if (da !== db) return da - db;
+    if (priorityA !== priorityB) return priorityA - priorityB;
     return parseTime(a.time) - parseTime(b.time);
   });
 
   const registered = activeTournaments.filter(t => {
     return t.status === 'registered';
   }).sort((a, b) => {
+    const da = getRegSortKey(a);
+    const db = getRegSortKey(b);
+    if (da !== db) return da - db;
     const priorityA = a.prioridade || 2;
     const priorityB = b.prioridade || 2;
-    if (priorityA !== priorityB) {
-      return priorityA - priorityB;
-    }
-    const da = regDeadline(a);
-    const db = regDeadline(b);
-    if (da !== db) return da - db;
+    if (priorityA !== priorityB) return priorityA - priorityB;
     return parseTime(a.time) - parseTime(b.time);
   });
 
@@ -420,17 +432,19 @@ export const organizeTournaments = (tournaments: any[], plannedTournaments: any[
   return { registered, upcoming, completed };
 };
 
-// Function to organize tournaments by break times
+// Function to organize tournaments by break times.
+// Agrupa por hora do registrationTime (fallback time+lateReg / time).
+// Ordena torneios dentro do bloco pela mesma chave de registro.
 export const organizeTournamentsByBreaks = (tournaments: any[]) => {
   if (!tournaments || tournaments.length === 0) return [];
 
   const breakMap = new Map<string, any[]>();
 
   tournaments.forEach(tournament => {
-    if (!tournament.time) return;
+    const sortKey = getRegSortKey(tournament);
+    if (!sortKey && !tournament.time && !tournament.registrationTime) return;
 
-    const [hour] = tournament.time.split(':').map(Number);
-    const breakHour = hour;
+    const breakHour = Math.floor(sortKey / 60);
     const breakTime = `${breakHour.toString().padStart(2, '0')}:55`;
 
     if (!breakMap.has(breakTime)) {
@@ -444,9 +458,10 @@ export const organizeTournamentsByBreaks = (tournaments: any[]) => {
     .map(([breakTime, tournaments]) => ({
       breakTime,
       tournaments: tournaments.sort((a, b) => {
-        const timeA = a.time || '00:00';
-        const timeB = b.time || '00:00';
-        return timeA.localeCompare(timeB);
+        const da = getRegSortKey(a);
+        const db = getRegSortKey(b);
+        if (da !== db) return da - db;
+        return parseTime(a.time) - parseTime(b.time);
       })
     }))
     .sort((a, b) => a.breakTime.localeCompare(b.breakTime));
@@ -463,6 +478,12 @@ export const combineTournaments = (sessionTournaments: any[], plannedTournaments
     combinedTournaments.set(tournament.id, tournament);
   });
 
+  // Normaliza buyIn pra tolerar '20' vs '20.00' vs 20 vs '20,00' em comparacoes.
+  const normBuyIn = (v: any) => {
+    const n = parseFloat(String(v ?? '0').replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  };
+
   // Then, add planned tournaments only if they don't have a corresponding session tournament
   // Exception: Suprema tournaments always stay visible (multiple entries allowed)
   (plannedTournaments || []).forEach(tournament => {
@@ -477,9 +498,27 @@ export const combineTournaments = (sessionTournaments: any[], plannedTournaments
       (sessionTournament.fromPlannedTournament &&
        sessionTournament.name === tournament.name &&
        sessionTournament.site === tournament.site &&
-       sessionTournament.buyIn === tournament.buyIn &&
+       normBuyIn(sessionTournament.buyIn) === normBuyIn(tournament.buyIn) &&
        sessionTournament.time === tournament.time)
     );
+
+    // Suprema bypass mantem planned-X visivel mesmo com shadow registrado
+    // (multiplas entradas). Mas se existe shadow soft-deletado pra esse
+    // planned, usuario sinalizou "remover desta sessao" — respeitar.
+    // Match por plannedTournamentId (preferido) OU fallback por
+    // name+site+buyIn+time (cobre shadows legados sem campo).
+    const hasDeletedShadow = (sessionTournaments || []).some((st: any) => {
+      if (st.status !== 'deleted') return false;
+      if (st.plannedTournamentId === tournament.id) return true;
+      return (
+        st.fromPlannedTournament &&
+        st.name === tournament.name &&
+        st.site === tournament.site &&
+        normBuyIn(st.buyIn) === normBuyIn(tournament.buyIn) &&
+        st.time === tournament.time
+      );
+    });
+    if (hasDeletedShadow) return;
 
     if ((isSuprema || !hasSessionTournament) && !combinedTournaments.has(plannedKey)) {
       combinedTournaments.set(plannedKey, {

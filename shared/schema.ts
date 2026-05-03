@@ -451,6 +451,9 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   gameType: varchar("game_type"),
   blindLevelMinutes: integer("blind_level_minutes"),
   alertMinutesBefore: integer("alert_minutes_before"),
+  // Horario de registro intencional (HH:MM). Quando preenchido, /grind-live
+  // ordena/exibe por este valor; senao usa time + lateRegMinutes.
+  registrationTime: varchar("registration_time"),
   // Add-on + Re-entry (ADR-014)
   allowsAddOn: boolean("allows_addon").default(false),
   addOnCost: decimal("addon_cost"),
@@ -570,6 +573,9 @@ export const sessionTournaments = pgTable("session_tournaments", {
   gameType: varchar("game_type"),
   blindLevelMinutes: integer("blind_level_minutes"),
   alertMinutesBefore: integer("alert_minutes_before"),
+  // Horario de registro intencional (HH:MM). Quando preenchido, /grind-live
+  // ordena/exibe por este valor; senao usa time + lateRegMinutes.
+  registrationTime: varchar("registration_time"),
   // Add-on + Re-entry (ADR-014)
   allowsAddOn: boolean("allows_addon").default(false),
   addOnCost: decimal("addon_cost"),
@@ -2146,6 +2152,9 @@ export const tournamentLibrary = pgTable("tournament_library", {
   // Migration 0025: late-reg window preservada no template (antes apenas em
   // planned_tournaments). Permite re-instanciar template com late-reg correto.
   lateRegMinutes: integer("late_reg_minutes"),
+  // Horario de registro intencional (HH:MM). Persistido na biblioteca para
+  // herdar em planned/session ao instanciar.
+  registrationTime: varchar("registration_time"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -3822,6 +3831,81 @@ export const libraryProgressRelations = relations(libraryProgress, ({ one }) => 
   }),
 }));
 
+// =============================================================================
+// Sprint UX-Biblioteca-1 / RF-02 — library_access_requests (ADR-103)
+// Pedidos de liberacao de acesso alpha (substitui mailto cru).
+// Migration 0036_library_access_requests.sql.
+// =============================================================================
+
+export const libraryAccessRequestStatusEnum = pgEnum(
+  "library_access_request_status",
+  ["pending", "approved", "denied"] as const,
+);
+
+export const libraryAccessRequests = pgTable(
+  "library_access_requests",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    subscriptionPlanSnapshot: varchar("subscription_plan_snapshot", { length: 50 }).notNull(),
+    reason: text("reason").notNull(),
+    status: libraryAccessRequestStatusEnum("status").notNull().default("pending"),
+    reviewedBy: varchar("reviewed_by").references(
+      () => users.userPlatformId,
+      { onDelete: "set null" },
+    ),
+    reviewedAt: timestamp("reviewed_at"),
+    reviewNotes: text("review_notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    // UNIQUE INDEX parcial WHERE status = 'pending' — idempotencia em nivel
+    // de banco (race condition resolvida pelo Postgres com 23505).
+    uniqueIndex("uniq_library_access_requests_user_pending")
+      .on(table.userId)
+      .where(sql`${table.status} = 'pending'`),
+    index("idx_library_access_requests_user_status")
+      .on(table.userId, table.status, table.createdAt),
+    index("idx_library_access_requests_status_created")
+      .on(table.status, table.createdAt),
+  ],
+);
+
+export const libraryAccessRequestsRelations = relations(
+  libraryAccessRequests,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [libraryAccessRequests.userId],
+      references: [users.userPlatformId],
+    }),
+    reviewer: one(users, {
+      fields: [libraryAccessRequests.reviewedBy],
+      references: [users.userPlatformId],
+    }),
+  }),
+);
+
+export const insertLibraryAccessRequestSchema = createInsertSchema(
+  libraryAccessRequests,
+).omit({
+  id: true,
+  status: true,
+  reviewedBy: true,
+  reviewedAt: true,
+  reviewNotes: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type LibraryAccessRequest = typeof libraryAccessRequests.$inferSelect;
+export type InsertLibraryAccessRequest = z.infer<
+  typeof insertLibraryAccessRequestSchema
+>;
+
 // Expose `_` marker on every library table so smoke tests asserting
 // `(table as any)._` continue to validate "is a Drizzle table" without
 // depending on internal Drizzle symbols (which are not enumerable / public).
@@ -3835,6 +3919,7 @@ for (const t of [
   userLessonAccess,
   libraryEvents,
   libraryProgress,
+  libraryAccessRequests,
 ] as any[]) {
   if (!t._) Object.defineProperty(t, "_", { value: _libraryTableMarker, enumerable: false });
 }

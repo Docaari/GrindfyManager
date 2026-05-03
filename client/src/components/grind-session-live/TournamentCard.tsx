@@ -106,8 +106,14 @@ function RegisteredCard({
   const isSatellite = tournament?.type === 'Satellite';
   const currency = getCurrencyForSite(tournament.site || '');
   const addOnState = getAddOnButtonState(tournament, updateIsPending);
+  const regTimeExplicit = tournament.registrationTime && String(tournament.registrationTime).trim() !== ''
+    ? String(tournament.registrationTime)
+    : null;
   const regDeadlineLabel = getRegDeadlineLabel(tournament.time, tournament.lateRegMinutes);
-  const primaryTimeLabel = regDeadlineLabel ?? tournament.time ?? '—';
+  const primaryTimeLabel = regTimeExplicit ?? regDeadlineLabel ?? tournament.time ?? '—';
+  const startSubtitle = (regTimeExplicit || regDeadlineLabel) && tournament.time && tournament.time !== primaryTimeLabel
+    ? tournament.time
+    : null;
 
   return (
     <div className={`tournament-card tournament-registered pt-[2px] pb-[2px] ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
@@ -141,10 +147,10 @@ function RegisteredCard({
               <time dateTime={tournament.time || ''} className="text-emerald-400 font-mono text-sm font-bold">
                 {primaryTimeLabel}
               </time>
-              {regDeadlineLabel && tournament.time && (
-                <span className="text-gray-400 text-xs">(inicio {tournament.time})</span>
+              {startSubtitle && (
+                <span className="text-gray-400 text-xs">(inicio {startSubtitle})</span>
               )}
-              {!tournament.time && (
+              {!tournament.time && !regTimeExplicit && (
                 <span className="text-red-400 text-xs ml-1">(sem horario)</span>
               )}
             </div>
@@ -473,8 +479,14 @@ function UpcomingCard({
     const mm = String(deadline.getMinutes()).padStart(2, '0');
     return { deadline, minutesRemaining, color, hh, mm };
   })();
+  const regTimeExplicit = tournament.registrationTime && String(tournament.registrationTime).trim() !== ''
+    ? String(tournament.registrationTime)
+    : null;
   const regDeadlineLabel = getRegDeadlineLabel(tournament.time, tournament.lateRegMinutes);
-  const primaryTimeLabel = regDeadlineLabel ?? tournament.time ?? '—';
+  const primaryTimeLabel = regTimeExplicit ?? regDeadlineLabel ?? tournament.time ?? '—';
+  const startSubtitle = (regTimeExplicit || regDeadlineLabel) && tournament.time && tournament.time !== primaryTimeLabel
+    ? tournament.time
+    : null;
 
   return (
     <div className={`tournament-card tournament-upcoming mt-[6px] mb-[6px] ml-[0px] mr-[0px] pt-[0px] pb-[0px] relative ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
@@ -501,10 +513,10 @@ function UpcomingCard({
               <time dateTime={tournament.time || ''} className="text-emerald-400 font-mono text-sm font-bold">
                 {primaryTimeLabel}
               </time>
-              {regDeadlineLabel && tournament.time && (
-                <span className="text-gray-400 text-xs">(inicio {tournament.time})</span>
+              {startSubtitle && (
+                <span className="text-gray-400 text-xs">(inicio {startSubtitle})</span>
               )}
-              {!tournament.time && (
+              {!tournament.time && !regTimeExplicit && (
                 <span className="text-red-400 text-xs ml-1">(sem horario)</span>
               )}
             </div>
@@ -645,15 +657,11 @@ function UpcomingCard({
             Alerta
           </Button>
 
-          {/* Excluir */}
+          {/* Excluir — confirmacao via shadcn AlertDialog em GrindSessionLive (handleDeleteTournament) */}
           <Button
             size="sm"
             variant="outline"
-            onClick={() => {
-              if (window.confirm('Tem certeza que deseja excluir este torneio da lista?')) {
-                onDelete(tournament.id);
-              }
-            }}
+            onClick={() => onDelete(tournament.id)}
             className="border-2 border-red-500 bg-gradient-to-r from-red-600/60 to-red-700/60 text-red-100 hover:from-red-500/80 hover:to-red-600/80 hover:text-white h-10 px-2 text-xs font-semibold shadow-lg transform hover:scale-105 transition-all duration-200"
           >
             <X className="w-3 h-3 mr-1" />

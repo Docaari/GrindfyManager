@@ -3405,6 +3405,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         category: p.type, // Map type to category for compatibility
         // Enriched fields from Suprema
         lateRegMinutes: p.lateRegMinutes,
+        registrationTime: (p as any).registrationTime ?? null,
         startingStack: p.startingStack,
         maxPlayers: p.maxPlayers,
         gameType: p.gameType,

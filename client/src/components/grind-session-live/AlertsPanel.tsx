@@ -46,7 +46,7 @@ export default function AlertsPanel({
   onOpenTournamentAlert,
   hasUpcomingTournaments = false,
 }: AlertsPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showFired, setShowFired] = useState(false);
   const [formLabel, setFormLabel] = useState("");
