@@ -4172,3 +4172,114 @@ export const coachLeakFocus = pgTable("coach_leak_focus", {
 export type CoachLeakFocus = typeof coachLeakFocus.$inferSelect;
 export type InsertCoachLeakFocus = typeof coachLeakFocus.$inferInsert;
 
+// =============================================================================
+// News Feed — Sprint News-1 (ADR-106)
+// =============================================================================
+// 3 tabelas: news_sources (catalogo gerenciavel), news_items (cache compartilhada),
+// user_news_preferences (opt-in granular per category × per platform).
+// Migration: 0038_news_feed.sql
+// =============================================================================
+
+export const NEWS_CATEGORIES = ["tools", "sites", "gossip", "tournament-results", "studies", "market", "reserved-future"] as const;
+export const newsCategorySchema = z.enum(NEWS_CATEGORIES);
+export type NewsCategoryEnum = (typeof NEWS_CATEGORIES)[number];
+
+export const newsSources = pgTable(
+  "news_sources",
+  {
+    id: varchar("id", { length: 64 }).primaryKey().notNull(),
+    category: varchar("category", { length: 32 }).notNull(),
+    name: varchar("name", { length: 128 }).notNull(),
+    description: text("description"),
+    iconUrl: text("icon_url"),
+    /** Slug semantico do software/rede ('hand2note', 'pokerstars'). */
+    platform: varchar("platform", { length: 64 }).notNull(),
+    /** Template de prompt pra Grok (placeholders {{period}}, {{platform}}). */
+    queryTemplate: text("query_template"),
+    /** Handle no X pra Live Search (gossip). */
+    liveSearchHandle: varchar("live_search_handle", { length: 64 }),
+    /**
+     * Homepage da fonte. Usada como fallback quando o URL especifico do item
+     * (retornado pelo Grok) retorna 4xx/5xx — evita "Link nao encontrado" no
+     * NewsFeed. Migration 0041 (Sprint home-reform-4 item 11).
+     */
+    homepageUrl: text("homepage_url"),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_news_sources_category").on(table.category, table.enabled),
+    index("idx_news_sources_platform").on(table.platform),
+  ],
+);
+
+export type NewsSourceRow = typeof newsSources.$inferSelect;
+export type InsertNewsSource = typeof newsSources.$inferInsert;
+
+export const newsItems = pgTable(
+  "news_items",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    sourceId: varchar("source_id", { length: 64 })
+      .notNull()
+      .references(() => newsSources.id, { onDelete: "cascade" }),
+    category: varchar("category", { length: 32 }).notNull(),
+    platform: varchar("platform", { length: 64 }).notNull(),
+    title: text("title").notNull(),
+    summary: text("summary").notNull(),
+    url: text("url").notNull(),
+    thumbnailUrl: text("thumbnail_url"),
+    publishedAt: timestamp("published_at").notNull(),
+    fetchedAt: timestamp("fetched_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at").notNull(),
+    engagementLikes: integer("engagement_likes"),
+    engagementViews: integer("engagement_views"),
+    engagementComments: integer("engagement_comments"),
+    /** sha256(url + title) — dedup idempotente do cron. */
+    contentHash: varchar("content_hash", { length: 64 }).notNull(),
+    tags: jsonb("tags").$type<string[]>(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_news_items_content_hash").on(table.contentHash),
+    index("idx_news_items_category_published").on(table.category, table.publishedAt),
+    index("idx_news_items_platform").on(table.platform),
+    index("idx_news_items_expires").on(table.expiresAt),
+  ],
+);
+
+export type NewsItemRow = typeof newsItems.$inferSelect;
+export type InsertNewsItem = typeof newsItems.$inferInsert;
+
+export const userNewsPreferences = pgTable(
+  "user_news_preferences",
+  {
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    category: varchar("category", { length: 32 }).notNull(),
+    /** Master da categoria. Default false (opt-in obrigatorio per ADR-106). */
+    enabled: boolean("enabled").notNull().default(false),
+    /** Toggles per-platform: { 'hand2note': true, 'pokertracker': false }. */
+    platformToggles: jsonb("platform_toggles")
+      .$type<Record<string, boolean>>()
+      .notNull()
+      .default({}),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_user_news_prefs_user_category").on(table.userId, table.category),
+  ],
+);
+
+export type UserNewsPreferenceRow = typeof userNewsPreferences.$inferSelect;
+export type InsertUserNewsPreference = typeof userNewsPreferences.$inferInsert;
+
+export const newsPreferenceUpdateSchema = z.object({
+  category: newsCategorySchema,
+  enabled: z.boolean().optional(),
+  platformToggles: z.record(z.string(), z.boolean()).optional(),
+});
+export type NewsPreferenceUpdate = z.infer<typeof newsPreferenceUpdateSchema>;
+

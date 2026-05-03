@@ -6,7 +6,9 @@
  */
 
 import { registerSpotScreenshotsCron } from "./purgeSpotScreenshots";
+import { registerNewsRefreshCron } from "./refreshNews";
 
 export async function registerAllJobs(): Promise<void> {
   await registerSpotScreenshotsCron();
+  await registerNewsRefreshCron();
 }

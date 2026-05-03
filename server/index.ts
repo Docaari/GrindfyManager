@@ -44,12 +44,18 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    // Log mas NAO re-throw: re-throw apos res.json crashava o processo,
+    // derrubando o dev server (Vite middleware) a cada 500 — cascateava em
+    // "Failed to fetch dynamically imported module" para todas paginas.
+    console.error(`[express:error] ${req.method} ${req.path} ->`, err);
+
+    if (!res.headersSent) {
+      res.status(status).json({ message });
+    }
   });
 
   // importantly only setup vite in development and after

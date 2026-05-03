@@ -7754,3 +7754,56 @@ body.studies-focus-mode [class*="main-content"] {
     min-height: auto;
   }
 }
+
+/* LogoLoader — banda de luz varrendo o logo L->R em loop */
+.logo-loader-shine {
+  -webkit-mask-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 30%,
+    #000 45%,
+    #000 55%,
+    transparent 70%,
+    transparent 100%
+  );
+          mask-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 30%,
+    #000 45%,
+    #000 55%,
+    transparent 70%,
+    transparent 100%
+  );
+  -webkit-mask-size: 220% 100%;
+          mask-size: 220% 100%;
+  -webkit-mask-repeat: no-repeat;
+          mask-repeat: no-repeat;
+  -webkit-mask-position: 120% 0;
+          mask-position: 120% 0;
+  animation: grindfy-logo-shine 2.4s linear infinite;
+  will-change: mask-position, -webkit-mask-position;
+}
+
+@keyframes grindfy-logo-shine {
+  0% {
+    -webkit-mask-position: 120% 0;
+            mask-position: 120% 0;
+  }
+  100% {
+    -webkit-mask-position: -120% 0;
+            mask-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-loader-shine {
+    animation: grindfy-logo-pulse 2.4s ease-in-out infinite;
+    -webkit-mask-image: none;
+            mask-image: none;
+  }
+  @keyframes grindfy-logo-pulse {
+    0%, 100% { opacity: 0.35; }
+    50%      { opacity: 1; }
+  }
+}

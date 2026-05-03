@@ -1,17 +1,19 @@
 /**
- * RF-08 — Home page (Sprint home-reform-1).
+ * RF-08 — Home page (Sprint home-reform-1 + Onda 3 zoning).
  *
  * Spec: Docs/specs/home-reform-1.md §RF-08, §3 D3, §3 D9
+ *       Docs/specs/home-reform-3.md §RF-A1, §RF-A2, §RF-A3, §RF-A5, §RF-B1
  * ADR-099 (Operations Cockpit), ADR-100 (News), ADR-101 (Sidebar IA),
- * ADR-102 (cache strategy).
+ * ADR-102 (cache strategy), ADR-110 (zoning + ranking).
  *
  * Single TanStack Query → /api/home/overview. Cache staleTime 30s.
  * userState=empty renderiza <EmptyHomeOnboarding>; userState=power renderiza
- * cockpit completo. Banner priority D9: flight acima de cooldown.
+ * cockpit em 4 zonas semanticas: Hoje | Acao Imediata | Performance | Sinal Externo.
  *
  * Lessons aplicadas:
  *   #1  hooks first
  *   #13 apiRequest retorna JSON parseado direto
+ *   #17 nao reusar nome `profile` (ja em uso). Aqui usamos `data.profile`.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -20,7 +22,6 @@ import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { WelcomeNameModal } from '@/components/WelcomeNameModal';
 import { emit } from '@/lib/tracker';
-import HeaderLogo from '@/components/branding/HeaderLogo';
 
 import StatusStrip from '@/components/home/StatusStrip';
 import TodayCard from '@/components/home/TodayCard';
@@ -31,7 +32,6 @@ import LifetimeStats from '@/components/home/LifetimeStats';
 import RecentSessionsList from '@/components/home/RecentSessionsList';
 import PerformanceMini from '@/components/home/PerformanceMini';
 import PendingHandsList from '@/components/home/PendingHandsList';
-import NewsSlot from '@/components/home/NewsSlot';
 import HomeFooter from '@/components/home/HomeFooter';
 import EmptyHomeOnboarding from '@/components/home/EmptyHomeOnboarding';
 // Sprint home-reform-1-5 (RF-22 + RF-23): forward-looking blocks.
@@ -42,6 +42,10 @@ import StatsTopDeltas from '@/components/home/StatsTopDeltas';
 import VarianceCard from '@/components/home/VarianceCard';
 import TournamentRecommendations from '@/components/home/TournamentRecommendations';
 import HeuristicsCard from '@/components/home/HeuristicsCard';
+// Sprint home-reform-3 Onda 3 (RF-A1, RF-A5, RF-B1).
+import HomeHeader from '@/components/home/HomeHeader';
+import EmptyPerformanceCluster from '@/components/home/EmptyPerformanceCluster';
+import NewsFeed from '@/components/home/NewsFeed';
 
 import type { NewsItem } from '@shared/types/news';
 
@@ -171,6 +175,15 @@ function readSkipOnboarding(): boolean {
   }
 }
 
+// Heading sutil reutilizado entre zonas.
+function ZoneHeading({ children }: { children: React.ReactNode }): JSX.Element {
+  return (
+    <h2 className="text-xs uppercase tracking-wide text-muted-foreground mb-3">
+      {children}
+    </h2>
+  );
+}
+
 const Home: React.FC = () => {
   // Hooks first (lesson #1).
   const { user } = useAuth();
@@ -256,16 +269,27 @@ const Home: React.FC = () => {
 
   const isEmpty = data.userState === 'empty' && !skipOnboarding;
 
+  // Onda 3 RF-A5: aggregate empty for Performance zone Onda 2 cards.
+  const perfClusterEmpty =
+    (data.topDeltas ?? []).length === 0 &&
+    data.variance == null &&
+    (data.tournamentRecommendations ?? []).length === 0 &&
+    (data.heuristics ?? []).length === 0;
+
+  const userTimezone = data.meta?.userTimezone || 'America/Sao_Paulo';
+  const firstName =
+    (user as any)?.firstName ||
+    (typeof user?.name === 'string' ? user.name.trim().split(/\s+/)[0] : null) ||
+    null;
+
   return (
     <div className="min-h-screen p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-3">
-        <div className="flex items-center justify-center pt-2 pb-4">
-          <HeaderLogo
-            variant="full"
-            alt="Grindfy"
-            className="h-20 md:h-28 w-auto object-contain"
-          />
-        </div>
+        <HomeHeader
+          firstName={firstName}
+          timezone={userTimezone}
+          streakDays={data.lifetime?.currentStreakDays ?? 0}
+        />
 
         {isEmpty ? (
           <EmptyHomeOnboarding
@@ -283,51 +307,68 @@ const Home: React.FC = () => {
             <FlightBanner banner={data.banners.flight} />
             <CooldownBanner banner={data.banners.cooldown} />
 
-            <StatusStrip data={data.statusStrip} />
-
-            {/* Sprint home-reform-1-5 RF-22: Insight do Dia (forward-looking). */}
-            <DailyInsight data={data} />
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="md:col-span-2">
-                <TodayCard data={data.today} />
-              </div>
-              <div>
-                <NextTournamentCountdown data={data.nextTournament} />
-              </div>
+            {/* RF-A3: StatusStrip sticky. */}
+            <div
+              data-testid="sticky-status-strip"
+              className="sticky top-0 z-30 backdrop-blur-sm bg-background/85 -mx-4 px-4 md:-mx-6 md:px-6 py-2"
+            >
+              <StatusStrip data={data.statusStrip} />
             </div>
 
-            <LifetimeStats data={data.lifetime} />
+            {/* Zona 1 — Hoje */}
+            <section data-testid="home-zone-today" className="space-y-3">
+              <ZoneHeading>Hoje</ZoneHeading>
+              <DailyInsight data={data} />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <TodayCard data={data.today} />
+                </div>
+                <div>
+                  <NextTournamentCountdown data={data.nextTournament} />
+                </div>
+              </div>
+            </section>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <RecentSessionsList data={data.recentSessions ?? []} />
-              <PendingHandsList data={data.pendingHands} />
-            </div>
+            {/* Zona 2 — Acao Imediata */}
+            <section data-testid="home-zone-action" className="space-y-3">
+              <ZoneHeading>Acao Imediata</ZoneHeading>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <PendingHandsList data={data.pendingHands} />
+                <LibraryResume />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <TournamentRecommendations
+                    data={data.tournamentRecommendations ?? []}
+                    plannedTodayCount={data.today?.plannedCount ?? 0}
+                  />
+                </div>
+                <HeuristicsCard data={data.heuristics ?? null} />
+              </div>
+            </section>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Sprint home-reform-1-5 RF-23: Continue Assistindo. */}
-              <LibraryResume />
+            {/* Zona 3 — Performance */}
+            <section data-testid="home-zone-perf" className="space-y-3">
+              <ZoneHeading>Performance</ZoneHeading>
               <PerformanceMini data={data.performance} />
-            </div>
-
-            {/* Sprint home-reform-2 Onda 2: Stats top deltas + Variance check. */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <StatsTopDeltas data={data.topDeltas ?? null} />
-              <VarianceCard data={data.variance ?? null} />
-            </div>
-
-            {/* Sprint home-reform-2 Onda 2: Tournament recommendations + Heuristics. */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="md:col-span-2">
-                <TournamentRecommendations
-                  data={data.tournamentRecommendations ?? []}
-                  plannedTodayCount={data.today?.plannedCount ?? 0}
+              {perfClusterEmpty ? (
+                <EmptyPerformanceCluster
+                  sessionsCount={data.lifetime?.totalSessions ?? 0}
                 />
-              </div>
-              <HeuristicsCard data={data.heuristics ?? null} />
-            </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <StatsTopDeltas data={data.topDeltas ?? null} />
+                  <VarianceCard data={data.variance ?? null} />
+                </div>
+              )}
+              <LifetimeStats data={data.lifetime} />
+              <RecentSessionsList data={data.recentSessions ?? []} />
+            </section>
 
-            <NewsSlot enabled={data.news.enabled} items={data.news.items} />
+            {/* Zona 4 — Sinal Externo */}
+            <section data-testid="home-zone-news" className="space-y-3">
+              <NewsFeed />
+            </section>
           </>
         )}
 

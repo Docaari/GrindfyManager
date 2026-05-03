@@ -646,6 +646,13 @@ export async function handleListStarredHands(req: any, res: Response): Promise<v
   if (typeof q.period === "string" && (q.period === "7d" || q.period === "30d" || q.period === "all")) {
     filter.period = q.period;
   }
+  if (typeof q.reviewLater === "string") {
+    if (q.reviewLater === "true") filter.reviewLater = true;
+    else if (q.reviewLater === "false") filter.reviewLater = false;
+  }
+  if (q.includeDiscarded === "true" || q.includeDiscarded === true) {
+    filter.includeDiscarded = true;
+  }
 
   try {
     const items = await storage.listStarredHands(userId, filter);

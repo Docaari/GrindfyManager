@@ -72,6 +72,7 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [103](103-library-access-requests-table.md) | Tabela `library_access_requests` + UNIQUE INDEX parcial WHERE status='pending' (Sprint UX-Biblioteca-1) | Aceito | 2026-05-03 |
 | [104](104-library-video-speed-global-localstorage.md) | Velocidade video global via localStorage `library-video-speed` (Sprint UX-Biblioteca-1) | Aceito | 2026-05-03 |
 | [105](105-auto-navigation-countdown-pattern.md) | Padrao auto-navegacao countdown 5s + cancel sticky (NextLessonCTA, Sprint UX-Biblioteca-1) | Aceito | 2026-05-03 |
+| [110](110-news-feed-ranking-and-zoning.md) | News feed `/api/news/feed` ranqueado server-side + 4 zonas semanticas Home + read-state localStorage (Sprint home-reform-3) | Aceito | 2026-05-03 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 

@@ -3,7 +3,7 @@ import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import { db } from "../db";
 import { tournaments, grindSessions, plannedTournaments } from "@shared/schema";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, isNull } from "drizzle-orm";
 import { parseFiltersParam, mapFiltersToBackendFormat } from "./helpers";
 import { dashboardService } from "../services/dashboardService";
 
@@ -106,6 +106,7 @@ export function registerDashboardRoutes(app: Express): void {
 
       res.json(stats);
     } catch (error) {
+      console.error("[GET /api/dashboard/stats] failed:", error);
       res.status(500).json({ message: "Failed to fetch dashboard stats" });
     }
   });
@@ -115,14 +116,20 @@ export function registerDashboardRoutes(app: Express): void {
     try {
       const userPlatformId = req.user.userPlatformId;
 
-      // Get basic tournament stats (prize = net profit, não subtrair buyIn)
+      // Get basic tournament stats (prize = net profit, não subtrair buyIn).
+      // totalTournaments conta eventos distintos (series colapsadas como 1).
+      // Exclui baggedAt (Day 1 placeholders sem resultado final).
       const tournamentStats = await db.select({
-        totalTournaments: sql<number>`COUNT(*)::int`,
+        totalTournaments: sql<number>`COUNT(DISTINCT COALESCE(${tournaments.seriesId}, ${tournaments.id}))::int`,
         totalProfit: sql<number>`COALESCE(SUM(prize::numeric), 0)`,
         lastSessionDate: sql<string>`MAX(date_played)`
       })
       .from(tournaments)
-      .where(eq(tournaments.userId, userPlatformId));
+      .where(and(
+        eq(tournaments.userId, userPlatformId),
+        isNull(tournaments.grindSessionId),
+        isNull(tournaments.baggedAt),
+      ));
 
       // Get grind sessions count
       const sessionCount = await db.select({
@@ -144,7 +151,11 @@ export function registerDashboardRoutes(app: Express): void {
         date: sql<string>`DATE(date_played)`
       })
       .from(tournaments)
-      .where(eq(tournaments.userId, userPlatformId))
+      .where(and(
+        eq(tournaments.userId, userPlatformId),
+        isNull(tournaments.grindSessionId),
+        isNull(tournaments.baggedAt),
+      ))
       .groupBy(sql`DATE(date_played)`)
       .orderBy(desc(sql`DATE(date_played)`))
       .limit(10);
@@ -169,6 +180,7 @@ export function registerDashboardRoutes(app: Express): void {
         totalGradeDays: gradeCount[0]?.count || 0,
       });
     } catch (error) {
+      console.error("[GET /api/dashboard/quick-stats] failed:", error);
       res.status(500).json({ message: 'Erro ao buscar estatísticas rápidas' });
     }
   });
@@ -181,6 +193,7 @@ export function registerDashboardRoutes(app: Express): void {
       const performance = await storage.getPerformanceByPeriod(userId, period, filters);
       res.json(performance);
     } catch (error) {
+      console.error("[GET /api/dashboard/performance] failed:", error);
       res.status(500).json({ message: "Failed to fetch performance data" });
     }
   });

@@ -32,7 +32,6 @@ import type { DashboardFiltersState } from '@/components/dashboard/types';
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
 import { DashboardMetrics } from '@/components/dashboard/DashboardMetrics';
 import { RoiByPlatformCard } from '@/components/dashboard/RoiByPlatformCard';
-import { TicketsWidget } from '@/components/dashboard/TicketsWidget';
 import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
 import { TabEvolution } from '@/components/dashboard/TabEvolution';
 import { TabSite } from '@/components/dashboard/TabSite';
@@ -467,11 +466,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-
-      {/* Tickets Widget — Sprint Tickets-1 (RF-04) */}
-      <div className="mb-4" data-testid="dashboard-tickets-widget">
-        <TicketsWidget />
-      </div>
 
       {!isMainLoading && (
         <DashboardMetrics

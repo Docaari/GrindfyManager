@@ -16,6 +16,7 @@ import { NotificationModals } from "@/components/NotificationModals";
 import Sidebar from "@/components/Sidebar";
 import { AudioPlayerProvider } from "@/contexts/AudioPlayerContext";
 import { StickyAudioBar } from "@/components/biblioteca/StickyAudioBar";
+import { LogoLoader } from "@/components/LogoLoader";
 
 // Lazy-loaded pages for code splitting
 const Landing = lazy(() => import("@/pages/Landing"));
@@ -59,11 +60,7 @@ const CourseDetailPage: any = lazy(() => import("@/pages/biblioteca/CourseDetail
 import { LessonHeroPage } from "@/pages/biblioteca/LessonHeroPage";
 
 function PageLoader() {
-  return (
-    <div className="min-h-screen bg-poker-bg flex items-center justify-center">
-      <div className="text-poker-gold text-xl">Carregando...</div>
-    </div>
-  );
+  return <LogoLoader fullScreen size="md" />;
 }
 
 function Router() {
@@ -120,6 +117,7 @@ function Router() {
                   <Route path="/coach" component={() => (<ProtectedRoute><GradePlanner /></ProtectedRoute>)} />
                   <Route path="/upload" component={() => (<ProtectedRoute><UploadHistory /></ProtectedRoute>)} />
                   <Route path="/settings" component={() => (<ProtectedRoute><Settings /></ProtectedRoute>)} />
+                  <Route path="/estudos" component={() => (<ProtectedRoute><Studies /></ProtectedRoute>)} />
                   <Route path="/estudos/:rest*" component={() => (<ProtectedRoute><Studies /></ProtectedRoute>)} />
                   <Route path="/calculadoras" component={() => (<ProtectedRoute><Calculadoras /></ProtectedRoute>)} />
                   <Route path="/admin/dashboard" component={() => (<ProtectedRoute><AdminDashboard /></ProtectedRoute>)} />

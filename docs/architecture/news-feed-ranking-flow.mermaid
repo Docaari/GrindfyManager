@@ -1,0 +1,70 @@
+%% News Feed Ranking Flow — ADR-107
+%% GET /api/news/feed: query -> normalize -> score -> tiebreak -> top 10 -> cache 5min
+
+flowchart TD
+    Client["Client GET /api/news/feed<br/><i>NewsFeed component</i>"]
+    AuthMW["Middleware requireAuth<br/><i>JWT</i>"]
+
+    CacheCheck{"Cache server<br/>in-memory<br/>userId existe?"}
+    CacheHit["Return cached payload<br/><i>200 OK Cache-Control: private, max-age=60</i>"]
+
+    FlagCheck{"NEWS_FEED_ENABLED<br/>= true?"}
+    Disabled["Return enabled:false<br/>items:[ ]"]
+
+    PrefsLoad["Load userPrefs<br/><i>storage.getNewsPreferences userId</i>"]
+    AnyEnabled{"Pelo menos 1<br/>categoria.enabled<br/>= true?"}
+
+    Query["pg query news_articles<br/>WHERE category IN userEnabledCategories<br/>AND active = true<br/>AND publishedAt > now - 30d"]
+
+    Normalize["Para cada item:<br/>engagement_norm = log1p views + likes*5 + comments*10<br/>recency_norm = 1 - clamp now - publishedAt / 7d, 0, 1"]
+
+    MaxBatch["Calcula maxBatch =<br/>max log1p views + likes*5 + comments*10<br/>do batch"]
+
+    Score["score = engagement_norm * 0.6 + recency_norm * 0.4<br/><i>se maxBatch=0, engagement_norm=0</i>"]
+
+    Sort["Ordena DESC por score<br/>Tiebreak: NEWS_CATEGORY_PRIORITY.indexOf source ASC<br/><i>tools > sites > studies > tournament-results > gossip</i>"]
+
+    Truncate["Trunca top 10 globais<br/><i>independente de quantos por categoria</i>"]
+
+    BuildPayload["Monta payload:<br/>enabled: true<br/>items: top10<br/>cachedAt: now ISO<br/>nextRefreshAt: proxima seg 12:00 BRT"]
+
+    CacheStore["Armazena cache<br/><i>Map userId -> payload<br/>TTL 5min</i>"]
+
+    Response["Return 200<br/><i>Cache-Control: private, max-age=60</i>"]
+
+    Client -->|"Authorization: Bearer JWT"| AuthMW
+    AuthMW -->|"req.user setado"| CacheCheck
+
+    CacheCheck -->|"Sim, TTL valido"| CacheHit
+    CacheCheck -->|"Nao ou expirado"| FlagCheck
+
+    FlagCheck -->|"false"| Disabled
+    FlagCheck -->|"true"| PrefsLoad
+
+    PrefsLoad --> AnyEnabled
+    AnyEnabled -->|"Nao"| Disabled
+    AnyEnabled -->|"Sim"| Query
+
+    Query --> MaxBatch
+    MaxBatch --> Normalize
+    Normalize --> Score
+    Score --> Sort
+    Sort --> Truncate
+    Truncate --> BuildPayload
+    BuildPayload --> CacheStore
+    CacheStore --> Response
+
+    Disabled --> Response
+    CacheHit --> Response
+
+    Response -->|"hero=items[0]<br/>compact=items[1..9]"| Client
+
+    classDef cache fill:#0e7490,stroke:#155e75,color:#fff
+    classDef decision fill:#854d0e,stroke:#713f12,color:#fff
+    classDef compute fill:#166534,stroke:#14532d,color:#fff
+    classDef terminal fill:#1e40af,stroke:#1e3a8a,color:#fff
+
+    class CacheCheck,FlagCheck,AnyEnabled decision
+    class CacheHit,CacheStore cache
+    class Normalize,MaxBatch,Score,Sort,Truncate compute
+    class Client,Response,Disabled terminal

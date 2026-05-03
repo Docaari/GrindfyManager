@@ -25,6 +25,7 @@ import { LoadingScreen } from '@/components/grade-planner/LoadingScreen';
 import { WeeklySummaryBar } from '@/components/grade-planner/WeeklySummaryBar';
 import { WeekGrid } from '@/components/grade-planner/WeekGrid';
 import { BibliotecaPanel } from '@/components/grade-planner/BibliotecaPanel';
+import { TicketsWidget } from '@/components/dashboard/TicketsWidget';
 import { ProfileComparison } from '@/components/grade-planner/ProfileComparison';
 import { GradeSettings } from '@/components/grade-planner/GradeSettings';
 import { DeleteDialog } from '@/components/grade-planner/DeleteDialog';
@@ -809,6 +810,11 @@ export default function GradePlanner() {
           isDayActiveWithTournaments={isDayActiveWithTournaments}
           getActiveProfile={getActiveProfile}
         />
+
+        {/* Tickets Widget — registrar/visualizar tickets de satelites */}
+        <div className="mb-4" data-testid="grade-planner-tickets-widget">
+          <TicketsWidget />
+        </div>
 
         {/* Empty state onboarding — primeiro uso */}
         {plannedTournaments.length === 0 && (

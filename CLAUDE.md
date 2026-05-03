@@ -82,6 +82,9 @@ Arquivo `.env` na raiz (no `.gitignore`).
 - `ANTHROPIC_API_KEY` — Coach AI
 - `COACH_MODEL` — override do modelo Claude (ADR-021)
 - `SPOT_IMAGE_STORAGE_BACKEND` — backend de armazenamento de spots (default `local`; `s3` reservado para deploy futuro). Ver ADR-057.
+- `NEWS_FEED_ENABLED` — master kill-switch do news feed (default `false`). Quando `true`, ativa endpoints `/api/news` e cron `refreshNews`. Ver ADR-100 + ADR-106.
+- `XAI_API_KEY` — chave xAI Grok (obtida em console.x.ai). Obrigatoria se `NEWS_FEED_ENABLED=true`. Ver ADR-106.
+- `XAI_MODEL` — override do modelo xAI (default `grok-3-latest`).
 
 ---
 
@@ -104,6 +107,19 @@ Servidor escuta em `0.0.0.0:3000` por padrao.
 Schema em `shared/schema.ts`. **Indice completo de tabelas + convencoes:** `Docs/architecture/data-model-index.md`.
 
 **Tabelas core (memorize):** `users`, `tournaments`, `planned_tournaments`, `grind_sessions`, `session_tournaments`, `wallets`, `wallet_transactions`, `bankroll_snapshots`, `coach_conversations`, `coach_messages`.
+
+### 6.1 Regra de fonte do historico (`tournaments` vs `session_tournaments`)
+
+**`tournaments` = historico do jogador (dashboard / analytics / library).**
+- Origens validas: importacao via `/upload` (CSV WPN/GG/Stars/Party/etc), ingest Sharkscope, planilhas, criacao manual via `/grade-planner` (AddTournamentWizard, sem `grindSessionId`).
+- TODA query de dashboard, analytics, performance, library, ROI by platform, quick-stats DEVE filtrar `WHERE grind_session_id IS NULL`.
+- Helpers `buildPeriodCondition` (storage.ts) ja injetam `isNull(tournaments.grindSessionId)` por padrao. Metodos com period inline (`getTournaments`, `getPerformanceByPeriod`, `getTournamentLibrary`, `getAnalyticsByModifier`) e queries inline em `routes/dashboard.ts` adicionam o filtro explicito.
+
+**`session_tournaments` = registros de sessao /grind-live.**
+- Visiveis APENAS dentro do detalhe da sessao (pagina /grind, GrindSessionLive, /api/session-tournaments, /api/grind-sessions/:id/tournaments).
+- NUNCA agregar em metricas de dashboard. Conversao para `tournaments` (com `grindSessionId` setado) so se / quando o jogador escolher "importar do historico" — e mesmo assim deve continuar excluido do dashboard porque a coluna `grind_session_id` permanece NOT NULL.
+
+**Componentes obsoletos:** `client/src/components/SessionTracker.tsx` POSTa em `/api/tournaments` com `grindSessionId` setado. Esta morto (sem imports), mas existe — nao reutilizar sem revisitar a regra acima.
 
 Diagramas: `Docs/architecture/data-model.mermaid`, `bankroll-index.md`, `addon-rea-index.md`, `ai-coach/`.
 
@@ -172,6 +188,8 @@ Catalogo completo em `Docs/architecture/lessons-learned.md`. **Consultar antes d
 14. **`require()` em testes `.tsx` nao funciona com deps ESM** — Sprint Biblioteca-2: TDD test files (.tsx) com `require('./Component')` em try/catch falham porque Node nao consegue `require()` ESM packages (`@tanstack/react-query`). Setup.ts adiciona resolver `.tsx` via esbuild transformSync, mas dependencias ESM ainda quebram. **Solucao:** test-writer deve usar `await import(...)` em vez de `require()` em testes que carregam componentes React. 32 testes Sprint Biblioteca-2 ficaram bloqueados por esse padrao (ArticleIframe, ArticleIframeWithWatermark, bloco-a-fullflow e2e).
 15. **`vi.unmock` em escopo nested vira hoisted** — Sprint Biblioteca-2 e2e: `vi.unmock(...)` dentro de `it(...)` eh **hoisted** pelo Vitest e desfaz mock em **todos** os testes do arquivo (nao apenas o teste que escreveu). Vitest emite warning "will become an error in a future version". **Solucao:** mover pra top-level OU usar `vi.doUnmock(...)` (que NAO eh hoisted). Bloco-a-fullflow.test.ts: 6 testes falham por causa desse hoisting.
 16. **DOMPurify `USE_PROFILES: { html: true }` sobrescreve `ALLOWED_TAGS`** — Sprint Biblioteca-2: profile vira **union**, nao restricao. Para allowlist custom rigorosa, NAO usar `USE_PROFILES`. Para tag `<style>` em allowlist, precisa `ADD_TAGS: ['style']` (nao basta `ALLOWED_TAGS`) porque DOMPurify v3 trata `<style>` como dangerous-by-default.
+17. **Variavel `profile` colide em `home.ts`** — Sprint home-reform-1-5: declarei `const profile` apos ja existir `const profile = profileState as any` no mesmo escopo. oxc reporta "It can not be redeclared here" mas vitest nao captura ate run real. **Solucao:** renomeei para `playerProfile` + `playerProfileMeta` na nova adicao. Lesson generalizavel: ao estender route handlers grandes, `grep "const X"` antes de declarar variavel nova com nome generico.
+18. **`git stash` em meio de implementacao perde test files novos** — Sprint home-reform-1-5: usei `git stash` para comparar baseline de testes que falham; ao popar, files novos dos testes (DailyInsight.test, LibraryResume.test) re-apareceram mas EmptyHomeOnboarding.test.tsx + NewsSlot.test.tsx (que tinham edits Onda 1.5) voltaram para versao Onda 1 (porque stash pop conflitou com TournamentCard.tsx). **Solucao:** evitar `git stash` durante TDD; usar branch separada OU rodar baseline de regressao em worktree. Custou ~20min de re-trabalho restaurando os tests.
 
 ---
 

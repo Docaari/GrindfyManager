@@ -1,17 +1,22 @@
 /**
- * RF-09 — Status Strip 4 KPIs (Sprint home-reform-1).
+ * RF-09 — Status Strip 4 KPIs (Sprint home-reform-1) + Onda 3 (sparklines + KPI Hoje fix).
  *
  * Spec: Docs/specs/home-reform-1.md §RF-09, §5.1 S1, §3 D8, D-FOUNDER-1
- * ADR-099 §2.1
+ * ADR-099 §2.1, ADR-110 §2.5 (sticky)
  *
  * 4 KPIs (NUNCA 5): Banca / ROI 30d / Hoje / Pendencias.
  * Cada card clicavel navega para rota correspondente.
  * Cor amber soh quando pendencias > 0 (anti Christmas-tree).
+ *
+ * Onda 3 mudancas:
+ *   - RF-A4: sparkline Banca + ROI 30d (Recharts 60x20).
+ *   - RF-C1: KPI Hoje aponta para /grade-planner (era /coach).
  */
 
 import React from 'react';
 import { Link } from 'wouter';
 import { emit } from '@/lib/tracker';
+import Sparkline from './Sparkline';
 
 interface BancaKpi {
   totalUsd: number;
@@ -87,6 +92,10 @@ export default function StatusStrip({ data }: StatusStripProps): JSX.Element {
     (data.pendencias?.starredHands ?? 0) + (data.pendencias?.cooldownAlerts ?? 0);
   const pendAmber = pendCount > 0;
 
+  const bancaSparkData = data.banca?.sparkline ?? [];
+  const roiSparkData = data.roi30d?.sparkline ?? [];
+  const roiValue = data.roi30d?.value ?? null;
+
   return (
     <div
       data-testid="home-status-strip"
@@ -101,7 +110,16 @@ export default function StatusStrip({ data }: StatusStripProps): JSX.Element {
       >
         {data.banca ? (
           <>
-            <div className="text-3xl font-bold">{fmtUsd(data.banca.totalUsd)}</div>
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-3xl font-bold">{fmtUsd(data.banca.totalUsd)}</div>
+              {bancaSparkData.length > 1 ? (
+                <Sparkline
+                  data={bancaSparkData}
+                  delta={data.banca.deltaPct7d}
+                  testId="sparkline-banca"
+                />
+              ) : null}
+            </div>
             {data.banca.bisAvailable !== null && (
               <div className="text-xs text-muted-foreground">
                 {data.banca.bisAvailable} BIs disponiveis
@@ -130,9 +148,18 @@ export default function StatusStrip({ data }: StatusStripProps): JSX.Element {
       >
         {data.roi30d ? (
           <>
-            <div className="text-3xl font-bold">
-              {data.roi30d.value >= 0 ? '+' : ''}
-              {data.roi30d.value.toFixed(1)}%
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-3xl font-bold">
+                {data.roi30d.value >= 0 ? '+' : ''}
+                {data.roi30d.value.toFixed(1)}%
+              </div>
+              {roiSparkData.length > 1 ? (
+                <Sparkline
+                  data={roiSparkData}
+                  delta={roiValue}
+                  testId="sparkline-roi30d"
+                />
+              ) : null}
             </div>
             <div className="text-xs text-muted-foreground">Ultimos 30 dias</div>
           </>
@@ -146,7 +173,7 @@ export default function StatusStrip({ data }: StatusStripProps): JSX.Element {
       {/* Hoje */}
       <KpiCard
         testId="status-strip-card-hoje"
-        href="/coach"
+        href="/grade-planner"
         kpi="hoje"
         label="Hoje"
       >

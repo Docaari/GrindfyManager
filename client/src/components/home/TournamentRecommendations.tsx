@@ -1,7 +1,9 @@
 /**
  * Sprint home-reform-2 — RF-31 (B9 Tournament Selector Top 3 Hoje).
+ * Sprint home-reform-3 — RF-C3 (grade S destaque) + RF-C4 (badge "Ja na grade").
  *
  * Spec: Docs/specs/home-reform-2.md §3 B9, §5 RF-31
+ *       Docs/specs/home-reform-3.md §RF-C3, §RF-C4
  *
  * 3 cards horizontais com name/buyin/score/grade.
  * Empty: "Configure sua grade..." (CTA /grade-planner) OR
@@ -9,6 +11,11 @@
  * Tracker:
  *   home_tournament_recommendations_view  { count } — mount
  *   home_tournament_recommendations_click { grade, score } — click
+ *
+ * Onda 3 mudancas:
+ *   - Grade S: bg-gradient-to-br from-emerald-500/10 to-emerald-300/5 + border-emerald-500/40
+ *   - Score sempre text-2xl font-bold
+ *   - Badge "Ja na grade" quando alreadyInGrid===true
  *
  * Lessons aplicadas:
  *   #1 hooks first
@@ -30,7 +37,7 @@ interface Recommendation {
   grade: 'S' | 'A' | 'B';
   startTime: string;
   platform: string;
-  alreadyInGrid: boolean;
+  alreadyInGrid?: boolean;
 }
 
 interface Props {
@@ -38,10 +45,16 @@ interface Props {
   plannedTodayCount: number;
 }
 
-const GRADE_CLASSES: Record<Recommendation['grade'], string> = {
-  S: 'text-emerald-300 border-emerald-700/40',
-  A: 'text-emerald-300 border-emerald-700/40',
-  B: 'text-amber-300 border-amber-700/40',
+const GRADE_BORDER: Record<Recommendation['grade'], string> = {
+  S: 'border-emerald-500/40',
+  A: 'border-emerald-700/40',
+  B: 'border-amber-700/40',
+};
+
+const GRADE_TEXT: Record<Recommendation['grade'], string> = {
+  S: 'text-emerald-300',
+  A: 'text-emerald-300',
+  B: 'text-amber-300',
 };
 
 export default function TournamentRecommendations({ data, plannedTodayCount }: Props): JSX.Element {
@@ -94,6 +107,15 @@ export default function TournamentRecommendations({ data, plannedTodayCount }: P
       <ul className="grid grid-cols-1 md:grid-cols-3 gap-2">
         {items.map((t) => {
           const name = t.name.length > 40 ? `${t.name.slice(0, 40)}...` : t.name;
+          const isS = t.grade === 'S';
+          const cardClasses = [
+            'w-full text-left px-3 py-2 rounded-md border transition-colors hover:bg-accent',
+            GRADE_TEXT[t.grade],
+            GRADE_BORDER[t.grade],
+            isS ? 'bg-gradient-to-br from-emerald-500/10 to-emerald-300/5' : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
           return (
             <li key={t.id}>
               <button
@@ -101,7 +123,7 @@ export default function TournamentRecommendations({ data, plannedTodayCount }: P
                 data-testid={`home-tournament-recommendations-card-${t.id}`}
                 data-grade={t.grade}
                 onClick={() => emit('home_tournament_recommendations_click', { grade: t.grade, score: t.score })}
-                className={`w-full text-left px-3 py-2 rounded-md border ${GRADE_CLASSES[t.grade]} hover:bg-accent transition-colors`}
+                className={cardClasses}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-sm">{name}</span>
@@ -109,9 +131,18 @@ export default function TournamentRecommendations({ data, plannedTodayCount }: P
                     {t.grade}
                   </span>
                 </div>
+                <div className="text-2xl font-bold mt-1">{t.score}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  ${t.buyinUsd} · score {t.score} · {t.platform}
+                  ${t.buyinUsd} · {t.platform}
                 </div>
+                {t.alreadyInGrid === true ? (
+                  <span
+                    data-testid="recommendation-already-in-grid-badge"
+                    className="inline-block mt-1 text-[10px] uppercase rounded-md border border-current px-1.5 py-0.5"
+                  >
+                    Ja na grade
+                  </span>
+                ) : null}
               </button>
             </li>
           );

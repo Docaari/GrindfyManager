@@ -1,0 +1,89 @@
+%% Home Zoning — ADR-107
+%% Pagina / (Home.tsx) reorganizada em 4 zonas semanticas
+%% Ordem: StatusStrip sticky -> Hoje -> Acao Imediata -> Performance -> Sinal Externo
+
+flowchart TB
+    Header["Header reduzido<br/><i>Logo h-10 + saudacao contextual<br/>RF-A1</i>"]
+
+    Banners["Banners globais<br/><i>FlightBanner, CooldownBanner<br/>quando aplicavel</i>"]
+
+    StatusStrip["StatusStrip STICKY<br/><i>position: sticky top-0 z-30<br/>backdrop-blur-sm bg-background/85<br/>RF-A3</i>"]
+
+    subgraph Zona1["Zona 1 - Hoje"]
+        Z1H["h2 'Hoje' uppercase tracking-wide"]
+        Z1A["DailyInsight"]
+        Z1B["TodayCard md:col-span-2"]
+        Z1C["NextTournamentCountdown"]
+    end
+
+    subgraph Zona2["Zona 2 - Acao Imediata"]
+        Z2H["h2 'Acao Imediata'"]
+        Z2A["PendingHandsList"]
+        Z2B["LibraryResume"]
+        Z2C["TournamentRecommendations md:col-span-2<br/><i>RF-C2 destaque grade S<br/>RF-C3 badge 'Ja na grade'</i>"]
+        Z2D["HeuristicsCard"]
+    end
+
+    subgraph Zona3["Zona 3 - Performance"]
+        Z3H["h2 'Performance'"]
+        Z3A["PerformanceMini<br/><i>sempre render</i>"]
+        Z3B["StatsTopDeltas + VarianceCard<br/><i>grid-cols-2</i>"]
+        Z3C["LifetimeStats<br/><i>sempre render</i>"]
+        Z3D["RecentSessionsList<br/><i>sempre render</i>"]
+        Z3E["EmptyPerformanceCluster<br/><i>RF-A5: substitui Z3B+Z2C+Z2D<br/>quando todos vazios + sessions less than 30</i>"]
+    end
+
+    subgraph Zona4["Zona 4 - Sinal Externo"]
+        Z4H["h2 'Sinal Externo'"]
+        Z4A["NewsFeed<br/><i>RF-B1 substitui NewsSlot<br/>1 endpoint: GET /api/news/feed</i>"]
+        Z4B["RefreshBadge unico<br/><i>RF-B5</i>"]
+        Z4C["FilterChips: Todas Tools Sites Studies Resultados Fofocas<br/><i>RF-B6 prioridade</i>"]
+        Z4D["Hero card #1<br/><i>aspect-video, titulo h3, summary</i>"]
+        Z4E["Compact list #2..#10<br/><i>linha horizontal: ordinal + thumb 48x48 + texto<br/>opacity-60 + check se read RF-B4</i>"]
+    end
+
+    Footer["Footer"]
+
+    Header --> Banners
+    Banners --> StatusStrip
+    StatusStrip --> Zona1
+    Zona1 --> Zona2
+    Zona2 --> Zona3
+    Zona3 --> Zona4
+    Zona4 --> Footer
+
+    Z1H --> Z1A
+    Z1A --> Z1B
+    Z1B --> Z1C
+
+    Z2H --> Z2A
+    Z2A --> Z2B
+    Z2B --> Z2C
+    Z2C --> Z2D
+
+    Z3H --> Z3A
+    Z3A --> Z3B
+    Z3B --> Z3C
+    Z3C --> Z3D
+    Z3B -.->|"se topDeltas=variance=recommendations=heuristics=empty"| Z3E
+
+    Z4H --> Z4B
+    Z4B --> Z4C
+    Z4C --> Z4D
+    Z4D --> Z4E
+
+    classDef sticky fill:#7c2d12,stroke:#9a3412,color:#fff,stroke-width:2px
+    classDef zoneHeader fill:#1f2937,stroke:#374151,color:#9ca3af
+    classDef zone1 fill:#0c4a6e,stroke:#075985,color:#fff
+    classDef zone2 fill:#854d0e,stroke:#713f12,color:#fff
+    classDef zone3 fill:#166534,stroke:#14532d,color:#fff
+    classDef zone4 fill:#581c87,stroke:#4c1d95,color:#fff
+    classDef empty fill:#dc2626,stroke:#991b1b,color:#fff,stroke-dasharray: 5 5
+
+    class StatusStrip sticky
+    class Z1H,Z2H,Z3H,Z4H zoneHeader
+    class Z1A,Z1B,Z1C zone1
+    class Z2A,Z2B,Z2C,Z2D zone2
+    class Z3A,Z3B,Z3C,Z3D zone3
+    class Z4A,Z4B,Z4C,Z4D,Z4E zone4
+    class Z3E empty

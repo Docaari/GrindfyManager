@@ -153,6 +153,14 @@ import {
   type LibraryEvent,
   type LibraryProgress,
   type LibraryAccessRequest,
+  // Sprint News-1 (ADR-106) — news feed tables.
+  newsSources,
+  newsItems as newsItemsTable,
+  userNewsPreferences,
+  type NewsSourceRow,
+  type NewsItemRow,
+  type UserNewsPreferenceRow,
+  type NewsPreferenceUpdate,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, lt, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
@@ -163,7 +171,16 @@ import { normalizeTournamentTypePayload } from "./storage/normalizeTournamentTyp
 function buildPeriodCondition(period: string, filters: any) {
   const conditions: any[] = [];
 
-
+  // History rule: dashboard/analytics nunca incluem torneios criados em
+  // sessoes de grind-live. tournaments.grindSessionId IS NULL = importacao
+  // (CSV/sharkscope/manual via grade-planner). NOT NULL = registro feito a
+  // partir de uma sessao de grind, visivel apenas no detalhe da sessao.
+  conditions.push(isNull(tournaments.grindSessionId));
+  // Sprint Flight-1 H6 (ADR-090): rows com baggedAt setado sao placeholders
+  // de Day 1 criados via /grind-live "bag". Nao representam evento finalizado;
+  // o resultado final esta em outra row (Day 2) ou ainda nao aconteceu.
+  // Excluir do dashboard pra evitar poluir count/ABI/ROI com shells vazios.
+  conditions.push(isNull(tournaments.baggedAt));
 
   if (period === 'custom' && filters && filters.dateFrom && filters.dateTo) {
 
@@ -635,7 +652,7 @@ export interface IStorage {
     capturedDuring?: string;
   }): Promise<StarredHand>;
   getStarredHand(id: string, userId: string): Promise<any | null>;
-  listStarredHands(userId: string, filter?: { sessionId?: string; type?: string; period?: "7d" | "30d" | "all" }): Promise<any[]>;
+  listStarredHands(userId: string, filter?: { sessionId?: string; type?: string; period?: "7d" | "30d" | "all"; reviewLater?: boolean; includeDiscarded?: boolean }): Promise<any[]>;
   // Sprint F2: userId opcional (cron do purge nao tem userId — ownership ja
   // foi resolvida no listSpotsForPurge).
   deleteStarredHand(id: string, userId?: string): Promise<boolean | void>;
@@ -960,6 +977,13 @@ export class DatabaseStorage implements IStorage {
   async getTournaments(userId: string, limit: number = 50, offset?: number, period?: string, filters?: any, sortBy?: string): Promise<Tournament[]> {
     const baseConditions = [eq(tournaments.userId, userId)];
 
+    // History rule: torneios criados via /grind-live (grindSessionId NOT NULL)
+    // ficam isolados no detalhe da sessao; dashboard/library so listam imports.
+    baseConditions.push(isNull(tournaments.grindSessionId));
+    // Sprint Flight-1 H6 (ADR-090): rows com baggedAt setado sao placeholders
+    // Day 1 (sem resultado final). Excluir da lista historica.
+    baseConditions.push(isNull(tournaments.baggedAt));
+
     // Apply period filter
     if (period && period !== 'all') {
 
@@ -1017,11 +1041,17 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Para ordenação por profit, usar apenas filtro de userId sem outros filtros
+    // Para ordenação por profit, usar apenas filtro de userId/grindSessionId
+    // sem outros filtros. Preserva isolamento de grind-live (CLAUDE.md regra
+    // de fonte do historico).
     let queryConditions: any[] = baseConditions;
     if (sortBy === 'profit-high' || sortBy === 'profit-low') {
-      // Manter apenas filtro de userId, remover período e outros filtros
-      queryConditions = [eq(tournaments.userId, userId)];
+      // Manter filtro de userId + isolar grind-live + esconder Day 1 baggeds.
+      queryConditions = [
+        eq(tournaments.userId, userId),
+        isNull(tournaments.grindSessionId),
+        isNull(tournaments.baggedAt),
+      ];
     }
 
     const whereCondition = and(...queryConditions);
@@ -2154,7 +2184,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     opts: { modifier: string },
   ): Promise<any> {
     const modifier = String(opts?.modifier ?? "").toLowerCase();
-    const baseConditions: any[] = [eq(tournaments.userId, userId)];
+    const baseConditions: any[] = [
+      eq(tournaments.userId, userId),
+      // History rule: exclui torneios criados em /grind-live.
+      isNull(tournaments.grindSessionId),
+    ];
 
     if (modifier === "flight") {
       baseConditions.push(sql`${tournaments.seriesId} IS NOT NULL`);
@@ -2591,10 +2625,18 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     let stats: any;
     try {
       
+      // Sprint dashboard-cleanup (2026-05-03): contadores agregados por
+      // serie (COALESCE(seriesId, id)) para que multi-flight tournaments
+      // contem como 1 evento, nao como N legs. SUMs continuam por leg porque
+      // prize/buy_in/reentries/add_on agregam corretamente a custos/lucro
+      // total da serie (Day 1 rows tem buyIn pago, Day 2 row tem prize).
+      // Sem CTE: usa COUNT(DISTINCT ...) inline. ABI passa a ser derivado
+      // (totalBuyins / count) em JS, ja que AVG(buy_in) por leg distorceria
+      // series com buyIns repetidos.
       stats = await db
         .select({
-          // Contagem: Quantidade de torneios
-          count: sql<number>`COUNT(*)`,
+          // Contagem: Quantidade de torneios (1 por series ou 1 por non-series)
+          count: sql<number>`COUNT(DISTINCT COALESCE(${tournaments.seriesId}, ${tournaments.id}))`,
 
           // Lucro: Profit total (usando a coluna prize que já contém o profit calculado)
           totalProfit: sql<number>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
@@ -2609,28 +2651,23 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           totalReentriesCost: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL))`,
           totalAddOnCost: sql<number>`SUM(CASE WHEN ${tournaments.addOnTaken} = true THEN COALESCE(CAST(${tournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END)`,
 
-          // ABI: Buy-in médio (Stake Médio) - rounded to 2 decimal places
-          avgBuyin: sql<number>`ROUND(AVG(CAST(${tournaments.buyIn} AS DECIMAL)), 2)`,
+          // ITM: Quantidade de eventos (series ou singular) que ficou ITM
+          itmCount: sql<number>`COUNT(DISTINCT CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
 
-          // ITM: Quantidade que ficou na premiação (prize > 0)
-          itmCount: sql<number>`SUM(CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN 1 ELSE 0 END)`,
+          // FTs: eventos com posicao final 1-9 (em series, somente Day 2 tem posicao definida)
+          finalTablesCount: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.position} >= 1 AND ${tournaments.position} <= 9 AND ${tournaments.position} IS NOT NULL THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
 
-          // FTs: Final Tables (posição >= 1 AND <= 9, números válidos apenas)
-          finalTablesCount: sql<number>`SUM(CASE WHEN ${tournaments.position} >= 1 AND ${tournaments.position} <= 9 AND ${tournaments.position} IS NOT NULL THEN 1 ELSE 0 END)`,
-
-          // Cravadas: 1º lugar (posição = 1)
-          firstPlaceCount: sql<number>`SUM(CASE WHEN ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
+          // Cravadas: eventos com posicao 1
+          firstPlaceCount: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.position} = 1 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
 
           // Média de participantes - will be calculated separately with median for most sites
           avgFieldSize: sql<number>`ROUND(AVG(CASE WHEN ${tournaments.fieldSize} >= 15 AND ${tournaments.fieldSize} IS NOT NULL THEN CAST(${tournaments.fieldSize} AS DECIMAL) ELSE NULL END), 0)`,
 
-          // Finalização Precoce: eliminado cedo, ficou entre os últimos 10% do field (posição alta = saiu cedo)
-          // position/fieldSize >= 90% significa que o jogador terminou em posição ruim (ex: 900/1000 = 90%)
-          earlyFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} IS NOT NULL AND ${tournaments.fieldSize} > 0 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} IS NOT NULL AND ${tournaments.position} > 0 AND (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 >= 90 THEN 1 ELSE 0 END)`,
+          // Finalização Precoce: eventos com posicao no top 10% pior do field
+          earlyFinishCount: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.fieldSize} IS NOT NULL AND ${tournaments.fieldSize} > 0 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} IS NOT NULL AND ${tournaments.position} > 0 AND (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 >= 90 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
 
-          // Finalização Tardia: ficou até o final, entre os 10% melhores do field (posição baixa = deep run)
-          // position/fieldSize <= 10% significa que o jogador terminou em posição boa (ex: 50/1000 = 5%)
-          lateFinishCount: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} IS NOT NULL AND ${tournaments.fieldSize} > 0 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} IS NOT NULL AND ${tournaments.position} > 0 AND (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 <= 10 THEN 1 ELSE 0 END)`,
+          // Finalização Tardia: eventos com posicao no top 10% melhor do field
+          lateFinishCount: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.fieldSize} IS NOT NULL AND ${tournaments.fieldSize} > 0 AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} IS NOT NULL AND ${tournaments.position} > 0 AND (CAST(${tournaments.position} AS DECIMAL) / CAST(${tournaments.fieldSize} AS DECIMAL)) * 100 <= 10 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
 
           // Big Hit: Maior premiação registrada
           biggestPrize: sql<number>`MAX(CAST(${tournaments.prize} AS DECIMAL))`,
@@ -2642,9 +2679,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           // Dias Jogados: Quantidade de dias únicos com registros
           daysPlayed: sql<number>`COUNT(DISTINCT DATE(${tournaments.datePlayed}))`,
 
-          // Heads-Up: Estatísticas específicas para heads-up (field_size = 2)
-          headsUpTotal: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} = 2 THEN 1 ELSE 0 END)`,
-          headsUpWins: sql<number>`SUM(CASE WHEN ${tournaments.fieldSize} = 2 AND ${tournaments.position} = 1 THEN 1 ELSE 0 END)`,
+          // Heads-Up: eventos heads-up (field_size = 2)
+          headsUpTotal: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.fieldSize} = 2 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
+          headsUpWins: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.fieldSize} = 2 AND ${tournaments.position} = 1 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
         })
         .from(tournaments)
         .where(whereCondition);
@@ -2727,8 +2764,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     // 1. Contagem: Quantidade de torneios
     // 2. Lucro: Profit total dos torneios
-    // 3. ABI: Buy-in médio do torneio
-    const abi = Number(result.avgBuyin || 0);
+    // 3. ABI: Buy-in médio por evento (series colapsadas como 1).
+    //    Antes era AVG(buy_in) por leg; com agregacao de series isso distorcia
+    //    multi-flight events. Agora deriva de totalBuyins / count.
+    const abi = count > 0 ? Math.round((totalBuyins / count) * 100) / 100 : 0;
 
     // 4. ROI: Profit / (Total investido: buy-in + reentradas em valor monetário)
     const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
@@ -2846,7 +2885,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   async getPerformanceByPeriod(userId: string, period: string, filters: any = {}): Promise<any> {
 
-    const baseConditions = [eq(tournaments.userId, userId)];
+    const baseConditions = [
+      eq(tournaments.userId, userId),
+      // History rule: exclui torneios de grind-live (grindSessionId NOT NULL).
+      isNull(tournaments.grindSessionId),
+    ];
 
     // Add period filter if not showing all
     if (period !== "all") {
@@ -2938,7 +2981,12 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   // Tournament Library com Agrupamento Inteligente
   async getTournamentLibrary(userId: string, period: string = "all", filters: any = {}): Promise<any[]> {
     // Base condition - always filter by user
-    const baseConditions = [eq(tournaments.userId, userId)];
+    const baseConditions = [
+      eq(tournaments.userId, userId),
+      // History rule: biblioteca de torneios so agrupa imports — exclui
+      // tournaments.grindSessionId IS NOT NULL (grind-live).
+      isNull(tournaments.grindSessionId),
+    ];
 
     // Add period filter if not showing all
     if (period !== "all") {
@@ -5545,7 +5593,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   async listStarredHands(
     userId: string,
-    filter: { sessionId?: string; type?: string; period?: "7d" | "30d" | "all" } = {},
+    filter: { sessionId?: string; type?: string; period?: "7d" | "30d" | "all"; reviewLater?: boolean; includeDiscarded?: boolean } = {},
   ): Promise<StarredHand[]> {
     const conditions: any[] = [eq(starredHands.userId, userId)];
     if (filter.sessionId) conditions.push(eq(starredHands.sessionId, filter.sessionId));
@@ -5555,6 +5603,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       const days = filter.period === "7d" ? 7 : 30;
       const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
       conditions.push(gte(starredHands.createdAt, cutoff));
+    }
+    // Soft-deleted spots ficam ocultos por default (Studies/SpotsView).
+    if (!filter.includeDiscarded) {
+      conditions.push(not(eq(starredHands.status, "discarded")));
+    }
+    if (filter.reviewLater !== undefined) {
+      conditions.push(eq(starredHands.reviewLater, filter.reviewLater));
     }
     const rows = await db
       .select()
@@ -6346,40 +6401,40 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const sinceDate = opts.sinceDate ?? null;
     const untilDate = opts.untilDate ?? null;
 
-    // Aggregate session_tournaments JOIN grind_sessions on sessionId, filter
-    // status='completed' (and completedAt >= sinceDate when set, < untilDate
-    // for previous-period window — Implementer Round UX #3).
+    // CLAUDE.md regra de fonte: dashboard/ROI by platform usa `tournaments`
+    // (importacoes via /upload, manual grade, sharkscope) e exclui registros
+    // criados em /grind-live (grindSessionId NOT NULL). Substitui consulta
+    // antiga em session_tournaments que poluia o card.
+    // sessionsCount = dias unicos com torneios na plataforma (proxy historico).
+    // investedNative = SUM(buyIn * (1 + reentries) + addOnCost).
+    // profitNative   = SUM(prize)  ; tournaments.prize ja eh net profit.
     const conditions: any[] = [
-      eq(sessionTournaments.userId, userId),
-      eq(grindSessions.status, "completed"),
+      eq(tournaments.userId, userId),
+      isNull(tournaments.grindSessionId),
+      isNull(tournaments.baggedAt),
     ];
     if (sinceDate) {
-      conditions.push(gte(grindSessions.date, sinceDate));
+      conditions.push(gte(tournaments.datePlayed, sinceDate));
     }
     if (untilDate) {
-      conditions.push(lt(grindSessions.date, untilDate));
+      conditions.push(lt(tournaments.datePlayed, untilDate));
     }
 
     const rows = await db
       .select({
-        site: sessionTournaments.site,
-        sessionsCount: sql<number>`COUNT(DISTINCT ${grindSessions.id})::int`,
-        tournamentsCount: sql<number>`COUNT(${sessionTournaments.id})::int`,
+        site: tournaments.site,
+        sessionsCount: sql<number>`COUNT(DISTINCT DATE(${tournaments.datePlayed}))::int`,
+        tournamentsCount: sql<number>`COUNT(DISTINCT COALESCE(${tournaments.seriesId}, ${tournaments.id}))::int`,
         investedNative: sql<string>`COALESCE(SUM(
-          CAST(${sessionTournaments.buyIn} AS DECIMAL)
-          + CAST(COALESCE(${sessionTournaments.rebuys}, 0) AS DECIMAL) * CAST(${sessionTournaments.buyIn} AS DECIMAL)
+          CAST(${tournaments.buyIn} AS DECIMAL)
+          + COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL)
+          + CASE WHEN ${tournaments.addOnTaken} = true THEN COALESCE(CAST(${tournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END
         ), 0)::text`,
-        profitNative: sql<string>`COALESCE(SUM(
-          CAST(COALESCE(${sessionTournaments.result}, '0') AS DECIMAL)
-          + CAST(COALESCE(${sessionTournaments.bounty}, '0') AS DECIMAL)
-          - CAST(${sessionTournaments.buyIn} AS DECIMAL)
-          - CAST(COALESCE(${sessionTournaments.rebuys}, 0) AS DECIMAL) * CAST(${sessionTournaments.buyIn} AS DECIMAL)
-        ), 0)::text`,
+        profitNative: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)::text`,
       })
-      .from(sessionTournaments)
-      .innerJoin(grindSessions, eq(sessionTournaments.sessionId, grindSessions.id))
+      .from(tournaments)
       .where(and(...conditions))
-      .groupBy(sessionTournaments.site)
+      .groupBy(tournaments.site)
       .limit(limit);
 
     return rows.map((r: any) => ({
@@ -10408,5 +10463,274 @@ export async function findMatchingTickets(
 
 // In-memory store antigo (Map _ticketStore + seeds + helpers) REMOVIDO pelo
 // B1 do reviewer. Producao usa Drizzle real (vide DatabaseStorage.* metodos).
+
+// =============================================================================
+// News Feed storage helpers — Sprint News-1 (ADR-106)
+// =============================================================================
+
+const NEWS_TTL_DAYS = 14;
+
+export async function listNewsSources(category?: string): Promise<NewsSourceRow[]> {
+  const conditions: any[] = [eq(newsSources.enabled, true)];
+  if (category) conditions.push(eq(newsSources.category, category));
+  return await db
+    .select()
+    .from(newsSources)
+    .where(and(...conditions))
+    .orderBy(asc(newsSources.category), asc(newsSources.name));
+}
+
+export async function listNewsItems(opts: {
+  category: string;
+  sourceIds: string[];
+  limit: number;
+}): Promise<any[]> {
+  if (opts.sourceIds.length === 0) return [];
+  // TTL eh para purga (cron), nao para display. User pediu "sempre top 5
+  // mais recentes do DB", mesmo que items sejam antigos.
+  // Filtro por source_id (chave dos toggles), nao platform — porque toggle key
+  // = source.id e platform pode ser compartilhada (ex: gto-wizard tem source
+  // 'gto-wizard' em tools E 'gto-wizard-studies' em studies).
+  const rows = await db
+    .select()
+    .from(newsItemsTable)
+    .where(
+      and(
+        eq(newsItemsTable.category, opts.category),
+        inArray(newsItemsTable.sourceId, opts.sourceIds),
+      ),
+    )
+    .orderBy(desc(newsItemsTable.publishedAt))
+    .limit(Math.min(20, Math.max(1, opts.limit)));
+  return rows.map((r) => ({
+    id: r.id,
+    source: r.category,
+    platform: r.platform,
+    title: r.title,
+    summary: r.summary,
+    url: r.url,
+    publishedAt: r.publishedAt instanceof Date ? r.publishedAt.toISOString() : r.publishedAt,
+    fetchedAt: r.fetchedAt instanceof Date ? r.fetchedAt.toISOString() : r.fetchedAt,
+    thumbnailUrl: r.thumbnailUrl,
+    engagement: {
+      likes: r.engagementLikes ?? undefined,
+      views: r.engagementViews ?? undefined,
+      comments: r.engagementComments ?? undefined,
+    },
+    tags: r.tags ?? undefined,
+  }));
+}
+
+export async function upsertNewsItem(input: {
+  id: string;
+  sourceId: string;
+  source: string;
+  platform: string;
+  title: string;
+  summary: string;
+  url: string;
+  publishedAt: string;
+  fetchedAt: string;
+  thumbnailUrl?: string | null;
+  engagement?: { likes?: number; views?: number; comments?: number };
+  tags?: string[];
+  contentHash: string;
+}): Promise<boolean> {
+  const expiresAt = new Date(Date.now() + NEWS_TTL_DAYS * 24 * 3600 * 1000);
+  // Sprint home-reform-4 item 11: Grok comumente retorna URLs hallucinated
+  // (404 no destino real). Antes de salvar, valida HEAD; se falhar, substitui
+  // por homepage_url da source. Garante que cards do NewsFeed nunca quebrem.
+  let finalUrl = input.url;
+  try {
+    const [src] = await db
+      .select({ homepageUrl: newsSources.homepageUrl })
+      .from(newsSources)
+      .where(eq(newsSources.id, input.sourceId))
+      .limit(1);
+    const { resolveItemUrl } = await import("./services/urlValidator");
+    finalUrl = await resolveItemUrl(input.url, src?.homepageUrl ?? null, {
+      sourceId: input.sourceId,
+      title: input.title,
+    });
+  } catch (err) {
+    console.warn("[upsertNewsItem] url validation skipped (erro)", err);
+  }
+  try {
+    await db
+      .insert(newsItemsTable)
+      .values({
+        id: input.id,
+        sourceId: input.sourceId,
+        category: input.source,
+        platform: input.platform,
+        title: input.title,
+        summary: input.summary.slice(0, 280),
+        url: finalUrl,
+        thumbnailUrl: input.thumbnailUrl ?? null,
+        publishedAt: new Date(input.publishedAt),
+        fetchedAt: new Date(input.fetchedAt),
+        expiresAt,
+        engagementLikes: input.engagement?.likes ?? null,
+        engagementViews: input.engagement?.views ?? null,
+        engagementComments: input.engagement?.comments ?? null,
+        contentHash: input.contentHash,
+        tags: input.tags ?? null,
+      })
+      .onConflictDoNothing({ target: newsItemsTable.contentHash });
+    return true;
+  } catch (err) {
+    console.warn("[upsertNewsItem] insert falhou", err);
+    return false;
+  }
+}
+
+export async function getUserNewsPreference(
+  userId: string,
+  category: string,
+): Promise<UserNewsPreferenceRow | null> {
+  const [row] = await db
+    .select()
+    .from(userNewsPreferences)
+    .where(
+      and(
+        eq(userNewsPreferences.userId, userId),
+        eq(userNewsPreferences.category, category),
+      ),
+    )
+    .limit(1);
+  return (row as UserNewsPreferenceRow) ?? null;
+}
+
+export async function listUserNewsPreferences(
+  userId: string,
+): Promise<UserNewsPreferenceRow[]> {
+  return await db
+    .select()
+    .from(userNewsPreferences)
+    .where(eq(userNewsPreferences.userId, userId));
+}
+
+export async function upsertUserNewsPreference(
+  userId: string,
+  patch: NewsPreferenceUpdate,
+): Promise<void> {
+  const existing = await getUserNewsPreference(userId, patch.category);
+  if (existing) {
+    const updated: any = {};
+    if (patch.enabled !== undefined) updated.enabled = patch.enabled;
+    if (patch.platformToggles !== undefined) {
+      updated.platformToggles = {
+        ...(existing.platformToggles ?? {}),
+        ...patch.platformToggles,
+      };
+    }
+    updated.updatedAt = new Date();
+    if (Object.keys(updated).length === 0) return;
+    await db
+      .update(userNewsPreferences)
+      .set(updated)
+      .where(
+        and(
+          eq(userNewsPreferences.userId, userId),
+          eq(userNewsPreferences.category, patch.category),
+        ),
+      );
+    return;
+  }
+  await db.insert(userNewsPreferences).values({
+    userId,
+    category: patch.category,
+    enabled: patch.enabled ?? false,
+    platformToggles: (patch.platformToggles as any) ?? {},
+  });
+}
+
+/** Plataformas detectadas via CSV imports do user (interesse implicito). */
+export async function detectUserPlatforms(userId: string): Promise<string[]> {
+  try {
+    const rows = await db
+      .selectDistinct({ platform: tournaments.platform })
+      .from(tournaments)
+      .where(and(eq(tournaments.userId, userId), isNotNull(tournaments.platform)));
+    return rows.map((r) => String(r.platform ?? "").toLowerCase()).filter(Boolean);
+  } catch (err) {
+    console.warn("[detectUserPlatforms] falhou", err);
+    return [];
+  }
+}
+
+export async function getUserNewsPreferencesPayload(userId: string) {
+  const [prefs, sources, detected] = await Promise.all([
+    listUserNewsPreferences(userId),
+    listNewsSources(),
+    detectUserPlatforms(userId),
+  ]);
+  const catalog: Record<string, any[]> = {
+    sites: [],
+    tools: [],
+    studies: [],
+    gossip: [],
+    "tournament-results": [],
+    market: [],
+    "reserved-future": [],
+  };
+  for (const s of sources) {
+    const c = s.category ?? "market";
+    if (!catalog[c]) catalog[c] = [];
+    catalog[c].push({
+      id: s.id,
+      name: s.name,
+      description: s.description ?? undefined,
+      iconUrl: s.iconUrl ?? null,
+      category: c,
+      platform: s.platform,
+    });
+  }
+  return {
+    preferences: prefs.map((p) => ({
+      category: p.category,
+      enabled: p.enabled,
+      platformToggles: p.platformToggles ?? {},
+    })),
+    detectedPlatforms: detected,
+    catalog,
+  };
+}
+
+/**
+ * Verifica se ao menos 1 user habilitou esta source. Usado pelo cron pra evitar
+ * gastar tokens com sources que ninguem assina.
+ *
+ * Criterio: existe user_news_preferences row onde category=src.category AND
+ * enabled=true AND platform_toggles->>src.id = 'true'.
+ */
+export async function hasAnyUserEnabledForSource(src: {
+  id: string;
+  category: string;
+}): Promise<boolean> {
+  const rows = await db
+    .select({ userId: userNewsPreferences.userId })
+    .from(userNewsPreferences)
+    .where(
+      and(
+        eq(userNewsPreferences.category, src.category),
+        eq(userNewsPreferences.enabled, true),
+        sql`(platform_toggles ->> ${src.id})::boolean = true`,
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+// Bind helpers ao storage instance pra rotas usarem via storage.X
+(storage as any).listNewsSources = listNewsSources;
+(storage as any).listNewsItems = listNewsItems;
+(storage as any).upsertNewsItem = upsertNewsItem;
+(storage as any).getUserNewsPreference = getUserNewsPreference;
+(storage as any).listUserNewsPreferences = listUserNewsPreferences;
+(storage as any).upsertUserNewsPreference = upsertUserNewsPreference;
+(storage as any).getUserNewsPreferencesPayload = getUserNewsPreferencesPayload;
+(storage as any).detectUserPlatforms = detectUserPlatforms;
+(storage as any).hasAnyUserEnabledForSource = hasAnyUserEnabledForSource;
 // Tests que dependiam dos IDs fixture (tkt-1, etc.) declaram seu proprio
 // vi.mock('../../../server/db', ...) com Drizzle-shape fake backed por Map.

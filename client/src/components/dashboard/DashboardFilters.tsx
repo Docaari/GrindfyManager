@@ -34,7 +34,7 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
   const [tempParticipantRange, setTempParticipantRange] = useState({ min: '', max: '' });
 
   // Collapsible filter section state
-  const [filtersExpanded, setFiltersExpanded] = useState(true);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   // Functions for custom date range
   const formatDateForDisplay = (date: string) => {
