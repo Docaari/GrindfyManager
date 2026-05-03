@@ -23,11 +23,11 @@ Founder pediu explicitamente:
 | # | Item | Status | Tipo | Estimativa |
 |---|------|--------|------|------------|
 | 1 | Card "Sessoes" mes atual — fix tamanho/espaco | Concluido (2026-05-03) | UI fix | <1h |
-| 2 | Novo card "Dashboard" mes atual abaixo do Sessoes | Pendente | Feature | 2-3h |
+| 2 | Novo card "Dashboard" mes atual abaixo do Sessoes | Concluido (2026-05-03) — unificado com item 6 | Feature | 2-3h |
 | 3 | Explicacao "Acao imediata" | Pendente | Doc | 5min |
 | 4 | Substituir "Continue assistindo" por recomendacao Coach IA semanal | Pendente | Feature complexa | 1-2 dias |
 | 5 | Substituir "Recomendacao de hoje" por visao rapida grade planner | Pendente | Feature | 2-3h |
-| 6 | Performance abaixo de Sessoes (mesmo padrao) com empty states | Pendente | UI/refactor | 1-2h |
+| 6 | Performance abaixo de Sessoes (mesmo padrao) com empty states | Concluido (2026-05-03) — unificado com item 2 | UI/refactor | 1-2h |
 | 7 | Card Estudos: 3 stats foco do mes + temas linkados | Pendente | Feature complexa | 1-2 dias |
 | 8 | Remover card "4 torneios, 2 sessoes, 1 dia ativo" | Concluido (2026-05-03) | UI fix | 15min |
 | 9 | Card "Ultimas Sessoes" abaixo de Sessoes (acima Dashboard) | Pendente | Reorder | 30min |
@@ -87,6 +87,18 @@ Founder pediu explicitamente:
 - Filtro de mes: padrao mes corrente, mas suporta query param `?month=2026-02` futuramente
 
 **Lessons applicar:** §6.1 do CLAUDE.md (regra fonte historico) — NUNCA agregar `session_tournaments` em dashboard, NUNCA esquecer `WHERE grind_session_id IS NULL` em queries de dashboard.
+
+#### Resolucao (2026-05-03) — unificado com item 6
+
+- Componente novo `DashboardMonthCard` (`client/src/components/home/DashboardMonthCard.tsx`): clone simetrico de `SessionsMonthCard` — full-width rounded-lg border bg-card p-4, 3 KPIs grandes (Torneios | Profit | ROI) + label "Mes: {Mes pt-BR}". Link pra `/dashboard`.
+- Backend novo metodo `storage.getDashboardMonthAggregate(userId, { monthStart, monthEnd })` agrega `tournaments WHERE grind_session_id IS NULL AND bagged_at IS NULL` por site (count = DISTINCT seriesId/id, investedNative = buyIn*(1+reentries)+addOnCost, profitNative = SUM(prize) ja eh net profit).
+- Orchestrator `services/dashboardMonth.ts:getDashboardMonthSummary` aplica FX via `fxResolver.resolveExchangeRates` + `getCurrencyForSite` -> totals USD + ROI%.
+- `/api/home/overview` payload ganhou campo `dashboardMonth` (mesma shape de `sessionsMonth`).
+- Empty state: "Sem dados upados esse mes" quando count=0 ou data null (item 6 friendly tone).
+- Profit verde/vermelho conforme sinal; ROI null (invested=0) renderiza em-dash sem cor.
+- Render no `Home.tsx` zona Performance: SessionsMonthCard -> DashboardMonthCard -> PerformanceMini -> resto.
+- Testes: `tests/services/dashboardMonth.test.ts` (4/4) + `client/.../DashboardMonthCard.test.tsx` (7/7). Zero regressao home (151/154 verde, 3 fails pre-existing news-stub).
+- Reorder do item 9 (Ultimas Sessoes entre Sessoes e Dashboard) fica para sprint follow-up.
 
 ---
 
@@ -191,6 +203,10 @@ A zona 2 do Operations Cockpit (definida na ADR-110) agrupa **componentes que pe
 - Empty states claros e sem alarmismo
 
 **Nota:** Reorganizar zonas — possivelmente "Hoje" e "Performance" fundem em zona "Estado Atual" com 4 cards verticais (Sessoes, Dashboard/Performance, Ultimas Sessoes, Grafico Evolucao).
+
+#### Resolucao (2026-05-03) — unificado com item 2
+
+Implementacao foi unificada com item 2 (mesmo card, mesma fonte de dados, layout simetrico ao SessionsMonthCard). Detalhes da resolucao no item 2. Empty state "Sem dados upados esse mes" cobre o cenario "user nao fez upload no mes". O cenario "Sem reports nesse mes" fica coberto pelo card Sessoes vazio + card Dashboard vazio juntos — duas mensagens dao o sinal completo sem precisar de logica composta.
 
 ---
 

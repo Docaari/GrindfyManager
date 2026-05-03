@@ -47,6 +47,8 @@ import EmptyPerformanceCluster from '@/components/home/EmptyPerformanceCluster';
 import NewsFeed from '@/components/home/NewsFeed';
 // Sprint home-reform-4 item 1.
 import SessionsMonthCard from '@/components/home/SessionsMonthCard';
+// Sprint home-reform-4 item 2+6.
+import DashboardMonthCard from '@/components/home/DashboardMonthCard';
 
 import type { NewsItem } from '@shared/types/news';
 
@@ -167,6 +169,14 @@ interface HomeOverviewResponse {
   }>;
   // Sprint home-reform-4 item 1.
   sessionsMonth?: {
+    monthStart: string;
+    count: number;
+    profitUsd: number;
+    investedUsd: number;
+    roiPct: number | null;
+  } | null;
+  // Sprint home-reform-4 item 2+6.
+  dashboardMonth?: {
     monthStart: string;
     count: number;
     profitUsd: number;
@@ -361,6 +371,8 @@ const Home: React.FC = () => {
               <ZoneHeading>Performance</ZoneHeading>
               {/* home-reform-4 item 1: Card Sessoes mes atual full-width */}
               <SessionsMonthCard data={data.sessionsMonth ?? null} />
+              {/* home-reform-4 item 2+6: Card Dashboard mes atual (uploads/historico) */}
+              <DashboardMonthCard data={data.dashboardMonth ?? null} />
               <PerformanceMini data={data.performance} />
               {perfClusterEmpty ? (
                 <EmptyPerformanceCluster

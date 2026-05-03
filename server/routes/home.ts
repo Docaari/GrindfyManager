@@ -22,6 +22,7 @@ import type { NewsItem } from '@shared/types/news';
 import { handleTournamentSelector } from './tournament-selector';
 import { computeHeuristics } from '../services/homeHeuristics';
 import { getSessionsMonthSummary } from '../services/sessionsMonth';
+import { getDashboardMonthSummary } from '../services/dashboardMonth';
 
 // =============================================================================
 // Cache in-memory per-userId — D4 / ADR-102 §2.3
@@ -210,6 +211,14 @@ interface HomeOverviewBody {
     investedUsd: number;
     roiPct: number | null;
   } | null;
+  // Sprint home-reform-4 item 2+6 — Dashboard mes atual (uploads/historico).
+  dashboardMonth: {
+    monthStart: string;
+    count: number;
+    profitUsd: number;
+    investedUsd: number;
+    roiPct: number | null;
+  } | null;
   meta: {
     generatedAt: string;
     cacheHit: boolean;
@@ -383,6 +392,8 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
         }), timings),
       // Sprint home-reform-4 item 1.
       timed('sessionsMonth', () => getSessionsMonthSummary(userId), timings),
+      // Sprint home-reform-4 item 2+6.
+      timed('dashboardMonth', () => getDashboardMonthSummary(userId), timings),
     ]);
 
     const unwrap = <T,>(idx: number): T | null => {
@@ -412,6 +423,7 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     const varianceResult = unwrap<any>(14);
     const tournamentSelectorResult = unwrap<any>(15);
     const sessionsMonthResult = unwrap<any>(16);
+    const dashboardMonthResult = unwrap<any>(17);
 
     // Tipos usados localmente (cast porque mocks retornam any).
     const qs = quickStats as any;
@@ -718,6 +730,16 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
             profitUsd: Number(sessionsMonthResult.profitUsd ?? 0),
             investedUsd: Number(sessionsMonthResult.investedUsd ?? 0),
             roiPct: sessionsMonthResult.roiPct == null ? null : Number(sessionsMonthResult.roiPct),
+          }
+        : null,
+      // Sprint home-reform-4 item 2+6.
+      dashboardMonth: dashboardMonthResult && typeof dashboardMonthResult === 'object'
+        ? {
+            monthStart: String(dashboardMonthResult.monthStart ?? ''),
+            count: Number(dashboardMonthResult.count ?? 0),
+            profitUsd: Number(dashboardMonthResult.profitUsd ?? 0),
+            investedUsd: Number(dashboardMonthResult.investedUsd ?? 0),
+            roiPct: dashboardMonthResult.roiPct == null ? null : Number(dashboardMonthResult.roiPct),
           }
         : null,
       meta: {

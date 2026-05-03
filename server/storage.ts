@@ -760,6 +760,17 @@ export interface IStorage {
     returnsNative: string;
   }>>;
 
+  // Sprint home-reform-4 item 2+6 — Dashboard mes atual aggregate
+  getDashboardMonthAggregate(
+    userId: string,
+    opts?: { monthStart?: Date; monthEnd?: Date },
+  ): Promise<Array<{
+    site: string;
+    count: number;
+    investedNative: string;
+    profitNative: string;
+  }>>;
+
   // Sprint F3 — Stats Analyzer (ADR-051)
   getHudLayouts(userId: string): Promise<HudLayout[]>;
   getHudLayout(id: string, userId: string): Promise<HudLayout | undefined>;
@@ -6462,6 +6473,68 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       count: Number(r.count) || 0,
       investedNative: String(r.investedNative ?? '0'),
       returnsNative: String(r.returnsNative ?? '0'),
+    }));
+  }
+
+  // ============================================================================
+  // Sprint home-reform-4 item 2+6 — Dashboard mes atual aggregate
+  // ============================================================================
+  //
+  // Spec: Docs/specs/home-reform-4.md item 2 (novo card Dashboard) + item 6
+  // (Performance abaixo de Sessoes, mesmo padrao). Card mostra Torneios |
+  // Profit | ROI do mes corrente baseado em `tournaments WHERE
+  // grind_session_id IS NULL` (CLAUDE.md §6.1 — historico oficial / dashboard).
+  //
+  // Mirror de getSessionsMonthAggregate, mas fonte distinta: aqui uploads/manual
+  // grade/sharkscope, nao session_tournaments live. Mantendo schema simetrico
+  // (count + investedNative + profitNative) pra orquestrador FX→USD.
+  //
+  // Conta torneios distintos (DISTINCT seriesId OR id) para alinhar com
+  // getRoiByPlatform e quickStats.totalTournaments.
+  // investedNative = SUM(buyIn * (1 + reentries) + addOnCost*addOnTaken).
+  // profitNative   = SUM(prize)  ; tournaments.prize ja eh net profit.
+  // Exclui baggedAt NOT NULL (torneios em Day-2 ainda em jogo).
+  async getDashboardMonthAggregate(
+    userId: string,
+    opts: { monthStart?: Date; monthEnd?: Date } = {},
+  ): Promise<Array<{
+    site: string;
+    count: number;
+    investedNative: string;
+    profitNative: string;
+  }>> {
+    const now = new Date();
+    const monthStart = opts.monthStart ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const monthEnd = opts.monthEnd ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+    const conditions = [
+      eq(tournaments.userId, userId),
+      isNull(tournaments.grindSessionId),
+      isNull(tournaments.baggedAt),
+      gte(tournaments.datePlayed, monthStart),
+      lt(tournaments.datePlayed, monthEnd),
+    ];
+
+    const rows = await db
+      .select({
+        site: tournaments.site,
+        count: sql<number>`COUNT(DISTINCT COALESCE(${tournaments.seriesId}, ${tournaments.id}))::int`,
+        investedNative: sql<string>`COALESCE(SUM(
+          CAST(${tournaments.buyIn} AS DECIMAL)
+          + COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL)
+          + CASE WHEN ${tournaments.addOnTaken} = true THEN COALESCE(CAST(${tournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END
+        ), 0)::text`,
+        profitNative: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)::text`,
+      })
+      .from(tournaments)
+      .where(and(...conditions))
+      .groupBy(tournaments.site);
+
+    return rows.map((r: any) => ({
+      site: String(r.site ?? ''),
+      count: Number(r.count) || 0,
+      investedNative: String(r.investedNative ?? '0'),
+      profitNative: String(r.profitNative ?? '0'),
     }));
   }
 
