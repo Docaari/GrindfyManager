@@ -37,6 +37,11 @@ import EmptyHomeOnboarding from '@/components/home/EmptyHomeOnboarding';
 // Sprint home-reform-1-5 (RF-22 + RF-23): forward-looking blocks.
 import DailyInsight from '@/components/home/DailyInsight';
 import LibraryResume from '@/components/home/LibraryResume';
+// Sprint home-reform-2 Onda 2 (RF-29 / RF-30 / RF-31 / RF-34).
+import StatsTopDeltas from '@/components/home/StatsTopDeltas';
+import VarianceCard from '@/components/home/VarianceCard';
+import TournamentRecommendations from '@/components/home/TournamentRecommendations';
+import HeuristicsCard from '@/components/home/HeuristicsCard';
 
 import type { NewsItem } from '@shared/types/news';
 
@@ -114,7 +119,48 @@ interface HomeOverviewResponse {
     sessionTournamentCount: number;
     detectedAt: string;
   };
-  meta: { generatedAt: string; cacheHit: boolean; subqueryTimingsMs: Record<string, number> };
+  // Sprint home-reform-2 Onda 2.
+  topDeltas?: Array<{
+    stat: string;
+    statLabel: string;
+    baseline: number;
+    current: number;
+    delta: number;
+    deltaAbs: number;
+    severity: 'high' | 'medium' | 'low';
+    direction: 'positive' | 'negative' | 'neutral';
+    period: '30d';
+  }>;
+  variance?: {
+    sessionsCount: number;
+    actualUsd: number;
+    expectedUsd: number;
+    expectedSource: 'primedope-cache' | 'fallback-zero';
+    deviationUsd: number;
+    sigmaUsd: number;
+    sigmaMultiple: number;
+    status: 'lucky' | 'normal' | 'unlucky';
+    period: '90d';
+  } | null;
+  tournamentRecommendations?: Array<{
+    id: string;
+    name: string;
+    buyinUsd: number;
+    buyinNative: number;
+    currency: string;
+    score: number;
+    grade: 'S' | 'A' | 'B';
+    startTime: string;
+    platform: string;
+    alreadyInGrid: boolean;
+  }>;
+  heuristics?: Array<{
+    id: string;
+    message: string;
+    severity: 'info' | 'caution' | 'positive';
+    ctaHref: string | null;
+  }>;
+  meta: { generatedAt: string; cacheHit: boolean; subqueryTimingsMs: Record<string, number>; userTimezone?: string };
 }
 
 function readSkipOnboarding(): boolean {
@@ -262,6 +308,23 @@ const Home: React.FC = () => {
               {/* Sprint home-reform-1-5 RF-23: Continue Assistindo. */}
               <LibraryResume />
               <PerformanceMini data={data.performance} />
+            </div>
+
+            {/* Sprint home-reform-2 Onda 2: Stats top deltas + Variance check. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <StatsTopDeltas data={data.topDeltas ?? null} />
+              <VarianceCard data={data.variance ?? null} />
+            </div>
+
+            {/* Sprint home-reform-2 Onda 2: Tournament recommendations + Heuristics. */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="md:col-span-2">
+                <TournamentRecommendations
+                  data={data.tournamentRecommendations ?? []}
+                  plannedTodayCount={data.today?.plannedCount ?? 0}
+                />
+              </div>
+              <HeuristicsCard data={data.heuristics ?? null} />
             </div>
 
             <NewsSlot enabled={data.news.enabled} items={data.news.items} />

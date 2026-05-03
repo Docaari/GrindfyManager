@@ -19,6 +19,8 @@ import { requireAuth } from '../auth';
 import { storage } from '../storage';
 import { fetchNewsItems } from './news';
 import type { NewsItem } from '@shared/types/news';
+import { handleTournamentSelector } from './tournament-selector';
+import { computeHeuristics } from '../services/homeHeuristics';
 
 // =============================================================================
 // Cache in-memory per-userId — D4 / ADR-102 §2.3
@@ -158,10 +160,52 @@ interface HomeOverviewBody {
     ageRelative: string;
   }>;
   news: { enabled: boolean; items: NewsItem[] };
+  // Sprint home-reform-2 Onda 2 — RF-29 / RF-30 / RF-31 / RF-34 / RF-35.
+  topDeltas: Array<{
+    stat: string;
+    statLabel: string;
+    baseline: number;
+    current: number;
+    delta: number;
+    deltaAbs: number;
+    severity: 'high' | 'medium' | 'low';
+    direction: 'positive' | 'negative' | 'neutral';
+    period: '30d';
+  }>;
+  variance: {
+    sessionsCount: number;
+    actualUsd: number;
+    expectedUsd: number;
+    expectedSource: 'primedope-cache' | 'fallback-zero';
+    deviationUsd: number;
+    sigmaUsd: number;
+    sigmaMultiple: number;
+    status: 'lucky' | 'normal' | 'unlucky';
+    period: '90d';
+  } | null;
+  tournamentRecommendations: Array<{
+    id: string;
+    name: string;
+    buyinUsd: number;
+    buyinNative: number;
+    currency: string;
+    score: number;
+    grade: 'S' | 'A' | 'B';
+    startTime: string;
+    platform: string;
+    alreadyInGrid: boolean;
+  }>;
+  heuristics: Array<{
+    id: string;
+    message: string;
+    severity: 'info' | 'caution' | 'positive';
+    ctaHref: string | null;
+  }>;
   meta: {
     generatedAt: string;
     cacheHit: boolean;
     subqueryTimingsMs: Record<string, number>;
+    userTimezone: string; // Sprint home-reform-2 RF-33.
   };
 }
 
@@ -256,19 +300,53 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     const t0 = Date.now();
     const timings: Record<string, number> = {};
 
-    // Calcular dayOfWeek baseado em fuso (D14). Onda 1: fallback America/Sao_Paulo.
-    // Implementacao minima: usa servidor local Date.
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const todayIso = today.toISOString().slice(0, 10); // YYYY-MM-DD
+    // Sprint home-reform-2 RF-33 (B11) — timezone-aware.
+    // Le users.timezone (cached). Fallback America/Sao_Paulo. Timezone invalido
+    // (Intl.DateTimeFormat throw) tambem cai no fallback.
+    let userTimezone = 'America/Sao_Paulo';
+    try {
+      const tz = await (storage as any).getUserTimezone?.(userId);
+      if (typeof tz === 'string' && tz.length > 0) {
+        userTimezone = tz;
+      }
+    } catch (tzErr) {
+      console.error('[home/overview] getUserTimezone failed:', tzErr);
+    }
+
+    const formatToTzDateParts = (tz: string): { todayIso: string; dayOfWeek: number } => {
+      const fmt = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const parts = fmt.formatToParts(new Date());
+      const y = parts.find((p) => p.type === 'year')?.value ?? '1970';
+      const m = parts.find((p) => p.type === 'month')?.value ?? '01';
+      const d = parts.find((p) => p.type === 'day')?.value ?? '01';
+      const iso = `${y}-${m}-${d}`;
+      return { todayIso: iso, dayOfWeek: new Date(`${iso}T12:00:00Z`).getUTCDay() };
+    };
+
+    let todayIso: string;
+    let dayOfWeek: number;
+    try {
+      ({ todayIso, dayOfWeek } = formatToTzDateParts(userTimezone));
+    } catch (fmtErr) {
+      console.error(`[home/overview] Intl.DateTimeFormat failed (tz=${userTimezone}), fallback Sao_Paulo:`, fmtErr);
+      userTimezone = 'America/Sao_Paulo';
+      ({ todayIso, dayOfWeek } = formatToTzDateParts(userTimezone));
+    }
 
     // Promise.allSettled — graceful degradation por subquery (D5 / ADR-102 §2.1.4).
-    // timed() ja captura erros e retorna null; allSettled garante semantica explicita
-    // mesmo se algum timed() futuro deixar de catch.
+    // Sprint home-reform-2 RF-29/30/31/34: 4 subqueries novas + perf60d.
     const settled = await Promise.allSettled([
       timed('quickStats', () => (storage as any).getQuickStats(userId), timings),
       timed('performance', () => (storage as any).getDashboardPerformance(userId, '30d'), timings),
       timed('recentSessions', () => (storage as any).getRecentSessions(userId, 5), timings),
+      // Sprint home-reform-2 RF-34: heuristicas day-of-week precisam >=60 sessoes
+      // (ADR-108). Subquery dedicada paralela; nao reusa recentSessions(5).
+      timed('recentSessions60', () => (storage as any).getRecentSessions(userId, 60), timings),
       timed('pendingHands', () => (storage as any).getPendingStarredHands(userId, 5), timings),
       timed('planned', () => (storage as any).getPlannedTournamentsForDate(userId, todayIso), timings),
       timed('profile', () => (storage as any).getProfileStateForDay(userId, dayOfWeek), timings),
@@ -278,6 +356,22 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       timed('news', () => fetchNewsItems('poker-software', 5), timings),
       // Sprint home-reform-1-5 RF-25.3: subquery profile-detect.
       timed('profileDetect', () => (storage as any).detectPlayerProfile(userId), timings),
+      // Sprint home-reform-2 — Onda 2 novas subqueries.
+      timed('performance60d', () => (storage as any).getDashboardPerformance(userId, '60d'), timings),
+      timed('topDeltas', () => (storage as any).getStatsTopDeltas(userId, 3), timings),
+      timed('variance', () => (storage as any).getVarianceVsExpected(userId), timings),
+      timed('tournamentRecs', () =>
+        handleTournamentSelector({
+          userId,
+          date: todayIso,
+          sources: 'suprema,library',
+          minScore: 70,
+          bankrollFilter: false,
+          lookbackDays: 180,
+        } as any).catch((selErr) => {
+          console.error('[home/overview] handleTournamentSelector failed:', selErr);
+          return { tournaments: [] };
+        }), timings),
     ]);
 
     const unwrap = <T,>(idx: number): T | null => {
@@ -287,20 +381,25 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     const quickStats = unwrap<any>(0);
     const performance = unwrap<any>(1);
     const recentSessions = unwrap<any[]>(2);
-    const pendingHands = unwrap<any[]>(3);
-    const plannedToday = unwrap<any[]>(4);
-    const profileState = unwrap<any>(5);
-    const bankroll = unwrap<any>(6);
-    const cooldown = unwrap<any>(7);
-    const flightSeries = unwrap<any>(8);
-    const newsItemsResult = unwrap<NewsItem[]>(9);
+    const recentSessions60 = unwrap<any[]>(3);
+    const pendingHands = unwrap<any[]>(4);
+    const plannedToday = unwrap<any[]>(5);
+    const profileState = unwrap<any>(6);
+    const bankroll = unwrap<any>(7);
+    const cooldown = unwrap<any>(8);
+    const flightSeries = unwrap<any>(9);
+    const newsItemsResult = unwrap<NewsItem[]>(10);
     const profileDetectResult = unwrap<{
       profile: PlayerProfile;
       totalUploads: number;
       totalSessions: number;
       sessionTournamentCount: number;
       detectedAt: string;
-    }>(10);
+    }>(11);
+    const performance60d = unwrap<any>(12);
+    const topDeltasResult = unwrap<any[]>(13);
+    const varianceResult = unwrap<any>(14);
+    const tournamentSelectorResult = unwrap<any>(15);
 
     // Tipos usados localmente (cast porque mocks retornam any).
     const qs = quickStats as any;
@@ -466,6 +565,113 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       detectedAt: profileDetectResult?.detectedAt ?? new Date().toISOString(),
     };
 
+    // Sprint home-reform-2 — Onda 2 novos campos no payload (RF-35).
+    // topDeltas: array max 3, [] em fallback.
+    const topDeltasOut: HomeOverviewBody['topDeltas'] = (Array.isArray(topDeltasResult) ? topDeltasResult : [])
+      .slice(0, 3)
+      .map((d: any) => ({
+        stat: String(d?.stat ?? ''),
+        statLabel: String(d?.statLabel ?? d?.stat ?? ''),
+        baseline: Number(d?.baseline ?? 0),
+        current: Number(d?.current ?? 0),
+        delta: Number(d?.delta ?? 0),
+        deltaAbs: Number(d?.deltaAbs ?? Math.abs(Number(d?.delta ?? 0))),
+        severity: ((d?.severity === 'high' || d?.severity === 'medium' || d?.severity === 'low') ? d.severity : 'low') as
+          'high' | 'medium' | 'low',
+        direction: ((d?.direction === 'positive' || d?.direction === 'negative' || d?.direction === 'neutral') ? d.direction : 'neutral') as
+          'positive' | 'negative' | 'neutral',
+        period: '30d',
+      }));
+
+    // variance: passa shape inteiro OU null.
+    const varianceOut: HomeOverviewBody['variance'] = varianceResult && typeof varianceResult === 'object'
+      ? {
+          sessionsCount: Number(varianceResult.sessionsCount ?? 0),
+          actualUsd: Number(varianceResult.actualUsd ?? 0),
+          expectedUsd: Number(varianceResult.expectedUsd ?? 0),
+          expectedSource: (varianceResult.expectedSource === 'fallback-zero' ? 'fallback-zero' : 'primedope-cache') as
+            'primedope-cache' | 'fallback-zero',
+          deviationUsd: Number(varianceResult.deviationUsd ?? 0),
+          sigmaUsd: Number(varianceResult.sigmaUsd ?? 0),
+          sigmaMultiple: Number(varianceResult.sigmaMultiple ?? 0),
+          status: ((varianceResult.status === 'lucky' || varianceResult.status === 'unlucky') ? varianceResult.status : 'normal') as
+            'lucky' | 'normal' | 'unlucky',
+          period: '90d',
+        }
+      : null;
+
+    // tournamentRecommendations: filtra grade in [S, A, B], top 3 score DESC + startTime ASC.
+    const allRecs: any[] = Array.isArray(tournamentSelectorResult?.tournaments)
+      ? tournamentSelectorResult.tournaments
+      : [];
+    const nowIsoForRecs = new Date().toISOString();
+    const filteredRecs = allRecs
+      .filter((t: any) =>
+        t
+        && (t.grade === 'S' || t.grade === 'A' || t.grade === 'B')
+        && Number(t?.score ?? 0) >= 70
+        && (typeof t?.startTime !== 'string' || t.startTime >= nowIsoForRecs),
+      )
+      .sort((a: any, b: any) => {
+        const sb = Number(b?.score ?? 0) - Number(a?.score ?? 0);
+        if (sb !== 0) return sb;
+        return String(a?.startTime ?? '').localeCompare(String(b?.startTime ?? ''));
+      })
+      .slice(0, 3);
+    const tournamentRecommendationsOut: HomeOverviewBody['tournamentRecommendations'] = filteredRecs.map((t: any) => ({
+      id: String(t?.id ?? ''),
+      name: String(t?.name ?? ''),
+      buyinUsd: Number(t?.buyinUsd ?? 0),
+      buyinNative: Number(t?.buyinNative ?? t?.buyinUsd ?? 0),
+      currency: String(t?.currency ?? 'USD'),
+      score: Number(t?.score ?? 0),
+      grade: t.grade as 'S' | 'A' | 'B',
+      startTime: String(t?.startTime ?? ''),
+      platform: String(t?.platform ?? ''),
+      alreadyInGrid: !!t?.alreadyInGrid,
+    }));
+
+    // heuristics: orchestrator agrega inputs e chama servico puro.
+    let heuristicsOut: HomeOverviewBody['heuristics'] = [];
+    try {
+      // RF-34: heuristicas day-of-week precisam >= 60 sessoes (ADR-108 RECENT_SESSIONS_MIN).
+      // Usa subquery dedicada recentSessions60 (nao reusa recentSessions=5).
+      const recent60 = Array.isArray(recentSessions60) ? recentSessions60 : [];
+      const recentForHeu: Array<{ date: string; pnlUsd: number }> = recent60.map((s: any) => ({
+        date: String(s?.date ?? ''),
+        pnlUsd: Number(s?.pnlUsd ?? 0),
+      }));
+      // Lifetime cash: nao temos campo dedicado em quickStats Onda 2; usar perf.cash 30d
+      // como proxy temporario. monthsLifetime = activeDays/30. Quando getQuickStats
+      // expor lifetimeCash real (Onda 3), trocar aqui.
+      const monthsLifetime = Number(qs?.activeDays ?? 0) / 30;
+      const lifetimeCashProxy = monthsLifetime > 0 ? Number(perf?.cash ?? 0) : 0;
+      const computed = computeHeuristics({
+        userId,
+        quickStats: qs ?? null,
+        performance30d: perf ? { roi: Number(perf.roi ?? 0), itm: Number(perf.itm ?? 0), cash: Number(perf.cash ?? 0) } : null,
+        performance60d: performance60d
+          ? { roi: Number(performance60d.roi ?? 0), itm: Number(performance60d.itm ?? 0), cash: Number(performance60d.cash ?? 0) }
+          : null,
+        recentSessions: recentForHeu,
+        variance: varianceOut
+          ? { status: varianceOut.status, sigmaMultiple: varianceOut.sigmaMultiple }
+          : null,
+        todayDayOfWeek: dayOfWeek,
+        lifetime: { cash: lifetimeCashProxy, monthsLifetime },
+      });
+      heuristicsOut = (Array.isArray(computed) ? computed : []).map((h: any) => ({
+        id: String(h?.id ?? ''),
+        message: String(h?.message ?? ''),
+        severity: ((h?.severity === 'caution' || h?.severity === 'positive' || h?.severity === 'info') ? h.severity : 'info') as
+          'info' | 'caution' | 'positive',
+        ctaHref: typeof h?.ctaHref === 'string' ? h.ctaHref : null,
+      }));
+    } catch (heErr) {
+      console.error('[home/overview] computeHeuristics failed:', heErr);
+      heuristicsOut = [];
+    }
+
     const body: HomeOverviewBody = {
       userState,
       profile: playerProfile,
@@ -487,10 +693,16 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       performance: performanceOut,
       pendingHands: pendingHandsOut,
       news,
+      // Sprint home-reform-2 Onda 2.
+      topDeltas: topDeltasOut,
+      variance: varianceOut,
+      tournamentRecommendations: tournamentRecommendationsOut,
+      heuristics: heuristicsOut,
       meta: {
         generatedAt: new Date().toISOString(),
         cacheHit: false,
         subqueryTimingsMs: timings,
+        userTimezone,
       },
     };
 

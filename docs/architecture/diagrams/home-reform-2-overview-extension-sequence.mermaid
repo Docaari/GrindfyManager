@@ -1,0 +1,100 @@
+%% Sprint home-reform-2 Onda 2 — Sequence: GET /api/home/overview (extensao)
+%% Mostra subqueries NOVAS Onda 2 (topDeltas, variance, tournamentRecommendations,
+%% heuristics) somadas as Onda 1, todas em Promise.allSettled paralelo + timeout 800ms.
+%% Tambem ilustra reuso de walletService (ADR-109) e fallback em cada subquery.
+%% Renderizavel em https://mermaid.live (sequenceDiagram)
+sequenceDiagram
+    actor User as Pro Player
+    participant Browser as Browser (Home.tsx)
+    participant Auth as requireAuth<br/>(JWT middleware)
+    participant Home as routes/home.ts<br/>(Onda 2 extended)
+    participant Cache as Map&lt;userId, {data, expiresAt}&gt;<br/>TTL 30s
+    participant TZ as storage.getUserTimezone<br/>(cache 5min)
+    participant Storage as storage.ts
+    participant Wallet as walletService<br/>getConsolidatedBalance
+    participant TS as handleTournamentSelector<br/>(import direto)
+    participant Heur as homeHeuristics.ts<br/>(servico puro)
+    participant DB as PostgreSQL
+
+    Note over User,DB: GET /api/home/overview (cache MISS) — budget < 1500ms p95
+
+    User->>Browser: Navega para /
+    Browser->>Auth: GET /api/home/overview<br/>Authorization: Bearer JWT
+    Auth->>Home: req.user = { id: userId }
+    Home->>Cache: get(userId)
+    Cache-->>Home: undefined (miss)
+
+    Note over Home,TZ: D14 timezone-aware (RF-33)
+    Home->>TZ: getUserTimezone(userId)
+    TZ->>DB: SELECT timezone FROM users
+    DB-->>TZ: 'America/Sao_Paulo'
+    TZ-->>Home: tz + cache 5min
+    Home->>Home: Intl.DateTimeFormat(tz)<br/>todayIso, dayOfWeek
+
+    Note over Home,DB: Promise.allSettled — 13 subqueries paralelas, timeout 800ms cada<br/>(8 da Onda 1 + 4 NOVAS Onda 2 + getDashboardPerformance 60d)
+
+    par Onda 1: quickStats / perf30d / recentSessions / pendingHands / today / cooldown / flight / news
+        Home->>Storage: getQuickStats / getDashboardPerformance(30d) / ...
+        Storage->>DB: 8 queries Onda 1
+        DB-->>Storage: rows
+        Storage-->>Home: 8 results
+    and Onda 2 NEW: getDashboardPerformance(60d) [input p/ heuristics]
+        Home->>Storage: getDashboardPerformance(userId, '60d')
+        Storage->>DB: SELECT ROI/ITM/Cash 60d
+        DB-->>Storage: rows
+        Storage-->>Home: performance60d
+    and Onda 2 NEW: bankroll FX-aware (ADR-109)
+        Home->>Storage: getCurrentBankroll(userId)
+        Storage->>Wallet: getConsolidatedBalance(userId)
+        Wallet->>Storage: getActiveWalletsByUser
+        Storage->>DB: SELECT FROM wallets WHERE active
+        DB-->>Storage: wallets[]
+        Wallet->>Storage: getUserSettings (exchangeRates)
+        Storage->>DB: SELECT settings
+        DB-->>Storage: row
+        Wallet-->>Storage: { totalUSD, walletsCount, bisAvailable }
+        Storage->>DB: SELECT FROM bankroll_snapshots last 7d
+        DB-->>Storage: snapshots[]
+        Storage->>Storage: computeDeltaPct + buildSparkline7d
+        Storage-->>Home: bankroll | null
+    and Onda 2 NEW: topDeltas (B7)
+        Home->>Storage: getStatsTopDeltas(userId)
+        Storage->>DB: SELECT hud_stat_snapshots last 30d + baseline lifetime<br/>JOIN hud_stat_targets
+        DB-->>Storage: snapshots + targets
+        Storage->>Storage: filter sampleSize>=100<br/>compute deltaAbs<br/>severity threshold<br/>top 3
+        Storage-->>Home: topDeltas[]
+    and Onda 2 NEW: variance (B8)
+        Home->>Storage: getVarianceVsExpected(userId)
+        Storage->>DB: COUNT sessions 90d<br/>SUM pnl USD<br/>SELECT primedope_simulations cache
+        DB-->>Storage: rows
+        Storage->>Storage: stddev populacional<br/>sigmaMultiple<br/>status (lucky/normal/unlucky)
+        Storage-->>Home: variance | null<br/>(null se < 20 sessoes)
+    and Onda 2 NEW: tournamentRecommendations (B9)
+        Home->>TS: handleTournamentSelector({date, sources, minScore:70, lookbackDays:180})
+        TS->>Storage: scoring + suprema cache + library
+        Storage->>DB: queries selector
+        DB-->>Storage: tournaments
+        TS-->>Home: tournaments scored
+        Home->>Home: filter grade in [S,A,B] AND startTime>now<br/>top 3 by score DESC, startTime ASC
+    and Onda 1 stubs reais (B10): pendingHands / cooldown / flight / today
+        Home->>Storage: getPendingStarredHands<br/>getActiveCooldown<br/>getActiveFlightSeries<br/>getProfileStateForDay
+        Storage->>DB: 4 queries Drizzle
+        DB-->>Storage: rows | null
+        Storage-->>Home: 4 results
+    end
+
+    Note over Home,Heur: Onda 2 NEW: heuristics (B12) — apos subqueries terminarem
+    Home->>Heur: computeHeuristics({<br/>quickStats, performance30d, performance60d,<br/>recentSessions, variance, todayDayOfWeek<br/>})
+    Heur->>Heur: regra 1: roi-30d-vs-60d-drop<br/>regra 2: best-day-of-week<br/>regra 3: worst-day-of-week-warning<br/>regra 4: cash-pace-vs-baseline<br/>top 3 prioritized
+    Heur-->>Home: heuristics[] (max 3)
+
+    Note over Home: Compose response<br/>+ topDeltas + variance + tournamentRecommendations + heuristics<br/>+ meta.userTimezone + meta.subqueryTimingsMs (13 entradas)
+
+    Home->>Cache: set(userId, { data, expiresAt: now + 30s })
+    Home-->>Auth: 200 + HomeOverviewBody (Onda 1 + Onda 2)<br/>+ meta.cacheHit=false
+    Auth-->>Browser: JSON
+    Browser-->>User: Render cockpit completo<br/>(StatsTopDeltas, VarianceCard,<br/>TournamentRecommendations, HeuristicsCard)
+
+    Note over Home: Subquery timeout 800ms ou throw<br/>Promise.allSettled captura<br/>campo vira null/[]<br/>response continua 200 (graceful degradation)<br/>frontend ja renderiza empty/loading state
+
+    Note over Home,Heur: heuristics tolera variance=null (regra 1 e 4 sao independentes)<br/>se performance60d falhar, regra 1 nao dispara mas demais funcionam

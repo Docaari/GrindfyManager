@@ -1,0 +1,56 @@
+%% Sprint home-reform-2 Onda 2 — Flowchart: homeHeuristics.computeHeuristics
+%% Cobre: 4 regras Onda 2 priorizadas, condicoes de gating, output max 3.
+%% Servico puro server-side (ADR-108). Sem I/O.
+%% Renderizavel em https://mermaid.live (flowchart)
+flowchart TD
+    Start(["computeHeuristics(input)"]) --> Init["fired = []"]
+
+    Init --> R1{"Regra 1: roi-30d-vs-60d-drop<br/>perf60d.roi - perf30d.roi >= 5pp?"}
+    R1 -->|"Sim"| F1["push: id='roi-30d-vs-60d-drop'<br/>severity='caution'<br/>message='ROI 30d caiu Xpp vs 60d.<br/>Revisar selecao de torneios.'<br/>ctaHref='/tournament-selector'"]
+    R1 -->|"Nao OR perf60d ausente"| R2
+    F1 --> R2
+
+    R2{"Regra 2: best-day-of-week<br/>recentSessions length >= 60?"}
+    R2 -->|"Nao"| R3
+    R2 -->|"Sim"| R2a["Group by dayOfWeek<br/>Filter samples >= 5 por dia"]
+    R2a --> R2b{"Existe dia com<br/>roiDia - mediaGeral >= 10pp?"}
+    R2b -->|"Sim"| F2["push: id='best-day-of-week'<br/>severity='positive'<br/>message='Dom costuma ser seu melhor dia<br/>(ROI 18.2%).'<br/>ctaHref='/dashboard?period=60d'"]
+    R2b -->|"Nao"| R3
+    F2 --> R3
+
+    R3{"Regra 3: worst-day-of-week-warning<br/>recentSessions length >= 60?"}
+    R3 -->|"Nao"| R4
+    R3 -->|"Sim"| R3a["Group by dayOfWeek<br/>Identificar piorDia<br/>(menor ROI medio, samples >= 5)"]
+    R3a --> R3b{"piorDia.roi - mediaGeral <= -10pp<br/>AND todayDayOfWeek === piorDia?"}
+    R3b -->|"Sim"| F3["push: id='worst-day-of-week-warning'<br/>severity='caution'<br/>message='Ter historicamente teve ROI -8.4%.<br/>Considere reduzir exposicao.'<br/>ctaHref='/grade-planner'"]
+    R3b -->|"Nao"| R4
+    F3 --> R4
+
+    R4{"Regra 4: cash-pace-vs-baseline<br/>quickStats.totalSessions >= 30<br/>AND lifetime.cash > 0<br/>AND monthsLifetime > 0?"}
+    R4 -->|"Nao"| Sort
+    R4 -->|"Sim"| R4a["ratio = cash30d / (cashLifetime / monthsLifetime)"]
+    R4a --> R4b{"ratio > 1.2?"}
+    R4b -->|"Sim"| F4a["push: id='cash-pace-vs-baseline'<br/>severity='positive'<br/>message='Pace de cash 23%+<br/>acima da media.'<br/>ctaHref='/dashboard'"]
+    R4b -->|"Nao"| R4c{"ratio < 0.8?"}
+    R4c -->|"Sim"| F4b["push: id='cash-pace-vs-baseline'<br/>severity='caution'<br/>message='Pace de cash 25%+<br/>abaixo da media.'<br/>ctaHref='/dashboard'"]
+    R4c -->|"Nao"| Sort
+    F4a --> Sort
+    F4b --> Sort
+
+    Sort["Ordem fixa de prioridade<br/>(insertion order)<br/>+ slice top 3"]
+    Sort --> Empty{"fired.length === 0?"}
+    Empty -->|"Sim"| ReturnEmpty(["return []<br/>(componente HeuristicsCard oculta bloco)"])
+    Empty -->|"Nao"| ReturnArr(["return fired.slice(0, 3)<br/>(max 3 heuristicas)"])
+
+    ReturnEmpty --> Tracker["Frontend: home.heuristics.viewed<br/>NAO dispara (count === 0)"]
+    ReturnArr --> Tracker2["Frontend: home.heuristics.viewed<br/>dispara com count >= 1<br/>Click chip: home.heuristics.clicked<br/>{id, severity}"]
+
+    classDef rule fill:#1e293b,stroke:#475569,color:#e2e8f0
+    classDef fired fill:#065f46,stroke:#10b981,color:#d1fae5
+    classDef terminal fill:#334155,stroke:#64748b,color:#f1f5f9
+    classDef gate fill:#1e1b4b,stroke:#6366f1,color:#e0e7ff
+
+    class R1,R2,R3,R4,R2b,R3b,R4b,R4c,Empty rule
+    class F1,F2,F3,F4a,F4b fired
+    class Start,Init,Sort,ReturnArr,ReturnEmpty,Tracker,Tracker2 terminal
+    class R2a,R3a,R4a gate

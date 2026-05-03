@@ -237,6 +237,108 @@ function buildPeriodCondition(period: string, filters: any) {
   return conditions;
 }
 
+// ===========================================================================
+// Sprint home-reform-2 Onda 2 — helpers de bankroll/ageRelative para
+// `getCurrentBankroll` (B10.3 / ADR-109) e `getPendingStarredHands` (B10.1).
+// Helpers privados a este modulo. Sem I/O.
+// ===========================================================================
+
+function formatAgeRelative(date: Date): string {
+  const ms = Date.now() - date.getTime();
+  if (ms < 0) return 'agora';
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}min`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h`;
+  const days = Math.floor(hr / 24);
+  if (days < 30) return `${days}d`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo`;
+  return `${Math.floor(days / 365)}a`;
+}
+
+function snapshotAmount(snap: any): number {
+  return Number(snap?.newAmount ?? 0);
+}
+
+/**
+ * Constroi sparkline de 7 pontos USD (1 por dia) usando bankroll_snapshots.
+ * Para cada dia [now-6d, now], pega o ultimo snapshot <= fim do dia.
+ * Se nao ha snapshot daquele dia, repete o ultimo valor conhecido.
+ * Spec §3 B10.3.
+ */
+function buildSparkline7d(snapshots: any[], currentTotalUsd: number): number[] {
+  const sparkline: number[] = new Array(7).fill(currentTotalUsd);
+  if (!Array.isArray(snapshots) || snapshots.length === 0) return sparkline;
+
+  // ASC por occurredAt para iterar consistente.
+  const sorted = [...snapshots]
+    .map((s) => ({
+      occurredAt: s.occurredAt instanceof Date ? s.occurredAt : new Date(s.occurredAt),
+      amount: snapshotAmount(s),
+    }))
+    .filter((s) => !isNaN(s.occurredAt.getTime()))
+    .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+
+  if (sorted.length === 0) return sparkline;
+
+  let lastKnown = sorted[0].amount;
+  const now = new Date();
+  for (let i = 0; i < 7; i++) {
+    const dayEnd = new Date(now.getTime());
+    dayEnd.setHours(23, 59, 59, 999);
+    dayEnd.setDate(dayEnd.getDate() - (6 - i));
+    // Acha ultimo snapshot <= dayEnd
+    let found = lastKnown;
+    for (const s of sorted) {
+      if (s.occurredAt.getTime() <= dayEnd.getTime()) {
+        found = s.amount;
+      } else {
+        break;
+      }
+    }
+    sparkline[i] = found;
+    lastKnown = found;
+  }
+  // Sempre fecha com valor atual no ponto 7.
+  sparkline[6] = currentTotalUsd;
+  return sparkline;
+}
+
+/**
+ * deltaPct7d = (current - balance7daysAgo) / balance7daysAgo * 100.
+ * balance7daysAgo = ultimo snapshot anterior a 7d (ou null se inexistente).
+ * Spec §3 B10.3.
+ */
+function computeDeltaPct7d(snapshots: any[], currentTotalUsd: number): number | null {
+  if (!Array.isArray(snapshots) || snapshots.length === 0) return null;
+  // Pega o snapshot mais antigo dos 7d (ou o primeiro se todos forem recentes).
+  const sorted = [...snapshots]
+    .map((s) => ({
+      occurredAt: s.occurredAt instanceof Date ? s.occurredAt : new Date(s.occurredAt),
+      amount: snapshotAmount(s),
+    }))
+    .filter((s) => !isNaN(s.occurredAt.getTime()))
+    .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+  if (sorted.length === 0) return null;
+  const balance7d = sorted[0].amount;
+  if (balance7d === 0) return null;
+  return Number((((currentTotalUsd - balance7d) / balance7d) * 100).toFixed(2));
+}
+
+/**
+ * bisAvailable = floor(totalUsd / softLimitUSD). null se softLimit nao configurado.
+ * Spec §3 B10.3.
+ */
+function computeBisAvailable(totalUsd: number, softLimitUSD: any): number | null {
+  if (softLimitUSD == null) return null;
+  const limit = Number(softLimitUSD);
+  if (!Number.isFinite(limit) || limit <= 0) return null;
+  return Math.floor(totalUsd / limit);
+}
+
 // Utility function to build SQL filters from dashboard filters
 function buildFilters(filters: any) {
   const conditions: any[] = [];
@@ -9513,9 +9615,44 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     }
   }
 
-  async getPendingStarredHands(_userId: string, _limit: number = 5): Promise<any[]> {
-    // Onda 1: stub. Sprint follow-up usa endpoint /api/starred-hands/pending.
-    return [];
+  // ===========================================================================
+  // Sprint home-reform-2 Onda 2 — RF-32 (B10) implementacoes reais.
+  // Spec: Docs/specs/home-reform-2.md §3 B10.
+  // ADR-109 (bankroll FX aggregation reusa walletService).
+  //
+  // Lessons aplicadas:
+  //   #3   shape REAL (verificado via schema.ts antes de mapear)
+  //   #6   normalizar para USD via walletService.getConsolidatedBalance
+  //   #9   logar ANTES de fallback (catch blocks)
+  // ===========================================================================
+
+  async getPendingStarredHands(userId: string, limit: number = 5): Promise<any[]> {
+    // B10.1: starredHands WHERE userId AND status='pending', ORDER BY createdAt DESC.
+    try {
+      const rows: any[] = await (db as any)
+        .select()
+        .from(starredHands)
+        .where(and(eq(starredHands.userId, userId), eq(starredHands.status, 'pending')))
+        .orderBy(desc(starredHands.createdAt))
+        .limit(limit);
+      return (rows ?? []).map((r: any) => {
+        const createdAt = r.createdAt instanceof Date
+          ? r.createdAt
+          : (r.createdAt ? new Date(r.createdAt) : null);
+        return {
+          id: String(r.id ?? ''),
+          // Schema atual nao tem campo 'hero'; usa notes ou type.
+          hero: String(r.notes ?? r.type ?? ''),
+          context: String(r.spot ?? r.type ?? ''),
+          tag: String(r.type ?? ''),
+          ageRelative: createdAt ? formatAgeRelative(createdAt) : '',
+        };
+      });
+    } catch (err) {
+      console.error('[storage.getPendingStarredHands] failed', err);
+      // Lesson #9: re-throw — Promise.allSettled em home.ts captura e usa [].
+      throw err;
+    }
   }
 
   async getPlannedTournamentsForDate(userId: string, dateIso: string): Promise<any[]> {
@@ -9529,23 +9666,78 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     }
   }
 
-  async getProfileStateForDay(_userId: string, _dayOfWeek: number): Promise<any> {
-    // Onda 1: stub. Sprint follow-up consulta profile_states + warmup_rituals.
-    return null;
+  async getProfileStateForDay(userId: string, dayOfWeek: number): Promise<any> {
+    // B10.2: profile_states WHERE userId AND dayOfWeek. Schema atual tem
+    // apenas { id, userId, dayOfWeek, activeProfile, createdAt, updatedAt }.
+    // Campos da spec ausentes (stopLoss, stopTime, hasWarmupToday) ficam null.
+    // Spec §3 B10.2: graceful null se erro (NAO throw).
+    try {
+      const rows: any[] = await (db as any)
+        .select()
+        .from(profileStates)
+        .where(and(eq(profileStates.userId, userId), eq(profileStates.dayOfWeek, dayOfWeek)))
+        .limit(1);
+      if (!rows || rows.length === 0) return null;
+      const row = rows[0];
+      const profile = row?.activeProfile ?? null;
+      return {
+        profile: (profile === 'A' || profile === 'B' || profile === 'C' || profile === 'OFF') ? profile : null,
+        // TODO Onda 3: schema atual nao tem stopLoss / stopTime / hasWarmupToday.
+        stopLoss: null,
+        stopTime: null,
+        hasWarmupToday: false,
+      };
+    } catch (err) {
+      console.error('[storage.getProfileStateForDay] failed', err);
+      return null;
+    }
   }
 
   async getCurrentBankroll(userId: string): Promise<any> {
-    // Onda 1 minimo: signal de "wallets configurados" para userState.
-    // Sprint follow-up agrega balances + FX + delta 7d via bankrollSnapshots.
+    // B10.3 / ADR-109: delega para walletService.getConsolidatedBalance (FX cascata)
+    // + getBankrollSnapshots (delta 7d + sparkline). Lazy import por circular dep.
     try {
-      const count = await this.countActiveWalletsByUser(userId);
-      if (count === 0) return null;
+      const { walletService } = await import('./services/walletService');
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      // Paraleliza walletService consolidacao + snapshots (reduz 2 RTTs sequenciais -> 1).
+      const [consolidatedRes, snapshotsRes] = await Promise.allSettled([
+        walletService.getConsolidatedBalance(userId),
+        this.getBankrollSnapshots(userId, { from: sevenDaysAgo }),
+      ]);
+      const consolidated: any =
+        consolidatedRes.status === 'fulfilled' ? consolidatedRes.value : null;
+      if (!consolidated) {
+        if (consolidatedRes.status === 'rejected') {
+          console.error('[storage.getCurrentBankroll] consolidate failed', consolidatedRes.reason);
+        }
+        return null;
+      }
+      const walletCount = Number(
+        consolidated?.walletsCount ?? consolidated?.walletCount ?? 0,
+      );
+      if (walletCount === 0) return null;
+      const totalUsd = Number(consolidated?.totalUSD ?? consolidated?.totalUsd ?? 0);
+      const snapshots: any[] =
+        snapshotsRes.status === 'fulfilled' && Array.isArray(snapshotsRes.value)
+          ? snapshotsRes.value
+          : [];
+      if (snapshotsRes.status === 'rejected') {
+        console.error('[storage.getCurrentBankroll] snapshots failed', snapshotsRes.reason);
+      }
+
+      const sparkline = buildSparkline7d(snapshots, totalUsd);
+      const deltaPct7d = computeDeltaPct7d(snapshots, totalUsd);
+
+      const bisAvailable = (typeof consolidated?.bisAvailable === 'number')
+        ? consolidated.bisAvailable
+        : computeBisAvailable(totalUsd, consolidated?.softLimitUSD);
+
       return {
-        totalUsd: 0,
-        walletsCount: count,
-        bisAvailable: null,
-        deltaPct7d: null,
-        sparkline: [],
+        totalUsd,
+        walletsCount: walletCount,
+        bisAvailable,
+        deltaPct7d,
+        sparkline,
       };
     } catch (err) {
       console.error('[storage.getCurrentBankroll] failed', err);
@@ -9553,13 +9745,81 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     }
   }
 
-  async getActiveCooldown(_userId: string): Promise<any> {
-    // Onda 1: stub. Sprint follow-up filtra cooldown_logs WHERE status='active'.
-    return null;
+  async getActiveCooldown(userId: string): Promise<any> {
+    // B10.4: cooldown_logs WHERE userId AND completedAt IS NULL ORDER BY startedAt DESC LIMIT 1.
+    try {
+      const rows: any[] = await (db as any)
+        .select()
+        .from(cooldownLogs)
+        .where(and(eq(cooldownLogs.userId, userId), isNull(cooldownLogs.completedAt)))
+        .orderBy(desc(cooldownLogs.startedAt))
+        .limit(1);
+      if (!rows || rows.length === 0) return null;
+      const row = rows[0];
+      const startedAt = row.startedAt instanceof Date ? row.startedAt : new Date(row.startedAt);
+      // Default duration 30min se durationMinutes ausente.
+      const durationMs = (row.durationMinutes ? Number(row.durationMinutes) : 30) * 60 * 1000;
+      const until = new Date(startedAt.getTime() + durationMs).toISOString();
+      // Mapping mode -> type (TODO Onda 3: detect stop-loss via blocksCompleted).
+      const mode = String(row.mode ?? 'full');
+      const type: 'manual' | 'stop-loss' | 'time-stop' = mode === 'quick' ? 'time-stop' : 'manual';
+      return {
+        active: true,
+        until,
+        type,
+        cooldownId: String(row.id ?? ''),
+        sessionId: String(row.sessionId ?? ''),
+      };
+    } catch (err) {
+      console.error('[storage.getActiveCooldown] failed', err);
+      return null;
+    }
   }
 
-  async getActiveFlightSeries(_userId: string): Promise<any> {
-    // Onda 1: stub. Sprint follow-up filtra tournament_series WHERE status='active'.
+  async getActiveFlightSeries(userId: string): Promise<any> {
+    // B10.5: tournament_series WHERE userId AND day2Status='pending' AND day2DateTime > now()
+    //        ORDER BY day2DateTime ASC LIMIT 1.
+    try {
+      const now = new Date();
+      const rows: any[] = await (db as any)
+        .select()
+        .from(tournamentSeries)
+        .where(and(
+          eq(tournamentSeries.userId, userId),
+          eq(tournamentSeries.day2Status, 'pending'),
+          gt(tournamentSeries.day2DateTime, now),
+        ))
+        .orderBy(asc(tournamentSeries.day2DateTime))
+        .limit(1);
+      if (!rows || rows.length === 0) return null;
+      const row = rows[0];
+      const day2 = row.day2DateTime instanceof Date ? row.day2DateTime : new Date(row.day2DateTime);
+      return {
+        active: true,
+        seriesTitle: String(row.name ?? ''),
+        nextDayStartTime: day2.toISOString(),
+        currentStackBb: 0, // TODO Onda 3: calcular via planned_tournaments.baggedAt.
+        day: 2,
+      };
+    } catch (err) {
+      console.error('[storage.getActiveFlightSeries] failed', err);
+      return null;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Sprint home-reform-2 Onda 2 — Stubs Onda 2 minimo (RF-29, RF-30).
+  // Onda 3 popula real (HUD snapshots + PrimeDope cache).
+  // -------------------------------------------------------------------------
+  async getStatsTopDeltas(_userId: string, _limit: number = 3): Promise<any[]> {
+    // TODO Onda 3: query hud_stat_snapshots (30d) vs baseline lifetime.
+    // Onda 2: handler retorna [] — bloco frontend mostra empty CTA.
+    return [];
+  }
+
+  async getVarianceVsExpected(_userId: string): Promise<any> {
+    // TODO Onda 3: filtra grind_sessions 90d, lookup primedope_simulations cache.
+    // Onda 2: retorna null (bloco oculto).
     return null;
   }
 
@@ -9575,30 +9835,28 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     detectedAt: string;
   }> {
     try {
-      // totalUploads = COUNT tournaments para o user (todos vem via CSV import).
-      const uploadsRows: any[] = await (db as any)
-        .select({ count: sql<number>`COUNT(*)::int` })
-        .from(tournaments)
-        .where(eq(tournaments.userId, userId));
-      const totalUploads = Number(uploadsRows?.[0]?.count ?? 0);
-
-      // totalSessions = COUNT grind_sessions.
-      const sessionsRows: any[] = await (db as any)
-        .select({ count: sql<number>`COUNT(*)::int` })
-        .from(grindSessions)
-        .where(eq(grindSessions.userId, userId));
-      const totalSessions = Number(sessionsRows?.[0]?.count ?? 0);
-
-      // sessionTournamentCount = COUNT session_tournaments para o user (via JOIN com grind_sessions).
-      const sessionTournamentRows: any[] = await (db as any)
-        .select({ count: sql<number>`COUNT(*)::int` })
-        .from(sessionTournaments)
-        .innerJoin(
-          grindSessions,
-          eq(sessionTournaments.sessionId, grindSessions.id),
-        )
-        .where(eq(grindSessions.userId, userId));
-      const sessionTournamentCount = Number(sessionTournamentRows?.[0]?.count ?? 0);
+      // 3 COUNTs paralelos — reduz 3 round-trips → 1.
+      const [uploadsRows, sessionsRows, sessionTournamentRows] = await Promise.all([
+        (db as any)
+          .select({ count: sql<number>`COUNT(*)::int` })
+          .from(tournaments)
+          .where(eq(tournaments.userId, userId)),
+        (db as any)
+          .select({ count: sql<number>`COUNT(*)::int` })
+          .from(grindSessions)
+          .where(eq(grindSessions.userId, userId)),
+        (db as any)
+          .select({ count: sql<number>`COUNT(*)::int` })
+          .from(sessionTournaments)
+          .innerJoin(
+            grindSessions,
+            eq(sessionTournaments.sessionId, grindSessions.id),
+          )
+          .where(eq(grindSessions.userId, userId)),
+      ]);
+      const totalUploads = Number((uploadsRows as any[])?.[0]?.count ?? 0);
+      const totalSessions = Number((sessionsRows as any[])?.[0]?.count ?? 0);
+      const sessionTournamentCount = Number((sessionTournamentRows as any[])?.[0]?.count ?? 0);
 
       const profile = detectProfileHeuristic({
         totalUploads,
@@ -9624,6 +9882,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   // verificar entitlements (user_lesson_access) por curso/lesson.
   // ===========================================================================
   async hasLibraryAccess(_userId: string): Promise<boolean> {
+    // TODO(home-reform-2): substituir por check real de user_lesson_access
+    // (ADR-100 Biblioteca + ADR Onda 2). Onda 1.5 deliberadamente liberal
+    // para nao bloquear QA do bloco LibraryResume.
     return true;
   }
 
