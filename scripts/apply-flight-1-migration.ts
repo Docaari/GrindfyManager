@@ -48,12 +48,22 @@ async function main(): Promise<void> {
   const client = await pool.connect();
 
   try {
-    // === Pass 1: aplicar migration 0029 ===
-    const sqlPath = resolve(__dirname, "..", "migrations", "0029_add_tournament_series.sql");
-    const sql = readFileSync(sqlPath, "utf-8");
-    console.log(`[pass1] applying ${sqlPath} (${sql.length} bytes)`);
-    await client.query(sql);
-    console.log("[pass1] OK migration aplicada");
+    // === Pass 1: aplicar migration 0029 (skipa se 0030 ja rodou) ===
+    // Backfill PL/pgSQL da 0029 referencia flight_parent_id que e dropada pela 0030.
+    // Idempotencia: se coluna nao existe, pula 0029 inteiro (table tournament_series
+    // ja existe e dados ja estao migrados).
+    const colCheck = await client.query(
+      `SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'tournaments' AND column_name = 'flight_parent_id') as exists;`,
+    );
+    if (colCheck.rows[0]?.exists) {
+      const sqlPath = resolve(__dirname, "..", "migrations", "0029_add_tournament_series.sql");
+      const sql = readFileSync(sqlPath, "utf-8");
+      console.log(`[pass1] applying ${sqlPath} (${sql.length} bytes)`);
+      await client.query(sql);
+      console.log("[pass1] OK migration aplicada");
+    } else {
+      console.log("[pass1] SKIP 0029 (flight_parent_id nao existe; 0030 ja rodou — DB consistente)");
+    }
 
     // === Pass 1b: aplicar migration 0030 (DROP COLUMN) — opt-in via APPLY_0030=1 ===
     if (process.env.APPLY_0030 === "1") {
