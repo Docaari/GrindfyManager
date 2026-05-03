@@ -1,12 +1,10 @@
 /**
- * SMOKE TEST + audit final Sprint Flight-1.
- * - Valida tournament_series + Day 2 planneds estao corretos no DB.
- * - Garante 1 entry por profile (A + B) por serie.
- * - Audita series + bagged tournaments.
+ * Pos-Migration 0030 + Founder feedback:
+ * Marca planneds Day 1 (originais, recorrentes, dow=6) dos 4 flights como
+ * COMPLETED + linka ao series. Founder veria status "upcoming" antes; agora
+ * vai ver "completed" indicando que passou pra Day 2.
  *
  * Uso: npx tsx --env-file=.env scripts/find-founder.ts
- *
- * Idempotente: rodar varias vezes nao duplica nada.
  */
 import { Pool } from "pg";
 
@@ -31,8 +29,43 @@ async function main(): Promise<void> {
     const userId = userRes.rows[0].user_platform_id;
     console.log(`founder userId = ${userId}`);
 
-    // Normaliza: pra cada (série), garante exatamente 1 planned por profile A e B.
-    // DELETE all + INSERT 2 (idempotente em re-runs).
+    // === STEP 0: Marcar planneds Day 1 originais como COMPLETED + linkar a serie ===
+    // Founder feedback 2026-05-03: vê 4 flights jogados sábado dow=6 ainda com
+    // status=upcoming. Atualiza pra status=completed + seriesId pra refletir
+    // "passou pra Day 2".
+    const day1Patterns: Record<string, string> = {
+      "OSS Flight": "OSS Flight",
+      "Mystery Mini": "Mystery Mini D1",
+      "Mystery Million": "Mystery Million Stage 1",
+      "Zodiac": "Zodiac Phase",
+    };
+    for (const [seriesName, day1NamePattern] of Object.entries(day1Patterns)) {
+      const seriesQ = await client.query(
+        `SELECT id FROM tournament_series WHERE user_id = $1 AND name = $2 LIMIT 1;`,
+        [userId, seriesName],
+      );
+      if (seriesQ.rows.length === 0) continue;
+      const seriesId = seriesQ.rows[0].id;
+      const upd = await client.query(
+        `UPDATE planned_tournaments
+            SET status = 'completed', series_id = $1, updated_at = NOW()
+          WHERE user_id = $2
+            AND name = $3
+            AND day_of_week = 6
+            AND series_id IS NULL
+          RETURNING id, name, day_of_week, time, profile, status;`,
+        [seriesId, userId, day1NamePattern],
+      );
+      if (upd.rowCount && upd.rowCount > 0) {
+        console.log(`marked ${upd.rowCount} Day 1 planneds COMPLETED for ${day1NamePattern}:`);
+        upd.rows.forEach((r) =>
+          console.log(`  ${r.id} | ${r.name} | profile=${r.profile} | dow=${r.day_of_week} time=${r.time} | status=${r.status}`),
+        );
+      }
+    }
+
+    // Normaliza: pra cada (série), garante exatamente 1 planned Day 2 por profile A e B.
+    // DELETE only Day 2 planneds (mantém Day 1 originais marcados como completed).
     const { nanoid } = await import("nanoid");
     for (const fix of BRT_FIXES) {
       const brt = new Date(fix.day2BrtIso);
@@ -50,13 +83,15 @@ async function main(): Promise<void> {
       const seriesId = seriesRow.rows[0].id;
       const network = seriesRow.rows[0].network;
 
-      // DELETE todos planneds dessa série (qualquer profile)
+      // DELETE somente Day 2 planneds (name LIKE '%Day 2'), preservando Day 1 originais.
       const del = await client.query(
-        `DELETE FROM planned_tournaments WHERE user_id = $1 AND series_id = $2 RETURNING id;`,
+        `DELETE FROM planned_tournaments
+          WHERE user_id = $1 AND series_id = $2 AND name ILIKE '%Day 2'
+        RETURNING id;`,
         [userId, seriesId],
       );
       if (del.rowCount && del.rowCount > 0) {
-        console.log(`  deleted ${del.rowCount} pre-existing planneds for ${fix.seriesName}`);
+        console.log(`  deleted ${del.rowCount} Day 2 planneds for ${fix.seriesName}`);
       }
 
       // INSERT 1 por profile (A + B)
