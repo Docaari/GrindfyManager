@@ -22,7 +22,7 @@ Founder pediu explicitamente:
 
 | # | Item | Status | Tipo | Estimativa |
 |---|------|--------|------|------------|
-| 1 | Card "Sessoes" mes atual — fix tamanho/espaco | Pendente | UI fix | <1h |
+| 1 | Card "Sessoes" mes atual — fix tamanho/espaco | Concluido (2026-05-03) | UI fix | <1h |
 | 2 | Novo card "Dashboard" mes atual abaixo do Sessoes | Pendente | Feature | 2-3h |
 | 3 | Explicacao "Acao imediata" | Pendente | Doc | 5min |
 | 4 | Substituir "Continue assistindo" por recomendacao Coach IA semanal | Pendente | Feature complexa | 1-2 dias |
@@ -49,6 +49,16 @@ Founder pediu explicitamente:
 - Conteudo do card deve ser ajustado conforme item 2 (mes atual + Profit + ROI)
 
 **Arquivos provaveis:** `client/src/components/home/StatusStrip.tsx` ou componente proprio
+
+#### Resolucao (2026-05-03)
+
+- Componente novo `SessionsMonthCard` (full-width rounded-lg border bg-card p-4) com 3 KPIs grandes: Torneios | Profit | ROI + label "Mes: {Mes pt-BR}".
+- Backend: `storage.getSessionsMonthAggregate(userId, { monthStart, monthEnd })` agrega `session_tournaments` por site (count + investedNative + returnsNative). Orchestrator `services/sessionsMonth.ts:getSessionsMonthSummary` aplica FX via `fxResolver` + `getCurrencyForSite` -> totals USD + ROI%. Adicionado a `/api/home/overview` (campo `sessionsMonth`).
+- Empty state: "Sem sessoes esse mes" quando count=0 ou data null.
+- Profit verde/vermelho conforme sinal; ROI null (invested=0) renderiza em-dash sem cor.
+- Card linka pra `/grind`.
+- Testes: `tests/services/sessionsMonth.test.ts` (4/4) + `client/.../SessionsMonthCard.test.tsx` (7/7). Zero regressao home (78 integration verde).
+- Conteudo do card permanece "Sessoes mes atual"; o sibling "Dashboard mes atual" sera adicionado no item 2.
 
 ---
 

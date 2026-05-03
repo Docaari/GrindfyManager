@@ -21,6 +21,7 @@ import { fetchNewsItems } from './news';
 import type { NewsItem } from '@shared/types/news';
 import { handleTournamentSelector } from './tournament-selector';
 import { computeHeuristics } from '../services/homeHeuristics';
+import { getSessionsMonthSummary } from '../services/sessionsMonth';
 
 // =============================================================================
 // Cache in-memory per-userId — D4 / ADR-102 §2.3
@@ -201,6 +202,14 @@ interface HomeOverviewBody {
     severity: 'info' | 'caution' | 'positive';
     ctaHref: string | null;
   }>;
+  // Sprint home-reform-4 item 1 — Sessoes mes atual.
+  sessionsMonth: {
+    monthStart: string;
+    count: number;
+    profitUsd: number;
+    investedUsd: number;
+    roiPct: number | null;
+  } | null;
   meta: {
     generatedAt: string;
     cacheHit: boolean;
@@ -372,6 +381,8 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
           console.error('[home/overview] handleTournamentSelector failed:', selErr);
           return { tournaments: [] };
         }), timings),
+      // Sprint home-reform-4 item 1.
+      timed('sessionsMonth', () => getSessionsMonthSummary(userId), timings),
     ]);
 
     const unwrap = <T,>(idx: number): T | null => {
@@ -400,6 +411,7 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     const topDeltasResult = unwrap<any[]>(13);
     const varianceResult = unwrap<any>(14);
     const tournamentSelectorResult = unwrap<any>(15);
+    const sessionsMonthResult = unwrap<any>(16);
 
     // Tipos usados localmente (cast porque mocks retornam any).
     const qs = quickStats as any;
@@ -698,6 +710,16 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       variance: varianceOut,
       tournamentRecommendations: tournamentRecommendationsOut,
       heuristics: heuristicsOut,
+      // Sprint home-reform-4 item 1.
+      sessionsMonth: sessionsMonthResult && typeof sessionsMonthResult === 'object'
+        ? {
+            monthStart: String(sessionsMonthResult.monthStart ?? ''),
+            count: Number(sessionsMonthResult.count ?? 0),
+            profitUsd: Number(sessionsMonthResult.profitUsd ?? 0),
+            investedUsd: Number(sessionsMonthResult.investedUsd ?? 0),
+            roiPct: sessionsMonthResult.roiPct == null ? null : Number(sessionsMonthResult.roiPct),
+          }
+        : null,
       meta: {
         generatedAt: new Date().toISOString(),
         cacheHit: false,

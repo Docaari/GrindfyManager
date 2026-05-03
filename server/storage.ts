@@ -749,6 +749,17 @@ export interface IStorage {
     profitNative: string;
   }>>;
 
+  // Sprint home-reform-4 item 1 — Sessoes mes atual aggregate
+  getSessionsMonthAggregate(
+    userId: string,
+    opts?: { monthStart?: Date; monthEnd?: Date },
+  ): Promise<Array<{
+    site: string;
+    count: number;
+    investedNative: string;
+    returnsNative: string;
+  }>>;
+
   // Sprint F3 — Stats Analyzer (ADR-051)
   getHudLayouts(userId: string): Promise<HudLayout[]>;
   getHudLayout(id: string, userId: string): Promise<HudLayout | undefined>;
@@ -6386,6 +6397,73 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   // ============================================================================
   // Sprint Bankroll-3 RF-7 — ROI by platform aggregation (CRIT-1 fix)
   // ============================================================================
+
+  // ============================================================================
+  // Sprint home-reform-4 item 1 — Sessoes mes atual aggregate
+  // ============================================================================
+  //
+  // Spec: Docs/specs/home-reform-4.md item 1 + item 2 (Card Sessoes mes atual).
+  // Agrega session_tournaments do mes corrente (UTC) por site. Retorna shape
+  // { site, count, investedNative, returnsNative } pra conversao FX no
+  // orchestrator (servico chama fxResolver). Diferente de getRoiByPlatform
+  // (que usa `tournaments WHERE grind_session_id IS NULL`), este metodo eh
+  // a contraparte para dados de /grind-live (CLAUDE.md §6.1).
+  //
+  // Mes corrente: usa `now` server-side. Frontend pode passar `monthStart` /
+  // `monthEnd` para overrides futuros (item 10 grafico evolucao).
+  //
+  // Profit = returns - invested (calculado no orchestrator porque envolve FX).
+  // returnsNative = SUM(COALESCE(NULLIF(result, 0), prize) + COALESCE(bounty,0))
+  //   — segue mesma logica do calculateSessionStats client-side (lessons §6).
+  // investedNative = SUM(buyIn * (1 + rebuys + reentries) + addOnCost*addOnTaken).
+  async getSessionsMonthAggregate(
+    userId: string,
+    opts: { monthStart?: Date; monthEnd?: Date } = {},
+  ): Promise<Array<{
+    site: string;
+    count: number;
+    investedNative: string;
+    returnsNative: string;
+  }>> {
+    const now = new Date();
+    const monthStart = opts.monthStart ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const monthEnd = opts.monthEnd ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+    const conditions = [
+      eq(sessionTournaments.userId, userId),
+      gte(sessionTournaments.createdAt, monthStart),
+      lt(sessionTournaments.createdAt, monthEnd),
+    ];
+
+    const rows = await db
+      .select({
+        site: sessionTournaments.site,
+        count: sql<number>`COUNT(*)::int`,
+        investedNative: sql<string>`COALESCE(SUM(
+          CAST(${sessionTournaments.buyIn} AS DECIMAL)
+          * (1 + COALESCE(CAST(${sessionTournaments.rebuys} AS DECIMAL), 0) + COALESCE(CAST(${sessionTournaments.reentries} AS DECIMAL), 0))
+          + CASE WHEN ${sessionTournaments.addOnTaken} = true THEN COALESCE(CAST(${sessionTournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END
+        ), 0)::text`,
+        returnsNative: sql<string>`COALESCE(SUM(
+          CASE
+            WHEN COALESCE(CAST(${sessionTournaments.result} AS DECIMAL), 0) <> 0
+              THEN CAST(${sessionTournaments.result} AS DECIMAL)
+            ELSE COALESCE(CAST(${sessionTournaments.prize} AS DECIMAL), 0)
+          END
+          + COALESCE(CAST(${sessionTournaments.bounty} AS DECIMAL), 0)
+        ), 0)::text`,
+      })
+      .from(sessionTournaments)
+      .where(and(...conditions))
+      .groupBy(sessionTournaments.site);
+
+    return rows.map((r: any) => ({
+      site: String(r.site ?? ''),
+      count: Number(r.count) || 0,
+      investedNative: String(r.investedNative ?? '0'),
+      returnsNative: String(r.returnsNative ?? '0'),
+    }));
+  }
 
   async getRoiByPlatform(
     userId: string,
