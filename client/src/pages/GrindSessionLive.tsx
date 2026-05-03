@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +50,7 @@ import EditTournamentDialog from "@/components/grind-session-live/EditTournament
 import TimeEditDialog from "@/components/grind-session-live/TimeEditDialog";
 import AlertsPanel from "@/components/grind-session-live/AlertsPanel";
 import ReentryConfirmDialog from "@/components/grind-session-live/ReentryConfirmDialog";
+import SpotScreenshotPaster from "@/components/grind-session-live/SpotScreenshotPaster";
 import {
   TournamentAlertDialog,
   type TournamentAlertCreatePayload,
@@ -123,6 +124,10 @@ export default function GrindSessionLive() {
   const [dailyGoals, setDailyGoals] = useState("");
   const [screenCap, setScreenCap] = useState<number>(10);
   const [skipBreaksToday, setSkipBreaksToday] = useState(false);
+
+  // Dialog para alterar limite de telas em tempo real (click no card "Em Andamento").
+  const [screenCapDialogOpen, setScreenCapDialogOpen] = useState(false);
+  const [screenCapDialogValue, setScreenCapDialogValue] = useState<number>(10);
 
   // Break banner state (FP-07: non-blocking break system)
   const [showBreakBanner, setShowBreakBanner] = useState(false);
@@ -802,11 +807,70 @@ export default function GrindSessionLive() {
     enabled: !!activeSession?.id, staleTime: 30000,
   });
 
+  // Spot screenshots — pending count para counter X/10 do paster.
+  // Query ativa enquanto sessao live ativa; invalida pelo onUploaded callback.
+  const { data: pendingSpotsData } = useQuery<{ items?: any[]; total?: number } | undefined>({
+    queryKey: ["/api/starred-hands/pending", { sessionId: activeSession?.id }],
+    queryFn: async () => {
+      if (!activeSession?.id) return { items: [], total: 0 };
+      try {
+        return await apiRequest(
+          "GET",
+          `/api/starred-hands/pending?sessionId=${encodeURIComponent(activeSession.id)}`,
+        );
+      } catch (err) {
+        console.warn("spot.pending_query.failed", err);
+        return { items: [], total: 0 };
+      }
+    },
+    enabled: !!activeSession?.id,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+  const spotUsedCount =
+    typeof pendingSpotsData?.total === "number"
+      ? pendingSpotsData.total
+      : Array.isArray(pendingSpotsData?.items)
+        ? pendingSpotsData!.items!.length
+        : 0;
+  const handleSpotUploaded = useCallback(() => {
+    if (!activeSession?.id) return;
+    queryClient.invalidateQueries({
+      queryKey: ["/api/starred-hands/pending", { sessionId: activeSession.id }],
+    });
+    toast({
+      title: "Print salvo",
+      description: "Spot adicionado a sessao. Revise no cooldown ou em Estudos > Spots.",
+    });
+  }, [activeSession?.id]);
+  const handleSpotError = useCallback(
+    (msg: string) => {
+      toast({
+        title: "Erro ao salvar print",
+        description: msg,
+        variant: "destructive",
+      });
+    },
+    [toast],
+  );
+
   // RF-10: Fetch user settings for alert preferences
   const { data: userAlertSettings } = useQuery({
     queryKey: ["/api/user-settings"],
     retry: false,
   });
+
+  // Pre-fill do screenCap (start modal) com defaultScreenCap memorizado em
+  // user_settings. Aplica apenas uma vez por mount (antes de existir activeSession).
+  const screenCapPrefillRef = useRef(false);
+  useEffect(() => {
+    if (screenCapPrefillRef.current) return;
+    const defaultCap = (userAlertSettings as any)?.defaultScreenCap;
+    if (typeof defaultCap === 'number' && defaultCap >= 1 && defaultCap <= 24) {
+      setScreenCap(defaultCap);
+      screenCapPrefillRef.current = true;
+    }
+  }, [userAlertSettings]);
 
   // RF-07/RF-08 — TTS settings derivados de userAlertSettings (defaults espelham schema).
   const userTTSSettings = useMemo(() => {
@@ -1152,6 +1216,48 @@ export default function GrindSessionLive() {
   }, [activeSession, plannedTournaments, sessionTournaments, userAlertSettings, userTTSSettings, toast]);
 
   // ===== MUTATIONS =====
+  // Atualiza screenCap da sessao em curso e memoriza como default p/ proxima sessao.
+  // Optimistic: atualiza activeSession local e cache de /api/grind-sessions.
+  const updateScreenCapMutation = useMutation({
+    mutationFn: async (newCap: number) => {
+      if (!activeSession?.id) throw new Error('Sessao nao encontrada');
+      const updated = await apiRequest('PUT', `/api/grind-sessions/${activeSession.id}`, {
+        screenCap: newCap,
+      });
+      // Memoriza default para a proxima sessao (idempotente; falhas nao bloqueiam).
+      try {
+        await apiRequest('PUT', '/api/user-settings', { defaultScreenCap: newCap });
+      } catch (err) {
+        console.warn('Falha ao memorizar defaultScreenCap:', err);
+      }
+      return { updated, newCap };
+    },
+    onSuccess: ({ updated, newCap }) => {
+      setActiveSession((prev) => (prev ? { ...prev, screenCap: newCap } : prev));
+      setScreenCap(newCap);
+      queryClient.invalidateQueries({ queryKey: ['/api/grind-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/user-settings'] });
+      setScreenCapDialogOpen(false);
+      toast({
+        title: 'Limite de telas atualizado',
+        description: `Novo limite: ${newCap}. Memorizado para a proxima sessao.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Erro ao alterar limite',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const openScreenCapDialog = useCallback(() => {
+    const current = activeSession?.screenCap ?? screenCap ?? 10;
+    setScreenCapDialogValue(current);
+    setScreenCapDialogOpen(true);
+  }, [activeSession?.screenCap, screenCap]);
+
   const startSessionMutation = useMutation({
     mutationFn: async (data: { preparationNotes: string; preparationPercentage: number; dailyGoals: string; screenCap: number; skipBreaksToday: boolean }) => {
       return await apiRequest("POST", "/api/grind-sessions", {
@@ -2046,7 +2152,93 @@ export default function GrindSessionLive() {
         onResume={handleResumeSession}
       />
 
-      <SessionDashboard stats={stats} showDashboard={showDashboard} onToggleDashboard={() => setShowDashboard(!showDashboard)} sessionTournaments={sessionTournaments as any[]} />
+      {/* Spot screenshots — paste Ctrl+V em qualquer area da pagina (fora de
+          inputs) ou clique em "Adicionar print" para file picker. Counter X/10
+          mostra prints da sessao atual. Revise em Estudos > Spots ou no cooldown. */}
+      {activeSession && (
+        <div className="my-3 flex items-center justify-between rounded-lg border border-gray-700/60 bg-gray-900/40 px-3 py-2">
+          <div className="text-xs text-gray-400">
+            <span className="font-medium text-gray-200">Prints de spots</span>
+            <span className="ml-2">Cole (Ctrl+V) ou clique para anexar.</span>
+          </div>
+          <SpotScreenshotPaster
+            sessionId={activeSession.id}
+            usedCount={spotUsedCount}
+            onUploaded={handleSpotUploaded}
+            onError={handleSpotError}
+          />
+        </div>
+      )}
+
+      <SessionDashboard
+        stats={stats}
+        showDashboard={showDashboard}
+        onToggleDashboard={() => setShowDashboard(!showDashboard)}
+        onEditScreenCap={openScreenCapDialog}
+        sessionTournaments={sessionTournaments as any[]}
+      />
+
+      {/* Edit limit de telas em tempo real (Em Andamento card) */}
+      <Dialog open={screenCapDialogOpen} onOpenChange={setScreenCapDialogOpen}>
+        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Alterar limite de telas</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Novo limite vale para esta sessao e fica memorizado como padrao para as proximas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label htmlFor="screen-cap-input" className="text-sm text-gray-300">
+              Maximo de mesas simultaneas (1-24)
+            </Label>
+            <Input
+              id="screen-cap-input"
+              data-testid="screen-cap-input"
+              type="number"
+              min={1}
+              max={24}
+              step={1}
+              value={screenCapDialogValue}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10);
+                setScreenCapDialogValue(Number.isFinite(n) ? n : 0);
+              }}
+              className="bg-gray-800 border-gray-600 text-white"
+              autoFocus
+            />
+            <p className="text-xs text-gray-500">
+              Em uso agora: {stats.emAndamento} mesa(s).
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setScreenCapDialogOpen(false)}
+              disabled={updateScreenCapMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              data-testid="screen-cap-save"
+              onClick={() => {
+                const n = screenCapDialogValue;
+                if (!Number.isInteger(n) || n < 1 || n > 24) {
+                  toast({
+                    title: 'Limite invalido',
+                    description: 'Use um numero inteiro entre 1 e 24.',
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+                updateScreenCapMutation.mutate(n);
+              }}
+              disabled={updateScreenCapMutation.isPending}
+            >
+              {updateScreenCapMutation.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Alerts Panel */}
       <AlertsPanel

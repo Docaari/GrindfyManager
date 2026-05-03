@@ -764,6 +764,10 @@ export const userSettings = pgTable("user_settings", {
   // Sprint Flight-1 RF-16 / D13: toggle "agregar (default) vs expandir entries"
   // nos relatorios para combined-stack series.
   reportsExpandFlightSeries: boolean("reports_expand_flight_series").default(false),
+  // Limite de telas (mesas simultaneas) memorizado para a proxima sessao.
+  // Usado como pre-fill de grindSessions.screenCap em novas sessoes; pode ser
+  // alterado em tempo real clicando no card "Em Andamento" da grind-live.
+  defaultScreenCap: integer("default_screen_cap").default(10),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1568,6 +1572,8 @@ export const insertUserSettingsSchema = _insertUserSettingsSchemaBase.extend({
   ttsFirstRunSeen: z.boolean().optional(),
   // Sprint Flight-1 RF-16 / D13.
   reportsExpandFlightSeries: z.boolean().optional(),
+  // Limite de telas memorizado (1-24).
+  defaultScreenCap: z.number().int().min(1).max(24).optional(),
 }).strict();
 
 export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit({

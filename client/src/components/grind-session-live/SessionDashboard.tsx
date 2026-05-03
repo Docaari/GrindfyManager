@@ -46,6 +46,8 @@ interface SessionDashboardProps {
   stats: SessionStats;
   showDashboard: boolean;
   onToggleDashboard: () => void;
+  /** Click no card "Em Andamento" para editar o limite de telas em tempo real. */
+  onEditScreenCap?: () => void;
   /** @deprecated Add-ons Pagos agora vem de stats.addOnsPaid (currency-aware). */
   sessionTournaments?: any[];
 }
@@ -54,7 +56,9 @@ export default function SessionDashboard({
   stats,
   showDashboard,
   onToggleDashboard,
+  onEditScreenCap,
 }: SessionDashboardProps) {
+  const screenCapClickable = !!onEditScreenCap;
   return (
     <div className="dashboard-section">
       <button
@@ -68,7 +72,24 @@ export default function SessionDashboard({
       <div className={`dashboard-content ${!showDashboard ? 'collapsed' : ''}`}>
         {/* Linha 1: Status (Em Andamento, Registrados, Reentradas, Add-ons) */}
         <div className="metrics-row metrics-status">
-          <div className={`metric-card screen-cap ${getScreenCapColors(stats.emAndamento, stats.screenCap).alertClass}`}>
+          <div
+            className={`metric-card screen-cap ${getScreenCapColors(stats.emAndamento, stats.screenCap).alertClass}${screenCapClickable ? ' cursor-pointer hover:ring-2 hover:ring-blue-400/40 transition' : ''}`}
+            role={screenCapClickable ? 'button' : undefined}
+            tabIndex={screenCapClickable ? 0 : undefined}
+            title={screenCapClickable ? 'Clique para alterar o limite de telas' : undefined}
+            data-testid="kpi-screen-cap"
+            onClick={screenCapClickable ? onEditScreenCap : undefined}
+            onKeyDown={
+              screenCapClickable
+                ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onEditScreenCap?.();
+                    }
+                  }
+                : undefined
+            }
+          >
             <div className="metric-icon">{'\u{1F5A5}'}</div>
             <div className="metric-value">
               {stats.emAndamento}/{stats.screenCap}
@@ -76,6 +97,7 @@ export default function SessionDashboard({
             <div className="metric-label">Em Andamento</div>
             <div className="metric-sub">
               {Math.round((stats.emAndamento / (stats.screenCap || 10)) * 100)}% do cap
+              {screenCapClickable && <span className="ml-1 opacity-60">• editar</span>}
             </div>
           </div>
 
