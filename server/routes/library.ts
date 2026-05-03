@@ -495,6 +495,7 @@ async function serveStaticAsset(
     if (typeof inm === "string" && inm === etag) {
       res.setHeader("etag", etag);
       res.setHeader("cache-control", "public, max-age=2592000, immutable");
+      res.setHeader("cross-origin-resource-policy", "cross-origin");
       return res.status(304).end();
     }
 
@@ -502,6 +503,9 @@ async function serveStaticAsset(
     res.setHeader("cache-control", "public, max-age=2592000, immutable");
     res.setHeader("etag", etag);
     res.setHeader("vary", "Accept-Encoding");
+    // Iframe sandbox no allow-same-origin tem origin null;
+    // CORP padrao 'same-origin' bloqueia. Liberar pra cross-origin.
+    res.setHeader("cross-origin-resource-policy", "cross-origin");
     res.status(200);
     return res.send(entry.buffer);
   } catch (err) {

@@ -114,6 +114,23 @@ const POSTMESSAGE_BOILERPLATE = `
         }
       });
     });
+    // Internal anchor links: scroll without navigating (sandbox sem
+    // same-origin faz click em <a href="#x"> esvaziar o srcdoc).
+    document.body.addEventListener("click", function (e) {
+      var t = e.target;
+      while (t && t !== document.body) {
+        if (t.tagName === "A") {
+          var href = t.getAttribute("href") || "";
+          if (href.indexOf("#") === 0 && href.length > 1) {
+            e.preventDefault();
+            var target = document.getElementById(href.slice(1));
+            if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+          return;
+        }
+        t = t.parentNode;
+      }
+    });
   });
 })();
 // === END Grindfy library iframe boilerplate ===
