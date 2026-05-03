@@ -12,7 +12,7 @@
 import { storage } from "../storage";
 import { createMediaStorage } from "./mediaStorage";
 import { createMuxProvider } from "./muxMediaProvider";
-import { sanitizeArticleHtml } from "./htmlSanitizer";
+import { sanitizeArticleHtml, preserveInlineHandlers } from "./htmlSanitizer";
 import { extractLearningObjectives } from "./learningObjectivesExtractor";
 import { isValidLibraryCategoryId } from "../../shared/library-categories";
 import { STORAGE_SCOPES } from "../../shared/library-storage-scopes";
@@ -414,7 +414,8 @@ export async function importManifest(input: ImportManifestInput): Promise<Import
           if (f) {
             const rawHtml = f.buffer.toString("utf8");
             extractedObjectives = extractLearningObjectives(rawHtml);
-            const sanitized = sanitizeArticleHtml(rawHtml, "admin-trusted");
+            const preserved = preserveInlineHandlers(rawHtml);
+            const sanitized = sanitizeArticleHtml(preserved, "admin-trusted");
             articleHtml = sanitized.clean;
             articleWordCount = sanitized.wordCount;
           } else {

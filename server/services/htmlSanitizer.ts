@@ -187,6 +187,28 @@ function stripTags(html: string): string {
 }
 
 /**
+ * Pre-process HTML antes de sanitize (admin-trusted policy):
+ * converte `onclick="..."` (e outros on*) em `data-grindfy-onclick="..."`,
+ * que sobrevive ao sanitizer (ALLOW_DATA_ATTR=true) e e re-attached como
+ * event listener pelo lesson.js boilerplate dentro do iframe sandbox.
+ *
+ * Iframe sandbox `allow-scripts` SEM `allow-same-origin` ja contem XSS;
+ * este transform preserva interatividade do conteudo Docari sem violar
+ * defesa-em-profundidade.
+ */
+export function preserveInlineHandlers(html: string): string {
+  if (!html) return html;
+  return html.replace(
+    /\s(on(?:click|change|submit|focus|blur|keydown|keyup|mouseover))=("([^"]*)"|'([^']*)')/gi,
+    (_m, _attr, _quoted, dq, sq) => {
+      const code = dq ?? sq ?? "";
+      const escaped = String(code).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+      return ` data-grindfy-${_attr.toLowerCase()}="${escaped}"`;
+    },
+  );
+}
+
+/**
  * Sanitiza HTML de artigo de aula da Biblioteca.
  *
  * @param rawHtml HTML cru.

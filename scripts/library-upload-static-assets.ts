@@ -131,6 +131,28 @@ const POSTMESSAGE_BOILERPLATE = `
         t = t.parentNode;
       }
     });
+    // ADR-093: re-attach inline handlers preservados via data-grindfy-on*.
+    // Sanitizer admin-trusted strip onclick=; manifest importer pre-processa
+    // pra data-grindfy-onclick="..." que sobrevive. Aqui reativamos.
+    var EVENTS = ["click", "change", "submit", "focus", "blur", "keydown", "keyup", "mouseover"];
+    EVENTS.forEach(function (ev) {
+      document.body.addEventListener(ev, function (e) {
+        var attr = "data-grindfy-on" + ev;
+        var t = e.target;
+        while (t && t !== document.body) {
+          if (t.nodeType === 1 && t.hasAttribute && t.hasAttribute(attr)) {
+            try {
+              var code = t.getAttribute(attr);
+              new Function("event", code).call(t, e);
+            } catch (err) {
+              try { console.warn("grindfy inline handler error:", err); } catch (_) {}
+            }
+            return;
+          }
+          t = t.parentNode;
+        }
+      }, true);
+    });
   });
 })();
 // === END Grindfy library iframe boilerplate ===

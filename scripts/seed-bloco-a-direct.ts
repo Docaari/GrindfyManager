@@ -6,7 +6,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { storage } from "../server/storage";
 import { createMediaStorage } from "../server/services/mediaStorage";
-import { sanitizeArticleHtml } from "../server/services/htmlSanitizer";
+import { sanitizeArticleHtml, preserveInlineHandlers } from "../server/services/htmlSanitizer";
 import { extractLearningObjectives } from "../server/services/learningObjectivesExtractor";
 import { STORAGE_SCOPES } from "../shared/library-storage-scopes";
 
@@ -99,7 +99,8 @@ async function main() {
     try {
       const raw = await fs.readFile(path.join(FOLDER, l.htmlFile), "utf8");
       learningObjectives = extractLearningObjectives(raw);
-      const sanitized = sanitizeArticleHtml(raw, "admin-trusted");
+      const preserved = preserveInlineHandlers(raw);
+      const sanitized = sanitizeArticleHtml(preserved, "admin-trusted");
       articleHtml = sanitized.clean;
       articleWordCount = sanitized.wordCount;
     } catch (err: any) {
