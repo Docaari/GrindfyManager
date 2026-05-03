@@ -161,7 +161,7 @@ describe('<Home /> — userState branching', () => {
     });
   });
 
-  it('userState=power renderiza StatusStrip + LifetimeStats + componentes do cockpit', async () => {
+  it('userState=power renderiza StatusStrip + componentes do cockpit', async () => {
     const { default: Home } = await import('../Home');
     render(wrap(<Home />));
     await waitFor(() => {

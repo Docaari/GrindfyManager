@@ -28,7 +28,6 @@ import TodayCard from '@/components/home/TodayCard';
 import CooldownBanner from '@/components/home/CooldownBanner';
 import FlightBanner from '@/components/home/FlightBanner';
 import NextTournamentCountdown from '@/components/home/NextTournamentCountdown';
-import LifetimeStats from '@/components/home/LifetimeStats';
 import RecentSessionsList from '@/components/home/RecentSessionsList';
 import PerformanceMini from '@/components/home/PerformanceMini';
 import PendingHandsList from '@/components/home/PendingHandsList';
@@ -373,7 +372,6 @@ const Home: React.FC = () => {
                   <VarianceCard data={data.variance ?? null} />
                 </div>
               )}
-              <LifetimeStats data={data.lifetime} />
               <RecentSessionsList data={data.recentSessions ?? []} />
             </section>
 

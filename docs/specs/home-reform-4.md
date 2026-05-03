@@ -29,7 +29,7 @@ Founder pediu explicitamente:
 | 5 | Substituir "Recomendacao de hoje" por visao rapida grade planner | Pendente | Feature | 2-3h |
 | 6 | Performance abaixo de Sessoes (mesmo padrao) com empty states | Pendente | UI/refactor | 1-2h |
 | 7 | Card Estudos: 3 stats foco do mes + temas linkados | Pendente | Feature complexa | 1-2 dias |
-| 8 | Remover card "4 torneios, 2 sessoes, 1 dia ativo" | Pendente | UI fix | 15min |
+| 8 | Remover card "4 torneios, 2 sessoes, 1 dia ativo" | Concluido (2026-05-03) | UI fix | 15min |
 | 9 | Card "Ultimas Sessoes" abaixo de Sessoes (acima Dashboard) | Pendente | Reorder | 30min |
 | 10 | Card Dashboard com grafico evolucao do mes selecionado abaixo | Pendente | Feature | 2h |
 | 11 | News: cards nao aparecem, links "Link nao encontrado" | Concluido (2026-05-03) | Bug fix | 1h |
@@ -234,6 +234,14 @@ Layout vertical com 3 entradas, cada uma:
 **Aceite:** Componente removido do Home.tsx. Verificar se ha referencia em outras paginas — se exclusivo Home, deletar arquivo.
 
 **Arquivo provavel:** algum componente em `client/src/components/home/` que renderiza esses 3 contadores. Investigar.
+
+#### Resolucao (2026-05-03)
+
+- Componente identificado: `LifetimeStats` (4 metricas: Torneios / Sessoes / Dias ativos / Streak). Apenas referenciado em `Home.tsx` — exclusivo da home.
+- Removido import + render de `Home.tsx` (zona Performance).
+- Deletado `client/src/components/home/LifetimeStats.tsx` + `client/src/components/home/__tests__/LifetimeStats.test.tsx`.
+- Atualizado nomes de testes obsoletos em `tests/home/HomeZoning.test.tsx` e `client/src/pages/__tests__/Home.test.tsx` (asserts ja toleravam ausencia — usavam selectors com OR).
+- Validacao: 226 testes home (-9 LifetimeStats deletados), 2 fails NewsSlot pre-existing baseline confirmado via stash. Zero regressao introduzida.
 
 ---
 

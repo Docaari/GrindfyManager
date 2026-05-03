@@ -221,14 +221,14 @@ describe('RF-A2 — 4 zonas semanticas', () => {
     expect(action.querySelector('[data-testid*="pending-hands"], [data-testid*="library-resume"], [data-testid*="tournament-recommendations"]')).not.toBeNull();
   });
 
-  it('zona "Performance" contem PerformanceMini + LifetimeStats + RecentSessions', async () => {
+  it('zona "Performance" contem PerformanceMini + RecentSessions', async () => {
     await renderHome(buildPowerPayload({
       topDeltas: [
         { stat: 'vpip', statLabel: 'VPIP', baseline: 25, current: 28, delta: 3, deltaAbs: 3, severity: 'medium', direction: 'positive', period: '30d' },
       ],
     }));
     const perf = await screen.findByTestId('home-zone-perf');
-    expect(perf.querySelector('[data-testid*="performance-mini"], [data-testid*="lifetime"], [data-testid*="recent-sessions"]')).not.toBeNull();
+    expect(perf.querySelector('[data-testid*="performance-mini"], [data-testid*="recent-sessions"]')).not.toBeNull();
   });
 
   it('zona "Sinal Externo" contem NewsFeed', async () => {
