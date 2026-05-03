@@ -49,6 +49,34 @@ interface LessonRow {
   displayOrder: number;
 }
 
+/**
+ * Sprint Biblioteca-2 / RF-01: storage.findLibraryLessonsByCategory + ByTag
+ * agora retornam shape nested `{ lesson, course, module, ... }`. Adapter
+ * achata para o LessonRow usado por este caller (mantem retro-compat de UI).
+ */
+function flattenLessonResult(item: any): LessonRow {
+  // Suporta tanto shape nested novo (Sprint Biblioteca-2 RF-01) quanto
+  // shape achatada legacy (Spec 1 mocks). Achatado wins.
+  if (item?.lesson && item?.course) {
+    const l = item.lesson;
+    return {
+      id: l.id,
+      slug: l.slug,
+      courseId: item.course.id ?? l.courseId,
+      courseSlug: item.course.slug ?? "",
+      courseTitle: item.course.title ?? "",
+      title: l.title,
+      coverKey: l.coverKey ?? null,
+      videoDurationSeconds: l.videoDurationSeconds ?? null,
+      audioDurationSeconds: l.audioDurationSeconds ?? null,
+      categoryId: l.categoryId,
+      tags: l.tags ?? [],
+      displayOrder: l.displayOrder ?? 0,
+    };
+  }
+  return item as LessonRow;
+}
+
 function progressRank(progress: Map<string, any>, lesson: LessonRow): number {
   const p = progress.get(lesson.id);
   if (!p) return 0; // nao-iniciada
@@ -96,20 +124,25 @@ async function recommendLessonHandler(rawInput: unknown, ctx: any) {
   const userId = ctx?.userPlatformId ?? ctx?.userId;
 
   // 1. Match exato categoria
-  let lessons: LessonRow[] = (await storage.findLibraryLessonsByCategory(
+  const rawCat = (await storage.findLibraryLessonsByCategory(
     leakTopic,
     { limit: maxResults * 3 },
   )) ?? [];
+  let lessons: LessonRow[] = (rawCat as any[]).map(flattenLessonResult);
 
-  // 2. Fallback: tags
+  // 2. Fallback: tags (excludeIds suportado em call site mas filtrado client-side
+  // se storage backend nao implementar — Sprint Biblioteca-2 RF-01).
   if (lessons.length < maxResults) {
-    const tagged: LessonRow[] = (await storage.findLibraryLessonsByTag(
+    const rawTag = (await storage.findLibraryLessonsByTag(
       leakTopic,
       {
-        excludeIds: lessons.map((l) => l.id),
         limit: maxResults - lessons.length,
-      },
+      } as any,
     )) ?? [];
+    const seen = new Set(lessons.map((l) => l.id));
+    const tagged: LessonRow[] = (rawTag as any[])
+      .map(flattenLessonResult)
+      .filter((l) => !seen.has(l.id));
     lessons = [...lessons, ...tagged];
   }
 

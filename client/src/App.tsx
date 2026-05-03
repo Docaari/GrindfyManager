@@ -55,6 +55,8 @@ const Flight = lazy(() => import("@/pages/Flight"));
 const BibliotecaPage = lazy(() => import("@/pages/biblioteca/BibliotecaPage").then(m => ({ default: m.BibliotecaPage })));
 const LessonViewerPage: any = lazy(() => import("@/pages/biblioteca/LessonViewer").then(m => ({ default: m.LessonViewer as any })));
 const CourseDetailPage: any = lazy(() => import("@/pages/biblioteca/CourseDetailPage").then(m => ({ default: m.CourseDetailPage as any })));
+// Sprint Bloco-A-Polish / RF-02: LessonHeroPage NAO eh lazy (entry point critico).
+import { LessonHeroPage } from "@/pages/biblioteca/LessonHeroPage";
 
 function PageLoader() {
   return (
@@ -118,7 +120,7 @@ function Router() {
                   <Route path="/coach" component={() => (<ProtectedRoute><GradePlanner /></ProtectedRoute>)} />
                   <Route path="/upload" component={() => (<ProtectedRoute><UploadHistory /></ProtectedRoute>)} />
                   <Route path="/settings" component={() => (<ProtectedRoute><Settings /></ProtectedRoute>)} />
-                  <Route path="/estudos" component={() => (<ProtectedRoute><Studies /></ProtectedRoute>)} />
+                  <Route path="/estudos/:rest*" component={() => (<ProtectedRoute><Studies /></ProtectedRoute>)} />
                   <Route path="/calculadoras" component={() => (<ProtectedRoute><Calculadoras /></ProtectedRoute>)} />
                   <Route path="/admin/dashboard" component={() => (<ProtectedRoute><AdminDashboard /></ProtectedRoute>)} />
                   <Route path="/admin/users" component={() => (<ProtectedRoute><AdminUsers /></ProtectedRoute>)} />
@@ -138,10 +140,22 @@ function Router() {
                       </ProtectedRoute>
                     )}
                   </Route>
-                  <Route path="/biblioteca/curso/:courseSlug/:lessonSlug">
+                  {/* Sprint Bloco-A-Polish RF-02: rota mais especifica /play
+                      ANTES da generica para Wouter resolver corretamente. */}
+                  <Route path="/biblioteca/curso/:courseSlug/:lessonSlug/play">
                     {(params: any) => (
                       <ProtectedRoute>
                         <LessonViewerPage
+                          courseSlug={params.courseSlug}
+                          lessonSlug={params.lessonSlug}
+                        />
+                      </ProtectedRoute>
+                    )}
+                  </Route>
+                  <Route path="/biblioteca/curso/:courseSlug/:lessonSlug">
+                    {(params: any) => (
+                      <ProtectedRoute>
+                        <LessonHeroPage
                           courseSlug={params.courseSlug}
                           lessonSlug={params.lessonSlug}
                         />

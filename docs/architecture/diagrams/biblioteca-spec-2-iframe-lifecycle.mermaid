@@ -1,0 +1,101 @@
+%% biblioteca-spec-2 — Iframe Lifecycle State Machine (ADR-092 + ADR-094)
+%% State diagram: iframe load -> resize -> scroll -> unload + cleanup postMessage listeners
+
+stateDiagram-v2
+    [*] --> Mounting: User navega para LessonViewer<br/>+ ArticleIframe renderiza
+
+    Mounting --> Fetching: useQuery dispara<br/>GET /article-bundle
+
+    Fetching --> Error401: response 401<br/>access_denied
+    Fetching --> Error404: response 404<br/>article_not_available
+    Fetching --> Error503: response 503<br/>static_assets_not_uploaded
+    Fetching --> BundleReady: response 200<br/>{html, stylesUrl, scriptsUrl, version, meta}
+
+    Error401 --> [*]: ArticleError component<br/>CTA Voltar ao curso
+    Error404 --> [*]: ArticleError + fallback
+    Error503 --> [*]: ArticleError + admin warning
+
+    BundleReady --> Building: buildSrcdoc(bundle, userPlatformId)<br/>escapeHtml em meta.title<br/>inject __GRINDFY_LIBRARY
+
+    Building --> SrcdocSet: <iframe sandbox='allow-scripts'<br/>srcDoc={srcdoc}><br/>iframeHeight = 800px (default)
+
+    SrcdocSet --> Loading: iframe browser parse<br/>fetch CSS via stylesUrl<br/>fetch JS via scriptsUrl
+
+    Loading --> Loaded: lesson.js.transformed executa<br/>ResizeObserver(document.body) attached<br/>scroll listener (throttle 1s) attached
+
+    state Loaded {
+        [*] --> Idle
+        Idle --> ReportingHeight: ResizeObserver fires<br/>OR window.load fires
+        ReportingHeight --> Idle: parent.postMessage<br/>{type: grindfy:library:resize,<br/>payload: {height}}
+        Idle --> ScrollDetected: user scrolla
+        ScrollDetected --> ThrottlingScroll: setTimeout 1000ms
+        ThrottlingScroll --> ReportingScroll: timeout fires
+        ReportingScroll --> Idle: parent.postMessage<br/>{type: grindfy:library:scroll,<br/>payload: {percent}}
+    }
+
+    Loaded --> ParentValidating: postMessage event recebido
+
+    state ParentValidating {
+        [*] --> CheckSource: event.source === iframeRef.contentWindow?
+        CheckSource --> Ignore: source mismatch
+        CheckSource --> CheckType: source OK
+        CheckType --> Ignore: type fora whitelist
+        CheckType --> ProcessResize: grindfy:library:resize
+        CheckType --> ProcessScroll: grindfy:library:scroll
+        ProcessResize --> CapHeight: validate payload.height number<br/>cap min(height, 50000)
+        CapHeight --> ApplyHeight: setIframeHeight(capped)
+        ApplyHeight --> [*]
+        ProcessScroll --> ClampPercent: validate payload.percent number<br/>clamp 0-100
+        ClampPercent --> Dedup5Pct: Math.abs(percent - lastSent) >= 5?
+        Dedup5Pct --> CallCallback: yes
+        Dedup5Pct --> SkipMutation: no (dedup)
+        CallCallback --> [*]
+        Ignore --> [*]
+        SkipMutation --> [*]
+    }
+
+    ParentValidating --> Loaded: continua escutando
+
+    Loaded --> SavingProgress: onScrollDepth callback chamado<br/>articleProgressMutation.mutate(percent)
+
+    SavingProgress --> ServerThrottle: PATCH /api/library/lessons/:id/progress<br/>{format:'article', lastPositionSeconds:percent, totalDurationSeconds:100}
+
+    state ServerThrottle {
+        [*] --> CheckThrottle: server-side throttle 5s<br/>(Spec 1 RF-06 + D12)
+        CheckThrottle --> AcceptUpdate: > 5s desde ultimo PATCH
+        CheckThrottle --> RejectThrottle: < 5s, ignora
+        AcceptUpdate --> ComputeCompleted: lastPos >= totalDur * 0.95?
+        ComputeCompleted --> MarkCompleted: yes - completedAt = NOW()
+        ComputeCompleted --> InProgress: no
+        MarkCompleted --> [*]
+        InProgress --> [*]
+        RejectThrottle --> [*]
+    }
+
+    ServerThrottle --> Loaded: response 200
+
+    Loaded --> Unmounting: User navega para outra rota<br/>OR re-renderiza ArticleIframe (key change)
+
+    Unmounting --> CleanupListeners: useEffect cleanup<br/>removeEventListener('message', onMessage)
+
+    CleanupListeners --> IframeDestroyed: React unmount<br/>browser destroi iframe element
+
+    IframeDestroyed --> [*]: ResizeObserver garbage collected<br/>scroll listener garbage collected<br/>postMessage handler removed (lesson #1)
+
+    note right of Loaded
+        Iframe vive em origin null
+        (sandbox sem allow-same-origin)
+        - sem acesso a parent.cookie
+        - sem acesso a parent.localStorage
+        - sem acesso a parent.fetch
+        - sem fetch a outras origins
+        Apenas postMessage(parent, '*') funciona
+    end note
+
+    note left of ParentValidating
+        Validacao dupla obrigatoria:
+        1. event.source === contentWindow
+           (sandbox impede forging)
+        2. type in whitelist
+           (anti-DoS + anti-noise)
+    end note

@@ -3572,6 +3572,8 @@ export const libraryEventTypeEnum = pgEnum("library_event_type", [
   "note_create",
   "coach_recommend",
   "access_blocked",
+  "prologue_viewed",  // ADR-097 — Sprint Bloco-A-Polish (Migration 0035)
+  "prologue_skipped", // ADR-097 — Sprint Bloco-A-Polish (Migration 0035)
 ]);
 
 export const libraryFormatEnum = pgEnum("library_format", [
@@ -3646,6 +3648,13 @@ export const libraryLessons = pgTable(
     audioMimeType: varchar("audio_mime_type", { length: 60 }).default("audio/mp4"),
     articleHtml: text("article_html"),
     articleWordCount: integer("article_word_count"),
+    // Sprint Biblioteca-2 / RF-08 + ADR-095: learning_objectives auto-extraidos
+    // do HTML pelo manifestImporter; usados em hero da aula + Coach AI tools.
+    // Migration 0034 adiciona coluna com default '[]'::jsonb (back-compat).
+    learningObjectives: jsonb("learning_objectives")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     displayOrder: integer("display_order").notNull().default(0),
     isPublished: boolean("is_published").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -3856,6 +3865,14 @@ export const insertLibraryLessonSchema = _insertLibraryLessonBase.extend({
   // Garantir validacao do enum hard-coded D13
   categoryId: z.enum(LIBRARY_CATEGORY_IDS as readonly [LibraryCategoryId, ...LibraryCategoryId[]]),
   tags: z.array(z.string()).optional().default([]),
+  // Sprint Biblioteca-2 / RF-08 + ADR-095: learning_objectives.
+  // Optional + default([]) (Lesson #7) — back-compat com inserts antigos.
+  // Cap 10 items, cada item entre 1 e 200 chars (D5 + ADR-095).
+  learningObjectives: z
+    .array(z.string().min(1).max(200))
+    .max(10)
+    .optional()
+    .default([]),
 });
 
 export const insertUserLessonAccessSchema = createInsertSchema(userLessonAccess).omit({

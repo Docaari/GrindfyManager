@@ -70,23 +70,97 @@ if (typeof globalThis !== 'undefined' && typeof (globalThis as any).window !== '
   }
 }
 
-// Patch require to resolve .ts files (needed for TDD try/catch require pattern in tests)
+// Patch require to resolve .ts/.tsx files (needed for TDD try/catch require pattern in tests)
 const originalResolveFilename = (Module as any)._resolveFilename;
 (Module as any)._resolveFilename = function (request: string, parent: any, ...args: any[]) {
   try {
     return originalResolveFilename.call(this, request, parent, ...args);
   } catch (err: any) {
     if (err.code === 'MODULE_NOT_FOUND') {
-      // Try with .ts extension
+      // Try with .ts/.tsx extension (lazy require em test files .tsx).
       const parentDir = parent?.filename ? path.dirname(parent.filename) : process.cwd();
-      const resolved = path.resolve(parentDir, request + '.ts');
-      if (fs.existsSync(resolved)) {
-        return resolved;
+      for (const ext of ['.ts', '.tsx']) {
+        const resolved = path.resolve(parentDir, request + ext);
+        if (fs.existsSync(resolved)) {
+          return resolved;
+        }
       }
     }
     throw err;
   }
 };
+
+// Register .tsx + .ts handlers para `require()` em testes lazy.
+// Sprint Biblioteca-2: TDD test files (.tsx) usam `require()` em try/catch
+// para tolerar red phase. Sem transform JSX, falha. Usamos esbuild
+// transformSync para transpilar antes de eval no Module wrapper.
+//
+// IMPORTANT: Vitest 4 transforma via vite/oxc no import path normal; este
+// shim eh apenas pra `require()` sincrono em TDD lazy-loading.
+// Sprint Biblioteca-2: TDD test files (.tsx) usam `require()` lazy para
+// red-phase fallback. Vitest 4 transforma .tsx via vite/oxc no import path
+// normal, mas `require()` sincrono nao passa pelo transform. Registramos
+// um handler esbuild manual que transforma TSX -> CJS antes do _compile.
+//
+// LIMITACAO conhecida: bibliotecas ESM-only importadas pelo componente
+// (@tanstack/react-query) podem falhar em `require(esm-package)`.
+// Quando isso acontece, o test deveria migrar pra `await import(...)`.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const esbuild = require('esbuild');
+  const handler = function (module: any, filename: string) {
+    const src = fs.readFileSync(filename, 'utf8');
+    const result = esbuild.transformSync(src, {
+      loader: filename.endsWith('.tsx') ? 'tsx' : 'ts',
+      format: 'cjs',
+      target: 'node20',
+      jsx: 'automatic',
+      jsxImportSource: 'react',
+      sourcemap: 'inline',
+    });
+    module._compile(result.code, filename);
+  };
+  if (!(Module as any)._extensions['.tsx']) {
+    (Module as any)._extensions['.tsx'] = handler;
+  }
+} catch {
+  // ok — vitest may handle this differently in some envs.
+}
+
+// =============================================================================
+// localStorage polyfill (server/node env).
+// Sprint Bloco-A-Polish: lessonHeroStorage.test.ts roda em node (eh .test.ts)
+// mas usa localStorage. jsdom polyfilla automaticamente; node nao. Fornecemos
+// uma implementacao minima em-memoria respeitando Storage.prototype para que
+// `vi.spyOn(Storage.prototype, ...)` funcione.
+// =============================================================================
+if (typeof (globalThis as any).localStorage === 'undefined') {
+  const memoryStore = new Map<string, string>();
+  class MemoryStorage {
+    get length() {
+      return memoryStore.size;
+    }
+    clear() {
+      memoryStore.clear();
+    }
+    getItem(key: string): string | null {
+      return memoryStore.has(key) ? (memoryStore.get(key) as string) : null;
+    }
+    setItem(key: string, value: string): void {
+      memoryStore.set(String(key), String(value));
+    }
+    removeItem(key: string): void {
+      memoryStore.delete(key);
+    }
+    key(index: number): string | null {
+      return Array.from(memoryStore.keys())[index] ?? null;
+    }
+  }
+  // Garante Storage.prototype para que `vi.spyOn(Storage.prototype, ...)`
+  // intercepte mesmo em node.
+  (globalThis as any).Storage = MemoryStorage;
+  (globalThis as any).localStorage = new MemoryStorage();
+}
 
 // Set required environment variables for tests
 process.env.JWT_SECRET = 'test-jwt-secret-for-vitest';

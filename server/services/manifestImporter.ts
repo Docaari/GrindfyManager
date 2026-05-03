@@ -13,11 +13,14 @@ import { storage } from "../storage";
 import { createMediaStorage } from "./mediaStorage";
 import { createMuxProvider } from "./muxMediaProvider";
 import { sanitizeArticleHtml } from "./htmlSanitizer";
+import { extractLearningObjectives } from "./learningObjectivesExtractor";
 import { isValidLibraryCategoryId } from "../../shared/library-categories";
 import { STORAGE_SCOPES } from "../../shared/library-storage-scopes";
 
 const MAX_ROWS = 100;
-const MAX_PAYLOAD_BYTES = 50 * 1024 * 1024;
+// Cap 100MB acomoda Bloco A (~95MB total). Endpoint admin atras de
+// requirePermission('admin_full'); risco DoS aceito.
+const MAX_PAYLOAD_BYTES = 100 * 1024 * 1024;
 
 export interface ManifestRow {
   type: "course" | "module" | "lesson";
@@ -35,6 +38,9 @@ export interface ManifestRow {
   video_filename?: string;
   cover_filename?: string;
   display_order?: number;
+  // Sprint Biblioteca-2 / RF-09 + ADR-095: coluna opcional override.
+  // Quando preenchido (JSON array string valido), substitui auto-extracao do HTML.
+  learning_objectives?: string[];
 }
 
 export interface ManifestParseResult {
@@ -99,6 +105,7 @@ export function parseManifestCsv(csvText: string): ManifestParseResult {
 
   const headerCols = splitCsvLine(lines[0]).map((c) => c.trim());
   // Validacao header — precisa ter pelo menos as colunas obrigatorias.
+  // Spec 2: `learning_objectives` eh OPCIONAL (16a coluna pra override).
   const missingHeaders = HEADER_KEYS.filter((k) => !headerCols.includes(k));
   if (missingHeaders.length > 0) {
     return {
@@ -150,6 +157,27 @@ export function parseManifestCsv(csvText: string): ManifestParseResult {
       cover_filename: obj.cover_filename || undefined,
       display_order: obj.display_order ? Number(obj.display_order) : undefined,
     };
+
+    // Spec 2 / RF-09: coluna opcional `learning_objectives` (JSON array string).
+    // Override sobre auto-extracao quando valido. Invalido -> warning, fallback auto.
+    if (obj.learning_objectives) {
+      try {
+        const parsed = JSON.parse(String(obj.learning_objectives));
+        if (Array.isArray(parsed) && parsed.every((s) => typeof s === "string")) {
+          row.learning_objectives = parsed;
+        } else {
+          errors.push({
+            row: i + 2,
+            reason: `learning_objectives override invalid (not array of strings)`,
+          });
+        }
+      } catch {
+        errors.push({
+          row: i + 2,
+          reason: `learning_objectives override invalid JSON`,
+        });
+      }
+    }
 
     // Detecta slug duplicado dentro do mesmo curso (lesson) — fatal.
     if (type === "lesson" && row.lesson_slug) {
@@ -257,8 +285,9 @@ export async function importManifest(input: ImportManifestInput): Promise<Import
   const { csv, files, adminUserId } = input;
   const totalSize = files.reduce((acc, f) => acc + (f.buffer?.length ?? 0), 0);
   if (totalSize > MAX_PAYLOAD_BYTES) {
+    // Spec 2 test pattern: erro precisa matchar /too_large|too large|batch.*size|payload.*size/i
     throw new Error(
-      `payload too_large: ${totalSize} bytes exceeds cap of ${MAX_PAYLOAD_BYTES} (50MB)`,
+      `batch_too_large: payload too_large ${totalSize} bytes exceeds cap of ${MAX_PAYLOAD_BYTES} (50MB)`,
     );
   }
 
@@ -373,12 +402,19 @@ export async function importManifest(input: ImportManifestInput): Promise<Import
         }
 
         // Sanitize HTML (sync, no I/O)
+        // Spec 2 / RF-09 + ADR-093: usa policy 'admin-trusted' (allowlist
+        // expandida pra HTML rico Docari Bloco A).
+        // Spec 2 / RF-09 + ADR-095: extrai learning_objectives ANTES do
+        // sanitize (preserva markup do <div class="learning-objectives">).
         let articleHtml: string | undefined;
         let articleWordCount: number | undefined;
+        let extractedObjectives: string[] = [];
         if (row.article_filename) {
           const f = find(row.article_filename);
           if (f) {
-            const sanitized = sanitizeArticleHtml(f.buffer.toString("utf8"));
+            const rawHtml = f.buffer.toString("utf8");
+            extractedObjectives = extractLearningObjectives(rawHtml);
+            const sanitized = sanitizeArticleHtml(rawHtml, "admin-trusted");
             articleHtml = sanitized.clean;
             articleWordCount = sanitized.wordCount;
           } else {
@@ -387,6 +423,8 @@ export async function importManifest(input: ImportManifestInput): Promise<Import
             });
           }
         }
+        // Override CSV (RF-09 manual override) sobrescreve auto-extract.
+        const learningObjectives = row.learning_objectives ?? extractedObjectives;
 
         // Audio + Video + Cover uploads em paralelo (F18 + F2) — independentes.
         const audioFile = row.audio_filename
@@ -399,20 +437,24 @@ export async function importManifest(input: ImportManifestInput): Promise<Import
           ? find(row.cover_filename)
           : null;
 
-        const audioPromise: Promise<string | undefined> = (async () => {
-          if (!row.audio_filename) return undefined;
+        const audioPromise: Promise<{ key?: string; mime?: string }> = (async () => {
+          if (!row.audio_filename) return {};
           if (!audioFile) {
             errors.push({ reason: `audio file not found: ${row.audio_filename}` });
-            return undefined;
+            return {};
           }
           const ext = (audioFile.originalname.split(".").pop() ?? "m4a").toLowerCase();
+          const mime =
+            audioFile.mimetype && audioFile.mimetype !== "application/octet-stream"
+              ? audioFile.mimetype
+              : "audio/mp4";
           const result = await mediaStorage.put({
             scope: STORAGE_SCOPES.LIBRARY_AUDIO,
             ext,
             buffer: audioFile.buffer,
-            mime: audioFile.mimetype,
+            mime,
           });
-          return result.key;
+          return { key: result.key, mime };
         })();
 
         const videoPromise: Promise<{ assetId?: string; playbackId?: string }> = (async () => {
@@ -452,11 +494,13 @@ export async function importManifest(input: ImportManifestInput): Promise<Import
           return result.key;
         })();
 
-        const [audioKey, videoUpload, coverKey] = await Promise.all([
+        const [audioResult, videoUpload, coverKey] = await Promise.all([
           audioPromise,
           videoPromise,
           coverPromise,
         ]);
+        const audioKey = audioResult.key;
+        const audioMimeType = audioResult.mime;
         const videoMuxAssetId = videoUpload.assetId;
         const videoMuxPlaybackId = videoUpload.playbackId;
 
@@ -472,11 +516,14 @@ export async function importManifest(input: ImportManifestInput): Promise<Import
             articleHtml,
             articleWordCount,
             audioKey,
+            audioMimeType,
             coverKey,
             videoMuxAssetId,
             videoMuxPlaybackId,
             displayOrder: row.display_order ?? 0,
             isPublished: false,
+            // Spec 2 / RF-08 + ADR-095
+            learningObjectives,
           });
         } catch (upsertErr) {
           // F2: cleanup do asset orfao se upsert falhar (audio + cover; video

@@ -194,8 +194,8 @@ describe('importManifest', () => {
     expect(result.errors.length).toBeGreaterThan(0);
   });
 
-  it('deve enforce cap de 50MB total payload', async () => {
-    const huge = Buffer.alloc(55 * 1024 * 1024);
+  it('deve enforce cap de 100MB total payload', async () => {
+    const huge = Buffer.alloc(105 * 1024 * 1024);
     await expect(
       importManifest({
         csv: makeCsv(),
@@ -204,7 +204,7 @@ describe('importManifest', () => {
         ],
         adminUserId: 'USER-ADMIN',
       })
-    ).rejects.toThrow(/50|too_large|payload|cap/i);
+    ).rejects.toThrow(/100|too_large|payload|cap/i);
   });
 });
 

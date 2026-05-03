@@ -28,6 +28,8 @@ import MuxPlayerRaw from "@mux/mux-player-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOptionalAudioPlayer } from "@/contexts/AudioPlayerContext";
 import { PodcastPlayer } from "@/components/biblioteca/PodcastPlayer";
+// Sprint Biblioteca-2 / RF-06 + RF-07: artigo via iframe sandbox + watermark overlay.
+import { ArticleIframeWithWatermark } from "@/components/biblioteca/ArticleIframeWithWatermark";
 
 // MuxPlayer module shape varies (default export vs namespace). Resolve once.
 const MuxPlayer = (MuxPlayerRaw as any)?.default ?? MuxPlayerRaw;
@@ -48,6 +50,7 @@ interface LessonData {
   courseSlug?: string | null;
   title: string;
   subtitle?: string | null;
+  displayLabel?: string | null;
   formats: {
     video?: { mux: { playbackId: string }; durationSeconds: number };
     podcast?: { audioUrl: string; durationSeconds: number; mimeType: string };
@@ -55,10 +58,44 @@ interface LessonData {
   };
 }
 
+// Sprint Bloco-A-Polish / RF-07 + D5: completedAt por formato (vindo do
+// backend como ISO string). Usado para badge "Concluida" no header.
+interface ProgressEntry {
+  lastPositionSeconds: number;
+  totalDurationSeconds: number;
+  completedAt?: string | Date | null;
+}
+
 interface ProgressData {
-  video?: { lastPositionSeconds: number; totalDurationSeconds: number };
-  podcast?: { lastPositionSeconds: number; totalDurationSeconds: number };
-  article?: { lastPositionSeconds: number; totalDurationSeconds: number };
+  video?: ProgressEntry;
+  podcast?: ProgressEntry;
+  article?: ProgressEntry;
+}
+
+// Sprint Bloco-A-Polish / RF-07 + D4: shape parcial do course usado pra
+// resolver "proxima aula". Apenas campos necessarios.
+interface CourseLessonRef {
+  id: string;
+  slug: string;
+  title: string;
+  displayLabel?: string | null;
+  durationMinutes?: number | null;
+  formats?: string[];
+  hasAccess?: boolean;
+}
+
+interface CourseModuleRef {
+  id: string;
+  slug: string;
+  title: string;
+  lessons: CourseLessonRef[];
+}
+
+interface CourseData {
+  id: string;
+  slug: string;
+  title: string;
+  modules: CourseModuleRef[];
 }
 
 const FORMAT_LABELS: Record<FormatTab, string> = {
@@ -174,9 +211,23 @@ export function LessonViewer({
   const [articleFontSize, setArticleFontSize] = useState<ArticleFontSize>(
     () => readStoredFontSize(),
   );
+  // Sprint Bloco-A-Polish / RF-07 + D4: trava re-fire do toast "Proxima aula".
+  const nextLessonToastFiredRef = useRef(false);
 
   const lesson = lessonQuery.data;
   const progress = progressQuery.data ?? {};
+
+  // Sprint Bloco-A-Polish / RF-08 + RF-07: busca course pra breadcrumb +
+  // resolver "proxima aula". Habilitado apenas quando temos courseSlug.
+  const courseQuery = useQuery<CourseData>({
+    queryKey: ["library-course", courseSlug],
+    queryFn: async () => {
+      return await apiRequest("GET", `/api/library/courses/${courseSlug}`);
+    },
+    enabled: !!courseSlug,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Define tab default (primeiro formato disponivel) quando lesson chega.
   useEffect(() => {
@@ -264,6 +315,48 @@ export function LessonViewer({
     }
     return { maxProgressPct: max, maxProgressFormat: from };
   }, [progress]);
+
+  // Sprint Bloco-A-Polish / RF-07 + D5: completedAt — true se algum formato
+  // tem completedAt nao-nulo. Direciona renderizacao do badge "Concluida".
+  const isLessonCompleted = useMemo(() => {
+    const progressTyped = progress as ProgressData;
+    for (const f of ["video", "podcast", "article"] as FormatTab[]) {
+      const p = progressTyped[f];
+      if (p && p.completedAt != null) return true;
+    }
+    return false;
+  }, [progress]);
+
+  // Sprint Bloco-A-Polish / RF-07 + D4: resolve "proxima aula" do mesmo curso.
+  const nextLessonRef = useMemo(() => {
+    const course = courseQuery.data;
+    if (!course || !lesson) return null;
+    const flat: CourseLessonRef[] = [];
+    for (const m of course.modules ?? []) {
+      for (const l of m.lessons ?? []) flat.push(l);
+    }
+    const idx = flat.findIndex((l) => l.id === lesson.id);
+    if (idx < 0) return null;
+    const next = flat[idx + 1];
+    return next ?? null;
+  }, [courseQuery.data, lesson]);
+
+  // Sprint Bloco-A-Polish / RF-07 + D4: dispara toast "Proxima aula" UMA vez
+  // por mount quando maxProgressPct cruza 90 e existe proxima aula.
+  useEffect(() => {
+    if (nextLessonToastFiredRef.current) return;
+    if (maxProgressPct < 90) return;
+    if (!nextLessonRef) return;
+    if (!lesson) return;
+    nextLessonToastFiredRef.current = true;
+    const nextLabel = nextLessonRef.displayLabel ?? "";
+    const nextTitle = nextLessonRef.title;
+    toast({
+      title: `Proxima aula: ${nextLabel} - ${nextTitle}`,
+      description: "Continue de onde voce parou.",
+      duration: 8000,
+    });
+  }, [maxProgressPct, nextLessonRef, lesson, toast]);
 
   // F4: when user switches tab and there's progress carried from another
   // format, surface a toast "Continuando de MM:SS" with a "Voltar ao inicio"
@@ -409,20 +502,77 @@ export function LessonViewer({
   const watermarkText = userPlatformId ?? "";
   const watermarkInstances = Array.from({ length: 6 }, (_, i) => i);
 
+  // Sprint Biblioteca-2 / D6: grid 2-col layout quando exatamente 2 formatos
+  // disponiveis E viewport >= lg (1024px). Mobile sempre tabs single-panel.
+  const formatCount = availableFormats.length;
+  const useTwoColLayout = formatCount === 2;
+
+  // Sprint Bloco-A-Polish / RF-08: breadcrumb sticky no topo.
+  const courseTitle = courseQuery.data?.title ?? "";
+  const lessonDisplayLabel = lesson.displayLabel ?? "";
+
   return (
-    <div data-testid="lesson-viewer" className="p-6 space-y-4">
+    <div data-testid="lesson-viewer" className="space-y-4">
+      {/* Sprint Bloco-A-Polish / RF-08: Breadcrumb sticky */}
+      <nav
+        data-testid="lesson-viewer-breadcrumb"
+        aria-label="Breadcrumb"
+        className="sticky top-0 z-30 bg-black/80 backdrop-blur-sm border-b border-gray-800 px-6 py-3 text-sm"
+      >
+        <ol className="flex items-center gap-2 text-gray-300">
+          <li>
+            <Link
+              href="/biblioteca"
+              className="hover:text-white transition-colors"
+            >
+              Biblioteca
+            </Link>
+          </li>
+          <li aria-hidden className="text-gray-600">
+            /
+          </li>
+          {courseTitle && (
+            <>
+              <li>
+                <Link
+                  href={`/biblioteca/curso/${courseSlug}`}
+                  className="hover:text-white transition-colors"
+                >
+                  {courseTitle}
+                </Link>
+              </li>
+              <li aria-hidden className="text-gray-600">
+                /
+              </li>
+            </>
+          )}
+          <li className="text-white font-medium">
+            Aula {lessonDisplayLabel}
+          </li>
+        </ol>
+      </nav>
+
+      <div className="px-6 space-y-4">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold text-white">{lesson.title}</h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-bold text-white">{lesson.title}</h1>
+          {/* Sprint Bloco-A-Polish / RF-07 + D5: badge "Concluida" */}
+          {isLessonCompleted && (
+            <span
+              data-testid="lesson-completed-badge"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-300 border border-green-500/40"
+            >
+              Concluida
+            </span>
+          )}
+        </div>
         {lesson.subtitle && <p className="text-gray-400">{lesson.subtitle}</p>}
       </header>
 
       {/*
-        F14 (alternative): existing test asserts that unavailable format tabs
-        return null (queryByTestId('lesson-format-tab-video')) so we cannot
-        render them as disabled. Instead we expose the available list as a
-        subtitle below and (when something is missing) a footer hint, so users
-        know which formats this lesson has vs. which are intentionally absent.
-
+        D7 (Sprint Biblioteca-2): tabs renderizadas APENAS para formatos
+        disponiveis. Tab `video` quando ausente NAO entra no DOM (queryByTestId
+        retorna null). Bloco A so tem podcast + artigo.
         F-A10.1 (a11y): aria-controls + dynamic tabIndex + arrow-key navigation.
       */}
       <div
@@ -432,7 +582,6 @@ export function LessonViewer({
       >
         {availableFormats.map((f) => {
           const isActive = activeTab === f;
-          // F-A3.4: format icon (kept as text-after for a11y; icon is hidden).
           const Icon = FORMAT_ICONS[f];
           return (
             <button
@@ -473,129 +622,153 @@ export function LessonViewer({
         </p>
       )}
 
-      {activeTab === "video" && lesson.formats.video && (
-        <div
-          data-testid="lesson-format-panel-video"
-          data-start-seconds={startSeconds}
-          id="lesson-format-panel-video"
-          role="tabpanel"
-          aria-labelledby="lesson-format-tab-video"
-          className="relative w-full aspect-video bg-black rounded-lg overflow-hidden"
-        >
-          <VideoPanel playbackId={lesson.formats.video.mux.playbackId} />
-          {/* F15: watermark 6x diagonal */}
-          <div
-            data-testid="lesson-video-watermark"
-            aria-hidden
-            className="absolute inset-0 pointer-events-none grid grid-cols-2 grid-rows-3 place-items-center"
-          >
-            {watermarkInstances.map((i) => (
-              <span
-                key={i}
-                className="text-white/10 text-xl font-mono"
-                style={{ transform: "rotate(-30deg)" }}
-              >
-                {watermarkText}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeTab === "podcast" && lesson.formats.podcast && (
-        <div
-          data-testid="lesson-format-panel-podcast"
-          data-start-seconds={startSeconds}
-          id="lesson-format-panel-podcast"
-          role="tabpanel"
-          aria-labelledby="lesson-format-tab-podcast"
-          className="p-4 bg-gray-900 rounded-lg"
-        >
-          {audioCtx ? (
-            <PodcastPlayer
-              lessonId={lesson.id}
-              audioUrl={lesson.formats.podcast.audioUrl}
-              title={lesson.title}
-              durationSeconds={lesson.formats.podcast.durationSeconds}
-              courseTitle={lesson.subtitle ?? undefined}
-            />
-          ) : (
-            <audio
-              controls
-              preload="metadata"
-              src={lesson.formats.podcast.audioUrl}
-            >
-              <track kind="captions" />
-            </audio>
-          )}
-        </div>
-      )}
-
-      {activeTab === "article" && lesson.formats.article && (
-        <div
-          id="lesson-format-panel-article"
-          role="tabpanel"
-          aria-labelledby="lesson-format-tab-article"
-          className="space-y-3"
-        >
-          {/* F-A4.5: font size selector */}
-          <div className="flex items-center justify-end gap-2 text-xs text-gray-400">
-            <span aria-hidden>Tamanho do texto:</span>
-            <div
-              role="group"
-              aria-label="Tamanho da fonte do artigo"
-              className="inline-flex items-center rounded-md border border-gray-700 overflow-hidden"
-            >
-              <button
-                type="button"
-                data-testid="article-font-size-sm"
-                onClick={() => applyFontSize("sm")}
-                aria-pressed={articleFontSize === "sm"}
-                className={`px-2 py-1 text-xs ${
-                  articleFontSize === "sm"
-                    ? "bg-green-600 text-white"
-                    : "bg-gray-900 text-gray-300 hover:text-white"
-                }`}
-              >
-                A-
-              </button>
-              <button
-                type="button"
-                data-testid="article-font-size-md"
-                onClick={() => applyFontSize("md")}
-                aria-pressed={articleFontSize === "md"}
-                className={`px-2 py-1 text-sm border-x border-gray-700 ${
-                  articleFontSize === "md"
-                    ? "bg-green-600 text-white"
-                    : "bg-gray-900 text-gray-300 hover:text-white"
-                }`}
-              >
-                A
-              </button>
-              <button
-                type="button"
-                data-testid="article-font-size-lg"
-                onClick={() => applyFontSize("lg")}
-                aria-pressed={articleFontSize === "lg"}
-                className={`px-2 py-1 text-base ${
-                  articleFontSize === "lg"
-                    ? "bg-green-600 text-white"
-                    : "bg-gray-900 text-gray-300 hover:text-white"
-                }`}
-              >
-                A+
-              </button>
-            </div>
-          </div>
-          <article
-            data-testid="lesson-format-panel-article"
-            data-font-size={articleFontSize}
-            className="prose prose-invert max-w-none"
-            style={{ fontSize: fontSizePx(articleFontSize) }}
-            dangerouslySetInnerHTML={{ __html: lesson.formats.article.html }}
-          />
-        </div>
-      )}
+      {/* Sprint Biblioteca-2 / D6: grid 2-col em desktop quando exatamente 2 formatos. */}
+      <div
+        data-testid={useTwoColLayout ? "lesson-format-grid" : undefined}
+        className={
+          useTwoColLayout ? "lg:grid lg:grid-cols-2 lg:gap-6 space-y-4 lg:space-y-0" : "space-y-4"
+        }
+      >
+        {/* Em layout 2-col, ambos panels ficam visiveis simultaneamente em lg+;
+            em mobile (<lg) fallback para o ativo via tabs. */}
+        {(useTwoColLayout ? availableFormats : ([activeTab].filter(Boolean) as FormatTab[])).map(
+          (f) => {
+            if (f === "video" && lesson.formats.video) {
+              return (
+                <div
+                  key={f}
+                  data-testid="lesson-format-panel-video"
+                  data-start-seconds={startSeconds}
+                  id="lesson-format-panel-video"
+                  role="tabpanel"
+                  aria-labelledby="lesson-format-tab-video"
+                  className="relative w-full aspect-video bg-black rounded-lg overflow-hidden"
+                >
+                  <VideoPanel playbackId={lesson.formats.video.mux.playbackId} />
+                  {/* F15: watermark 6x diagonal */}
+                  <div
+                    data-testid="lesson-video-watermark"
+                    aria-hidden
+                    className="absolute inset-0 pointer-events-none grid grid-cols-2 grid-rows-3 place-items-center"
+                  >
+                    {watermarkInstances.map((i) => (
+                      <span
+                        key={i}
+                        className="text-white/10 text-xl font-mono"
+                        style={{ transform: "rotate(-30deg)" }}
+                      >
+                        {watermarkText}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            if (f === "podcast" && lesson.formats.podcast) {
+              return (
+                <div
+                  key={f}
+                  data-testid="lesson-format-panel-podcast"
+                  data-start-seconds={startSeconds}
+                  id="lesson-format-panel-podcast"
+                  role="tabpanel"
+                  aria-labelledby="lesson-format-tab-podcast"
+                  className="p-4 bg-gray-900 rounded-lg"
+                >
+                  {audioCtx ? (
+                    <PodcastPlayer
+                      lessonId={lesson.id}
+                      audioUrl={lesson.formats.podcast.audioUrl}
+                      title={lesson.title}
+                      durationSeconds={lesson.formats.podcast.durationSeconds}
+                      courseTitle={lesson.subtitle ?? undefined}
+                    />
+                  ) : (
+                    <audio
+                      controls
+                      preload="metadata"
+                      src={lesson.formats.podcast.audioUrl}
+                    >
+                      <track kind="captions" />
+                    </audio>
+                  )}
+                </div>
+              );
+            }
+            if (f === "article" && lesson.formats.article) {
+              // Sprint Biblioteca-2 / RF-06: artigo migra para iframe sandbox.
+              // Watermark via overlay externo (RF-07) preservando ADR-076.
+              return (
+                <div
+                  key={f}
+                  data-testid="lesson-format-panel-article"
+                  data-font-size={articleFontSize}
+                  id="lesson-format-panel-article"
+                  role="tabpanel"
+                  aria-labelledby="lesson-format-tab-article"
+                  className="space-y-3"
+                >
+                  {/* F-A4.5: font size selector (mantido — controla tamanho extra
+                      do iframe via data attribute; preferencia visual do usuario). */}
+                  <div className="flex items-center justify-end gap-2 text-xs text-gray-400">
+                    <span aria-hidden>Tamanho do texto:</span>
+                    <div
+                      role="group"
+                      aria-label="Tamanho da fonte do artigo"
+                      className="inline-flex items-center rounded-md border border-gray-700 overflow-hidden"
+                    >
+                      <button
+                        type="button"
+                        data-testid="article-font-size-sm"
+                        onClick={() => applyFontSize("sm")}
+                        aria-pressed={articleFontSize === "sm"}
+                        className={`px-2 py-1 text-xs ${
+                          articleFontSize === "sm"
+                            ? "bg-green-600 text-white"
+                            : "bg-gray-900 text-gray-300 hover:text-white"
+                        }`}
+                      >
+                        A-
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="article-font-size-md"
+                        onClick={() => applyFontSize("md")}
+                        aria-pressed={articleFontSize === "md"}
+                        className={`px-2 py-1 text-sm border-x border-gray-700 ${
+                          articleFontSize === "md"
+                            ? "bg-green-600 text-white"
+                            : "bg-gray-900 text-gray-300 hover:text-white"
+                        }`}
+                      >
+                        A
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="article-font-size-lg"
+                        onClick={() => applyFontSize("lg")}
+                        aria-pressed={articleFontSize === "lg"}
+                        className={`px-2 py-1 text-base ${
+                          articleFontSize === "lg"
+                            ? "bg-green-600 text-white"
+                            : "bg-gray-900 text-gray-300 hover:text-white"
+                        }`}
+                      >
+                        A+
+                      </button>
+                    </div>
+                  </div>
+                  <ArticleIframeWithWatermark
+                    lessonId={lesson.id}
+                    userPlatformId={userPlatformId}
+                  />
+                </div>
+              );
+            }
+            return null;
+          },
+        )}
+      </div>
 
       {/* F-A4.8: progress label above bar - includes max% + which format owns it. */}
       <div className="space-y-1">
@@ -626,6 +799,7 @@ export function LessonViewer({
             style={{ width: `${maxProgressPct}%` }}
           />
         </div>
+      </div>
       </div>
     </div>
   );

@@ -1,0 +1,119 @@
+%% Sprint Bloco-A-Polish — Hero Prologue Flow
+%% Inputs: Spec biblioteca-spec-bloco-a-polish.md (RF-01..RF-09 + D9..D11)
+%% ADRs: 096 (routing), 097 (telemetry enum), 098 (animation strategy)
+%% Diagram: state machine cold-load -> hero-mount -> ken-burns -> user-action -> cross-fade -> player + revisita-bypass
+
+stateDiagram-v2
+    [*] --> RouteEntry : User clica aula em CourseDetailPage
+
+    state "Route Entry" as RouteEntry {
+        [*] --> ResolveRoute
+        ResolveRoute --> LessonHeroPageMount : path = /biblioteca/curso/:slug/:lesson
+        ResolveRoute --> LessonViewerPageMount : path = /biblioteca/curso/:slug/:lesson/play (deep link)
+    }
+
+    state "LessonHeroPage Mount" as LessonHeroPageMount {
+        [*] --> FetchLesson
+        FetchLesson --> CheckLocalStorage : useQuery resolves
+        CheckLocalStorage --> RevisitaBypass : flag === "true"
+        CheckLocalStorage --> ColdLoad : flag === null
+    }
+
+    state "Revisita Bypass (D9)" as RevisitaBypass {
+        [*] --> SetLocationReplace
+        SetLocationReplace --> [*] : setLocation('/play', { replace: true })
+        note right of SetLocationReplace
+            replace: true evita poluir history.
+            Back button volta para CourseDetailPage,
+            nao para hero.
+        end note
+    }
+
+    state "Cold Load (1a visita)" as ColdLoad {
+        [*] --> RenderHero
+        RenderHero --> KenBurnsAnimation
+        KenBurnsAnimation --> StaggerEntry
+        StaggerEntry --> WaitUserAction
+    }
+
+    state "Ken Burns (ADR-098)" as KenBurnsAnimation {
+        [*] --> CoverFadeScale
+        CoverFadeScale --> [*] : opacity 0->1 (600ms) + scale 1.05->1 (1200ms)
+    }
+
+    state "Stagger Entry (ADR-098)" as StaggerEntry {
+        [*] --> EpisodeLabel : delay 100ms, 350ms duration
+        EpisodeLabel --> Title : delay 200ms, 400ms
+        Title --> Subtitle : delay 350ms, 400ms
+        Subtitle --> ChipsMeta : delay 500ms+stagger 80ms
+        ChipsMeta --> CtaPrimario : delay 750ms, spring stiffness 300
+        CtaPrimario --> CtaSecundario : delay 850ms, 350ms
+        CtaSecundario --> [*]
+    }
+
+    state "Wait User Action" as WaitUserAction {
+        [*] --> WriteFlagAfter1s : setTimeout 1000ms
+        WriteFlagAfter1s --> EmitPrologueViewed : writeHeroSeenFlag(lessonId)
+        EmitPrologueViewed --> WaitClick : POST /api/library/events { eventType: 'prologue_viewed' }
+
+        WaitClick --> ShowSkipAfter3s : setTimeout 3000ms (RF-04)
+        ShowSkipAfter3s --> WaitClickWithSkip
+        WaitClickWithSkip --> StartClicked : click "Iniciar aula"
+        WaitClickWithSkip --> SkipClicked : click "Pular intro"
+        WaitClickWithSkip --> BackClicked : back navigation
+    }
+
+    state "Start Clicked" as StartClicked {
+        [*] --> SetExitingTrue
+        SetExitingTrue --> CrossFadeOut : motion.div animate { opacity: 0, scale: 1.05 }
+        CrossFadeOut --> SetLocationPlay : onAnimationComplete (700ms)
+        SetLocationPlay --> [*]
+    }
+
+    state "Skip Clicked" as SkipClicked {
+        [*] --> EmitPrologueSkipped : POST /api/library/events { eventType: 'prologue_skipped' }
+        EmitPrologueSkipped --> SetLocationPlaySkip : setLocation('/play')
+        SetLocationPlaySkip --> [*]
+        note right of EmitPrologueSkipped
+            ADR-097 enum expansion (Migration 0035)
+        end note
+    }
+
+    state "Back Clicked" as BackClicked {
+        [*] --> NavBackToCourse : Wouter back -> CourseDetailPage
+        NavBackToCourse --> [*]
+        note right of NavBackToCourse
+            Se < 1s mount, flag NAO setada -> hero aparece de novo proxima visita.
+            Se >= 1s, flag ja setada -> revisita bypass.
+        end note
+    }
+
+    state "LessonViewerPage Mount" as LessonViewerPageMount {
+        [*] --> PlayerEntryAnimation : motion.div fade-in 500ms delay 200ms
+        PlayerEntryAnimation --> AudioPlayerContextSync : if podcast, load audio
+        AudioPlayerContextSync --> RenderViewer : tabs Video/Podcast/Article
+        RenderViewer --> WatchProgress : poll progressQuery
+        WatchProgress --> ToastNextLesson : maxProgressPct >= 90 (RF-07)
+        WatchProgress --> ShowConcluidaBadge : completedAt !== null (RF-07)
+        ToastNextLesson --> [*]
+        ShowConcluidaBadge --> [*]
+    }
+
+    StartClicked --> LessonViewerPageMount
+    SkipClicked --> LessonViewerPageMount
+    RevisitaBypass --> LessonViewerPageMount
+
+    LessonViewerPageMount --> [*] : User leaves (back, navigate away)
+
+    note left of CheckLocalStorage
+        Storage key (D9):
+        library:lesson:{lessonId}:hero-seen
+        Helpers em client/src/lib/library-hero-storage.ts
+        try/catch silent (private mode, quota cheia).
+    end note
+
+    note right of EmitPrologueViewed
+        ADR-097: Migration 0035 expande enum
+        library_event_type com prologue_viewed
+        + prologue_skipped (idempotente).
+    end note

@@ -16,6 +16,11 @@ import {
   handleGetLibraryProgress,
   handlePatchLibraryProgress,
   handleCreateLibraryEvent,
+  // Sprint Biblioteca-2 / RF-03 + RF-04 + RF-11
+  handleGetArticleBundle,
+  handleGetArticleStyles,
+  handleGetArticleScripts,
+  handleAdminUploadStaticAsset,
 } from "./library";
 import { handleAdminGrantAccess } from "./adminLibrary";
 import { createMediaStorage } from "../services/mediaStorage";
@@ -92,6 +97,17 @@ export function registerLibraryRoutes(app: Express) {
     handleGetLibraryLessonBySlug,
   );
   app.get("/api/library/lessons/:id", requireAuth, handleGetLibraryLesson);
+
+  // Sprint Biblioteca-2 / RF-04: Article bundle endpoint.
+  app.get(
+    "/api/library/lessons/:id/article-bundle",
+    requireAuth,
+    handleGetArticleBundle,
+  );
+
+  // Sprint Biblioteca-2 / RF-03: Static asset endpoints (publicos, cache 30d).
+  app.get("/api/library/static/article-styles.css", handleGetArticleStyles);
+  app.get("/api/library/static/article-scripts.js", handleGetArticleScripts);
 
   // Eventos + progress (RF-06)
   app.post("/api/library/events", requireAuth, handleCreateLibraryEvent);
@@ -238,6 +254,30 @@ export function registerLibraryRoutes(app: Express) {
     requireAuth,
     requirePermission("admin_full"),
     handleAdminGrantAccess,
+  );
+
+  // Sprint Biblioteca-2 / RF-11: upload de static asset (CSS/JS).
+  // Multer: single file (5MB cap razoavel; CSS/JS sao pequenos).
+  const staticAssetUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 5 * 1024 * 1024,
+      files: 1,
+      fieldSize: 1 * 1024 * 1024,
+    },
+  });
+  app.post(
+    "/api/admin/library/static-asset",
+    requireAuth,
+    requirePermission("admin_full"),
+    (req: Request, res: Response, next: NextFunction) => {
+      const mw = staticAssetUpload.single("file");
+      mw(req, res, (err: any) => {
+        if (err) return multerErrorHandler(err, req, res, next);
+        next();
+      });
+    },
+    handleAdminUploadStaticAsset,
   );
 
   app.post(

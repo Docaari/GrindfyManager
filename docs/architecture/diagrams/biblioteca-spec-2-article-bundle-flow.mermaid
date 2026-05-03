@@ -1,0 +1,98 @@
+%% biblioteca-spec-2 — Article Bundle Flow (RF-04 + RF-06 + ADR-094)
+%% Sequence diagram: User abre aula -> article-bundle -> iframe srcdoc -> postMessage scroll-depth -> progress save
+
+sequenceDiagram
+    actor User
+    participant LV as LessonViewer<br/>(parent React)
+    participant AI as ArticleIframe<br/>(parent component)
+    participant API as API Server<br/>(library-register.ts)
+    participant ST as Storage<br/>(Drizzle)
+    participant MS as mediaStorage<br/>(FS local)
+    participant IF as Iframe sandbox<br/>(child, origin null)
+
+    User->>LV: Navega /biblioteca/curso/antes-das-cartas/a1-...
+    LV->>API: GET /api/library/lessons/by-slug/...
+    API->>ST: getLibraryLessonBySlug(...)
+    ST-->>API: { id, slug, title, formats: { article, podcast } }
+    API-->>LV: 200 { lesson com formats }
+
+    LV->>AI: <ArticleIframe lessonId={id} />
+    AI->>API: GET /api/library/lessons/:id/article-bundle
+
+    API->>ST: findLessonAccess({userId, lessonId})
+    alt sem grant
+        ST-->>API: null
+        API-->>AI: 401 { message: 'access_denied' }
+    end
+    ST-->>API: { granted: true }
+
+    API->>ST: getLibraryLesson(id)
+    alt lesson sem articleHtml
+        ST-->>API: { articleHtml: null }
+        API-->>AI: 404 { message: 'article_not_available' }
+    end
+    ST-->>API: lesson com articleHtml
+
+    API->>MS: computeStaticAssetHash('library/static/article-styles.css')
+    MS-->>API: cssHash (sha256)
+    API->>MS: computeStaticAssetHash('library/static/article-scripts.js')
+    MS-->>API: jsHash (sha256)
+    alt assets nao uploaded
+        MS-->>API: null
+        API-->>AI: 503 { message: 'static_assets_not_uploaded' }
+    end
+
+    Note over API: version = sha256(cssHash + jsHash).slice(0,16)<br/>stylesUrl = /api/library/static/article-styles.css?v={cssHash:12}<br/>scriptsUrl = /api/library/static/article-scripts.js?v={jsHash:12}
+
+    API-->>AI: 200 { html, stylesUrl, scriptsUrl, version, meta:{title,learningObjectives} }
+
+    AI->>AI: buildSrcdoc(bundle, userPlatformId)
+    Note over AI: srcdoc inclui:<br/>- <link rel=stylesheet href={stylesUrl}><br/>- <script>window.__GRINDFY_LIBRARY = {...}</script><br/>- {sanitized html}<br/>- <script src={scriptsUrl} defer></script>
+
+    AI->>IF: <iframe sandbox="allow-scripts" srcdoc={srcdoc}>
+    IF->>API: GET {stylesUrl} (cached 30d)
+    API-->>IF: 200 text/css ETag={cssHash:12}
+    IF->>API: GET {scriptsUrl} (cached 30d)
+    API-->>IF: 200 application/javascript ETag={jsHash:12}
+
+    IF->>IF: ResizeObserver(document.body)
+    IF->>IF: addEventListener('scroll', throttle 1s)
+
+    rect rgb(220, 240, 220)
+        Note over IF,LV: Resize protocol (postMessage)
+        IF->>AI: parent.postMessage({type:'grindfy:library:resize', payload:{height:3200}}, '*')
+        AI->>AI: validate event.source === iframeRef.contentWindow
+        AI->>AI: validate type whitelist + cap height min(payload.height, 50000)
+        AI->>AI: setIframeHeight(3200)
+        AI->>IF: iframe.style.height = '3200px'
+    end
+
+    User->>IF: Rola scroll do artigo
+    rect rgb(220, 220, 240)
+        Note over IF,LV: Scroll-depth protocol (throttle 1s)
+        IF->>IF: scroll fires
+        IF->>IF: setTimeout(reportScroll, 1000)
+        IF->>AI: parent.postMessage({type:'grindfy:library:scroll', payload:{percent:42}}, '*')
+        AI->>AI: validate + clamp 0-100
+        AI->>LV: onScrollDepth(42) callback
+        LV->>LV: dedup 5% — Math.abs(42 - 0) >= 5 = TRUE
+        LV->>API: PATCH /api/library/lessons/:id/progress<br/>{format:'article', lastPositionSeconds:42, totalDurationSeconds:100}
+        API->>ST: upsertLibraryProgress(...)
+        Note over ST: completedAt computed when<br/>lastPositionSeconds >= totalDurationSeconds * 0.95
+        ST-->>API: { row, completed: false }
+        API-->>LV: 200 { ok }
+    end
+
+    Note over User,IF: User scrolla ate 96%
+    IF->>AI: postMessage scroll percent:96
+    AI->>LV: onScrollDepth(96)
+    LV->>API: PATCH progress {format:'article',lastPositionSeconds:96,totalDurationSeconds:100}
+    API->>ST: upsertLibraryProgress(...)
+    Note over ST: 96 >= 100*0.95 = TRUE<br/>completedAt = NOW()
+    ST-->>API: { row, completed: true }
+    API-->>LV: 200 { ok, completed: true }
+
+    User->>LV: Navega para outra rota
+    LV->>AI: unmount
+    AI->>AI: useEffect cleanup<br/>removeEventListener('message', onMessage)
+    Note over AI,IF: Iframe destruido pelo browser<br/>postMessage listener cleanup OK<br/>(lesson #1)

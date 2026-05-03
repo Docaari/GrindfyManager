@@ -1,0 +1,56 @@
+%% biblioteca-spec-2 — Trusted Bypass Data Flow (ADR-093)
+%% Flowchart: HTML bruto -> manifest importer -> trusted bypass policy -> DB -> article-bundle endpoint -> iframe srcdoc
+
+flowchart TD
+    A["HTML bruto Docari<br/><i>OneDrive/.../Bloco A/A1.html</i><br/>~12KB com section, button, style, data-*, onclick"]
+    B{"Origem do upload?"}
+    C["manifestImporter.ts<br/>(admin-trusted)"]
+    D["Spec 2 B7 / Spec futura<br/>(user-content notas comments)"]
+
+    A --> B
+    B -->|"founder script CLI<br/>RF-10/11"| C
+    B -->|"user input form<br/>(futuro)"| D
+
+    C --> E["learningObjectivesExtractor.ts<br/>regex match <div class=learning-objectives><br/>extract <li> as string[]<br/>cap 10 items + 200 chars"]
+    E --> F["learning_objectives<br/>= ['obj1','obj2',...]"]
+
+    C --> G["htmlSanitizer.sanitizeArticleHtml<br/>(rawHtml, 'admin-trusted')"]
+    D --> H["htmlSanitizer.sanitizeArticleHtml<br/>(rawHtml, 'user-content')"]
+
+    G --> I["ALLOWED_TAGS:<br/>+ section, nav, button, article<br/>+ aside, figure, header, footer<br/>+ details, summary, mark, sup, sub<br/>+ table, thead, tbody, tfoot<br/>+ style"]
+    G --> I2["ALLOWED_ATTR:<br/>+ id, role, type, tabindex<br/>+ data-* (ALLOW_DATA_ATTR)<br/>+ aria-* (ALLOW_ARIA_ATTR)"]
+
+    H --> J["ALLOWED_TAGS:<br/>p, h1-h6, ul, ol, li,<br/>strong, em, b, i, u,<br/>blockquote, code, pre, a,<br/>img, span, div, table"]
+    H --> J2["ALLOWED_ATTR:<br/>href, src, alt, title, class"]
+
+    I --> K{"FORBID em ambas:<br/>script, iframe, object, embed,<br/>form, input, svg, math"}
+    I2 --> K
+    J --> K
+    J2 --> K
+
+    K --> L{"FORBID_ATTR em ambas:<br/>onclick, onerror, onload,<br/>onmouseover, onfocus, onblur,<br/>onchange, onsubmit, onkeydown,<br/>onkeyup, style"}
+    L --> M{"Hooks:<br/>img src startsWith /api/library/assets/<br/>a href !javascript: !data:"}
+
+    M --> N["clean HTML<br/>+ wordCount<br/>+ warnings[]"]
+    F --> O["upsertLibraryLessonBySlug({<br/>articleHtml: clean,<br/>articleWordCount: wordCount,<br/>learningObjectives: F<br/>})"]
+    N --> O
+
+    O --> P[("library_lessons row<br/>article_html (sanitized clean)<br/>learning_objectives JSONB")]
+
+    Q["GET /api/library/lessons/:id<br/>/article-bundle"] --> R["return {html, stylesUrl,<br/>scriptsUrl, version,<br/>meta:{title,learningObjectives}}"]
+    P --> Q
+    R --> S["ArticleIframe.tsx<br/>buildSrcdoc"]
+
+    S --> T["<iframe sandbox='allow-scripts'<br/>srcdoc='...html...'>"]
+    T --> U{"Defesa em profundidade<br/>se XSS escapou camada 1"}
+    U -->|"sandbox sem same-origin"| V["XSS contido em origin null<br/>nao acessa cookies/storage parent"]
+
+    classDef trusted fill:#e1f5e1,stroke:#2e7d32
+    classDef untrusted fill:#fff3cd,stroke:#856404
+    classDef hazard fill:#ffe1e1,stroke:#c62828
+    classDef safe fill:#e1f0ff,stroke:#1565c0
+
+    class C,G,I,I2,F trusted
+    class D,H,J,J2 untrusted
+    class K,L,M hazard
+    class N,O,P,Q,R,S,T,V safe

@@ -1,0 +1,82 @@
+%% biblioteca-spec-2 — Storage Implementation Flow (RF-01)
+%% Flowchart: 18 storage methods stub -> implementation -> Drizzle queries -> DB
+%% NOTA: Diagrama bonus de cobertura RF-01 (storage.ts implementacao)
+
+flowchart TB
+    A["server/storage.ts:6926-6982<br/>18 methods stubbed<br/>throw 'not implemented (Sprint Biblioteca-2)'"]
+
+    A --> B["Implementacao por categoria"]
+
+    B --> C1["Reads list/detail"]
+    C1 --> M1["listLibraryCourses"]
+    C1 --> M2["getLibraryCourseBySlug"]
+    C1 --> M3["getLibraryLesson"]
+    C1 --> M4["getLibraryLessonBySlug"]
+    C1 --> M5["findLibraryLessonsByCategory"]
+    C1 --> M6["findLibraryLessonsByTag"]
+
+    B --> C2["Bulk lookups (Coach + UI)"]
+    C2 --> M7["lessonAccessLookup"]
+    C2 --> M8["libraryLessonAccessLookup"]
+    C2 --> M9["libraryLessonProgressLookup"]
+    C2 --> M10["findLessonAccess"]
+
+    B --> C3["Upserts (manifest importer)"]
+    C3 --> M11["upsertLibraryCourseBySlug"]
+    C3 --> M12["upsertLibraryModuleBySlug"]
+    C3 --> M13["upsertLibraryLessonBySlug<br/>(includes learning_objectives - RF-08)"]
+
+    B --> C4["Mutations (admin + user)"]
+    C4 --> M14["bulkGrantLessonAccess"]
+    C4 --> M15["upsertLibraryProgress<br/>(completedAt threshold 95%)"]
+    C4 --> M16["getLibraryProgressForLesson"]
+
+    B --> C5["Events (audit + rate limit)"]
+    C5 --> M17["createLibraryEvent"]
+    C5 --> M18["recordLibraryEvents (bulk)"]
+    C5 --> M19["countLibraryEventsForUserInWindow"]
+
+    M1 --> Q1["SELECT FROM library_courses<br/>WHERE is_published<br/>+ subquery COUNT lessons<br/>+ subquery EXISTS user_lesson_access<br/>ORDER BY display_order, created_at"]
+    M2 --> Q2["SELECT course<br/>JOIN modules<br/>JOIN lessons<br/>derive formats[] from columns"]
+    M3 --> Q3["SELECT FROM library_lessons<br/>WHERE id"]
+    M4 --> Q4["SELECT lessons<br/>JOIN courses<br/>WHERE course.slug AND lesson.slug"]
+    M5 --> Q5["SELECT lessons<br/>WHERE category_id<br/>+ progressState ranking<br/>ORDER BY untouched > in-progress > completed,<br/>display_order"]
+    M6 --> Q6["SELECT WHERE tag = ANY(tags)<br/>+ filtros publicados"]
+    M7 --> Q7["SELECT WHERE user_id<br/>AND lesson_id IN (...)<br/>Map<lessonId, true>"]
+    M11 --> Q11["INSERT...ON CONFLICT (slug)<br/>DO UPDATE SET ... RETURNING"]
+    M12 --> Q12["INSERT...ON CONFLICT (course_id, slug)<br/>DO UPDATE"]
+    M13 --> Q13["INSERT...ON CONFLICT (course_id, slug)<br/>DO UPDATE<br/>+ learning_objectives JSONB"]
+    M14 --> Q14["INSERT...ON CONFLICT DO NOTHING<br/>+ counter alreadyHadAccess"]
+    M15 --> Q15["INSERT...ON CONFLICT (user_id, lesson_id, format)<br/>DO UPDATE<br/>+ compute completedAt if >= 95%"]
+    M19 --> Q19["SELECT COUNT WHERE user_id<br/>AND timestamp > NOW() - $window"]
+
+    Q1 --> DB[("PostgreSQL 16<br/>library_courses<br/>library_modules<br/>library_lessons (+ learning_objectives JSONB)<br/>library_lesson_assets<br/>user_lesson_access<br/>library_events<br/>library_progress")]
+    Q2 --> DB
+    Q3 --> DB
+    Q4 --> DB
+    Q5 --> DB
+    Q6 --> DB
+    Q7 --> DB
+    Q11 --> DB
+    Q12 --> DB
+    Q13 --> DB
+    Q14 --> DB
+    Q15 --> DB
+    Q19 --> DB
+
+    DB --> R["Resultados tipados via Drizzle inferSelect<br/>LibraryCourse, LibraryLesson, LibraryProgress,<br/>UserLessonAccess, LibraryEvent"]
+
+    R --> CALL1["UI consumers<br/>BibliotecaPage, CourseDetailPage,<br/>LessonViewer, ArticleIframe"]
+    R --> CALL2["Coach AI tools<br/>recommend_lesson + access lookups"]
+    R --> CALL3["Manifest importer<br/>idempotente upsert by slug"]
+    R --> CALL4["Endpoints HTTP<br/>12 existing + 4 novos (RF-03/04/11)"]
+
+    classDef stub fill:#ffe1e1,stroke:#c62828,stroke-width:2px
+    classDef impl fill:#e1f5e1,stroke:#2e7d32
+    classDef query fill:#fff3cd,stroke:#856404
+    classDef storage fill:#e1f0ff,stroke:#1565c0
+
+    class A stub
+    class M1,M2,M3,M4,M5,M6,M7,M8,M9,M10,M11,M12,M13,M14,M15,M16,M17,M18,M19 impl
+    class Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q11,Q12,Q13,Q14,Q15,Q19 query
+    class DB,R storage

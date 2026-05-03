@@ -1,0 +1,103 @@
+%% biblioteca-spec-2 — Manifest Import Flow (RF-09 + RF-10 + RF-11 + ADR-093 + ADR-095)
+%% Sequence diagram: Founder roda script upload -> manifest importer -> mediaStorage put -> DB upsert -> static endpoints servem CSS/JS
+
+sequenceDiagram
+    actor F as Founder
+    participant CLI1 as scripts/library-upload-static-assets.ts
+    participant CLI2 as scripts/library-upload-bloco-a.ts
+    participant API as API Server<br/>(library-register.ts)
+    participant MI as manifestImporter.ts
+    participant LOE as learningObjectivesExtractor.ts
+    participant SAN as htmlSanitizer.ts<br/>(policy: admin-trusted)
+    participant MS as mediaStorage<br/>(FS local)
+    participant ST as Storage<br/>(Drizzle)
+    participant DB as Postgres
+
+    rect rgb(255, 240, 220)
+        Note over F,CLI1: ETAPA 1 — Upload static assets (CSS + JS) — RF-11
+        F->>CLI1: npx tsx scripts/library-upload-static-assets.ts
+        CLI1->>CLI1: read _assets/styles.css (26KB)
+        CLI1->>CLI1: read _assets/lesson.js (130 lines)
+        CLI1->>CLI1: transformLessonJs(source)<br/>append boilerplate (resize, scroll, flashcard handlers)
+        CLI1->>CLI1: write _assets/lesson.js.transformed
+        CLI1->>F: print diff + prompt 'Aplicar e fazer upload? (y/N)'
+        F-->>CLI1: y
+
+        CLI1->>API: POST /api/admin/library/static-asset<br/>{kind:'styles', file:styles.css}
+        API->>API: requireAuth + requirePermission('admin_full')
+        API->>MS: putAtFixedKey('library/static/article-styles.css', buffer, 'text/css')
+        MS-->>API: { size, sha256 }
+        API-->>CLI1: 200 { kind:'styles', key, size, sha256 }
+
+        CLI1->>API: POST /api/admin/library/static-asset<br/>{kind:'scripts', file:lesson.js.transformed}
+        API->>MS: putAtFixedKey('library/static/article-scripts.js', buffer, 'application/javascript')
+        MS-->>API: { size, sha256 }
+        API-->>CLI1: 200 { kind:'scripts', key, size, sha256 }
+
+        CLI1->>API: GET /api/library/static/article-styles.css (validation)
+        API-->>CLI1: 200 ETag={hash:12}
+        CLI1->>API: GET /api/library/static/article-scripts.js (validation)
+        API-->>CLI1: 200 ETag={hash:12}
+        CLI1-->>F: 'Static assets uploaded successfully'
+    end
+
+    rect rgb(220, 255, 220)
+        Note over F,CLI2: ETAPA 2 — Upload Bloco A (9 lessons) — RF-10
+        F->>CLI2: npx tsx scripts/library-upload-bloco-a.ts<br/>--source "C:/.../Bloco A - Fundamentos Mentais"
+        CLI2->>CLI2: validate source path + compressed/ subdir
+        CLI2->>CLI2: list 9 .m4a (compressed/) + 9 .html + 9 .jpeg (Capas/)
+
+        opt --resume flag
+            CLI2->>API: GET /api/library/courses/antes-das-cartas
+            alt 200 com 4 lessons existentes
+                API-->>CLI2: { lessons: [...] }
+                CLI2->>CLI2: filter LESSONS = lessons NAO existentes
+            else 404
+                CLI2->>CLI2: full upload
+            end
+        end
+
+        CLI2->>CLI2: build CSV manifest in-memory<br/>(course + module + 9 lessons rows)
+
+        CLI2->>API: POST /api/admin/library/import-manifest<br/>(multipart: manifest CSV + 27 files)
+        API->>API: requireAuth + admin_full
+        API->>API: total batch size <= 150MB?
+        API->>MI: importManifest(csv, files)
+
+        loop Para cada lesson row no CSV
+            MI->>MI: read articleFile (HTML)
+            MI->>LOE: extractLearningObjectives(rawHtml)
+            LOE->>LOE: regex match <div class="learning-objectives">
+            LOE-->>MI: ['obj1', 'obj2', 'obj3', 'obj4']
+            Note over LOE: cap 10 items + 200 chars/item
+
+            MI->>SAN: sanitizeArticleHtml(rawHtml, 'admin-trusted')
+            Note over SAN: Allowlist expandida (ADR-093):<br/>section, nav, button, style, data-*, aria-*<br/>Bloqueia: script, onclick, style attr, javascript:
+            SAN-->>MI: { clean, wordCount, warnings }
+
+            MI->>MS: put({scope:'library/audio', ext:'m4a', buffer, mime:'audio/mp4'})
+            MS-->>MI: audioKey
+
+            MI->>MS: put({scope:'library/covers', ext:'jpeg', buffer, mime:'image/jpeg'})
+            MS-->>MI: coverKey
+
+            MI->>ST: upsertLibraryLessonBySlug({<br/>  slug, title, articleHtml, articleWordCount,<br/>  audioKey, coverKey, learningObjectives,<br/>  ...})
+            ST->>DB: INSERT...ON CONFLICT (course_id, slug) DO UPDATE
+            DB-->>ST: lesson row
+            ST-->>MI: LibraryLesson
+
+            Note over MI: log: lesson "a1-..." imported:<br/>html=12KB audio=13.5MB cover=1.8MB<br/>learningObjectives=4 (auto-extracted)
+        end
+
+        MI-->>API: { courseId, lessons: 9 }
+        API-->>CLI2: 200 { imported }
+        CLI2-->>F: 'imported course=antes-das-cartas, lessons=9'
+    end
+
+    rect rgb(220, 220, 255)
+        Note over F: ETAPA 3 — Verifica via UI
+        F->>API: GET /biblioteca/curso/antes-das-cartas/a1-...
+        API->>ST: getLibraryLessonBySlug(...)
+        ST-->>API: lesson com articleHtml + learningObjectives
+        API-->>F: render LessonViewer + ArticleIframe<br/>(consume ETAPA 1 assets via article-bundle endpoint RF-04)
+    end

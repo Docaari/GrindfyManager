@@ -302,6 +302,6 @@ describe('GET /api/library/lessons/:id', () => {
     expect(res.body.formats.video).toBeDefined();
     expect(res.body.formats.video.mux.playbackId).toBe('pb_xyz');
     expect(res.body.formats.podcast.audioUrl).toBe('/api/library/lessons/l1/audio');
-    expect(res.body.formats.article.html).toBe('<p>limpo</p>');
+    expect(res.body.formats.article.bundleUrl).toBe('/api/library/lessons/l1/article-bundle');
   });
 });

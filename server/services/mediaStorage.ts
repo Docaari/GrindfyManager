@@ -26,6 +26,7 @@
 
 import { promises as fs, createReadStream, type ReadStream } from "fs";
 import path from "path";
+import { createHash } from "crypto";
 import { nanoid } from "nanoid";
 
 // -----------------------------------------------------------------------------
@@ -73,11 +74,29 @@ export interface MediaRangeOutOfBoundsResult {
   totalSize: number;
 }
 
+export interface PutAtFixedKeyResult {
+  size: number;
+  /** sha256 hex (full, 64 chars). Caller pode truncar pra ETag. */
+  sha256: string;
+}
+
 export interface MediaStorage {
   put(input: MediaPutInput): Promise<MediaPutResult>;
   get(key: string): Promise<{ buffer: Buffer; mime: string } | null>;
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
+  /**
+   * Sprint Biblioteca-2 / RF-03 + RF-11.
+   *
+   * Escreve `buffer` em uma key FIXA (sobrescreve), retornando size + sha256.
+   * Diferente de `put` (gera nanoid), aqui o caller controla a key — caso de
+   * uso: assets staticos da Biblioteca (`library/static/article-styles.css`).
+   *
+   * @param key path completo dentro do scope storage (ex: `library/static/article-styles.css`).
+   * @param buffer conteudo a gravar (ja em memoria; cap responsabilidade do caller).
+   * @param mime Content-Type (informacional; backend FS local nao persiste mime).
+   */
+  putAtFixedKey(key: string, buffer: Buffer, mime: string): Promise<PutAtFixedKeyResult>;
   /**
    * Open a read stream for the asset. When `range` is provided returns the
    * subset; otherwise streams the entire file. Returns null when key missing.
@@ -249,6 +268,23 @@ class LocalMediaStorage implements MediaStorage {
     }
   }
 
+  async putAtFixedKey(
+    key: string,
+    buffer: Buffer,
+    _mime: string,
+  ): Promise<PutAtFixedKeyResult> {
+    validateKey(key);
+    if (!Buffer.isBuffer(buffer)) {
+      throw new Error("invalid buffer: must be Buffer instance");
+    }
+    const absPath = path.join(this.root, key);
+    const absDir = path.dirname(absPath);
+    await fs.mkdir(absDir, { recursive: true });
+    await fs.writeFile(absPath, buffer);
+    const sha256 = createHash("sha256").update(buffer).digest("hex");
+    return { size: buffer.length, sha256 };
+  }
+
   async openReadStream(
     key: string,
     range?: MediaRangeRequest,
@@ -307,6 +343,15 @@ class S3MediaStorage implements MediaStorage {
     );
   }
   async exists(_key: string): Promise<boolean> {
+    throw new Error(
+      "S3MediaStorage nao implementado nesta fase. Use MEDIA_STORAGE_BACKEND=local.",
+    );
+  }
+  async putAtFixedKey(
+    _key: string,
+    _buffer: Buffer,
+    _mime: string,
+  ): Promise<PutAtFixedKeyResult> {
     throw new Error(
       "S3MediaStorage nao implementado nesta fase. Use MEDIA_STORAGE_BACKEND=local.",
     );

@@ -1,0 +1,90 @@
+%% biblioteca-spec-2 — Component Diagram (C4 level 3)
+%% Novos componentes: ArticleIframe, ArticleIframeWithWatermark, article-bundle endpoint, static endpoints, manifest importer extensions
+
+graph TB
+    subgraph parent["Parent React App (Grindfy)"]
+        LV["LessonViewer.tsx<br/><i>Page component<br/>RF-05 layout grid 2-col</i>"]
+        AI["ArticleIframe.tsx<br/><i>NEW - RF-06<br/>iframe sandbox + postMessage</i>"]
+        AIW["ArticleIframeWithWatermark.tsx<br/><i>NEW - RF-07<br/>overlay 6 instancias diagonais</i>"]
+        PP["PodcastPlayer.tsx<br/><i>existing</i>"]
+        SAB["StickyAudioBar.tsx<br/><i>existing<br/>F3: hide if podcast in viewport</i>"]
+        APC["AudioPlayerContext<br/><i>existing</i>"]
+        TQ["TanStack Query<br/><i>queryKey:<br/>['library','lesson',id,<br/> 'article-bundle']</i>"]
+    end
+
+    subgraph child["iframe sandbox - origin null"]
+        SD["srcdoc HTML<br/><i>doctype + meta + link CSS<br/>+ window.__GRINDFY_LIBRARY<br/>+ sanitized body<br/>+ defer script</i>"]
+        LJS["lesson.js.transformed<br/><i>ResizeObserver + scroll throttle<br/>+ data-flashcard-toggle handlers<br/>+ data-accordion-toggle handlers<br/>+ data-recall-check handlers</i>"]
+        ACSS["article-styles.css<br/><i>26KB Outfit + JetBrains Mono<br/>+ flashcard-grid + tool-card<br/>cached 30d</i>"]
+    end
+
+    subgraph backend["Express API"]
+        AB["GET /api/library/lessons/:id/article-bundle<br/><i>NEW - RF-04<br/>requireAuth + lesson access</i>"]
+        SC["GET /api/library/static/article-styles.css<br/><i>NEW - RF-03<br/>publico, Cache 30d, ETag</i>"]
+        SJ["GET /api/library/static/article-scripts.js<br/><i>NEW - RF-03<br/>publico, Cache 30d, ETag</i>"]
+        SA["POST /api/admin/library/static-asset<br/><i>NEW - RF-11<br/>admin_full kind=styles|scripts</i>"]
+        IM["POST /api/admin/library/import-manifest<br/><i>existing - cap raised 150MB total</i>"]
+        PR["PATCH /api/library/lessons/:id/progress<br/><i>existing - article percent proxy</i>"]
+    end
+
+    subgraph services["Server Services"]
+        SAN["htmlSanitizer.ts<br/><i>RF-02 dual-policy<br/>admin-trusted vs user-content<br/>(ADR-093)</i>"]
+        LOE["learningObjectivesExtractor.ts<br/><i>NEW - RF-09 + ADR-095<br/>regex parse <div class=learning-...></i>"]
+        MI["manifestImporter.ts<br/><i>existing + RF-09 changes<br/>m4a + audio/mp4 + extract objectives</i>"]
+        MS["mediaStorage.ts<br/><i>existing + putAtFixedKey() new helper<br/>(library/static fixed keys)</i>"]
+        ST["storage.ts<br/><i>RF-01: implement 18 stub methods<br/>Drizzle queries</i>"]
+    end
+
+    subgraph storage["Storage Layer"]
+        FS["FS local uploads/<br/><i>library/audio/, library/covers/<br/>library/static/<br/>(article-styles.css + article-scripts.js)</i>"]
+        DB[("PostgreSQL 16<br/><i>library_lessons + learning_objectives JSONB<br/>(NEW Migration 0033)</i>")]
+    end
+
+    subgraph cli["CLI Scripts (founder local)"]
+        SC1["scripts/library-upload-static-assets.ts<br/><i>NEW - RF-11<br/>transform lesson.js + upload x2</i>"]
+        SC2["scripts/library-upload-bloco-a.ts<br/><i>NEW - RF-10<br/>iterate 9 episodes + manifest CSV</i>"]
+    end
+
+    LV -->|"renders if formats.article"| AIW
+    AIW -->|"wraps"| AI
+    LV -->|"renders if formats.podcast"| PP
+    LV -->|"global state"| APC
+    APC --> SAB
+
+    AI -->|"useQuery"| TQ
+    TQ -->|"GET"| AB
+    AB -->|"findLessonAccess + getLibraryLesson"| ST
+    AB -->|"computeStaticAssetHash x2"| MS
+    AB -->|"return {html,stylesUrl,scriptsUrl,version,meta}"| AI
+    AI -->|"buildSrcdoc"| SD
+
+    SD -->|"<link href>"| SC
+    SD -->|"<script src>"| SJ
+    SC -->|"read"| MS
+    SJ -->|"read"| MS
+    MS -->|"FS read"| FS
+
+    LJS -->|"loaded by srcdoc"| SD
+    ACSS -->|"loaded by srcdoc"| SD
+
+    LJS -.->|"postMessage<br/>resize+scroll<br/>(child to parent)"| AI
+    AI -->|"validates source<br/>+ type whitelist"| AI
+    AI -->|"onScrollDepth callback"| LV
+    LV -->|"PATCH (dedup 5%)"| PR
+    PR -->|"upsertLibraryProgress"| ST
+    ST -->|"queries"| DB
+
+    SC1 -->|"transform + POST styles"| SA
+    SC1 -->|"POST scripts"| SA
+    SA -->|"putAtFixedKey x2"| MS
+    SC2 -->|"POST manifest + 27 files"| IM
+    IM -->|"per lesson"| SAN
+    IM -->|"per lesson"| LOE
+    IM -->|"upsertLibraryLessonBySlug"| ST
+
+    classDef new fill:#e1f5e1,stroke:#2e7d32,stroke-width:2px
+    classDef existing fill:#f5f5f5,stroke:#666
+    classDef storage fill:#fff3cd,stroke:#856404
+    class AI,AIW,AB,SC,SJ,SA,LOE,SC1,SC2 new
+    class LV,PP,SAB,APC,TQ,IM,MI,MS,ST,SAN,PR existing
+    class FS,DB storage
