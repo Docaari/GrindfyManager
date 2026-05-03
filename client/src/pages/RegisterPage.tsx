@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Loader2, AlertCircle, UserPlus } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
-import grindfyLogoPath from '@assets/grindfy-logo-mark.png';
+import HeaderLogo from '@/components/branding/HeaderLogo';
 import { getGoogleAuthURL, getOAuthButtonLabel, isGoogleEnabled, getOAuthProviders } from '@/lib/oauth-ui-helpers';
 
 const registerSchema = z.object({
@@ -141,9 +141,9 @@ export default function RegisterPage() {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-3 mb-4">
-              <img 
-                src={grindfyLogoPath} 
-                alt="Grindfy Logo" 
+              <HeaderLogo
+                variant="mark"
+                alt="Grindfy Logo"
                 className="w-12 h-12 rounded-full border-2 border-[#00ff88]/30"
               />
               <h1 className="text-4xl font-bold">

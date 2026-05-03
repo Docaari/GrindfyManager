@@ -9,6 +9,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'wouter';
+import { tokens } from '@/lib/ui-tokens';
 
 interface FlightBannerData {
   active: boolean;
@@ -68,9 +69,9 @@ export default function FlightBanner({ banner }: Props): JSX.Element | null {
     <div
       data-testid="flight-banner"
       role="alert"
-      className="flex items-center justify-between gap-3 rounded-lg border border-green-500/40 bg-green-500/10 px-4 py-3"
+      className={`flex items-center justify-between gap-3 rounded-lg border px-4 py-3 ${tokens.color.success.border} ${tokens.color.success.bg}`}
     >
-      <div className="flex-1 text-sm text-green-200">
+      <div className={`flex-1 text-sm ${tokens.color.success.text}`}>
         <span className="font-semibold">Day {banner.day}</span> do{' '}
         <span className="font-semibold">"{banner.seriesTitle}"</span>
         {countdown ? ` comeca ${countdown}` : ''} · Stack:{' '}
@@ -80,7 +81,7 @@ export default function FlightBanner({ banner }: Props): JSX.Element | null {
         <a
           data-testid="flight-banner-cta"
           href="/flight"
-          className="inline-flex items-center px-3 py-1.5 rounded-md bg-green-600 text-white text-sm hover:opacity-90"
+          className="inline-flex items-center px-3 py-1.5 rounded-md bg-poker-accent text-white text-sm hover:opacity-90"
         >
           Abrir Flight
         </a>

@@ -10,7 +10,9 @@
 
 import React, { useState } from 'react';
 import { Link } from 'wouter';
+import { X } from 'lucide-react';
 import { emit } from '@/lib/tracker';
+import { tokens } from '@/lib/ui-tokens';
 
 interface CooldownBannerData {
   active: boolean;
@@ -56,14 +58,14 @@ export default function CooldownBanner({
     <div
       data-testid="cooldown-banner"
       role="alert"
-      className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3"
+      className={`flex items-center justify-between gap-3 rounded-lg border px-4 py-3 ${tokens.color.warn.border} ${tokens.color.warn.bg}`}
     >
-      <div className="flex-1 text-sm text-amber-200">
+      <div className={`flex-1 text-sm ${tokens.color.warn.text}`}>
         <span className="font-semibold">Cooldown</span>
         {hhmm ? ` ate ${hhmm}` : ''} — {motivo}
       </div>
       <Link href="/bankroll">
-        <a className="text-sm text-amber-100 underline hover:opacity-80">
+        <a className={`text-sm underline hover:opacity-80 ${tokens.color.warn.text}`}>
           ver detalhes
         </a>
       </Link>
@@ -74,9 +76,9 @@ export default function CooldownBanner({
           emit('home_banner_dismiss', { blockId: 'S3' });
         }}
         aria-label="Dispensar banner"
-        className="text-amber-200 hover:text-amber-100 transition-colors text-lg leading-none"
+        className={`transition-colors hover:opacity-80 ${tokens.color.warn.text}`}
       >
-        x
+        <X size={16} />
       </button>
     </div>
   );

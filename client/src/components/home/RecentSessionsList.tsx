@@ -9,6 +9,7 @@
 
 import React from 'react';
 import { Link } from 'wouter';
+import { tokens } from '@/lib/ui-tokens';
 
 interface RecentSession {
   id: string;
@@ -48,8 +49,8 @@ function fmtPnl(v: number): string {
 }
 
 function pnlClass(v: number): string {
-  if (v > 0) return 'text-green-400';
-  if (v < 0) return 'text-red-400';
+  if (v > 0) return tokens.color.success.text;
+  if (v < 0) return tokens.color.danger.text;
   return 'text-foreground';
 }
 

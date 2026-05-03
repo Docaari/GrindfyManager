@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Loader2, AlertCircle, Mail, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import logoPath from '@assets/grindfy-logo-mark.png';
+import HeaderLogo from '@/components/branding/HeaderLogo';
 import { getGoogleAuthURL, getOAuthButtonLabel, isGoogleEnabled, getOAuthProviders } from '@/lib/oauth-ui-helpers';
 
 const loginSchema = z.object({
@@ -160,9 +160,9 @@ export default function LoginPage() {
         {/* Logo Section - Large and Prominent */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
-            <img 
-              src={logoPath} 
-              alt="Grindfy Logo" 
+            <HeaderLogo
+              variant="mark"
+              alt="Grindfy Logo"
               className="w-16 h-16 mr-4"
             />
             <h1 className="text-4xl font-bold">

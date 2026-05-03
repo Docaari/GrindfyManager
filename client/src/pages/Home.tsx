@@ -105,10 +105,19 @@ interface HomeOverviewResponse {
   meta: { generatedAt: string; cacheHit: boolean; subqueryTimingsMs: Record<string, number> };
 }
 
+function readSkipOnboarding(): boolean {
+  try {
+    return localStorage.getItem('home:skipOnboarding') === 'true';
+  } catch {
+    return false;
+  }
+}
+
 const Home: React.FC = () => {
   // Hooks first (lesson #1).
   const { user } = useAuth();
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [skipOnboarding, setSkipOnboarding] = useState<boolean>(() => readSkipOnboarding());
   const homeViewEmittedRef = useRef(false);
 
   const { data, isLoading } = useQuery<HomeOverviewResponse>({
@@ -117,6 +126,14 @@ const Home: React.FC = () => {
     staleTime: 30_000,
     refetchOnWindowFocus: true,
   });
+
+  // Listener para 'home:skipOnboarding' — reflete click do user no botao
+  // "Pular onboarding" mesmo quando o write vem da mesma aba.
+  useEffect(() => {
+    const sync = () => setSkipOnboarding(readSkipOnboarding());
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, []);
 
   // WelcomeNameModal trigger no primeiro login (preservado de Home antiga).
   useEffect(() => {
@@ -165,7 +182,7 @@ const Home: React.FC = () => {
     );
   }
 
-  const isEmpty = data.userState === 'empty';
+  const isEmpty = data.userState === 'empty' && !skipOnboarding;
 
   return (
     <div className="min-h-screen p-4 md:p-6">

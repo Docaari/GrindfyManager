@@ -11,6 +11,7 @@
 
 import React from 'react';
 import { Link } from 'wouter';
+import { tokens } from '@/lib/ui-tokens';
 
 interface OnboardingData {
   totalTournaments: number;
@@ -39,7 +40,7 @@ function Step(props: StepProps): JSX.Element {
       data-completed={props.completed ? 'true' : 'false'}
       className={`rounded-lg border p-4 transition-colors ${
         props.completed
-          ? 'border-green-500/40 bg-green-500/10'
+          ? `${tokens.color.success.border} ${tokens.color.success.bg}`
           : 'border-border bg-card'
       }`}
     >
@@ -47,7 +48,7 @@ function Step(props: StepProps): JSX.Element {
         <div
           className={`flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold ${
             props.completed
-              ? 'bg-green-500 text-white'
+              ? `bg-poker-accent text-white`
               : 'bg-muted text-muted-foreground border border-border'
           }`}
         >

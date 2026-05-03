@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { ArrowLeft, Key, Eye, EyeOff, CheckCircle, AlertCircle, KeyRound, ShieldCheck } from 'lucide-react';
-import logoPath from '@assets/grindfy-logo-mark.png';
+import HeaderLogo from '@/components/branding/HeaderLogo';
 
 const resetPasswordSchema = z.object({
   password: z.string()
@@ -141,9 +141,9 @@ export function ResetPasswordPage() {
             {/* Header with Logo */}
             <div className="text-center mb-8">
               <div className="flex items-center justify-center gap-3 mb-6">
-                <img 
-                  src={logoPath} 
-                  alt="Grindfy Logo" 
+                <HeaderLogo
+                  variant="mark"
+                  alt="Grindfy Logo"
                   className="w-12 h-12 object-contain"
                 />
                 <div className="text-3xl font-bold">
@@ -206,9 +206,9 @@ export function ResetPasswordPage() {
             {/* Header with Logo */}
             <div className="text-center mb-8">
               <div className="flex items-center justify-center gap-3 mb-6">
-                <img 
-                  src={logoPath} 
-                  alt="Grindfy Logo" 
+                <HeaderLogo
+                  variant="mark"
+                  alt="Grindfy Logo"
                   className="w-12 h-12 object-contain"
                 />
                 <div className="text-3xl font-bold">
@@ -281,9 +281,9 @@ export function ResetPasswordPage() {
             {/* Header with Logo */}
             <div className="text-center mb-8">
               <div className="flex items-center justify-center gap-3 mb-6">
-                <img 
-                  src={logoPath} 
-                  alt="Grindfy Logo" 
+                <HeaderLogo
+                  variant="mark"
+                  alt="Grindfy Logo"
                   className="w-12 h-12 object-contain"
                 />
                 <div className="text-3xl font-bold">
@@ -325,9 +325,9 @@ export function ResetPasswordPage() {
           {/* Header with Logo */}
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-3 mb-6">
-              <img 
-                src={logoPath} 
-                alt="Grindfy Logo" 
+              <HeaderLogo
+                variant="mark"
+                alt="Grindfy Logo"
                 className="w-12 h-12 object-contain"
               />
               <div className="text-3xl font-bold">

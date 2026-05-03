@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, AlertCircle, Loader2, Mail, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import logoPath from '@assets/grindfy-logo-mark.png';
+import HeaderLogo from '@/components/branding/HeaderLogo';
 
 export function VerifyEmailPage() {
   const [, setLocation] = useLocation();
@@ -87,9 +87,9 @@ export function VerifyEmailPage() {
             {/* Header with Logo */}
             <div className="text-center mb-8">
               <div className="flex items-center justify-center gap-3 mb-6">
-                <img 
-                  src={logoPath} 
-                  alt="Grindfy Logo" 
+                <HeaderLogo
+                  variant="mark"
+                  alt="Grindfy Logo"
                   className="w-12 h-12 object-contain"
                 />
                 <div className="text-3xl font-bold">
@@ -148,9 +148,9 @@ export function VerifyEmailPage() {
             {/* Header with Logo */}
             <div className="text-center mb-8">
               <div className="flex items-center justify-center gap-3 mb-6">
-                <img 
-                  src={logoPath} 
-                  alt="Grindfy Logo" 
+                <HeaderLogo
+                  variant="mark"
+                  alt="Grindfy Logo"
                   className="w-12 h-12 object-contain"
                 />
                 <div className="text-3xl font-bold">
@@ -211,9 +211,9 @@ export function VerifyEmailPage() {
           {/* Header with Logo */}
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-3 mb-6">
-              <img 
-                src={logoPath} 
-                alt="Grindfy Logo" 
+              <HeaderLogo
+                variant="mark"
+                alt="Grindfy Logo"
                 className="w-12 h-12 object-contain"
               />
               <div className="text-3xl font-bold">
