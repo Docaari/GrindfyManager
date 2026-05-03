@@ -98,6 +98,7 @@ export function ArticleIframe({
       apiRequest("GET", `/api/library/lessons/${lessonId}/article-bundle`),
     retry: false,
     staleTime: 5 * 60 * 1000,
+    refetchOnMount: "always",
   });
 
   // ADR-094: postMessage listener. event.source validation eh CRITICA.
