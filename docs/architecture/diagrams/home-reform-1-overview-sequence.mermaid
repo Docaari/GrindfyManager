@@ -1,0 +1,99 @@
+%% Sprint home-reform-1 — Sequence: GET /api/home/overview
+%% Cobre: cache miss (1a chamada), 8 subqueries paralelas Promise.allSettled, timeout 800ms, compose, cache store, response.
+%% Tambem ilustra cache hit (2a chamada em <30s) com early return.
+%% Renderizavel em https://mermaid.live (sequenceDiagram)
+sequenceDiagram
+    actor User as Pro Player
+    participant Browser as Browser (Home.tsx)
+    participant TanStack as TanStack Query<br/>staleTime 30s
+    participant Auth as requireAuth<br/>(JWT middleware)
+    participant Home as routes/home.ts
+    participant Cache as Map&lt;userId, {data, expiresAt}&gt;<br/>TTL 30s
+    participant Storage as storage.ts
+    participant News as routes/news.ts<br/>fetchNewsItems()
+    participant DB as PostgreSQL
+
+    Note over User,DB: 1a chamada (cache MISS) — budget < 500ms p95
+    User->>Browser: Navega para /
+    Browser->>TanStack: useQuery(['/api/home/overview'])
+    TanStack->>Auth: GET /api/home/overview<br/>Authorization: Bearer JWT
+    Auth->>Auth: Valida JWT, extrai userId
+    Auth->>Home: req.user = { id: userId, ... }
+    Home->>Cache: get(userId)
+    Cache-->>Home: undefined (miss)
+
+    Note over Home,DB: Promise.allSettled — 8 subqueries paralelas, timeout 800ms cada
+
+    par statusStrip data
+        Home->>Storage: getQuickStats(userId)
+        Storage->>DB: SELECT lifetime totals
+        DB-->>Storage: rows
+        Storage-->>Home: quickStats
+    and dashboard performance 30d
+        Home->>Storage: getDashboardPerformance(userId, '30d')
+        Storage->>DB: SELECT ROI/ITM/Cash + sparkline
+        DB-->>Storage: rows
+        Storage-->>Home: performance
+    and recent sessions top 5
+        Home->>Storage: getRecentSessions(userId, 5)
+        Storage->>DB: SELECT FROM grind_sessions LIMIT 5
+        DB-->>Storage: rows
+        Storage-->>Home: recentSessions
+    and pending starred hands top 5
+        Home->>Storage: getPendingStarredHands(userId, 5)
+        Storage->>DB: SELECT FROM starred_hands WHERE status='pending' LIMIT 5
+        DB-->>Storage: rows
+        Storage-->>Home: pendingHands
+    and today (planned + profile)
+        Home->>Storage: getPlannedTournamentsForDate(userId, today, tz)
+        Storage->>DB: SELECT WHERE start_time::date=today
+        DB-->>Storage: rows
+        Storage-->>Home: planned[]
+        Home->>Storage: getProfileStateForDay(userId, dayOfWeek)
+        Storage->>DB: SELECT FROM profile_states WHERE day=N
+        DB-->>Storage: row
+        Storage-->>Home: profile
+    and bankroll current
+        Home->>Storage: getCurrentBankroll(userId)
+        Storage->>DB: SELECT FROM wallets / bankroll_snapshots
+        DB-->>Storage: rows
+        Storage-->>Home: banca
+    and cooldown active
+        Home->>Storage: getActiveCooldown(userId)
+        Storage->>DB: SELECT FROM cooldown_logs WHERE status='active'
+        DB-->>Storage: row | null
+        Storage-->>Home: cooldown | null
+    and flight series active
+        Home->>Storage: getActiveFlightSeries(userId)
+        Storage->>DB: SELECT FROM tournament_series WHERE status='active'
+        DB-->>Storage: rows
+        Storage-->>Home: flight | null
+    and news (Onda 1: stub)
+        Home->>News: fetchNewsItems('poker-software', 5)
+        News->>News: NEWS_FEED_ENABLED=false<br/>return []
+        News-->>Home: { items: [], enabled: false }
+    end
+
+    Note over Home: Compose response<br/>userState = totalTournaments>=50 && totalSessions>=5 ? 'power' : 'empty'
+
+    Home->>Cache: set(userId, { data, expiresAt: now + 30000 })
+    Home-->>Auth: 200 + HomeOverviewResponse<br/>+ meta.cacheHit=false<br/>+ meta.subqueryTimingsMs
+    Auth-->>TanStack: JSON response<br/>Cache-Control: private, max-age=30
+    TanStack-->>Browser: data (cached client 30s)
+    Browser-->>User: Render cockpit em &lt;500ms
+
+    Note over User,DB: 2a chamada (cache HIT) — < 50ms p95<br/>(user retorna a Home em < 30s)
+    User->>Browser: Refresh / volta foco janela
+    Browser->>TanStack: refetch (refetchOnWindowFocus=true)
+    TanStack->>Auth: GET /api/home/overview
+    Auth->>Home: req.user
+    Home->>Cache: get(userId)
+    Cache-->>Home: { data, expiresAt: future } HIT
+    Home-->>Auth: 200 + cached data<br/>+ meta.cacheHit=true
+    Auth-->>TanStack: JSON
+    TanStack-->>Browser: data
+    Browser-->>User: Re-render &lt;50ms
+
+    Note over Home: Subquery timeout 800ms<br/>se exceder, vira null no campo correspondente<br/>response continua 200 (graceful degradation)
+
+    Note over Home: Subquery throw<br/>Promise.allSettled captura, vira null<br/>log [home/overview] error nivel error<br/>response continua 200

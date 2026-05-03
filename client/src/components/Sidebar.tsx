@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { apiRequest } from '@/lib/queryClient';
 import BugReportModal from '@/components/BugReportModal';
 import ImprovementSuggestionModal from '@/components/ImprovementSuggestionModal';
-import logoImage from '@assets/image_1753377238747.webp';
+import HeaderLogo from '@/components/branding/HeaderLogo';
 import { getTrialDaysRemaining, getSubscriptionStatus, isSuperAdmin } from '../../../shared/permissions';
 import {
   BarChart3,
@@ -64,41 +64,50 @@ const Sidebar: React.FC = () => {
         ? '99+'
         : String(pendingSpotsCount);
 
+  // Sprint home-reform-1 RF-07 / D19: 5 grupos refatorados.
+  // HOJE / GRIND / ESTUDOS / FERRAMENTAS / ADMIN.
+  // URLs preservadas (zero migration). Labels e ordem ajustadas.
   const menuSections = [
     {
-      title: 'VISAO GERAL',
+      slug: 'hoje',
+      title: 'HOJE',
       items: [
-        { path: '/', icon: User, label: 'Home', adminOnly: false },
+        { path: '/', icon: User, label: 'Hoje', adminOnly: false },
         { path: '/dashboard', icon: BarChart3, label: 'Dashboard', adminOnly: false },
         { path: '/upload', icon: Upload, label: 'Import', adminOnly: false },
-        // Sprint Biblioteca-1 RF-12 / D1: rotulo "Torneios" para Tournament Library
-        // (rota /library mantida — zero migration de URL).
         { path: '/library', icon: BookOpen, label: 'Torneios', adminOnly: false },
       ]
     },
     {
+      slug: 'grind',
       title: 'GRIND',
       items: [
+        // D19: Grade -> Grind -> Warm Up -> Coach IA -> Flight
         { path: '/coach', icon: Calendar, label: 'Grade', adminOnly: false },
-        { path: '/coach-ai', icon: MessageSquare, label: 'Coach IA', adminOnly: false },
         { path: '/grind', icon: Gamepad2, label: 'Grind', adminOnly: false },
         { path: '/mental', icon: Brain, label: 'Warm Up', adminOnly: false },
-      ]
-    },
-    {
-      title: 'FERRAMENTAS',
-      items: [
-        { path: '/estudos', icon: BookOpen, label: 'Estudos', adminOnly: false },
-        // Sprint Biblioteca-1 RF-12 / D1: novo item Biblioteca → /biblioteca
-        // com icone GraduationCap (diferencia visualmente de /library).
-        { path: '/biblioteca', icon: GraduationCap, label: 'Biblioteca', adminOnly: false },
-        { path: '/calculadoras', icon: Wrench, label: 'Ferramentas', adminOnly: false },
-        { path: '/bankroll', icon: Wallet, label: 'Banca', adminOnly: false },
-        // Sprint Flight-1 RF-10 / D14: novo item Flight (multi-flight series).
+        { path: '/coach-ai', icon: MessageSquare, label: 'Coach IA', adminOnly: false },
         { path: '/flight', icon: Layers, label: 'Flight', adminOnly: false },
       ]
     },
     {
+      slug: 'estudos',
+      title: 'ESTUDOS',
+      items: [
+        { path: '/estudos', icon: BookOpen, label: 'Estudos', adminOnly: false },
+        { path: '/biblioteca', icon: GraduationCap, label: 'Biblioteca', adminOnly: false },
+      ]
+    },
+    {
+      slug: 'ferramentas',
+      title: 'FERRAMENTAS',
+      items: [
+        { path: '/calculadoras', icon: Calculator, label: 'Calculadoras', adminOnly: false },
+        { path: '/bankroll', icon: Wallet, label: 'Banca', adminOnly: false },
+      ]
+    },
+    {
+      slug: 'admin',
       title: 'ADMIN',
       items: [
         { path: '/analytics', icon: TrendingUp, label: 'Analytics', adminOnly: true },
@@ -162,13 +171,13 @@ const Sidebar: React.FC = () => {
       ${isCollapsed ? 'w-16' : 'w-64'}
       h-full bg-gray-900 border-r border-gray-700 flex flex-col transition-all duration-300
     `}>
-      {/* Header */}
+      {/* Header — Sprint home-reform-1 RF-06: <HeaderLogo> swappable. */}
       <div className="p-4 border-b border-gray-700">
         <div className="flex items-center justify-between">
           {!isCollapsed && (
             <div className="flex items-center space-x-3">
-              <img
-                src={logoImage}
+              <HeaderLogo
+                variant="mark"
                 alt="Grindfy Logo"
                 className="w-8 h-8 flex-shrink-0"
               />
@@ -178,8 +187,8 @@ const Sidebar: React.FC = () => {
             </div>
           )}
           {isCollapsed && (
-            <img
-              src={logoImage}
+            <HeaderLogo
+              variant="mark"
               alt="Grindfy Logo"
               className="w-8 h-8 flex-shrink-0"
             />
@@ -214,7 +223,11 @@ const Sidebar: React.FC = () => {
       <nav className="flex-1 p-4 overflow-y-auto">
         <div className="space-y-6">
           {filteredMenuSections.map((section) => (
-            <div key={section.title} className="space-y-2">
+            <div
+              key={section.title}
+              data-testid={`sidebar-section-${section.slug}`}
+              className="space-y-2"
+            >
               {/* Section Title */}
               {!isCollapsed && (
                 <div className="px-3 py-1">
@@ -290,7 +303,7 @@ const Sidebar: React.FC = () => {
                           )}
                           {showLibraryNewBadge && !isCollapsed && (
                             <span
-                              data-testid="sidebar-library-new-badge"
+                              data-testid="sidebar-biblioteca-new-badge"
                               className="ml-auto inline-flex items-center justify-center px-1.5 h-5 rounded-full bg-green-500/20 border border-green-500/40 text-green-300 text-[10px] font-semibold animate-pulse"
                             >
                               Novo
@@ -340,7 +353,10 @@ const Sidebar: React.FC = () => {
         </Link>
 
         <Link href="/settings">
-          <a className={`
+          <a
+            data-testid="sidebar-footer-settings"
+            href="/settings"
+            className={`
             flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
             ${location === '/settings'
               ? 'bg-green-600/20 text-green-400 border-l-2 border-green-400'
@@ -388,6 +404,7 @@ const Sidebar: React.FC = () => {
         </div>
 
         <button
+          data-testid="sidebar-footer-logout"
           onClick={handleLogout}
           className={`
             flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200

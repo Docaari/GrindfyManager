@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Loader2, AlertCircle, UserPlus } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
-import grindfyLogoPath from '@assets/image_1753377238747.webp';
+import grindfyLogoPath from '@assets/grindfy-logo-mark.png';
 import { getGoogleAuthURL, getOAuthButtonLabel, isGoogleEnabled, getOAuthProviders } from '@/lib/oauth-ui-helpers';
 
 const registerSchema = z.object({

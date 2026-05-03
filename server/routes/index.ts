@@ -41,6 +41,9 @@ import { registerAllJobs } from "../jobs";
 import { spotStorage } from "../lib/spotStorage";
 import primedopeRouter from "./primedope";
 import gradeDayDetailRouter from "./grade-day-detail";
+// Sprint home-reform-1 (RF-01, RF-02): operations cockpit + news stub.
+import { registerHomeRoutes } from "./home";
+import { registerNewsRoutes } from "./news";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -166,6 +169,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sprint F4 (PrimeDope variance simulation + drill-down) — routers default-export.
   app.use("/api/primedope", primedopeRouter);
   app.use("/api/grade", gradeDayDetailRouter);
+
+  // Sprint home-reform-1 (RF-01 + RF-02): /api/home/overview + /api/news.
+  registerHomeRoutes(app);
+  registerNewsRoutes(app);
 
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);

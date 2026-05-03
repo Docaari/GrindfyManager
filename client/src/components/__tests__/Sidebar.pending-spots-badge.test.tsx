@@ -37,7 +37,7 @@
  *   });
  *
  * REQUISITO PRE-W4 (BLOCKER): vitest.config.ts NAO mapeia `@assets`. Sidebar
- * importa `@assets/image_1753377238747.webp`. Sem o alias, vite:import-analysis
+ * importa `@assets/grindfy-logo-mark.png`. Sem o alias, vite:import-analysis
  * falha em transform-time ANTES de qualquer vi.mock kick in. Implementer (W4)
  * deve resolver via UMA das opcoes:
  *   (a) adicionar alias `@assets` -> `attached_assets` em vitest.config.ts
@@ -92,7 +92,7 @@ vi.mock('wouter', () => ({
 // que captura o specifier exato usado por Sidebar.tsx.
 // Lesson #4: nao ha "transform error em cascata" porque vi.mock eh hoisted
 // e injeta um stub antes do import-analysis tentar resolver o path real.
-vi.mock('@assets/image_1753377238747.webp', () => ({ default: 'logo.webp' }), {
+vi.mock('@assets/grindfy-logo-mark.png', () => ({ default: 'grindfy-logo-mark.png' }), {
   virtual: true,
 } as any);
 

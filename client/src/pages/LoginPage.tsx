@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Loader2, AlertCircle, Mail, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import logoPath from '@assets/Imagem do WhatsApp de 2025-07-24 à(s) 14.09.18_16ebb75d_1753385463919.jpg';
+import logoPath from '@assets/grindfy-logo-mark.png';
 import { getGoogleAuthURL, getOAuthButtonLabel, isGoogleEnabled, getOAuthProviders } from '@/lib/oauth-ui-helpers';
 
 const loginSchema = z.object({

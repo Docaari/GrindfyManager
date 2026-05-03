@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { ArrowLeft, Mail, AlertCircle, CheckCircle, KeyRound } from 'lucide-react';
-import logoPath from '@assets/Imagem do WhatsApp de 2025-07-24 à(s) 14.09.18_16ebb75d_1753385463919.jpg';
+import logoPath from '@assets/grindfy-logo-mark.png';
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Por favor, insira um email válido'),

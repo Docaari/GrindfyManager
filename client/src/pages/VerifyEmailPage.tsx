@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, AlertCircle, Loader2, Mail, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import logoPath from '@assets/Imagem do WhatsApp de 2025-07-24 à(s) 14.09.18_16ebb75d_1753385463919.jpg';
+import logoPath from '@assets/grindfy-logo-mark.png';
 
 export function VerifyEmailPage() {
   const [, setLocation] = useLocation();

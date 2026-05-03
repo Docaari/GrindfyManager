@@ -9426,11 +9426,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return [];
   }
 
-  async getPlannedTournamentsForDate(userId: string, _dateIso: string): Promise<any[]> {
-    // Onda 1: usa getPlannedTournaments() existente para hoje (dayOfWeek atual).
+  async getPlannedTournamentsForDate(userId: string, dateIso: string): Promise<any[]> {
     try {
-      const dow = new Date().getDay();
-      return await this.getPlannedTournaments(userId, dow);
+      const parsed = dateIso ? new Date(dateIso) : new Date();
+      const target = isNaN(parsed.getTime()) ? new Date() : parsed;
+      return await this.getPlannedTournaments(userId, target.getDay());
     } catch (err) {
       console.error('[storage.getPlannedTournamentsForDate] failed', err);
       throw err;

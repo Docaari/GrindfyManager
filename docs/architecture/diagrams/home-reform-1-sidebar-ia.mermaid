@@ -1,0 +1,68 @@
+%% Sprint home-reform-1 — Sidebar Information Architecture (D19 + ADR-101)
+%% Mostra arvore final: 5 grupos (HOJE / GRIND / ESTUDOS / FERRAMENTAS / ADMIN), items, badges, footer.
+%% Renderizavel em https://mermaid.live (graph TD)
+graph TD
+    sidebar["Sidebar.tsx<br/><i>Refatorada home-reform-1</i>"]
+
+    sidebar --> header
+    sidebar --> hoje
+    sidebar --> grind
+    sidebar --> estudos
+    sidebar --> ferramentas
+    sidebar --> admin
+    sidebar --> footerBlock
+
+    header["Header<br/><HeaderLogo variant='mark' /><br/>+ titulo Grindfy + collapse toggle"]
+
+    subgraph hoje["GRUPO 1: HOJE (era VISAO GERAL)"]
+        h1["Hoje<br/>path: /<br/><i>era 'Home' — RENOMEADO</i><br/>icon: User"]
+        h2["Dashboard<br/>path: /dashboard<br/>icon: BarChart3"]
+        h3["Import<br/>path: /upload<br/>icon: Upload"]
+        h4["Torneios<br/>path: /library<br/>icon: BookOpen"]
+        h1 --> h2 --> h3 --> h4
+    end
+
+    subgraph grind["GRUPO 2: GRIND (REORDENADO)"]
+        g1["Grade<br/>path: /coach<br/>icon: Calendar"]
+        g2["Grind<br/>path: /grind<br/>icon: Gamepad2"]
+        g3["Warm Up<br/>path: /mental<br/>icon: Brain"]
+        g4["Coach IA<br/>path: /coach-ai<br/>icon: MessageSquare"]
+        g5["Flight<br/>path: /flight<br/>icon: Layers<br/><i>movido de FERRAMENTAS</i>"]
+        g1 --> g2 --> g3 --> g4 --> g5
+    end
+
+    subgraph estudos["GRUPO 3: ESTUDOS (NOVO)"]
+        e1["Estudos<br/>path: /estudos<br/>icon: BookOpen<br/><i>movido de FERRAMENTAS</i><br/>+ badge pendingSpots"]
+        e2["Biblioteca<br/>path: /biblioteca<br/>icon: GraduationCap<br/><i>movido de FERRAMENTAS</i><br/>+ badge 'Novo'"]
+        e1 --> e2
+    end
+
+    subgraph ferramentas["GRUPO 4: FERRAMENTAS (REDUZIDO)"]
+        f1["Calculadoras<br/>path: /calculadoras<br/>icon: Wrench"]
+        f2["Banca<br/>path: /bankroll<br/>icon: Wallet"]
+        f1 --> f2
+    end
+
+    subgraph admin["GRUPO 5: ADMIN (admin-only filter)"]
+        a1["Analytics<br/>path: /analytics<br/>icon: TrendingUp"]
+        a2["Usuarios<br/>path: /admin/users<br/>icon: Users"]
+        a3["Bugs<br/>path: /admin/bugs<br/>icon: Bug"]
+        a1 --> a2 --> a3
+    end
+
+    subgraph footerBlock["FOOTER (inalterado)"]
+        ft1["Subscription Badge<br/><i>renderSubscriptionBadge()</i><br/>trial / active / expired"]
+        ft2["Settings<br/>path: /settings<br/>icon: Settings"]
+        ft3["Logout<br/>onClick: logout()<br/>icon: LogOut"]
+        ft1 --> ft2 --> ft3
+    end
+
+    classDef new fill:#15a24e,stroke:#0d6e34,color:#fff
+    classDef renamed fill:#f59e0b,stroke:#b45309,color:#000
+    classDef moved fill:#3b82f6,stroke:#1d4ed8,color:#fff
+    classDef preserved fill:#1f2937,stroke:#374151,color:#e5e7eb
+
+    class hoje,h1 renamed
+    class estudos,e1,e2 new
+    class g5 moved
+    class header,grind,ferramentas,admin,footerBlock,h2,h3,h4,g1,g2,g3,g4,f1,f2,a1,a2,a3,ft1,ft2,ft3 preserved

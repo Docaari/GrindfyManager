@@ -1,0 +1,65 @@
+%% Sprint home-reform-1 — News Feature Flag Flow (ADR-100)
+%% Mostra: env var NEWS_FEED_ENABLED -> handler /api/news -> componente NewsSlot.
+%% Cobre Onda 1 (off, sempre null) vs Onda 3 (on, integracao xAI Grok).
+%% Renderizavel em https://mermaid.live (flowchart TD)
+flowchart TD
+    Start["Browser carrega Home"] --> QueryOverview["GET /api/home/overview"]
+
+    QueryOverview --> AuthCheck{"requireAuth<br/>JWT valido?"}
+    AuthCheck -->|"Nao"| Resp401["401 Unauthorized"]
+    AuthCheck -->|"Sim"| OrchestrateHome["routes/home.ts<br/>Promise.allSettled 8 subqueries<br/>+ fetchNewsItems()"]
+
+    OrchestrateHome --> CallNews["fetchNewsItems(source, limit)<br/>importado de routes/news.ts"]
+
+    CallNews --> ReadFlag{"NEWS_FEED_ENABLED<br/>env var truthy?<br/>('true' OR '1')"}
+
+    %% Onda 1 — flag OFF (default)
+    ReadFlag -->|"NAO (default Onda 1)"| ReturnEmpty["return { items: [], enabled: false }"]
+    ReturnEmpty --> ComposeOnda1["routes/home.ts compose<br/>data.news = { enabled: false, items: [] }"]
+    ComposeOnda1 --> ReturnHomeOverview1["200 + HomeOverviewResponse<br/>data.news.enabled = false"]
+    ReturnHomeOverview1 --> RenderNewsOnda1["&lt;NewsSlot enabled={false} items={[]} /&gt;"]
+    RenderNewsOnda1 --> NullRender["return null<br/><i>NAO renderiza DOM<br/>NAO reserva espaco visivel</i>"]
+    NullRender --> UserOnda1["Usuario nao ve news em Onda 1<br/><i>queryByTestId('home-news-slot') = null</i>"]
+
+    %% Onda 3 — flag ON
+    ReadFlag -->|"SIM (Onda 3)"| CheckCache{"Cache hit por source?<br/>(TTL 1-3h)"}
+    CheckCache -->|"Hit"| ReturnCached["return cached items"]
+    CheckCache -->|"Miss"| CallProvider["fetchNewsItems implementacao Onda 3<br/>chamar provider externo"]
+
+    CallProvider --> ProviderChoice{"Provider escolhido<br/>(decisao Onda 3)"}
+    ProviderChoice -->|"xAI Grok (default)"| GrokAPI["xAI Grok API<br/>~$2/user/mes com cache 1-3h"]
+    ProviderChoice -->|"NewsAPI"| NewsAPIExt["NewsAPI.org"]
+    ProviderChoice -->|"Custom scraper"| Scraper["Scraper proprio<br/>poker-software RSS feeds"]
+
+    GrokAPI --> Sanitize["sanitizeNewsItem(raw)<br/>Zod parse + URL allowlist"]
+    NewsAPIExt --> Sanitize
+    Scraper --> Sanitize
+
+    Sanitize --> ValidItem{"Valido?"}
+    ValidItem -->|"Nao"| DropItem["descartar (log warn)"]
+    ValidItem -->|"Sim"| StoreCache["cache.set(getCacheKey(source), items, ttl)"]
+    DropItem --> StoreCache
+
+    StoreCache --> ReturnLive["return { items, enabled: true, cachedAt, nextRefreshAt }"]
+    ReturnCached --> ComposeOnda3
+    ReturnLive --> ComposeOnda3["routes/home.ts compose<br/>data.news = { enabled: true, items: [...] }"]
+    ComposeOnda3 --> ReturnHomeOverview3["200 + HomeOverviewResponse<br/>data.news.enabled = true<br/>data.news.items = [...]"]
+    ReturnHomeOverview3 --> RenderNewsOnda3["&lt;NewsSlot enabled={true} items={[...]} /&gt;"]
+    RenderNewsOnda3 --> CheckEmpty{"items.length > 0?"}
+    CheckEmpty -->|"Nao"| StillNull["return null<br/><i>Onda 1 escolha: nao mostrar 'sem noticias'</i>"]
+    CheckEmpty -->|"Sim"| RenderList["Renderiza lista de noticias<br/><i>card por item</i>"]
+
+    %% F4 vetada
+    F4Veto["F4 — Fofocas/cravadas/resultados<br/>VETADA permanentemente<br/>(D-FOUNDER-3)"]
+    F4Veto -.->|"NAO chamar"| ProviderChoice
+    F4Veto -.->|"enum 'source' fechado<br/>NAO adicionar 'tournament-results'<br/>NAO adicionar 'gossip'<br/>NAO adicionar 'player-news'"| ReadFlag
+
+    classDef onda1 fill:#15a24e,stroke:#0d6e34,color:#fff
+    classDef onda3 fill:#3b82f6,stroke:#1d4ed8,color:#fff
+    classDef veto fill:#dc2626,stroke:#7f1d1d,color:#fff
+    classDef shared fill:#1f2937,stroke:#374151,color:#e5e7eb
+
+    class ReturnEmpty,ComposeOnda1,ReturnHomeOverview1,RenderNewsOnda1,NullRender,UserOnda1 onda1
+    class CheckCache,ReturnCached,CallProvider,ProviderChoice,GrokAPI,NewsAPIExt,Scraper,Sanitize,ValidItem,DropItem,StoreCache,ReturnLive,ComposeOnda3,ReturnHomeOverview3,RenderNewsOnda3,CheckEmpty,RenderList,StillNull onda3
+    class F4Veto veto
+    class Start,QueryOverview,AuthCheck,Resp401,OrchestrateHome,CallNews,ReadFlag shared

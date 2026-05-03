@@ -1,510 +1,218 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+/**
+ * RF-08 — Home page (Sprint home-reform-1).
+ *
+ * Spec: Docs/specs/home-reform-1.md §RF-08, §3 D3, §3 D9
+ * ADR-099 (Operations Cockpit), ADR-100 (News), ADR-101 (Sidebar IA),
+ * ADR-102 (cache strategy).
+ *
+ * Single TanStack Query → /api/home/overview. Cache staleTime 30s.
+ * userState=empty renderiza <EmptyHomeOnboarding>; userState=power renderiza
+ * cockpit completo. Banner priority D9: flight acima de cooldown.
+ *
+ * Lessons aplicadas:
+ *   #1  hooks first
+ *   #13 apiRequest retorna JSON parseado direto
+ */
+
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import { Link } from 'wouter';
-import {
-  BarChart3,
-  Upload,
-  Calendar,
-  Zap,
-  BookOpen,
-  Brain,
-  GraduationCap,
-  CalendarDays,
-  Calculator,
-  Clock,
-  TrendingUp,
-  FileText,
-  ChevronRight,
-  Sparkles,
-  MessageCircle,
-  Mail,
-  AlertCircle,
-  RefreshCw
-} from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { WelcomeNameModal } from '@/components/WelcomeNameModal';
+import { emit } from '@/lib/tracker';
 
-interface QuickStats {
-  totalTournaments: number;
-  lastSessionDate: string;
-  totalProfit: number;
-  currentStreak: number;
-  totalSessions?: number;
-  totalGradeDays?: number;
+import StatusStrip from '@/components/home/StatusStrip';
+import TodayCard from '@/components/home/TodayCard';
+import CooldownBanner from '@/components/home/CooldownBanner';
+import FlightBanner from '@/components/home/FlightBanner';
+import NextTournamentCountdown from '@/components/home/NextTournamentCountdown';
+import LifetimeStats from '@/components/home/LifetimeStats';
+import RecentSessionsList from '@/components/home/RecentSessionsList';
+import PerformanceMini from '@/components/home/PerformanceMini';
+import PendingHandsList from '@/components/home/PendingHandsList';
+import NewsSlot from '@/components/home/NewsSlot';
+import HomeFooter from '@/components/home/HomeFooter';
+import EmptyHomeOnboarding from '@/components/home/EmptyHomeOnboarding';
+
+import type { NewsItem } from '@shared/types/news';
+
+// =============================================================================
+// Schema da resposta — espelha RF-01 + ADR-099 §2.1
+// =============================================================================
+
+interface HomeOverviewResponse {
+  userState: 'empty' | 'power';
+  statusStrip: {
+    banca: { totalUsd: number; bisAvailable: number | null; deltaPct7d: number | null; sparkline: number[] } | null;
+    roi30d: { value: number; sparkline: number[] } | null;
+    today: { plannedCount: number; firstStartTime: string | null; realizedPnlUsd: number | null } | null;
+    pendencias: { starredHands: number; cooldownAlerts: number } | null;
+  };
+  today: {
+    profile: 'A' | 'B' | 'C' | 'OFF' | null;
+    plannedCount: number;
+    firstStartTime: string | null;
+    stopLoss: { amount: number; currency: string } | null;
+    stopTime: string | null;
+    hasWarmupToday: boolean;
+  } | null;
+  banners: {
+    cooldown: { active: boolean; until: string; type: 'stop-loss' | 'time-stop' | 'manual' } | null;
+    flight: {
+      active: boolean;
+      seriesTitle: string;
+      nextDayStartTime: string;
+      currentStackBb: number;
+      day: number;
+    } | null;
+  };
+  nextTournament: {
+    startTime: string;
+    name: string;
+    buyin: number;
+    currency: string;
+    platform: string;
+  } | null;
+  lifetime: {
+    totalTournaments: number;
+    totalSessions: number;
+    activeDays: number;
+    currentStreakDays: number;
+  };
+  recentSessions: Array<{
+    id: string;
+    date: string;
+    pnlUsd: number;
+    tournamentCount: number;
+    primaryPlatform: string;
+    status: 'live' | 'ended' | 'finalized';
+  }> | null;
+  performance: {
+    roi: number;
+    itm: number;
+    cash: number;
+    sparkline: number[];
+    period: '7d' | '30d' | '90d' | 'ytd';
+  } | null;
+  pendingHands: Array<{
+    id: string;
+    hero: string;
+    context: string;
+    tag: string;
+    ageRelative: string;
+  }>;
+  news: { enabled: boolean; items: NewsItem[] };
+  meta: { generatedAt: string; cacheHit: boolean; subqueryTimingsMs: Record<string, number> };
 }
 
 const Home: React.FC = () => {
+  // Hooks first (lesson #1).
   const { user } = useAuth();
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const homeViewEmittedRef = useRef(false);
 
+  const { data, isLoading } = useQuery<HomeOverviewResponse>({
+    queryKey: ['/api/home/overview'],
+    queryFn: () => apiRequest('GET', '/api/home/overview'),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+
+  // WelcomeNameModal trigger no primeiro login (preservado de Home antiga).
   useEffect(() => {
-    // Check if user needs to set a display name (first time login)
-    if (user && (!user.name || user.name.trim() === '')) {
-      // Check if user has been here before using localStorage
-      const hasSetName = localStorage.getItem(`hasSetName_${user.userPlatformId}`);
-      if (!hasSetName) {
-        setShowWelcomeModal(true);
+    if (user && (!user.name || (typeof user.name === 'string' && user.name.trim() === ''))) {
+      try {
+        const hasSetName = localStorage.getItem(`hasSetName_${user.userPlatformId}`);
+        if (!hasSetName) {
+          setShowWelcomeModal(true);
+        }
+      } catch {
+        // ignore
       }
     }
   }, [user]);
 
+  // Tracking home_view (RNF-09): 1x por mount, quando data chega.
+  useEffect(() => {
+    if (!data || homeViewEmittedRef.current) return;
+    homeViewEmittedRef.current = true;
+    emit('home_view', {
+      userState: data.userState,
+      cacheHit: data.meta?.cacheHit ?? false,
+    });
+  }, [data]);
+
   const handleWelcomeComplete = () => {
     setShowWelcomeModal(false);
-    // Mark that user has set their name
     if (user) {
-      localStorage.setItem(`hasSetName_${user.userPlatformId}`, 'true');
+      try {
+        localStorage.setItem(`hasSetName_${user.userPlatformId}`, 'true');
+      } catch {
+        // ignore
+      }
     }
   };
 
-  // Fetch quick stats for welcome section
-  const { data: quickStats, isLoading, isError, refetch } = useQuery<QuickStats>({
-    queryKey: ['/api/dashboard/quick-stats'],
-    queryFn: () => apiRequest('GET', '/api/dashboard/quick-stats'),
-  });
-
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Bom dia';
-    if (hour < 18) return 'Boa tarde';
-    return 'Boa noite';
-  };
-
-  const mainTools = [
-    {
-      title: 'Dashboard',
-      description: 'Analise seus Resultados',
-      subtitle: 'Métricas detalhadas e gráficos de performance',
-      icon: BarChart3,
-      href: '/dashboard'
-    },
-    {
-      title: 'Import',
-      description: 'Importe seus Históricos',
-      subtitle: 'Carregue dados de torneios de qualquer site',
-      icon: Upload,
-      href: '/upload'
-    },
-    {
-      title: 'Grade',
-      description: 'Planeje sua Grade',
-      subtitle: 'Organize torneios e estratégias semanais',
-      icon: Calendar,
-      href: '/coach'
-    },
-    {
-      title: 'Grind',
-      description: 'Sessão ao Vivo',
-      subtitle: 'Acompanhe sessões em tempo real',
-      icon: Zap,
-      href: '/grind'
-    }
-  ];
-
-  const comingSoonTools = [
-    {
-      title: 'Calendario',
-      description: 'Rotina semanal completa',
-      icon: CalendarDays
-    },
-    {
-      title: 'Relatorios Avancados',
-      description: 'Analises comparativas e exportacao',
-      icon: FileText
-    }
-  ];
-
-  const onboardingSteps = [
-    {
-      step: 1,
-      title: 'Importar Dados',
-      description: 'Carregue seus históricos de torneios',
-      action: 'Ir para Import',
-      href: '/upload',
-      icon: Upload,
-      completed: (quickStats?.totalTournaments || 0) > 0
-    },
-    {
-      step: 2,
-      title: 'Analisar Resultados',
-      description: 'Visualize suas métricas e performance',
-      action: 'Ir para Dashboard',
-      href: '/dashboard',
-      icon: TrendingUp,
-      completed: (quickStats?.totalTournaments || 0) > 10
-    },
-    {
-      step: 3,
-      title: 'Planejar Grade',
-      description: 'Organize sua grade de torneios',
-      action: 'Ir para Grade',
-      href: '/coach',
-      icon: Calendar,
-      completed: (quickStats?.totalGradeDays || 0) > 0
-    },
-    {
-      step: 4,
-      title: 'Iniciar Grind',
-      description: 'Acompanhe sessoes ao vivo',
-      action: 'Ir para Grind',
-      href: '/grind',
-      icon: Zap,
-      completed: (quickStats?.totalSessions || 0) > 0
-    }
-  ];
-
-  if (isError) {
+  if (isLoading || !data) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
-          <h3 className="text-xl font-semibold text-white">Erro ao carregar dados</h3>
-          <p className="text-gray-400">Não foi possível carregar os dados.</p>
-          <Button onClick={() => refetch()} variant="outline" className="text-white border-gray-600">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Tentar novamente
-          </Button>
+      <div className="min-h-screen p-4 md:p-6">
+        <div className="max-w-6xl mx-auto space-y-3">
+          <div className="h-24 rounded-lg bg-muted/40 animate-pulse" />
+          <div className="h-32 rounded-lg bg-muted/40 animate-pulse" />
+          <div className="h-48 rounded-lg bg-muted/40 animate-pulse" />
         </div>
       </div>
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-900 p-6">
-        <div className="max-w-7xl mx-auto space-y-12">
-          <div className="text-center space-y-6">
-            <Skeleton className="h-10 w-80 bg-gray-700 mx-auto" />
-            <Skeleton className="h-6 w-96 bg-gray-700 mx-auto" />
-            <div className="flex justify-center items-center gap-12 mt-6">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="text-center">
-                  <Skeleton className="h-8 w-16 bg-gray-700 mx-auto mb-1" />
-                  <Skeleton className="h-4 w-24 bg-gray-700" />
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
-            {[1, 2, 3, 4].map(i => (
-              <Card key={i} className="bg-slate-800/70 border-slate-700/50 h-48">
-                <CardHeader className="pb-6">
-                  <Skeleton className="h-14 w-14 bg-gray-700 rounded-xl" />
-                  <Skeleton className="h-6 w-32 bg-gray-700 mt-4" />
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <Skeleton className="h-5 w-40 bg-gray-700 mb-2" />
-                  <Skeleton className="h-4 w-full bg-gray-700" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const isEmpty = data.userState === 'empty';
 
   return (
-    <div className="min-h-screen bg-gray-900 p-6">
-      <div className="max-w-7xl mx-auto space-y-12">
+    <div className="min-h-screen p-4 md:p-6">
+      <div className="max-w-6xl mx-auto space-y-3">
+        {isEmpty ? (
+          <EmptyHomeOnboarding
+            data={{
+              totalTournaments: data.lifetime.totalTournaments,
+              totalSessions: data.lifetime.totalSessions,
+              walletsConfigured: !!data.statusStrip.banca,
+              gradeDays: data.today?.plannedCount ?? 0,
+            }}
+          />
+        ) : (
+          <>
+            {/* Banner priority D9: Flight acima de Cooldown. */}
+            <FlightBanner banner={data.banners.flight} />
+            <CooldownBanner banner={data.banners.cooldown} />
 
-        {/* Welcome Section */}
-        <div className="text-center space-y-6">
-          <h1 className="text-4xl font-bold text-white">
-            {getGreeting()}, {user?.firstName || user?.name || 'Jogador'}!
-          </h1>
-          <p className="text-xl text-gray-300">
-            Bem-vindo ao seu hub central de poker profissional
-          </p>
-          
-          {quickStats && (
-            <div className="flex justify-center items-center gap-12 mt-6">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-emerald-400">
-                  {quickStats.totalTournaments}
-                </div>
-                <div className="text-sm text-gray-400 font-medium">Torneios Upados</div>
+            <StatusStrip data={data.statusStrip} />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="md:col-span-2">
+                <TodayCard data={data.today} />
               </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-emerald-400">
-                  {quickStats.totalSessions || 0}
-                </div>
-                <div className="text-sm text-gray-400 font-medium">Sessoes Registradas</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-emerald-400">
-                  {quickStats.totalGradeDays || 0}
-                </div>
-                <div className="text-sm text-gray-400 font-medium">Dias na Grade</div>
+              <div>
+                <NextTournamentCountdown data={data.nextTournament} />
               </div>
             </div>
-          )}
-        </div>
 
-        {/* Main Tools Grid */}
-        <section>
-          <h2 className="text-3xl font-bold text-white mb-8 flex items-center gap-3">
-            <Sparkles className="w-8 h-8 text-emerald-400" />
-            Ferramentas Principais
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
-            {mainTools.map((tool) => {
-              const Icon = tool.icon;
-              return (
-                <Link key={tool.title} href={tool.href}>
-                  <Card className="
-                    bg-slate-800/70 hover:bg-slate-800 
-                    border-slate-700/50 hover:border-emerald-500/30
-                    transition-all duration-300
-                    cursor-pointer h-full
-                    hover:shadow-xl hover:shadow-emerald-500/20
-                    backdrop-blur-sm
-                  ">
-                    <CardHeader className="pb-6">
-                      <div className="flex items-center justify-between">
-                        <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                          <Icon className="w-8 h-8 text-emerald-400" />
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-gray-500" />
-                      </div>
-                      <CardTitle className="text-white text-2xl font-bold mt-4">
-                        {tool.title}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <p className="text-emerald-300 font-semibold mb-3 text-lg">
-                        {tool.description}
-                      </p>
-                      <p className="text-gray-400 text-sm leading-relaxed">
-                        {tool.subtitle}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
+            <LifetimeStats data={data.lifetime} />
 
-        {/* Onboarding Section */}
-        <section>
-          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-            <Clock className="w-6 h-6 text-emerald-400" />
-            Como Começar
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {onboardingSteps.map((step) => {
-              const Icon = step.icon;
-              return (
-                <Card key={step.step} className={`
-                  bg-slate-800/40 border-slate-700/50 
-                  ${step.completed ? 'border-emerald-500/40 bg-emerald-500/5' : ''}
-                  hover:border-slate-600 transition-all duration-300
-                  backdrop-blur-sm
-                `}>
-                  <CardHeader className="pb-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className={`
-                        w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold
-                        ${step.completed ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-gray-300'}
-                      `}>
-                        {step.completed ? '✓' : step.step}
-                      </div>
-                      <Icon className={`w-6 h-6 ${step.completed ? 'text-emerald-400' : 'text-gray-400'}`} />
-                      {step.completed && (
-                        <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 ml-auto">
-                          ✓
-                        </Badge>
-                      )}
-                    </div>
-                    <CardTitle className="text-white text-lg font-semibold">
-                      {step.title}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <p className="text-gray-400 text-sm mb-4 leading-relaxed">
-                      {step.description}
-                    </p>
-                    <Link href={step.href}>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className={`
-                          w-full ${step.completed ? 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 bg-emerald-500/5' : 'border-slate-600 text-gray-300 hover:bg-slate-700'}
-                        `}
-                      >
-                        {step.action}
-                      </Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Coming Soon Section */}
-        <section>
-          <h2 className="text-xl font-semibold text-gray-300 mb-4 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-gray-400" />
-            Em Desenvolvimento
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {comingSoonTools.map((tool) => {
-              const Icon = tool.icon;
-              return (
-                <Card key={tool.title} className="
-                  bg-slate-800/30 border-slate-700/30
-                  transition-all duration-300 opacity-60
-                  cursor-not-allowed h-auto
-                ">
-                  <CardHeader className="pb-2 pt-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <Icon className="w-5 h-5 text-gray-500" />
-                      <Badge variant="outline" className="bg-gray-600/20 text-gray-400 border-gray-600/30 text-xs">
-                        Breve
-                      </Badge>
-                    </div>
-                    <CardTitle className="text-gray-400 text-sm font-medium">
-                      {tool.title}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0 pb-4">
-                    <p className="text-gray-500 text-xs">
-                      {tool.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Quick Actions Footer */}
-        <section className="pt-12 border-t border-slate-700/50">
-          <div className="text-center space-y-6">
-            <p className="text-gray-400 text-lg">
-              Pronto para começar sua sessão? Acesse suas ferramentas rapidamente
-            </p>
-            <div className="flex justify-center gap-6 flex-wrap">
-              <Link href="/upload">
-                <Button variant="outline" className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 bg-emerald-500/5 px-6 py-3">
-                  <Upload className="w-5 h-5 mr-3" />
-                  Importar Dados
-                </Button>
-              </Link>
-              <Link href="/dashboard">
-                <Button variant="outline" className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 bg-emerald-500/5 px-6 py-3">
-                  <BarChart3 className="w-5 h-5 mr-3" />
-                  Ver Dashboard
-                </Button>
-              </Link>
-              <Link href="/grind">
-                <Button variant="outline" className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 bg-emerald-500/5 px-6 py-3">
-                  <Zap className="w-5 h-5 mr-3" />
-                  Iniciar Grind
-                </Button>
-              </Link>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <RecentSessionsList data={data.recentSessions ?? []} />
+              <PendingHandsList data={data.pendingHands} />
             </div>
-          </div>
-        </section>
 
-        {/* Contact/Community Section */}
-        <section>
-          <h2 className="text-xl font-semibold text-gray-300 mb-6 flex items-center gap-2">
-            <MessageCircle className="w-5 h-5 text-emerald-400" />
-            Contato & Comunidade
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Discord Card */}
-            <a 
-              href="https://discord.gg/MPJh3pub" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="block"
-            >
-              <Card className="
-                bg-slate-800/50 border-slate-700/50 
-                hover:bg-slate-800/70 hover:border-emerald-500/30
-                transition-all duration-300 cursor-pointer
-                hover:shadow-lg hover:shadow-emerald-500/10
-                backdrop-blur-sm
-              ">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                      <MessageCircle className="w-6 h-6 text-emerald-400" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-white text-lg font-semibold">
-                        Discord
-                      </CardTitle>
-                      <p className="text-gray-400 text-sm">
-                        Se junte à nossa comunidade
-                      </p>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-gray-500 ml-auto" />
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="text-emerald-300 text-sm">
-                    Conecte-se com outros jogadores, compartilhe experiências e receba suporte
-                  </p>
-                </CardContent>
-              </Card>
-            </a>
+            <PerformanceMini data={data.performance} />
 
-            {/* Email Card */}
-            <a 
-              href="mailto:support@grindfyapp.com" 
-              className="block"
-            >
-              <Card className="
-                bg-slate-800/50 border-slate-700/50 
-                hover:bg-slate-800/70 hover:border-emerald-500/30
-                transition-all duration-300 cursor-pointer
-                hover:shadow-lg hover:shadow-emerald-500/10
-                backdrop-blur-sm
-              ">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                      <Mail className="w-6 h-6 text-emerald-400" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-white text-lg font-semibold">
-                        Email
-                      </CardTitle>
-                      <p className="text-gray-400 text-sm">
-                        support@grindfyapp.com
-                      </p>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-gray-500 ml-auto" />
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="text-emerald-300 text-sm">
-                    Entre em contato para suporte técnico ou dúvidas gerais
-                  </p>
-                </CardContent>
-              </Card>
-            </a>
+            <NewsSlot enabled={data.news.enabled} items={data.news.items} />
+          </>
+        )}
 
-          </div>
-        </section>
-
+        <HomeFooter />
       </div>
 
-      {/* Welcome Name Modal */}
-      <WelcomeNameModal
-        open={showWelcomeModal}
-        onComplete={handleWelcomeComplete}
-      />
+      <WelcomeNameModal open={showWelcomeModal} onComplete={handleWelcomeComplete} />
     </div>
   );
 };

@@ -1,0 +1,106 @@
+%% Sprint home-reform-1 — C4 Component (Home reformada)
+%% Mostra a topologia interna da nova Home: pagina -> endpoint composto -> storage.ts -> tabelas.
+%% Sub-componentes Frontend: 12 blocos visuais consumindo data slices do mesmo payload.
+%% Renderizavel em https://mermaid.live (graph TB)
+graph TB
+    user["Pro Player MTT<br/><i>Browser logado</i>"]
+
+    subgraph webApp["Web App (React 18 + TS + Vite)"]
+        homePage["pages/Home.tsx<br/><i>Refatorado</i>"]
+        sidebar["components/Sidebar.tsx<br/><i>5 grupos D19</i>"]
+        miniChat["components/MiniChat.tsx<br/><i>FAB global em App.tsx</i>"]
+        headerLogo["components/branding/HeaderLogo.tsx<br/><i>RF-06 NOVO</i>"]
+
+        subgraph homeBlocks["components/home/* (NOVOS)"]
+            statusStrip["StatusStrip<br/><i>S1 — 4 KPIs</i>"]
+            todayCard["TodayCard<br/><i>S2 — Hoje</i>"]
+            cooldownBanner["CooldownBanner<br/><i>S3 — condicional</i>"]
+            nextTour["NextTournamentCountdown<br/><i>S4 — setInterval 1s</i>"]
+            flightBanner["FlightBanner<br/><i>S5 — condicional</i>"]
+            lifetime["LifetimeStats<br/><i>F1 — 4 metricas</i>"]
+            recent["RecentSessionsList<br/><i>F2 — top 5</i>"]
+            perfMini["PerformanceMini<br/><i>F6 — sparkline</i>"]
+            pendingHands["PendingHandsList<br/><i>F8 — top 5</i>"]
+            newsSlot["NewsSlot<br/><i>S15 — null em Onda 1</i>"]
+            footer["HomeFooter<br/><i>S12 — bug report</i>"]
+            empty["EmptyHomeOnboarding<br/><i>userState=empty</i>"]
+        end
+
+        tanstack["TanStack Query<br/><i>queryKey=/api/home/overview<br/>staleTime 30s</i>"]
+        tracker["lib/tracker.ts<br/><i>emit() RNF-09</i>"]
+    end
+
+    subgraph apiServer["API Server (Express + TS, porta 3000)"]
+        authMW["requireAuth<br/><i>JWT middleware</i>"]
+        homeRoute["routes/home.ts<br/><i>GET /api/home/overview NOVO</i>"]
+        newsRoute["routes/news.ts<br/><i>GET /api/news NOVO stub</i>"]
+        cache["Cache Map&lt;userId, {data, expiresAt}&gt;<br/><i>30s TTL in-memory</i>"]
+        storage["storage.ts<br/><i>Funcoes Drizzle ORM</i>"]
+        config["config.ts<br/><i>NEWS_FEED_ENABLED</i>"]
+    end
+
+    subgraph database["PostgreSQL 16 / Neon Serverless"]
+        users[("users")]
+        tournaments[("tournaments")]
+        plannedT[("planned_tournaments")]
+        profileStates[("profile_states")]
+        sessions[("grind_sessions")]
+        wallets[("wallets / bankroll_snapshots")]
+        cooldown[("cooldown_logs")]
+        series[("tournament_series")]
+        starred[("starred_hands")]
+        warmups[("warmup_rituals")]
+    end
+
+    user -->|"HTTPS"| webApp
+    homePage -->|"useQuery"| tanstack
+    tanstack -->|"GET /api/home/overview"| authMW
+    authMW -->|"JWT valido"| homeRoute
+    homeRoute -->|"Lookup"| cache
+    cache -->|"Miss → orquestrar"| homeRoute
+    homeRoute -->|"Promise.allSettled<br/>timeout 800ms cada"| storage
+    homeRoute -->|"fetchNewsItems()"| newsRoute
+    newsRoute -->|"Le flag"| config
+
+    storage -->|"SQL"| users
+    storage -->|"SQL"| tournaments
+    storage -->|"SQL"| plannedT
+    storage -->|"SQL"| profileStates
+    storage -->|"SQL"| sessions
+    storage -->|"SQL"| wallets
+    storage -->|"SQL"| cooldown
+    storage -->|"SQL"| series
+    storage -->|"SQL"| starred
+    storage -->|"SQL"| warmups
+
+    homeRoute -->|"data composto"| tanstack
+    tanstack -->|"data slices"| homePage
+
+    homePage --> headerLogo
+    homePage --> statusStrip
+    homePage --> todayCard
+    homePage --> cooldownBanner
+    homePage --> nextTour
+    homePage --> flightBanner
+    homePage --> lifetime
+    homePage --> recent
+    homePage --> perfMini
+    homePage --> pendingHands
+    homePage --> newsSlot
+    homePage --> footer
+    homePage --> empty
+
+    statusStrip -.->|"emit('home_status_strip_kpi_click')"| tracker
+    todayCard -.->|"emit('home_today_warmup_start')"| tracker
+    cooldownBanner -.->|"emit('home_banner_dismiss')"| tracker
+
+    sidebar --> headerLogo
+    user -->|"FAB click"| miniChat
+
+    classDef new fill:#15a24e,stroke:#0d6e34,color:#fff
+    classDef existing fill:#1f2937,stroke:#374151,color:#e5e7eb
+    classDef external fill:#3b82f6,stroke:#1d4ed8,color:#fff
+
+    class homeRoute,newsRoute,headerLogo,statusStrip,todayCard,cooldownBanner,nextTour,flightBanner,lifetime,recent,perfMini,pendingHands,newsSlot,footer,empty new
+    class sidebar,miniChat,authMW,storage,tanstack,tracker,config,homePage existing
+    class user external
