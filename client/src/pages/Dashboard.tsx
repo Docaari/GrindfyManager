@@ -31,7 +31,6 @@ import {
 import type { DashboardFiltersState } from '@/components/dashboard/types';
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
 import { DashboardMetrics } from '@/components/dashboard/DashboardMetrics';
-import { BankrollWidget } from '@/components/bankroll/BankrollWidget';
 import { RoiByPlatformCard } from '@/components/dashboard/RoiByPlatformCard';
 import { TicketsWidget } from '@/components/dashboard/TicketsWidget';
 import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
@@ -469,18 +468,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Bankroll Widget (RF-09) — acima das metricas do Dashboard */}
-      <div className="mb-4" data-testid="dashboard-bankroll-widget">
-        <BankrollWidget />
-      </div>
-
-      {/* ROI por Plataforma (RF-7 wiring) — visualizacao consolidada por site */}
-      {user?.userPlatformId && (
-        <div className="mb-4" data-testid="dashboard-roi-by-platform">
-          <RoiByPlatformCard userId={user.userPlatformId} />
-        </div>
-      )}
-
       {/* Tickets Widget — Sprint Tickets-1 (RF-04) */}
       <div className="mb-4" data-testid="dashboard-tickets-widget">
         <TicketsWidget />
@@ -572,6 +559,13 @@ export default function Dashboard() {
               <TabPosition fieldAnalytics={fieldAnalytics} fieldLoading={fieldLoading} finalTableAnalytics={finalTableAnalytics} finalTableLoading={finalTableLoading} filters={filters} />
             )}
           </div>
+
+          {/* ROI por Plataforma — abaixo dos graficos. */}
+          {user?.userPlatformId && (
+            <div className="mt-6" data-testid="dashboard-roi-by-platform">
+              <RoiByPlatformCard userId={user.userPlatformId} />
+            </div>
+          )}
         </div>
       )}
     </div>
