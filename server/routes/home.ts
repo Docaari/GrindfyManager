@@ -198,12 +198,15 @@ async function timed<T>(
 
 function computeUserState(
   quickStats: { totalTournaments?: number; totalSessions?: number } | null,
+  walletsConfigured: boolean,
 ): 'empty' | 'power' {
-  if (!quickStats) return 'empty';
-  const tournaments = quickStats.totalTournaments ?? 0;
-  const sessions = quickStats.totalSessions ?? 0;
-  if (tournaments < 50 || sessions < 5) return 'empty';
-  return 'power';
+  const tournaments = quickStats?.totalTournaments ?? 0;
+  const sessions = quickStats?.totalSessions ?? 0;
+  // Power state = qualquer sinal de atividade real:
+  // CSV importado, sessao iniciada OU wallets configuradas.
+  // Empty state apenas para users 100% novos.
+  if (tournaments >= 1 || sessions >= 1 || walletsConfigured) return 'power';
+  return 'empty';
 }
 
 // =============================================================================
@@ -289,7 +292,8 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     const cool = cooldown as any;
     const flight = flightSeries as any;
 
-    const userState = computeUserState(qs);
+    const walletsConfigured = !!bank;
+    const userState = computeUserState(qs, walletsConfigured);
 
     // Status Strip
     const banca: BancaKpi | null = bank

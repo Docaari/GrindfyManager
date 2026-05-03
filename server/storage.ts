@@ -9442,9 +9442,23 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return null;
   }
 
-  async getCurrentBankroll(_userId: string): Promise<any> {
-    // Onda 1: stub. Sprint follow-up agrega wallets ativos.
-    return null;
+  async getCurrentBankroll(userId: string): Promise<any> {
+    // Onda 1 minimo: signal de "wallets configurados" para userState.
+    // Sprint follow-up agrega balances + FX + delta 7d via bankrollSnapshots.
+    try {
+      const count = await this.countActiveWalletsByUser(userId);
+      if (count === 0) return null;
+      return {
+        totalUsd: 0,
+        walletsCount: count,
+        bisAvailable: null,
+        deltaPct7d: null,
+        sparkline: [],
+      };
+    } catch (err) {
+      console.error('[storage.getCurrentBankroll] failed', err);
+      return null;
+    }
   }
 
   async getActiveCooldown(_userId: string): Promise<any> {

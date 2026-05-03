@@ -191,38 +191,47 @@ describe('GET /api/home/overview — response shape', () => {
 // =============================================================================
 
 describe('GET /api/home/overview — userState threshold (D7)', () => {
-  it('totalTournaments < 50 => userState=empty', async () => {
+  // D7 atualizado pos-QA founder 2026-05-03: empty state apenas para users
+  // 100% novos (sem qualquer atividade real). Qualquer um destes vira power:
+  // >=1 torneio importado, >=1 sessao OU wallets configuradas.
+  it('user 100% novo (zero atividade, zero wallets) => userState=empty', async () => {
     (storage.getQuickStats as any).mockResolvedValue({
-      totalTournaments: 10,
-      totalSessions: 10,
-      activeDays: 5,
+      totalTournaments: 0,
+      totalSessions: 0,
+      activeDays: 0,
       currentStreakDays: 0,
     });
+    (storage.getCurrentBankroll as any).mockResolvedValue(null);
     const req = makeReq();
     const res = makeRes();
     await handleHomeOverview(req, res);
     expect(res.body.userState).toBe('empty');
   });
 
-  it('totalSessions < 5 => userState=empty (mesmo com >50 torneios)', async () => {
+  it('qualquer torneio importado (>=1) => userState=power', async () => {
     (storage.getQuickStats as any).mockResolvedValue({
-      totalTournaments: 200,
-      totalSessions: 2,
-      activeDays: 10,
+      totalTournaments: 1,
+      totalSessions: 0,
+      activeDays: 1,
       currentStreakDays: 0,
     });
+    (storage.getCurrentBankroll as any).mockResolvedValue(null);
     const req = makeReq();
     const res = makeRes();
     await handleHomeOverview(req, res);
-    expect(res.body.userState).toBe('empty');
+    expect(res.body.userState).toBe('power');
   });
 
-  it('totalTournaments >=50 AND totalSessions >=5 => userState=power', async () => {
+  it('wallets configuradas (sem torneio/sessao) => userState=power', async () => {
     (storage.getQuickStats as any).mockResolvedValue({
-      totalTournaments: 60,
-      totalSessions: 10,
-      activeDays: 30,
-      currentStreakDays: 3,
+      totalTournaments: 0,
+      totalSessions: 0,
+      activeDays: 0,
+      currentStreakDays: 0,
+    });
+    (storage.getCurrentBankroll as any).mockResolvedValue({
+      totalUsd: 5000,
+      walletsCount: 3,
     });
     const req = makeReq();
     const res = makeRes();
@@ -317,10 +326,11 @@ describe('GET /api/home/overview — cache 30s per-userId', () => {
     await handleHomeOverview(reqA, resA);
     expect(resA.body.userState).toBe('power');
 
-    // User B tem 5 torneios — cache do A nao pode contaminar B
+    // User B 100% novo — cache do A nao pode contaminar B
     (storage.getQuickStats as any).mockResolvedValueOnce({
-      totalTournaments: 5, totalSessions: 1, activeDays: 1, currentStreakDays: 0,
+      totalTournaments: 0, totalSessions: 0, activeDays: 0, currentStreakDays: 0,
     });
+    (storage.getCurrentBankroll as any).mockResolvedValueOnce(null);
     const reqB = makeReq({ user: { userPlatformId: 'USER-B' } });
     const resB = makeRes();
     await handleHomeOverview(reqB, resB);
