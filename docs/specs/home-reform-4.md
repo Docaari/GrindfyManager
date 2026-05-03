@@ -30,8 +30,8 @@ Founder pediu explicitamente:
 | 6 | Performance abaixo de Sessoes (mesmo padrao) com empty states | Concluido (2026-05-03) — unificado com item 2 | UI/refactor | 1-2h |
 | 7 | Card Estudos: 3 stats foco do mes + temas linkados | Pendente | Feature complexa | 1-2 dias |
 | 8 | Remover card "4 torneios, 2 sessoes, 1 dia ativo" | Concluido (2026-05-03) | UI fix | 15min |
-| 9 | Card "Ultimas Sessoes" abaixo de Sessoes (acima Dashboard) | Pendente | Reorder | 30min |
-| 10 | Card Dashboard com grafico evolucao do mes selecionado abaixo | Pendente | Feature | 2h |
+| 9 | Card "Ultimas Sessoes" abaixo de Sessoes (acima Dashboard) | Concluido (2026-05-03) | Reorder | 30min |
+| 10 | Card Dashboard com grafico evolucao do mes selecionado abaixo | Concluido (2026-05-03) | Feature | 2h |
 | 11 | News: cards nao aparecem, links "Link nao encontrado" | Concluido (2026-05-03) | Bug fix | 1h |
 
 ---
@@ -271,6 +271,10 @@ Layout vertical com 3 entradas, cada uma:
 
 **Arquivo:** `client/src/pages/Home.tsx` — reorganizar JSX.
 
+#### Resolucao (2026-05-03)
+
+`RecentSessionsList` movido para entre `SessionsMonthCard` e `DashboardMonthCard` na zona Performance de `Home.tsx`. Antes vivia no fim da zona, depois do PerformanceMini. Sem novos testes (reorder JSX); regressao home cobre rendering.
+
 ---
 
 ### Item 10 — Grafico evolucao abaixo do Card Dashboard
@@ -283,6 +287,15 @@ Layout vertical com 3 entradas, cada uma:
 - Recharts LineChart, sparkline grande (~280px altura)
 
 **Backend:** GET `/api/home/evolution?month=2026-05` retorna `{ days: [{ date, profit, bankroll }] }`.
+
+#### Resolucao (2026-05-03)
+
+- **Backend:** novo endpoint `GET /api/home/evolution?month=YYYY-MM` (default mes corrente UTC). Auth required. Validacao de format -> 400 em payloads invalidos.
+- **Storage:** `getDashboardDailyAggregate(userId, { monthStart, monthEnd })` agrega `tournaments WHERE grind_session_id IS NULL AND bagged_at IS NULL` por (UTC date, site). Mesma fonte do `DashboardMonthCard` — CLAUDE.md §6.1.
+- **Service:** `services/homeEvolution.ts` aplica FX→USD via `fxResolver` + `getCurrencyForSite`, gera serie continua dia-a-dia (dias sem volume herdam cumulativo do anterior). Mes corrente clampa em hoje UTC; mes passado cobre completo; mes futuro retorna serie vazia.
+- **Frontend:** `MonthEvolutionChart` (Recharts LineChart 280px). Linha unica = profit acumulado USD. Cor verde/rose conforme sinal do total. Tooltip custom mostra dia + cumulativo + profit do dia + count torneios. Empty state "Sem dados upados esse mes" quando todos os dias com count=0. Render em `Home.tsx` zona Performance, abaixo do `DashboardMonthCard`.
+- **Sync com seletor de mes:** prop `month` aceita override; default = mes corrente UTC (mesmo do `DashboardMonthCard`). Seletor compartilhado fica para iteracao futura (ainda nao ha UI de selecao de mes na home).
+- **Tests:** `tests/services/homeEvolution.test.ts` (8/8) + `client/src/components/home/__tests__/MonthEvolutionChart.test.tsx` (4/4). Zero regressao home (235/237 verde, 2 fails NewsSlot pre-existing baseline).
 
 ---
 

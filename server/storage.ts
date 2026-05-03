@@ -771,6 +771,18 @@ export interface IStorage {
     profitNative: string;
   }>>;
 
+  // Sprint home-reform-4 item 10 — Dashboard daily aggregate (evolution chart)
+  getDashboardDailyAggregate(
+    userId: string,
+    opts: { monthStart: Date; monthEnd: Date },
+  ): Promise<Array<{
+    date: string;
+    site: string;
+    count: number;
+    investedNative: string;
+    profitNative: string;
+  }>>;
+
   // Sprint F3 — Stats Analyzer (ADR-051)
   getHudLayouts(userId: string): Promise<HudLayout[]>;
   getHudLayout(id: string, userId: string): Promise<HudLayout | undefined>;
@@ -6531,6 +6543,60 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .groupBy(tournaments.site);
 
     return rows.map((r: any) => ({
+      site: String(r.site ?? ''),
+      count: Number(r.count) || 0,
+      investedNative: String(r.investedNative ?? '0'),
+      profitNative: String(r.profitNative ?? '0'),
+    }));
+  }
+
+  // ============================================================================
+  // Sprint home-reform-4 item 10 — Daily aggregate (evolution chart)
+  // ============================================================================
+  //
+  // Spec: Docs/specs/home-reform-4.md item 10. Endpoint /api/home/evolution
+  // exibe grafico de profit acumulado por dia do mes selecionado. Mesma fonte
+  // do DashboardMonthCard (CLAUDE.md §6.1 — `tournaments WHERE
+  // grind_session_id IS NULL`). Aqui agrupado por (data UTC, site) — service
+  // aplica FX→USD por site e acumula sequencialmente.
+  async getDashboardDailyAggregate(
+    userId: string,
+    opts: { monthStart: Date; monthEnd: Date },
+  ): Promise<Array<{
+    date: string;
+    site: string;
+    count: number;
+    investedNative: string;
+    profitNative: string;
+  }>> {
+    const conditions = [
+      eq(tournaments.userId, userId),
+      isNull(tournaments.grindSessionId),
+      isNull(tournaments.baggedAt),
+      gte(tournaments.datePlayed, opts.monthStart),
+      lt(tournaments.datePlayed, opts.monthEnd),
+    ];
+
+    const dayExpr = sql<string>`TO_CHAR(${tournaments.datePlayed} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
+
+    const rows = await db
+      .select({
+        date: dayExpr,
+        site: tournaments.site,
+        count: sql<number>`COUNT(DISTINCT COALESCE(${tournaments.seriesId}, ${tournaments.id}))::int`,
+        investedNative: sql<string>`COALESCE(SUM(
+          CAST(${tournaments.buyIn} AS DECIMAL)
+          + COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL)
+          + CASE WHEN ${tournaments.addOnTaken} = true THEN COALESCE(CAST(${tournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END
+        ), 0)::text`,
+        profitNative: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)::text`,
+      })
+      .from(tournaments)
+      .where(and(...conditions))
+      .groupBy(dayExpr, tournaments.site);
+
+    return rows.map((r: any) => ({
+      date: String(r.date ?? ''),
       site: String(r.site ?? ''),
       count: Number(r.count) || 0,
       investedNative: String(r.investedNative ?? '0'),

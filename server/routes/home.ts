@@ -23,6 +23,7 @@ import { handleTournamentSelector } from './tournament-selector';
 import { computeHeuristics } from '../services/homeHeuristics';
 import { getSessionsMonthSummary } from '../services/sessionsMonth';
 import { getDashboardMonthSummary } from '../services/dashboardMonth';
+import { getHomeEvolution, parseMonthIso } from '../services/homeEvolution';
 
 // =============================================================================
 // Cache in-memory per-userId — D4 / ADR-102 §2.3
@@ -770,6 +771,35 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
   }
 }
 
+// =============================================================================
+// Sprint home-reform-4 item 10 — /api/home/evolution
+// =============================================================================
+//
+// Spec: Docs/specs/home-reform-4.md item 10. Grafico evolucao do mes
+// selecionado abaixo do DashboardMonthCard.
+// Query: ?month=YYYY-MM (default mes corrente UTC). Mes invalido -> 400.
+export async function handleHomeEvolution(req: any, res: Response): Promise<void> {
+  try {
+    const userId = req?.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+    const monthRaw = typeof req?.query?.month === 'string' ? req.query.month : null;
+    if (monthRaw && !parseMonthIso(monthRaw)) {
+      res.status(400).json({ message: 'Invalid month format. Expected YYYY-MM.' });
+      return;
+    }
+    const summary = await getHomeEvolution(userId, monthRaw);
+    res.setHeader('Cache-Control', 'private, max-age=30');
+    res.status(200).json(summary);
+  } catch (err) {
+    console.error('[home/evolution] fatal failure:', err);
+    res.status(500).json({ message: 'Internal error' });
+  }
+}
+
 export function registerHomeRoutes(app: Express): void {
   app.get('/api/home/overview', requireAuth, handleHomeOverview);
+  app.get('/api/home/evolution', requireAuth, handleHomeEvolution);
 }

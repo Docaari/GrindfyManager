@@ -49,6 +49,8 @@ import NewsFeed from '@/components/home/NewsFeed';
 import SessionsMonthCard from '@/components/home/SessionsMonthCard';
 // Sprint home-reform-4 item 2+6.
 import DashboardMonthCard from '@/components/home/DashboardMonthCard';
+// Sprint home-reform-4 item 10.
+import MonthEvolutionChart from '@/components/home/MonthEvolutionChart';
 
 import type { NewsItem } from '@shared/types/news';
 
@@ -371,8 +373,12 @@ const Home: React.FC = () => {
               <ZoneHeading>Performance</ZoneHeading>
               {/* home-reform-4 item 1: Card Sessoes mes atual full-width */}
               <SessionsMonthCard data={data.sessionsMonth ?? null} />
+              {/* home-reform-4 item 9: RecentSessionsList entre Sessoes e Dashboard */}
+              <RecentSessionsList data={data.recentSessions ?? []} />
               {/* home-reform-4 item 2+6: Card Dashboard mes atual (uploads/historico) */}
               <DashboardMonthCard data={data.dashboardMonth ?? null} />
+              {/* home-reform-4 item 10: grafico evolucao mes selecionado */}
+              <MonthEvolutionChart />
               <PerformanceMini data={data.performance} />
               {perfClusterEmpty ? (
                 <EmptyPerformanceCluster
@@ -384,7 +390,6 @@ const Home: React.FC = () => {
                   <VarianceCard data={data.variance ?? null} />
                 </div>
               )}
-              <RecentSessionsList data={data.recentSessions ?? []} />
             </section>
 
             {/* Zona 4 — Sinal Externo */}
