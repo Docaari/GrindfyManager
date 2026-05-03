@@ -162,8 +162,8 @@ export function ArticleIframe({
       srcDoc={srcdoc}
       title={`Aula: ${bundleQuery.data?.meta.title ?? ""}`}
       aria-label={bundleQuery.data?.meta.title ?? "Artigo da aula"}
-      className="w-full border-0 bg-white rounded-lg"
-      style={{ height: `${iframeHeight}px` }}
+      className="w-full border-0 rounded-lg"
+      style={{ height: `${iframeHeight}px`, background: "#070a12" }}
     />
   );
 }

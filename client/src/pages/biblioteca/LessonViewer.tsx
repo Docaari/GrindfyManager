@@ -502,10 +502,14 @@ export function LessonViewer({
   const watermarkText = userPlatformId ?? "";
   const watermarkInstances = Array.from({ length: 6 }, (_, i) => i);
 
-  // Sprint Biblioteca-2 / D6: grid 2-col layout quando exatamente 2 formatos
-  // disponiveis E viewport >= lg (1024px). Mobile sempre tabs single-panel.
   const formatCount = availableFormats.length;
-  const useTwoColLayout = formatCount === 2;
+  const useTwoColLayout = false;
+  // Stack vertical: render todos formatos disponiveis em sequencia (podcast/video
+  // em cima, artigo full-width abaixo). Founder feedback 2026-05-03.
+  const stackedFormats = availableFormats.length > 1 && availableFormats.includes("article");
+  const renderFormats: FormatTab[] = stackedFormats
+    ? (availableFormats.filter((f) => f !== "article").concat("article") as FormatTab[])
+    : ([activeTab].filter(Boolean) as FormatTab[]);
 
   // Sprint Bloco-A-Polish / RF-08: breadcrumb sticky no topo.
   const courseTitle = courseQuery.data?.title ?? "";
@@ -622,17 +626,11 @@ export function LessonViewer({
         </p>
       )}
 
-      {/* Sprint Biblioteca-2 / D6: grid 2-col em desktop quando exatamente 2 formatos. */}
       <div
-        data-testid={useTwoColLayout ? "lesson-format-grid" : undefined}
-        className={
-          useTwoColLayout ? "lg:grid lg:grid-cols-2 lg:gap-6 space-y-4 lg:space-y-0" : "space-y-4"
-        }
+        data-testid={stackedFormats ? "lesson-format-stack" : undefined}
+        className="space-y-6"
       >
-        {/* Em layout 2-col, ambos panels ficam visiveis simultaneamente em lg+;
-            em mobile (<lg) fallback para o ativo via tabs. */}
-        {(useTwoColLayout ? availableFormats : ([activeTab].filter(Boolean) as FormatTab[])).map(
-          (f) => {
+        {renderFormats.map((f) => {
             if (f === "video" && lesson.formats.video) {
               return (
                 <div
@@ -766,8 +764,7 @@ export function LessonViewer({
               );
             }
             return null;
-          },
-        )}
+          })}
       </div>
 
       {/* F-A4.8: progress label above bar - includes max% + which format owns it. */}

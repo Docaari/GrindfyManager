@@ -194,8 +194,8 @@ describe('LessonViewer — D7 Tab Video totalmente escondida quando ausente', ()
 // D6: Grid 2-col quando exatamente 2 formatos AND viewport >= lg
 // ---------------------------------------------------------------------------
 
-describe('LessonViewer — D6 grid 2-col em desktop com 2 formatos', () => {
-  it('Bloco A (article + podcast) em viewport >= lg -> container com classes lg:grid lg:grid-cols-2', async () => {
+describe('LessonViewer — Bloco A stacked layout (founder feedback 2026-05-03)', () => {
+  it('Bloco A (article + podcast) -> stack vertical, article DEPOIS de podcast (full-width)', async () => {
     setViewportLg(true);
     setLessonResponse(LESSON_BLOCO_A);
     renderWithClient(
@@ -206,11 +206,14 @@ describe('LessonViewer — D6 grid 2-col em desktop com 2 formatos', () => {
       />
     );
     await waitFor(() => screen.getByTestId('lesson-viewer'));
-    // Container do layout 2-col deve existir com data-testid lesson-format-grid OU
-    // classe Tailwind detectavel
     const viewer = screen.getByTestId('lesson-viewer');
-    const gridContainer = viewer.querySelector('[data-testid="lesson-format-grid"]') ?? viewer.querySelector('.lg\\:grid-cols-2');
-    expect(gridContainer).not.toBeNull();
+    const stack = viewer.querySelector('[data-testid="lesson-format-stack"]');
+    expect(stack).not.toBeNull();
+    const podcast = viewer.querySelector('[data-testid="lesson-format-panel-podcast"]');
+    const article = viewer.querySelector('[data-testid="lesson-format-panel-article"]');
+    expect(podcast).not.toBeNull();
+    expect(article).not.toBeNull();
+    expect(podcast!.compareDocumentPosition(article!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('Bloco A em viewport < lg -> mobile fallback tabs (sem grid)', async () => {
