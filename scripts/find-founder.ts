@@ -29,6 +29,45 @@ async function main(): Promise<void> {
     const userId = userRes.rows[0].user_platform_id;
     console.log(`founder userId = ${userId}`);
 
+    // === FIX profile_states ===
+    // Founder reportou que torneios sumiram da grade-planner. Causa:
+    // getSessionTournamentsByDay default activeProfile='A' quando profile_states
+    // nao tem row pra (user, dow). Planneds founder estao em profile='B'.
+    // Solucao: garantir que profile_states tem entries pra todos os 7 dias = 'B'.
+    const { nanoid: nanoidFix } = await import("nanoid");
+    for (let dow = 0; dow < 7; dow++) {
+      const exists = await client.query(
+        `SELECT id FROM profile_states WHERE user_id = $1 AND day_of_week = $2 LIMIT 1;`,
+        [userId, dow],
+      );
+      if (exists.rows.length === 0) {
+        const psId = nanoidFix(21);
+        await client.query(
+          `INSERT INTO profile_states (id, user_id, day_of_week, active_profile, created_at, updated_at)
+           VALUES ($1, $2, $3, 'B', NOW(), NOW());`,
+          [psId, userId, dow],
+        );
+        console.log(`profile_states INSERTED dow=${dow} active_profile=B (id=${psId})`);
+      } else {
+        console.log(`profile_states OK dow=${dow}`);
+      }
+    }
+
+    // === STEP 0a: REVERTER status='completed' nos Day 1 (founder esperava 'upcoming') ===
+    // Founder usa grade-planner pra ver torneios planejados. status='completed'
+    // pode disparar comportamento diferente (filter, badge, etc) na UI.
+    // Reverter pra 'upcoming' e usar bagged_at no tournament historico (ja feito).
+    const revertCompleted = await client.query(
+      `UPDATE planned_tournaments
+          SET status = 'upcoming', updated_at = NOW()
+        WHERE user_id = $1 AND day_of_week = 6 AND status = 'completed'
+        RETURNING id, name;`,
+      [userId],
+    );
+    if (revertCompleted.rowCount && revertCompleted.rowCount > 0) {
+      console.log(`reverted ${revertCompleted.rowCount} planneds Day 1 status -> upcoming`);
+    }
+
     // === STEP 0: Marcar planneds Day 1 originais como COMPLETED + linkar a serie ===
     // Founder feedback 2026-05-03: vê 4 flights jogados sábado dow=6 ainda com
     // status=upcoming. Atualiza pra status=completed + seriesId pra refletir
@@ -48,7 +87,7 @@ async function main(): Promise<void> {
       const seriesId = seriesQ.rows[0].id;
       const upd = await client.query(
         `UPDATE planned_tournaments
-            SET status = 'completed', series_id = $1, updated_at = NOW()
+            SET series_id = $1, updated_at = NOW()
           WHERE user_id = $2
             AND name = $3
             AND day_of_week = 6
@@ -57,7 +96,7 @@ async function main(): Promise<void> {
         [seriesId, userId, day1NamePattern],
       );
       if (upd.rowCount && upd.rowCount > 0) {
-        console.log(`marked ${upd.rowCount} Day 1 planneds COMPLETED for ${day1NamePattern}:`);
+        console.log(`linked ${upd.rowCount} Day 1 planneds to series ${day1NamePattern}:`);
         upd.rows.forEach((r) =>
           console.log(`  ${r.id} | ${r.name} | profile=${r.profile} | dow=${r.day_of_week} time=${r.time} | status=${r.status}`),
         );
