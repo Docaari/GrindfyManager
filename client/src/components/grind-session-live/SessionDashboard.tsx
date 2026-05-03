@@ -189,10 +189,22 @@ export default function SessionDashboard({
 
           <div className="metric-card metric-roi">
             <div className="metric-icon">{'\u{1F4C8}'}</div>
-            <div className="metric-value" style={{'--value-color': stats.roi >= 0 ? '#00ff88' : '#ff4444'} as React.CSSProperties}>
-              {stats.roi.toFixed(1)}%
-            </div>
-            <div className="metric-label">ROI%</div>
+            {/* Sprint Flight-1 RF-15: stats.roi pode ser undefined quando
+                colapso de combined-stack ocorreu — fallback profit/invested. */}
+            {(() => {
+              const fallbackRoi = (stats.totalInvestido > 0
+                ? (stats.profit / stats.totalInvestido) * 100
+                : 0);
+              const roiValue = stats.roi ?? fallbackRoi;
+              return (
+                <>
+                  <div className="metric-value" style={{'--value-color': roiValue >= 0 ? '#00ff88' : '#ff4444'} as React.CSSProperties}>
+                    {roiValue.toFixed(1)}%
+                  </div>
+                  <div className="metric-label">ROI%</div>
+                </>
+              );
+            })()}
           </div>
 
           <div className="metric-card metric-fts">

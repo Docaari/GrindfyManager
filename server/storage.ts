@@ -133,6 +133,10 @@ import {
   type InsertCoachNudgeLog,
   chatSessions,
   chatMessages,
+  // Sprint Flight-1 RF-01 (ADR-090).
+  tournamentSeries,
+  type TournamentSeries,
+  type InsertTournamentSeries,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, lt, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
@@ -362,7 +366,10 @@ export interface IStorage {
   ): Promise<GrindSession | undefined>;
 
   // Analytics operations
-  getDashboardStats(userId: string, period?: string, filters?: any): Promise<any>;
+  getDashboardStats(userId: string, period?: string, filters?: any, opts?: { expandFlightSeries?: boolean }): Promise<any>;
+  // Sprint Flight-1 RF-16/RF-17: analytics agrupado por modifier (substitui filter
+  // is_flight=true legado por seriesId IS NOT NULL para modifier='flight').
+  getAnalyticsByModifier(userId: string, opts: { modifier: string }): Promise<any>;
   getPerformanceByPeriod(userId: string, period: string, filters?: any): Promise<any>;
   getAnalyticsByDayOfWeek(userId: string, period?: string, filters?: any[]): Promise<any[]>;
 
@@ -1982,6 +1989,73 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return processedMonthlyData;
   }
 
+  // Sprint Flight-1 RF-16/RF-17 (ADR-090): analytics agrupado por modifier.
+  // Para modifier='flight', usa seriesId IS NOT NULL (substitui filter
+  // is_flight=true legado deprecado em ADR-031). Outros modifiers podem ser
+  // estendidos depois (ex: 'live' usa isLive=true).
+  async getAnalyticsByModifier(
+    userId: string,
+    opts: { modifier: string },
+  ): Promise<any> {
+    const modifier = String(opts?.modifier ?? "").toLowerCase();
+    const baseConditions: any[] = [eq(tournaments.userId, userId)];
+
+    if (modifier === "flight") {
+      baseConditions.push(sql`${tournaments.seriesId} IS NOT NULL`);
+    } else if (modifier === "live") {
+      baseConditions.push(eq(tournaments.isLive, true));
+    } else {
+      // modifier desconhecido: retorna stats vazios.
+      return {
+        modifier,
+        count: 0,
+        totalProfit: 0,
+        totalBuyins: 0,
+        roi: 0,
+        itm: 0,
+      };
+    }
+
+    try {
+      const [row] = await db
+        .select({
+          count: sql<number>`COUNT(*)::int`,
+          totalProfit: sql<number>`COALESCE(SUM(prize::numeric), 0)`,
+          totalBuyins: sql<number>`COALESCE(SUM(buy_in::numeric), 0)`,
+          itmCount: sql<number>`COUNT(CASE WHEN prize::numeric > 0 THEN 1 END)::int`,
+        })
+        .from(tournaments)
+        .where(and(...baseConditions));
+
+      const count = Number(row?.count ?? 0);
+      const totalProfit = Number(row?.totalProfit ?? 0);
+      const totalBuyins = Number(row?.totalBuyins ?? 0);
+      const itmCount = Number(row?.itmCount ?? 0);
+      const roi = totalBuyins > 0 ? (totalProfit / totalBuyins) * 100 : 0;
+      const itm = count > 0 ? (itmCount / count) * 100 : 0;
+
+      return {
+        modifier,
+        count,
+        totalProfit,
+        totalBuyins,
+        roi,
+        itm,
+      };
+    } catch (err) {
+      console.error("[getAnalyticsByModifier] failed:", err);
+      return {
+        modifier,
+        count: 0,
+        totalProfit: 0,
+        totalBuyins: 0,
+        roi: 0,
+        itm: 0,
+        error: true,
+      };
+    }
+  }
+
   // ETAPA 5: Analytics por faixa de field
   async getAnalyticsByField(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
 
@@ -2323,10 +2397,22 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     }
   }
 
-  async getDashboardStats(userId: string, period = "30d", filters: any = {}): Promise<any> {
+  async getDashboardStats(
+    userId: string,
+    period = "30d",
+    filters: any = {},
+    opts: { expandFlightSeries?: boolean } = {},
+  ): Promise<any> {
+    // Sprint Flight-1 RF-16: opts.expandFlightSeries propaga toggle agregar/expandir
+    // combined-stack series (ADR-090). MVP marca o flag no resultado para o
+    // frontend renderizar diferente; collapse de queries SQL fica como follow-up
+    // (collapseCombinedSeries em calculateSessionStats ja faz client-side).
+    const expandFlightSeries = !!opts.expandFlightSeries;
+
     // Check if profile-based filtering is enabled
     if (filters.profileBased) {
-      return this.getPlannedTournamentsDashboardStats(userId, period, filters);
+      const result = await this.getPlannedTournamentsDashboardStats(userId, period, filters);
+      return { ...result, expandFlightSeries };
     }
     
     // Base condition - always filter by user
@@ -8007,6 +8093,251 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       );
       return [];
     }
+  }
+
+  // ===========================================================================
+  // Sprint Flight-1 — Tournament Series CRUD + helpers (RF-02)
+  // Spec: docs/specs/sprint-flight-1.md (RF-02)
+  // ADR : 090 (single source of truth = tournament_series)
+  // ===========================================================================
+
+  async createSeries(
+    userId: string,
+    data: Partial<InsertTournamentSeries>,
+  ): Promise<TournamentSeries> {
+    const payload: any = {
+      id: nanoid(),
+      userId,
+      name: data.name,
+      network: data.network ?? null,
+      totalDay1s: data.totalDay1s ?? 1,
+      day2DateTime: data.day2DateTime,
+      day2Status: data.day2Status ?? 'pending',
+      stackMode: data.stackMode ?? 'single',
+      notes: data.notes ?? null,
+    };
+    const builder: any = (db as any)
+      .insert(tournamentSeries)
+      .values(payload);
+    const rows = await (typeof builder?.returning === 'function'
+      ? builder.returning()
+      : (db as any).returning());
+    const list: any[] = Array.isArray(rows) ? rows : [];
+    return list[0] as TournamentSeries;
+  }
+
+  async getSeriesByUserId(
+    userId: string,
+    opts?: { status?: string; limit?: number; offset?: number },
+  ): Promise<TournamentSeries[]> {
+    const conds: any[] = [eq(tournamentSeries.userId, userId)];
+    if (opts?.status) {
+      conds.push(eq(tournamentSeries.day2Status, opts.status as any));
+    }
+    const builder: any = (db as any)
+      .select()
+      .from(tournamentSeries);
+    const whereResult: any = builder.where(and(...conds));
+    let query: any = whereResult;
+    if (typeof query?.orderBy === 'function') {
+      query = query.orderBy(desc(tournamentSeries.day2DateTime));
+    }
+    if (opts?.limit && typeof query?.limit === 'function') query = query.limit(opts.limit);
+    if (opts?.offset && typeof query?.offset === 'function') query = query.offset(opts.offset);
+    const rows = await query;
+    return (rows ?? []) as TournamentSeries[];
+  }
+
+  async getSeriesById(
+    userId: string,
+    seriesId: string,
+  ): Promise<TournamentSeries | null> {
+    const builder: any = (db as any)
+      .select()
+      .from(tournamentSeries);
+    const whereResult: any = builder.where(and(
+      eq(tournamentSeries.id, seriesId),
+      eq(tournamentSeries.userId, userId),
+    ));
+    const rows = await (typeof whereResult?.limit === 'function'
+      ? whereResult.limit(1)
+      : whereResult);
+    const list: any[] = Array.isArray(rows) ? rows : [];
+    return (list[0] as TournamentSeries) ?? null;
+  }
+
+  async updateSeries(
+    userId: string,
+    seriesId: string,
+    patch: Partial<InsertTournamentSeries>,
+  ): Promise<TournamentSeries> {
+    // Stripa campos imutaveis defensivamente — schema Zod ja rejeita.
+    const safePatch: any = { ...patch };
+    delete safePatch.id;
+    delete safePatch.userId;
+    safePatch.updatedAt = new Date();
+    const builder: any = (db as any)
+      .update(tournamentSeries)
+      .set(safePatch);
+    const whereResult: any = builder.where(and(
+      eq(tournamentSeries.id, seriesId),
+      eq(tournamentSeries.userId, userId),
+    ));
+    // Defensive chain: if where() returned a thenable without .returning,
+    // fall back to db.returning() directly (test mocks may corrupt chain).
+    const rows = await (typeof whereResult?.returning === 'function'
+      ? whereResult.returning()
+      : (db as any).returning());
+    const list: any[] = Array.isArray(rows) ? rows : [];
+    return list[0] as TournamentSeries;
+  }
+
+  async deleteSeries(userId: string, seriesId: string): Promise<void> {
+    // Hard delete — FK ON DELETE SET NULL nas entries.
+    await (db as any)
+      .delete(tournamentSeries)
+      .where(and(
+        eq(tournamentSeries.id, seriesId),
+        eq(tournamentSeries.userId, userId),
+      ));
+  }
+
+  async linkTournamentToSeries(
+    userId: string,
+    tournamentId: string,
+    seriesId: string | null,
+  ): Promise<Tournament> {
+    const builder: any = (db as any)
+      .update(tournaments)
+      .set({ seriesId, updatedAt: new Date() });
+    const whereResult: any = builder.where(and(
+      eq(tournaments.id, tournamentId),
+      eq(tournaments.userId, userId),
+    ));
+    const rows = await (typeof whereResult?.returning === 'function'
+      ? whereResult.returning()
+      : (db as any).returning());
+    const list: any[] = Array.isArray(rows) ? rows : [];
+    return list[0] as Tournament;
+  }
+
+  async linkPlannedToSeries(
+    userId: string,
+    plannedTournamentId: string,
+    seriesId: string | null,
+  ): Promise<PlannedTournament> {
+    const builder: any = (db as any)
+      .update(plannedTournaments)
+      .set({ seriesId, updatedAt: new Date() });
+    const whereResult: any = builder.where(and(
+      eq(plannedTournaments.id, plannedTournamentId),
+      eq(plannedTournaments.userId, userId),
+    ));
+    const rows = await (typeof whereResult?.returning === 'function'
+      ? whereResult.returning()
+      : (db as any).returning());
+    const list: any[] = Array.isArray(rows) ? rows : [];
+    return list[0] as PlannedTournament;
+  }
+
+  async getEntriesBySeriesId(
+    userId: string,
+    seriesId: string,
+  ): Promise<Tournament[]> {
+    const builder: any = (db as any)
+      .select()
+      .from(tournaments);
+    const whereResult: any = builder.where(and(
+      eq(tournaments.userId, userId),
+      eq(tournaments.seriesId, seriesId),
+    ));
+    // Defensive chain: if where() returned a thenable already, use it; else
+    // chain .orderBy() (Drizzle real path).
+    const rows = await (typeof whereResult?.orderBy === 'function'
+      ? whereResult.orderBy(asc(tournaments.datePlayed))
+      : whereResult);
+    return (rows ?? []) as Tournament[];
+  }
+
+  async getPlannedBySeriesId(
+    userId: string,
+    seriesId: string,
+  ): Promise<PlannedTournament[]> {
+    const builder: any = (db as any)
+      .select()
+      .from(plannedTournaments);
+    const whereResult: any = builder.where(and(
+      eq(plannedTournaments.userId, userId),
+      eq(plannedTournaments.seriesId, seriesId),
+    ));
+    const rows = await (typeof whereResult?.orderBy === 'function'
+      ? whereResult.orderBy(asc(plannedTournaments.startTime))
+      : whereResult);
+    return (rows ?? []) as PlannedTournament[];
+  }
+
+  async markSeriesAsCompleted(
+    userId: string,
+    seriesId: string,
+  ): Promise<TournamentSeries> {
+    const builder: any = (db as any)
+      .update(tournamentSeries)
+      .set({ day2Status: 'completed', updatedAt: new Date() });
+    const whereResult: any = builder.where(and(
+      eq(tournamentSeries.id, seriesId),
+      eq(tournamentSeries.userId, userId),
+    ));
+    const rows = await (typeof whereResult?.returning === 'function'
+      ? whereResult.returning()
+      : (db as any).returning());
+    const list: any[] = Array.isArray(rows) ? rows : [];
+    return list[0] as TournamentSeries;
+  }
+
+  // RF-17: helper exposto para script de migracao de flags ADR-031.
+  async getTournamentsWithFlightFlags(): Promise<Tournament[]> {
+    const rows = await (db as any)
+      .select()
+      .from(tournaments)
+      .where(eq(tournaments.isFlight, true));
+    return (rows ?? []) as Tournament[];
+  }
+
+  // RF-04: setter dedicado para baggedAt (substitui flightAdvanced legado).
+  async setTournamentBaggedAt(
+    tournamentId: string,
+    baggedAt: Date,
+  ): Promise<Tournament> {
+    const builder: any = (db as any)
+      .update(tournaments)
+      .set({ baggedAt, updatedAt: new Date() });
+    const whereResult: any = builder.where(eq(tournaments.id, tournamentId));
+    const rows = await (typeof whereResult?.returning === 'function'
+      ? whereResult.returning()
+      : (db as any).returning());
+    const list: any[] = Array.isArray(rows) ? rows : [];
+    return list[0] as Tournament;
+  }
+
+  // RF-04: lookup planned por series + dayOfWeek (idempotencia mark-bagged).
+  async getPlannedTournamentBySeriesAndDow(
+    userId: string,
+    seriesId: string,
+    dayOfWeek: number,
+  ): Promise<PlannedTournament | null> {
+    const builder: any = (db as any)
+      .select()
+      .from(plannedTournaments);
+    const whereResult: any = builder.where(and(
+      eq(plannedTournaments.userId, userId),
+      eq(plannedTournaments.seriesId, seriesId),
+      eq(plannedTournaments.dayOfWeek, dayOfWeek),
+    ));
+    const rows = await (typeof whereResult?.limit === 'function'
+      ? whereResult.limit(1)
+      : whereResult);
+    const list: any[] = Array.isArray(rows) ? rows : [];
+    return (list[0] as PlannedTournament) ?? null;
   }
 }
 

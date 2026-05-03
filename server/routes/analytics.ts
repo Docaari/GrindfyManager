@@ -47,7 +47,34 @@ export async function handlePlayerBundle(req: PlayerBundleRequest): Promise<any>
   };
 }
 
+// =============================================================================
+// Sprint Flight-1 RF-16 + RF-17: handleByModifier — substitui filter
+// `is_flight=true` (deprecado ADR-031) por `seriesId IS NOT NULL` (ADR-090).
+// =============================================================================
+export async function handleByModifier(req: any, res: any): Promise<void> {
+  try {
+    const userId = req?.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const modifier = String(req?.query?.modifier ?? "");
+    const result = await (storage as any).getAnalyticsByModifier(userId, {
+      modifier,
+      // Implementer nota (ADR-090): para modifier='flight', a query interna
+      // usa WHERE seriesId IS NOT NULL (substitui is_flight=true legado).
+    });
+    res.status(200).json(result ?? []);
+  } catch (err) {
+    console.error("[handleByModifier] failed:", err);
+    res.status(500).json({ message: "Failed to fetch analytics" });
+  }
+}
+
 export function registerAnalyticsRoutes(app: Express): void {
+  // Sprint Flight-1 RF-16/RF-17: substitui filter is_flight=true legado por seriesId IS NOT NULL.
+  app.get('/api/analytics/by-modifier', requireAuth, handleByModifier);
+
   // Analytics dashboard stats endpoint (frontend compatibility)
   app.get('/api/analytics/dashboard-stats', requireAuth, async (req: any, res) => {
     try {

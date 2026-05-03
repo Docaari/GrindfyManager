@@ -139,7 +139,7 @@ erDiagram
         boolean addon_taken "default: false NOT NULL — ADR-014"
         boolean allows_reentry "default: false NOT NULL — ADR-014"
         integer max_reentries "nullable (null=ilimitado) — ADR-014"
-        boolean is_flight "default: false NOT NULL — ADR-031 modificador ortogonal"
+        boolean is_flight "DEPRECATED Sprint Flight-1 — sera removida via migration 0030 (ADR-090)"
         boolean is_live "default: false NOT NULL — ADR-031 modificador ortogonal"
         varchar satellite_reward_type "nullable ADR-031 — ticket/package/cash/mixed"
         decimal satellite_ticket_value "nullable USD — quando rewardType=ticket ou mixed"
@@ -147,9 +147,11 @@ erDiagram
         varchar satellite_target_name "nullable — fallback texto livre"
         decimal satellite_extra_cash "nullable USD — premio cash extra (hibrido)"
         boolean entered_via_satellite "default: false NOT NULL — flag para ROI agregado"
-        varchar flight_day "nullable — 1A/1B/Final/Day 2 regex validado"
-        varchar flight_parent_id FK "nullable references tournaments.id (self-FK soft)"
-        boolean flight_advanced "nullable — true=avancou, false=eliminado, null se Day Final"
+        varchar flight_day "DEPRECATED Sprint Flight-1 — sera removida via migration 0030 (ADR-090)"
+        varchar flight_parent_id FK "DEPRECATED Sprint Flight-1 — sera removida via migration 0030 (ADR-090)"
+        boolean flight_advanced "DEPRECATED Sprint Flight-1 — substituida por bagged_at (ADR-090)"
+        varchar series_id FK "NEW Sprint Flight-1 — references tournament_series.id ON DELETE SET NULL (ADR-090)"
+        timestamp bagged_at "NEW Sprint Flight-1 — substitui flight_advanced=true; preenchido quando founder marca Day 1 bagged (ADR-090)"
         decimal package_buy_in "nullable USD — componente buy-in do pacote (live)"
         decimal package_accommodation "nullable USD — hospedagem"
         decimal package_travel "nullable USD — voo/transporte"
@@ -190,12 +192,61 @@ erDiagram
         timestamp upload_date "defaultNow"
     }
 
+    %% ===== Sprint Flight-1: Tournament Series (ADR-090, ADR-091) =====
+    %% Single source of truth para multi-flight tournaments. Substitui flags
+    %% legados ADR-031 (is_flight/flight_day/flight_parent_id/flight_advanced).
+    %% Migration 0029 cria tabela + back-fill; migration 0030 (MANUAL) dropa flags.
+
+    tournament_series {
+        varchar id PK "nanoid Sprint Flight-1 (ADR-090)"
+        varchar user_id FK "references users.user_platform_id ON DELETE CASCADE, NOT NULL"
+        varchar name "NOT NULL — nome-base extraido (ex: 'Sunday Million Phased')"
+        varchar network "nullable — site/rede derivada das entries"
+        integer total_day1s "NOT NULL DEFAULT 1 — Day 1s definidos pela rede (ex: 17)"
+        timestamp day2_datetime "NOT NULL — data+hora UTC do Day 2 (editavel via RF-14)"
+        varchar day2_status "enum series_day2_status NOT NULL DEFAULT 'pending' — pending/completed/cancelled"
+        varchar stack_mode "enum series_stack_mode NOT NULL DEFAULT 'single' — single/combined (ADR-091; best fora do MVP)"
+        text notes "nullable — campo livre opcional"
+        timestamp created_at "defaultNow"
+        timestamp updated_at "defaultNow"
+    }
+
+    users ||--o{ tournament_series : "agrupa multi-flight tournaments (ADR-090)"
+    tournament_series ||--o{ tournaments : "series_id ON DELETE SET NULL (entries pagas)"
+    tournament_series ||--o{ planned_tournaments : "series_id ON DELETE SET NULL (Day 2 auto-criado)"
+
+    %% Indices em tournament_series (Sprint Flight-1):
+    %%   IDX (user_id, day2_status) — idx_series_user_status
+    %%     query "minhas series pendentes" rapida (default tab em /flight)
+    %%   IDX (user_id, day2_datetime) — idx_series_user_datetime
+    %%     query "proximas series do calendario"
+    %%   IDX (user_id, name) — idx_series_user_name
+    %%     match aproximado para auto-link CSV (RF-08)
+    %%   IDX parcial (series_id) WHERE series_id IS NOT NULL em tournaments e planned_tournaments
+    %%     idx_tournaments_series, idx_planned_tournaments_series — alvo de getEntriesBySeriesId
+    %%
+    %% Invariantes (ADR-090):
+    %%   tournament.series_id IS NULL = single-flight (default) OU pending confirmation
+    %%   tournament.series_id IS NOT NULL = entry vinculada a uma serie multi-flight
+    %%   tournament.bagged_at IS NOT NULL = founder marcou Day 1 como passado
+    %%     (substitui flight_advanced=true legado)
+    %%   series.day2_status='completed' apos reconcile pos-sessao detectar Day 2 jogado
+    %%   stack_mode='combined' implica P&L = sum(buy_in entries) / 1 prize Day 2 (RF-15)
+    %%
+    %% Auto-add Day 2 (RF-04 + D5):
+    %%   Idempotente: re-checa planned existente por (series_id, day_of_week) antes de inserir
+    %%   Se planned ja existe e datetime mudou: UPDATE start_time, NAO duplica
+    %%
+    %% Migration path (ADR-090, RF-17):
+    %%   Fase 1 (0029) AUTO: cria tabela + back-fill via flight_parent_id ou (name,site)
+    %%   Fase 2 (0030) MANUAL apos 7 dias: DROP COLUMN is_flight/flight_day/flight_parent_id/flight_advanced
+
     users ||--o{ tournaments : "importa torneios"
     users ||--o{ tournament_templates : "possui templates"
     users ||--o{ upload_history : "realiza uploads"
     tournament_templates ||--o{ tournaments : "origina torneios"
     tournament_templates ||--o{ tournaments : "satellite_target_template_id (FK soft ADR-031)"
-    tournaments ||--o{ tournaments : "flight_parent_id self-FK soft (re-entry 1A/1B/Day Final)"
+    tournaments ||--o{ tournaments : "flight_parent_id DEPRECATED Sprint Flight-1 (sera removida)"
 
     %% ===== ADR-031 Tournament Types Orthogonal Model =====
     %%
@@ -407,13 +458,14 @@ erDiagram
         decimal addon_cost "nullable — so se allows_addon=true — ADR-014"
         boolean allows_reentry "default: false NOT NULL — ADR-014"
         integer max_reentries "nullable (null=ilimitado) — ADR-014"
-        boolean is_flight "default: false NOT NULL — ADR-031"
+        boolean is_flight "DEPRECATED Sprint Flight-1 — sera removida via migration 0030 (ADR-090)"
         boolean is_live "default: false NOT NULL — ADR-031"
         varchar satellite_reward_type "nullable ADR-031 — ticket/package/cash/mixed"
         varchar satellite_target_template_id FK "nullable references tournament_templates.id (FK soft)"
         varchar satellite_target_name "nullable — fallback texto livre"
-        varchar flight_day "nullable — 1A/1B/Final regex validado"
-        varchar flight_parent_id FK "nullable references tournaments.id (self-FK soft)"
+        varchar flight_day "DEPRECATED Sprint Flight-1 — sera removida via migration 0030 (ADR-090)"
+        varchar flight_parent_id FK "DEPRECATED Sprint Flight-1 — sera removida via migration 0030 (ADR-090)"
+        varchar series_id FK "NEW Sprint Flight-1 — references tournament_series.id ON DELETE SET NULL (ADR-090)"
     }
 
     active_days {

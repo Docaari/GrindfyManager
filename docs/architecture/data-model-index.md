@@ -13,9 +13,10 @@ Para diagramas Mermaid: `Docs/architecture/data-model.mermaid`, `data-model-stud
 | `users` | Usuarios do sistema | id, userPlatformId (USER-XXXX), email, password, role, status, subscriptionPlan, emailVerified |
 | `auth_tokens` | Tokens de verificacao/reset (substituiu Map em memoria) | userId, token, type, expiresAt |
 | `sessions` | Sessoes Express (connect-pg-simple) | sid, sess (jsonb), expire |
-| `tournaments` | Torneios importados do historico | userId, name, buyIn, prize, position, site, format, category, speed, fieldSize, datePlayed |
+| `tournaments` | Torneios importados do historico | userId, name, buyIn, prize, position, site, format, category, speed, fieldSize, datePlayed, **seriesId (NEW Flight-1, FK ON DELETE SET NULL)**, **baggedAt (NEW Flight-1, substitui flight_advanced legado)** |
 | `tournament_templates` | Templates agrupados da biblioteca | userId, name, site, format, category, avgBuyIn, avgRoi, totalPlayed |
-| `planned_tournaments` | Torneios planejados na grade | userId, dayOfWeek, profile (A/B/C), site, time, buyIn, type, speed, status |
+| `planned_tournaments` | Torneios planejados na grade | userId, dayOfWeek, profile (A/B/C), site, time, buyIn, type, speed, status, **seriesId (NEW Flight-1, FK ON DELETE SET NULL)** |
+| `tournament_series` | **NEW Sprint Flight-1 (ADR-090).** Single source of truth para torneios multi-flight (Phased/Stage/Day 1 X). Substitui flags legados ADR-031 (`is_flight/flight_day/flight_parent_id/flight_advanced`) que serao removidos via migration 0030 MANUAL apos 7 dias de validacao. Campos: id (nanoid), userId, name (nome-base ex 'Sunday Million Phased'), network, totalDay1s, day2DateTime (UTC), day2Status enum (`pending`/`completed`/`cancelled`), stackMode enum (`single`/`combined` — best fora MVP, ADR-091), notes. Indices: `idx_series_user_status`, `idx_series_user_datetime`, `idx_series_user_name`. CASCADE em userId. SET NULL em tournaments.series_id e planned_tournaments.series_id. Auto-add Day 2 idempotente via (series_id, day_of_week). |
 | `weekly_plans` | Planos semanais | userId, weekStart, targetBuyins, targetProfit, targetVolume |
 | `grind_sessions` | Sessoes de grind | userId, date, status (planned/active/completed), profitLoss, duration, metricas mentais |
 | `session_tournaments` | Torneios de uma sessao em tempo real | sessionId, site, buyIn, result, position, bounty, prize, status |
@@ -43,6 +44,21 @@ Migrations afetadas:
 - `migrations/0018_auto_snapshot_meta.sql` — ALTER `bankroll_snapshots` (origin + source_ref_id + index + unique parcial) + ALTER `user_settings` (stops).
 
 ADRs relevantes: 058 (auto-snapshot), 059 (wallet_transfers), 060 (stop-loss lock), 061 (fxResolver).
+
+### Schema Delta — Sprint Flight-1 (Tournament Series + deprecacao flags ADR-031)
+
+Migrations afetadas:
+- `migrations/0029_add_tournament_series.sql` (AUTOMATICA) — cria tabela `tournament_series` + 2 ENUMs Postgres (`series_stack_mode`, `series_day2_status`) + ADD COLUMN `series_id` (FK SET NULL) em `tournaments` e `planned_tournaments` + ADD COLUMN `bagged_at TIMESTAMP NULL` em `tournaments` + back-fill de dados historicos via `flight_parent_id` ou `(name, site)`.
+- `migrations/0030_drop_legacy_flight_flags.sql` (**MANUAL pos sign-off** apos 7 dias de validacao) — DROP COLUMN `is_flight`, `flight_day`, `flight_parent_id`, `flight_advanced` em `tournaments` e `planned_tournaments` + DROP indices parciais ADR-031 (`idx_tournaments_user_flight_parent`, `idx_tournaments_user_is_flight`).
+
+ADRs relevantes: **ADR-090** (Tournament Series single source of truth — deprecar flags inline ADR-031), **ADR-091** (Stack mode enum: `single` | `combined`; best-stack fora MVP).
+
+Diagramas Mermaid: `Docs/architecture/features/flight/`:
+- `01-upload-detect-flight.mermaid` — parser detecta keywords + insere normalmente + auto-link Day1+Day2 (RF-05/06/08).
+- `02-confirm-flight-modal.mermaid` — modal pos-upload descartavel + batch confirmation (RF-07/09).
+- `03-mark-bagged-auto-add-day2.mermaid` — endpoint mark-bagged + auto-add planned Day 2 idempotente (RF-04/11).
+- `04-backfill-manual.mermaid` — back-fill retroativo via UI (RF-13).
+- `05-migration-deprecation.mermaid` — migration em 2 fases (auto + manual) com janela de validacao (RF-17).
 
 ## Coach AI
 

@@ -30,7 +30,8 @@ import {
   CreditCard,
   MessageSquare,
   Wallet,
-  GraduationCap
+  GraduationCap,
+  Layers
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
@@ -93,6 +94,8 @@ const Sidebar: React.FC = () => {
         { path: '/biblioteca', icon: GraduationCap, label: 'Biblioteca', adminOnly: false },
         { path: '/calculadoras', icon: Wrench, label: 'Ferramentas', adminOnly: false },
         { path: '/bankroll', icon: Wallet, label: 'Banca', adminOnly: false },
+        // Sprint Flight-1 RF-10 / D14: novo item Flight (multi-flight series).
+        { path: '/flight', icon: Layers, label: 'Flight', adminOnly: false },
       ]
     },
     {
@@ -254,10 +257,15 @@ const Sidebar: React.FC = () => {
                       }
                     })();
 
+                  // Sprint Flight-1 RF-10: data-testid estavel para testes
+                  // (lessons-learned #2). Format: sidebar-link-<segmento>.
+                  const linkTestId = `sidebar-link-${item.path.replace(/^\//, '').split('/')[0] || 'home'}`;
+
                   return (
                     <li key={item.path}>
                       <Link href={item.path}>
                         <a
+                          data-testid={linkTestId}
                           onClick={() => {
                             // F9: marca biblioteca como visitada para esconder
                             // o badge "Novo" em proximas renderizacoes.

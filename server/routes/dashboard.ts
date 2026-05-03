@@ -12,6 +12,34 @@ import { dashboardService } from "../services/dashboardService";
 // =============================================================================
 const VALID_PERIODS = new Set(["7d", "30d", "90d", "180d", "all"]);
 
+// =============================================================================
+// Sprint Flight-1 RF-16: handleGetDashboard exposto para passar param
+// `expandFlightSeries` para storage.getDashboardStats. Default: setting do user.
+// =============================================================================
+export async function handleGetDashboard(req: any, res: any): Promise<void> {
+  try {
+    const userId = req?.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const settings = await (storage as any).getUserSettings(userId);
+    const settingDefault = !!settings?.reportsExpandFlightSeries;
+    const queryParam = req?.query?.expandFlightSeries;
+    let expandFlightSeries = settingDefault;
+    if (queryParam !== undefined) {
+      expandFlightSeries = queryParam === 'true' || queryParam === true;
+    }
+    const stats = await (storage as any).getDashboardStats(userId, {
+      expandFlightSeries,
+    });
+    res.status(200).json(stats);
+  } catch (err) {
+    console.error("[handleGetDashboard] failed:", err);
+    res.status(500).json({ message: "Failed to fetch dashboard" });
+  }
+}
+
 export async function handleGetDashboardRoiByPlatform(
   req: any,
   res: any,
@@ -64,8 +92,16 @@ export function registerDashboardRoutes(app: Express): void {
       // Map frontend filters to backend format
       const filters = mapFiltersToBackendFormat(rawFilters);
 
+      // Sprint Flight-1 RF-16: opts.expandFlightSeries vem de query > setting > false.
+      const settings = await (storage as any).getUserSettings?.(userId);
+      const settingDefault = !!settings?.reportsExpandFlightSeries;
+      const queryParam = req.query.expandFlightSeries;
+      let expandFlightSeries = settingDefault;
+      if (queryParam !== undefined) {
+        expandFlightSeries = queryParam === 'true' || queryParam === true;
+      }
 
-      const stats = await storage.getDashboardStats(userId, period, filters);
+      const stats = await storage.getDashboardStats(userId, period, filters, { expandFlightSeries });
 
 
       res.json(stats);

@@ -152,7 +152,9 @@ export interface SessionStats {
   breakdown: SessionFinancialBreakdown;
   itm: number;
   itmPercent: number;
-  roi: number;
+  /** ROI percentage. Sprint Flight-1 RF-15: undefined quando colapso de
+   * combined-stack ocorreu (consumer deriva via profit/totalInvestido). */
+  roi: number | undefined;
   fts: number;
   cravadas: number;
   progressao: number;
@@ -163,6 +165,11 @@ export interface SessionStats {
   turboSpeedPercentage: number;
   hyperSpeedPercentage: number;
   totalEntries: number;
+  /**
+   * Sprint Flight-1 RF-15: numero de eventos economicos distintos.
+   * Combined-stack series colapsam para 1 (vs N entries).
+   */
+  tournamentsPlayed: number;
   screenCap: number;
   screenCapColors: { bgColor: string; textColor: string; borderColor: string };
 }

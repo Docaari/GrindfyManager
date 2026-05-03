@@ -1,0 +1,77 @@
+%% Sprint Flight-1 — Sequence: Confirm Flight Modal (FlightConfirmationDialog)
+%% Spec: Docs/specs/sprint-flight-1.md (RF-07 + RF-09)
+%% ADRs: 090 (single source of truth)
+%%
+%% Fluxo: Apos upload retornar pendingFlightConfirmations[], modal abre INLINE.
+%% Founder responde por entry: "isso e flight?" (default SIM) + cria nova serie ou
+%% linka a existente. Submit faz batch para POST /api/upload/confirm-flights
+%% (cap 50 confirmacoes — D11). Modal e DESCARTAVEL — cancelar deixa entries normais
+%% (sem series_id) e founder pode criar serie depois via tela /flight.
+
+sequenceDiagram
+    actor F as Founder
+    participant M as FlightConfirmation<br/>Dialog (RF-09)
+    participant Q as TanStack Query<br/>(useQuery cache)
+    participant API as POST /api/upload/<br/>confirm-flights (RF-07)
+    participant ST as storage.ts
+    participant DB as PostgreSQL<br/>(tournament_series, tournaments)
+
+    Note over M: Modal recebe pendingFlightConfirmations[]<br/>do response do upload anterior
+
+    F->>M: Visualiza lista de candidates<br/>(ex: 3 entries Sunday Million Phased)
+
+    loop para cada entry
+        F->>M: Toggle SIM/NAO (default SIM)
+        alt SIM
+            F->>M: Escolhe "Criar nova serie" ou<br/>"Linkar a serie existente"
+            alt Criar nova
+                F->>M: Preenche form inline<br/>(name pre-preenchido com baseName,<br/>totalDay1s, day2DateTime UTC,<br/>stackMode radio single/combined)
+            else Linkar existente
+                M->>Q: useQuery(['tournament-series',<br/>{status: 'pending'}])
+                Q->>M: lista de series pending
+                F->>M: Seleciona series do dropdown<br/>(typeahead search)
+            end
+        else NAO (falso positivo)
+            Note over M: No-op — entry ja esta com<br/>series_id=NULL desde insert (D10)
+        end
+    end
+
+    F->>M: Clica "Confirmar todos"
+
+    alt pendingFlightConfirmations.length > 50
+        M->>M: Pagina internamente<br/>(submit em batches de 50)
+    end
+
+    M->>API: POST /api/upload/confirm-flights<br/>{confirmations: [<br/>{tournamentId, isFlight: true,<br/>seriesId: null, newSeries: {...}},<br/>{tournamentId, isFlight: true,<br/>seriesId: 'existing-id'},<br/>{tournamentId, isFlight: false}]}
+
+    API->>API: Zod validate (cap 50 + refinements:<br/>isFlight=true exige seriesId OU newSeries;<br/>sem duplicate tournamentIds)
+
+    alt validacao falha
+        API-->>M: 400 {message: 'duplicate tournamentIds'}<br/>OU 'max 50 confirmations per batch'
+        M->>F: Toast erro + retry button
+    end
+
+    API->>ST: db.transaction(async (tx) => ...)<br/>(atomico — rollback completo se erro)
+
+    loop para cada confirmation
+        alt isFlight=true + newSeries
+            ST->>DB: INSERT INTO tournament_series<br/>(stackMode enum series_stack_mode)
+            DB-->>ST: novoSeriesId
+            ST->>DB: UPDATE tournaments<br/>SET series_id = novoSeriesId<br/>WHERE id = tournamentId<br/>AND user_id = ? (owner check)
+        else isFlight=true + seriesId existente
+            ST->>ST: getSeriesById(userId, seriesId)<br/>(owner check)
+            ST->>DB: UPDATE tournaments<br/>SET series_id = seriesId<br/>WHERE id = tournamentId<br/>AND user_id = ?
+        else isFlight=false
+            Note over ST: Defesa: se tournament tem series_id !== null,<br/>UPDATE SET series_id = NULL (unlink)
+        end
+    end
+
+    ST-->>API: tx commit
+
+    API-->>M: 200 OK<br/>{processed: 3, createdSeries: 1,<br/>linkedToExisting: 1, markedNotFlight: 1, errors: []}
+
+    M->>Q: queryClient.invalidateQueries(['tournaments'])<br/>+ ['tournament-series']<br/>+ ['planned-tournaments']
+    M->>F: Toast "1 serie criada, 1 linkada"
+    M->>M: Fecha modal
+
+    Note over F,DB: Entries linkadas agora aparecem com badge "Phased Day 1A"<br/>na biblioteca + tela /flight mostra a serie nova com 3 entries.<br/>Founder pode marcar bagged via RF-11 quando passar do Day 1.

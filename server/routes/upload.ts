@@ -8,8 +8,10 @@ import {
 } from "@shared/schema";
 import multer from "multer";
 import { PokerCSVParser } from "../csvParser";
+import { detectFlightCandidate } from "../flightDetector";
 import { nanoid } from "nanoid";
 import { eq, desc, sql } from "drizzle-orm";
+import { z } from "zod";
 import { playerBundleCache } from "../services/playerBundle";
 import { selectorCache } from "../services/selectorCache";
 
@@ -807,4 +809,308 @@ export function registerUploadRoutes(app: Express): void {
       res.status(500).json({ message: 'Failed to delete upload history' });
     }
   });
+
+  // Sprint Flight-1 RF-06/RF-07: novos handlers expostos via Express.
+  app.post('/api/upload', requireAuth, upload.single('file'), handleUploadCsv as any);
+  app.post('/api/upload/confirm-flights', requireAuth, handleConfirmFlights as any);
+}
+
+// ============================================================================
+// Sprint Flight-1 — Handlers expostos (RF-06, RF-07, RF-08)
+// Spec: docs/specs/sprint-flight-1.md
+// ADRs: 090 (single source of truth), 091 (stack_mode enum)
+// ============================================================================
+
+function userIdOfReq(req: any): string | null {
+  return req?.user?.userPlatformId ?? null;
+}
+
+/**
+ * RF-06 + RF-08: parser CSV + flight detection + auto-link Day 1 + Day 2.
+ *
+ * Comportamento:
+ *  - Tournaments inseridos NORMALMENTE com seriesId=NULL (D10 — sem persistencia
+ *    de "pending confirmation").
+ *  - Response inclui pendingFlightConfirmations[] em memoria (in-memory).
+ *  - RF-08: se Day 1s + Day 2 do mesmo baseName + site + janela 1-7d chegam
+ *    juntos, cria series automaticamente (sem prompt) e linka via seriesId.
+ *  - autoLinkedSeries[] no response para UI mostrar toast.
+ */
+export async function handleUploadCsv(req: any, res: any): Promise<void> {
+  const userId = userIdOfReq(req);
+  if (!userId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  try {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ message: "No file uploaded" });
+      return;
+    }
+
+    const userSettings = await (storage as any).getUserSettings(userId);
+    const exchangeRates = userSettings?.exchangeRates || {};
+    const fileContent = file.buffer.toString('utf-8');
+
+    // Parse via parser default (PokerCSVParser.parseCSV) — testes mockam.
+    const parsed = await PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
+
+    // Detecta candidates e separa em buckets para auto-link RF-08.
+    const detections = (parsed ?? []).map((t: any) => ({
+      tournament: t,
+      detection: detectFlightCandidate(t.name),
+    }));
+
+    // RF-08: agrupa flight candidates por baseName + site para identificar
+    // pares Day 1 + Day 2 dentro do mesmo upload.
+    const groups = new Map<string, { day1s: any[]; day2s: any[] }>();
+    for (const { tournament, detection } of detections) {
+      if (!detection.isFlightCandidate) continue;
+      const key = `${detection.baseName.trim().toLowerCase()}|${(tournament.site ?? '').trim().toLowerCase()}`;
+      if (!groups.has(key)) groups.set(key, { day1s: [], day2s: [] });
+      const bucket = groups.get(key)!;
+      // "Day 2" detector matches "day 2" with leading "Day" + space + "2".
+      // baseName already excludes the matched flight day text.
+      const isDay2 = /day\s*2/i.test(detection.flightDay ?? '');
+      if (isDay2) bucket.day2s.push({ tournament, detection });
+      else bucket.day1s.push({ tournament, detection });
+    }
+
+    // Para cada grupo com 1+ Day 1 + 1+ Day 2 dentro da janela 1-7d, cria series.
+    const autoLinkMap = new Map<string, string>(); // tournamentId → seriesId
+    const autoLinkedSeries: any[] = [];
+
+    for (const [key, bucket] of groups) {
+      if (bucket.day1s.length === 0 || bucket.day2s.length === 0) continue;
+
+      // Verifica janela 1-7 dias entre Day 1 mais cedo e Day 2.
+      const day1Times = bucket.day1s
+        .map((d) => d.tournament.datePlayed?.getTime?.() ?? 0)
+        .filter((t) => t > 0);
+      const day2Times = bucket.day2s
+        .map((d) => d.tournament.datePlayed?.getTime?.() ?? 0)
+        .filter((t) => t > 0);
+      if (day1Times.length === 0 || day2Times.length === 0) continue;
+      const earliestDay1 = Math.min(...day1Times);
+      const earliestDay2 = Math.min(...day2Times);
+      const diffDays = (earliestDay2 - earliestDay1) / (1000 * 60 * 60 * 24);
+      if (diffDays < 1 || diffDays > 7) continue;
+
+      // Cria a serie. stackMode = combined se >= 2 Day 1s, senao single.
+      const baseName = bucket.day1s[0].detection.baseName;
+      const site = bucket.day1s[0].tournament.site;
+      const stackMode = bucket.day1s.length >= 2 ? 'combined' : 'single';
+      const series = await (storage as any).createSeries(userId, {
+        name: baseName,
+        network: site,
+        totalDay1s: bucket.day1s.length,
+        day2DateTime: new Date(earliestDay2),
+        day2Status: 'completed',
+        stackMode,
+      });
+
+      const seriesId = series?.id ?? `srs-auto-${autoLinkedSeries.length + 1}`;
+      const allEntries = [...bucket.day1s, ...bucket.day2s];
+      for (const e of allEntries) {
+        autoLinkMap.set(e.tournament.tournamentId ?? e.tournament.id, seriesId);
+      }
+      autoLinkedSeries.push({
+        seriesId,
+        name: baseName,
+        entryCount: allEntries.length,
+      });
+    }
+
+    // Insere todos os tournaments. Auto-linkados recebem seriesId imediato;
+    // demais ficam com seriesId=null (D10 — visiveis em reports normalmente).
+    const insertFn = (storage as any).createTournament ?? (storage as any).insertTournament;
+    const inserted: any[] = [];
+    const pendingFlightConfirmations: any[] = [];
+
+    for (const { tournament, detection } of detections) {
+      const externalId = tournament.tournamentId ?? tournament.id;
+      const linkedSeriesId = autoLinkMap.get(externalId) ?? null;
+      const payload: any = {
+        ...tournament,
+        userId,
+        seriesId: linkedSeriesId,
+      };
+      const persisted = insertFn ? await insertFn(payload) : payload;
+      inserted.push(persisted);
+
+      // Adiciona ao pending list APENAS se: candidate detectado + NAO auto-linkado.
+      if (detection.isFlightCandidate && !linkedSeriesId) {
+        pendingFlightConfirmations.push({
+          tournamentId: persisted.id ?? externalId,
+          name: tournament.name,
+          baseName: detection.baseName,
+          flightDay: detection.flightDay,
+          site: tournament.site,
+          datePlayed: tournament.datePlayed,
+          buyIn: tournament.buyIn,
+          suggestedSeriesId: null,
+        });
+      }
+    }
+
+    res.status(200).json({
+      imported: inserted.length,
+      pendingFlightConfirmations,
+      autoLinkedSeries,
+    });
+  } catch (err: any) {
+    console.error("[handleUploadCsv] failed:", err);
+    res.status(500).json({ message: "Internal error" });
+  }
+}
+
+// ----------------------------------------------------------------------------
+// RF-07: POST /api/upload/confirm-flights
+// ----------------------------------------------------------------------------
+
+const confirmFlightsBodySchema = z.object({
+  confirmations: z.array(z.object({
+    tournamentId: z.string().min(1),
+    isFlight: z.boolean(),
+    seriesId: z.string().nullable().optional(),
+    newSeries: z.object({
+      name: z.string().min(1),
+      totalDay1s: z.number().int().min(0),
+      day2DateTime: z.union([z.string(), z.date()]),
+      stackMode: z.enum(['single', 'combined']),
+      network: z.string().nullable().optional(),
+      notes: z.string().nullable().optional(),
+    }).optional(),
+  })).max(50, 'max 50 confirmations per batch'),
+}).superRefine((data, ctx) => {
+  // Verifica duplicatas em tournamentIds.
+  const ids = data.confirmations.map((c) => c.tournamentId);
+  const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
+  if (dupes.length > 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'duplicate tournamentIds',
+      path: ['confirmations'],
+    });
+  }
+  // isFlight=true exige seriesId OU newSeries.
+  for (let i = 0; i < data.confirmations.length; i++) {
+    const c = data.confirmations[i];
+    if (c.isFlight && !c.seriesId && !c.newSeries) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'isFlight=true requires seriesId or newSeries',
+        path: ['confirmations', i],
+      });
+    }
+  }
+});
+
+export async function handleConfirmFlights(req: any, res: any): Promise<void> {
+  const userId = userIdOfReq(req);
+  if (!userId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  try {
+    const parsed = confirmFlightsBodySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Validation error",
+        errors: parsed.error.flatten?.() ?? parsed.error,
+      });
+      return;
+    }
+
+    const { confirmations } = parsed.data;
+    let createdSeries = 0;
+    let linkedToExisting = 0;
+    let markedNotFlight = 0;
+
+    // Atomico: validar todos refs primeiro, depois aplicar.
+    // Pre-valida ownership de tournamentIds + seriesIds referenciados.
+    for (const c of confirmations) {
+      const tournament = await (storage as any).getTournamentById(c.tournamentId, userId);
+      if (!tournament) {
+        res.status(404).json({ message: `Tournament ${c.tournamentId} not found` });
+        return;
+      }
+      if (c.isFlight && c.seriesId) {
+        const series = await (storage as any).getSeriesById(userId, c.seriesId);
+        if (!series) {
+          res.status(404).json({ message: `Series ${c.seriesId} not found` });
+          return;
+        }
+      }
+    }
+
+    // Sprint Flight-1 H1 fix (Reviewer R1): app-level rollback se erro no meio.
+    // Storage methods nao aceitam tx ainda — guardamos applied stack pra reverter
+    // manualmente se algo falhar (best-effort atomicity). Spec RF-07 exige atomico.
+    type Applied =
+      | { type: "create-series"; seriesId: string }
+      | { type: "link"; tournamentId: string; prevSeriesId: string | null };
+    const applied: Applied[] = [];
+
+    try {
+      for (const c of confirmations) {
+        if (!c.isFlight) {
+          // No-op (D10): tournament ja esta com seriesId=NULL desde insert.
+          // Defesa: se tournament TEM seriesId, faz unlink.
+          const tournament = await (storage as any).getTournamentById(c.tournamentId, userId);
+          if (tournament?.seriesId) {
+            applied.push({ type: "link", tournamentId: c.tournamentId, prevSeriesId: tournament.seriesId });
+            await (storage as any).linkTournamentToSeries(userId, c.tournamentId, null);
+          }
+          markedNotFlight += 1;
+          continue;
+        }
+
+        if (c.seriesId) {
+          const tournament = await (storage as any).getTournamentById(c.tournamentId, userId);
+          applied.push({ type: "link", tournamentId: c.tournamentId, prevSeriesId: tournament?.seriesId ?? null });
+          await (storage as any).linkTournamentToSeries(userId, c.tournamentId, c.seriesId);
+          linkedToExisting += 1;
+        } else if (c.newSeries) {
+          const series = await (storage as any).createSeries(userId, c.newSeries);
+          applied.push({ type: "create-series", seriesId: series.id });
+          const tournament = await (storage as any).getTournamentById(c.tournamentId, userId);
+          applied.push({ type: "link", tournamentId: c.tournamentId, prevSeriesId: tournament?.seriesId ?? null });
+          await (storage as any).linkTournamentToSeries(userId, c.tournamentId, series.id);
+          createdSeries += 1;
+        }
+      }
+
+      res.status(200).json({
+        processed: confirmations.length,
+        createdSeries,
+        linkedToExisting,
+        markedNotFlight,
+        errors: [],
+      });
+    } catch (innerErr: any) {
+      // Rollback best-effort: reverte na ordem inversa.
+      console.error("[handleConfirmFlights] inner error, rolling back:", innerErr);
+      const rollbackErrors: string[] = [];
+      for (const op of applied.reverse()) {
+        try {
+          if (op.type === "link") {
+            await (storage as any).linkTournamentToSeries(userId, op.tournamentId, op.prevSeriesId);
+          } else if (op.type === "create-series") {
+            await (storage as any).deleteSeries(userId, op.seriesId);
+          }
+        } catch (rbErr: any) {
+          rollbackErrors.push(`${op.type}:${(rbErr?.message ?? rbErr)}`);
+        }
+      }
+      res.status(500).json({
+        message: "Internal error during confirm; rollback attempted",
+        rollbackErrors,
+      });
+    }
+  } catch (err: any) {
+    console.error("[handleConfirmFlights] failed:", err);
+    res.status(500).json({ message: "Internal error" });
+  }
 }

@@ -1,0 +1,66 @@
+%% Sprint Flight-1 — Sequence: Upload CSV detecta flight candidates
+%% Spec: Docs/specs/sprint-flight-1.md (RF-05 + RF-06 + RF-08)
+%% ADRs: 090 (single source of truth), 091 (stack_mode enum)
+%%
+%% Fluxo: Founder envia CSV pos-sessao. Parser detecta keywords (Flight/Stage/Day 1/Phase)
+%% via regex case-insensitive. Tournaments sao inseridos NORMALMENTE (series_id=NULL),
+%% ficam visiveis em reports imediatamente (D10 — sem persistencia de "pending"). Response
+%% inclui pendingFlightConfirmations[] em memoria para frontend abrir modal RF-09.
+%% Se Day 1 + Day 2 do mesmo baseName vem juntos, RF-08 cria serie automaticamente
+%% sem prompt (matching: baseName + site + janela 1-7 dias).
+
+sequenceDiagram
+    actor F as Founder
+    participant W as Web App<br/>(client/src)
+    participant API as POST /api/upload<br/>(server/routes/upload.ts)
+    participant P as PokerCSVParser<br/>(server/csvParser.ts)
+    participant FD as detectFlightCandidate<br/>(RF-05 helper)
+    participant ST as storage.ts
+    participant DB as PostgreSQL<br/>(tournaments, tournament_series)
+
+    F->>W: Click "Importar CSV"<br/>seleciona arquivo
+    W->>API: POST multipart/form-data<br/>file=hand-history.csv
+    API->>P: parser.parse(buffer)<br/>retorna ParsedTournament[]
+    P-->>API: 47 entries parseadas
+
+    loop para cada entry
+        API->>FD: detectFlightCandidate(name)
+        FD-->>API: {isFlightCandidate, baseName, flightDay}
+    end
+
+    Note over API: Agrupa candidates por (baseName, site)<br/>para RF-08 (auto-link Day1+Day2)
+
+    alt RF-08: Day1s + Day2 do mesmo baseName no upload
+        API->>API: Detecta Day2 datetime entre 1-7 dias<br/>apos Day1 mais antigo
+        API->>ST: createSeries({name, network, totalDay1s,<br/>day2DateTime, stackMode='combined' se >=2 Day1s,<br/>day2Status='completed'})
+        ST->>DB: INSERT INTO tournament_series
+        DB-->>ST: series row criada
+        ST-->>API: TournamentSeries
+        loop para cada entry auto-linkada
+            API->>ST: storage.insertTournament({...entry, seriesId})
+            ST->>DB: INSERT INTO tournaments<br/>(series_id setado)
+        end
+    end
+
+    Note over API: Para entries que NAO foram auto-linkadas:
+
+    loop entries restantes (single + flight-candidates nao auto-linked)
+        API->>ST: storage.insertTournament({...entry, seriesId: NULL})
+        ST->>DB: INSERT INTO tournaments<br/>(series_id=NULL — visivel em reports)
+        DB-->>ST: tournament inserido
+    end
+
+    API->>API: Monta response:<br/>imported, duplicates, errors,<br/>pendingFlightConfirmations[]<br/>(in-memory, NAO persistido — D10),<br/>autoLinkedSeries[] (RF-08)
+
+    API-->>W: 200 OK<br/>{imported: 47, duplicates: 3,<br/>pendingFlightConfirmations: [<br/>{tournamentId, name, baseName,<br/>flightDay, suggestedSeriesId}],<br/>autoLinkedSeries: [{seriesId, name, entryCount}]}
+
+    W->>W: Hook useUpload recebe response
+    alt pendingFlightConfirmations.length > 0
+        W->>F: Abre modal FlightConfirmationDialog<br/>(RF-09 — proximo diagrama 02)
+    else autoLinkedSeries.length > 0
+        W->>F: Toast "Series 'X' criada<br/>automaticamente (3 entries linkadas)"
+    else nenhum candidate
+        W->>F: Toast "47 torneios importados"
+    end
+
+    Note over F,DB: Tournaments aparecem IMEDIATAMENTE na biblioteca/reports<br/>com series_id=NULL (D10). Modal e descartavel — se cancelar,<br/>entries ficam normais e founder cria serie depois via /flight (RF-13).

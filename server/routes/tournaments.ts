@@ -142,7 +142,10 @@ export function registerTournamentRoutes(app: Express): void {
     }
   });
 
-  app.put('/api/tournaments/:id', requireAuth, async (req: any, res) => {
+  // Sprint Flight-1 H4 fix (Reviewer R1): handler shared para PUT + PATCH.
+  // PATCH e o verb REST-correto pra partial update (usado pelo BackfillSeriesDialog).
+  // PUT mantido pra compat com clients existentes.
+  const updateTournamentHandler = async (req: any, res: any) => {
     try {
       const userId = req.user.userPlatformId;
       const { id } = req.params;
@@ -158,7 +161,9 @@ export function registerTournamentRoutes(app: Express): void {
       }
       res.status(500).json({ message: "Failed to update tournament" });
     }
-  });
+  };
+  app.put('/api/tournaments/:id', requireAuth, updateTournamentHandler);
+  app.patch('/api/tournaments/:id', requireAuth, updateTournamentHandler);
 
   app.delete('/api/tournaments/:id', requireAuth, async (req: any, res) => {
     try {

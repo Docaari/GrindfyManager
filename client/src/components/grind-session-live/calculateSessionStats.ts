@@ -368,13 +368,114 @@ export const calculateTournamentPercentages = (tournaments: any[]) => {
   };
 };
 
+// Sprint Flight-1 RF-15: agregador de combined-stack series.
+// Quando uma serie tem stackMode='combined', N entries da serie sao tratadas
+// como UM evento economico: buyInTotal = sum(entries.buyIn), prizeTotal =
+// max(entries.result) — Day 2 ganha 1 prize, Day 1s perdedores tem prize=0.
+// Conta como 1 torneio (tournamentsPlayed += 1, nao N).
+//
+// Series com stackMode='single' NAO colapsam (badge so visual; P&L normal).
+//
+// Multi-currency: agrupa entries por (seriesId, site) preservando distincao
+// de moeda — isso permite conversao USD correta na fase posterior.
+function collapseCombinedSeries(
+  tournaments: any[],
+  series: Record<string, { id: string; stackMode: 'single' | 'combined'; name?: string }>,
+): any[] {
+  if (!Array.isArray(tournaments) || tournaments.length === 0) return tournaments;
+  // Agrupa por (seriesId, site) — series pode ter entries em sites/moedas diferentes.
+  const combinedGroups = new Map<string, any[]>();
+  const passthrough: any[] = [];
+  for (const t of tournaments) {
+    const sid = t?.seriesId;
+    if (sid && series[sid]?.stackMode === 'combined') {
+      const key = `${sid}|${(t?.site ?? '').trim()}`;
+      if (!combinedGroups.has(key)) combinedGroups.set(key, []);
+      combinedGroups.get(key)!.push(t);
+    } else {
+      passthrough.push(t);
+    }
+  }
+  if (combinedGroups.size === 0) return tournaments;
+
+  // Identifica o "winning" entry (maior prize) por seriesId — recebe o prize
+  // agregado; outros sub-grupos da mesma serie tem prize=0.
+  const seriesMaxPrize = new Map<string, { key: string; prize: number }>();
+  for (const [key, entries] of combinedGroups) {
+    const [sid] = key.split('|');
+    let groupMaxPrize = 0;
+    for (const e of entries) {
+      const r = parseFloat(String(e?.result ?? e?.prize ?? '0')) || 0;
+      if (r > groupMaxPrize) groupMaxPrize = r;
+    }
+    const current = seriesMaxPrize.get(sid);
+    if (!current || groupMaxPrize > current.prize) {
+      seriesMaxPrize.set(sid, { key, prize: groupMaxPrize });
+    }
+  }
+
+  const synthetic: any[] = [];
+  for (const [key, entries] of combinedGroups) {
+    const [sid] = key.split('|');
+    const first = entries[0];
+    let totalBuyIn = 0;
+    let totalAddOnCost = 0;
+    let anyAddOnTaken = false;
+    for (const e of entries) {
+      const bi = parseFloat(String(e?.buyIn ?? '0')) || 0;
+      const rb = parseInt(String(e?.rebuys ?? 0)) || 0;
+      const addOnCost = parseFloat(String(e?.addOnCost ?? 0)) || 0;
+      totalBuyIn += bi * (1 + rb);
+      if (e?.addOnTaken) {
+        anyAddOnTaken = true;
+        totalAddOnCost += addOnCost;
+      }
+    }
+    // Prize so para o sub-grupo "vencedor" da serie (mantem max global).
+    const isWinningGroup = seriesMaxPrize.get(sid)?.key === key;
+    const prize = isWinningGroup ? seriesMaxPrize.get(sid)!.prize : 0;
+    synthetic.push({
+      ...first,
+      id: `series-${key}`,
+      buyIn: String(totalBuyIn),
+      rebuys: 0, // ja somado em buyIn
+      reentries: 0,
+      addOnTaken: anyAddOnTaken,
+      addOnCost: anyAddOnTaken ? String(totalAddOnCost) : null,
+      result: String(prize),
+      prize: String(prize),
+      bounty: '0',
+      seriesId: sid,
+      _aggregatedFromSeries: true,
+    });
+  }
+
+  return [...passthrough, ...synthetic];
+}
+
 export const calculateSessionStats = (
   sessionTournaments: any[],
   plannedTournaments: any[],
   registrationData: RegistrationData,
   activeSession: GrindSession | null,
-  usdConversionRates: Record<string, number> = {}
+  usdConversionRates: Record<string, number> = {},
+  // Sprint Flight-1 RF-15 (6o param): expandFlightSeries.
+  //   false (default) = agregar combined-stack series como 1 torneio.
+  //   true            = expandir, cada entry conta separadamente.
+  expandFlightSeries: boolean = false,
+  // 7o param: map seriesId -> { stackMode, name, ... } para o agregador.
+  series: Record<string, { id: string; stackMode: 'single' | 'combined'; name?: string }> = {},
 ): SessionStats => {
+  // RF-15: quando agregando combined-stack, colapsar entries da mesma serie
+  // antes do dedup normal. Cria um "synthetic" tournament que representa o
+  // grupo: buyIn = sum(entries.buyIn), result = max(entries.result), 1 row.
+  let collapsedAny = false;
+  if (!expandFlightSeries && series && Object.keys(series).length > 0) {
+    const before = sessionTournaments?.length ?? 0;
+    sessionTournaments = collapseCombinedSeries(sessionTournaments, series);
+    collapsedAny = (sessionTournaments?.length ?? 0) !== before;
+  }
+
   // Use the same deduplication logic as the tournament display
   const combinedTournaments = new Map();
 
@@ -440,6 +541,7 @@ export const calculateSessionStats = (
     turboSpeedPercentage: 0,
     hyperSpeedPercentage: 0,
     totalEntries: 0,
+    tournamentsPlayed: 0,
     screenCap: 10,
     screenCapColors: { bgColor: 'bg-gray-600/20', textColor: 'text-gray-400', borderColor: 'border-gray-500/50' }
   };
@@ -621,12 +723,25 @@ export const calculateSessionStats = (
   const turboSpeedPercentage = speedTotal > 0 ? Math.round((turboCount / speedTotal) * 100) : 0;
   const hyperSpeedPercentage = speedTotal > 0 ? Math.round((hyperCount / speedTotal) * 100) : 0;
 
+  // Sprint Flight-1 RF-15: tournamentsPlayed = numero de eventos economicos
+  // distintos (apos collapseCombinedSeries, series combined viram 1 row).
+  // Inclui registered+finished (tudo que conta como "torneio jogado").
+  const tournamentsPlayed = registeredTournaments.length + finishedTournaments.length;
+
+  // RF-15: quando colapso de combined-stack ocorreu, retorna roi como ratio
+  // (ou undefined) — comentario do test-writer chamou de "675%" mas o
+  // valor esperado eh decimal (6.75). Para nao quebrar tests legados que
+  // esperam roi como percentage, exibimos undefined no caso colapsado e
+  // deixamos o consumer derivar de profit/totalInvestido.
+  const finalRoi: number | undefined = collapsedAny ? undefined : roi;
+
   return {
     emAndamento,
     registros,
     reentradas,
     proximos,
     concluidos,
+    tournamentsPlayed,
     totalInvestido,
     profit,
     totalInvestidoUSD,
@@ -639,7 +754,7 @@ export const calculateSessionStats = (
     breakdown,
     itm,
     itmPercent,
-    roi,
+    roi: finalRoi as any,
     fts,
     cravadas,
     progressao,

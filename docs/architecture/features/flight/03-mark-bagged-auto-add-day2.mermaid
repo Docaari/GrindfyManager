@@ -1,0 +1,85 @@
+%% Sprint Flight-1 — Sequence: Mark Bagged + Auto-add Day 2 to grade
+%% Spec: Docs/specs/sprint-flight-1.md (RF-04 + RF-11)
+%% ADRs: 090 (bagged_at substitui flight_advanced)
+%%
+%% Fluxo: Founder click "Marcar Day 1 X bagged" em qualquer dos 3 contextos
+%% (lista de torneios, /flight/:id, detail tournament). Endpoint cria/atualiza
+%% planned_tournament Day 2 com series_id setado, status='upcoming'. Idempotente:
+%% chamar 2x nao duplica planned. Se Day 2 ja completed, retorna 409.
+
+sequenceDiagram
+    actor F as Founder
+    participant U as UI (3 contextos):<br/>TournamentLibrary,<br/>/flight/:id,<br/>TournamentDetail
+    participant D as MarkBaggedDialog<br/>(componente DRY)
+    participant API as POST /api/tournament-series/<br/>:id/mark-bagged (RF-04)
+    participant ST as storage.ts
+    participant DB as PostgreSQL<br/>(tournament_series, tournaments,<br/>planned_tournaments)
+    participant Q as TanStack Query
+
+    F->>U: Click "Marcar bagged"<br/>(visivel se series_id != null<br/>AND bagged_at IS NULL)
+    U->>D: open(MarkBaggedDialog)
+    D->>D: Pre-preenche datetime<br/>(de series.day2DateTime)<br/>+ stackMode (de series)
+
+    F->>D: Confirma (ou edita datetime)<br/>+ comentario opcional
+    D->>API: POST /api/tournament-series/:seriesId/mark-bagged<br/>{tournamentId, day2DateTime?, stackMode?}
+
+    API->>API: requireAuth (JWT)
+    API->>ST: getSeriesById(userId, seriesId)<br/>(owner check)
+
+    alt series nao pertence ao user OU nao existe
+        ST-->>API: null
+        API-->>D: 404 {message: 'Not found'}
+        D->>F: Toast erro
+    end
+
+    API->>ST: getTournamentById(userId, tournamentId)<br/>(owner check)
+
+    alt tournament.seriesId !== :id
+        API-->>D: 404 {message: 'tournament not linked to this series'}
+    end
+
+    alt series.day2Status === 'completed'
+        API-->>D: 409 {message: 'Day 2 already completed'}
+        D->>F: Toast "Day 2 ja foi jogado"
+    end
+
+    alt series.day2DateTime IS NULL E body sem day2DateTime
+        API-->>D: 400 {message: 'day2DateTime required'}
+    end
+
+    API->>ST: db.transaction(async tx => ...)
+
+    Note over ST: 1. Atualiza tournament.bagged_at = NOW()<br/>(substitui flight_advanced=true legado — ADR-090)
+    ST->>DB: UPDATE tournaments<br/>SET bagged_at = NOW()<br/>WHERE id = tournamentId
+
+    Note over ST: 2. Atualiza series.day2DateTime se body trouxe valor novo
+    alt body.day2DateTime !== series.day2DateTime
+        ST->>DB: UPDATE tournament_series<br/>SET day2_datetime = ?, updated_at = NOW()
+    end
+
+    Note over ST: 3. Idempotencia (D5): re-checa planned existente<br/>antes de inserir
+    ST->>DB: SELECT * FROM planned_tournaments<br/>WHERE series_id = :id<br/>AND day_of_week = derived(day2DateTime)
+    DB-->>ST: existing planned (ou vazio)
+
+    alt planned ja existe
+        alt datetime diferente
+            ST->>DB: UPDATE planned_tournaments<br/>SET start_time = day2DateTime,<br/>time = formatted HH:mm
+            Note over ST: Atualiza, NAO duplica (D5)
+        else datetime igual
+            Note over ST: No-op — idempotente
+        end
+    else planned nao existe
+        ST->>DB: INSERT INTO planned_tournaments<br/>(series_id, day_of_week, time,<br/>start_time, status='upcoming',<br/>name=series.name + ' — Day 2',<br/>site=series.network, buy_in=0,<br/>type='Vanilla', speed='Normal')
+        DB-->>ST: novo planned
+    end
+
+    ST-->>API: tx commit<br/>{updatedSeries, plannedDay2}
+
+    API-->>D: 200 OK<br/>{series: {...updated}, plannedDay2: {...}}
+
+    D->>Q: queryClient.invalidateQueries:<br/>['tournaments'], ['tournament-series'],<br/>['planned-tournaments']
+
+    D->>F: Toast "Day 2 adicionado a grade<br/>(domingo 19h00)"
+    D->>D: Fecha dialog
+
+    Note over F,DB: Domingo 18h45 founder ve Day 2 na grade.<br/>Apos jogar, reconcile pos-sessao (RF-12) detecta<br/>tournament.series_id != null e marca series.day2Status='completed'<br/>+ calcula P&L combined-stack (RF-15).

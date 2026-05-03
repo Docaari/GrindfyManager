@@ -1,0 +1,91 @@
+%% Sprint Flight-1 — Sequence: Back-fill manual de Series Retroativo
+%% Spec: Docs/specs/sprint-flight-1.md (RF-13)
+%% ADRs: 090 (single source of truth)
+%%
+%% Fluxo: Founder tem ~30 torneios Phased historicos pagos (lista mental).
+%% Acessa /flight → "Adicionar Series Retroativo" → form cria serie nova +
+%% multi-select de tournaments existentes da biblioteca → N requests PATCH
+%% para linkar (sem endpoint batch dedicado — D8 simplificou). Apos linkar,
+%% reports historicos consolidam P&L combined.
+
+sequenceDiagram
+    actor F as Founder
+    participant FP as /flight page<br/>(RF-10)
+    participant BD as BackfillDialog<br/>(RF-13)
+    participant SAPI as POST /api/tournament-series<br/>(RF-03)
+    participant LAPI as PATCH /api/tournaments/:id<br/>(existente)
+    participant ST as storage.ts
+    participant DB as PostgreSQL
+    participant Q as TanStack Query
+
+    F->>FP: Acessa /flight (sidebar Ferramentas)
+    F->>FP: Click "Adicionar Series Retroativo"
+    FP->>BD: open(BackfillDialog)
+
+    Note over BD: Etapa 1 — Criar Serie
+
+    BD->>F: Form: name, network (dropdown sites),<br/>totalDay1s, day2DateTime (datetime picker),<br/>stackMode radio (single/combined),<br/>notes opcional
+    F->>BD: Preenche e clica "Criar serie"
+
+    BD->>SAPI: POST /api/tournament-series<br/>{name: 'Sunday Million Phased',<br/>network: 'PokerStars', totalDay1s: 17,<br/>day2DateTime: '2025-12-15T19:00:00Z',<br/>stackMode: 'combined'}
+
+    SAPI->>SAPI: requireAuth + Zod validate<br/>(insertTournamentSeriesSchema)
+    SAPI->>ST: createSeries(userId, payload)
+    ST->>DB: INSERT INTO tournament_series<br/>(id=nanoid, day2_status='pending')
+    DB-->>ST: serie criada
+    ST-->>SAPI: TournamentSeries
+    SAPI-->>BD: 201 {id: 'newSeriesId', ...}
+
+    BD->>Q: invalidateQueries(['tournament-series'])
+    BD->>BD: Avanca para Etapa 2
+
+    Note over BD: Etapa 2 — Multi-select Tournaments
+
+    BD->>Q: useQuery(['tournaments',<br/>{filter: 'no_series'}])<br/>(filtros opcionais: site, periodo)
+    Q-->>BD: lista de tournaments com series_id=NULL
+
+    F->>BD: Filtra por site=PokerStars,<br/>periodo=ultimos 6 meses
+    F->>BD: Visualiza lista (ex: 47 candidates)
+    F->>BD: Multi-select 5 entries<br/>(usa search por nome/data)
+    F->>BD: Click "Linkar a serie"
+
+    BD->>BD: Mostra confirm: "5 tournaments<br/>serao linkados a 'Sunday Million Phased'.<br/>Continuar?"
+    F->>BD: Confirma
+
+    Note over BD: Sem endpoint batch (D8 simplificou).<br/>Loop sequencial de PATCH com progress bar.
+
+    loop para cada tournamentId selecionado
+        BD->>LAPI: PATCH /api/tournaments/:tournamentId<br/>{seriesId: 'newSeriesId'}
+
+        LAPI->>LAPI: requireAuth + Zod validate
+        LAPI->>ST: linkTournamentToSeries(userId, tId, seriesId)<br/>(owner check em ambos)
+
+        alt tournament nao pertence ao user OU<br/>series nao pertence ao user
+            ST-->>LAPI: error
+            LAPI-->>BD: 404 {message: 'Not found'}
+            BD->>BD: Marca entry como FALHOU,<br/>continua loop
+        end
+
+        ST->>DB: UPDATE tournaments<br/>SET series_id = ?<br/>WHERE id = ? AND user_id = ?
+        DB-->>ST: row atualizada
+        ST-->>LAPI: tournament atualizado
+        LAPI-->>BD: 200 {tournament}
+
+        BD->>BD: Atualiza progress bar<br/>(N/M linkados)
+    end
+
+    BD->>Q: invalidateQueries:<br/>['tournaments'],<br/>['tournament-series'],<br/>['tournament-series', seriesId]
+
+    alt todos sucesso
+        BD->>F: Toast "5 tournaments linkados<br/>a 'Sunday Million Phased'"
+    else parciais
+        BD->>F: Toast "4/5 linkados<br/>(1 falhou — ver detalhes)"
+    end
+
+    BD->>FP: Fecha dialog<br/>+ navega para /flight/:newSeriesId
+
+    FP->>Q: useQuery(['tournament-series', newSeriesId])
+    Q-->>FP: {series, entries: 5, planneds: []}
+    FP->>F: Renderiza detail panel<br/>(P&L combined, badges Phased nas entries)
+
+    Note over F,DB: Reports/dashboard agora agregam essas 5 entries via series_id<br/>(RF-15). Founder repete fluxo para outras ~25 series historicas.<br/>Empty state da biblioteca apos back-fill: "0 / 17 Day 1s pagos" pra<br/>series sem entries linkadas (caso founder crie serie sem entries).

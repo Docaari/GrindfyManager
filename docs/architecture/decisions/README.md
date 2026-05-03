@@ -67,6 +67,8 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [056](056-onboarding-dismiss-localstorage.md) | Onboarding educativo dismiss via `localStorage` vs coluna `users.preferences` JSONB (Sprint F4) | Aceito | 2026-04-28 |
 | [088](088-hud-stat-targets-knowledge-base.md) | hud_stat_targets knowledge base global + override inline (Sprint F4 stats-analyzer, ex-057) | Aceito | 2026-04-29 |
 | [089](089-hud-snapshot-sample-size-per-stat.md) | sample size per stat em snapshots.values com 3 formatos back-compat (Sprint F4 stats-analyzer, ex-058) | Aceito | 2026-04-29 |
+| [090](090-tournament-series-single-source-of-truth.md) | Tournament Series como single source of truth — deprecar flags inline ADR-031 (Sprint Flight-1) | Aceito | 2026-05-02 |
+| [091](091-stack-mode-enum-single-combined.md) | Stack mode enum: `single` \| `combined` (best-stack fora MVP, defer Flight-2) | Aceito | 2026-05-02 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 

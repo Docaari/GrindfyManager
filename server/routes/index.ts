@@ -36,6 +36,7 @@ import { registerStudyRecommendationsRoutes } from "./study-recommendations";
 import { registerStudyThemeSpotLinkRoutes } from "./study-theme-spot-links";
 import { registerStudyMiscRoutes } from "./study-misc";
 import { registerLibraryRoutes } from "./library-register";
+import { registerTournamentSeriesRoutes } from "./tournament-series";
 import { registerAllJobs } from "../jobs";
 import { spotStorage } from "../lib/spotStorage";
 import primedopeRouter from "./primedope";
@@ -132,6 +133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerDashboardRoutes(app);
   registerAnalyticsRoutes(app);
   registerTournamentRoutes(app);
+  registerTournamentSeriesRoutes(app);
   registerGradePlannerRoutes(app);
   registerGrindSessionRoutes(app);
   registerUploadRoutes(app);

@@ -1,0 +1,94 @@
+%% Sprint Flight-1 — Sequence: Migracao + Deprecacao flags ADR-031
+%% Spec: Docs/specs/sprint-flight-1.md (RF-17)
+%% ADRs: 090 (Tournament Series single source of truth)
+%%
+%% Fluxo: 2 fases. Fase 1 = automatica (Migration A 0029): cria series + back-fill
+%% dados historicos. Fase 2 = MANUAL (Migration B 0030): drop colunas legadas.
+%% Wizard manual refatorado entre as fases para usar API tournament_series.
+%% Janela de seguranca = 7 dias entre Fase 1 e Fase 2.
+
+sequenceDiagram
+    actor D as Dev/Founder
+    participant CLI as drizzle-kit / psql
+    participant DB as PostgreSQL
+    participant SC as shared/schema.ts
+    participant W as Wizard manual<br/>(client/src/components/<br/>tournaments/AddDialog)
+    participant SAPI as /api/tournament-series<br/>(RF-03)
+    participant T as Tests<br/>(vitest)
+
+    Note over D,T: ===== FASE 1 — AUTOMATICA =====<br/>Migration A: 0029_add_tournament_series.sql
+
+    D->>CLI: npm run db:push<br/>(ou drizzle-kit migrate)
+    CLI->>DB: BEGIN TRANSACTION
+
+    Note over CLI: 1. Cria 2 ENUMs (ADR-091)
+    CLI->>DB: CREATE TYPE series_stack_mode<br/>AS ENUM ('single', 'combined');
+    CLI->>DB: CREATE TYPE series_day2_status<br/>AS ENUM ('pending', 'completed', 'cancelled');
+
+    Note over CLI: 2. Cria tabela tournament_series
+    CLI->>DB: CREATE TABLE tournament_series<br/>(id, user_id, name, network,<br/>total_day1s, day2_datetime,<br/>day2_status, stack_mode, notes,<br/>created_at, updated_at);
+
+    Note over CLI: 3. Cria 3 indices
+    CLI->>DB: CREATE INDEX idx_series_user_status<br/>ON tournament_series (user_id, day2_status);
+    CLI->>DB: CREATE INDEX idx_series_user_datetime<br/>ON tournament_series (user_id, day2_datetime);
+    CLI->>DB: CREATE INDEX idx_series_user_name<br/>ON tournament_series (user_id, name);
+
+    Note over CLI: 4. Adiciona series_id em tournaments e planned
+    CLI->>DB: ALTER TABLE tournaments<br/>ADD COLUMN series_id varchar<br/>REFERENCES tournament_series(id) ON DELETE SET NULL;
+    CLI->>DB: ALTER TABLE planned_tournaments<br/>ADD COLUMN series_id varchar<br/>REFERENCES tournament_series(id) ON DELETE SET NULL;
+
+    Note over CLI: 5. Adiciona bagged_at (substitui flight_advanced)
+    CLI->>DB: ALTER TABLE tournaments<br/>ADD COLUMN bagged_at timestamp NULL;
+
+    Note over CLI: 6. Back-fill dados historicos
+    CLI->>DB: SELECT id, user_id, name, site,<br/>flight_parent_id, flight_day,<br/>flight_advanced, created_at<br/>FROM tournaments<br/>WHERE is_flight = true;
+    DB-->>CLI: ~N rows historicas
+
+    loop para cada grupo (flight_parent_id OR name+site)
+        CLI->>DB: INSERT INTO tournament_series<br/>(id=nanoid, user_id, name=base_name,<br/>network=site, total_day1s=count_in_group,<br/>day2_datetime=COALESCE(parent.date_played, NOW()),<br/>day2_status='completed',<br/>stack_mode='combined' if count > 1 else 'single')
+        DB-->>CLI: novoSeriesId
+        CLI->>DB: UPDATE tournaments<br/>SET series_id = novoSeriesId<br/>WHERE id IN (group_ids);
+        Note over CLI: Para entries com flight_advanced=true:
+        CLI->>DB: UPDATE tournaments<br/>SET bagged_at = created_at<br/>WHERE id IN (group_ids)<br/>AND flight_advanced = true;
+    end
+
+    CLI->>DB: COMMIT
+    DB-->>CLI: migration applied
+
+    Note over D: Validacao manual: founder revisa<br/>amostra de 5-10 series migradas via /flight
+
+    Note over D,T: ===== REFACTOR DO WIZARD MANUAL =====
+
+    D->>SC: Atualiza shared/schema.ts:<br/>tournamentSeries table object,<br/>seriesStackModeEnum, seriesDay2StatusEnum.<br/>Marca isFlight/flightDay/flightParentId/<br/>flightAdvanced como DEPRECATED em comentarios.
+    D->>W: Refactor wizard:<br/>remove inputs de flag,<br/>adiciona "este torneio e parte de uma serie?"<br/>→ se SIM, integra com /api/tournament-series<br/>(criar nova OU linkar existente)
+
+    D->>T: npm run check + npx vitest<br/>(garantir 0 regressao em tests)
+
+    Note over D,T: Aplicado em producao. Janela 7 dias monitorando<br/>queries que ainda referenciam flags legados.
+
+    Note over D,T: ===== FASE 2 — MANUAL (apos sign-off) =====<br/>Migration B: 0030_drop_legacy_flight_flags.sql
+
+    D->>D: Validacao final: sem queries em codigo<br/>nem em logs referenciando is_flight/flight_*<br/>(grep + monitoring)
+
+    D->>CLI: psql -f migrations/<br/>0030_drop_legacy_flight_flags.sql<br/>(MANUAL — nao automatico no deploy)
+
+    CLI->>DB: BEGIN TRANSACTION
+
+    Note over CLI: 1. Drop indices parciais
+    CLI->>DB: DROP INDEX IF EXISTS<br/>idx_tournaments_user_flight_parent;
+    CLI->>DB: DROP INDEX IF EXISTS<br/>idx_tournaments_user_is_flight;
+
+    Note over CLI: 2. Drop colunas em tournaments
+    CLI->>DB: ALTER TABLE tournaments<br/>DROP COLUMN is_flight,<br/>DROP COLUMN flight_day,<br/>DROP COLUMN flight_parent_id,<br/>DROP COLUMN flight_advanced;
+
+    Note over CLI: 3. Drop colunas em planned_tournaments
+    CLI->>DB: ALTER TABLE planned_tournaments<br/>DROP COLUMN is_flight,<br/>DROP COLUMN flight_day,<br/>DROP COLUMN flight_parent_id;
+
+    CLI->>DB: COMMIT
+    DB-->>CLI: drop applied
+
+    D->>SC: Atualiza shared/schema.ts:<br/>remove colunas dos table objects.<br/>Atualiza data-model.mermaid<br/>(remove campos DEPRECATED).
+
+    D->>T: npm run check + npx vitest<br/>(garantir 0 regressao final)
+
+    Note over D,DB: Schema clean. Single source of truth = tournament_series.<br/>Rollback de Fase 2 = re-adicionar colunas + popular via series_id<br/>(custoso — por isso Fase 2 MANUAL com sign-off).

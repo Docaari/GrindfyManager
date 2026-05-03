@@ -237,10 +237,16 @@ export const tournaments = pgTable("tournaments", {
   satelliteTargetName: varchar("satellite_target_name"),
   satelliteExtraCash: decimal("satellite_extra_cash"),
   enteredViaSatellite: boolean("entered_via_satellite").default(false),
-  // Flight fields (so quando isFlight=true)
+  // Flight fields (so quando isFlight=true) — DEPRECADAS (ADR-090); migrar para series_id.
   flightDay: varchar("flight_day"), // '1A' | '1B' | ... | 'Final' | '2' | '3' | 'Day 1' | ...
   flightParentId: varchar("flight_parent_id"),
   flightAdvanced: boolean("flight_advanced"),
+  // Sprint Flight-1 (ADR-090): single source of truth = tournament_series.
+  // FK nullable, ON DELETE SET NULL (orfaniza entries sem deletar historico).
+  seriesId: varchar("series_id").references(() => tournamentSeries.id, { onDelete: "set null" }),
+  // baggedAt substitui semantica de flightAdvanced=true (ADR-090): timestamp
+  // de quando a entry foi marcada como bagged (Day 1 passou).
+  baggedAt: timestamp("bagged_at"),
   // Package fields (so quando isLive=true)
   packageBuyIn: decimal("package_buy_in"),
   packageAccommodation: decimal("package_accommodation"),
@@ -271,6 +277,73 @@ export const tournaments = pgTable("tournaments", {
   index("tournaments_flight_parent_idx").on(table.flightParentId),
   index("tournaments_live_idx").on(table.isLive),
 ]);
+
+// =============================================================================
+// Sprint Flight-1 — tournament_series (ADR-090, ADR-091, Migration 0029)
+// =============================================================================
+
+// ENUMs Postgres (ADR-091): single | combined; sem 'best' (defer Sprint Flight-2).
+export const SERIES_STACK_MODES = ['single', 'combined'] as const;
+export const seriesStackModeEnum = pgEnum('series_stack_mode', SERIES_STACK_MODES);
+
+// D4: status do Day 2 — pending (default) / completed / cancelled.
+export const SERIES_DAY2_STATUSES = ['pending', 'completed', 'cancelled'] as const;
+export const seriesDay2StatusEnum = pgEnum('series_day2_status', SERIES_DAY2_STATUSES);
+
+export const tournamentSeries = pgTable('tournament_series', {
+  id: varchar('id').primaryKey().notNull(),
+  userId: varchar('user_id')
+    .notNull()
+    .references(() => users.userPlatformId, { onDelete: 'cascade' }),
+  name: varchar('name').notNull(),
+  network: varchar('network'),
+  totalDay1s: integer('total_day1s').notNull().default(1),
+  day2DateTime: timestamp('day2_datetime').notNull(),
+  day2Status: seriesDay2StatusEnum('day2_status').notNull().default('pending'),
+  stackMode: seriesStackModeEnum('stack_mode').notNull().default('single'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_series_user_status').on(table.userId, table.day2Status),
+  index('idx_series_user_datetime').on(table.userId, table.day2DateTime),
+  index('idx_series_user_name').on(table.userId, table.name),
+]);
+
+export type TournamentSeries = typeof tournamentSeries.$inferSelect;
+export type InsertTournamentSeries = typeof tournamentSeries.$inferInsert;
+
+// Zod schemas (drizzle-zod) — defaults aplicados pelo coerce em campos
+// opcionais; rejeita totalDay1s negativo (D9 permite 0); restringe enums.
+const _insertTournamentSeriesBase = createInsertSchema(tournamentSeries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTournamentSeriesSchema = _insertTournamentSeriesBase.extend({
+  name: z.string().trim().min(1, 'name eh obrigatorio'),
+  totalDay1s: z.number().int().min(0, 'totalDay1s nao pode ser negativo').optional().default(1),
+  day2DateTime: z.union([z.date(), z.string()])
+    .transform((v) => (typeof v === 'string' ? new Date(v) : v)),
+  day2Status: z.enum(SERIES_DAY2_STATUSES).optional().default('pending'),
+  stackMode: z.enum(SERIES_STACK_MODES).optional().default('single'),
+  network: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+});
+
+// Update schema: omit immutable fields (userId, id) — refinement-style.
+export const updateTournamentSeriesSchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  network: z.string().nullable().optional(),
+  totalDay1s: z.number().int().min(0).optional(),
+  day2DateTime: z.union([z.date(), z.string()])
+    .transform((v) => (typeof v === 'string' ? new Date(v) : v))
+    .optional(),
+  day2Status: z.enum(SERIES_DAY2_STATUSES).optional(),
+  stackMode: z.enum(SERIES_STACK_MODES).optional(),
+  notes: z.string().nullable().optional(),
+}).strict();
 
 // Sprint F4 — primedope_runs (Migration 0015, ADR-054 cache + audit trail).
 // Reviewer fix HIGH #5: FK aponta para users.userPlatformId (padrao do
@@ -388,6 +461,8 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   isLive: boolean("is_live").default(false),
   flightDay: varchar("flight_day"),
   flightParentId: varchar("flight_parent_id"),
+  // Sprint Flight-1 (ADR-090): FK opcional para tournament_series.
+  seriesId: varchar("series_id").references(() => tournamentSeries.id, { onDelete: "set null" }),
   // Sprint 1: campos satellite minimos (ticket value + target name) para
   // quando type=Satellite e o usuario adiciona o satelite na grade.
   satelliteRewardType: varchar("satellite_reward_type"),
@@ -686,6 +761,9 @@ export const userSettings = pgTable("user_settings", {
   stopWinUsd: decimal("stop_win_usd"),
   stopLockUntil: timestamp("stop_lock_until"),
   stopLockDurationHours: integer("stop_lock_duration_hours").notNull().default(12),
+  // Sprint Flight-1 RF-16 / D13: toggle "agregar (default) vs expandir entries"
+  // nos relatorios para combined-stack series.
+  reportsExpandFlightSeries: boolean("reports_expand_flight_series").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1564,6 +1642,8 @@ export const insertUserSettingsSchema = _insertUserSettingsSchemaBase.extend({
   alertRepeatGapMs: z.number().int().min(2000).max(30000).optional(),
   ttsRedactBuyIn: z.boolean().optional(),
   ttsFirstRunSeen: z.boolean().optional(),
+  // Sprint Flight-1 RF-16 / D13.
+  reportsExpandFlightSeries: z.boolean().optional(),
 }).strict();
 
 export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit({
