@@ -7,7 +7,7 @@
  * - Mini-sparkline dos ultimos 30d
  * - Projecao mensal oculta quando ROI30d <= 0
  */
-import React from "react";
+import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -31,12 +31,18 @@ interface BankrollState {
 
 interface BankrollHistory {
   series: Array<{ bucket: string; balance: number; movements: number; delta: number }>;
+  snapshots?: Array<{ delta: any; reason: string; occurredAt: string }>;
   summary: {
     netChange?: number;
     startBalance?: number;
     endBalance?: number;
   };
 }
+
+// Sprint Bankroll-Profit-Chart 2026-05-03: sparkline considera apenas
+// reasons que representam lucro/prejuizo de poker. Aportes/saques/transfers
+// nao deslocam a curva (founder pediu visualizacao de performance pura).
+const PROFIT_REASONS = new Set(["session_result", "rakeback", "manual_report"]);
 
 function formatUSD(n: number | null | undefined): string {
   if (n == null) return "-";
@@ -59,6 +65,26 @@ export function BankrollWidget() {
     queryFn: () => apiRequest("GET", "/api/bankroll/history"),
     enabled: !!state?.configured,
   });
+
+  // Profit-only sparkline: filtra snapshots para reasons de lucro e acumula
+  // deltas a partir de 0. Aportes/saques sao ignorados de proposito.
+  // Hook precede os early returns abaixo (lessons-learned #1).
+  const profitSeries = useMemo(() => {
+    const snaps = history?.snapshots ?? [];
+    const sorted = snaps
+      .filter((s) => PROFIT_REASONS.has(s.reason))
+      .slice()
+      .sort(
+        (a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime(),
+      );
+    let cum = 0;
+    return sorted.map((s) => {
+      const raw = typeof s.delta === "number" ? s.delta : parseFloat(String(s.delta));
+      const d = Number.isFinite(raw) ? raw : 0;
+      cum += d;
+      return { balance: cum };
+    });
+  }, [history?.snapshots]);
 
   if (!state) return null;
 
@@ -91,7 +117,6 @@ export function BankrollWidget() {
   // backend nao expoe a chave nova (compat retroativa durante rollout).
   const amountBRL = state.amountDisplay?.BRL
     ?? (state.exchangeRateBRL != null ? amount * state.exchangeRateBRL : undefined);
-  const series = history?.series ?? [];
 
   // ROI simples sobre a serie (endBalance - startBalance) / startBalance
   const start = history?.summary?.startBalance ?? 0;
@@ -99,8 +124,7 @@ export function BankrollWidget() {
   const roi = start > 0 ? (end - start) / start : 0;
   const showProjection = roi > 0;
 
-  // Mini-sparkline: polyline SVG
-  const sparkPath = buildSparklinePath(series);
+  const sparkPath = buildSparklinePath(profitSeries);
 
   return (
     <div className="rounded-lg border p-5 bg-card space-y-3">
@@ -136,17 +160,25 @@ export function BankrollWidget() {
         )}
       </div>
 
-      {series.length > 0 && (
-        <div data-testid="bankroll-widget-sparkline" className="h-8">
-          <svg viewBox="0 0 100 20" preserveAspectRatio="none" className="w-full h-full">
-            <polyline
-              points={sparkPath}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1"
-              className="text-primary"
-            />
-          </svg>
+      {profitSeries.length > 0 && (
+        <div data-testid="bankroll-widget-sparkline-wrapper" className="space-y-1">
+          <div data-testid="bankroll-widget-sparkline" className="h-8">
+            <svg viewBox="0 0 100 20" preserveAspectRatio="none" className="w-full h-full">
+              <polyline
+                points={sparkPath}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1"
+                className="text-primary"
+              />
+            </svg>
+          </div>
+          <p
+            data-testid="bankroll-widget-sparkline-note"
+            className="text-[11px] leading-tight text-muted-foreground"
+          >
+            Curva considera apenas lucros e prejuizos de sessoes, rakeback e reports manuais. Aportes e retiradas sao ignorados.
+          </p>
         </div>
       )}
 

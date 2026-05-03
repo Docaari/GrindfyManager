@@ -135,7 +135,14 @@ describe('BankrollWidget - banca configurada', () => {
       const url = typeof urlArg === 'string' ? urlArg : methodOrUrl;
       if (url.includes('/api/bankroll/history')) {
         return Promise.resolve({
-          snapshots: [],
+          // Profit-only sparkline (Sprint Bankroll-Profit-Chart 2026-05-03):
+          // widget agora deriva curva de snapshots filtrados por reason de
+          // lucro (session_result/rakeback/manual_report).
+          snapshots: [
+            { delta: 200, reason: 'session_result', occurredAt: '2026-04-15T12:00:00Z' },
+            { delta: 50, reason: 'rakeback', occurredAt: '2026-04-20T12:00:00Z' },
+            { delta: 100, reason: 'session_result', occurredAt: '2026-04-24T12:00:00Z' },
+          ],
           series: [
             { bucket: '2026-04-01', balance: 1000, movements: 1, delta: 1000 },
             { bucket: '2026-04-15', balance: 1200, movements: 1, delta: 200 },
@@ -155,6 +162,44 @@ describe('BankrollWidget - banca configurada', () => {
     await waitFor(() => {
       expect(screen.getByTestId('bankroll-widget-sparkline')).toBeTruthy();
     });
+    // Nota explicativa abaixo do grafico (founder request 2026-05-03)
+    expect(screen.getByTestId('bankroll-widget-sparkline-note').textContent).toMatch(
+      /aportes.*retiradas|lucros.*prejui/i,
+    );
+  });
+
+  it('sparkline ignora aportes/retiradas e usa cumulative profit', async () => {
+    (apiRequest as any).mockImplementation((methodOrUrl: string, urlArg?: string) => {
+      const url = typeof urlArg === 'string' ? urlArg : methodOrUrl;
+      if (url.includes('/api/bankroll/history')) {
+        return Promise.resolve({
+          snapshots: [
+            { delta: 5000, reason: 'deposit', occurredAt: '2026-04-01T00:00:00Z' },
+            { delta: 200, reason: 'session_result', occurredAt: '2026-04-10T00:00:00Z' },
+            { delta: -1000, reason: 'withdrawal', occurredAt: '2026-04-15T00:00:00Z' },
+            { delta: -50, reason: 'session_result', occurredAt: '2026-04-20T00:00:00Z' },
+          ],
+          series: [],
+          summary: { netChange: 4150, startBalance: 0, endBalance: 4150 },
+          pagination: { total: 4, limit: 100, offset: 0 },
+        });
+      }
+      return Promise.resolve({
+        configured: true, amount: 4150, rule: '1pct', maxBuyInUSD: 41, snapshotCount: 4,
+      });
+    });
+
+    render(withClient(<BankrollWidget />));
+
+    // Sparkline renderiza pq existem snapshots de profit, mesmo sem `series`.
+    await waitFor(() => {
+      expect(screen.getByTestId('bankroll-widget-sparkline')).toBeTruthy();
+    });
+
+    // Polyline tem exatamente 2 pontos (2 snapshots de profit, deposit/withdrawal ignorados).
+    const svg = screen.getByTestId('bankroll-widget-sparkline').querySelector('polyline');
+    const points = svg?.getAttribute('points')?.trim().split(/\s+/) ?? [];
+    expect(points).toHaveLength(2);
   });
 
   it('projecao mensal esconde valor quando ROI30d <= 0 (spec RF-09 criterio)', async () => {
