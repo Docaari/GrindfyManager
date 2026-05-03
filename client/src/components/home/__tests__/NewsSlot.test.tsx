@@ -1,13 +1,18 @@
 /**
  * Test-Writer (Modo TDD - Red Phase)
  *
- * Sprint home-reform-1 — RF-05 + RF-19 (NewsSlot — null em Onda 1).
+ * Sprint home-reform-1-5 — RF-24 (B3 NewsSlot visivel "em breve").
  *
- * Spec : Docs/specs/home-reform-1.md §RF-05, §RF-19, §3 D17, §5.13 S15
- * ADR  : Docs/architecture/decisions/100-news-feed-deferred-integration.md §2 (D)
+ * Spec : Docs/specs/home-reform-1-5.md RF-24, D1.5-6, D-FOUNDER-5
  *
- * Status RED: componente NAO existe ainda em
- * `client/src/components/home/NewsSlot.tsx`.
+ * MUDANCA Onda 1.5: NewsSlot que retornava null em Onda 1 agora retorna
+ * placeholder visivel quando enabled=false OU items.length=0.
+ *
+ * Status RED: comportamento atual de NewsSlot eh retornar null. Implementer
+ * deve atualizar NewsSlot.tsx para render placeholder.
+ *
+ * Lessons aplicadas:
+ *   #14  await import(...) em vez de require — ESM compat
  */
 
 import { describe, it, expect } from 'vitest';
@@ -25,45 +30,61 @@ const stubItem = {
 };
 
 // =============================================================================
-// enabled=false — sempre null (D17, RF-05 AC #2)
+// enabled=false — placeholder visivel "Em breve" (D1.5-6 + D-FOUNDER-5)
 // =============================================================================
 
-describe('<NewsSlot enabled={false} /> — Onda 1 invisivel', () => {
-  it('com enabled=false, renderiza null (DOM nao tem testid)', async () => {
+describe('<NewsSlot enabled={false} /> — placeholder visivel (Onda 1.5)', () => {
+  it('com enabled=false renderiza placeholder com data-testid="home-news-slot-placeholder"', async () => {
     const { default: NewsSlot } = await import('../NewsSlot');
-    const { container } = render(<NewsSlot enabled={false} items={[]} />);
-    expect(container.firstChild).toBeNull();
-    expect(screen.queryByTestId('home-news-slot')).not.toBeInTheDocument();
+    render(<NewsSlot enabled={false} items={[]} />);
+    expect(screen.getByTestId('home-news-slot-placeholder')).toBeInTheDocument();
   });
 
-  it('com enabled=false e items nao-vazio, ainda renderiza null', async () => {
+  it('placeholder mostra header "Noticias do mercado"', async () => {
     const { default: NewsSlot } = await import('../NewsSlot');
-    const { container } = render(<NewsSlot enabled={false} items={[stubItem]} />);
-    expect(container.firstChild).toBeNull();
+    render(<NewsSlot enabled={false} items={[]} />);
+    expect(screen.getByText(/Noticias do mercado/i)).toBeInTheDocument();
+  });
+
+  it('placeholder mostra badge "Em breve"', async () => {
+    const { default: NewsSlot } = await import('../NewsSlot');
+    render(<NewsSlot enabled={false} items={[]} />);
+    expect(screen.getByText(/Em breve/i)).toBeInTheDocument();
+  });
+
+  it('placeholder mostra body texto descritivo (PT4 / HM3 / SharkScope)', async () => {
+    const { default: NewsSlot } = await import('../NewsSlot');
+    render(<NewsSlot enabled={false} items={[]} />);
+    expect(screen.getByText(/PT4|HM3|SharkScope/i)).toBeInTheDocument();
   });
 });
 
 // =============================================================================
-// enabled=true && items=[] — null (RF-05 AC #3)
+// enabled=true && items=[] — mesmo placeholder visivel (D1.5-6)
 // =============================================================================
 
-describe('<NewsSlot enabled={true} items={[]} /> — Onda 1 sem placeholder', () => {
-  it('com enabled=true e items=[], renderiza null (sem "sem noticias")', async () => {
+describe('<NewsSlot enabled={true} items={[]} /> — placeholder visivel', () => {
+  it('com enabled=true e items=[] renderiza mesmo placeholder', async () => {
     const { default: NewsSlot } = await import('../NewsSlot');
-    const { container } = render(<NewsSlot enabled={true} items={[]} />);
-    expect(container.firstChild).toBeNull();
+    render(<NewsSlot enabled={true} items={[]} />);
+    expect(screen.getByTestId('home-news-slot-placeholder')).toBeInTheDocument();
   });
 });
 
 // =============================================================================
-// enabled=true && items.length > 0 — Onda 3 contract preservado
+// enabled=true && items.length > 0 — Onda 3 path preservado
 // =============================================================================
 
 describe('<NewsSlot enabled={true} items={[item]} /> — Onda 3 contract', () => {
-  it('com items > 0 renderiza container visivel (data-testid="home-news-slot")', async () => {
+  it('com items > 0 renderiza container real (data-testid="home-news-slot")', async () => {
     const { default: NewsSlot } = await import('../NewsSlot');
     render(<NewsSlot enabled={true} items={[stubItem]} />);
-    const slot = screen.queryByTestId('home-news-slot');
-    expect(slot).toBeInTheDocument();
+    expect(screen.getByTestId('home-news-slot')).toBeInTheDocument();
+  });
+
+  it('com items > 0 NAO mostra placeholder', async () => {
+    const { default: NewsSlot } = await import('../NewsSlot');
+    render(<NewsSlot enabled={true} items={[stubItem]} />);
+    expect(screen.queryByTestId('home-news-slot-placeholder')).not.toBeInTheDocument();
   });
 });
