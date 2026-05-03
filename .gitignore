@@ -11,6 +11,7 @@ vite.config.ts.*
 .claude/scheduled_tasks.lock
 .claude/transcripts/
 .claude/cache/
+.claude/worktrees/
 
 # CSVs de uso pessoal (importados pelo founder localmente)
 CSV Field/
@@ -27,3 +28,13 @@ session-log.txt
 # studies-v2.ts:639. Acesso so via GET /api/starred-hands/:id/image
 # (ADR-052 ownership middleware).
 private-uploads/
+
+# Pasta uploads/ generica (alguns flows escrevem aqui localmente; storage real
+# eh private-uploads ou S3 em prod).
+uploads/
+
+# Branding deliverables exportados via ferramenta de design — versao bruta
+# nao versionada. Variants oficiais ficam em attached_assets/.
+logo-export/
+_thumb_*.png
+/Logo *.png
