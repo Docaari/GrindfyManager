@@ -34,6 +34,7 @@ export interface SpotScreenshotPasterProps {
     pastedAt?: string;
   }) => void;
   onError?: (msg: string) => void;
+  onCounterClick?: () => void;
   disabled?: boolean;
 }
 
@@ -58,6 +59,7 @@ export default function SpotScreenshotPaster(props: SpotScreenshotPasterProps) {
     sessionTournamentId,
     onUploaded,
     onError,
+    onCounterClick,
     disabled = false,
   } = props;
 
@@ -221,13 +223,31 @@ export default function SpotScreenshotPaster(props: SpotScreenshotPasterProps) {
 
   return (
     <div className="flex items-center gap-2" data-testid="spot-paster-root">
-      <Badge
-        variant="secondary"
-        data-testid="spot-paster-counter"
-        className="font-mono"
-      >
-        {usedCount}/{maxCount} prints
-      </Badge>
+      {onCounterClick ? (
+        <button
+          type="button"
+          onClick={onCounterClick}
+          data-testid="spot-viewer-trigger"
+          className="rounded-md focus:outline-none focus:ring-2 focus:ring-poker-accent"
+          aria-label="Ver prints da sessao"
+        >
+          <Badge
+            variant="secondary"
+            data-testid="spot-paster-counter"
+            className="font-mono cursor-pointer hover:bg-gray-700"
+          >
+            {usedCount}/{maxCount} prints
+          </Badge>
+        </button>
+      ) : (
+        <Badge
+          variant="secondary"
+          data-testid="spot-paster-counter"
+          className="font-mono"
+        >
+          {usedCount}/{maxCount} prints
+        </Badge>
+      )}
       <Button
         type="button"
         variant="outline"

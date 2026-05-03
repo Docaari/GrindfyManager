@@ -51,6 +51,10 @@ import TimeEditDialog from "@/components/grind-session-live/TimeEditDialog";
 import AlertsPanel from "@/components/grind-session-live/AlertsPanel";
 import ReentryConfirmDialog from "@/components/grind-session-live/ReentryConfirmDialog";
 import SpotScreenshotPaster from "@/components/grind-session-live/SpotScreenshotPaster";
+import QuickNoteDialog, {
+  type QuickNoteSpot,
+} from "@/components/grind-session-live/QuickNoteDialog";
+import SessionSpotsViewerDialog from "@/components/grind-session-live/SessionSpotsViewerDialog";
 import {
   TournamentAlertDialog,
   type TournamentAlertCreatePayload,
@@ -833,16 +837,35 @@ export default function GrindSessionLive() {
       : Array.isArray(pendingSpotsData?.items)
         ? pendingSpotsData!.items!.length
         : 0;
-  const handleSpotUploaded = useCallback(() => {
-    if (!activeSession?.id) return;
-    queryClient.invalidateQueries({
-      queryKey: ["/api/starred-hands/pending", { sessionId: activeSession.id }],
-    });
-    toast({
-      title: "Print salvo",
-      description: "Spot adicionado a sessao. Revise no cooldown ou em Estudos > Spots.",
-    });
-  }, [activeSession?.id]);
+  const [spotNoteQueue, setSpotNoteQueue] = useState<QuickNoteSpot[]>([]);
+  const [spotViewerOpen, setSpotViewerOpen] = useState(false);
+
+  const handleSpotUploaded = useCallback(
+    (spot: { id: string; imageUrl: string }) => {
+      if (!activeSession?.id) return;
+      queryClient.invalidateQueries({
+        queryKey: ["/api/starred-hands/pending", { sessionId: activeSession.id }],
+      });
+      setSpotNoteQueue((prev) => [
+        ...prev,
+        { id: spot.id, imageUrl: spot.imageUrl },
+      ]);
+    },
+    [activeSession?.id],
+  );
+
+  const closeSpotNote = useCallback(() => {
+    setSpotNoteQueue((prev) => prev.slice(1));
+  }, []);
+
+  const openSpotViewer = useCallback(() => {
+    setSpotViewerOpen(true);
+  }, []);
+
+  const closeSpotViewer = useCallback(() => {
+    setSpotViewerOpen(false);
+  }, []);
+
   const handleSpotError = useCallback(
     (msg: string) => {
       toast({
@@ -2166,6 +2189,7 @@ export default function GrindSessionLive() {
             usedCount={spotUsedCount}
             onUploaded={handleSpotUploaded}
             onError={handleSpotError}
+            onCounterClick={openSpotViewer}
           />
         </div>
       )}
@@ -2838,6 +2862,18 @@ export default function GrindSessionLive() {
           </div>
         </div>
       )}
+
+      {/* Spot Notes (RF-01) + Viewer (RF-02) — Sprint Grind-Live Spot Notes */}
+      <QuickNoteDialog
+        spot={spotNoteQueue[0] ?? null}
+        sessionId={activeSession?.id}
+        onClose={closeSpotNote}
+      />
+      <SessionSpotsViewerDialog
+        open={spotViewerOpen}
+        sessionId={activeSession?.id ?? null}
+        onClose={closeSpotViewer}
+      />
     </div>
   );
 }
