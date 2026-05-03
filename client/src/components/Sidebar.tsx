@@ -31,12 +31,16 @@ import {
   MessageSquare,
   Wallet,
   GraduationCap,
-  Layers
+  Layers,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const { user, logout, isAdmin } = useAuth();
 
   // Sprint F2 W4 (RF-10): badge de Spots Pendentes em /estudos.
@@ -64,46 +68,47 @@ const Sidebar: React.FC = () => {
         ? '99+'
         : String(pendingSpotsCount);
 
-  // Sprint home-reform-1 RF-07 / D19: 5 grupos refatorados.
-  // HOJE / GRIND / ESTUDOS / FERRAMENTAS / ADMIN.
-  // URLs preservadas (zero migration). Labels e ordem ajustadas.
+  // Sidebar reform 2026-05-03 (Opcao A — workflow conservador).
+  // 5 grupos: VISAO / JOGAR / ESTUDAR / UTILIDADES / ADMIN.
+  // URLs preservadas (zero migration). Banca sobe pra Visao.
+  // Coach IA migra pra Estudar (transversal). Torneios vira Estudar (historico).
+  // Import migra pra Utilidades (acao esporadica).
   const menuSections = [
     {
-      slug: 'hoje',
-      title: 'HOJE',
+      slug: 'visao',
+      title: 'VISAO',
       items: [
         { path: '/', icon: User, label: 'Hoje', adminOnly: false },
         { path: '/dashboard', icon: BarChart3, label: 'Dashboard', adminOnly: false },
-        { path: '/upload', icon: Upload, label: 'Import', adminOnly: false },
-        { path: '/library', icon: BookOpen, label: 'Torneios', adminOnly: false },
+        { path: '/bankroll', icon: Wallet, label: 'Banca', adminOnly: false },
       ]
     },
     {
-      slug: 'grind',
-      title: 'GRIND',
+      slug: 'jogar',
+      title: 'JOGAR',
       items: [
-        // D19: Grade -> Grind -> Warm Up -> Coach IA -> Flight
         { path: '/coach', icon: Calendar, label: 'Grade', adminOnly: false },
-        { path: '/grind', icon: Gamepad2, label: 'Grind', adminOnly: false },
         { path: '/mental', icon: Brain, label: 'Warm Up', adminOnly: false },
-        { path: '/coach-ai', icon: MessageSquare, label: 'Coach IA', adminOnly: false },
+        { path: '/grind', icon: Gamepad2, label: 'Grind', adminOnly: false },
         { path: '/flight', icon: Layers, label: 'Flight', adminOnly: false },
       ]
     },
     {
-      slug: 'estudos',
-      title: 'ESTUDOS',
+      slug: 'estudar',
+      title: 'ESTUDAR',
       items: [
         { path: '/estudos', icon: BookOpen, label: 'Estudos', adminOnly: false },
+        { path: '/coach-ai', icon: MessageSquare, label: 'Coach IA', adminOnly: false },
         { path: '/biblioteca', icon: GraduationCap, label: 'Biblioteca', adminOnly: false },
+        { path: '/library', icon: Trophy, label: 'Torneios', adminOnly: false },
       ]
     },
     {
-      slug: 'ferramentas',
-      title: 'FERRAMENTAS',
+      slug: 'utilidades',
+      title: 'UTILIDADES',
       items: [
+        { path: '/upload', icon: Upload, label: 'Import', adminOnly: false },
         { path: '/calculadoras', icon: Calculator, label: 'Calculadoras', adminOnly: false },
-        { path: '/bankroll', icon: Wallet, label: 'Banca', adminOnly: false },
       ]
     },
     {
@@ -172,53 +177,38 @@ const Sidebar: React.FC = () => {
       h-full bg-gray-900 border-r border-gray-700 flex flex-col transition-all duration-300
     `}>
       {/* Header — Sprint home-reform-1 RF-06: <HeaderLogo> swappable. */}
-      <div className="p-4 border-b border-gray-700">
-        <div className="flex items-center justify-between">
-          {!isCollapsed && (
-            <div className="flex items-center space-x-3">
-              <HeaderLogo
-                variant="mark"
-                alt="Grindfy Logo"
-                className="w-8 h-8 flex-shrink-0"
-              />
-              <h1 className="text-xl font-bold text-white">
-                Grind<span className="text-[#15a24e]">fy</span>
-              </h1>
-            </div>
-          )}
-          {isCollapsed && (
-            <HeaderLogo
-              variant="mark"
-              alt="Grindfy Logo"
-              className="w-8 h-8 flex-shrink-0"
-            />
-          )}
+      <div className="px-3 py-1 border-b border-gray-700 relative">
+        {!isCollapsed && (
+          <HeaderLogo
+            variant="full"
+            alt="Grindfy Logo"
+            className="block w-full h-auto object-contain"
+          />
+        )}
+        {isCollapsed && (
+          <HeaderLogo
+            variant="mark"
+            alt="Grindfy Logo"
+            className="block w-full h-auto object-contain"
+          />
+        )}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          aria-label={isCollapsed ? 'Expandir sidebar' : 'Recolher sidebar'}
+          className={`absolute top-2 right-2 p-1 rounded-lg bg-gray-900/70 hover:bg-gray-800 text-gray-400 hover:text-white transition-colors ${isCollapsed ? 'hidden' : ''}`}
+        >
+          <ChevronLeft size={18} />
+        </button>
+        {isCollapsed && (
           <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+            onClick={() => setIsCollapsed(false)}
+            aria-label="Expandir sidebar"
+            className="mt-2 w-full flex justify-center p-1 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
           >
-            {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+            <ChevronRight size={18} />
           </button>
-        </div>
+        )}
       </div>
-      {/* User Info */}
-      {!isCollapsed && (
-        <div className="p-4 border-b border-gray-700">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-              <User size={16} className="text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">
-                {user?.name || user?.username || user?.firstName || user?.userPlatformId || 'Usuario'}
-              </p>
-              <p className="text-xs text-gray-400 truncate">
-                {user?.email}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Navigation */}
       <nav className="flex-1 p-4 overflow-y-auto">
         <div className="space-y-6">
@@ -334,6 +324,24 @@ const Sidebar: React.FC = () => {
       </nav>
       {/* Footer Actions */}
       <div className="p-4 border-t border-gray-700 space-y-2">
+        {/* User Info */}
+        {!isCollapsed && (
+          <div className="pb-3 mb-2 border-b border-gray-700">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <User size={16} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">
+                  {user?.name || user?.username || user?.firstName || user?.userPlatformId || 'Usuario'}
+                </p>
+                <p className="text-xs text-gray-400 truncate">
+                  {user?.email}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Subscription Status Badge */}
         {renderSubscriptionBadge()}
 
@@ -370,37 +378,61 @@ const Sidebar: React.FC = () => {
           </a>
         </Link>
 
-        {/* Feedback Modals */}
-        <div className="space-y-2">
-          <BugReportModal
-            currentPage={location}
-            trigger={
-              <button className={`
-                flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
-                text-gray-300 hover:bg-red-600/20 hover:text-red-400 w-full
-              `}>
-                <Bug size={20} className="flex-shrink-0" />
-                {!isCollapsed && (
-                  <span className="font-medium">Reportar Bug</span>
-                )}
-              </button>
-            }
-          />
+        {/* Ajuda — submenu colapsavel agrupando Bug + Sugestao */}
+        <div className="space-y-1">
+          <button
+            data-testid="sidebar-footer-help-toggle"
+            onClick={() => setHelpOpen((v) => !v)}
+            aria-expanded={helpOpen}
+            className={`
+              flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
+              text-gray-300 hover:bg-green-600/10 hover:text-green-400 w-full
+            `}
+          >
+            <HelpCircle size={20} className="flex-shrink-0 text-gray-400" />
+            {!isCollapsed && (
+              <>
+                <span className="font-medium">Ajuda</span>
+                <span className="ml-auto text-gray-400">
+                  {helpOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </span>
+              </>
+            )}
+          </button>
 
-          <ImprovementSuggestionModal
-            currentPage={location}
-            trigger={
-              <button className={`
-                flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
-                text-gray-300 hover:bg-green-600/20 hover:text-green-400 w-full
-              `}>
-                <Lightbulb size={20} className="flex-shrink-0" />
-                {!isCollapsed && (
-                  <span className="font-medium">Sugerir Melhoria</span>
-                )}
-              </button>
-            }
-          />
+          {helpOpen && (
+            <div data-testid="sidebar-footer-help-menu" className="space-y-1 pl-2">
+              <BugReportModal
+                currentPage={location}
+                trigger={
+                  <button className={`
+                    flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
+                    text-gray-300 hover:bg-red-600/20 hover:text-red-400 w-full
+                  `}>
+                    <Bug size={18} className="flex-shrink-0" />
+                    {!isCollapsed && (
+                      <span className="text-sm">Reportar Bug</span>
+                    )}
+                  </button>
+                }
+              />
+
+              <ImprovementSuggestionModal
+                currentPage={location}
+                trigger={
+                  <button className={`
+                    flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
+                    text-gray-300 hover:bg-green-600/20 hover:text-green-400 w-full
+                  `}>
+                    <Lightbulb size={18} className="flex-shrink-0" />
+                    {!isCollapsed && (
+                      <span className="text-sm">Sugerir Melhoria</span>
+                    )}
+                  </button>
+                }
+              />
+            </div>
+          )}
         </div>
 
         <button

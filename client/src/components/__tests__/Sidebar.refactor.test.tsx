@@ -1,27 +1,14 @@
 /**
- * Test-Writer (Modo TDD - Red Phase)
+ * Sidebar Reform 2026-05-03 (Opcao A — workflow conservador).
  *
- * Sprint home-reform-1 — RF-07 (Refactor Sidebar.tsx aplicando D19).
- *
- * Spec : Docs/specs/home-reform-1.md §RF-07, §3 D19, §5.11 F10
- * ADR  : Docs/architecture/decisions/101-home-sidebar-information-architecture.md
- *
- * Mudancas validadas:
- *   - 5 grupos: HOJE / GRIND / ESTUDOS / FERRAMENTAS / ADMIN
- *   - Item path '/' label "Hoje" (era "Home")
- *   - GRIND ordem: Grade -> Grind -> Warm Up -> Coach IA -> Flight
- *   - ESTUDOS contem Estudos + Biblioteca
- *   - FERRAMENTAS contem Calculadoras + Banca apenas
- *   - Badges (pendingSpots, "Novo" Biblioteca) preservados
- *   - Footer (trial badge, Settings, Logout) inalterado
- *   - Header consome <HeaderLogo variant='mark'>
- *
- * Status RED: Sidebar.tsx atual tem 4 grupos com VISAO GERAL/Home/etc —
- * implementer aplicara D19.
+ * 5 grupos: VISAO / JOGAR / ESTUDAR / UTILIDADES / ADMIN.
+ * URLs preservadas. Coach IA migra pra Estudar. Banca sobe pra Visao.
+ * Torneios migra pra Estudar. Import migra pra Utilidades.
+ * Footer: Ajuda submenu colapsavel agrupa Bug + Sugestao.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 
@@ -54,7 +41,6 @@ vi.mock('wouter', () => ({
   Link: ({ href, children }: any) => <a href={href}>{children}</a>,
 }));
 
-// Asset stubs (Vite alias @assets nao configurado em vitest)
 vi.mock('@assets/grindfy-logo-mark.png', () => ({ default: 'grindfy-logo-mark.png' }), {
   virtual: true,
 } as any);
@@ -62,7 +48,6 @@ vi.mock('@assets/grindfy-logo-full.png', () => ({ default: 'grindfy-logo-full.pn
   virtual: true,
 } as any);
 
-// Modal stubs
 vi.mock('@/components/BugReportModal', () => ({
   default: ({ trigger }: any) => <>{trigger}</>,
 }));
@@ -113,143 +98,130 @@ beforeEach(() => {
 });
 
 // =============================================================================
-// 5 grupos na ordem correta (D19)
+// 5 grupos na ordem correta
 // =============================================================================
 
-describe('Sidebar refactor — 5 grupos na ordem (D19)', () => {
-  it('renderiza grupos HOJE / GRIND / ESTUDOS / FERRAMENTAS na ordem (admin oculto)', async () => {
+describe('Sidebar reform — 5 grupos na ordem (Opcao A)', () => {
+  it('renderiza grupos VISAO / JOGAR / ESTUDAR / UTILIDADES na ordem (admin oculto)', async () => {
     setAuth(true, false);
     render(wrap(<Sidebar />));
 
     const sections = await screen.findAllByTestId(/^sidebar-section-/);
     const titles = sections.map((s) => s.getAttribute('data-testid'));
-    // Esperamos pelo menos os 4 visiveis
     expect(titles).toEqual(
       expect.arrayContaining([
-        'sidebar-section-hoje',
-        'sidebar-section-grind',
-        'sidebar-section-estudos',
-        'sidebar-section-ferramentas',
+        'sidebar-section-visao',
+        'sidebar-section-jogar',
+        'sidebar-section-estudar',
+        'sidebar-section-utilidades',
       ]),
     );
-    // Ordem correta
-    const idxHoje = titles.indexOf('sidebar-section-hoje');
-    const idxGrind = titles.indexOf('sidebar-section-grind');
-    const idxEstudos = titles.indexOf('sidebar-section-estudos');
-    const idxFerr = titles.indexOf('sidebar-section-ferramentas');
-    expect(idxHoje).toBeLessThan(idxGrind);
-    expect(idxGrind).toBeLessThan(idxEstudos);
-    expect(idxEstudos).toBeLessThan(idxFerr);
+    const idxVisao = titles.indexOf('sidebar-section-visao');
+    const idxJogar = titles.indexOf('sidebar-section-jogar');
+    const idxEstudar = titles.indexOf('sidebar-section-estudar');
+    const idxUtil = titles.indexOf('sidebar-section-utilidades');
+    expect(idxVisao).toBeLessThan(idxJogar);
+    expect(idxJogar).toBeLessThan(idxEstudar);
+    expect(idxEstudar).toBeLessThan(idxUtil);
   });
 
-  it('admin ve grupo ADMIN apos FERRAMENTAS', async () => {
+  it('admin ve grupo ADMIN apos UTILIDADES', async () => {
     setAuth(true, true);
     render(wrap(<Sidebar />));
     const sections = await screen.findAllByTestId(/^sidebar-section-/);
     const titles = sections.map((s) => s.getAttribute('data-testid'));
     expect(titles).toContain('sidebar-section-admin');
-    const idxFerr = titles.indexOf('sidebar-section-ferramentas');
+    const idxUtil = titles.indexOf('sidebar-section-utilidades');
     const idxAdmin = titles.indexOf('sidebar-section-admin');
-    expect(idxAdmin).toBeGreaterThan(idxFerr);
+    expect(idxAdmin).toBeGreaterThan(idxUtil);
   });
 });
 
 // =============================================================================
-// Item path '/' label "Hoje" (NAO "Home")
+// VISAO — Hoje + Dashboard + Banca
 // =============================================================================
 
-describe('Sidebar refactor — label "Hoje" no item raiz', () => {
-  it('item com path / tem label "Hoje", NAO "Home"', async () => {
+describe('Sidebar reform — VISAO grupo', () => {
+  it('VISAO contem Hoje (/), Dashboard, Banca', async () => {
+    render(wrap(<Sidebar />));
+    const sec = await screen.findByTestId('sidebar-section-visao');
+    const links = within(sec).getAllByRole('link');
+    const hrefs = links.map((l) => l.getAttribute('href'));
+    expect(hrefs).toEqual(expect.arrayContaining(['/', '/dashboard', '/bankroll']));
+  });
+
+  it('item raiz tem label "Hoje" (NAO "Home")', async () => {
     render(wrap(<Sidebar />));
     const link = await screen.findByRole('link', { name: /hoje/i });
     expect(link.getAttribute('href')).toBe('/');
-    // Garante que NAO ha link "Home" (label antigo)
     expect(screen.queryByRole('link', { name: /^home$/i })).not.toBeInTheDocument();
   });
 });
 
 // =============================================================================
-// GRIND ordem: Grade -> Grind -> Warm Up -> Coach IA -> Flight
+// JOGAR — Grade -> Warm Up -> Grind -> Flight
 // =============================================================================
 
-describe('Sidebar refactor — GRIND ordem (D19)', () => {
-  it('items GRIND na ordem Grade / Grind / Warm Up / Coach IA / Flight', async () => {
+describe('Sidebar reform — JOGAR ordem', () => {
+  it('items JOGAR na ordem Grade / Warm Up / Grind / Flight', async () => {
     render(wrap(<Sidebar />));
-    const grindSection = await screen.findByTestId('sidebar-section-grind');
-    const links = within(grindSection).getAllByRole('link');
+    const sec = await screen.findByTestId('sidebar-section-jogar');
+    const links = within(sec).getAllByRole('link');
     const labels = links.map((l) => l.textContent?.toLowerCase().trim() || '');
     const idxGrade = labels.findIndex((t) => t.includes('grade'));
-    const idxGrind = labels.findIndex((t) => /^grind$|^\sgrind\s/.test(t) || t === 'grind');
     const idxWarm = labels.findIndex((t) => t.includes('warm'));
-    const idxCoach = labels.findIndex((t) => t.includes('coach'));
+    const idxGrind = labels.findIndex((t) => t === 'grind' || /^grind\s/.test(t));
     const idxFlight = labels.findIndex((t) => t.includes('flight'));
     expect(idxGrade).toBeGreaterThanOrEqual(0);
-    expect(idxGrind).toBeGreaterThan(idxGrade);
-    expect(idxWarm).toBeGreaterThan(idxGrind);
-    expect(idxCoach).toBeGreaterThan(idxWarm);
-    expect(idxFlight).toBeGreaterThan(idxCoach);
+    expect(idxWarm).toBeGreaterThan(idxGrade);
+    expect(idxGrind).toBeGreaterThan(idxWarm);
+    expect(idxFlight).toBeGreaterThan(idxGrind);
+  });
+
+  it('JOGAR NAO contem Coach IA (migrou pra Estudar)', async () => {
+    render(wrap(<Sidebar />));
+    const sec = await screen.findByTestId('sidebar-section-jogar');
+    const hrefs = within(sec).getAllByRole('link').map((l) => l.getAttribute('href'));
+    expect(hrefs).not.toContain('/coach-ai');
   });
 });
 
 // =============================================================================
-// ESTUDOS contem Estudos + Biblioteca
+// ESTUDAR — Estudos + Coach IA + Biblioteca + Torneios
 // =============================================================================
 
-describe('Sidebar refactor — ESTUDOS grupo proprio', () => {
-  it('ESTUDOS contem item Estudos (path /estudos)', async () => {
+describe('Sidebar reform — ESTUDAR grupo', () => {
+  it('ESTUDAR contem Estudos + Coach IA + Biblioteca + Torneios', async () => {
     render(wrap(<Sidebar />));
-    const sec = await screen.findByTestId('sidebar-section-estudos');
-    const link = within(sec).getByRole('link', { name: /estudos/i });
-    expect(link.getAttribute('href')).toBe('/estudos');
-  });
-
-  it('ESTUDOS contem item Biblioteca (path /biblioteca)', async () => {
-    render(wrap(<Sidebar />));
-    const sec = await screen.findByTestId('sidebar-section-estudos');
-    const link = within(sec).getByRole('link', { name: /biblioteca/i });
-    expect(link.getAttribute('href')).toBe('/biblioteca');
-  });
-});
-
-// =============================================================================
-// FERRAMENTAS reduzido
-// =============================================================================
-
-describe('Sidebar refactor — FERRAMENTAS reduzido (D19)', () => {
-  it('FERRAMENTAS contem APENAS Calculadoras + Banca', async () => {
-    render(wrap(<Sidebar />));
-    const sec = await screen.findByTestId('sidebar-section-ferramentas');
-    const links = within(sec).getAllByRole('link');
-    const hrefs = links.map((l) => l.getAttribute('href'));
-    expect(hrefs).toEqual(expect.arrayContaining(['/calculadoras', '/bankroll']));
-    // NAO contem rotas de outros grupos
-    expect(hrefs).not.toContain('/estudos');
-    expect(hrefs).not.toContain('/biblioteca');
-    expect(hrefs).not.toContain('/flight');
-  });
-});
-
-// =============================================================================
-// HOJE (era VISAO GERAL) — items
-// =============================================================================
-
-describe('Sidebar refactor — HOJE grupo', () => {
-  it('HOJE contem Hoje / Dashboard / Import / Torneios', async () => {
-    render(wrap(<Sidebar />));
-    const sec = await screen.findByTestId('sidebar-section-hoje');
-    const links = within(sec).getAllByRole('link');
-    const hrefs = links.map((l) => l.getAttribute('href'));
+    const sec = await screen.findByTestId('sidebar-section-estudar');
+    const hrefs = within(sec).getAllByRole('link').map((l) => l.getAttribute('href'));
     expect(hrefs).toEqual(
-      expect.arrayContaining(['/', '/dashboard', '/upload', '/library']),
+      expect.arrayContaining(['/estudos', '/coach-ai', '/biblioteca', '/library']),
     );
   });
 });
 
 // =============================================================================
-// Badges preservados (RNF-07 zero regressao)
+// UTILIDADES — Import + Calculadoras
 // =============================================================================
 
-describe('Sidebar refactor — badges preservados', () => {
+describe('Sidebar reform — UTILIDADES grupo', () => {
+  it('UTILIDADES contem APENAS Import + Calculadoras', async () => {
+    render(wrap(<Sidebar />));
+    const sec = await screen.findByTestId('sidebar-section-utilidades');
+    const hrefs = within(sec).getAllByRole('link').map((l) => l.getAttribute('href'));
+    expect(hrefs).toEqual(expect.arrayContaining(['/upload', '/calculadoras']));
+    expect(hrefs).not.toContain('/bankroll');
+    expect(hrefs).not.toContain('/biblioteca');
+    expect(hrefs).not.toContain('/library');
+  });
+});
+
+// =============================================================================
+// Badges preservados (zero regressao)
+// =============================================================================
+
+describe('Sidebar reform — badges preservados', () => {
   it('badge pendingSpots em /estudos preservado', async () => {
     apiRequestMock.mockImplementation((method: string, path: string) => {
       if (method === 'GET' && /\/api\/starred-hands\/pending/.test(path)) {
@@ -263,32 +235,46 @@ describe('Sidebar refactor — badges preservados', () => {
     });
   });
 
-  it('badge "Novo" em Biblioteca preservado (data-testid="sidebar-biblioteca-new-badge")', async () => {
+  it('badge "Novo" em Biblioteca preservado', async () => {
     render(wrap(<Sidebar />));
-    // Sidebar-biblioteca-new-badge ja existe na implementacao atual
     const badge = screen.queryByTestId('sidebar-biblioteca-new-badge');
     expect(badge).toBeInTheDocument();
   });
 });
 
 // =============================================================================
-// Footer inalterado
+// Footer — Settings + Logout + Ajuda colapsavel
 // =============================================================================
 
-describe('Sidebar refactor — footer inalterado', () => {
+describe('Sidebar reform — footer', () => {
   it('Settings + Logout continuam no footer', async () => {
     render(wrap(<Sidebar />));
     expect(await screen.findByTestId('sidebar-footer-settings')).toBeInTheDocument();
     expect(screen.getByTestId('sidebar-footer-logout')).toBeInTheDocument();
   });
+
+  it('Ajuda submenu inicia colapsado (Bug+Sugestao escondidos)', async () => {
+    render(wrap(<Sidebar />));
+    expect(await screen.findByTestId('sidebar-footer-help-toggle')).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar-footer-help-menu')).not.toBeInTheDocument();
+  });
+
+  it('clicar Ajuda expande submenu com Bug + Sugestao', async () => {
+    render(wrap(<Sidebar />));
+    const toggle = await screen.findByTestId('sidebar-footer-help-toggle');
+    fireEvent.click(toggle);
+    const menu = await screen.findByTestId('sidebar-footer-help-menu');
+    expect(within(menu).getByText(/reportar bug/i)).toBeInTheDocument();
+    expect(within(menu).getByText(/sugerir melhoria/i)).toBeInTheDocument();
+  });
 });
 
 // =============================================================================
-// HeaderLogo consumido (RF-06)
+// HeaderLogo
 // =============================================================================
 
-describe('Sidebar refactor — HeaderLogo integrado', () => {
-  it('header da sidebar contem <HeaderLogo /> (data-testid="header-logo")', async () => {
+describe('Sidebar reform — HeaderLogo integrado', () => {
+  it('header da sidebar contem <HeaderLogo />', async () => {
     render(wrap(<Sidebar />));
     const logo = await screen.findByTestId('header-logo');
     expect(logo).toBeInTheDocument();
