@@ -68,10 +68,10 @@ export default function WizardStep3Conditional({
     packageNotes: value.packageNotes ?? "",
   };
 
+  // Sprint Flight-1 H6: novo shape (seriesId + baggedAt) substitui flags ADR-031.
   const flightValue: FlightFieldsValue = {
-    flightDay: value.flightDay ?? "",
-    flightAdvanced: value.flightAdvanced ?? null,
-    flightParentId: value.flightParentId ?? null,
+    seriesId: value.seriesId ?? null,
+    baggedAt: value.baggedAt ?? null,
   };
 
   const liveValue: LiveFieldsValue = {

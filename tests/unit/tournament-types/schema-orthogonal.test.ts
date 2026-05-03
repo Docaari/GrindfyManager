@@ -249,7 +249,10 @@ describe('satelliteRewardType enum', () => {
 // Refinement: campos flight* SO quando isFlight=true
 // ---------------------------------------------------------------------------
 
-describe('refinement flight ortogonal', () => {
+// Sprint Flight-1 H6 (ADR-090): refinement flight* removido. Substituido por
+// modelo tournament_series (seriesId + baggedAt). Tests preservados como skip
+// pra historia + futuro reuso quando new validations forem adicionadas.
+describe.skip('refinement flight ortogonal [DEPRECATED H6]', () => {
   it('rejeita isFlight=false com flightDay populado', () => {
     const r = insertTournamentSchema.safeParse(
       makeValidTournament({ isFlight: false, flightDay: '1A' })
@@ -333,7 +336,8 @@ describe('refinement flight ortogonal', () => {
 // flightDay regex
 // ---------------------------------------------------------------------------
 
-describe('flightDay regex', () => {
+// Sprint Flight-1 H6 (ADR-090): flightDay regex deprecada. Skipado.
+describe.skip('flightDay regex [DEPRECATED H6]', () => {
   const validValues = ['1A', '1B', '1C', '1D', '1E', '2', '3', 'Day 1', 'Day 2', 'Final'];
   const invalidValues = ['xyz', '1@', 'Day-1', '  Day 1  ', 'random', '1AA'];
 

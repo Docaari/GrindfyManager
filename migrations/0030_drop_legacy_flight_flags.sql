@@ -39,17 +39,17 @@ BEGIN;
 -- 1. Drop indices parciais ADR-031 (nao usados mais)
 DROP INDEX IF EXISTS "idx_tournaments_user_flight_parent";
 DROP INDEX IF EXISTS "idx_tournaments_user_is_flight";
+DROP INDEX IF EXISTS "tournaments_flight_parent_idx";
 
--- 2. Drop colunas em tournaments
+-- 2. Drop colunas SECUNDARIAS em tournaments (mantem is_flight como modifier
+-- categorico — usado por wizard, badges e refinements de package*).
 ALTER TABLE "tournaments"
-  DROP COLUMN IF EXISTS "is_flight",
   DROP COLUMN IF EXISTS "flight_day",
   DROP COLUMN IF EXISTS "flight_parent_id",
   DROP COLUMN IF EXISTS "flight_advanced";
 
--- 3. Drop colunas em planned_tournaments
+-- 3. Drop colunas SECUNDARIAS em planned_tournaments (idem mantem is_flight)
 ALTER TABLE "planned_tournaments"
-  DROP COLUMN IF EXISTS "is_flight",
   DROP COLUMN IF EXISTS "flight_day",
   DROP COLUMN IF EXISTS "flight_parent_id";
 

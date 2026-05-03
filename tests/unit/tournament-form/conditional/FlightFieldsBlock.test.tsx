@@ -1,32 +1,25 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-// Modulo NAO EXISTE ainda (red phase).
 import FlightFieldsBlock from '../../../../client/src/components/tournament-form/conditional/FlightFieldsBlock';
-import { FLIGHT_DAY_SUGGESTIONS } from '../../../../shared/tournamentTypes';
 
 // =============================================================================
-// Sprint 2 - RF-06 FlightFieldsBlock
+// Sprint Flight-1 H6 — refatorado pra usar tournament_series API.
+// Substitui flags ADR-031 (flightDay/flightAdvanced/flightParentId) por
+// seriesId + baggedAt.
 //
-// Campos:
-//   - flightDay (input + datalist com FLIGHT_DAY_SUGGESTIONS)
-//   - flightAdvanced (checkbox, so quando Day 1A/B/C)
-//   - flightParentId (autocomplete dos Day 1 do user — mockado)
-//
-// Hints:
-//   - Day Final: "Position e prize obrigatorios"
-//   - Estados visuais: Day 1 (verde), intermediario (amarelo), Final (azul)
-//
-// Mock: useQuery flight-parents -> [].
+// Mock: apiRequest GET /api/tournament-series -> [].
 //
 // data-testid:
-//   - wizard-flight-day
-//   - wizard-flight-advanced
-//   - wizard-flight-parent-id
-//   - wizard-flight-final-hint
-//
-// RED PHASE.
+//   - wizard-flight-series-id (select)
+//   - wizard-flight-bagged (checkbox)
+//   - wizard-flight-series-empty-hint (quando lista vazia)
 // =============================================================================
+
+vi.mock('../../../../client/src/lib/queryClient', () => ({
+  apiRequest: vi.fn(async () => []),
+  queryClient: { invalidateQueries: vi.fn(), setQueryData: vi.fn() },
+}));
 
 const wrap = (ui: React.ReactNode) => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -34,148 +27,71 @@ const wrap = (ui: React.ReactNode) => {
 };
 
 const baseValue: any = {
-  flightDay: '',
-  flightAdvanced: null,
-  flightParentId: null,
+  seriesId: null,
+  baggedAt: null,
 };
 
-describe('FlightFieldsBlock', () => {
-  it('renderiza input para flightDay', () => {
+describe('FlightFieldsBlock (H6 refatorado)', () => {
+  it('renderiza select para seriesId', () => {
     render(wrap(<FlightFieldsBlock value={baseValue} onChange={() => {}} />));
-    expect(screen.getByTestId('wizard-flight-day')).toBeTruthy();
+    expect(screen.getByTestId('wizard-flight-series-id')).toBeTruthy();
   });
 
-  it('input flightDay associa-se a um datalist com sugestoes', () => {
+  it('renderiza checkbox bagged', () => {
     render(wrap(<FlightFieldsBlock value={baseValue} onChange={() => {}} />));
-    const input = screen.getByTestId('wizard-flight-day') as HTMLInputElement;
-    const listAttr = input.getAttribute('list');
-    if (listAttr) {
-      const dl = document.getElementById(listAttr) as HTMLDataListElement | null;
-      expect(dl).toBeTruthy();
-      const opts = Array.from(dl!.querySelectorAll('option')).map((o) =>
-        (o as HTMLOptionElement).value,
-      );
-      // Deve conter as sugestoes do SSoT.
-      for (const s of FLIGHT_DAY_SUGGESTIONS) {
-        expect(opts).toContain(s);
-      }
-    } else {
-      // Pode ser implementado como Combobox: precisa pelo menos exibir as opcoes
-      // como elementos no DOM em algum momento.
-      const html = document.body.outerHTML;
-      for (const s of FLIGHT_DAY_SUGGESTIONS.slice(0, 3)) {
-        expect(html).toContain(s);
-      }
-    }
+    expect(screen.getByTestId('wizard-flight-bagged')).toBeTruthy();
   });
 
-  it('renderiza checkbox flightAdvanced quando flightDay matches Day 1A/B/C/D/E', () => {
-    render(
-      wrap(
-        <FlightFieldsBlock
-          value={{ ...baseValue, flightDay: '1A' }}
-          onChange={() => {}}
-        />,
-      ),
-    );
-    expect(screen.getByTestId('wizard-flight-advanced')).toBeTruthy();
-  });
-
-  it('NAO renderiza flightAdvanced quando flightDay=Final', () => {
-    render(
-      wrap(
-        <FlightFieldsBlock
-          value={{ ...baseValue, flightDay: 'Final' }}
-          onChange={() => {}}
-        />,
-      ),
-    );
-    expect(screen.queryByTestId('wizard-flight-advanced')).toBeNull();
-  });
-
-  it('NAO renderiza flightAdvanced quando flightDay=2 (intermediario)', () => {
-    render(
-      wrap(
-        <FlightFieldsBlock
-          value={{ ...baseValue, flightDay: '2' }}
-          onChange={() => {}}
-        />,
-      ),
-    );
-    expect(screen.queryByTestId('wizard-flight-advanced')).toBeNull();
-  });
-
-  it('mostra hint quando flightDay=Final ("Position e prize obrigatorios")', () => {
-    render(
-      wrap(
-        <FlightFieldsBlock
-          value={{ ...baseValue, flightDay: 'Final' }}
-          onChange={() => {}}
-        />,
-      ),
-    );
-    const hint = screen.queryByTestId('wizard-flight-final-hint');
-    if (hint) {
-      expect(hint.textContent).toMatch(/Position.*prize|prize.*Position|posi.*prize/i);
-    } else {
-      const matches = screen.queryAllByText(/Position.*prize|prize.*posi/i);
-      expect(matches.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('renderiza autocomplete para flightParentId', () => {
+  it('mostra hint quando lista series vazia', async () => {
     render(wrap(<FlightFieldsBlock value={baseValue} onChange={() => {}} />));
-    expect(screen.getByTestId('wizard-flight-parent-id')).toBeTruthy();
+    // Aguarda render inicial (sem series, mostra hint).
+    await new Promise((r) => setTimeout(r, 10));
+    expect(screen.queryByTestId('wizard-flight-series-empty-hint')).toBeTruthy();
   });
 
-  it('alterar flightDay dispara onChange', () => {
+  it('select seriesId dispara onChange (limpar -> null)', () => {
     const onChange = vi.fn();
-    render(wrap(<FlightFieldsBlock value={baseValue} onChange={onChange} />));
-    const input = screen.getByTestId('wizard-flight-day') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: '1B' } });
-    const arg = onChange.mock.calls[onChange.mock.calls.length - 1][0];
-    expect(arg.flightDay).toBe('1B');
-  });
-
-  it('toggle flightAdvanced dispara onChange', () => {
-    const onChange = vi.fn();
+    // start with seriesId set, change to ''
     render(
       wrap(
         <FlightFieldsBlock
-          value={{ ...baseValue, flightDay: '1A', flightAdvanced: false }}
+          value={{ ...baseValue, seriesId: 'srs-old' }}
           onChange={onChange}
         />,
       ),
     );
-    fireEvent.click(screen.getByTestId('wizard-flight-advanced'));
+    const select = screen.getByTestId('wizard-flight-series-id') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: '' } });
     const arg = onChange.mock.calls[onChange.mock.calls.length - 1][0];
-    expect(arg.flightAdvanced).toBe(true);
+    expect(arg.seriesId).toBeNull();
   });
 
-  it('estado visual de Day 1 contem cor verde (smoke - classe aplicada)', () => {
+  it('toggle bagged seta baggedAt = Date', () => {
+    const onChange = vi.fn();
+    render(wrap(<FlightFieldsBlock value={baseValue} onChange={onChange} />));
+    fireEvent.click(screen.getByTestId('wizard-flight-bagged'));
+    const arg = onChange.mock.calls[onChange.mock.calls.length - 1][0];
+    expect(arg.baggedAt).toBeInstanceOf(Date);
+  });
+
+  it('toggle bagged off (com baggedAt setado) zera baggedAt', () => {
+    const onChange = vi.fn();
     render(
       wrap(
         <FlightFieldsBlock
-          value={{ ...baseValue, flightDay: '1A' }}
-          onChange={() => {}}
+          value={{ ...baseValue, baggedAt: new Date() }}
+          onChange={onChange}
         />,
       ),
     );
-    // Procura por algum elemento com classe relacionada a verde.
-    const html = document.body.outerHTML;
-    expect(html).toMatch(/(green|emerald|teal)/i);
+    fireEvent.click(screen.getByTestId('wizard-flight-bagged'));
+    const arg = onChange.mock.calls[onChange.mock.calls.length - 1][0];
+    expect(arg.baggedAt).toBeNull();
   });
 
-  it('estado visual de Day Final contem cor azul (smoke)', () => {
-    render(
-      wrap(
-        <FlightFieldsBlock
-          value={{ ...baseValue, flightDay: 'Final' }}
-          onChange={() => {}}
-        />,
-      ),
-    );
+  it('container tem cor cyan (smoke estilo Flight)', () => {
+    render(wrap(<FlightFieldsBlock value={baseValue} onChange={() => {}} />));
     const html = document.body.outerHTML;
-    expect(html).toMatch(/(blue|sky|indigo|cyan)/i);
+    expect(html).toMatch(/cyan/i);
   });
 });

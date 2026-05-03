@@ -237,10 +237,9 @@ export const tournaments = pgTable("tournaments", {
   satelliteTargetName: varchar("satellite_target_name"),
   satelliteExtraCash: decimal("satellite_extra_cash"),
   enteredViaSatellite: boolean("entered_via_satellite").default(false),
-  // Flight fields (so quando isFlight=true) — DEPRECADAS (ADR-090); migrar para series_id.
-  flightDay: varchar("flight_day"), // '1A' | '1B' | ... | 'Final' | '2' | '3' | 'Day 1' | ...
-  flightParentId: varchar("flight_parent_id"),
-  flightAdvanced: boolean("flight_advanced"),
+  // Sprint Flight-1 H6 (ADR-090): flightDay/flightParentId/flightAdvanced
+  // REMOVIDOS — colunas dropadas em Migration 0030. Substituidos por
+  // tournament_series + seriesId + baggedAt (declarados abaixo).
   // Sprint Flight-1 (ADR-090): single source of truth = tournament_series.
   // FK nullable, ON DELETE SET NULL (orfaniza entries sem deletar historico).
   seriesId: varchar("series_id").references(() => tournamentSeries.id, { onDelete: "set null" }),
@@ -274,7 +273,8 @@ export const tournaments = pgTable("tournaments", {
   index("idx_tournaments_user_site").on(table.userId, table.site),
   // Sprint 1: indexes parciais para queries dos modulos novos (Selector, dashboard)
   index("tournaments_satellite_target_idx").on(table.satelliteTargetTemplateId),
-  index("tournaments_flight_parent_idx").on(table.flightParentId),
+  // Sprint Flight-1 H6 (ADR-090): tournaments_flight_parent_idx REMOVIDO — coluna
+  // flight_parent_id dropada em Migration 0030. Use index series_id quando criar.
   index("tournaments_live_idx").on(table.isLive),
 ]);
 
@@ -459,8 +459,8 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   // Sprint 1 (ADR-031): modificadores ortogonais
   isFlight: boolean("is_flight").default(false),
   isLive: boolean("is_live").default(false),
-  flightDay: varchar("flight_day"),
-  flightParentId: varchar("flight_parent_id"),
+  // Sprint Flight-1 H6 (ADR-090): flightDay/flightParentId REMOVIDOS — colunas
+  // dropadas em Migration 0030. Use seriesId.
   // Sprint Flight-1 (ADR-090): FK opcional para tournament_series.
   seriesId: varchar("series_id").references(() => tournamentSeries.id, { onDelete: "set null" }),
   // Sprint 1: campos satellite minimos (ticket value + target name) para
@@ -1345,62 +1345,11 @@ function applyOrthogonalRefinements(schema: any): any {
     // ROI parcial ate la (founder original definiu "tudo opcional de registrar").
     // Orthogonality acima preserva: campos satellite* fora de Satellite continuam rejeitados.
 
-    // ---- Refinement 2: campos flight* so quando isFlight=true ----
-    const flightFieldsAll = ['flightDay', 'flightParentId', 'flightAdvanced'] as const;
-    if (!isFlight) {
-      for (const f of flightFieldsAll) {
-        if (isPopulatedField(d?.[f])) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: [f],
-            message: `Campo ${f} so e permitido quando isFlight=true`,
-          });
-        }
-      }
-    } else {
-      // isFlight=true — flightDay e obrigatorio + regex valido
-      if (!isPopulatedField(d?.flightDay)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['flightDay'],
-          message: 'flightDay e obrigatorio quando isFlight=true',
-        });
-      } else if (!FLIGHT_DAY_REGEX.test(String(d.flightDay))) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['flightDay'],
-          message:
-            'flightDay invalido (use formatos como "1A", "Day 1", "2", "Final")',
-        });
-      } else {
-        // flightDay valido — valida coerencia com flightAdvanced/position
-        const flightDay = String(d.flightDay);
-        const isDayLetterPattern = /^\d+[A-Z]$/.test(flightDay);
-        const isFinal = flightDay === 'Final';
-
-        // Day letter pattern (1A, 1B, ...) — flightAdvanced e obrigatorio (boolean)
-        if (isDayLetterPattern) {
-          if (typeof d?.flightAdvanced !== 'boolean') {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ['flightAdvanced'],
-              message: 'flightAdvanced e obrigatorio quando flightDay e formato "Day 1A/B/C"',
-            });
-          }
-        }
-
-        // Day Final — position e obrigatorio
-        if (isFinal) {
-          if (d?.position == null) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ['position'],
-              message: 'position e obrigatorio quando flightDay=Final',
-            });
-          }
-        }
-      }
-    }
+    // ---- Refinement 2: REMOVIDO (Sprint Flight-1 H6, ADR-090) ----
+    // Refinement legado validava flightDay/flightAdvanced/flightParentId.
+    // Substituido por modelo tournament_series + seriesId + baggedAt.
+    // Campos legados continuam aceitos no schema base como nullable().optional()
+    // mas sem validacao customizada. Migration 0030 dropa as colunas DB.
 
     // ---- Refinement 3: campos package* so quando isLive=true OU satellite rewardType=package ----
     const packageFields = [
@@ -1493,33 +1442,8 @@ function applyPlannedOrthogonalRefinements(schema: any): any {
     // Sprint 2 (RF-04 RELAXADO planned): Satellite planned NAO exige
     // rewardType nem target. Mesma motivacao do schema de tournaments.
 
-    // Flight ortogonalidade
-    const flightFieldsAll = ['flightDay', 'flightParentId'] as const;
-    if (!isFlight) {
-      for (const f of flightFieldsAll) {
-        if (isPopulatedField(d?.[f])) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: [f],
-            message: `Campo ${f} so e permitido quando isFlight=true`,
-          });
-        }
-      }
-    } else {
-      if (!isPopulatedField(d?.flightDay)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['flightDay'],
-          message: 'flightDay e obrigatorio quando isFlight=true',
-        });
-      } else if (!FLIGHT_DAY_REGEX.test(String(d.flightDay))) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['flightDay'],
-          message: 'flightDay invalido',
-        });
-      }
-    }
+    // Sprint Flight-1 H6 (ADR-090): refinement flight* removido em planned.
+    // Substituido por seriesId. Ver tournament_series.
   });
 }
 

@@ -124,39 +124,10 @@ describe('insertTournamentSchema - Satellite refinement RELAXADO (Sprint 2)', ()
     expect(result.success).toBe(false);
   });
 
-  // ==== Flight refinement preservado ====
+  // ==== Flight refinement DEPRECATED — Sprint Flight-1 H6 (ADR-090) ====
+  // Substituido por seriesId + baggedAt. Tests originais skipados.
 
-  it('REJEITA isFlight=true sem flightDay', () => {
-    const result = insertTournamentSchema.safeParse({
-      ...baseTournament,
-      type: 'Vanilla',
-      isFlight: true,
-    });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      const issues = result.error.issues.map((i) => i.path.join('.'));
-      expect(issues).toContain('flightDay');
-    }
-  });
-
-  it('REJEITA flightDay invalido quando isFlight=true', () => {
-    const result = insertTournamentSchema.safeParse({
-      ...baseTournament,
-      type: 'PKO',
-      isFlight: true,
-      flightDay: 'lixo123',
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it('aceita flightDay valido quando isFlight=true (Day 1A) com flightAdvanced', () => {
-    const result = insertTournamentSchema.safeParse({
-      ...baseTournament,
-      type: 'PKO',
-      isFlight: true,
-      flightDay: '1A',
-      flightAdvanced: false,
-    });
-    expect(result.success).toBe(true);
-  });
+  it.skip('[DEPRECATED H6] REJEITA isFlight=true sem flightDay', () => {});
+  it.skip('[DEPRECATED H6] REJEITA flightDay invalido quando isFlight=true', () => {});
+  it.skip('[DEPRECATED H6] aceita flightDay valido quando isFlight=true', () => {});
 });

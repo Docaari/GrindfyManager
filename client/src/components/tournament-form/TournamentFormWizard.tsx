@@ -42,9 +42,9 @@ export interface TournamentFormWizardValue {
   satelliteTargetName?: string;
   satelliteTicketValue?: string;
   satelliteExtraCash?: string;
-  flightDay?: string;
-  flightAdvanced?: boolean | null;
-  flightParentId?: string | null;
+  // Sprint Flight-1 H6: substitui flags ADR-031 deprecadas.
+  seriesId?: string | null;
+  baggedAt?: Date | null;
   packageBuyIn?: string;
   packageAccommodation?: string;
   packageTravel?: string;
@@ -81,9 +81,8 @@ const DEFAULT_VALUE: TournamentFormWizardValue = {
   satelliteTargetName: "",
   satelliteTicketValue: "",
   satelliteExtraCash: "",
-  flightDay: "",
-  flightAdvanced: null,
-  flightParentId: null,
+  seriesId: null,
+  baggedAt: null,
   packageBuyIn: "",
   packageAccommodation: "",
   packageTravel: "",

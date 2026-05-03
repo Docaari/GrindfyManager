@@ -55,6 +55,17 @@ async function main(): Promise<void> {
     await client.query(sql);
     console.log("[pass1] OK migration aplicada");
 
+    // === Pass 1b: aplicar migration 0030 (DROP COLUMN) — opt-in via APPLY_0030=1 ===
+    if (process.env.APPLY_0030 === "1") {
+      const sql30Path = resolve(__dirname, "..", "migrations", "0030_drop_legacy_flight_flags.sql");
+      const sql30 = readFileSync(sql30Path, "utf-8");
+      console.log(`[pass1b] applying ${sql30Path} (${sql30.length} bytes)`);
+      await client.query(sql30);
+      console.log("[pass1b] OK migration 0030 aplicada");
+    } else {
+      console.log("[pass1b] SKIP migration 0030 (set APPLY_0030=1 para rodar — IRREVERSIVEL)");
+    }
+
     // === Pass 2: validacao schema ===
     for (const t of ["tournament_series"]) {
       const r = await client.query(
