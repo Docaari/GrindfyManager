@@ -36,6 +36,8 @@ import { WelcomeNameModal } from '@/components/WelcomeNameModal';
 import { emit } from '@/lib/tracker';
 
 import StatusStrip from '@/components/home/StatusStrip';
+// Sprint home-reform-5 item 2: novo header strip (4 KPIs corrigidos).
+import HeaderStrip from '@/components/home/HeaderStrip';
 import TodayCard from '@/components/home/TodayCard';
 import CooldownBanner from '@/components/home/CooldownBanner';
 // Sprint home-reform-5 item 1: FlightBanner removido da Home (ruido visual).
@@ -186,6 +188,23 @@ interface HomeOverviewResponse {
     severity: 'info' | 'caution' | 'positive';
     ctaHref: string | null;
   }>;
+  // Sprint home-reform-5 item 2 — Header Strip.
+  headerStrip?: {
+    banca: { totalUsd: number; currency: 'USD' } | null;
+    today: { profile: 'A' | 'B' | 'C' | null; plannedCount: number; isOff: boolean };
+    roi30d: { value: number | null; hasData: boolean };
+    pendency: {
+      kind:
+        | 'bankroll_check'
+        | 'coach_report'
+        | 'upload_tournaments'
+        | 'spot_review'
+        | 'focus_stat';
+      label: string;
+      ctaHref: string;
+      daysSince: number | null;
+    } | null;
+  };
   // Sprint home-reform-4 item 1.
   sessionsMonth?: {
     monthStart: string;
@@ -345,12 +364,16 @@ const Home: React.FC = () => {
             {/* Sprint home-reform-5 item 1: FlightBanner removido. */}
             <CooldownBanner banner={data.banners.cooldown} />
 
-            {/* RF-A3: StatusStrip sticky. */}
+            {/* Sprint home-reform-5 item 2: HeaderStrip substitui StatusStrip nesta posicao. */}
             <div
               data-testid="sticky-status-strip"
               className="sticky top-0 z-30 backdrop-blur-sm bg-background/85 -mx-4 px-4 md:-mx-6 md:px-6 py-2"
             >
-              <StatusStrip data={data.statusStrip} />
+              {data.headerStrip ? (
+                <HeaderStrip data={data.headerStrip} />
+              ) : (
+                <StatusStrip data={data.statusStrip} />
+              )}
             </div>
 
             {/* Zona 1 — Hoje */}

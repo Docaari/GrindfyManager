@@ -23,7 +23,7 @@ Regra de execucao:
 | # | Item | Status | Tipo | Estimativa |
 |---|------|--------|------|------------|
 | 1 | Remover aviso "Day 2 do Mystery Mini comeca em 145h..." | Concluido (2026-05-04) | Remocao | 15min |
-| 2 | Corrigir Header Sessao (Banca, Hoje, ROI 30D, Pendencias priorizadas) | Pendente | Bug fix + feature | 4-6h |
+| 2 | Corrigir Header Sessao (Banca, Hoje, ROI 30D, Pendencias priorizadas) | Concluido (2026-05-04) | Bug fix + feature | 4-6h |
 | 3 | Pergunte ao Coach: perfis multiplos + Iniciar Sessao + DAY OFF | Pendente | Feature | 2-3h |
 | 4 | Acao Imediata: stat destaque + Iniciar sessao | Pendente | Feature (depende de stat destaque futura) | 2h |
 | 5 | Grade do Dia: Primeiro Registro + Ultimo Registro | Pendente | Feature pequena | 1-2h |
@@ -109,6 +109,20 @@ Ordem de execucao recomendada: **1 -> 2 -> 5 -> 3 -> 4 -> 6 -> 7 -> 8 -> 11 -> 1
 - Confirmar regra do CLAUDE.md secao 6.1: dashboard usa `tournaments WHERE grind_session_id IS NULL`.
 - Pendencia #4 depende de tabela de spots — checar `spots` schema antes (`shared/schema.ts`).
 - Pendencias #2 e #5 ainda nao tem feature implementada -> reservar slot mas nao quebrar se vazio.
+
+#### Resolucao (2026-05-04)
+
+- Service puro novo: `server/services/homeHeader.ts` com `buildHeaderStrip(input)` retornando `{ banca, today, roi30d, pendency }`. Recebe inputs ja resolvidos (bankrollUsd, snapshots agregados, datas) — testavel sem Drizzle. 25/25 testes verde em `tests/services/homeHeader.test.ts`.
+- 3 storage helpers novos em `server/storage.ts`: `getLatestBankrollMovementAt`, `getLatestTournamentUploadAt` (filtro `grindSessionId IS NULL` conforme CLAUDE.md §6.1), `getOldestPendingSpotAt` (starred_hands status='pending').
+- 5 subqueries adicionadas em `/api/home/overview` (lastBankrollMovementAt, lastTournamentUploadAt, oldestPendingSpotAt, bankrollSnapshots30d, bankrollSnapshotPrior30d). Subqueries seguem padrao `timed()` + Promise.allSettled (graceful degradation).
+- Bloco novo `headerStrip` no payload do `/api/home/overview` (coexiste com `statusStrip` legado durante migracao).
+- **2.1 Banca**: `bank.totalUsd` (consolidado via walletService FX cascata) renderizado com 2 casas decimais (`fmtUsd2` -> `$1.866,84`).
+- **2.2 Hoje**: filtra `planned_tournaments` por `profile===activeProfile` do `profile_states`. `isOff=true` somente quando `activeProfile` null/'OFF'. Profile B com 0 torneios continua mostrando `0 torneios · perfil B` (nao DAY OFF).
+- **2.3 ROI 30D**: formula spec literal `(saldoAtual - saldo30dAtras) / invested30d * 100`. `saldo30dAtras` = `newAmount` do ultimo snapshot anterior a now-30d (fallback 0 se ha snapshots dentro da janela mas nenhum antes). `invested30d` = soma absoluta deltas com `reason='deposit'` nos ultimos 30d. Empty state quando denominador 0 ou sem dados.
+- **2.4 Pendencias**: prioridade fixa 1->5 (bankroll_check > coach_report > upload_tournaments > spot_review > focus_stat). Mostra apenas a primeira ativa. Thresholds: bankroll/upload >7d, spot >3d, focus_stat >7d. Pendencias #2 (coach_report) e #5 (focus_stat) sao slots dormantes (recebem inputs do payload ainda zerados — feature futura).
+- Frontend: `client/src/components/home/HeaderStrip.tsx` consome `data.headerStrip`. 14/14 testes verde em `tests/home/HeaderStrip.test.tsx`. Substitui `StatusStrip` na posicao sticky-top da Home (StatusStrip permanece exportado para fallback `data.headerStrip == null`).
+- Type-check zero erros novos. Errors pre-existentes (Home.test.tsx, NewsSlot.test.tsx) intocados.
+- Tests: 162/162 home-related verdes. Falhas em `tests/integration/home/news-stub.test.ts` sao pre-existentes (sprint News-3 em desenvolvimento, sem relacao com este item).
 
 ---
 
