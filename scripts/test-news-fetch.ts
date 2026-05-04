@@ -1,37 +1,51 @@
 /**
- * Smoke test economico: 1 source so, limit=3, sem live search.
- * Roda standalone via:
+ * @deprecated Sprint News-3 (RF-12) — provider Grok-LLM removido.
+ *
+ * Smoke test substituido. Use `runOrchestration()` direto:
  *   npx tsx --env-file=.env scripts/test-news-fetch.ts
  */
-import { fetchGrokNews } from "../server/services/grokNewsProvider";
+
+import { fetchBlogSource } from "../server/services/news/blogScraperProvider";
+import { fetchXSource } from "../server/services/news/xSearchProvider";
 
 async function main() {
   console.log("[test] XAI_API_KEY presente:", !!process.env.XAI_API_KEY);
   console.log("[test] XAI_MODEL:", process.env.XAI_MODEL ?? "(default)");
-  console.log("[test] chamando fetchGrokNews(market / hand2note, limit=3)...\n");
 
-  const items = await fetchGrokNews({
-    category: "market",
+  console.log("\n[test] BlogScraper hand2note (html_and_x)...");
+  const blogItems = await fetchBlogSource({
+    id: "hand2note",
+    category: "tools",
     platform: "hand2note",
-    promptTemplate:
-      "Atualizacoes recentes da plataforma Hand2Note (perfil X @Hand2Note + site oficial) nos ultimos 7 dias.",
-    liveSearchHandle: "Hand2Note",
-    limit: 3,
+    rssUrl: null,
+    homepageUrl: "https://hand2note.com/Blog",
+    scrapeStrategy: "html",
+    xHandle: null,
   });
-
-  console.log(`[test] retornou ${items.length} items:\n`);
-  for (const it of items) {
+  console.log(`[test] blog: ${blogItems.length} items`);
+  for (const it of blogItems.slice(0, 3)) {
     console.log("---");
     console.log("title:", it.title);
-    console.log("summary:", it.summary);
     console.log("url:", it.url);
     console.log("publishedAt:", it.publishedAt);
-    console.log("platform:", it.platform);
-    if (it.engagement) console.log("engagement:", it.engagement);
   }
 
-  if (items.length === 0) {
-    console.log("\n[test] zero items — pode ser: prompt sem hits, allowlist bloqueou URLs, ou JSON malformado.");
+  console.log("\n[test] XSearch sharkscope (x_only)...");
+  const xItems = await fetchXSource({
+    id: "sharkscope",
+    category: "tools",
+    platform: "sharkscope",
+    rssUrl: null,
+    homepageUrl: null,
+    scrapeStrategy: "x_only",
+    xHandle: "sharkscope",
+  });
+  console.log(`[test] x: ${xItems.length} items`);
+  for (const it of xItems.slice(0, 3)) {
+    console.log("---");
+    console.log("title:", it.title);
+    console.log("url:", it.url);
+    console.log("publishedAt:", it.publishedAt);
   }
 }
 
