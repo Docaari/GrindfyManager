@@ -26,6 +26,7 @@ import { fetchXSource } from "./xSearchProvider";
 import { applyDedupe } from "./dedupeLayers";
 import { canonicalizeUrl } from "./urlCanonicalize";
 import { titleFingerprint } from "./titleFingerprint";
+import { categorizeItem } from "./categorizeItem";
 import type { NewsSourceLike, ScrapedNewsItem } from "./blogScraperProvider";
 // Review M1: invalida cache do /api/news/feed apos run para que admin trigger
 // + cron run reflitam imediatamente no proximo /feed (evita janela 5min stale).
@@ -128,9 +129,17 @@ async function insertSurvivor(
   const expiresAt = new Date(
     new Date(survivor.publishedAt).getTime() + TTL_MS,
   ).toISOString();
+  // Sprint News-3.5: re-categoriza items de sources gossip via heuristica
+  // title-based (resultados vs fofocas reais). Founder requisitou separacao.
+  const finalCategory = categorizeItem({
+    title: survivor.title,
+    summary: survivor.summary,
+    sourceCategory: survivor.category,
+  });
   try {
     return await newsStorage.insertNewsItem({
       ...survivor,
+      category: finalCategory,
       urlCanonical: canonical,
       titleFingerprint: fp,
       expiresAt,
