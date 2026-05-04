@@ -116,6 +116,80 @@ async function fetchViaRss(
   return items;
 }
 
+/**
+ * Sprint News-3.4: per-article date enrichment.
+ *
+ * Adapters HTML setam publishedAt = now() quando homepage nao expoe data.
+ * Para items "fresh now", fetch da pagina do article + extract date real
+ * via JSON-LD `datePublished` ou meta `article:published_time`.
+ *
+ * Timeout curto (8s) — failures retornam null + mantem now() como fallback.
+ * Concurrency limitada para evitar burst contra o site.
+ */
+const ENRICH_TIMEOUT_MS = 8000;
+const ENRICH_CONCURRENCY = 5;
+const NOW_THRESHOLD_MS = 60_000; // items com publishedAt < 60s ago = "now sentinel"
+
+const ENRICH_DATE_RES = [
+  /"datePublished"\s*:\s*"([^"]+)"/,
+  /<meta[^>]+property=["']article:published_time["'][^>]*content=["']([^"']+)["']/i,
+  /<meta[^>]+content=["']([^"']+)["'][^>]*property=["']article:published_time["']/i,
+  /<time[^>]+datetime=["']([^"']+)["']/,
+];
+
+async function fetchArticleDate(articleUrl: string): Promise<string | null> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ENRICH_TIMEOUT_MS);
+  try {
+    const res = await fetch(articleUrl, {
+      headers: { "User-Agent": USER_AGENT },
+      signal: ctrl.signal,
+    } as any);
+    if (!res.ok) return null;
+    const text = await res.text();
+    for (const re of ENRICH_DATE_RES) {
+      const m = re.exec(text);
+      if (m && m[1]) {
+        const d = new Date(m[1]);
+        if (isValidDate(d)) return d.toISOString();
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function enrichDates(items: ScrapedNewsItem[]): Promise<ScrapedNewsItem[]> {
+  const nowMs = Date.now();
+  const needs = items.filter((it) => {
+    const d = new Date(it.publishedAt).getTime();
+    return Math.abs(nowMs - d) < NOW_THRESHOLD_MS;
+  });
+  if (needs.length === 0) return items;
+
+  const enriched = new Map<string, string>();
+  let i = 0;
+  async function worker() {
+    while (i < needs.length) {
+      const idx = i++;
+      const it = needs[idx];
+      const real = await fetchArticleDate(it.url);
+      if (real) enriched.set(it.url, real);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(ENRICH_CONCURRENCY, needs.length) }, worker),
+  );
+
+  return items.map((it) => {
+    const real = enriched.get(it.url);
+    return real ? { ...it, publishedAt: real } : it;
+  });
+}
+
 async function fetchViaHtml(
   source: NewsSourceLike,
 ): Promise<ScrapedNewsItem[]> {
@@ -152,7 +226,7 @@ async function fetchViaHtml(
     console.error(`[news/scraper] ${source.id} HTML adapter threw`, err);
     return [];
   }
-  return raw.slice(0, TOP_LIMIT).map((it) => ({
+  const baseItems: ScrapedNewsItem[] = raw.slice(0, TOP_LIMIT).map((it) => ({
     title: it.title,
     url: it.url,
     summary: it.summary,
@@ -161,6 +235,7 @@ async function fetchViaHtml(
     category: source.category,
     platform: source.platform,
   }));
+  return await enrichDates(baseItems);
 }
 
 export async function fetchBlogSource(
