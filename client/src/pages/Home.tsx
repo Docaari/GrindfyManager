@@ -38,7 +38,8 @@ import { emit } from '@/lib/tracker';
 import StatusStrip from '@/components/home/StatusStrip';
 import TodayCard from '@/components/home/TodayCard';
 import CooldownBanner from '@/components/home/CooldownBanner';
-import FlightBanner from '@/components/home/FlightBanner';
+// Sprint home-reform-5 item 1: FlightBanner removido da Home (ruido visual).
+// Logica Day 2 auto-resume continua viva em /grind (Sprint Flight-1).
 import NextTournamentCountdown from '@/components/home/NextTournamentCountdown';
 import RecentSessionsList from '@/components/home/RecentSessionsList';
 import PerformanceMini from '@/components/home/PerformanceMini';
@@ -341,8 +342,7 @@ const Home: React.FC = () => {
           />
         ) : (
           <>
-            {/* Banner priority D9: Flight acima de Cooldown. */}
-            <FlightBanner banner={data.banners.flight} />
+            {/* Sprint home-reform-5 item 1: FlightBanner removido. */}
             <CooldownBanner banner={data.banners.cooldown} />
 
             {/* RF-A3: StatusStrip sticky. */}

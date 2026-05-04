@@ -175,7 +175,10 @@ describe('<Home /> — userState branching', () => {
 // =============================================================================
 
 describe('<Home /> — banner priority (D9)', () => {
-  it('flight ativo + cooldown ativo => FlightBanner aparece ACIMA de CooldownBanner', async () => {
+  // Sprint home-reform-5 item 1: FlightBanner removido da Home.
+  // Mesmo com flight ativo no payload, NAO deve renderizar na Home.
+  // Cooldown segue renderizando normalmente.
+  it('flight ativo NAO renderiza FlightBanner na Home (cooldown ainda renderiza)', async () => {
     apiRequestMock.mockResolvedValue({
       ...fullOverview,
       banners: {
@@ -193,16 +196,10 @@ describe('<Home /> — banner priority (D9)', () => {
     render(wrap(<Home />));
 
     await waitFor(() => {
-      expect(screen.queryByTestId('flight-banner')).toBeInTheDocument();
       expect(screen.queryByTestId('cooldown-banner')).toBeInTheDocument();
     });
 
-    // Posicao do flight no DOM antes do cooldown
-    const flight = screen.getByTestId('flight-banner');
-    const cooldown = screen.getByTestId('cooldown-banner');
-    const pos = flight.compareDocumentPosition(cooldown);
-    // 0x04 = DOCUMENT_POSITION_FOLLOWING (cooldown segue flight)
-    expect(pos & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByTestId('flight-banner')).not.toBeInTheDocument();
   });
 });
 
