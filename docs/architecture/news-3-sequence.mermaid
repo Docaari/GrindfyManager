@@ -1,0 +1,161 @@
+sequenceDiagram
+    %% News-3 — Sequence Diagram (cron run end-to-end)
+    %% Spec: Docs/specs/news-3-rss-x-refactor.md
+    %% ADR: Docs/architecture/decisions/107-news-rss-x-search-refactor.md
+
+    autonumber
+    actor Cron as node-cron<br/>(0 15 * * 1 UTC)
+    participant Job as RefreshNewsCron
+    participant Orch as OrchestratorService
+    participant Blog as BlogScraperProvider
+    participant XP as XSearchProvider
+    participant Dedupe as DedupeService
+    participant Repo as NewsRepository
+    participant DB as PostgreSQL<br/>news_*
+    participant XAI as xAI Live Search API
+    participant Site as External Site<br/>(RSS / HTML)
+
+    Cron->>Job: fire weekly
+    activate Job
+
+    Job->>Job: isEnabled()?<br/>(NEWS_FEED_ENABLED + XAI_API_KEY)
+    alt flag off OR XAI_API_KEY missing/invalid
+        Job-->>Cron: log [news/cron] skipped
+        deactivate Job
+    else activated
+        Job->>Orch: runOrchestration()
+        activate Orch
+
+        Orch->>Orch: runId = nanoid(10)<br/>startedAt = Date.now()
+        Orch->>Repo: getEnabledSources()
+        Repo->>DB: SELECT * FROM news_sources<br/>WHERE enabled=true
+        DB-->>Repo: 15 sources
+        Repo-->>Orch: NewsSource[]
+
+        Note over Orch: pLimit(3) — 3 sources em paralelo
+
+        loop para cada source (concurrency=3)
+            alt strategy ∈ {rss, html, rss_or_html}
+                Orch->>Blog: fetchSource(source)
+                activate Blog
+
+                alt strategy supports RSS AND rss_url presente
+                    Blog->>Site: GET rss_url<br/>UA: GrindfyNewsBot/1.0<br/>timeout 60s
+                    alt RSS OK + items > 0
+                        Site-->>Blog: feed XML
+                        Blog->>Blog: parse rss-parser<br/>top 10 items
+                    else RSS empty AND strategy='rss_or_html'
+                        Blog->>Site: GET homepage_url
+                        Site-->>Blog: HTML
+                        Blog->>Blog: dispatch htmlAdapter[sourceId]
+                    else RSS error
+                        Note over Blog: log [news/scraper] error<br/>return []
+                    end
+                else strategy='html'
+                    Blog->>Site: GET homepage_url
+                    Site-->>Blog: HTML
+                    Blog->>Blog: dispatch htmlAdapter[sourceId]<br/>(cheerio/linkedom)
+                    alt adapter retorna 0 items
+                        Note over Blog: log [news/html] layout may have changed<br/>return []
+                    end
+                end
+
+                Blog-->>Orch: NewsItem[] (max 10)
+                deactivate Blog
+
+            else strategy='x_only'
+                Orch->>XP: fetchSource(source)
+                activate XP
+                XP->>XAI: POST /v1/chat/completions<br/>{search_parameters.sources[]={type:'x',x_handles:[handle]},<br/>from_date=now-7d, to_date=now}
+                alt 200 OK
+                    XAI-->>XP: { citations: [...] }
+                    XP->>XP: validate URL regex<br/>drop trailing-zeros
+                else 4xx/5xx/timeout
+                    XAI-->>XP: error
+                    Note over XP: log [news/xsearch] error<br/>return []
+                end
+                XP-->>Orch: NewsItem[]
+                deactivate XP
+
+            else strategy ∈ {rss_and_x, html_and_x}
+                par Blog provider
+                    Orch->>Blog: fetchSource(source)
+                    Blog-->>Orch: NewsItem[] blog
+                and X provider
+                    Orch->>XP: fetchSource(source)
+                    XP-->>Orch: NewsItem[] x
+                end
+                Orch->>Orch: concat both arrays
+            end
+
+            %% Dedupe pipeline
+            Orch->>Dedupe: applyDedupe(items, sourceId)
+            activate Dedupe
+
+            loop para cada item
+                Dedupe->>Dedupe: canonicalizeUrl(item.url)
+                Dedupe->>Repo: existsByCanonical(url, 30d)
+                Repo->>DB: SELECT 1 WHERE url_canonical=?<br/>AND fetched_at >= NOW()-30d
+                DB-->>Repo: hit/miss
+                Repo-->>Dedupe: boolean
+
+                alt Layer 1 hit
+                    Note over Dedupe: log [news/dedupe] drop layer:1
+                    Dedupe->>Dedupe: skipped.layer1++
+                else miss
+                    Dedupe->>Dedupe: titleFingerprint(item.title)
+                    Dedupe->>Repo: existsByFingerprint(fp, 30d)
+                    Repo->>DB: SELECT 1 WHERE title_fingerprint=?<br/>AND fetched_at >= NOW()-30d
+                    DB-->>Repo: hit/miss
+                    Repo-->>Dedupe: boolean
+
+                    alt Layer 2 hit
+                        Note over Dedupe: log [news/dedupe] drop layer:2
+                        Dedupe->>Dedupe: skipped.layer2++
+                    else miss
+                        alt item.url contem x.com (X item)
+                            Dedupe->>Dedupe: extractTweetUrls(summary)
+                            loop urls externos
+                                Dedupe->>Repo: existsByCanonical(url, 7d)
+                                Repo->>DB: SELECT 1 WHERE url_canonical=?<br/>AND fetched_at >= NOW()-7d
+                                DB-->>Repo: hit/miss
+                                Repo-->>Dedupe: boolean
+                            end
+                            alt qualquer hit
+                                Note over Dedupe: log [news/dedupe] drop layer:3
+                                Dedupe->>Dedupe: skipped.layer3++
+                            else passa
+                                Dedupe->>Dedupe: survivor++
+                            end
+                        else item nao-X
+                            Note over Dedupe: skip Layer 3
+                            Dedupe->>Dedupe: survivor++
+                        end
+                    end
+                end
+            end
+
+            Dedupe-->>Orch: { survivors, skipped }
+            deactivate Dedupe
+
+            %% Insert
+            loop para cada survivor
+                Orch->>Orch: contentHash = sha256(canonical+title_fp)<br/>expiresAt = publishedAt + 30d
+                Orch->>Repo: insertNewsItem(item)
+                Repo->>DB: INSERT INTO news_items<br/>ON CONFLICT (content_hash) DO NOTHING
+                DB-->>Repo: rows_affected
+                Repo-->>Orch: inserted | skipped
+            end
+
+            Note over Orch: log [news/source]<br/>{runId, sourceId, strategy,<br/>fetched, inserted, errored:false}
+
+        end
+
+        Orch->>Orch: durationMs = Date.now() - startedAt
+        Note over Orch: log [news/metric]<br/>{runId, sources:15, fetched, inserted,<br/>skippedLayer1, skippedLayer2, skippedLayer3,<br/>errors, durationMs, startedAt, completedAt}
+
+        Orch-->>Job: { runId, sources, fetched, inserted, skipped, errors }
+        deactivate Orch
+        Job-->>Cron: done
+        deactivate Job
+    end

@@ -73,6 +73,16 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [104](104-library-video-speed-global-localstorage.md) | Velocidade video global via localStorage `library-video-speed` (Sprint UX-Biblioteca-1) | Aceito | 2026-05-03 |
 | [105](105-auto-navigation-countdown-pattern.md) | Padrao auto-navegacao countdown 5s + cancel sticky (NextLessonCTA, Sprint UX-Biblioteca-1) | Aceito | 2026-05-03 |
 | [110](110-news-feed-ranking-and-zoning.md) | News feed `/api/news/feed` ranqueado server-side + 4 zonas semanticas Home + read-state localStorage (Sprint home-reform-3) | Aceito | 2026-05-03 |
+| [111](111-coach-lesson-recommendation-schema.md) | Tabela dedicada `coach_lesson_recommendations` com UNIQUE `(userId, weekStartDate)` + ciclo semanal previsivel (home-reform-4 item 4) | Aceito | 2026-05-03 |
+| [112](112-coach-recommendation-cron-strategy.md) | Cron node-cron in-process `0 6 * * 1` America/Sao_Paulo + idempotencia em 3 camadas + endpoint admin regenerate (home-reform-4 item 4) | Aceito | 2026-05-03 |
+| [113](113-coach-recommendation-fallback-tiers.md) | Algoritmo Coach IA + fallback determinista em 5 tiers (short-circuit -> Coach -> leak->tag -> popular -> recent -> null) (home-reform-4 item 4) | Aceito | 2026-05-03 |
+| [114](114-coach-recommendation-consume-tracking.md) | Consume tracking via 30s OR 80% playback + query param `?source=home-coach-rec&recId=...` + library_events `coach_recommend` (home-reform-4 item 4) | Aceito | 2026-05-03 |
+| [115](115-coach-recommendation-prompt-cache.md) | Prompt cache 2 blocos `cache_control: ephemeral` (system + catalog) + cap 200 lessons + hit rate alvo > 90% (home-reform-4 item 4) | Aceito | 2026-05-03 |
+| [116](116-user-focus-stats-schema-monthly.md) | Schema `user_focus_stats` com escopo mensal + UNIQUE composta + reset implicito ao virar mes (home-reform-4 item 7) | Aceito | 2026-05-03 |
+| [117](117-study-sessions-theme-id-opcao-c.md) | `study_sessions.theme_id` nullable + sem back-fill historico + accountability futura (Opcao C aprovada) (home-reform-4 item 7) | Aceito | 2026-05-03 |
+| [118](118-focus-stats-card-zone-estudos.md) | `FocusStatsCard` em nova zona "Estudos" no Home, entre Performance e Sinal Externo (home-reform-4 item 7) | Aceito | 2026-05-03 |
+| [106-news](106-news-feed-grok-integration.md) | News feed: integracao xAI Grok + opt-in granular (Sprint News-1) | **SUPERSEDED por ADR-107-news** | 2026-05-03 |
+| [107-news](107-news-rss-x-search-refactor.md) | Refatorar news provider para RSS/HTML scrapers + xAI Live Search com `sources[].type='x'`; pipeline dedupe 3-layer; cron weekly UTC; supersedes ADR-106-news (Sprint News-3) | Aceito | 2026-05-04 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 
@@ -86,12 +96,14 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 
 ## Notas
 
-- **Numeracao duplicada (047, 048, 051, 052):** existem dois ADRs com cada um desses
-  numeros — sufixo `a`/`b` adicionado neste indice apenas para desambiguacao visual; os
+- **Numeracao duplicada (047, 048, 051, 052, 106, 107):** existem dois ADRs com cada um desses
+  numeros — sufixo `a`/`b` ou `-news` adicionado neste indice apenas para desambiguacao visual; os
   arquivos no disco mantem nome original (e.g. `047-summary-inline-reconcile.md` e
-  `047-tts-browser-native-vs-cloud.md`). Divida historica de coordenacao entre sprints
-  paralelos (TTS, Bankroll, Stats Analyzer, Spot Screenshots) — proximos ADRs evitam
-  colisao.
+  `047-tts-browser-native-vs-cloud.md`; `106-home-daily-insight-rule-engine.md` e
+  `106-news-feed-grok-integration.md`; `107-home-profile-detection-smart-auto-adapt.md` e
+  `107-news-rss-x-search-refactor.md`). Divida historica de coordenacao entre sprints
+  paralelos (TTS, Bankroll, Stats Analyzer, Spot Screenshots, home-reform-3 vs news-1, news-3) —
+  proximos ADRs evitam colisao.
 - **Branches paralelas:** ADRs 051-spot-screenshots, 052-spot-screenshots e
   053-spot-screenshots existem somente em `feature/spot-screenshots`. ADRs
   051-stats-analyzer e 052-stats-analyzer existem em `feature/stats-analyzer`. ADRs

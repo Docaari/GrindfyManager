@@ -1,0 +1,59 @@
+flowchart TD
+    %% News-3 — Dedupe Pipeline Flowchart
+    %% Spec: Docs/specs/news-3-rss-x-refactor.md (RF-08)
+    %% ADR: Docs/architecture/decisions/107-news-rss-x-search-refactor.md
+
+    Start([Incoming NewsItem<br/>de Blog ou X provider])
+
+    Start --> Canon["canonicalizeUrl(item.url)<br/><br/>- lowercase host<br/>- strip utm_*/fbclid/gclid/etc<br/>- ordenar query params<br/>- twitter.com → x.com<br/>- strip trailing slash<br/>- strip fragment"]
+
+    Canon --> Q1{"Existe em<br/>news_items.url_canonical<br/>nos ultimos 30 dias?"}
+
+    Q1 -->|"Sim"| Drop1["DROP — Layer 1<br/><br/>log [news/dedupe] drop<br/>{ layer:1, sourceId, url,<br/>reason: 'url_canonical_match' }<br/><br/>skipped.layer1++"]
+
+    Drop1 --> End1([item descartado])
+
+    Q1 -->|"Nao"| FP["titleFingerprint(item.title)<br/><br/>- NFD strip diacritics<br/>- lowercase + strip punct<br/>- tokenize por espacos<br/>- strip stopwords PT+EN<br/>- sort alfabetico<br/>- top 10 tokens<br/>- sha256 → hex 64 chars"]
+
+    FP --> Q2{"Existe em<br/>news_items.title_fingerprint<br/>nos ultimos 30 dias?"}
+
+    Q2 -->|"Sim"| Drop2["DROP — Layer 2<br/><br/>log [news/dedupe] drop<br/>{ layer:2, sourceId, url,<br/>title, reason: 'fingerprint_match' }<br/><br/>skipped.layer2++"]
+
+    Drop2 --> End2([item descartado])
+
+    Q2 -->|"Nao"| Q3{"item.url contem<br/>x.com OR twitter.com?<br/>(eh tweet?)"}
+
+    Q3 -->|"Nao (blog item)"| Skip3["Pula Layer 3<br/>(aplicavel apenas a tweets)"]
+
+    Skip3 --> Insert
+
+    Q3 -->|"Sim (tweet)"| Extract["extractTweetUrls(item.summary)<br/><br/>- regex captura URLs http/https<br/>- filtrar self-X (x.com, twitter.com, t.co)<br/>- canonicalizeUrl em cada match<br/>- Set dedupe interno"]
+
+    Extract --> Q4{"URLs externas<br/>encontradas?"}
+
+    Q4 -->|"Nao (tweet sem links)"| Insert
+    Q4 -->|"Sim"| Q5{"Alguma URL externa<br/>existe em<br/>news_items.url_canonical<br/>nos ultimos 7 dias?"}
+
+    Q5 -->|"Sim"| Drop3["DROP — Layer 3<br/><br/>log [news/dedupe] drop<br/>{ layer:3, sourceId, tweetUrl,<br/>matchedExternalUrl,<br/>reason: 'tweet_cites_indexed_url' }<br/><br/>skipped.layer3++"]
+
+    Drop3 --> End3([tweet descartado])
+
+    Q5 -->|"Nao"| Insert["Computar metadata final:<br/><br/>- contentHash =<br/>sha256(url_canonical + '\n' +<br/>title_fingerprint)<br/>- expiresAt =<br/>publishedAt + 30 dias"]
+
+    Insert --> InsertDB["INSERT INTO news_items<br/>(id, source_id, title, url,<br/>url_canonical, title_fingerprint,<br/>summary, published_at, content_hash,<br/>fetched_at, expires_at)<br/><br/>ON CONFLICT (content_hash)<br/>DO NOTHING"]
+
+    InsertDB --> Q6{"rows_affected > 0?"}
+
+    Q6 -->|"Sim"| Inserted([INSERTED — log<br/>inserted++])
+    Q6 -->|"Nao (race conflict)"| Idemp([IDEMPOTENT skip<br/>log [news/dedupe] dup_db_layer])
+
+    %% Styling
+    classDef dropNode fill:#fee,stroke:#c33,stroke-width:2px
+    classDef checkNode fill:#fff8dc,stroke:#999
+    classDef successNode fill:#efe,stroke:#3c3,stroke-width:2px
+    classDef processNode fill:#eef,stroke:#66c
+
+    class Drop1,Drop2,Drop3 dropNode
+    class Q1,Q2,Q3,Q4,Q5,Q6 checkNode
+    class Inserted,Idemp successNode
+    class Canon,FP,Extract,Insert,InsertDB,Skip3 processNode

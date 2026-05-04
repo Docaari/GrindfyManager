@@ -72,6 +72,7 @@ Diagramas Mermaid: `Docs/architecture/features/flight/`:
 | `user_coach_preferences` | **NOVA Coach Sprint 0 (RF-01 / ADR-084)**. 1 row por usuario, lazy-create (defaults retornados se row ausente). 8 toggles por categoria de nudge (B-SNAPSHOT/B-LEAK/B-STUDY/B-VOLUME/B-GRADE/B-DOWNSWING ON; B-LIFE/B-MENTAL OFF). Quiet hours timezone-aware via `users.timezone`: `quiet_hours_start` + `quiet_hours_end` (0..23, wrap-around aceito). Frequency cap: `max_nudges_per_day=3`, `max_nudges_per_hour=1`. Channels: `channel_in_app`+`channel_email` ON, `channel_push` OFF. Tom: `coach_tone='balanced'` (gentle/balanced/direct, Coach-4 ativa LLM). UNIQUE em user_id. CASCADE em user. Cache memoria 30s (`prefsCache`) reusa logica de `resolveUserTier`. |
 | `coach_nudge_log` | **NOVA Coach Sprint 0 (RF-03 / ADR-085)**. Audit + frequency cap + idempotencia per-cycle. Cada nudge enviado gera 1 row. `category` varchar(32) (B-SNAPSHOT/B-LEAK/B-STUDY/B-VOLUME/B-GRADE/B-DOWNSWING/B-LIFE/B-MENTAL). `cycle_key` varchar(16) nullable ('YYYY-MM' mensal | 'YYYY-WW' semanal | NULL). `status` varchar(16): sent/engaged/dismissed/snoozed/unsubscribed (snoozed NAO consume cap). `triggered_by_event` (cron_28th/csv_upload/session_complete/etc). Engine `shouldSendNudge` (ADR-085) consulta para frequency cap + idempotencia (`already_sent_this_cycle`). Indices: `idx_coach_nudge_log_user_sent`, `idx_coach_nudge_log_user_category_cycle`, `idx_coach_nudge_log_category_status_sent`. FK CASCADE em user; FK soft em chat_session_id (nudge cria sessao). |
 | `coach_leak_focus` | **NOVA Coach-2B (RF-05 / ADR-077)**. Foco de leak escolhido pelo user (1 ou mais por mes). `leak_code` varchar(64) (ex 'low_itm_turbos'); `description` text max 200 pt-BR; `target_month` varchar(7) ('YYYY-MM'); `baseline_stat_key` + `baseline_value` + `baseline_sample_size` capturados no momento do log. `status`: active/resolved/abandoned. UNIQUE em (user_id, leak_code, target_month). FK CASCADE em user. Tool `verify_leak_progress` (RF-05) consulta para comparativo current vs baseline. |
+| `coach_lesson_recommendations` | **NOVA home-reform-4 item 4 (RF-01 / ADRs 111-115)**. Recomendacao semanal de licao curada pelo Coach IA. 1 row por user por semana (UNIQUE `(user_id, week_start_date)`). `week_start_date` date (segunda-feira 00:00 BRT do ciclo). `reason` text 20-240 chars pt-BR. `source` varchar(20): `coach` (Anthropic respondeu) / `fallback_leak_tag` (mapping deterministico) / `fallback_popular` (popularidade + seed-randomizado) / `fallback_recent` (lessons mais novas) / `manual` (admin override). `input_summary` jsonb com snapshot de leaks/analytics/profile/sampleSize/catalogHash para auditoria + replay. `chat_session_id` varchar nullable reservado para feature futura "Discutir com Coach". `dismissed_at` + `consumed_at` timestamps mutuamente terminais (NULL = ativa). FK CASCADE em `users.user_platform_id` e `library_lessons.id`. Indices: `uq_coach_rec_user_week` (UNIQUE), `idx_coach_rec_user_active` (user_id + dismissed_at + consumed_at), `idx_coach_rec_lesson` (lesson_id). Cron `generateCoachRecommendations` (segunda 06:00 BRT, ADR-112) gera; endpoints `GET /api/home/coach-recommendation`, `POST /:id/dismiss`, `POST /:id/consume`, `POST /api/admin/coach/recommendations/regenerate`. |
 
 Detalhes: `Docs/api/coach.md`, `Docs/api/coach-tools.md`.
 
@@ -83,6 +84,13 @@ Detalhes: `Docs/api/coach.md`, `Docs/api/coach-tools.md`.
 - **ADR-086** (`coach-citations-and-confidence-inline-rules`) — CITATIONS_RULES + CONFIDENCE_RULES em arquivo unico `coachSafetyPrompts.ts` (lesson #10 DRY); cache invalidation 1x apos deploy.
 - **ADR-087** (`job-runner-timezone-aware`) — node-cron in-process para Sprint 2B; `iterateUsersWithTimezone` filtra por hora local; migration path para pg-boss em Coach-3.
 
+**ADRs relevantes Coach Lesson Recommendation — home-reform-4 item 4 (2026-05-03):**
+- **ADR-111** (`coach-lesson-recommendation-schema`) — tabela dedicada `coach_lesson_recommendations` com UNIQUE `(userId, weekStartDate)` + FK CASCADE em users e library_lessons; ciclo semanal previsivel; `source` enum logico (varchar) com 5 valores; `inputSummary` jsonb para auditoria. Migration `0042_coach_lesson_recommendations.sql`.
+- **ADR-112** (`coach-recommendation-cron-strategy`) — node-cron in-process registrado em `cronRunner.ts` com expressao `0 6 * * 1` + tz `America/Sao_Paulo`. Activation guard reusa `COACH_CRON_ENABLED`. Idempotencia em 3 camadas (banco UNIQUE + cron early-skip + admin DELETE). Sequencial; endpoint admin `regenerate` para override manual.
+- **ADR-113** (`coach-recommendation-fallback-tiers`) — algoritmo em 5 tiers: (0) short-circuit user sem dados, (1) Coach IA Anthropic, (2) leak->tag deterministico, (3) popular seed-randomizado por (userId+weekStart), (4) lessons recentes, (5) null. Garante resilience a outage Anthropic.
+- **ADR-114** (`coach-recommendation-consume-tracking`) — query param `?source=home-coach-rec&recId=...` na URL da pagina lesson; player dispara consume apos 30s OR 80% playback; backend insere row em `library_events` com `event_type='coach_recommend'` (enum existente em schema:3582). Convencao `?source=...` reutilizavel para outros entry points.
+- **ADR-115** (`coach-recommendation-prompt-cache`) — 2 blocos `cache_control: ephemeral` (system prompt + catalog markdown). Hit rate alvo > 90%. Catalog cap 200 lessons ordenadas deterministicamente (createdAt DESC, id). Logging de tokens cache_creation/cache_read para monitoramento.
+
 > Nota numeracao: ADR-078 (design tokens UI-FND-1) foi reservado por sessao paralela em 2026-05-02. Os 6 ADRs Coach Sprint 0 + Coach-2B foram renumerados para 077 + 083-087 evitando colisao.
 
 **Diagramas Mermaid:** ver `Docs/architecture/diagrams/coach-2b/`:
@@ -93,7 +101,13 @@ Detalhes: `Docs/api/coach.md`, `Docs/api/coach-tools.md`.
 - `seq-nudge-b-leak.mermaid` — B-LEAK setImmediate pos-upload com gap-check + cycleKey semanal.
 - `flow-citation-enrichment.mermaid` — System prompt rules + tool result wrapping + frontend parser.
 
+**Diagramas Mermaid Coach Lesson Recommendation (home-reform-4 item 4):**
+- `Docs/architecture/coach-recommendation-data.mermaid` — ER de `coach_lesson_recommendations` + FKs com `users`, `library_lessons`, `library_events`, `user_lesson_access`.
+- `Docs/architecture/coach-recommendation-sequence.mermaid` — Sequencia ponta-a-ponta: cron weekly -> detectLeaks -> recommendLessonForUser -> Coach IA / fallback -> INSERT -> render Home -> consume tracking via library_events.
+- `Docs/architecture/coach-recommendation-flow.mermaid` — Decision tree do fallback em 5 tiers (Tier 0 short-circuit -> Coach -> leak->tag -> popular -> recent -> null).
+
 **Migration prevista:** `migrations/0024_coach_2b_actions_leak_focus.sql` (cria 4 tabelas + indices em uma migration unica).
+**Migration prevista (home-reform-4 item 4):** `migrations/0042_coach_lesson_recommendations.sql` (cria 1 tabela + 3 indices).
 
 ### Schema Delta — Sprint Coach Sprint 0 + Coach-2B
 
@@ -219,8 +233,9 @@ Drizzle (em `shared/schema.ts`): Zod `optional + default` em todas as colunas wr
 | `study_tabs` | Abas dentro de tema (boards, ranges, hand_notes, tags). **Coluna opcional Studies-Reform (RF-02 / ADR-067)**: `last_visited_at` timestamp nullable — alimenta "Continue de onde parou" no Dashboard; fallback derivar de `study_sessions.tab_id` mais recente quando nao populada. |
 | `study_materials` | Materiais (video, artigo, pdf) |
 | `study_notes` | Notas de estudo |
-| `study_sessions` | Sessoes de estudo com duracao e scores |
+| `study_sessions` | Sessoes de estudo com duracao e scores. **Coluna nova home-reform-4 Item 7 (RF-08 / ADR-117)**: `theme_id` varchar(21) nullable, FK `study_themes(id)` ON DELETE SET NULL — alimenta `studyMinutesMonth` no `FocusStatsCard` da Home. SEM back-fill historico (sessoes pre-Item 7 ficam com `theme_id=NULL`). Indice parcial `idx_study_sessions_user_theme_date` em `(user_id, theme_id, date) WHERE theme_id IS NOT NULL`. Migration `0044_study_sessions_theme_id.sql`. |
 | `study_schedules` | Agendamentos de estudo |
+| `user_focus_stats` | **NOVO home-reform-4 Item 7 (RF-01 / ADR-116)**. Persiste as marcacoes mensais de stats foco do user (max 3 por user/mes, enforcement em servico). 1 row por (user, stat_id, month). Colunas: `id` varchar(21) PK nanoid; `user_id` varchar(21) FK `users.user_platform_id` ON DELETE CASCADE; `stat_id` varchar(64) (id em `HUD_STAT_CATALOG`, sem FK — catalog estatico em codigo); `study_theme_id` varchar(21) FK `study_themes.id` ON DELETE CASCADE; `month` varchar(7) formato `YYYY-MM` UTC (validado por regex Zod); `created_at`/`updated_at` timestamp (trigger `set_updated_at`). UNIQUE constraint `(user_id, stat_id, month)` previne marcacao duplicada (race condition vira 409 STAT_ALREADY_FOCUSED). Indices: `uq_user_focus_stats_user_stat_month`, `idx_user_focus_stats_user_month`, `idx_user_focus_stats_theme`. **Reset implicito ao virar mes**: query muda mes → rows mudam, sem cron. Migration `0043_user_focus_stats.sql`. Alimenta `GET /api/home/focus-stats` (consumido pelo `FocusStatsCard` na zona "Estudos" da Home — ADR-118). |
 | `study_theme_spot_links` | **NOVO Studies-Reform (RF-08 / ADR-068, opcional D10)**. Tabela N:N entre `study_themes` e `starred_hands`. 1 row por vinculo. Colunas: `id` (nanoid), `theme_id` (FK CASCADE), `spot_id` (FK CASCADE), `user_id` (FK CASCADE), `linked_at` timestamp default NOW. UNIQUE constraint em `(theme_id, spot_id)` para idempotencia. Indices: `idx_study_theme_spot_links_theme`, `idx_study_theme_spot_links_spot`, `idx_study_theme_spot_links_user`. Alimenta `storage.getLinkedSpots()` (compartilhado entre `studyRecommendationsService` RF-06 e Coach tool `read_theme_with_linked_spots` RF-07). Spec MVP: 1 spot pode ter multiplos themes (modelado N:N para futuro), mas UI atual sugere 1 tema por spot. |
 
 ## Calendario
@@ -239,6 +254,69 @@ Drizzle (em `shared/schema.ts`): Zod `optional + default` em todas as colunas wr
 |--------|-----------|
 | `satellite_tickets` | Tickets ganhos em satelites |
 | `ticket_uses` | Usos de tickets em torneios target |
+
+## News Feed
+
+| Tabela | Descricao |
+|--------|-----------|
+| `news_sources` | Catalogo de fontes (15 entries locked apos Sprint News-3). **Colunas pos-News-3 (ADR-107-news):** `id` varchar PK (slug ex `mundopoker`, `gto-wizard`); `category` enum (`gossip`/`sites`/`studies`/`tools`); `platform` varchar nullable (apenas para sources de redes especificas); `homepage_url` text nullable (URL canonica do blog); `rss_url` text nullable **(NOVA)** (URL feed RSS/Atom quando disponivel); `scrape_strategy` varchar(32) NOT NULL DEFAULT `'html'` **(NOVA)** com CHECK constraint para enum `('rss','html','x_only','rss_and_x','html_and_x','rss_or_html')`; `x_handle` varchar(64) nullable **(RENAMED de `live_search_handle`)** — handle X sem `@`; `enabled` boolean NOT NULL DEFAULT true. Sem timestamps explicitos (catalogo gerenciado via seed/UPSERT). Sources legacy deletadas em 2026-05-04 (cravadas-br, chico, ipoker, intuitive-table, holdem-manager, pokertracker) com CASCADE em `news_items`. Migration `0XXX_news_3_refactor.sql` (RF-01 + RF-08.1). |
+| `news_items` | Items do feed indexados pelo cron weekly. Wipe total no flip Sprint News-3 (todos pre-Sprint News-3 eram fake — audit 2026-05-04). **Colunas:** `id` varchar PK (nanoid 21); `source_id` varchar FK `news_sources.id` ON DELETE CASCADE; `title` text NOT NULL; `url` text NOT NULL; `summary` text nullable (truncado 500 chars); `published_at` timestamp NOT NULL (data publicada na fonte); `content_hash` varchar(64) UNIQUE NOT NULL (sha256 derivado de `url_canonical + '\n' + title_fingerprint`; alimenta `ON CONFLICT DO NOTHING` idempotente); `fetched_at` timestamp NOT NULL DEFAULT NOW; `expires_at` timestamp NOT NULL (publishedAt + 30d); `category` enum espelha source.category; `platform` varchar espelha source.platform. **Colunas pos-News-3 (ADR-107-news):** `url_canonical` text NOT NULL DEFAULT `''` **(NOVA, indexada)** — URL normalizada para Layer 1 dedupe (lowercase host, strip utm_*, twitter→x, ordenar query, strip trailing slash); `title_fingerprint` varchar(64) NOT NULL DEFAULT `''` **(NOVA, indexada)** — sha256 hex do top-10 tokens normalizados (NFD, lowercase, strip stopwords PT+EN, sort) para Layer 2 dedupe. Indices novos: `idx_news_items_url_canonical_fetched (url_canonical, fetched_at DESC)` + `idx_news_items_title_fingerprint_fetched (title_fingerprint, fetched_at DESC)`. |
+
+**ADRs relevantes News:**
+- **ADR-100** (`news-feed-deferred-integration`) — base estrutura Onda 1 (catalogo + flag).
+- **ADR-106-news** (`news-feed-grok-integration`) — **SUPERSEDED por ADR-107-news**. Provider Grok-LLM hallucinava conteudo (audit 73.6% URLs mortas, 100% datas Out/2024).
+- **ADR-107-news** (`news-rss-x-search-refactor`) — Sprint News-3. Substitui Grok-LLM por arquitetura `BlogScraperProvider` (RSS+9 HTML adapters) + `XSearchProvider` (xAI Live Search com `sources[].type='x'`) + `OrchestratorService` (concurrency 3 + dispatch per strategy) + `DedupeService` 3-layer ordenado. Cron `0 15 * * 1` UTC. `XAI_API_KEY` ausente/invalida → cron skip total (decisao all-or-nothing).
+- **ADR-110** (`news-feed-ranking-and-zoning`) — endpoint `/api/news/feed` ranqueado server-side + 4 zonas semanticas Home + read-state localStorage (Sprint home-reform-3).
+
+**Diagramas Mermaid News-3:**
+- `Docs/architecture/news-3-components.mermaid` — C4 component diagram (cron, orchestrator, providers, adapters, dedupe, repo, DB).
+- `Docs/architecture/news-3-sequence.mermaid` — Sequencia ponta-a-ponta cron run com paths de erro (timeout, key missing, parse fail) + concurrency 3.
+- `Docs/architecture/news-3-dedupe-flow.mermaid` — Decision tree do pipeline dedupe Layer 1 → 2 → 3 com logging em cada drop.
+
+**Schema Delta — Sprint News-3:**
+
+```sql
+-- migrations/0XXX_news_3_refactor.sql (preview)
+
+-- RF-01: news_sources schema
+ALTER TABLE news_sources ADD COLUMN rss_url TEXT NULL;
+ALTER TABLE news_sources ADD COLUMN scrape_strategy VARCHAR(32) NOT NULL DEFAULT 'html'
+  CHECK (scrape_strategy IN ('rss','html','x_only','rss_and_x','html_and_x','rss_or_html'));
+ALTER TABLE news_sources RENAME COLUMN live_search_handle TO x_handle;
+DELETE FROM news_sources WHERE id IN
+  ('cravadas-br','chico','ipoker','intuitive-table','holdem-manager','pokertracker');
+-- UPSERT 15 sources finais via seed (mundopoker, superpoker, 888poker, bodog, coinpoker,
+-- ggpoker, partypoker, pokerstars, wpn-acr, gto-wizard-studies, gto-wizard,
+-- hand2note, hrc, jurojin, sharkscope).
+
+-- RF-01 wipe: descartar todos items fake
+DELETE FROM news_items;
+
+-- RF-08.1: dedupe support columns + indices
+ALTER TABLE news_items ADD COLUMN url_canonical TEXT NOT NULL DEFAULT '';
+ALTER TABLE news_items ADD COLUMN title_fingerprint VARCHAR(64) NOT NULL DEFAULT '';
+CREATE INDEX idx_news_items_url_canonical_fetched
+  ON news_items (url_canonical, fetched_at DESC);
+CREATE INDEX idx_news_items_title_fingerprint_fetched
+  ON news_items (title_fingerprint, fetched_at DESC);
+```
+
+Drizzle (em `shared/schema.ts`):
+
+```ts
+// news_sources
+rssUrl: text('rss_url'),
+scrapeStrategy: varchar('scrape_strategy', { length: 32 }).notNull().default('html'),
+xHandle: varchar('x_handle', { length: 64 }),  // RENAMED de liveSearchHandle
+
+// news_items
+urlCanonical: text('url_canonical').notNull().default(''),
+titleFingerprint: varchar('title_fingerprint', { length: 64 }).notNull().default(''),
+```
+
+Type literal exportado: `type ScrapeStrategy = 'rss' | 'html' | 'x_only' | 'rss_and_x' | 'html_and_x' | 'rss_or_html'`.
+
+---
 
 ## Admin / Sistema
 
@@ -467,3 +545,127 @@ Zod schemas (insert/update): `optional + default` nas 8 colunas — lessons lear
 local; S3 deferido para F3), 052 (ownership middleware em GET /image), 053 (node-cron
 diario para purge). Detalhes completos em
 [`cooldown-index.md`](cooldown-index.md#f2--spot-screenshots-sprint-f2-branch-featurespot-screenshots).
+
+---
+
+## Schema Delta — Sprint home-reform-4 Item 7 (Focus Stats)
+
+ADR-116 (`user_focus_stats` schema mensal) + ADR-117 (`study_sessions.theme_id` Opcao C) +
+ADR-118 (zona "Estudos" no Home) introduzem **1 tabela nova + 1 coluna em `study_sessions`**.
+Item 7 do home-reform-4 permite o jogador marcar **3 stats HUD como foco do mes** (escopo
+mensal `YYYY-MM` UTC), cada uma vinculada a um `study_themes.id`. Card `FocusStatsCard` na
+Home consome via `GET /api/home/focus-stats` e renderiza valor atual + delta vs mes anterior +
+tempo de estudo dedicado ao tema.
+
+```mermaid
+erDiagram
+    USERS ||--o{ USER_FOCUS_STATS : "1:N CASCADE"
+    STUDY_THEMES ||--o{ USER_FOCUS_STATS : "1:N CASCADE"
+    STUDY_THEMES ||--o{ STUDY_SESSIONS : "1:N SET NULL (theme_id NOVA)"
+
+    USER_FOCUS_STATS {
+        varchar id PK "nanoid 21"
+        varchar user_id FK
+        varchar stat_id "len 64 — id em HUD_STAT_CATALOG (sem FK)"
+        varchar study_theme_id FK
+        varchar month "len 7 — formato YYYY-MM UTC"
+        timestamp created_at
+        timestamp updated_at "trigger set_updated_at"
+    }
+
+    STUDY_SESSIONS {
+        varchar id PK
+        varchar user_id FK
+        varchar study_card_id "soft FK"
+        varchar theme_id FK_NULL "NOVA — ON DELETE SET NULL"
+        timestamp date
+        integer duration "minutos"
+    }
+```
+
+Migrations afetadas:
+- `migrations/0043_user_focus_stats.sql` (NOVA tabela + 3 indices + trigger updated_at)
+- `migrations/0044_study_sessions_theme_id.sql` (ALTER ADD COLUMN nullable + indice parcial)
+
+Drizzle (em `shared/schema.ts`):
+
+```ts
+// NOVO — userFocusStats
+export const userFocusStats = pgTable("user_focus_stats", {
+  id: varchar("id", { length: 21 }).primaryKey().notNull(),
+  userId: varchar("user_id", { length: 21 })
+    .notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  statId: varchar("stat_id", { length: 64 }).notNull(),
+  studyThemeId: varchar("study_theme_id", { length: 21 })
+    .notNull()
+    .references(() => studyThemes.id, { onDelete: "cascade" }),
+  month: varchar("month", { length: 7 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  userStatMonthUnique: uniqueIndex("uq_user_focus_stats_user_stat_month")
+    .on(table.userId, table.statId, table.month),
+  userMonthIdx: index("idx_user_focus_stats_user_month")
+    .on(table.userId, table.month),
+  themeIdx: index("idx_user_focus_stats_theme").on(table.studyThemeId),
+}));
+
+// ALTERADO — studySessions ganha themeId opcional
+themeId: varchar("theme_id", { length: 21 })
+  .references(() => studyThemes.id, { onDelete: "set null" }),
+```
+
+SQL (preview):
+
+```sql
+-- migrations/0043_user_focus_stats.sql
+CREATE TABLE IF NOT EXISTS user_focus_stats (
+    id              VARCHAR(21) PRIMARY KEY,
+    user_id         VARCHAR(21) NOT NULL REFERENCES users(user_platform_id) ON DELETE CASCADE,
+    stat_id         VARCHAR(64) NOT NULL,
+    study_theme_id  VARCHAR(21) NOT NULL REFERENCES study_themes(id) ON DELETE CASCADE,
+    month           VARCHAR(7) NOT NULL,
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_user_focus_stats_user_stat_month
+    ON user_focus_stats (user_id, stat_id, month);
+CREATE INDEX IF NOT EXISTS idx_user_focus_stats_user_month
+    ON user_focus_stats (user_id, month);
+CREATE INDEX IF NOT EXISTS idx_user_focus_stats_theme
+    ON user_focus_stats (study_theme_id);
+CREATE TRIGGER trg_user_focus_stats_updated_at
+    BEFORE UPDATE ON user_focus_stats
+    FOR EACH ROW
+    EXECUTE FUNCTION set_updated_at();
+
+-- migrations/0044_study_sessions_theme_id.sql
+ALTER TABLE study_sessions
+    ADD COLUMN IF NOT EXISTS theme_id VARCHAR(21)
+        REFERENCES study_themes(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_study_sessions_user_theme_date
+    ON study_sessions (user_id, theme_id, date)
+    WHERE theme_id IS NOT NULL;
+```
+
+**Regras de negocio (resumo — detalhes em ADR-116):**
+- Limite hard de **3 marcacoes por (user_id, month)**: enforcement em **servico** (transacao + re-check), NAO em CHECK constraint.
+- UNIQUE `(user_id, stat_id, month)` previne duplicacao mesmo em race condition (PG 23505 → 409 STAT_ALREADY_FOCUSED).
+- Validacoes Zod + servico: `month` formato YYYY-MM (regex), mes futuro/passado rejeitado, `statId` deve estar em `HUD_STAT_CATALOG`, `studyThemeId` ownership via JOIN com `study_themes.user_id`.
+- **Reset implicito ao virar mes**: rows passadas continuam la (audit), apenas filtro `WHERE month = currentMonth` muda. Sem cron/cleanup.
+- `study_sessions.theme_id` SEM back-fill: sessoes pre-Item 7 ficam com `NULL`. Card calcula `studyMinutesMonth = 0` se nenhuma sessao do tema no mes — UX accept ("0min — comece agora").
+- `stat_id` SEM FK: catalogo HUD eh estatico em `shared/hud-stat-catalog.ts`. Stat removida do catalog → UI mostra warning + botao remover marcacao manual.
+
+**Endpoints novos:**
+- `GET /api/home/focus-stats?month=YYYY-MM` — lista 3 (ou menos) items com valor + delta + tema + studyMinutesMonth. Cache 30s in-memory per-userId (padrao ADR-102).
+- `POST /api/focus-stats` — cria marcacao no mes corrente.
+- `DELETE /api/focus-stats/:id` — remove marcacao (libera slot).
+
+**Diagramas Mermaid:**
+- `Docs/architecture/focus-stats-sequence.mermaid` — 3 fluxos (marcar → render Home → estudar agora).
+- `Docs/architecture/focus-stats-data.mermaid` — ER com FKs + cardinalidade + referencia logica HUD_STAT_CATALOG.
+- `Docs/architecture/focus-stats-flow.mermaid` — fluxograma decisao FocusStatsCard render tree.
+
+ADRs relevantes: **ADR-116** (schema mensal), **ADR-117** (study_sessions.theme_id Opcao C),
+**ADR-118** (FocusStatsCard zona "Estudos" no Home — nova Zona 4 entre Performance e Sinal Externo).

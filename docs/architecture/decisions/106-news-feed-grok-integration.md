@@ -1,11 +1,12 @@
 # ADR-106 — News Feed: Integracao xAI Grok + revogacao do veto F4 + opt-in granular
 
-- Status: Aceito
+- Status: **SUPERSEDED por ADR-107-news (2026-05-04)** — provider Grok-LLM hallucinava conteudo (audit 2026-05-04: 73.6% URLs mortas, 100% datas Out/2024, tweet IDs sintetizados). Substituido por arquitetura RSS/HTML scrapers + xAI Live Search com `sources[].type='x'`. Detalhes em `Docs/architecture/decisions/107-news-rss-x-search-refactor.md`.
 - Data: 2026-05-03
 - Sprint: news-1 (Onda 3 do plano de news feed)
 - Decision owner: founder (revoga veto previo D-FOUNDER-3) + system-architect
 - Related: ADR-100 (estrutura preparada Onda 1), ADR-099 (cockpit), ADR-101 (sidebar IA)
 - Spec: `Docs/specs/news-1.md` (a criar)
+- Superseded by: `107-news-rss-x-search-refactor.md` (Sprint News-3)
 
 ---
 

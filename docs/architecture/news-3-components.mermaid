@@ -1,0 +1,115 @@
+graph TB
+    %% News-3 — Component Diagram (C4 nivel container/component)
+    %% Spec: Docs/specs/news-3-rss-x-refactor.md
+    %% ADR: Docs/architecture/decisions/107-news-rss-x-search-refactor.md
+
+    %% External actors / systems
+    cron["node-cron scheduler<br/><i>0 15 * * 1 UTC</i>"]
+    admin["Admin (Founder)<br/><i>POST /api/admin/news/refresh</i>"]
+
+    subgraph external["Sistemas Externos"]
+        xai["xAI Live Search API<br/><i>POST api.x.ai/v1/chat/completions<br/>search_parameters.sources[].type='x'</i>"]
+        rss["RSS Endpoints<br/><i>GTO Wizard articles/whats-new<br/>HTTP GET (Atom/RSS)</i>"]
+        html["HTML Pages<br/><i>9 sites: mundopoker, superpoker,<br/>ggpoker, pokerstars, hand2note,<br/>hrc, jurojin, gtowizard×2</i>"]
+    end
+
+    subgraph system["Grindfy News-3 Pipeline"]
+        cronJob["RefreshNewsCron<br/><i>server/jobs/refreshNews.ts</i>"]
+        orch["OrchestratorService<br/><i>runOrchestration()<br/>concurrency=3 + per-source dispatch</i>"]
+
+        subgraph providers["Providers"]
+            blog["BlogScraperProvider<br/><i>RSS first, HTML fallback</i>"]
+            xs["XSearchProvider<br/><i>xAI Live Search wrapper<br/>regex validation + trailing-zero drop</i>"]
+        end
+
+        subgraph blogSubs["Blog sub-modules"]
+            rssParser["RssParser<br/><i>rss-parser lib<br/>top 10 items</i>"]
+
+            subgraph adapters["HtmlAdapter[ ] (9 total)"]
+                a1["scrapeMundoPoker"]
+                a2["scrapeSuperPoker"]
+                a3["scrapeGgPoker"]
+                a4["scrapePokerStars"]
+                a5["scrapeHand2Note"]
+                a6["scrapeHrc"]
+                a7["scrapeJurojin"]
+                a8["scrapeGtoWizardArticles"]
+                a9["scrapeGtoWizardWhatsNew"]
+            end
+        end
+
+        subgraph dedupe["DedupeService"]
+            layer1["Layer 1<br/><i>canonicalizeUrl<br/>janela 30d</i>"]
+            layer2["Layer 2<br/><i>titleFingerprint sha256<br/>janela 30d</i>"]
+            layer3["Layer 3<br/><i>extractTweetUrls<br/>janela 7d (X items only)</i>"]
+        end
+
+        repo["NewsRepository<br/><i>storage.ts queries<br/>ON CONFLICT (content_hash) DO NOTHING</i>"]
+
+        subgraph dbTables["PostgreSQL — news_*"]
+            tSrc[("news_sources<br/>id, rss_url, scrape_strategy,<br/>x_handle, homepage_url, enabled")]
+            tItm[("news_items<br/>id, source_id, title, url,<br/>url_canonical, title_fingerprint,<br/>summary, published_at, content_hash,<br/>fetched_at, expires_at")]
+        end
+    end
+
+    %% Triggers
+    cron -->|"weekly fire"| cronJob
+    admin -->|"manual trigger"| cronJob
+    cronJob -->|"runOrchestration()"| orch
+
+    %% Orchestrator dispatch
+    orch -->|"load enabled sources"| repo
+    repo -->|"SELECT WHERE enabled=true"| tSrc
+    tSrc -.->|"15 sources"| orch
+
+    orch -->|"strategy ∈ {rss, html, rss_or_html, rss_and_x, html_and_x}"| blog
+    orch -->|"strategy ∈ {x_only, rss_and_x, html_and_x}"| xs
+
+    %% Blog provider internals
+    blog -->|"if rss_url + strategy supports rss"| rssParser
+    blog -->|"if html or fallback"| adapters
+
+    rssParser -->|"HTTP GET<br/>UA: GrindfyNewsBot/1.0"| rss
+    a1 -->|"HTTP GET"| html
+    a2 -->|"HTTP GET"| html
+    a3 -->|"HTTP GET"| html
+    a4 -->|"HTTP GET"| html
+    a5 -->|"HTTP GET"| html
+    a6 -->|"HTTP GET"| html
+    a7 -->|"HTTP GET"| html
+    a8 -->|"HTTP GET"| html
+    a9 -->|"HTTP GET"| html
+
+    %% X provider
+    xs -->|"POST /v1/chat/completions<br/>Bearer XAI_API_KEY"| xai
+
+    %% Dedupe pipeline
+    blog -->|"NewsItem[] candidatos"| layer1
+    xs -->|"NewsItem[] candidatos"| layer1
+    layer1 -->|"survivors"| layer2
+    layer2 -->|"survivors"| layer3
+    layer3 -->|"final survivors"| repo
+
+    %% Dedupe queries
+    layer1 -->|"SELECT 1 WHERE url_canonical=? AND fetched_at >= NOW()-30d"| tItm
+    layer2 -->|"SELECT 1 WHERE title_fingerprint=? AND fetched_at >= NOW()-30d"| tItm
+    layer3 -->|"SELECT 1 WHERE url_canonical=? AND fetched_at >= NOW()-7d"| tItm
+
+    %% Insert
+    repo -->|"INSERT idempotente"| tItm
+
+    %% Metrics
+    orch -.->|"[news/metric] JSON log"| cronJob
+
+    %% Styling
+    classDef external fill:#fee,stroke:#c66
+    classDef provider fill:#eef,stroke:#66c
+    classDef dedupe fill:#efe,stroke:#6c6
+    classDef db fill:#ffd,stroke:#c93
+    classDef adapter fill:#f5f5f5,stroke:#999
+
+    class xai,rss,html external
+    class blog,xs,rssParser provider
+    class layer1,layer2,layer3 dedupe
+    class tSrc,tItm db
+    class a1,a2,a3,a4,a5,a6,a7,a8,a9 adapter
