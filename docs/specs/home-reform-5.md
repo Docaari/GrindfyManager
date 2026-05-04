@@ -25,7 +25,7 @@ Regra de execucao:
 | 1 | Remover aviso "Day 2 do Mystery Mini comeca em 145h..." | Concluido (2026-05-04) | Remocao | 15min |
 | 2 | Corrigir Header Sessao (Banca, Hoje, ROI 30D, Pendencias priorizadas) | Concluido (2026-05-04) | Bug fix + feature | 4-6h |
 | 3 | Pergunte ao Coach: perfis multiplos + Iniciar Sessao + DAY OFF | Concluido (2026-05-04) | Feature | 2-3h |
-| 4 | Acao Imediata: stat destaque + Iniciar sessao | Pendente | Feature (depende de stat destaque futura) | 2h |
+| 4 | Acao Imediata: stat destaque + Iniciar sessao | Concluido (2026-05-04) | Feature (depende de stat destaque futura) | 2h |
 | 5 | Grade do Dia: Primeiro Registro + Ultimo Registro | Concluido (2026-05-04) | Feature pequena | 1-2h |
 | 6 | Renomear Performance -> Sessoes Registradas + KPIs corretos + ITM/MF/Cravadas | Pendente | Bug fix + feature | 3-4h |
 | 7 | Dashboard: All Time + KPIs ITM/MF/Cravadas + grafico evolucao all-time | Pendente | Feature | 3-4h |
@@ -184,6 +184,31 @@ Ordem de execucao recomendada: **1 -> 2 -> 5 -> 3 -> 4 -> 6 -> 7 -> 8 -> 11 -> 1
 - Estender o tipo `ImmediateActionType = 'pending_hand' | 'focus_stat' | 'start_session'` (focus_stat permanece dormante ate Stats Analyzer destaque).
 - Backend: campo `immediateAction` em `/api/home/overview` ja existe; ampliar logica de selecao.
 - Pipeline TDD recomendado para selecao de prioridade.
+
+#### Resolucao (2026-05-04)
+
+- Premissa do spec corrigida: `ImmediateAction.tsx` NAO existia previamente. Item 3 home-reform-4 era documentacao apenas. `PendingHandsList` (zona Acao Imediata) eh quem foi visto como "so mostra Mao Pendente" pelo founder. Item 4 cria componente novo + campo backend novo.
+- Backend service puro novo: `server/services/immediateAction.ts` com `buildImmediateAction(input)` retornando `ImmediateActionData | null`. Prioridade fixa `pending_hand > focus_stat > start_session > null`.
+  - **pending_hand**: ativa quando `pendingHandsCount > 0`. Output `{ kind, count, ctaHref: '/estudos' }`.
+  - **focus_stat (DORMENTE)**: ativa quando `focusStatPending != null`. Backend hoje passa `null`; estrutura ja aceita `{ statName, daysSince, ctaHref }` para hidratar quando Stats Analyzer destaque (Sprint Stats-V*) for entregue. Output `{ kind, statName, daysSince, ctaHref }`.
+  - **start_session**: ativa quando `todayTournamentsTotal > 0` + `!isDayOff` + `!hasActiveGrindSession`. Output `{ kind, plannedCount, activeProfilesLabel, ctaHref: '/grind?open=quickstart' }`.
+  - Saneamento: counts negativos viram zero; counts vazios/null nao disparam variant.
+  - 15/15 testes verde em `tests/services/immediateAction.test.ts`.
+- Storage: `hasActiveGrindSession(userId)` em `server/storage.ts`. Filtra `grind_sessions WHERE user_id=? AND status='active' LIMIT 1`. Catch retorna `false` (graceful degradation). Sem alteracao na interface IStorage (segue padrao item 2 com cast `(storage as any)`).
+- Route handler `/api/home/overview`:
+  - 1 subquery nova `hasActiveGrindSession` (Promise.allSettled, `timed()`, padrao existente).
+  - Bloco novo `immediateActionData` apos `coachContextData`. Reusa `coachContextData.todayTournamentsTotal` + `coachContextData.isDayOff` (sem subquery duplicada). `activeProfilesLabel` = `coachContextData.activeProfiles.join(' + ')`.
+  - `pendingHandsCount = pending.length` reusando subquery `pendingHands` (top-5 ja carregada). Limita o sinal mas eh suficiente para o gancho prioridade — UI nao depende de count exato.
+  - `focusStatPending: null` ate Stats Analyzer destaque entregar.
+  - Campo `immediateAction: ImmediateActionData | null` adicionado ao `HomeOverviewBody` + payload final.
+- Frontend novo: `client/src/components/home/ImmediateAction.tsx`. Renderiza 1 das 3 variants conforme `data.immediateAction`. Quando `null`, retorna `null` (zona Acao Imediata cai pro fluxo antigo: `PendingHandsList` + `CoachRecommendationCard`). 
+  - Variant pending_hand: `"X mãos pendentes"` (singular `"1 mão pendente"`) + CTA "Revisar agora →" -> /estudos.
+  - Variant focus_stat: `"Stat XYZ sem revisão há Nd"` + CTA "Ver stat →" -> ctaHref do payload.
+  - Variant start_session: `"X torneios planejados para hoje · A + B"` + CTA "Início Rápido →" -> /grind?open=quickstart (modal Inicio Rapido, wired no GrindSession.tsx desde item 3).
+  - 6/6 testes verde em `client/src/components/home/__tests__/ImmediateAction.test.tsx`.
+- Wiring `Home.tsx`: import + tipo `immediateAction?: ImmediateActionData | null` na interface + render `<ImmediateAction data={data.immediateAction ?? null} />` como primeiro filho da zona Acao Imediata, ACIMA da sub-grid `PendingHandsList + CoachRecommendationCard`. Quando null, nao quebra layout (componente retorna null).
+- Type-check: zero erros novos. Tests regressao home + services + storage + components: 616/619 verdes (3 falhas pre-existentes Sprint News-3 em desenvolvimento — `tests/services/news/titleFingerprint.test.ts:106`, `client/src/components/home/__tests__/NewsSlot.test.tsx:53/58`, ja documentadas em itens 3 e 5).
+- focus_stat permanece DORMENTE: backend nao tem fonte de "stat em destaque" hoje. Quando Stats Analyzer destaque for entregue, basta hidratar `focusStatPending` no route handler com `{ statName, daysSince, ctaHref }` — service + componente ja aceitam.
 
 ---
 

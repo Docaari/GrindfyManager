@@ -27,6 +27,7 @@ import { getHomeEvolution, parseMonthIso } from '../services/homeEvolution';
 import { getGradeTodaySummary, type GradeProfile } from '../services/gradeToday';
 import { buildHeaderStrip, type HeaderStripData } from '../services/homeHeader';
 import { buildCoachContext, type CoachContextData } from '../services/coachContext';
+import { buildImmediateAction, type ImmediateActionData } from '../services/immediateAction';
 
 // =============================================================================
 // Cache in-memory per-userId — D4 / ADR-102 §2.3
@@ -119,6 +120,9 @@ interface HomeOverviewBody {
   headerStrip: HeaderStripData;
   // Sprint home-reform-5 item 3 — Pergunte ao Coach + Iniciar Sessao.
   coachContext: CoachContextData;
+  // Sprint home-reform-5 item 4 — Acao Imediata (pending_hand|focus_stat|start_session).
+  // Slot focus_stat fica DORMENTE ate Stats Analyzer destaque (Sprint Stats-V*).
+  immediateAction: ImmediateActionData | null;
   today: {
     profile: 'A' | 'B' | 'C' | 'OFF' | null;
     plannedCount: number;
@@ -419,6 +423,8 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
           to: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
           limit: 1,
         }), timings),
+      // Sprint home-reform-5 item 4 — Acao Imediata (start_session check).
+      timed('hasActiveGrindSession', () => (storage as any).hasActiveGrindSession(userId), timings),
     ]);
 
     const unwrap = <T,>(idx: number): T | null => {
@@ -454,6 +460,7 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     const oldestPendingSpotAtResult = unwrap<Date>(20);
     const bankrollSnapshots30dResult = unwrap<any[]>(21);
     const bankrollSnapshotPrior30dResult = unwrap<any[]>(22);
+    const hasActiveGrindSessionResult = unwrap<boolean>(23) ?? false;
 
     // Tipos usados localmente (cast porque mocks retornam any).
     const qs = quickStats as any;
@@ -807,6 +814,28 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       }
     })();
 
+    // Sprint home-reform-5 item 4 — Acao Imediata (prioridade pending>focus>start).
+    // focusStatPending DORMENTE: backend passa null ate Stats Analyzer destaque
+    // ser entregue (Sprint Stats-V*). Estrutura aceita o tipo.
+    const immediateActionData: ImmediateActionData | null = (() => {
+      try {
+        const activeProfilesLabel = coachContextData.activeProfiles.length > 0
+          ? coachContextData.activeProfiles.join(' + ')
+          : null;
+        return buildImmediateAction({
+          pendingHandsCount: pending.length,
+          focusStatPending: null,
+          todayTournamentsTotal: coachContextData.todayTournamentsTotal,
+          isDayOff: coachContextData.isDayOff,
+          hasActiveGrindSession: hasActiveGrindSessionResult,
+          activeProfilesLabel,
+        });
+      } catch (iaErr) {
+        console.error('[home/overview] buildImmediateAction failed:', iaErr);
+        return null;
+      }
+    })();
+
     const body: HomeOverviewBody = {
       userState,
       profile: playerProfile,
@@ -819,6 +848,7 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       },
       headerStrip: headerStripData,
       coachContext: coachContextData,
+      immediateAction: immediateActionData,
       today: todayBlock,
       banners: {
         cooldown: cooldownBanner,

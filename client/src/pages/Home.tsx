@@ -46,6 +46,8 @@ import NextTournamentCountdown from '@/components/home/NextTournamentCountdown';
 import RecentSessionsList from '@/components/home/RecentSessionsList';
 import PerformanceMini from '@/components/home/PerformanceMini';
 import PendingHandsList from '@/components/home/PendingHandsList';
+// Sprint home-reform-5 item 4 — primary CTA card da zona Acao Imediata.
+import ImmediateAction, { type ImmediateActionData } from '@/components/home/ImmediateAction';
 import HomeFooter from '@/components/home/HomeFooter';
 import EmptyHomeOnboarding from '@/components/home/EmptyHomeOnboarding';
 // Sprint home-reform-1-5 (RF-22 + RF-23): forward-looking blocks.
@@ -211,6 +213,8 @@ interface HomeOverviewResponse {
     todayTournamentsTotal: number;
     isDayOff: boolean;
   };
+  // Sprint home-reform-5 item 4 — Acao Imediata (pending_hand|focus_stat|start_session).
+  immediateAction?: ImmediateActionData | null;
   // Sprint home-reform-4 item 1.
   sessionsMonth?: {
     monthStart: string;
@@ -402,6 +406,8 @@ const Home: React.FC = () => {
             {/* Zona 2 — Acao Imediata */}
             <section data-testid="home-zone-action" className="space-y-3">
               <ZoneHeading>Acao Imediata</ZoneHeading>
+              {/* Sprint home-reform-5 item 4 — primary CTA acima da sub-grid. */}
+              <ImmediateAction data={data.immediateAction ?? null} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <PendingHandsList data={data.pendingHands} />
                 <CoachRecommendationCard />

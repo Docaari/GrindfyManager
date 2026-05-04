@@ -10258,6 +10258,23 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   // -------------------------------------------------------------------------
+  // Sprint home-reform-5 item 4 — Acao Imediata (start_session check).
+  // -------------------------------------------------------------------------
+  async hasActiveGrindSession(userId: string): Promise<boolean> {
+    try {
+      const rows: any[] = await (db as any)
+        .select({ id: grindSessions.id })
+        .from(grindSessions)
+        .where(and(eq(grindSessions.userId, userId), eq(grindSessions.status, 'active')))
+        .limit(1);
+      return Array.isArray(rows) && rows.length > 0;
+    } catch (err) {
+      console.error('[storage.hasActiveGrindSession] failed', err);
+      return false;
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Sprint home-reform-2 Onda 2 — Stubs Onda 2 minimo (RF-29, RF-30).
   // Onda 3 popula real (HUD snapshots + PrimeDope cache).
   // -------------------------------------------------------------------------
