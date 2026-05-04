@@ -14,7 +14,11 @@ import type { NewsItem, NewsCategory } from '@shared/types/news';
 import { NEWS_CATEGORY_PRIORITY } from '@shared/types/news';
 
 const SEVEN_DAYS_MS = 7 * 24 * 3600 * 1000;
-const MAX_FEED_ITEMS = 10;
+// Sprint News-3.4 fix: cap subiu de 10 para 50 para que filtros por categoria
+// no frontend (FilterChips) tenham itens reais — antes top-10 global era
+// dominado por sites recentes e categorias menos recentes (Estudos, Tools,
+// Fofocas) sumiam quando user clicava no chip.
+const MAX_FEED_ITEMS = 50;
 
 function engagementRaw(item: NewsItem): number {
   const e = item.engagement ?? {};

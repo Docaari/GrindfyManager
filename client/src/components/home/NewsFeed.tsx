@@ -173,21 +173,41 @@ interface PlatformChipsProps {
   platforms: string[];
 }
 
-function PlatformChipsCollapsible({ platforms }: PlatformChipsProps): JSX.Element | null {
+interface PlatformChipsClickableProps {
+  platforms: string[];
+  selected: string | null;
+  onSelect: (p: string | null) => void;
+}
+
+function PlatformChipsCollapsible({
+  platforms,
+  selected,
+  onSelect,
+}: PlatformChipsClickableProps): JSX.Element | null {
   const [expanded, setExpanded] = useState(false);
   if (platforms.length === 0) return null;
-  const visible = expanded ? platforms : platforms.slice(0, 3);
+  const visible = expanded ? platforms : platforms.slice(0, 6);
   const hidden = platforms.length - visible.length;
   return (
     <div className="flex flex-wrap gap-1 mt-2">
-      {visible.map((p) => (
-        <span
-          key={p}
-          className="text-[10px] uppercase rounded-md px-2 py-0.5 border border-border text-muted-foreground"
-        >
-          {p}
-        </span>
-      ))}
+      {visible.map((p) => {
+        const isActive = selected === p;
+        return (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onSelect(isActive ? null : p)}
+            data-testid={`news-feed-platform-chip-${p}`}
+            className={`text-[10px] uppercase rounded-md px-2 py-0.5 border transition-colors ${
+              isActive
+                ? "bg-poker-accent text-black border-poker-accent"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {p}
+          </button>
+        );
+      })}
       {hidden > 0 ? (
         <button
           type="button"
@@ -197,7 +217,7 @@ function PlatformChipsCollapsible({ platforms }: PlatformChipsProps): JSX.Elemen
           +{hidden}
         </button>
       ) : null}
-      {expanded && platforms.length > 3 ? (
+      {expanded && platforms.length > 6 ? (
         <button
           type="button"
           onClick={() => setExpanded(false)}
@@ -304,22 +324,31 @@ export default function NewsFeed(): JSX.Element {
   });
 
   const [filter, setFilter] = useState<FilterCategory>('all');
+  const [platformFilter, setPlatformFilter] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const { isRead, markRead } = useNewsReadState();
 
   const items = useMemo<NewsItem[]>(() => data?.items ?? [], [data?.items]);
   const enabled = data?.enabled ?? false;
 
-  const filtered = useMemo(() => {
+  // Filter por categoria primeiro; reset platform filter quando categoria muda.
+  const itemsByCategory = useMemo(() => {
     if (filter === 'all') return items;
     return items.filter((it) => it.source === filter);
   }, [items, filter]);
 
+  // Aplica filtro de plataforma sobre items ja filtrados por categoria.
+  const filtered = useMemo(() => {
+    if (!platformFilter) return itemsByCategory;
+    return itemsByCategory.filter((it) => it.platform === platformFilter);
+  }, [itemsByCategory, platformFilter]);
+
+  // Plataformas disponiveis derivam dos items DA categoria atual (ou todos).
   const platforms = useMemo(() => {
     const set = new Set<string>();
-    for (const it of filtered) set.add(it.platform);
+    for (const it of itemsByCategory) set.add(it.platform);
     return Array.from(set);
-  }, [filtered]);
+  }, [itemsByCategory]);
 
   const refreshBadge = data
     ? fmtRefreshBadge(data.cachedAt, data.nextRefreshAt)
@@ -338,6 +367,7 @@ export default function NewsFeed(): JSX.Element {
 
   const handleSelectFilter = (cat: FilterCategory) => {
     setFilter(cat);
+    setPlatformFilter(null); // Reset platform ao mudar categoria.
     if (cat !== 'all') {
       emit('home_news_feed_filter_applied', {
         filter: cat,
@@ -375,7 +405,13 @@ export default function NewsFeed(): JSX.Element {
       ) : (
         <>
           <FilterChips active={filter} onSelect={handleSelectFilter} />
-          {platforms.length > 0 ? <PlatformChipsCollapsible platforms={platforms} /> : null}
+          {platforms.length > 0 ? (
+            <PlatformChipsCollapsible
+              platforms={platforms}
+              selected={platformFilter}
+              onSelect={setPlatformFilter}
+            />
+          ) : null}
 
           {filtered.length === 0 && filter !== 'all' ? (
             <CategoryEmptyState
@@ -393,7 +429,7 @@ export default function NewsFeed(): JSX.Element {
               ) : null}
               {filtered.length > 1 ? (
                 <div className="rounded-lg border bg-card overflow-hidden">
-                  {filtered.slice(1, 10).map((it, idx) => {
+                  {filtered.slice(1, 20).map((it, idx) => {
                     const rank = idx + 2;
                     return (
                       <CompactItem
