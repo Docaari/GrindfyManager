@@ -201,6 +201,10 @@ Catalogo completo em `Docs/architecture/lessons-learned.md`. **Consultar antes d
 
 23. **Wouter v3 `<Link href><a>...</a></Link>` NAO duplica anchor** — Sprint home-reform-4 Audit Round 2 (HIGH-2): em Wouter v3, quando Link recebe um React element como child, ele transfere `href` + handlers para o child sem renderizar uma anchor extra. O padrao `<Link href="/x"><a className="...">label</a></Link>` esta CORRETO em v3. Em v2, Link renderiza sua propria anchor + child anchor → nested anchors invalidos. Verificar `package.json` antes de "fixar" — se >=3.0.0, deixar como esta. Apenas v2 precisa migrar pra `<Link href="/x">label</Link>` (sem anchor child).
 
+24. **Branch switch implicito do harness durante long-running task** — Sprint News-3 implementer phase: estava implementando em `feature/news-3-rss-x-refactor` quando, pos-instalacao de deps via `npm install`, o harness automaticamente fez `git stash` e mudou pra `main` em algum momento (provavelmente checkout transparente entre comandos). Files novos viraram untracked + tests pararam de aparecer no Glob. Recovery: `git checkout feature/X` + `git stash pop`. Lesson: ao trabalhar em feature branch por muito tempo, `git status` periodicamente pra confirmar contexto. Auto-mode com tools paralelos pode trocar working dir/branch silenciosamente.
+
+25. **Test-writer pode escrever exemplos com inconsistencia logica** — Sprint News-3 RF-03 titleFingerprint: teste "top 10 tokens — ignora tokens 11+" com `baseTokens` 10 tokens + adicao `lambda, mu, nu` esperando hash igual. Mas lambda/mu/nu sortam ANTES de theta/zeta alfabeticamente (l<m<n<t<z), entao top 10 muda — empurram theta/zeta pra fora. Test-writer comentou "tokens DEPOIS de kappa" (verdade tecnica isolada: l>k) mas ignorou que tambem sao < t, z. Implementer NAO pode modificar o teste; documentou no resumo + acceptable failure. Lesson generalizavel: quando teste falha por contradicao logica entre descricao e exemplo, documentar e seguir.
+
 ---
 
 ## 10. Roadmap & Status
