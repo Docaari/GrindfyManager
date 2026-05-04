@@ -69,6 +69,9 @@ export const users = pgTable("users", {
   // Sprint Studies-Reform RF-12 — streak counter persistente (migration 0021).
   studyStreakDays: integer("study_streak_days").notNull().default(0),
   lastStudyActivityAt: timestamp("last_study_activity_at"),
+  // Sprint home-reform-5 item 11 — Home customization (visibility toggles + flags).
+  // Shape em shared/types/homeSettings.ts. JSONB unico (1 row por user, sem joins).
+  homeLayoutSettings: jsonb("home_layout_settings"),
 });
 
 // Auth tokens table - email verification and password reset tokens

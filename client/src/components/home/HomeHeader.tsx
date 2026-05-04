@@ -9,6 +9,7 @@
 
 import React from 'react';
 import HeaderLogo from '@/components/branding/HeaderLogo';
+import HomeSettingsGear from './HomeSettingsGear';
 
 interface Props {
   firstName: string | null | undefined;
@@ -91,7 +92,7 @@ export default function HomeHeader({ firstName, timezone, streakDays }: Props): 
         alt="Grindfy"
         className="h-10 md:h-12 w-auto object-contain"
       />
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <h1
           data-testid="home-header-greeting"
           className="text-xl md:text-2xl font-semibold leading-tight"
@@ -104,6 +105,10 @@ export default function HomeHeader({ firstName, timezone, streakDays }: Props): 
         >
           {metaParts.join(' - ')}
         </p>
+      </div>
+      {/* Sprint home-reform-5 item 11 — engrenagem habilita/desabilita sessoes. */}
+      <div className="ml-auto shrink-0">
+        <HomeSettingsGear />
       </div>
     </div>
   );

@@ -441,6 +441,10 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
 
+  // Sprint home-reform-5 item 11 — Home customization.
+  getHomeLayoutSettings(userId: string): Promise<unknown | null>;
+  setHomeLayoutSettings(userId: string, settings: unknown): Promise<void>;
+
   // Tournament operations
   getTournaments(userId: string, limit?: number, offset?: number, period?: string, filters?: any): Promise<Tournament[]>;
   getTournament(id: string): Promise<Tournament | undefined>;
@@ -10600,6 +10604,31 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       console.error('[storage.hasActiveGrindSession] failed', err);
       return false;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Sprint home-reform-5 item 11 — Home customization (engrenagem).
+  // -------------------------------------------------------------------------
+  async getHomeLayoutSettings(userId: string): Promise<unknown | null> {
+    try {
+      const rows: any[] = await (db as any)
+        .select({ homeLayoutSettings: users.homeLayoutSettings })
+        .from(users)
+        .where(eq(users.userPlatformId, userId))
+        .limit(1);
+      const r = rows?.[0];
+      return r?.homeLayoutSettings ?? null;
+    } catch (err) {
+      console.error('[storage.getHomeLayoutSettings] failed', err);
+      return null;
+    }
+  }
+
+  async setHomeLayoutSettings(userId: string, settings: unknown): Promise<void> {
+    await (db as any)
+      .update(users)
+      .set({ homeLayoutSettings: settings as any, updatedAt: new Date() })
+      .where(eq(users.userPlatformId, userId));
   }
 
   // -------------------------------------------------------------------------

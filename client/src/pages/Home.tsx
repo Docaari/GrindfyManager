@@ -77,6 +77,11 @@ import AllTimeEvolutionChart from '@/components/home/AllTimeEvolutionChart';
 import FocusStatsCard from '@/components/home/FocusStatsCard';
 
 import type { NewsItem } from '@shared/types/news';
+// Sprint home-reform-5 item 11 — visibility toggles.
+import {
+  DEFAULT_HOME_LAYOUT_SETTINGS,
+  type HomeLayoutSettings,
+} from '@shared/types/homeSettings';
 
 // =============================================================================
 // Schema da resposta — espelha RF-01 + ADR-099 §2.1
@@ -295,6 +300,19 @@ const Home: React.FC = () => {
     refetchOnWindowFocus: true,
   });
 
+  // Sprint home-reform-5 item 11 — settings de visibilidade. Carrega em
+  // paralelo a /api/home/overview; defaults aplicados quando ainda nao
+  // resolveu (todos toggles ON).
+  const { data: settings } = useQuery<HomeLayoutSettings>({
+    queryKey: ['/api/home/settings'],
+    queryFn: () => apiRequest('GET', '/api/home/settings'),
+    staleTime: 60_000,
+  });
+  const visibility =
+    settings && settings.visibility
+      ? { ...DEFAULT_HOME_LAYOUT_SETTINGS.visibility, ...settings.visibility }
+      : DEFAULT_HOME_LAYOUT_SETTINGS.visibility;
+
   // Listener para 'home:skipOnboarding' — reflete click do user no botao
   // "Pular onboarding" mesmo quando o write vem da mesma aba.
   useEffect(() => {
@@ -404,61 +422,54 @@ const Home: React.FC = () => {
             <CooldownBanner banner={data.banners.cooldown} />
 
             {/* Sprint home-reform-5 item 2: HeaderStrip substitui StatusStrip nesta posicao. */}
-            <div
-              data-testid="sticky-status-strip"
-              className="sticky top-0 z-30 backdrop-blur-sm bg-background/85 -mx-4 px-4 md:-mx-6 md:px-6 py-2"
-            >
-              {data.headerStrip ? (
-                <HeaderStrip data={data.headerStrip} />
-              ) : (
-                <StatusStrip data={data.statusStrip} />
-              )}
-            </div>
-
-            {/* Zona 1 — Hoje */}
-            <section data-testid="home-zone-today" className="space-y-3">
-              <ZoneHeading>Hoje</ZoneHeading>
-              <DailyInsight data={data} />
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="md:col-span-2">
-                  <TodayCard data={data.today} coachContext={data.coachContext} />
-                </div>
-                <div>
-                  <NextTournamentCountdown
-                    data={data.nextTournament}
-                    coachContext={data.coachContext}
-                  />
-                </div>
+            {/* Sprint home-reform-5 item 11: respeita visibility.headerStrip. */}
+            {visibility.headerStrip ? (
+              <div
+                data-testid="sticky-status-strip"
+                className="sticky top-0 z-30 backdrop-blur-sm bg-background/85 -mx-4 px-4 md:-mx-6 md:px-6 py-2"
+              >
+                {data.headerStrip ? (
+                  <HeaderStrip data={data.headerStrip} />
+                ) : (
+                  <StatusStrip data={data.statusStrip} />
+                )}
               </div>
-            </section>
+            ) : null}
 
-            {/* Zona 2 — Acao Imediata */}
-            <section data-testid="home-zone-action" className="space-y-3">
-              <ZoneHeading>Acao Imediata</ZoneHeading>
-              {/* Sprint home-reform-5 item 4 — primary CTA acima da sub-grid. */}
-              <ImmediateAction data={data.immediateAction ?? null} />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <PendingHandsList data={data.pendingHands} />
-                <CoachRecommendationCard />
-              </div>
-              {/*
-                * MEDIUM-10 reviewer: render condicional do grid 3-col. Quando
-                * heuristics esta vazio, o GradeTodayCard ocupa full-width e
-                * eliminamos a coluna fantasma do HeuristicsCard (que renderiza
-                * `null` interno + space vazio). Resultado: layout responsivo
-                * sem espaco em branco inutil.
-                */}
-              {(data.heuristics ?? []).length === 0 ? (
-                <GradeTodayCard
-                  defaultProfile={
-                    data.today?.profile === 'A' || data.today?.profile === 'B' || data.today?.profile === 'C'
-                      ? data.today.profile
-                      : 'A'
-                  }
-                />
-              ) : (
+            {/* Zona 1 — Hoje (toggle visibility.coach) */}
+            {visibility.coach ? (
+              <section data-testid="home-zone-today" className="space-y-3">
+                <ZoneHeading>Hoje</ZoneHeading>
+                <DailyInsight data={data} />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="md:col-span-2">
+                    <TodayCard data={data.today} coachContext={data.coachContext} />
+                  </div>
+                  <div>
+                    <NextTournamentCountdown
+                      data={data.nextTournament}
+                      coachContext={data.coachContext}
+                    />
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {/* Zona 2 — Acao Imediata + Grade do Dia */}
+            {(visibility.immediateAction || visibility.gradeToday) ? (
+              <section data-testid="home-zone-action" className="space-y-3">
+                <ZoneHeading>Acao Imediata</ZoneHeading>
+                {visibility.immediateAction ? (
+                  <>
+                    <ImmediateAction data={data.immediateAction ?? null} />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <PendingHandsList data={data.pendingHands} />
+                      <CoachRecommendationCard />
+                    </div>
+                  </>
+                ) : null}
+                {visibility.gradeToday ? (
+                  (data.heuristics ?? []).length === 0 ? (
                     <GradeTodayCard
                       defaultProfile={
                         data.today?.profile === 'A' || data.today?.profile === 'B' || data.today?.profile === 'C'
@@ -466,49 +477,73 @@ const Home: React.FC = () => {
                           : 'A'
                       }
                     />
-                  </div>
-                  <HeuristicsCard data={data.heuristics ?? null} />
-                </div>
-              )}
-            </section>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="md:col-span-2">
+                        <GradeTodayCard
+                          defaultProfile={
+                            data.today?.profile === 'A' || data.today?.profile === 'B' || data.today?.profile === 'C'
+                              ? data.today.profile
+                              : 'A'
+                          }
+                        />
+                      </div>
+                      <HeuristicsCard data={data.heuristics ?? null} />
+                    </div>
+                  )
+                ) : null}
+              </section>
+            ) : null}
 
-            {/* Zona 3 — Sessoes Registradas (renome de "Performance" — item 6) */}
-            <section data-testid="home-zone-perf" className="space-y-3">
-              <ZoneHeading>Sessoes Registradas</ZoneHeading>
-              {/* home-reform-5 item 6: card all-time /grind com 6 KPIs */}
-              <SessionsRegisteredCard data={data.sessionsRegistered ?? null} />
-              {/* home-reform-4 item 1: Card Sessoes mes atual full-width */}
-              <SessionsMonthCard data={data.sessionsMonth ?? null} />
-              {/* home-reform-4 item 9: RecentSessionsList entre Sessoes e Dashboard */}
-              <RecentSessionsList data={data.recentSessions ?? []} />
-              {/* home-reform-5 item 7: Dashboard - All Time (renome + 6 KPIs all-time) */}
-              <DashboardAllTimeCard data={data.dashboardAllTime ?? null} />
-              {/* home-reform-5 item 7: grafico evolucao all-time agrupado por mes */}
-              <AllTimeEvolutionChart />
-              <PerformanceMini data={data.performance} />
-              {perfClusterEmpty ? (
-                <EmptyPerformanceCluster
-                  sessionsCount={data.lifetime?.totalSessions ?? 0}
-                />
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <StatsTopDeltas data={data.topDeltas ?? null} />
-                  <VarianceCard data={data.variance ?? null} />
-                </div>
-              )}
-            </section>
+            {/* Zona 3 — Sessoes Registradas + Dashboard + Performance */}
+            {(visibility.sessionsRegistered || visibility.dashboard || visibility.performance) ? (
+              <section data-testid="home-zone-perf" className="space-y-3">
+                <ZoneHeading>Sessoes Registradas</ZoneHeading>
+                {visibility.sessionsRegistered ? (
+                  <>
+                    <SessionsRegisteredCard data={data.sessionsRegistered ?? null} />
+                    <SessionsMonthCard data={data.sessionsMonth ?? null} />
+                    <RecentSessionsList data={data.recentSessions ?? []} />
+                  </>
+                ) : null}
+                {visibility.dashboard ? (
+                  <>
+                    <DashboardAllTimeCard data={data.dashboardAllTime ?? null} />
+                    <AllTimeEvolutionChart />
+                  </>
+                ) : null}
+                {visibility.performance ? (
+                  <>
+                    <PerformanceMini data={data.performance} />
+                    {perfClusterEmpty ? (
+                      <EmptyPerformanceCluster
+                        sessionsCount={data.lifetime?.totalSessions ?? 0}
+                      />
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <StatsTopDeltas data={data.topDeltas ?? null} />
+                        <VarianceCard data={data.variance ?? null} />
+                      </div>
+                    )}
+                  </>
+                ) : null}
+              </section>
+            ) : null}
 
-            {/* Zona 4 — Estudos (Sprint home-reform-4 item 7) */}
-            <section data-testid="home-zone-estudos" className="space-y-3">
-              {/* MEDIUM-9 reviewer: usa ZoneHeading consistente em vez de h2 inline. */}
-              <ZoneHeading>Estudos</ZoneHeading>
-              <FocusStatsCard />
-            </section>
+            {/* Zona 4 — Estudos */}
+            {visibility.studies ? (
+              <section data-testid="home-zone-estudos" className="space-y-3">
+                <ZoneHeading>Estudos</ZoneHeading>
+                <FocusStatsCard />
+              </section>
+            ) : null}
 
             {/* Zona 5 — Sinal Externo */}
-            <section data-testid="home-zone-news" className="space-y-3">
-              <NewsFeed />
-            </section>
+            {visibility.news ? (
+              <section data-testid="home-zone-news" className="space-y-3">
+                <NewsFeed />
+              </section>
+            ) : null}
           </>
         )}
 

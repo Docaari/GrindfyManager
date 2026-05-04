@@ -51,6 +51,8 @@ import { registerHomeCoachRecRoutes } from "./home-coach-recommendation";
 // Sprint home-reform-4 / Item 7: /api/home/focus-stats + /api/focus-stats/*.
 import { registerHomeFocusStatsRoutes } from "./home-focus-stats";
 import { registerFocusStatsRoutes } from "./focus-stats";
+// Sprint home-reform-5 item 11: /api/home/settings (engrenagem).
+import { registerHomeSettingsRoutes } from "./home-settings";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -187,6 +189,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sprint home-reform-4 / Item 7: /api/home/focus-stats + /api/focus-stats/*.
   registerHomeFocusStatsRoutes(app);
   registerFocusStatsRoutes(app);
+  // Sprint home-reform-5 item 11: /api/home/settings (engrenagem).
+  registerHomeSettingsRoutes(app);
 
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);

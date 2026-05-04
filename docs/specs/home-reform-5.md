@@ -32,7 +32,7 @@ Regra de execucao:
 | 8 | Performance baseada em registros /grind (toggle futuro) | Concluido (2026-05-04) | Refactor | 2h |
 | 9 | Estudos: OK, nao mexer | Skip | — | 0 |
 | 10 | News: renomear + botoes novos + carousel com setas+dots | **POR ULTIMO** | UI/feature | 4-6h |
-| 11 | Engrenagem habilita/desabilita sessoes da Home | Pendente | Feature | 3-4h |
+| 11 | Engrenagem habilita/desabilita sessoes da Home | Concluido (2026-05-04) | Feature | 3-4h |
 
 Ordem de execucao recomendada: **1 -> 2 -> 5 -> 3 -> 4 -> 6 -> 7 -> 8 -> 11 -> 10** (deixa News por ultimo conforme pedido).
 
@@ -384,6 +384,36 @@ Skip. Sem alteracao.
 - Frontend: componente `HomeSettingsGear.tsx` com toggles + persistencia via TanStack mutation.
 - Pipeline TDD obrigatorio (persistencia + permissoes).
 - Considerar item 8 (flag `performance_source`) integrado ao mesmo modelo de settings.
+
+#### Resolucao (2026-05-04)
+
+- **Schema** — JSONB unico `users.home_layout_settings` (migration `0047_home_layout_settings.sql`). Decisao formalizada em ADR-119: zero migration ao adicionar/remover toggle, defaults aplicados em runtime (coluna `NULL` -> todos toggles ON + `performanceFromGrind=true`). Shape compartilhado em `shared/types/homeSettings.ts` (alias `@shared/types/homeSettings` no client).
+- **Tipos** — `HomeLayoutSettings = { visibility: HomeVisibilitySettings, performanceFromGrind: boolean }`. 9 toggles: headerStrip / coach / immediateAction / gradeToday / sessionsRegistered / dashboard / performance / studies / news. Item 8 absorvido (flag funcional `performanceFromGrind` faz parte do mesmo objeto).
+- **Service** — `server/services/homeSettings.ts` puro com 3 funcoes: `resolveHomeLayoutSettings(stored)` (NULL/garbled -> defaults; partial -> merge), `mergeHomeLayoutSettings(current, patch)` (deep-shallow), `parseHomeLayoutSettingsPatch(body)` (Zod `.strict()` rejeita chave desconhecida + tipos errados + payload nao-objeto). 16/16 testes verde em `tests/services/homeSettings.test.ts`.
+- **Storage** — `getHomeLayoutSettings(userId)` + `setHomeLayoutSettings(userId, settings)` em `server/storage.ts`. Interface `IStorage` atualizada. Get com graceful fallback (catch -> null).
+- **Endpoints** — `server/routes/home-settings.ts` exporta `handleGetHomeSettings` + `handlePatchHomeSettings` + `registerHomeSettingsRoutes(app)`. Wired em `server/routes/index.ts` apos `registerFocusStatsRoutes`. PATCH:
+  - 401 sem userId, 400 com Zod error (issues retornados), 500 storage failure.
+  - Merge `current` (storage) + `patch` (body) -> grava resultado completo (idempotente em re-leitura).
+  - Chama `clearHomeOverviewCache(userId)` apos persistir para que `/api/home/overview` reflita visibility/flag em re-fetch sem aguardar TTL 30s.
+  - 10/10 testes verde em `tests/integration/home/home-settings.test.ts`.
+- **Frontend** — `client/src/components/home/HomeSettingsGear.tsx`:
+  - Botao engrenagem (`lucide-react Settings`) com `data-testid="home-settings-gear"` + `aria-label="Configurar Home"`.
+  - Click abre painel inline (sem Radix Popover — evita Portal/jsdom flakiness). Click-outside fecha.
+  - 9 `<Switch>` (Radix) com `data-testid="home-settings-toggle-<key>"` + 1 flag `data-testid="home-settings-flag-performanceFromGrind"`.
+  - TanStack `useQuery` (`/api/home/settings`, staleTime 60s) + `useMutation` PATCH com **diff minimo** (apenas chave alterada) + optimistic update via `setQueryData` + `invalidateQueries(['/api/home/overview'])` no `onSettled` (re-render imediato Home).
+  - 3/3 testes verde em `client/src/components/home/__tests__/HomeSettingsGear.test.tsx`.
+- **Wiring** — `client/src/components/home/HomeHeader.tsx` recebe engrenagem ao final da linha (`ml-auto shrink-0`, sem alterar greeting/meta). `client/src/pages/Home.tsx` carrega `useQuery('/api/home/settings')` em paralelo com `/api/home/overview` (defaults aplicados se ainda nao resolveu) e envolve cada zona em render condicional:
+  - `visibility.headerStrip` -> sticky strip top.
+  - `visibility.coach` -> Zona Hoje.
+  - `visibility.immediateAction || visibility.gradeToday` -> Zona Acao Imediata (sub-grid + GradeTodayCard renderizados independentemente).
+  - `visibility.sessionsRegistered || visibility.dashboard || visibility.performance` -> Zona Sessoes Registradas (3 sub-blocos independentes).
+  - `visibility.studies` -> Zona Estudos.
+  - `visibility.news` -> Zona Sinal Externo.
+  - Defensive merge: `{ ...DEFAULT.visibility, ...settings.visibility }` quando settings carregado mas shape incompleto (evita crash em testes legacy que mockam apiRequest sem retornar settings shape).
+- **Persistencia** — Migration `0047` aplicada via `tsx pg.Client` em DATABASE_URL local. Coluna `home_layout_settings jsonb NULLABLE` confirmada via `information_schema.columns`. Sem back-fill (defaults runtime).
+- **ADR** — ADR-119 documenta decisao (JSONB vs tabela vs colunas separadas) + alternativas + consequencias + plano para item 8 absorvido.
+- **Tests** — 29/29 testes novos verde (16 service + 10 route + 3 component). Regressao home + services + components: 485/490 verde, 5 fails pre-existentes Sprint News-3 em desenvolvimento (`tests/integration/home/news-stub.test.ts` 3 fails + `client/src/components/home/__tests__/NewsSlot.test.tsx` 2 fails — ja documentadas em itens 3-7).
+- **Type-check** — zero erros novos introduzidos. Erros pre-existentes (storage.ts/biblioteca/tournaments) intocados.
 
 ---
 
