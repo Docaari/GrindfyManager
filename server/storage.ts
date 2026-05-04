@@ -783,6 +783,16 @@ export interface IStorage {
     profitNative: string;
   }>>;
 
+  // Sprint home-reform-4 item 5 — Grade hoje aggregate por profile
+  getGradeTodayAggregate(
+    userId: string,
+    opts: { dayOfWeek: number; profile: 'A' | 'B' | 'C' },
+  ): Promise<Array<{
+    site: string;
+    count: number;
+    investedNative: string;
+  }>>;
+
   // Sprint F3 — Stats Analyzer (ADR-051)
   getHudLayouts(userId: string): Promise<HudLayout[]>;
   getHudLayout(id: string, userId: string): Promise<HudLayout | undefined>;
@@ -6601,6 +6611,50 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       count: Number(r.count) || 0,
       investedNative: String(r.investedNative ?? '0'),
       profitNative: String(r.profitNative ?? '0'),
+    }));
+  }
+
+  // ============================================================================
+  // Sprint home-reform-4 item 5 — Grade hoje aggregate
+  // ============================================================================
+  //
+  // Spec: Docs/specs/home-reform-4.md item 5. Card "Grade do dia" chips A|B|C
+  // mostrando count, totalInvestmentUsd, ABI dos torneios planejados no dia
+  // selecionado para o profile selecionado.
+  //
+  // Filtra `planned_tournaments` por user, dayOfWeek (0..6) e profile (A|B|C).
+  // Retorna agregado por site -> count + soma do buy-in nativo (sem reentries
+  // ou add-on, pois eh planejamento e nao registro real).
+  // is_active filtra rows soft-deleted da grade.
+  async getGradeTodayAggregate(
+    userId: string,
+    opts: { dayOfWeek: number; profile: 'A' | 'B' | 'C' },
+  ): Promise<Array<{
+    site: string;
+    count: number;
+    investedNative: string;
+  }>> {
+    const conditions = [
+      eq(plannedTournaments.userId, userId),
+      eq(plannedTournaments.dayOfWeek, opts.dayOfWeek),
+      eq(plannedTournaments.profile, opts.profile),
+      eq(plannedTournaments.isActive, true),
+    ];
+
+    const rows = await db
+      .select({
+        site: plannedTournaments.site,
+        count: sql<number>`COUNT(*)::int`,
+        investedNative: sql<string>`COALESCE(SUM(CAST(${plannedTournaments.buyIn} AS DECIMAL)), 0)::text`,
+      })
+      .from(plannedTournaments)
+      .where(and(...conditions))
+      .groupBy(plannedTournaments.site);
+
+    return rows.map((r: any) => ({
+      site: String(r.site ?? ''),
+      count: Number(r.count) || 0,
+      investedNative: String(r.investedNative ?? '0'),
     }));
   }
 

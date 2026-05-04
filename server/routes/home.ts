@@ -24,6 +24,7 @@ import { computeHeuristics } from '../services/homeHeuristics';
 import { getSessionsMonthSummary } from '../services/sessionsMonth';
 import { getDashboardMonthSummary } from '../services/dashboardMonth';
 import { getHomeEvolution, parseMonthIso } from '../services/homeEvolution';
+import { getGradeTodaySummary, type GradeProfile } from '../services/gradeToday';
 
 // =============================================================================
 // Cache in-memory per-userId — D4 / ADR-102 §2.3
@@ -799,7 +800,76 @@ export async function handleHomeEvolution(req: any, res: Response): Promise<void
   }
 }
 
+// =============================================================================
+// Sprint home-reform-4 item 5 — /api/home/grade-today
+// =============================================================================
+//
+// Spec: Docs/specs/home-reform-4.md item 5. Card "Grade do dia" com chips
+// A|B|C + count/totalInvestmentUsd/abi para os torneios planejados no dia
+// selecionado (default hoje no timezone do user).
+// Query: ?profile=A|B|C (default A) &date=YYYY-MM-DD (default hoje BRT).
+export async function handleHomeGradeToday(req: any, res: Response): Promise<void> {
+  try {
+    const userId = req?.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const profileRaw = typeof req?.query?.profile === 'string' ? req.query.profile.toUpperCase() : 'A';
+    const profile: GradeProfile = (profileRaw === 'A' || profileRaw === 'B' || profileRaw === 'C') ? profileRaw : 'A';
+
+    const dateRaw = typeof req?.query?.date === 'string' ? req.query.date : null;
+    if (dateRaw && !/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
+      res.status(400).json({ message: 'Invalid date format. Expected YYYY-MM-DD.' });
+      return;
+    }
+
+    let userTimezone = 'America/Sao_Paulo';
+    try {
+      const tz = await (storage as any).getUserTimezone?.(userId);
+      if (typeof tz === 'string' && tz.length > 0) userTimezone = tz;
+    } catch {
+      // fallback
+    }
+
+    const computeTzDate = (tz: string): string => {
+      const fmt = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const parts = fmt.formatToParts(new Date());
+      const y = parts.find((p) => p.type === 'year')?.value ?? '1970';
+      const m = parts.find((p) => p.type === 'month')?.value ?? '01';
+      const d = parts.find((p) => p.type === 'day')?.value ?? '01';
+      return `${y}-${m}-${d}`;
+    };
+
+    let date: string;
+    if (dateRaw) {
+      date = dateRaw;
+    } else {
+      try {
+        date = computeTzDate(userTimezone);
+      } catch {
+        date = computeTzDate('America/Sao_Paulo');
+      }
+    }
+    const dayOfWeek = new Date(`${date}T12:00:00Z`).getUTCDay();
+
+    const summary = await getGradeTodaySummary(userId, { date, dayOfWeek, profile });
+    res.setHeader('Cache-Control', 'private, max-age=30');
+    res.status(200).json(summary);
+  } catch (err) {
+    console.error('[home/grade-today] fatal failure:', err);
+    res.status(500).json({ message: 'Internal error' });
+  }
+}
+
 export function registerHomeRoutes(app: Express): void {
   app.get('/api/home/overview', requireAuth, handleHomeOverview);
   app.get('/api/home/evolution', requireAuth, handleHomeEvolution);
+  app.get('/api/home/grade-today', requireAuth, handleHomeGradeToday);
 }

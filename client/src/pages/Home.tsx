@@ -39,8 +39,9 @@ import LibraryResume from '@/components/home/LibraryResume';
 // Sprint home-reform-2 Onda 2 (RF-29 / RF-30 / RF-31 / RF-34).
 import StatsTopDeltas from '@/components/home/StatsTopDeltas';
 import VarianceCard from '@/components/home/VarianceCard';
-import TournamentRecommendations from '@/components/home/TournamentRecommendations';
 import HeuristicsCard from '@/components/home/HeuristicsCard';
+// Sprint home-reform-4 item 5 — substitui TournamentRecommendations.
+import GradeTodayCard from '@/components/home/GradeTodayCard';
 // Sprint home-reform-3 Onda 3 (RF-A1, RF-A5, RF-B1).
 import HomeHeader from '@/components/home/HomeHeader';
 import EmptyPerformanceCluster from '@/components/home/EmptyPerformanceCluster';
@@ -291,10 +292,11 @@ const Home: React.FC = () => {
   const isEmpty = data.userState === 'empty' && !skipOnboarding;
 
   // Onda 3 RF-A5: aggregate empty for Performance zone Onda 2 cards.
+  // Sprint home-reform-4 item 5: TournamentRecommendations substituido por
+  // GradeTodayCard (zona Acao Imediata) — fora do perfCluster.
   const perfClusterEmpty =
     (data.topDeltas ?? []).length === 0 &&
     data.variance == null &&
-    (data.tournamentRecommendations ?? []).length === 0 &&
     (data.heuristics ?? []).length === 0;
 
   const userTimezone = data.meta?.userTimezone || 'America/Sao_Paulo';
@@ -359,9 +361,12 @@ const Home: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-2">
-                  <TournamentRecommendations
-                    data={data.tournamentRecommendations ?? []}
-                    plannedTodayCount={data.today?.plannedCount ?? 0}
+                  <GradeTodayCard
+                    defaultProfile={
+                      data.today?.profile === 'A' || data.today?.profile === 'B' || data.today?.profile === 'C'
+                        ? data.today.profile
+                        : 'A'
+                    }
                   />
                 </div>
                 <HeuristicsCard data={data.heuristics ?? null} />

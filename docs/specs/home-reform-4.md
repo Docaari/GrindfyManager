@@ -24,9 +24,9 @@ Founder pediu explicitamente:
 |---|------|--------|------|------------|
 | 1 | Card "Sessoes" mes atual — fix tamanho/espaco | Concluido (2026-05-03) | UI fix | <1h |
 | 2 | Novo card "Dashboard" mes atual abaixo do Sessoes | Concluido (2026-05-03) — unificado com item 6 | Feature | 2-3h |
-| 3 | Explicacao "Acao imediata" | Pendente | Doc | 5min |
+| 3 | Explicacao "Acao imediata" | Concluido (2026-05-03) — entregue inline + abaixo | Doc | 5min |
 | 4 | Substituir "Continue assistindo" por recomendacao Coach IA semanal | Pendente | Feature complexa | 1-2 dias |
-| 5 | Substituir "Recomendacao de hoje" por visao rapida grade planner | Pendente | Feature | 2-3h |
+| 5 | Substituir "Recomendacao de hoje" por visao rapida grade planner | Concluido (2026-05-03) | Feature | 2-3h |
 | 6 | Performance abaixo de Sessoes (mesmo padrao) com empty states | Concluido (2026-05-03) — unificado com item 2 | UI/refactor | 1-2h |
 | 7 | Card Estudos: 3 stats foco do mes + temas linkados | Pendente | Feature complexa | 1-2 dias |
 | 8 | Remover card "4 torneios, 2 sessoes, 1 dia ativo" | Concluido (2026-05-03) | UI fix | 15min |
@@ -118,6 +118,23 @@ A zona 2 do Operations Cockpit (definida na ADR-110) agrupa **componentes que pe
 
 **Status:** Aguarda confirmacao founder se quer manter conceito ou repensar.
 
+#### Resolucao (2026-05-03)
+
+Resposta inline ao founder (sem implementacao). A zona "Acao Imediata" eh a **Zona 2** do Operations Cockpit (ADR-110 §2.2). Filosofia: **"o que voce pode/deve fazer NESTE momento, antes de comecar o grind."** Diferente da:
+- Zona 1 "Hoje" — status passivo (perfil do dia, proximo torneio, daily insight)
+- Zona 3 "Performance" — analise retrospectiva (KPIs do mes, evolucao, deltas vs baseline)
+- Zona 4 "Sinal Externo" — noticias do mercado
+
+Componentes atuais da zona:
+- `PendingHandsList` — maos imported aguardando review/tag (CTA: revisar agora)
+- `LibraryResume` — episodio em progresso para retomar (sera substituido item 4 por recomendacao Coach semanal)
+- `GradeTodayCard` (item 5) — visao rapida da grade do dia, chips A|B|C, decisao de quanto investir hoje
+- `HeuristicsCard` — alertas day-of-week / variance / cash flow (CTA: ver detalhe)
+
+Decisoes pendentes do founder:
+- Manter o nome "Acao Imediata" ou repensar (alternativas: "Para hoje", "Decisoes do grind").
+- Manter `HeuristicsCard` na zona apos itens 4+5+7 ou mover pro footer.
+
 ---
 
 ### Item 4 — Substituir "Continue assistindo" por Recomendacao Coach IA semanal
@@ -184,6 +201,16 @@ A zona 2 do Operations Cockpit (definida na ADR-110) agrupa **componentes que pe
 - ABI formatado USD com 2 decimais
 
 **Pipeline TDD recomendado.**
+
+#### Resolucao (2026-05-03)
+
+- **Backend:** novo endpoint `GET /api/home/grade-today?profile=A|B|C&date=YYYY-MM-DD` (default profile=A; date default = hoje no timezone do user, mesma logica do `/api/home/overview`). Auth required. Date invalido -> 400.
+- **Storage:** `getGradeTodayAggregate(userId, { dayOfWeek, profile })` filtra `planned_tournaments` por (userId, dayOfWeek, profile, isActive=true) e agrega por site -> `{ site, count, investedNative }` (soma `buy_in` nativo, sem rebuy/addOn pois eh planejamento).
+- **Service:** `services/gradeToday.ts:getGradeTodaySummary` aplica FX→USD via `fxResolver` + `getCurrencyForSite` (cascata ADR-061). Retorna `{ date, profile, count, totalInvestmentUsd, abi }`. ABI = totalInvestmentUsd / count (null quando count=0).
+- **Frontend:** `GradeTodayCard` em zona Acao Imediata, substitui `TournamentRecommendations`. Header `Grade do dia — dd/mm` + chips A|B|C single-select (default = `data.today?.profile` quando A/B/C, senao 'A'). 3 KPIs (Torneios | Investimento USD | ABI USD). CTA `Ver grade completa →` -> `/grade-planner`. Click chip refaz query (queryKey inclui profile, staleTime 60s).
+- **Empty state:** `Nenhum torneio planejado para perfil X` quando count=0.
+- **Tests:** `tests/services/gradeToday.test.ts` (5/5) + `client/src/components/home/__tests__/GradeTodayCard.test.tsx` (7/7). Zero regressao home (242/244 verde, 2 fails NewsSlot pre-existing baseline).
+- **Removido:** import + render de `TournamentRecommendations` em `Home.tsx`. Field `data.tournamentRecommendations` removido tambem do calculo `perfClusterEmpty` (cluster nao depende mais desse field).
 
 ---
 
