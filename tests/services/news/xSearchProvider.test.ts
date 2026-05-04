@@ -1,26 +1,21 @@
 /**
- * Test-Writer (Modo TDD - Red Phase)
+ * XSearchProvider tests — atualizados Sprint News-3.1.
  *
- * Sprint News-3 — RF-06: XSearchProvider (xAI Live Search wrapper).
+ * Migracao: xAI Live Search (deprecated 410) → Agent Tools API (`x_search` tool).
  *
- * Spec: Docs/specs/news-3-rss-x-refactor.md §RF-06
- * ADR : Docs/architecture/decisions/107-news-rss-x-search-refactor.md §2
+ * Spec: Docs/specs/news-3-rss-x-refactor.md §RF-06 (atualizada)
  *
- * Funcao `fetchXSource(source: NewsSource) => Promise<NewsItem[]>`.
+ * Endpoint novo: POST https://api.x.ai/v1/responses
+ * Body novo: { model, input[], tools: [{ type: 'x_search', allowed_x_handles, from_date, to_date }] }
+ * Response: output[].content[] com type='output_text' (texto JSON) + annotations[] (URLs reais ground truth)
  *
- * Cenarios:
- *   - Resposta valida com 5 citations → 5 NewsItems
- *   - Citation com tweet ID 10+ trailing zeros → drop + log warn
- *   - HTTP 4xx/5xx/timeout → [] + log
- *   - XAI_API_KEY ausente → [] + log warn (sem throw)
- *   - from_date = now - 7d UTC, to_date = now UTC
- *   - Citation com URL malformado → drop
- *
- * Status RED: modulo `server/services/news/xSearchProvider` NAO existe.
- *
- * Lessons aplicadas:
- *   #5  vi.fn() ok para mock de fetch (nao constructor)
- *   #6  conversao ja nao se aplica aqui
+ * Cenarios testados:
+ *   - Resposta valida com 5 tweets no JSON output_text → 4 NewsItems (1 trailing zeros dropado)
+ *   - tweet_url nao bate regex → drop
+ *   - tweet_url do JSON nao consta nas annotations (halucinacao) → drop
+ *   - HTTP 4xx/5xx/timeout → []
+ *   - XAI_API_KEY ausente → [] + warn
+ *   - Body envia tools[].x_search.allowed_x_handles[handle] + from_date + to_date
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -29,7 +24,7 @@ import path from 'path';
 
 function loadXaiFixture(): any {
   const json = fs.readFileSync(
-    path.resolve(__dirname, '../../fixtures/news-xai/live-search-response.json'),
+    path.resolve(__dirname, '../../fixtures/news-xai/agent-tools-response.json'),
     'utf8',
   );
   return JSON.parse(json);
@@ -60,6 +55,39 @@ function makeXSource(overrides: any = {}): any {
   };
 }
 
+/**
+ * Helper para sintetizar response no shape Agent Tools.
+ * Recebe lista de tweets e gera output_text JSON + annotations URLs (i/status path).
+ */
+function makeAgentResponse(tweets: Array<{ id: string; handle?: string; title?: string; summary?: string; date?: string }>): any {
+  const items = tweets.map((t) => ({
+    tweet_url: `https://x.com/${t.handle ?? 'foo'}/status/${t.id}`,
+    title: t.title ?? `T-${t.id}`,
+    summary: t.summary ?? `S-${t.id}`,
+    published_at: t.date ?? '2026-04-30',
+  }));
+  return {
+    id: 'r-test',
+    object: 'response',
+    output: [
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [
+          {
+            type: 'output_text',
+            text: JSON.stringify(items),
+            annotations: tweets.map((t) => ({
+              type: 'url_citation',
+              url: `https://x.com/i/status/${t.id}`,
+            })),
+          },
+        ],
+      },
+    ],
+  };
+}
+
 const ORIGINAL_KEY = process.env.XAI_API_KEY;
 
 beforeEach(() => {
@@ -73,8 +101,7 @@ afterEach(() => {
 });
 
 describe('XSearchProvider — happy path (RF-06)', () => {
-  it('resposta valida com 5 citations retorna NewsItems com fields completos', async () => {
-    // RF-06 AC: 5 citations validas (1 deve ser dropada por trailing zeros, 4 sobrevivem)
+  it('resposta valida com 5 tweets retorna 4 NewsItems (1 trailing zeros dropado)', async () => {
     const fixture = loadXaiFixture();
     vi.spyOn(global, 'fetch' as any).mockResolvedValue(
       makeFetchResponse({ ok: true, body: fixture }),
@@ -85,8 +112,6 @@ describe('XSearchProvider — happy path (RF-06)', () => {
     );
     const out = await fetchXSource(makeXSource());
 
-    // 1 citation tem 12 trailing zeros — deve ser dropada
-    // 4 sobrevivem
     expect(out.length).toBe(4);
     for (const item of out) {
       expect(item.title).toBeTruthy();
@@ -99,24 +124,11 @@ describe('XSearchProvider — happy path (RF-06)', () => {
 });
 
 describe('XSearchProvider — trailing zeros guard (RF-06)', () => {
-  it('citation com tweet ID com 10+ trailing zeros eh dropada', async () => {
-    // RF-06 AC principal: anti-hallucination guard
-    const body = {
-      citations: [
-        {
-          url: 'https://x.com/foo/status/12345678900000000000',
-          title: 'Suspicious',
-          snippet: 'snip',
-          published_at: '2026-04-30T12:00:00Z',
-        },
-        {
-          url: 'https://x.com/foo/status/1786543210123456789',
-          title: 'Real',
-          snippet: 'snip',
-          published_at: '2026-04-30T12:00:00Z',
-        },
-      ],
-    };
+  it('tweet com ID com 10+ trailing zeros eh dropado', async () => {
+    const body = makeAgentResponse([
+      { id: '12345678900000000000', handle: 'foo', title: 'Suspicious' },
+      { id: '1786543210123456789', handle: 'foo', title: 'Real' },
+    ]);
     vi.spyOn(global, 'fetch' as any).mockResolvedValue(
       makeFetchResponse({ ok: true, body }),
     );
@@ -129,26 +141,38 @@ describe('XSearchProvider — trailing zeros guard (RF-06)', () => {
 
     expect(out.length).toBe(1);
     expect(out[0].title).toBe('Real');
-    // log warn esperado (texto livre — checar prefixo)
     const warnCalls = warnSpy.mock.calls.flat().join(' ');
     expect(warnCalls).toMatch(/news\/xsearch|trailing/i);
   });
 
-  it('citation com URL malformado (nao bate regex) eh dropada', async () => {
-    // RF-06 AC: regex validation rigorosa
+  it('tweet_url malformado (nao bate regex) eh dropado', async () => {
+    // Construir body manual com URL malformada no JSON E sem citation correspondente
     const body = {
-      citations: [
+      output: [
         {
-          url: 'https://example.com/not-a-tweet',
-          title: 'Bad',
-          snippet: 'snip',
-          published_at: '2026-04-30T12:00:00Z',
-        },
-        {
-          url: 'https://x.com/foo/status/1786543210123456789',
-          title: 'Good',
-          snippet: 'snip',
-          published_at: '2026-04-30T12:00:00Z',
+          type: 'message',
+          content: [
+            {
+              type: 'output_text',
+              text: JSON.stringify([
+                {
+                  tweet_url: 'https://example.com/not-a-tweet',
+                  title: 'Bad',
+                  summary: 'snip',
+                  published_at: '2026-04-30',
+                },
+                {
+                  tweet_url: 'https://x.com/foo/status/1786543210123456789',
+                  title: 'Good',
+                  summary: 'snip',
+                  published_at: '2026-04-30',
+                },
+              ]),
+              annotations: [
+                { type: 'url_citation', url: 'https://x.com/i/status/1786543210123456789' },
+              ],
+            },
+          ],
         },
       ],
     };
@@ -163,6 +187,50 @@ describe('XSearchProvider — trailing zeros guard (RF-06)', () => {
     const out = await fetchXSource(makeXSource());
     expect(out.length).toBe(1);
     expect(out[0].title).toBe('Good');
+  });
+
+  it('tweet_url do JSON sem citation correspondente (halucinacao) eh dropado', async () => {
+    // Modelo retorna 2 tweets no JSON, mas annotations so tem 1 citation real.
+    const body = {
+      output: [
+        {
+          type: 'message',
+          content: [
+            {
+              type: 'output_text',
+              text: JSON.stringify([
+                {
+                  tweet_url: 'https://x.com/foo/status/1786543210123456789',
+                  title: 'Real (em annotations)',
+                  summary: 's',
+                  published_at: '2026-04-30',
+                },
+                {
+                  tweet_url: 'https://x.com/foo/status/9999999999999999999',
+                  title: 'Halucinada (NAO esta em annotations)',
+                  summary: 's',
+                  published_at: '2026-04-30',
+                },
+              ]),
+              annotations: [
+                { type: 'url_citation', url: 'https://x.com/i/status/1786543210123456789' },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    vi.spyOn(global, 'fetch' as any).mockResolvedValue(
+      makeFetchResponse({ ok: true, body }),
+    );
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { fetchXSource } = await import(
+      '../../../server/services/news/xSearchProvider'
+    );
+    const out = await fetchXSource(makeXSource());
+    expect(out.length).toBe(1);
+    expect(out[0].title).toBe('Real (em annotations)');
   });
 });
 
@@ -205,10 +273,9 @@ describe('XSearchProvider — error handling (RF-06)', () => {
   });
 
   it('XAI_API_KEY ausente skipa silenciosamente com [] + log warn', async () => {
-    // RF-06 AC: sem key → [] + warn, nao throw
     delete process.env.XAI_API_KEY;
     const fetchSpy = vi.spyOn(global, 'fetch' as any).mockResolvedValue(
-      makeFetchResponse({ ok: true, body: { citations: [] } }),
+      makeFetchResponse({ ok: true, body: makeAgentResponse([]) }),
     );
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -223,38 +290,10 @@ describe('XSearchProvider — error handling (RF-06)', () => {
   });
 });
 
-describe('XSearchProvider — search params (RF-06)', () => {
-  it('envia from_date = now-7d UTC e to_date = now UTC', async () => {
-    // RF-06 AC: janela de 7 dias UTC
-    const FIXED_NOW = new Date('2026-05-04T15:00:00Z');
-    vi.useFakeTimers();
-    vi.setSystemTime(FIXED_NOW);
-
+describe('XSearchProvider — request payload (RF-06 Agent Tools)', () => {
+  it('envia tools[0].type = "x_search" + allowed_x_handles', async () => {
     const fetchSpy = vi.spyOn(global, 'fetch' as any).mockResolvedValue(
-      makeFetchResponse({ ok: true, body: { citations: [] } }),
-    );
-
-    const { fetchXSource } = await import(
-      '../../../server/services/news/xSearchProvider'
-    );
-    await fetchXSource(makeXSource());
-
-    expect(fetchSpy).toHaveBeenCalled();
-    const callArgs = fetchSpy.mock.calls[0];
-    const init: any = callArgs[1] ?? {};
-    const body = init.body ? JSON.parse(init.body) : {};
-    const sp = body.search_parameters ?? {};
-    // ISO yyyy-mm-dd
-    expect(sp.to_date).toBe('2026-05-04');
-    expect(sp.from_date).toBe('2026-04-27');
-
-    vi.useRealTimers();
-  });
-
-  it('envia x_handles[] = [source.xHandle]', async () => {
-    // RF-06 AC: handle correto enviado
-    const fetchSpy = vi.spyOn(global, 'fetch' as any).mockResolvedValue(
-      makeFetchResponse({ ok: true, body: { citations: [] } }),
+      makeFetchResponse({ ok: true, body: makeAgentResponse([]) }),
     );
 
     const { fetchXSource } = await import(
@@ -264,14 +303,50 @@ describe('XSearchProvider — search params (RF-06)', () => {
 
     const init: any = fetchSpy.mock.calls[0][1] ?? {};
     const body = JSON.parse(init.body ?? '{}');
-    const sources = body?.search_parameters?.sources ?? [];
-    expect(sources[0]).toMatchObject({ type: 'x', x_handles: ['sharkscope'] });
+    expect(body.tools?.[0]?.type).toBe('x_search');
+    expect(body.tools?.[0]?.allowed_x_handles).toEqual(['sharkscope']);
+  });
+
+  it('envia tools[0].from_date = now-7d UTC e to_date = now UTC (yyyy-mm-dd)', async () => {
+    const FIXED_NOW = new Date('2026-05-04T15:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
+
+    const fetchSpy = vi.spyOn(global, 'fetch' as any).mockResolvedValue(
+      makeFetchResponse({ ok: true, body: makeAgentResponse([]) }),
+    );
+
+    const { fetchXSource } = await import(
+      '../../../server/services/news/xSearchProvider'
+    );
+    await fetchXSource(makeXSource());
+
+    const init: any = fetchSpy.mock.calls[0][1] ?? {};
+    const body = JSON.parse(init.body ?? '{}');
+    expect(body.tools?.[0]?.to_date).toBe('2026-05-04');
+    expect(body.tools?.[0]?.from_date).toBe('2026-04-27');
+
+    vi.useRealTimers();
+  });
+
+  it('envia endpoint /v1/responses (Agent Tools)', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch' as any).mockResolvedValue(
+      makeFetchResponse({ ok: true, body: makeAgentResponse([]) }),
+    );
+
+    const { fetchXSource } = await import(
+      '../../../server/services/news/xSearchProvider'
+    );
+    await fetchXSource(makeXSource());
+
+    const url = fetchSpy.mock.calls[0][0];
+    expect(url).toBe('https://api.x.ai/v1/responses');
   });
 
   it('envia Authorization Bearer XAI_API_KEY', async () => {
     process.env.XAI_API_KEY = 'sk-xai-test-key-99999';
     const fetchSpy = vi.spyOn(global, 'fetch' as any).mockResolvedValue(
-      makeFetchResponse({ ok: true, body: { citations: [] } }),
+      makeFetchResponse({ ok: true, body: makeAgentResponse([]) }),
     );
 
     const { fetchXSource } = await import(
