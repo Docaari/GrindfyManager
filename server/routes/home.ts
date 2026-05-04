@@ -25,6 +25,7 @@ import { getSessionsMonthSummary } from '../services/sessionsMonth';
 import { getDashboardMonthSummary } from '../services/dashboardMonth';
 import { getHomeEvolution, parseMonthIso } from '../services/homeEvolution';
 import { getGradeTodaySummary, type GradeProfile } from '../services/gradeToday';
+import { buildHeaderStrip, type HeaderStripData } from '../services/homeHeader';
 
 // =============================================================================
 // Cache in-memory per-userId — D4 / ADR-102 §2.3
@@ -110,6 +111,11 @@ interface HomeOverviewBody {
     today: TodayKpi | null;
     pendencias: PendenciasKpi | null;
   };
+  // Sprint home-reform-5 item 2 — bloco novo Header Strip (Banca/Hoje/ROI 30D/Pendencia).
+  // Coexiste com statusStrip durante migracao: HeaderStrip eh a nova UI; Home
+  // antiga ainda renderiza statusStrip (deprecated, vai sair quando Onda 2
+  // limpar componentes obsoletos).
+  headerStrip: HeaderStripData;
   today: {
     profile: 'A' | 'B' | 'C' | 'OFF' | null;
     plannedCount: number;
@@ -396,6 +402,20 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       timed('sessionsMonth', () => getSessionsMonthSummary(userId), timings),
       // Sprint home-reform-4 item 2+6.
       timed('dashboardMonth', () => getDashboardMonthSummary(userId), timings),
+      // Sprint home-reform-5 item 2 — Header Strip subqueries.
+      timed('lastBankrollMovementAt', () => (storage as any).getLatestBankrollMovementAt(userId), timings),
+      timed('lastTournamentUploadAt', () => (storage as any).getLatestTournamentUploadAt(userId), timings),
+      timed('oldestPendingSpotAt', () => (storage as any).getOldestPendingSpotAt(userId), timings),
+      timed('bankrollSnapshots30d', () =>
+        (storage as any).getBankrollSnapshots(userId, {
+          from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          limit: 500,
+        }), timings),
+      timed('bankrollSnapshotPrior30d', () =>
+        (storage as any).getBankrollSnapshots(userId, {
+          to: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          limit: 1,
+        }), timings),
     ]);
 
     const unwrap = <T,>(idx: number): T | null => {
@@ -426,6 +446,11 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     const tournamentSelectorResult = unwrap<any>(15);
     const sessionsMonthResult = unwrap<any>(16);
     const dashboardMonthResult = unwrap<any>(17);
+    const lastBankrollMovementAtResult = unwrap<Date>(18);
+    const lastTournamentUploadAtResult = unwrap<Date>(19);
+    const oldestPendingSpotAtResult = unwrap<Date>(20);
+    const bankrollSnapshots30dResult = unwrap<any[]>(21);
+    const bankrollSnapshotPrior30dResult = unwrap<any[]>(22);
 
     // Tipos usados localmente (cast porque mocks retornam any).
     const qs = quickStats as any;
@@ -698,6 +723,67 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       heuristicsOut = [];
     }
 
+    // Sprint home-reform-5 item 2 — Header Strip.
+    // Calcula bankroll prior 30d + invested 30d a partir dos snapshots.
+    const headerStripData: HeaderStripData = (() => {
+      try {
+        const bankrollUsd = bank && typeof bank.totalUsd === 'number' ? bank.totalUsd : null;
+
+        const snapshots30d = Array.isArray(bankrollSnapshots30dResult) ? bankrollSnapshots30dResult : [];
+        const snapshotPrior = Array.isArray(bankrollSnapshotPrior30dResult) && bankrollSnapshotPrior30dResult[0]
+          ? bankrollSnapshotPrior30dResult[0]
+          : null;
+
+        const parseDec = (v: any): number => {
+          if (v == null) return 0;
+          if (typeof v === 'number') return v;
+          const n = parseFloat(String(v));
+          return Number.isFinite(n) ? n : 0;
+        };
+
+        const bankrollAmount30dAgoUsd = snapshotPrior
+          ? parseDec(snapshotPrior.newAmount)
+          : (snapshots30d.length > 0 ? 0 : null);
+
+        // Sum absoluto de deltas com reason='deposit' nos ultimos 30d.
+        const invested30dUsd = snapshots30d.reduce((acc: number, s: any) => {
+          if (s?.reason === 'deposit') return acc + Math.abs(parseDec(s.delta));
+          return acc;
+        }, 0);
+
+        const hasBankrollData30d = snapshots30d.length > 0 || snapshotPrior !== null;
+
+        const activeProfileRaw = profile?.profile;
+        const activeProfile: 'A' | 'B' | 'C' | 'OFF' | null =
+          activeProfileRaw === 'A' || activeProfileRaw === 'B' || activeProfileRaw === 'C' || activeProfileRaw === 'OFF'
+            ? activeProfileRaw
+            : null;
+
+        return buildHeaderStrip({
+          bankrollUsd,
+          activeProfile,
+          plannedTournaments: planned,
+          bankrollAmount30dAgoUsd,
+          invested30dUsd,
+          hasBankrollData30d,
+          lastBankrollMovementAt: lastBankrollMovementAtResult ?? null,
+          lastTournamentUploadAt: lastTournamentUploadAtResult ?? null,
+          oldestPendingSpotAt: oldestPendingSpotAtResult ?? null,
+          // Features futuras — Item 2 spec: "reservar slot, nao quebrar se vazio".
+          hasUnreviewedCoachReport: false,
+          focusStatPendingDaysSince: null,
+        });
+      } catch (hsErr) {
+        console.error('[home/overview] buildHeaderStrip failed:', hsErr);
+        return {
+          banca: null,
+          today: { profile: null, plannedCount: 0, isOff: true },
+          roi30d: { value: null, hasData: false },
+          pendency: null,
+        };
+      }
+    })();
+
     const body: HomeOverviewBody = {
       userState,
       profile: playerProfile,
@@ -708,6 +794,7 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
         today: todayKpi,
         pendencias,
       },
+      headerStrip: headerStripData,
       today: todayBlock,
       banners: {
         cooldown: cooldownBanner,

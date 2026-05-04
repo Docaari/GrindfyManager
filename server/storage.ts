@@ -10142,6 +10142,61 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   // -------------------------------------------------------------------------
+  // Sprint home-reform-5 item 2 — Header Strip (Pendencias).
+  // -------------------------------------------------------------------------
+  async getLatestBankrollMovementAt(userId: string): Promise<Date | null> {
+    try {
+      const rows: any[] = await (db as any)
+        .select({ occurredAt: bankrollSnapshots.occurredAt })
+        .from(bankrollSnapshots)
+        .where(eq(bankrollSnapshots.userId, userId))
+        .orderBy(desc(bankrollSnapshots.occurredAt))
+        .limit(1);
+      const r = rows?.[0];
+      if (!r?.occurredAt) return null;
+      return r.occurredAt instanceof Date ? r.occurredAt : new Date(r.occurredAt);
+    } catch (err) {
+      console.error('[storage.getLatestBankrollMovementAt] failed', err);
+      return null;
+    }
+  }
+
+  async getLatestTournamentUploadAt(userId: string): Promise<Date | null> {
+    try {
+      // CLAUDE.md §6.1: dashboard usa tournaments WHERE grind_session_id IS NULL.
+      const rows: any[] = await (db as any)
+        .select({ createdAt: tournaments.createdAt })
+        .from(tournaments)
+        .where(and(eq(tournaments.userId, userId), isNull(tournaments.grindSessionId)))
+        .orderBy(desc(tournaments.createdAt))
+        .limit(1);
+      const r = rows?.[0];
+      if (!r?.createdAt) return null;
+      return r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
+    } catch (err) {
+      console.error('[storage.getLatestTournamentUploadAt] failed', err);
+      return null;
+    }
+  }
+
+  async getOldestPendingSpotAt(userId: string): Promise<Date | null> {
+    try {
+      const rows: any[] = await (db as any)
+        .select({ createdAt: starredHands.createdAt })
+        .from(starredHands)
+        .where(and(eq(starredHands.userId, userId), eq(starredHands.status, 'pending')))
+        .orderBy(asc(starredHands.createdAt))
+        .limit(1);
+      const r = rows?.[0];
+      if (!r?.createdAt) return null;
+      return r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
+    } catch (err) {
+      console.error('[storage.getOldestPendingSpotAt] failed', err);
+      return null;
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Sprint home-reform-2 Onda 2 — Stubs Onda 2 minimo (RF-29, RF-30).
   // Onda 3 popula real (HUD snapshots + PrimeDope cache).
   // -------------------------------------------------------------------------
