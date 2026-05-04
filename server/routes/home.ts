@@ -22,6 +22,10 @@ import type { NewsItem } from '@shared/types/news';
 import { handleTournamentSelector } from './tournament-selector';
 import { computeHeuristics } from '../services/homeHeuristics';
 import { getSessionsMonthSummary } from '../services/sessionsMonth';
+// Sprint home-reform-5 item 6 — Sessoes Registradas (renome "Performance").
+import { getSessionsRegisteredSummary } from '../services/sessionsRegistered';
+import { fxResolver as homeFxResolver } from '../services/fxResolver';
+import { getCurrencyForSite as homeGetCurrencyForSite } from '@shared/platform-currency';
 import { getDashboardMonthSummary } from '../services/dashboardMonth';
 import { getHomeEvolution, parseMonthIso } from '../services/homeEvolution';
 import { getGradeTodaySummary, type GradeProfile } from '../services/gradeToday';
@@ -161,7 +165,23 @@ interface HomeOverviewBody {
     tournamentCount: number;
     primaryPlatform: string;
     status: 'live' | 'ended' | 'finalized';
+    // Sprint home-reform-5 item 6 — KPIs por sessao (FX-normalizado USD).
+    investedUsd: number;
+    roi: number | null;
+    itm: number;
+    finalTables: number;
+    wins: number;
   }> | null;
+  // Sprint home-reform-5 item 6 — Card "Sessoes Registradas" (renome "Performance").
+  sessionsRegistered: {
+    tournaments: number;
+    profit: number;
+    invested: number;
+    roi: number | null;
+    itm: number;
+    finalTables: number;
+    wins: number;
+  } | null;
   performance: {
     roi: number;
     itm: number;
@@ -425,6 +445,9 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
         }), timings),
       // Sprint home-reform-5 item 4 — Acao Imediata (start_session check).
       timed('hasActiveGrindSession', () => (storage as any).hasActiveGrindSession(userId), timings),
+      // Sprint home-reform-5 item 6 — Sessoes Registradas + RecentSessions com KPIs.
+      timed('sessionsRegistered', () => getSessionsRegisteredSummary(userId), timings),
+      timed('recentSessionsKpis', () => (storage as any).getRecentSessionsWithKpis(userId, 5), timings),
     ]);
 
     const unwrap = <T,>(idx: number): T | null => {
@@ -461,6 +484,8 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     const bankrollSnapshots30dResult = unwrap<any[]>(21);
     const bankrollSnapshotPrior30dResult = unwrap<any[]>(22);
     const hasActiveGrindSessionResult = unwrap<boolean>(23) ?? false;
+    const sessionsRegisteredResult = unwrap<any>(24);
+    const recentSessionsKpisResult = unwrap<any[]>(25);
 
     // Tipos usados localmente (cast porque mocks retornam any).
     const qs = quickStats as any;
@@ -581,15 +606,80 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       currentStreakDays: Number(qs?.currentStreakDays ?? 0),
     };
 
-    const recentSessionsOut: HomeOverviewBody['recentSessions'] =
-      recent === null ? null : recent.map((s: any) => ({
+    // Sprint home-reform-5 item 6 — RecentSessions com KPIs.
+    // Substitui recent (placeholder) por recentSessionsKpisResult quando
+    // disponivel + aplica FX por site -> USD por sessao.
+    let recentSessionsOut: HomeOverviewBody['recentSessions'] = null;
+    if (Array.isArray(recentSessionsKpisResult) && recentSessionsKpisResult.length > 0) {
+      try {
+        const { rates } = await homeFxResolver.resolveExchangeRates(userId);
+        recentSessionsOut = recentSessionsKpisResult.map((s: any) => {
+          const sites: any[] = Array.isArray(s?.sites) ? s.sites : [];
+          let count = 0;
+          let invested = 0;
+          let returns = 0;
+          let itm = 0;
+          let finalTables = 0;
+          let wins = 0;
+          let primary = '';
+          let primaryCount = -1;
+          for (const r of sites) {
+            const currency = homeGetCurrencyForSite(r.site).code;
+            const rate = rates[currency] ?? 1;
+            const safeRate = rate > 0 ? rate : 1;
+            const inv = (parseFloat(r.investedNative ?? '0') || 0) / safeRate;
+            const ret = (parseFloat(r.returnsNative ?? '0') || 0) / safeRate;
+            const c = Number(r.count) || 0;
+            count += c;
+            invested += inv;
+            returns += ret;
+            itm += Number(r.itmCount) || 0;
+            finalTables += Number(r.finalTablesCount) || 0;
+            wins += Number(r.winsCount) || 0;
+            if (c > primaryCount) { primary = String(r.site ?? ''); primaryCount = c; }
+          }
+          const pnlUsd = returns - invested;
+          const roi = invested > 0 ? (pnlUsd / invested) * 100 : null;
+          const created = s?.createdAt instanceof Date ? s.createdAt : (s?.createdAt ? new Date(s.createdAt) : null);
+          const dateIso = created ? created.toISOString().slice(0, 10) : '';
+          const statusRaw = String(s?.status ?? 'finalized');
+          const status = (statusRaw === 'live' || statusRaw === 'ended' || statusRaw === 'finalized'
+            ? statusRaw : 'finalized') as 'live' | 'ended' | 'finalized';
+          return {
+            id: String(s?.sessionId ?? ''),
+            date: dateIso,
+            pnlUsd,
+            tournamentCount: count,
+            primaryPlatform: primary,
+            status,
+            investedUsd: invested,
+            roi,
+            itm,
+            finalTables,
+            wins,
+          };
+        });
+      } catch (errFx) {
+        console.error('[home/overview] recentSessionsKpis FX resolution failed:', errFx);
+        recentSessionsOut = null;
+      }
+    }
+    if (recentSessionsOut === null && recent !== null) {
+      // Fallback legacy (sem KPIs reais — placeholders zero).
+      recentSessionsOut = recent.map((s: any) => ({
         id: String(s?.id ?? ''),
         date: String(s?.date ?? ''),
         pnlUsd: Number(s?.pnlUsd ?? 0),
         tournamentCount: Number(s?.tournamentCount ?? 0),
         primaryPlatform: String(s?.primaryPlatform ?? ''),
         status: (s?.status as 'live' | 'ended' | 'finalized') ?? 'finalized',
+        investedUsd: 0,
+        roi: null,
+        itm: 0,
+        finalTables: 0,
+        wins: 0,
       }));
+    }
 
     const performanceOut: HomeOverviewBody['performance'] = perf
       ? {
@@ -865,6 +955,18 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       variance: varianceOut,
       tournamentRecommendations: tournamentRecommendationsOut,
       heuristics: heuristicsOut,
+      // Sprint home-reform-5 item 6 — Sessoes Registradas.
+      sessionsRegistered: sessionsRegisteredResult && typeof sessionsRegisteredResult === 'object'
+        ? {
+            tournaments: Number(sessionsRegisteredResult.tournaments ?? 0),
+            profit: Number(sessionsRegisteredResult.profit ?? 0),
+            invested: Number(sessionsRegisteredResult.invested ?? 0),
+            roi: sessionsRegisteredResult.roi == null ? null : Number(sessionsRegisteredResult.roi),
+            itm: Number(sessionsRegisteredResult.itm ?? 0),
+            finalTables: Number(sessionsRegisteredResult.finalTables ?? 0),
+            wins: Number(sessionsRegisteredResult.wins ?? 0),
+          }
+        : null,
       // Sprint home-reform-4 item 1.
       sessionsMonth: sessionsMonthResult && typeof sessionsMonthResult === 'object'
         ? {

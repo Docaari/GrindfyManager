@@ -27,7 +27,7 @@ Regra de execucao:
 | 3 | Pergunte ao Coach: perfis multiplos + Iniciar Sessao + DAY OFF | Concluido (2026-05-04) | Feature | 2-3h |
 | 4 | Acao Imediata: stat destaque + Iniciar sessao | Concluido (2026-05-04) | Feature (depende de stat destaque futura) | 2h |
 | 5 | Grade do Dia: Primeiro Registro + Ultimo Registro | Concluido (2026-05-04) | Feature pequena | 1-2h |
-| 6 | Renomear Performance -> Sessoes Registradas + KPIs corretos + ITM/MF/Cravadas | Pendente | Bug fix + feature | 3-4h |
+| 6 | Renomear Performance -> Sessoes Registradas + KPIs corretos + ITM/MF/Cravadas | Concluido (2026-05-04) | Bug fix + feature | 3-4h |
 | 7 | Dashboard: All Time + KPIs ITM/MF/Cravadas + grafico evolucao all-time | Pendente | Feature | 3-4h |
 | 8 | Performance baseada em registros /grind (toggle futuro) | Pendente | Refactor | 2h |
 | 9 | Estudos: OK, nao mexer | Skip | — | 0 |
@@ -257,6 +257,25 @@ Ordem de execucao recomendada: **1 -> 2 -> 5 -> 3 -> 4 -> 6 -> 7 -> 8 -> 11 -> 1
 - Ver `feedback_grind_live_fx.md` (memory) — stats grind-live exigem FX consistente.
 - Confirmar formula ITM/MF/Cravadas: contar registros com finishPlace dentro do payout / final table threshold / position 1.
 - Pipeline TDD obrigatorio.
+
+#### Resolucao (2026-05-04)
+
+- **Backend service novo**: `server/services/sessionsRegistered.ts` com `getSessionsRegisteredSummary(userId)` retornando `{ tournaments, profit, invested, roi, itm, finalTables, wins }`. FX cascade via `fxResolver.resolveExchangeRates` + `getCurrencyForSite` (lesson #6). Empty/error -> shape vazio sem throw (lesson #9). 6/6 testes verde em `tests/services/sessionsRegistered.test.ts` incluindo cenario real founder (124 torneios, profit -$255.24 USD, ROI -17.4%).
+- **Storage helpers novos** em `server/storage.ts`:
+  - `getSessionsRegisteredAggregate(userId, opts?)` — agrupa por site com `count`, `investedNative`, `returnsNative`, `itmCount` (prize > 0), `finalTablesCount` (position 1..9), `winsCount` (position = 1). Aceita `{ from, to }` opcional para uso futuro.
+  - `getRecentSessionsWithKpis(userId, limit)` — pega top-N grind_sessions DESC + agrega session_tournaments por (sessionId, site) com mesmos 6 KPIs nativos. Orchestrator aplica FX por site para devolver USD por sessao.
+  - Interface IStorage atualizada com ambas assinaturas.
+- **Route handler `/api/home/overview`**:
+  - 2 subqueries novas (Promise.allSettled, padrao `timed()`): `sessionsRegistered` (delega ao service) + `recentSessionsKpis` (storage).
+  - Bloco `sessionsRegistered: { tournaments, profit, invested, roi, itm, finalTables, wins } | null` no payload final.
+  - `recentSessionsOut` reescrito: usa `recentSessionsKpisResult` quando disponivel, aplica FX por site -> USD por sessao + soma KPIs (count/itm/finalTables/wins) e calcula PnL/ROI USD por sessao. `primaryPlatform` derivado do site com mais torneios. Fallback legacy para shape antigo (KPIs zerados) quando subquery falhar.
+- **Frontend novo**: `client/src/components/home/SessionsRegisteredCard.tsx` renderiza header "Sessoes Registradas" + grid responsivo 6 KPIs (Torneios | Profit | ROI | ITM | Mesas Finais | Cravadas). Empty state quando `data == null` ou `tournaments === 0`. CTA card-wide para `/grind-live`. Profit usa `fmtUsd2` local (2 casas pt-BR) para casar valores founder ("-$255,24"). 5/5 testes verde em `client/src/components/home/__tests__/SessionsRegisteredCard.test.tsx`.
+- **Frontend atualizado**: `RecentSessionsList.tsx` aceita props opcionais `investedUsd | roi | itm | finalTables | wins` por sessao + renderiza linha auxiliar com 4 chips (ROI/ITM/MF/Cravadas) abaixo de cada cartao. Back-compat: props ausentes mostram zero.
+- **Wiring `Home.tsx`**: zona 3 renomeada `<ZoneHeading>Sessoes Registradas</ZoneHeading>`. Novo `<SessionsRegisteredCard data={data.sessionsRegistered ?? null} />` como primeiro card da zona. Tipo `HomeOverviewResponse.recentSessions[]` estendido com KPIs opcionais + novo bloco `sessionsRegistered`.
+- **Test ajustado**: `tests/home/HomeZoning.test.tsx` linha 202 trocou regex de `/Performance/i` para `/Sessoes Registradas/i`.
+- **Premissa item 8 absorvida parcialmente**: card ja consome `session_tournaments` por default. Item 8 fica como fundacao da flag `homeOptions.performanceFromGrind` (UI toggle entrega item 11).
+- Tests: 5 arquivos focados 46/46 verde. Regressao home + services + componentes home: 598/601 verde. 3 falhas restantes pre-existentes do Sprint News-3 em desenvolvimento (`tests/services/news/titleFingerprint.test.ts:106` lesson #25 + `client/src/components/home/__tests__/NewsSlot.test.tsx:53/58`). Type-check sem erros novos.
+- **Confirmacao founder pos-implementacao**: Validar valores reais 124 torneios / profit -$255,24 / ROI -17,4% via Home apos `db:push` ou backend reload. Service test ja simula esse cenario com `invested 1467.24 / returns 1212.00 / position 1 / itm 22 / FT 5` e bate exato.
 
 ---
 

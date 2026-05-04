@@ -19,6 +19,12 @@ interface RecentSession {
   primaryPlatform: string;
   // Tolerante a string para nao exigir `as const` em fixtures de teste/dados runtime.
   status: string;
+  // Sprint home-reform-5 item 6 — KPIs por sessao (FX-normalizado USD).
+  investedUsd?: number;
+  roi?: number | null;
+  itm?: number;
+  finalTables?: number;
+  wins?: number;
 }
 
 interface Props {
@@ -96,35 +102,58 @@ export default function RecentSessionsList({ data }: Props): JSX.Element {
     <div className="rounded-lg border border-border bg-card p-4">
       <h3 className="text-sm font-semibold mb-3">Ultimas sessoes</h3>
       <ul className="space-y-2">
-        {items.map((s) => (
-          <li key={s.id}>
-            <Link href={sessionHref(s)}>
-              <a
-                data-testid={`recent-session-card-${s.id}`}
-                href={sessionHref(s)}
-                className="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-accent transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground w-12">
-                    {fmtDate(s.date)}
-                  </span>
-                  <span
-                    data-testid={`recent-session-pnl-${s.id}`}
-                    className={`font-semibold text-sm ${pnlClass(s.pnlUsd)}`}
-                  >
-                    {fmtPnl(s.pnlUsd)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {s.tournamentCount} torneios · {s.primaryPlatform}
-                  </span>
-                </div>
-                <span className="text-[10px] uppercase px-1.5 py-0.5 rounded-md border border-border text-muted-foreground">
-                  {s.status}
-                </span>
-              </a>
-            </Link>
-          </li>
-        ))}
+        {items.map((s) => {
+          const roi = s.roi == null ? null : s.roi;
+          const roiLabel = roi == null
+            ? '—'
+            : `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%`;
+          return (
+            <li key={s.id}>
+              <Link href={sessionHref(s)}>
+                <a
+                  data-testid={`recent-session-card-${s.id}`}
+                  href={sessionHref(s)}
+                  className="flex flex-col gap-1 px-3 py-2 rounded-md hover:bg-accent transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground w-12">
+                        {fmtDate(s.date)}
+                      </span>
+                      <span
+                        data-testid={`recent-session-pnl-${s.id}`}
+                        className={`font-semibold text-sm ${pnlClass(s.pnlUsd)}`}
+                      >
+                        {fmtPnl(s.pnlUsd)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {s.tournamentCount} torneios · {s.primaryPlatform}
+                      </span>
+                    </div>
+                    <span className="text-[10px] uppercase px-1.5 py-0.5 rounded-md border border-border text-muted-foreground">
+                      {s.status}
+                    </span>
+                  </div>
+                  {/* Sprint home-reform-5 item 6 — KPIs por sessao */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-[60px] text-[11px] text-muted-foreground">
+                    <span data-testid={`recent-session-roi-${s.id}`}>
+                      ROI: <span className="font-medium text-foreground">{roiLabel}</span>
+                    </span>
+                    <span data-testid={`recent-session-itm-${s.id}`}>
+                      ITM: <span className="font-medium text-foreground">{s.itm ?? 0}</span>
+                    </span>
+                    <span data-testid={`recent-session-final-tables-${s.id}`}>
+                      MF: <span className="font-medium text-foreground">{s.finalTables ?? 0}</span>
+                    </span>
+                    <span data-testid={`recent-session-wins-${s.id}`}>
+                      Cravadas: <span className="font-medium text-foreground">{s.wins ?? 0}</span>
+                    </span>
+                  </div>
+                </a>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
       <Link href="/dashboard">
         <a

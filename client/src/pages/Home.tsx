@@ -45,6 +45,8 @@ import CooldownBanner from '@/components/home/CooldownBanner';
 import NextTournamentCountdown from '@/components/home/NextTournamentCountdown';
 import RecentSessionsList from '@/components/home/RecentSessionsList';
 import PerformanceMini from '@/components/home/PerformanceMini';
+// Sprint home-reform-5 item 6 — substitui PerformanceMini por card all-time grind.
+import SessionsRegisteredCard from '@/components/home/SessionsRegisteredCard';
 import PendingHandsList from '@/components/home/PendingHandsList';
 // Sprint home-reform-5 item 4 — primary CTA card da zona Acao Imediata.
 import ImmediateAction, { type ImmediateActionData } from '@/components/home/ImmediateAction';
@@ -125,7 +127,23 @@ interface HomeOverviewResponse {
     tournamentCount: number;
     primaryPlatform: string;
     status: 'live' | 'ended' | 'finalized';
+    // Sprint home-reform-5 item 6.
+    investedUsd?: number;
+    roi?: number | null;
+    itm?: number;
+    finalTables?: number;
+    wins?: number;
   }> | null;
+  // Sprint home-reform-5 item 6 — card "Sessoes Registradas" (renome Performance).
+  sessionsRegistered?: {
+    tournaments: number;
+    profit: number;
+    invested: number;
+    roi: number | null;
+    itm: number;
+    finalTables: number;
+    wins: number;
+  } | null;
   performance: {
     roi: number;
     itm: number;
@@ -443,9 +461,11 @@ const Home: React.FC = () => {
               )}
             </section>
 
-            {/* Zona 3 — Performance */}
+            {/* Zona 3 — Sessoes Registradas (renome de "Performance" — item 6) */}
             <section data-testid="home-zone-perf" className="space-y-3">
-              <ZoneHeading>Performance</ZoneHeading>
+              <ZoneHeading>Sessoes Registradas</ZoneHeading>
+              {/* home-reform-5 item 6: card all-time /grind com 6 KPIs */}
+              <SessionsRegisteredCard data={data.sessionsRegistered ?? null} />
               {/* home-reform-4 item 1: Card Sessoes mes atual full-width */}
               <SessionsMonthCard data={data.sessionsMonth ?? null} />
               {/* home-reform-4 item 9: RecentSessionsList entre Sessoes e Dashboard */}

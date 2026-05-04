@@ -199,7 +199,8 @@ describe('RF-A2 — 4 zonas semanticas', () => {
 
     expect(today.querySelector('h2')?.textContent ?? '').toMatch(/Hoje/i);
     expect(action.querySelector('h2')?.textContent ?? '').toMatch(/Acao Imediata/i);
-    expect(perf.querySelector('h2')?.textContent ?? '').toMatch(/Performance/i);
+    // Sprint home-reform-5 item 6: zona renomeada "Performance" -> "Sessoes Registradas".
+    expect(perf.querySelector('h2')?.textContent ?? '').toMatch(/Sessoes Registradas/i);
     expect(news.querySelector('h2')?.textContent ?? '').toMatch(/Sinal Externo/i);
   });
 

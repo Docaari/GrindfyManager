@@ -768,6 +768,39 @@ export interface IStorage {
     returnsNative: string;
   }>>;
 
+  // Sprint home-reform-5 item 6 — Sessoes Registradas (all-time grind aggregate)
+  getSessionsRegisteredAggregate(
+    userId: string,
+    opts?: { from?: Date; to?: Date },
+  ): Promise<Array<{
+    site: string;
+    count: number;
+    investedNative: string;
+    returnsNative: string;
+    itmCount: number;
+    finalTablesCount: number;
+    winsCount: number;
+  }>>;
+
+  // Sprint home-reform-5 item 6 — RecentSessions com KPIs (ITM/MF/Wins/profit nativo)
+  getRecentSessionsWithKpis(
+    userId: string,
+    limit?: number,
+  ): Promise<Array<{
+    sessionId: string;
+    createdAt: Date | null;
+    status: string;
+    sites: Array<{
+      site: string;
+      count: number;
+      investedNative: string;
+      returnsNative: string;
+      itmCount: number;
+      finalTablesCount: number;
+      winsCount: number;
+    }>;
+  }>>;
+
   // Sprint home-reform-4 item 2+6 — Dashboard mes atual aggregate
   getDashboardMonthAggregate(
     userId: string,
@@ -6514,6 +6547,170 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       investedNative: String(r.investedNative ?? '0'),
       returnsNative: String(r.returnsNative ?? '0'),
     }));
+  }
+
+  // ============================================================================
+  // Sprint home-reform-5 item 6 — Sessoes Registradas (all-time grind aggregate)
+  // ============================================================================
+  //
+  // Spec: Docs/specs/home-reform-5.md Item 6 (renome "Performance" -> "Sessoes
+  // Registradas" + 6 KPIs). Fonte: `session_tournaments` (live grind),
+  // contraparte historica do Dashboard (CLAUDE.md §6.1).
+  //
+  // KPIs adicionais vs. getSessionsMonthAggregate:
+  //   itmCount = COUNT(prize > 0)
+  //   finalTablesCount = COUNT(position 1..9)
+  //   winsCount = COUNT(position = 1)
+  //
+  // Sem range default = all-time. Aceita { from, to } para usos futuros.
+  async getSessionsRegisteredAggregate(
+    userId: string,
+    opts: { from?: Date; to?: Date } = {},
+  ): Promise<Array<{
+    site: string;
+    count: number;
+    investedNative: string;
+    returnsNative: string;
+    itmCount: number;
+    finalTablesCount: number;
+    winsCount: number;
+  }>> {
+    const conditions = [eq(sessionTournaments.userId, userId)];
+    if (opts.from) conditions.push(gte(sessionTournaments.createdAt, opts.from));
+    if (opts.to) conditions.push(lt(sessionTournaments.createdAt, opts.to));
+
+    const rows = await db
+      .select({
+        site: sessionTournaments.site,
+        count: sql<number>`COUNT(*)::int`,
+        investedNative: sql<string>`COALESCE(SUM(
+          CAST(${sessionTournaments.buyIn} AS DECIMAL)
+          * (1 + COALESCE(CAST(${sessionTournaments.rebuys} AS DECIMAL), 0) + COALESCE(CAST(${sessionTournaments.reentries} AS DECIMAL), 0))
+          + CASE WHEN ${sessionTournaments.addOnTaken} = true THEN COALESCE(CAST(${sessionTournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END
+        ), 0)::text`,
+        returnsNative: sql<string>`COALESCE(SUM(
+          CASE
+            WHEN COALESCE(CAST(${sessionTournaments.result} AS DECIMAL), 0) <> 0
+              THEN CAST(${sessionTournaments.result} AS DECIMAL)
+            ELSE COALESCE(CAST(${sessionTournaments.prize} AS DECIMAL), 0)
+          END
+          + COALESCE(CAST(${sessionTournaments.bounty} AS DECIMAL), 0)
+        ), 0)::text`,
+        itmCount: sql<number>`COUNT(CASE WHEN COALESCE(CAST(${sessionTournaments.prize} AS DECIMAL), 0) > 0 THEN 1 END)::int`,
+        finalTablesCount: sql<number>`COUNT(CASE WHEN ${sessionTournaments.position} BETWEEN 1 AND 9 THEN 1 END)::int`,
+        winsCount: sql<number>`COUNT(CASE WHEN ${sessionTournaments.position} = 1 THEN 1 END)::int`,
+      })
+      .from(sessionTournaments)
+      .where(and(...conditions))
+      .groupBy(sessionTournaments.site);
+
+    return rows.map((r: any) => ({
+      site: String(r.site ?? ''),
+      count: Number(r.count) || 0,
+      investedNative: String(r.investedNative ?? '0'),
+      returnsNative: String(r.returnsNative ?? '0'),
+      itmCount: Number(r.itmCount) || 0,
+      finalTablesCount: Number(r.finalTablesCount) || 0,
+      winsCount: Number(r.winsCount) || 0,
+    }));
+  }
+
+  // ============================================================================
+  // Sprint home-reform-5 item 6 — RecentSessions enriquecidas com KPIs
+  // ============================================================================
+  //
+  // Cada sessao recente puxa rows agrupadas por (sessionId, site) com count,
+  // invested/returns nativos + itm/finalTables/wins. Orchestrator aplica FX
+  // pra USD por site e devolve PnL/ROI em USD por sessao.
+  async getRecentSessionsWithKpis(
+    userId: string,
+    limit: number = 5,
+  ): Promise<Array<{
+    sessionId: string;
+    createdAt: Date | null;
+    status: string;
+    sites: Array<{
+      site: string;
+      count: number;
+      investedNative: string;
+      returnsNative: string;
+      itmCount: number;
+      finalTablesCount: number;
+      winsCount: number;
+    }>;
+  }>> {
+    try {
+      const sessions: any[] = await (db as any)
+        .select()
+        .from(grindSessions)
+        .where(eq(grindSessions.userId, userId))
+        .orderBy(desc(grindSessions.createdAt))
+        .limit(limit);
+
+      if (!sessions || sessions.length === 0) return [];
+
+      const sessionIds = sessions.map((s: any) => s.id).filter(Boolean);
+      if (sessionIds.length === 0) return [];
+
+      const aggRows = await db
+        .select({
+          sessionId: sessionTournaments.sessionId,
+          site: sessionTournaments.site,
+          count: sql<number>`COUNT(*)::int`,
+          investedNative: sql<string>`COALESCE(SUM(
+            CAST(${sessionTournaments.buyIn} AS DECIMAL)
+            * (1 + COALESCE(CAST(${sessionTournaments.rebuys} AS DECIMAL), 0) + COALESCE(CAST(${sessionTournaments.reentries} AS DECIMAL), 0))
+            + CASE WHEN ${sessionTournaments.addOnTaken} = true THEN COALESCE(CAST(${sessionTournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END
+          ), 0)::text`,
+          returnsNative: sql<string>`COALESCE(SUM(
+            CASE
+              WHEN COALESCE(CAST(${sessionTournaments.result} AS DECIMAL), 0) <> 0
+                THEN CAST(${sessionTournaments.result} AS DECIMAL)
+              ELSE COALESCE(CAST(${sessionTournaments.prize} AS DECIMAL), 0)
+            END
+            + COALESCE(CAST(${sessionTournaments.bounty} AS DECIMAL), 0)
+          ), 0)::text`,
+          itmCount: sql<number>`COUNT(CASE WHEN COALESCE(CAST(${sessionTournaments.prize} AS DECIMAL), 0) > 0 THEN 1 END)::int`,
+          finalTablesCount: sql<number>`COUNT(CASE WHEN ${sessionTournaments.position} BETWEEN 1 AND 9 THEN 1 END)::int`,
+          winsCount: sql<number>`COUNT(CASE WHEN ${sessionTournaments.position} = 1 THEN 1 END)::int`,
+        })
+        .from(sessionTournaments)
+        .where(and(eq(sessionTournaments.userId, userId), inArray(sessionTournaments.sessionId, sessionIds)))
+        .groupBy(sessionTournaments.sessionId, sessionTournaments.site);
+
+      const bySession = new Map<string, Array<{
+        site: string;
+        count: number;
+        investedNative: string;
+        returnsNative: string;
+        itmCount: number;
+        finalTablesCount: number;
+        winsCount: number;
+      }>>();
+      for (const r of aggRows as any[]) {
+        const sid = String(r.sessionId ?? '');
+        if (!bySession.has(sid)) bySession.set(sid, []);
+        bySession.get(sid)!.push({
+          site: String(r.site ?? ''),
+          count: Number(r.count) || 0,
+          investedNative: String(r.investedNative ?? '0'),
+          returnsNative: String(r.returnsNative ?? '0'),
+          itmCount: Number(r.itmCount) || 0,
+          finalTablesCount: Number(r.finalTablesCount) || 0,
+          winsCount: Number(r.winsCount) || 0,
+        });
+      }
+
+      return sessions.map((s: any) => ({
+        sessionId: String(s.id ?? ''),
+        createdAt: s.createdAt instanceof Date ? s.createdAt : (s.createdAt ? new Date(s.createdAt) : null),
+        status: String(s.status ?? 'finalized'),
+        sites: bySession.get(String(s.id ?? '')) ?? [],
+      }));
+    } catch (err) {
+      console.error('[storage.getRecentSessionsWithKpis] failed', err);
+      throw err;
+    }
   }
 
   // ============================================================================
