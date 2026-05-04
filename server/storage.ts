@@ -11056,10 +11056,138 @@ export async function hasAnyUserEnabledForSource(src: {
   return rows.length > 0;
 }
 
+// =============================================================================
+// Sprint News-3 (RF-07/RF-08) — orchestrator + dedupe storage helpers
+// =============================================================================
+
+/**
+ * Lista todas as sources com enabled=true (sem param de category).
+ * Usado pelo orchestrator (RF-07).
+ */
+export async function listEnabledNewsSources(): Promise<NewsSourceRow[]> {
+  return await db
+    .select()
+    .from(newsSources)
+    .where(eq(newsSources.enabled, true))
+    .orderBy(asc(newsSources.category), asc(newsSources.name));
+}
+
+/**
+ * Insere news_item idempotente. Usa ON CONFLICT (content_hash) DO NOTHING.
+ * Calcula content_hash baseado em url_canonical + title_fingerprint
+ * (RF-07 default). Retorna true se inseriu, false se conflitou ou erro.
+ */
+export async function insertNewsItem(input: {
+  title: string;
+  summary: string;
+  url: string;
+  publishedAt: string;
+  category: string;
+  platform: string;
+  sourceId: string;
+  urlCanonical: string;
+  titleFingerprint: string;
+  expiresAt: string;
+  thumbnailUrl?: string | null;
+  tags?: string[] | null;
+}): Promise<boolean> {
+  const { createHash } = await import("crypto");
+  const contentHash = createHash("sha256")
+    .update(`${input.urlCanonical}\n${input.titleFingerprint}`)
+    .digest("hex");
+  const now = new Date();
+  try {
+    await db
+      .insert(newsItemsTable)
+      .values({
+        id: nanoid(),
+        sourceId: input.sourceId,
+        category: input.category,
+        platform: input.platform,
+        title: input.title,
+        summary: input.summary.slice(0, 500),
+        url: input.url,
+        thumbnailUrl: input.thumbnailUrl ?? null,
+        publishedAt: new Date(input.publishedAt),
+        fetchedAt: now,
+        expiresAt: new Date(input.expiresAt),
+        engagementLikes: null,
+        engagementViews: null,
+        engagementComments: null,
+        contentHash,
+        tags: input.tags ?? null,
+        urlCanonical: input.urlCanonical,
+        titleFingerprint: input.titleFingerprint,
+      })
+      .onConflictDoNothing({ target: newsItemsTable.contentHash });
+    return true;
+  } catch (err) {
+    console.error("[insertNewsItem] falhou", err);
+    return false;
+  }
+}
+
+/**
+ * Existe news_item com este url_canonical fetched dentro da janela `days`?
+ * Usado por Layer 1 e Layer 3 do dedupe pipeline (RF-08).
+ */
+export async function existsByCanonical(
+  canonicalUrl: string,
+  days: number,
+): Promise<boolean> {
+  if (typeof canonicalUrl !== "string" || canonicalUrl.length === 0) return false;
+  try {
+    const rows = await db
+      .select({ id: newsItemsTable.id })
+      .from(newsItemsTable)
+      .where(
+        and(
+          eq(newsItemsTable.urlCanonical, canonicalUrl),
+          sql`${newsItemsTable.fetchedAt} >= now() - interval '1 day' * ${days}`,
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  } catch (err) {
+    console.error("[existsByCanonical] falhou", err);
+    return false;
+  }
+}
+
+/**
+ * Existe news_item com este title_fingerprint? Layer 2 (RF-08).
+ */
+export async function existsByFingerprint(
+  fingerprint: string,
+  days: number,
+): Promise<boolean> {
+  if (typeof fingerprint !== "string" || fingerprint.length === 0) return false;
+  try {
+    const rows = await db
+      .select({ id: newsItemsTable.id })
+      .from(newsItemsTable)
+      .where(
+        and(
+          eq(newsItemsTable.titleFingerprint, fingerprint),
+          sql`${newsItemsTable.fetchedAt} >= now() - interval '1 day' * ${days}`,
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  } catch (err) {
+    console.error("[existsByFingerprint] falhou", err);
+    return false;
+  }
+}
+
 // Bind helpers ao storage instance pra rotas usarem via storage.X
 (storage as any).listNewsSources = listNewsSources;
+(storage as any).listEnabledNewsSources = listEnabledNewsSources;
 (storage as any).listNewsItems = listNewsItems;
 (storage as any).upsertNewsItem = upsertNewsItem;
+(storage as any).insertNewsItem = insertNewsItem;
+(storage as any).existsByCanonical = existsByCanonical;
+(storage as any).existsByFingerprint = existsByFingerprint;
 (storage as any).getUserNewsPreference = getUserNewsPreference;
 (storage as any).listUserNewsPreferences = listUserNewsPreferences;
 (storage as any).upsertUserNewsPreference = upsertUserNewsPreference;
