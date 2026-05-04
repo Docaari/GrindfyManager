@@ -8,32 +8,15 @@
  *     .blog-entry__excerpt (summary)
  */
 
-import * as cheerio from "cheerio";
-import {
-  AdapterItem,
-  finalizeItems,
-  parseDateMulti,
-  resolveUrl,
-  truncateSummary,
-} from "./_shared";
+import { AdapterItem, runAdapter } from "./_shared";
 
 export function scrapeJurojin(html: string, baseUrl: string): AdapterItem[] {
-  const $ = cheerio.load(html);
-  const items: AdapterItem[] = [];
-
-  $("article.blog-entry").each((_, el) => {
-    const $el = $(el);
-    const $anchor = $el.find("h2.blog-entry__title a").first();
-    const title = $anchor.text().trim();
-    const href = $anchor.attr("href");
-    const url = resolveUrl(href, baseUrl);
-    const dateRaw = $el.find(".blog-entry__date").text().trim();
-    const publishedAt = parseDateMulti(dateRaw);
-    const summary = truncateSummary($el.find(".blog-entry__excerpt").text());
-
-    if (!title || !url || !publishedAt) return;
-    items.push({ title, url, publishedAt, summary });
+  return runAdapter(html, baseUrl, {
+    name: "scrapeJurojin",
+    itemSelector: "article.blog-entry",
+    titleAnchor: ($el) => $el.find("h2.blog-entry__title a"),
+    dateSelector: ($el) => $el.find(".blog-entry__date"),
+    dateMode: "text",
+    summarySelector: ($el) => $el.find(".blog-entry__excerpt"),
   });
-
-  return finalizeItems("scrapeJurojin", items);
 }

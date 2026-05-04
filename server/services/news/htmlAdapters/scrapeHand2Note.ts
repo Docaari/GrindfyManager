@@ -8,32 +8,15 @@
  *     p.excerpt (summary)
  */
 
-import * as cheerio from "cheerio";
-import {
-  AdapterItem,
-  finalizeItems,
-  parseDateMulti,
-  resolveUrl,
-  truncateSummary,
-} from "./_shared";
+import { AdapterItem, runAdapter } from "./_shared";
 
 export function scrapeHand2Note(html: string, baseUrl: string): AdapterItem[] {
-  const $ = cheerio.load(html);
-  const items: AdapterItem[] = [];
-
-  $("#blog-posts article").each((_, el) => {
-    const $el = $(el);
-    const $anchor = $el.find("h1 a").first();
-    const title = $anchor.text().trim();
-    const href = $anchor.attr("href");
-    const url = resolveUrl(href, baseUrl);
-    const dateRaw = $el.find(".meta-date").text().trim();
-    const publishedAt = parseDateMulti(dateRaw);
-    const summary = truncateSummary($el.find(".excerpt").text());
-
-    if (!title || !url || !publishedAt) return;
-    items.push({ title, url, publishedAt, summary });
+  return runAdapter(html, baseUrl, {
+    name: "scrapeHand2Note",
+    itemSelector: "#blog-posts article",
+    titleAnchor: ($el) => $el.find("h1 a"),
+    dateSelector: ($el) => $el.find(".meta-date"),
+    dateMode: "text",
+    summarySelector: ($el) => $el.find(".excerpt"),
   });
-
-  return finalizeItems("scrapeHand2Note", items);
 }

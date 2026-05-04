@@ -13,6 +13,7 @@
  */
 
 import RssParser from "rss-parser";
+import { truncateSummary } from "./htmlAdapters/_shared";
 import { getHtmlAdapter } from "./htmlAdapters/registry";
 
 export interface NewsSourceLike {
@@ -39,6 +40,9 @@ const USER_AGENT = "GrindfyNewsBot/1.0 (+https://grindfy.com)";
 const TIMEOUT_MS = 60_000;
 const TOP_LIMIT = 10;
 
+const RSS_FIRST_STRATEGIES = new Set(["rss", "rss_or_html", "rss_and_x"]);
+const HTML_DIRECT_STRATEGIES = new Set(["html", "html_and_x"]);
+
 type FetchResult = { ok: boolean; status: number; text: string };
 
 async function fetchText(url: string): Promise<FetchResult> {
@@ -56,14 +60,8 @@ async function fetchText(url: string): Promise<FetchResult> {
   }
 }
 
-function truncateSummary(s: string | null | undefined): string {
-  if (!s) return "";
-  const cleaned = s.trim().replace(/\s+/g, " ");
-  return cleaned.length > 500 ? cleaned.slice(0, 500) : cleaned;
-}
-
 function isValidDate(d: Date): boolean {
-  return d instanceof Date && !Number.isNaN(d.getTime());
+  return !Number.isNaN(d.getTime());
 }
 
 async function fetchViaRss(
@@ -172,12 +170,7 @@ export async function fetchBlogSource(
   if (source.scrapeStrategy === "x_only") return [];
 
   try {
-    const wantsRssFirst = ["rss", "rss_or_html", "rss_and_x"].includes(
-      source.scrapeStrategy,
-    );
-    const wantsHtml = ["html", "html_and_x"].includes(source.scrapeStrategy);
-
-    if (wantsRssFirst) {
+    if (RSS_FIRST_STRATEGIES.has(source.scrapeStrategy)) {
       const rssItems = await fetchViaRss(source);
       if (rssItems.length > 0) return rssItems.slice(0, TOP_LIMIT);
       // Fallback HTML so quando strategy === 'rss_or_html'.
@@ -187,7 +180,7 @@ export async function fetchBlogSource(
       return [];
     }
 
-    if (wantsHtml) {
+    if (HTML_DIRECT_STRATEGIES.has(source.scrapeStrategy)) {
       return (await fetchViaHtml(source)).slice(0, TOP_LIMIT);
     }
 

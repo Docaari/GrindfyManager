@@ -26,10 +26,13 @@
  * Failure handling: log + retorna [] (NUNCA throw).
  */
 
+import { truncateSummary } from "./htmlAdapters/_shared";
 import type { NewsSourceLike, ScrapedNewsItem } from "./blogScraperProvider";
 
 const XAI_ENDPOINT = "https://api.x.ai/v1/chat/completions";
 const TIMEOUT_MS = 60_000;
+const MAX_SEARCH_RESULTS = 10;
+const SEARCH_WINDOW_DAYS = 7;
 const TWEET_URL_RE = /^https:\/\/x\.com\/[^/]+\/status\/(\d{15,20})$/;
 const TRAILING_ZEROS_RE = /0{10,}$/;
 
@@ -46,16 +49,9 @@ function isoDateUtc(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function truncateSummary(s: string | null | undefined): string {
-  if (!s) return "";
-  const cleaned = s.trim().replace(/\s+/g, " ");
-  return cleaned.length > 500 ? cleaned.slice(0, 500) : cleaned;
-}
-
 function isValidIsoDate(s: string): boolean {
   if (typeof s !== "string" || s.length === 0) return false;
-  const d = new Date(s);
-  return !Number.isNaN(d.getTime());
+  return !Number.isNaN(new Date(s).getTime());
 }
 
 export async function fetchXSource(
@@ -73,7 +69,9 @@ export async function fetchXSource(
   }
 
   const now = new Date();
-  const fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const fromDate = new Date(
+    now.getTime() - SEARCH_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  );
 
   const body = {
     model: process.env.XAI_MODEL ?? "grok-3-latest",
@@ -89,7 +87,7 @@ export async function fetchXSource(
       sources: [{ type: "x", x_handles: [source.xHandle] }],
       from_date: isoDateUtc(fromDate),
       to_date: isoDateUtc(now),
-      max_search_results: 10,
+      max_search_results: MAX_SEARCH_RESULTS,
     },
   };
 

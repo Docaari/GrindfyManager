@@ -8,33 +8,15 @@
  *     .news-item__summary (summary)
  */
 
-import * as cheerio from "cheerio";
-import {
-  AdapterItem,
-  finalizeItems,
-  parseDateMulti,
-  resolveUrl,
-  truncateSummary,
-} from "./_shared";
+import { AdapterItem, runAdapter } from "./_shared";
 
 export function scrapePokerStars(html: string, baseUrl: string): AdapterItem[] {
-  const $ = cheerio.load(html);
-  const items: AdapterItem[] = [];
-
-  $("article.news-item").each((_, el) => {
-    const $el = $(el);
-    const $anchor = $el.find("h2.news-item__title a").first();
-    const title = $anchor.text().trim();
-    const href = $anchor.attr("href");
-    const url = resolveUrl(href, baseUrl);
-    const $time = $el.find("time.news-item__date").first();
-    const datetimeRaw = $time.attr("datetime") ?? $time.text().trim();
-    const publishedAt = parseDateMulti(datetimeRaw);
-    const summary = truncateSummary($el.find(".news-item__summary").text());
-
-    if (!title || !url || !publishedAt) return;
-    items.push({ title, url, publishedAt, summary });
+  return runAdapter(html, baseUrl, {
+    name: "scrapePokerStars",
+    itemSelector: "article.news-item",
+    titleAnchor: ($el) => $el.find("h2.news-item__title a"),
+    dateSelector: ($el) => $el.find("time.news-item__date"),
+    dateMode: "datetime-attr-or-text",
+    summarySelector: ($el) => $el.find(".news-item__summary"),
   });
-
-  return finalizeItems("scrapePokerStars", items);
 }

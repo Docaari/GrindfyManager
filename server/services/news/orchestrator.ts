@@ -30,14 +30,37 @@ import type { NewsSourceLike, ScrapedNewsItem } from "./blogScraperProvider";
 
 const CONCURRENCY = 3;
 const NEWS_TTL_DAYS = 30; // Layer 1/2 windows = 30 dias.
+const TTL_MS = NEWS_TTL_DAYS * 24 * 60 * 60 * 1000;
+
+// Helpers do news vivem como funcoes top-level ligadas a `storage` via
+// (storage as any).X. Tipagem narrow para os 3 metodos consumidos aqui.
+interface NewsStorageBindings {
+  listEnabledNewsSources?: () => Promise<unknown[]>;
+  insertNewsItem: (input: Record<string, unknown>) => Promise<boolean>;
+  existsByCanonical: (url: string, days: number) => Promise<boolean>;
+  existsByFingerprint: (fp: string, days: number) => Promise<boolean>;
+}
+
+const newsStorage = storage as unknown as NewsStorageBindings;
+
+interface SkippedCounts {
+  layer1: number;
+  layer2: number;
+  layer3: number;
+}
+
+interface OrchestrationError {
+  sourceId: string;
+  error: string;
+}
 
 export interface OrchestrationResult {
   runId: string;
   sources: number;
   fetched: number;
   inserted: number;
-  skipped: { layer1: number; layer2: number; layer3: number };
-  errors: Array<{ sourceId: string; error: string }>;
+  skipped: SkippedCounts;
+  errors: OrchestrationError[];
   durationMs: number;
   startedAt: string;
   completedAt: string;
@@ -76,8 +99,8 @@ async function fetchForSource(source: NewsSourceLike): Promise<ScrapedNewsItem[]
 async function processInChunks(
   sources: NewsSourceLike[],
   runId: string,
-  totalSkipped: { layer1: number; layer2: number; layer3: number },
-  errors: Array<{ sourceId: string; error: string }>,
+  totalSkipped: SkippedCounts,
+  errors: OrchestrationError[],
 ): Promise<SourceOutcome[]> {
   const outcomes: SourceOutcome[] = [];
   for (let i = 0; i < sources.length; i += CONCURRENCY) {
@@ -94,53 +117,56 @@ async function processInChunks(
   return outcomes;
 }
 
+async function insertSurvivor(
+  survivor: ScrapedNewsItem,
+): Promise<boolean> {
+  const canonical = canonicalizeUrl(survivor.url);
+  const fp = titleFingerprint(survivor.title);
+  const expiresAt = new Date(
+    new Date(survivor.publishedAt).getTime() + TTL_MS,
+  ).toISOString();
+  try {
+    return await newsStorage.insertNewsItem({
+      ...survivor,
+      urlCanonical: canonical,
+      titleFingerprint: fp,
+      expiresAt,
+    });
+  } catch (err) {
+    // erro de insert por item nao quebra source — segue
+    console.error(
+      `[news/orchestrator] insert falhou ${survivor.sourceId}`,
+      err,
+    );
+    return false;
+  }
+}
+
 async function processOneSource(
   source: NewsSourceLike,
   runId: string,
-  totalSkipped: { layer1: number; layer2: number; layer3: number },
-  errors: Array<{ sourceId: string; error: string }>,
+  totalSkipped: SkippedCounts,
+  errors: OrchestrationError[],
 ): Promise<SourceOutcome> {
   let fetched = 0;
   let inserted = 0;
   let errored = false;
-  const s = storage as any;
 
   try {
     const items = await fetchForSource(source);
     fetched = items.length;
 
     const dedupeResult = await applyDedupe(items, {
-      existsByCanonical: async (url: string, days: number) =>
-        await s.existsByCanonical(url, days),
-      existsByFingerprint: async (fp: string, days: number) =>
-        await s.existsByFingerprint(fp, days),
+      existsByCanonical: newsStorage.existsByCanonical,
+      existsByFingerprint: newsStorage.existsByFingerprint,
     });
     totalSkipped.layer1 += dedupeResult.skipped.layer1;
     totalSkipped.layer2 += dedupeResult.skipped.layer2;
     totalSkipped.layer3 += dedupeResult.skipped.layer3;
 
     for (const survivor of dedupeResult.survivors) {
-      const canonical = canonicalizeUrl(survivor.url);
-      const fp = titleFingerprint(survivor.title);
-      const expiresAt = new Date(
-        new Date(survivor.publishedAt).getTime() +
-          NEWS_TTL_DAYS * 24 * 60 * 60 * 1000,
-      ).toISOString();
-      try {
-        const ok = await s.insertNewsItem({
-          ...survivor,
-          urlCanonical: canonical,
-          titleFingerprint: fp,
-          expiresAt,
-        });
-        if (ok) inserted += 1;
-      } catch (err) {
-        // erro de insert por item nao quebra source — segue
-        console.error(
-          `[news/orchestrator] insert falhou ${survivor.sourceId}`,
-          err,
-        );
-      }
+      const ok = await insertSurvivor(survivor);
+      if (ok) inserted += 1;
     }
   } catch (err: any) {
     errored = true;
@@ -171,18 +197,19 @@ export async function runOrchestration(): Promise<OrchestrationResult> {
   const startedAtTs = Date.now();
   const startedAt = new Date(startedAtTs).toISOString();
 
-  const s = storage as any;
   let sourcesList: NewsSourceLike[] = [];
   try {
-    const raw = (await s.listEnabledNewsSources?.()) ?? [];
-    sourcesList = raw.filter((src: any) => src?.enabled !== false);
+    const raw = (await newsStorage.listEnabledNewsSources?.()) ?? [];
+    sourcesList = (raw as NewsSourceLike[]).filter(
+      (src) => (src as any)?.enabled !== false,
+    );
   } catch (err) {
     console.error(`[news/orchestrator] listEnabledNewsSources falhou`, err);
     sourcesList = [];
   }
 
-  const totalSkipped = { layer1: 0, layer2: 0, layer3: 0 };
-  const errors: Array<{ sourceId: string; error: string }> = [];
+  const totalSkipped: SkippedCounts = { layer1: 0, layer2: 0, layer3: 0 };
+  const errors: OrchestrationError[] = [];
 
   const outcomes = await processInChunks(
     sourcesList,

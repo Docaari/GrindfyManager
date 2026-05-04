@@ -7,8 +7,11 @@
  *   - parseDateMulti: aceita ISO 8601, "Month Day, Year", "DD/MM/YYYY", "DD Month YYYY"
  *   - resolveUrl: resolve URLs relativas via URL constructor com baseUrl
  *   - truncateSummary: trunca a 500 chars
- *   - dropInvalid: filtra items sem title/url/data valida
+ *   - finalizeItems: filtra invalidos + trunca top 10 + warn em zero items
+ *   - runAdapter: builder declarativo que executa o pipeline padrao dos 9 adapters
  */
+
+import * as cheerio from "cheerio";
 
 export type AdapterItem = {
   title: string;
@@ -16,6 +19,9 @@ export type AdapterItem = {
   url: string;
   publishedAt: string;
 };
+
+const TOP_LIMIT = 10;
+const SUMMARY_MAX_LEN = 500;
 
 const MONTHS_PT: Record<string, number> = {
   jan: 0,
@@ -58,6 +64,11 @@ const MONTHS_EN: Record<string, number> = {
   december: 11,
 };
 
+function buildUtcIso(year: number, monthIdx: number, day: number): string | null {
+  const dt = new Date(Date.UTC(year, monthIdx, day));
+  return Number.isNaN(dt.getTime()) ? null : dt.toISOString();
+}
+
 /**
  * Parse multi-formato. Retorna ISO string OR null se invalido.
  */
@@ -75,23 +86,20 @@ export function parseDateMulti(raw: string | null | undefined): string | null {
   // DD/MM/YYYY
   const ddmmyyyy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (ddmmyyyy) {
-    const d = parseInt(ddmmyyyy[1], 10);
-    const m = parseInt(ddmmyyyy[2], 10) - 1;
-    const y = parseInt(ddmmyyyy[3], 10);
-    const dt = new Date(Date.UTC(y, m, d));
-    if (!Number.isNaN(dt.getTime())) return dt.toISOString();
+    return buildUtcIso(
+      parseInt(ddmmyyyy[3], 10),
+      parseInt(ddmmyyyy[2], 10) - 1,
+      parseInt(ddmmyyyy[1], 10),
+    );
   }
 
   // DD Mon YYYY (PT or EN), e.g. "28 abr 2026" or "28 April 2026".
   const dmy = trimmed.match(/^(\d{1,2})\s+([a-zA-ZçÇãÃáÁéÉíÍóÓúÚâÂêÊîÎôÔûÛ]+)\s+(\d{4})$/);
   if (dmy) {
-    const d = parseInt(dmy[1], 10);
     const monStr = dmy[2].toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "").slice(0, 3);
     const monthIdx = MONTHS_PT[monStr] ?? MONTHS_EN[monStr];
-    const y = parseInt(dmy[3], 10);
     if (monthIdx !== undefined) {
-      const dt = new Date(Date.UTC(y, monthIdx, d));
-      if (!Number.isNaN(dt.getTime())) return dt.toISOString();
+      return buildUtcIso(parseInt(dmy[3], 10), monthIdx, parseInt(dmy[1], 10));
     }
   }
 
@@ -99,12 +107,9 @@ export function parseDateMulti(raw: string | null | undefined): string | null {
   const mdy = trimmed.match(/^([a-zA-Z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
   if (mdy) {
     const monStr = mdy[1].toLowerCase();
-    const d = parseInt(mdy[2], 10);
-    const y = parseInt(mdy[3], 10);
     const monthIdx = MONTHS_EN[monStr] ?? MONTHS_PT[monStr.slice(0, 3)];
     if (monthIdx !== undefined) {
-      const dt = new Date(Date.UTC(y, monthIdx, d));
-      if (!Number.isNaN(dt.getTime())) return dt.toISOString();
+      return buildUtcIso(parseInt(mdy[3], 10), monthIdx, parseInt(mdy[2], 10));
     }
   }
 
@@ -130,7 +135,7 @@ export function resolveUrl(href: string | undefined | null, baseUrl: string): st
 export function truncateSummary(s: string | null | undefined): string {
   if (!s || typeof s !== "string") return "";
   const cleaned = s.trim().replace(/\s+/g, " ");
-  return cleaned.length > 500 ? cleaned.slice(0, 500) : cleaned;
+  return cleaned.slice(0, SUMMARY_MAX_LEN);
 }
 
 /**
@@ -145,5 +150,68 @@ export function finalizeItems(adapterName: string, items: AdapterItem[]): Adapte
     );
     return [];
   }
-  return valid.slice(0, 10);
+  return valid.slice(0, TOP_LIMIT);
+}
+
+// =============================================================================
+// runAdapter — pipeline declarativo compartilhado pelos 9 adapters HTML.
+// Cada adapter passa apenas seletores + estrategias de extracao; o helper
+// centraliza load(html), iteracao, validacao e finalizeItems.
+// =============================================================================
+
+type CheerioApi = ReturnType<typeof cheerio.load>;
+type CheerioWrap = ReturnType<CheerioApi>;
+
+export interface AdapterConfig {
+  /** Nome usado em logs de zero-items. */
+  name: string;
+  /** Seletor de cada item (ex: "article.post"). */
+  itemSelector: string;
+  /** Como achar o anchor de titulo dentro do item. */
+  titleAnchor: (item: CheerioWrap) => CheerioWrap;
+  /**
+   * Como extrair o texto do titulo. Default: text() do anchor.
+   * GTO Wizard Articles e HRC tem titulo num filho do anchor (ex: <h3>).
+   */
+  titleText?: (item: CheerioWrap, anchor: CheerioWrap) => string;
+  /** Como achar o elemento de data. */
+  dateSelector: (item: CheerioWrap) => CheerioWrap;
+  /**
+   * Estrategia de extracao da data:
+   *  - 'datetime-attr-or-text': tenta attr('datetime') primeiro, depois text().
+   *  - 'text': sempre text().
+   */
+  dateMode: "datetime-attr-or-text" | "text";
+  /** Como achar o elemento de summary. */
+  summarySelector: (item: CheerioWrap) => CheerioWrap;
+}
+
+export function runAdapter(
+  html: string,
+  baseUrl: string,
+  cfg: AdapterConfig,
+): AdapterItem[] {
+  const $ = cheerio.load(html);
+  const items: AdapterItem[] = [];
+
+  $(cfg.itemSelector).each((_, el) => {
+    const $el = $(el);
+    const $anchor = cfg.titleAnchor($el).first();
+    const title = (cfg.titleText ? cfg.titleText($el, $anchor) : $anchor.text()).trim();
+    const url = resolveUrl($anchor.attr("href"), baseUrl);
+
+    const $date = cfg.dateSelector($el).first();
+    const dateRaw =
+      cfg.dateMode === "datetime-attr-or-text"
+        ? ($date.attr("datetime") ?? $date.text().trim())
+        : $date.text().trim();
+    const publishedAt = parseDateMulti(dateRaw);
+
+    const summary = truncateSummary(cfg.summarySelector($el).text());
+
+    if (!title || !url || !publishedAt) return;
+    items.push({ title, url, publishedAt, summary });
+  });
+
+  return finalizeItems(cfg.name, items);
 }

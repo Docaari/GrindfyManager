@@ -9,32 +9,16 @@
  *     p.news-card__excerpt (summary)
  */
 
-import * as cheerio from "cheerio";
-import {
-  AdapterItem,
-  finalizeItems,
-  parseDateMulti,
-  resolveUrl,
-  truncateSummary,
-} from "./_shared";
+import { AdapterItem, runAdapter } from "./_shared";
 
 export function scrapeSuperPoker(html: string, baseUrl: string): AdapterItem[] {
-  const $ = cheerio.load(html);
-  const items: AdapterItem[] = [];
-
-  $("article.news-card").each((_, el) => {
-    const $el = $(el);
-    const $link = $el.find("a.news-card__link").first();
-    const href = $link.attr("href");
-    const title = $link.find("h3.news-card__title").text().trim();
-    const url = resolveUrl(href, baseUrl);
-    const dateRaw = $el.find(".news-card__date").text().trim();
-    const publishedAt = parseDateMulti(dateRaw);
-    const summary = truncateSummary($el.find(".news-card__excerpt").text());
-
-    if (!title || !url || !publishedAt) return;
-    items.push({ title, url, publishedAt, summary });
+  return runAdapter(html, baseUrl, {
+    name: "scrapeSuperPoker",
+    itemSelector: "article.news-card",
+    titleAnchor: ($el) => $el.find("a.news-card__link"),
+    titleText: (_$el, $anchor) => $anchor.find("h3.news-card__title").text(),
+    dateSelector: ($el) => $el.find(".news-card__date"),
+    dateMode: "text",
+    summarySelector: ($el) => $el.find(".news-card__excerpt"),
   });
-
-  return finalizeItems("scrapeSuperPoker", items);
 }
