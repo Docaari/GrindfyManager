@@ -1,0 +1,48 @@
+{
+  "id": "completion-fake-001",
+  "object": "chat.completion",
+  "created": 1746375600,
+  "model": "grok-3-latest",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Recent posts from PokerStars relevant to MTT players."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "citations": [
+    {
+      "url": "https://x.com/PokerStars/status/1786543210123456789",
+      "title": "PokerStars announces SCOOP 2026",
+      "snippet": "PokerStars confirms SCOOP 2026 schedule with $100M guarantee. Big news for MTT grinders.",
+      "published_at": "2026-04-30T14:00:00Z"
+    },
+    {
+      "url": "https://x.com/PokerStars/status/1786600000000000000",
+      "title": "Bug post — trailing zeros",
+      "snippet": "This citation has 12 trailing zeros, suspicious id.",
+      "published_at": "2026-04-29T12:00:00Z"
+    },
+    {
+      "url": "https://x.com/PokerStars/status/1786543210999111222",
+      "title": "Spin & Go gets new prize tiers",
+      "snippet": "PokerStars updates Spin & Go prize structure.",
+      "published_at": "2026-04-29T16:00:00Z"
+    },
+    {
+      "url": "https://x.com/PokerStars/status/1786543210999333444",
+      "title": "Cashback rework on FR/PT/ES",
+      "snippet": "Cashback restructured for European markets.",
+      "published_at": "2026-04-28T10:00:00Z"
+    },
+    {
+      "url": "https://x.com/PokerStars/status/1786543210999555666",
+      "title": "Mystery Bounty schedule update",
+      "snippet": "New Mystery Bounty events with $5K guaranteed.",
+      "published_at": "2026-04-28T09:00:00Z"
+    }
+  ]
+}

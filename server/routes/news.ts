@@ -22,7 +22,7 @@ import { storage as storageBase } from "../storage";
 // Helpers do news vivem como funcoes top-level no storage.ts e foram bindadas
 // ao instance via (storage as any). Cast aqui pra TS aceitar.
 const storage = storageBase as any;
-import { fetchGrokNews } from "../services/grokNewsProvider";
+import { runOrchestration } from "../services/news/orchestrator";
 import { rankNewsFeed } from "../services/newsRanking";
 
 // =============================================================================
@@ -353,39 +353,18 @@ export async function handleAdminRefreshNews(req: any, res: Response): Promise<v
       res.status(409).json({ message: "NEWS_FEED_ENABLED=false" });
       return;
     }
-    const cat = req.query?.category as string | undefined;
-    const filter = cat ? newsCategorySchema.safeParse(cat) : null;
-    const sources = await storage.listNewsSources(
-      filter?.success ? filter.data : undefined,
-    );
-    let inserted = 0;
-    let skipped = 0;
-    for (const src of sources) {
-      if (!src.enabled) continue;
-      const hasUser = await storage.hasAnyUserEnabledForSource({
-        id: src.id,
-        category: src.category,
-      });
-      if (!hasUser) {
-        skipped += 1;
-        continue;
-      }
-      const items = await fetchGrokNews({
-        category: src.category as any,
-        platform: src.platform,
-        promptTemplate: src.queryTemplate ?? "",
-        liveSearchHandle: src.liveSearchHandle,
-        limit: 5,
-      });
-      for (const it of items) {
-        const ok = await storage.upsertNewsItem({
-          ...it,
-          sourceId: src.id,
-        });
-        if (ok) inserted += 1;
-      }
-    }
-    res.status(200).json({ ok: true, inserted, sources: sources.length, skipped });
+    // Sprint News-3 (RF-09): admin trigger delega ao mesmo orchestrator do cron.
+    const result = await runOrchestration();
+    res.status(200).json({
+      ok: true,
+      runId: result.runId,
+      sources: result.sources,
+      fetched: result.fetched,
+      inserted: result.inserted,
+      skipped: result.skipped,
+      errors: result.errors,
+      durationMs: result.durationMs,
+    });
   } catch (err: any) {
     console.error("[news/admin/refresh] failed", err);
     res.status(500).json({ message: "Internal error" });
@@ -396,7 +375,7 @@ export async function handleAdminRefreshNews(req: any, res: Response): Promise<v
 // Backwards-compat exports (ADR-100 contract — Onda 1 testes)
 // =============================================================================
 
-/** @deprecated — Onda 3 substituido por fetchGrokNews. Stub mantido pra news-stub.test. */
+/** @deprecated — Sprint News-3 substituiu provider Grok-LLM legado pelo orchestrator. Stub mantido pra news-stub.test. */
 export async function fetchNewsItems(_source: string, _limit: number): Promise<NewsItem[]> {
   return [];
 }

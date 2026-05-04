@@ -4312,6 +4312,18 @@ export const NEWS_CATEGORIES = ["tools", "sites", "gossip", "tournament-results"
 export const newsCategorySchema = z.enum(NEWS_CATEGORIES);
 export type NewsCategoryEnum = (typeof NEWS_CATEGORIES)[number];
 
+// Sprint News-3 RF-01 — strategy literal union para scrape.
+export const SCRAPE_STRATEGIES = [
+  "rss",
+  "html",
+  "x_only",
+  "rss_and_x",
+  "html_and_x",
+  "rss_or_html",
+] as const;
+export type ScrapeStrategy = (typeof SCRAPE_STRATEGIES)[number];
+export const scrapeStrategySchema = z.enum(SCRAPE_STRATEGIES);
+
 export const newsSources = pgTable(
   "news_sources",
   {
@@ -4324,14 +4336,30 @@ export const newsSources = pgTable(
     platform: varchar("platform", { length: 64 }).notNull(),
     /** Template de prompt pra Grok (placeholders {{period}}, {{platform}}). */
     queryTemplate: text("query_template"),
-    /** Handle no X pra Live Search (gossip). */
-    liveSearchHandle: varchar("live_search_handle", { length: 64 }),
+    /**
+     * Sprint News-3 RF-01 — handle X (sem `@`). Renomeado de `live_search_handle`.
+     * Migration 0045 aplica RENAME COLUMN preservando valores existentes.
+     */
+    xHandle: varchar("x_handle", { length: 64 }),
     /**
      * Homepage da fonte. Usada como fallback quando o URL especifico do item
      * (retornado pelo Grok) retorna 4xx/5xx — evita "Link nao encontrado" no
      * NewsFeed. Migration 0041 (Sprint home-reform-4 item 11).
      */
     homepageUrl: text("homepage_url"),
+    /**
+     * Sprint News-3 RF-01 — URL do feed RSS/Atom (NULL se source nao tem RSS).
+     * Migration 0045.
+     */
+    rssUrl: text("rss_url"),
+    /**
+     * Sprint News-3 RF-01 — estrategia de fetch da source. CHECK constraint na
+     * migration limita aos 6 valores literais. Default 'html' (legacy mais
+     * comum). Migration 0045.
+     */
+    scrapeStrategy: varchar("scrape_strategy", { length: 32 })
+      .notNull()
+      .default("html"),
     enabled: boolean("enabled").notNull().default(true),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -4341,6 +4369,51 @@ export const newsSources = pgTable(
     index("idx_news_sources_platform").on(table.platform),
   ],
 );
+
+/**
+ * Sprint News-3 RF-01 — 15 sources locked (audit `Docs/audits/news-x-handles.md`).
+ * Usado pelo migration 0045 UPSERT + por test fixtures.
+ */
+export const NEWS_3_SOURCES_LOCKED: Array<{
+  id: string;
+  category: string;
+  name: string;
+  platform: string;
+  scrapeStrategy: ScrapeStrategy;
+  rssUrl: string | null;
+  homepageUrl: string | null;
+  xHandle: string | null;
+}> = [
+  // gossip
+  { id: "mundopoker", category: "gossip", name: "MundoPoker", platform: "mundopoker", scrapeStrategy: "html", rssUrl: null, homepageUrl: "https://mundopoker.com.br", xHandle: null },
+  { id: "superpoker", category: "gossip", name: "SuperPoker", platform: "superpoker", scrapeStrategy: "html", rssUrl: null, homepageUrl: "https://superpoker.com.br", xHandle: null },
+  // sites
+  { id: "888poker", category: "sites", name: "888poker", platform: "888poker", scrapeStrategy: "x_only", rssUrl: null, homepageUrl: null, xHandle: "888poker" },
+  { id: "bodog", category: "sites", name: "Bodog/Bovada", platform: "bodog", scrapeStrategy: "x_only", rssUrl: null, homepageUrl: null, xHandle: "IgnitionCasino" },
+  { id: "coinpoker", category: "sites", name: "CoinPoker", platform: "coinpoker", scrapeStrategy: "x_only", rssUrl: null, homepageUrl: null, xHandle: "CoinPoker_OFF" },
+  { id: "ggpoker", category: "sites", name: "GGPoker", platform: "ggpoker", scrapeStrategy: "html_and_x", rssUrl: null, homepageUrl: "https://ggpoker.com/pt-br/blog/", xHandle: "GGPoker" },
+  { id: "partypoker", category: "sites", name: "PartyPoker", platform: "partypoker", scrapeStrategy: "x_only", rssUrl: null, homepageUrl: null, xHandle: "partypoker" },
+  { id: "pokerstars", category: "sites", name: "PokerStars", platform: "pokerstars", scrapeStrategy: "html_and_x", rssUrl: null, homepageUrl: "https://www.pokerstars.com/pt-BR/poker/learn/news/?&no_redirect=1", xHandle: "PokerStars" },
+  { id: "wpn-acr", category: "sites", name: "WPN/ACR", platform: "wpn-acr", scrapeStrategy: "x_only", rssUrl: null, homepageUrl: null, xHandle: "ACR_POKER" },
+  // studies
+  { id: "gto-wizard-studies", category: "studies", name: "GTO Wizard - Estudos", platform: "gto-wizard", scrapeStrategy: "rss_or_html", rssUrl: null, homepageUrl: "https://blog.gtowizard.com/articles/", xHandle: null },
+  // tools
+  { id: "gto-wizard", category: "tools", name: "GTO Wizard - What's New", platform: "gto-wizard", scrapeStrategy: "rss_or_html", rssUrl: null, homepageUrl: "https://blog.gtowizard.com/whats-new-in-gto-wizard/", xHandle: null },
+  { id: "hand2note", category: "tools", name: "Hand2Note", platform: "hand2note", scrapeStrategy: "html_and_x", rssUrl: null, homepageUrl: "https://hand2note.com/Blog", xHandle: "hand2note" },
+  { id: "hrc", category: "tools", name: "HRC", platform: "hrc", scrapeStrategy: "html", rssUrl: null, homepageUrl: "https://www.holdemresources.net/blog", xHandle: null },
+  { id: "jurojin", category: "tools", name: "Jurojin", platform: "jurojin", scrapeStrategy: "html", rssUrl: null, homepageUrl: "https://jurojinpoker.com/pt/blog", xHandle: null },
+  { id: "sharkscope", category: "tools", name: "SharkScope", platform: "sharkscope", scrapeStrategy: "x_only", rssUrl: null, homepageUrl: null, xHandle: "sharkscope" },
+];
+
+/** Sprint News-3 RF-01 — sources legacy a serem dropadas (DELETE CASCADE). */
+export const NEWS_3_SOURCES_DROPPED: string[] = [
+  "cravadas-br",
+  "chico",
+  "ipoker",
+  "intuitive-table",
+  "holdem-manager",
+  "pokertracker",
+];
 
 export type NewsSourceRow = typeof newsSources.$inferSelect;
 export type InsertNewsSource = typeof newsSources.$inferInsert;
@@ -4367,6 +4440,17 @@ export const newsItems = pgTable(
     /** sha256(url + title) — dedup idempotente do cron. */
     contentHash: varchar("content_hash", { length: 64 }).notNull(),
     tags: jsonb("tags").$type<string[]>(),
+    /**
+     * Sprint News-3 RF-08.1 — URL canonicalizada para Layer 1 dedupe (indexada).
+     * NOT NULL DEFAULT '' permite back-fill gradual sem quebrar inserts existentes.
+     */
+    urlCanonical: text("url_canonical").notNull().default(""),
+    /**
+     * Sprint News-3 RF-08.1 — sha256 hex 64 do title fingerprint (Layer 2).
+     */
+    titleFingerprint: varchar("title_fingerprint", { length: 64 })
+      .notNull()
+      .default(""),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [
@@ -4374,6 +4458,8 @@ export const newsItems = pgTable(
     index("idx_news_items_category_published").on(table.category, table.publishedAt),
     index("idx_news_items_platform").on(table.platform),
     index("idx_news_items_expires").on(table.expiresAt),
+    index("idx_news_items_url_canonical_fetched").on(table.urlCanonical, table.fetchedAt),
+    index("idx_news_items_title_fingerprint_fetched").on(table.titleFingerprint, table.fetchedAt),
   ],
 );
 

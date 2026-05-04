@@ -1,36 +1,20 @@
 /**
- * Popula DB com 1 source de cada categoria (4 chamadas Grok total).
- * Custo estimado: ~$0.05.
+ * @deprecated Sprint News-3 (RF-12) — provider Grok-LLM removido.
  *
- * Usage: npx tsx --env-file=.env scripts/seed-news-economic.ts
+ * Substituido pelo orchestrator (server/services/news/orchestrator.ts).
+ * Para popular DB manualmente, use:
+ *   POST /api/admin/news/refresh
+ * Ou chame `runOrchestration()` direto do node REPL com env vars setadas.
  */
-import { fetchGrokNews } from "../server/services/grokNewsProvider";
-import { listNewsSources, upsertNewsItem } from "../server/storage";
 
-const PICK_ONE_PER_CATEGORY = ["hand2note", "mundopoker", "cravadas-br", "gto-wizard-studies"];
+import { runOrchestration } from "../server/services/news/orchestrator";
 
 async function main() {
-  console.log("[seed] iniciando — 4 chamadas Grok\n");
-  const all = await listNewsSources();
-  const picked = all.filter((s) => PICK_ONE_PER_CATEGORY.includes(s.id));
-
-  let totalInserted = 0;
-  for (const src of picked) {
-    console.log(`[seed] chamando ${src.id} (${src.category})...`);
-    const items = await fetchGrokNews({
-      category: src.category as any,
-      platform: src.platform,
-      promptTemplate: src.queryTemplate ?? "",
-      liveSearchHandle: src.liveSearchHandle,
-      limit: 5,
-    });
-    console.log(`[seed]   retornou ${items.length} items`);
-    for (const it of items) {
-      const ok = await upsertNewsItem({ ...it, sourceId: src.id });
-      if (ok) totalInserted += 1;
-    }
-  }
-  console.log(`\n[seed] DONE. Total inserido (best-effort): ${totalInserted}`);
+  console.log("[seed] News-3 orchestrator — chamando runOrchestration()");
+  const result = await runOrchestration();
+  console.log(`[seed] DONE. Inserido: ${result.inserted}`);
+  console.log(`       Skipped layer1=${result.skipped.layer1} layer2=${result.skipped.layer2} layer3=${result.skipped.layer3}`);
+  console.log(`       Errors: ${result.errors.length}`);
   process.exit(0);
 }
 

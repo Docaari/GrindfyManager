@@ -1,94 +1,60 @@
 /**
- * News refresh cron — Sprint News-1 (ADR-106 §2.7).
+ * News refresh cron — Sprint News-3 RF-09 (refactor).
  *
- * Cadencia UNICA: toda segunda-feira 12:00 BRT (America/Sao_Paulo).
- * Limite: top 5 items por source ativa por refresh.
+ * Spec: Docs/specs/news-3-rss-x-refactor.md §RF-09
+ * ADR : Docs/architecture/decisions/107-news-rss-x-search-refactor.md §6
  *
- * Skipa se NEWS_FEED_ENABLED !== 'true' OR XAI_API_KEY ausente.
+ * Mudancas vs Sprint News-1:
+ *   - CRON_EXPR = '0 15 * * 1' (UTC) — equivalent a 12:00 SP sem DST.
+ *   - Sem param `timezone: 'America/Sao_Paulo'`.
+ *   - Substitui provider Grok-LLM legado por `runOrchestration`.
+ *   - XAI_API_KEY ausente OR muito curta → SKIP cron INTEIRO + log error
+ *     (decisao founder 2026-05-04: all-or-nothing pra simplificar).
  *
- * Idempotente via content_hash UNIQUE em news_items (insert .onConflictDoNothing).
+ * Idempotente via dedupe pipeline + content_hash UNIQUE.
  */
 
 import cron from "node-cron";
-import { fetchGrokNews } from "../services/grokNewsProvider";
-import {
-  hasAnyUserEnabledForSource,
-  listNewsSources,
-  upsertNewsItem,
-} from "../storage";
+import { runOrchestration } from "../services/news/orchestrator";
 
-const CRON_EXPR = "0 12 * * 1"; // Segunda 12:00
-const CRON_TIMEZONE = "America/Sao_Paulo";
-const ITEMS_PER_SOURCE = 5;
+const CRON_EXPR = "0 15 * * 1"; // Segunda 15:00 UTC = 12:00 America/Sao_Paulo (UTC-3, sem DST).
 
-function isEnabled(): boolean {
+function isFlagEnabled(): boolean {
   const v = process.env.NEWS_FEED_ENABLED;
-  if (v !== "true" && v !== "1") return false;
+  return v === "true" || v === "1";
+}
+
+function isApiKeyValid(): boolean {
   const key = process.env.XAI_API_KEY;
-  if (typeof key !== "string" || key.length < 10) return false;
-  return true;
+  return typeof key === "string" && key.length > 10;
 }
 
 /**
  * Executa refresh imediato (chamado pelo cron OU pelo handler admin manual).
- * Retorna { sources, inserted } pra observabilidade.
+ * RF-09 + RF-07: delega ao orchestrator. Retorna metricas pra observabilidade.
  */
-export async function runNewsRefresh(): Promise<{ sources: number; inserted: number }> {
-  if (!isEnabled()) {
-    console.info("[news/cron] skipped — flag off ou XAI_API_KEY ausente");
-    return { sources: 0, inserted: 0 };
+export async function runNewsRefresh(): Promise<any> {
+  if (!isFlagEnabled()) {
+    console.info("[news/cron] skipped — NEWS_FEED_ENABLED off");
+    return null;
   }
-  const sources = await listNewsSources();
-  let inserted = 0;
-  let skipped = 0;
-  for (const src of sources) {
-    if (!src.enabled) continue;
-    // Otimizacao tokens (founder feedback 2026-05-03): so pesquisa source
-    // se >=1 user tem aquela plataforma ativada. Cron 1x/semana shared.
-    const hasUser = await hasAnyUserEnabledForSource({
-      id: src.id,
-      category: src.category,
-    });
-    if (!hasUser) {
-      skipped += 1;
-      continue;
-    }
-    try {
-      const items = await fetchGrokNews({
-        category: src.category as any,
-        platform: src.platform,
-        promptTemplate: src.queryTemplate ?? "",
-        liveSearchHandle: src.liveSearchHandle,
-        limit: ITEMS_PER_SOURCE,
-      });
-      for (const it of items) {
-        const ok = await upsertNewsItem({
-          ...it,
-          sourceId: src.id,
-        });
-        if (ok) inserted += 1;
-      }
-    } catch (err) {
-      console.error("[news/cron] source falhou", src.id, err);
-    }
+  if (!isApiKeyValid()) {
+    console.error(
+      "[news/cron] XAI_API_KEY missing or invalid — cron skipped",
+    );
+    return null;
   }
-  console.info("[news/cron] refresh ok", {
-    sources: sources.length,
-    inserted,
-    skipped,
-  });
-  return { sources: sources.length, inserted };
+  return await runOrchestration();
 }
 
+/**
+ * Registra o cron job. Idempotente — chamado uma vez no boot do server.
+ */
 export async function registerNewsRefreshCron(): Promise<void> {
-  cron.schedule(
-    CRON_EXPR,
-    () => {
-      runNewsRefresh().catch((err) => {
-        console.error("[news/cron] runNewsRefresh erro top-level", err);
-      });
-    },
-    { timezone: CRON_TIMEZONE },
-  );
-  console.info("[news/cron] registrado", { expr: CRON_EXPR, tz: CRON_TIMEZONE });
+  cron.schedule(CRON_EXPR, () => {
+    runNewsRefresh().catch((err) => {
+      console.error("[news/cron] runNewsRefresh erro top-level", err);
+    });
+  });
+  console.info("[news/cron] registrado", { expr: CRON_EXPR, tz: "UTC" });
 }
