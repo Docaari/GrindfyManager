@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { usePermission } from "@/hooks/usePermission";
 import AccessDenied from "@/components/AccessDenied";
@@ -462,6 +462,30 @@ export default function GrindSession() {
       loadFromGradePlanner: true,
     } as any);
   };
+
+  // Sprint home-reform-5 item 3.2 — auto-trigger Quick Start via ?open=quickstart.
+  // Vem do CTA "Iniciar Sessao" da Home (NextTournamentCountdown). Dispara apenas
+  // 1x apos sessionsLoading + historyLoading + warmupGateLoading resolverem (para
+  // handleQuickStart usar dados frescos sem early-return).
+  const search = useSearch();
+  const quickstartFiredRef = useRef(false);
+  useEffect(() => {
+    if (quickstartFiredRef.current) return;
+    const params = new URLSearchParams(search ?? '');
+    if (params.get('open') !== 'quickstart') return;
+    if (sessionsLoading || historyLoading || warmupGateLoading) return;
+    if (startSessionMutation.isPending) return;
+    quickstartFiredRef.current = true;
+    // Limpa o query param para evitar re-fire em refetch/back-nav.
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('open');
+      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    } catch {
+      // ignore
+    }
+    handleQuickStart();
+  }, [search, sessionsLoading, historyLoading, warmupGateLoading]);
 
   // Filter sessions based on current filters
   const filteredSessions = applyFiltersToSessions(sessionHistory, filterState);

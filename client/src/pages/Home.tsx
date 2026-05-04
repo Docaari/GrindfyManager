@@ -205,6 +205,12 @@ interface HomeOverviewResponse {
       daysSince: number | null;
     } | null;
   };
+  // Sprint home-reform-5 item 3 — Coach Context (multi-profile + DAY OFF).
+  coachContext?: {
+    activeProfiles: ('A' | 'B' | 'C')[];
+    todayTournamentsTotal: number;
+    isDayOff: boolean;
+  };
   // Sprint home-reform-4 item 1.
   sessionsMonth?: {
     monthStart: string;
@@ -382,10 +388,13 @@ const Home: React.FC = () => {
               <DailyInsight data={data} />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-2">
-                  <TodayCard data={data.today} />
+                  <TodayCard data={data.today} coachContext={data.coachContext} />
                 </div>
                 <div>
-                  <NextTournamentCountdown data={data.nextTournament} />
+                  <NextTournamentCountdown
+                    data={data.nextTournament}
+                    coachContext={data.coachContext}
+                  />
                 </div>
               </div>
             </section>

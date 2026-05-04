@@ -13,7 +13,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { storageMock, fxMock } = vi.hoisted(() => ({
-  storageMock: { getGradeTodayAggregate: vi.fn() },
+  storageMock: { getGradeTodayAggregate: vi.fn(), getDayPlanBoundaries: vi.fn() },
   fxMock: { resolveExchangeRates: vi.fn() },
 }));
 
@@ -31,6 +31,8 @@ import { getGradeTodaySummary } from '../../server/services/gradeToday';
 describe('getGradeTodaySummary', () => {
   beforeEach(() => {
     storageMock.getGradeTodayAggregate.mockReset();
+    storageMock.getDayPlanBoundaries.mockReset();
+    storageMock.getDayPlanBoundaries.mockResolvedValue(null);
     fxMock.resolveExchangeRates.mockReset();
     fxMock.resolveExchangeRates.mockResolvedValue({
       rates: { USD: 1, BRL: 5.0, EUR: 0.93 },
@@ -86,5 +88,47 @@ describe('getGradeTodaySummary', () => {
     expect(out.count).toBe(2);
     expect(out.totalInvestmentUsd).toBe(0);
     expect(out.abi).toBe(0);
+  });
+
+  // ===========================================================================
+  // Sprint home-reform-5 item 5 — firstEntry / lastEntry
+  // ===========================================================================
+  it('boundaries: storage retorna { first, last } -> service expoe firstEntry + lastEntry', async () => {
+    storageMock.getGradeTodayAggregate.mockResolvedValue([
+      { site: 'PokerStars', count: 3, investedNative: '90' },
+    ]);
+    storageMock.getDayPlanBoundaries.mockResolvedValue({
+      first: { time: '14:00', name: 'Mystery Mini' },
+      last: { time: '20:30', name: 'Sunday Storm' },
+    });
+    const out = await getGradeTodaySummary('USER-0001', { date: '2026-05-03', dayOfWeek: 0, profile: 'A' });
+    expect(out.firstEntry).toEqual({ time: '14:00', name: 'Mystery Mini' });
+    expect(out.lastEntry).toEqual({ time: '20:30', name: 'Sunday Storm' });
+  });
+
+  it('boundaries: storage retorna null -> firstEntry e lastEntry null', async () => {
+    storageMock.getGradeTodayAggregate.mockResolvedValue([]);
+    storageMock.getDayPlanBoundaries.mockResolvedValue(null);
+    const out = await getGradeTodaySummary('USER-0001', { date: '2026-05-03', dayOfWeek: 0, profile: 'A' });
+    expect(out.firstEntry).toBeNull();
+    expect(out.lastEntry).toBeNull();
+  });
+
+  it('boundaries: storage falha -> firstEntry/lastEntry null sem throw', async () => {
+    storageMock.getGradeTodayAggregate.mockResolvedValue([
+      { site: 'PokerStars', count: 1, investedNative: '10' },
+    ]);
+    storageMock.getDayPlanBoundaries.mockRejectedValue(new Error('db down'));
+    const out = await getGradeTodaySummary('USER-0001', { date: '2026-05-03', dayOfWeek: 0, profile: 'A' });
+    expect(out.count).toBe(1);
+    expect(out.firstEntry).toBeNull();
+    expect(out.lastEntry).toBeNull();
+  });
+
+  it('boundaries: storage chamado com [profile] como profileIds', async () => {
+    storageMock.getGradeTodayAggregate.mockResolvedValue([]);
+    storageMock.getDayPlanBoundaries.mockResolvedValue(null);
+    await getGradeTodaySummary('USER-0001', { date: '2026-05-03', dayOfWeek: 4, profile: 'C' });
+    expect(storageMock.getDayPlanBoundaries).toHaveBeenCalledWith('USER-0001', 4, ['C']);
   });
 });

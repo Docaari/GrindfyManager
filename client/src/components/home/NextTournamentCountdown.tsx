@@ -2,10 +2,15 @@
  * RF-12 — NextTournamentCountdown (Sprint home-reform-1).
  *
  * Spec: Docs/specs/home-reform-1.md §RF-12, §5.4 S4, §3 D15
+ *       Docs/specs/home-reform-5.md item 3.2 — renomeado para "Iniciar Sessao".
  *
- * Card oculto se data=null. setInterval 1s recalcula countdown client-side.
- * <60s: "Comecando agora". <=0: "Em andamento" + CTA "→ Grind live".
- * Cleanup do timer no unmount (sem leak).
+ * home-reform-5 item 3.2:
+ *   - Titulo do card renomeado para "Iniciar Sessao".
+ *   - CTA principal abre modal Inicio Rapido em /grind?open=quickstart.
+ *   - Conteudo: total de torneios planejados hoje no(s) perfil(s) ativo(s).
+ *   - Empty state DAY OFF quando nenhum perfil ativo.
+ *   - Mantem countdown legacy quando coachContext nao fornecido + nextTournament
+ *     existe (usado por callers nao migrados).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -19,8 +24,15 @@ interface NextTournamentData {
   platform: string;
 }
 
+interface CoachContext {
+  activeProfiles: ('A' | 'B' | 'C')[];
+  todayTournamentsTotal: number;
+  isDayOff: boolean;
+}
+
 interface Props {
   data: NextTournamentData | null;
+  coachContext?: CoachContext;
 }
 
 function diffSeconds(target: string, now: number): number {
@@ -43,12 +55,13 @@ function fmtCountdown(secs: number): string {
 
 export default function NextTournamentCountdown({
   data,
+  coachContext,
 }: Props): JSX.Element | null {
   // Hooks first.
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || coachContext) return;
     const id = setInterval(() => {
       setNow((prev) => {
         const next = Date.now();
@@ -65,7 +78,54 @@ export default function NextTournamentCountdown({
       });
     }, 1000);
     return () => clearInterval(id);
-  }, [data]);
+  }, [data, coachContext]);
+
+  // Sprint home-reform-5 item 3.2 — modo "Iniciar Sessao" (consome coachContext).
+  if (coachContext) {
+    const noun = coachContext.todayTournamentsTotal === 1 ? 'torneio' : 'torneios';
+    return (
+      <div
+        data-testid="next-tournament-countdown"
+        className="rounded-lg border border-border bg-card p-4"
+      >
+        <div
+          data-testid="iniciar-sessao-title"
+          className="text-xs uppercase text-muted-foreground tracking-wide"
+        >
+          Iniciar Sessao
+        </div>
+        {coachContext.isDayOff ? (
+          <div
+            data-testid="iniciar-sessao-day-off"
+            className="mt-2 text-base font-semibold"
+          >
+            DAY OFF
+          </div>
+        ) : (
+          <>
+            <div
+              data-testid="iniciar-sessao-count"
+              className="mt-1 text-base font-semibold"
+            >
+              {coachContext.todayTournamentsTotal} {noun} planejados
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {coachContext.activeProfiles.join(' + ')}
+            </div>
+            <Link href="/grind?open=quickstart">
+              <a
+                data-testid="iniciar-sessao-cta"
+                href="/grind?open=quickstart"
+                className="mt-3 inline-flex items-center px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90"
+              >
+                Inicio Rapido →
+              </a>
+            </Link>
+          </>
+        )}
+      </div>
+    );
+  }
 
   if (!data) return null;
 

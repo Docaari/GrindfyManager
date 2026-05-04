@@ -141,4 +141,49 @@ describe('<GradeTodayCard />', () => {
     const card = screen.getByTestId('grade-today-card');
     expect(card.textContent).toMatch(/Grade do dia\s*—\s*03\/05/);
   });
+
+  // ===========================================================================
+  // Sprint home-reform-5 item 5 — firstEntry / lastEntry
+  // ===========================================================================
+  it('renderiza firstEntry + lastEntry quando payload traz boundaries', async () => {
+    apiRequestMock.mockResolvedValue({
+      date: '2026-05-03',
+      profile: 'A',
+      count: 6,
+      totalInvestmentUsd: 200,
+      abi: 33.33,
+      firstEntry: { time: '14:00', name: 'Mystery Mini' },
+      lastEntry: { time: '20:30', name: 'Sunday Storm' },
+    });
+    const { default: GradeTodayCard } = await import('../GradeTodayCard');
+    renderWithClient(<GradeTodayCard defaultProfile="A" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('grade-today-card-first')).toBeTruthy();
+    });
+    const first = screen.getByTestId('grade-today-card-first');
+    expect(first.textContent).toMatch(/14:00/);
+    expect(first.textContent).toMatch(/Mystery Mini/);
+    const last = screen.getByTestId('grade-today-card-last');
+    expect(last.textContent).toMatch(/20:30/);
+    expect(last.textContent).toMatch(/Sunday Storm/);
+  });
+
+  it('nao renderiza boundaries quando firstEntry/lastEntry sao null', async () => {
+    apiRequestMock.mockResolvedValue({
+      date: '2026-05-03',
+      profile: 'B',
+      count: 0,
+      totalInvestmentUsd: 0,
+      abi: null,
+      firstEntry: null,
+      lastEntry: null,
+    });
+    const { default: GradeTodayCard } = await import('../GradeTodayCard');
+    renderWithClient(<GradeTodayCard defaultProfile="B" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('grade-today-card-empty')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('grade-today-card-first')).toBeNull();
+    expect(screen.queryByTestId('grade-today-card-last')).toBeNull();
+  });
 });
