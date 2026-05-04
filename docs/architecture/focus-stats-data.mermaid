@@ -1,0 +1,87 @@
+%% Focus Stats — Modelo de dados (ER)
+%% ADR-116, ADR-117
+%% Sprint home-reform-4 Item 7
+%%
+%% Tabelas afetadas:
+%% - user_focus_stats (NOVA — migration 0043)
+%% - study_sessions (ALTERADA — migration 0044, ADD COLUMN theme_id)
+%% - study_themes (referenciada, sem alteracao)
+%% - users (referenciada, sem alteracao)
+%% - hud_stat_snapshots (referenciada, sem alteracao)
+%% - HUD_STAT_CATALOG (source em codigo, sem FK; referencia logica via stat_id)
+
+erDiagram
+    USERS ||--o{ USER_FOCUS_STATS : "1:N CASCADE"
+    USERS ||--o{ STUDY_THEMES : "1:N CASCADE"
+    USERS ||--o{ STUDY_SESSIONS : "1:N CASCADE"
+    USERS ||--o{ HUD_STAT_SNAPSHOTS : "1:N CASCADE"
+
+    STUDY_THEMES ||--o{ USER_FOCUS_STATS : "1:N CASCADE (study_theme_id)"
+    STUDY_THEMES ||--o{ STUDY_SESSIONS : "1:N SET NULL (theme_id NOVA)"
+
+    HUD_STAT_CATALOG }o..o{ USER_FOCUS_STATS : "logical ref via stat_id (sem FK)"
+    HUD_STAT_CATALOG }o..o{ HUD_STAT_SNAPSHOTS : "logical ref via values[stat_id] (sem FK)"
+
+    USERS {
+        varchar id PK
+        varchar user_platform_id UK "USER-XXXX"
+        varchar email
+        varchar role
+        timestamp created_at
+    }
+
+    USER_FOCUS_STATS {
+        varchar id PK "nanoid 21 — NOVA"
+        varchar user_id FK "REFERENCES users.user_platform_id ON DELETE CASCADE"
+        varchar stat_id "len 64 — id em HUD_STAT_CATALOG (sem FK)"
+        varchar study_theme_id FK "REFERENCES study_themes.id ON DELETE CASCADE"
+        varchar month "len 7 — formato YYYY-MM UTC"
+        timestamp created_at "DEFAULT NOW"
+        timestamp updated_at "trigger set_updated_at"
+    }
+
+    STUDY_THEMES {
+        varchar id PK "nanoid 21"
+        varchar user_id FK
+        varchar name
+        varchar color
+        varchar emoji
+        integer progress
+        varchar attacks_leak_type "Studies-Reform RF-03 (ADR-067)"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    STUDY_SESSIONS {
+        varchar id PK "nanoid 21"
+        varchar user_id FK "REFERENCES users.user_platform_id ON DELETE CASCADE"
+        varchar study_card_id "FK soft → study_cards.id"
+        varchar theme_id FK "NOVA — REFERENCES study_themes.id ON DELETE SET NULL"
+        timestamp date
+        integer duration "minutos"
+        jsonb activities
+        integer focus_score
+        integer productivity_score
+        text insights
+        timestamp created_at
+    }
+
+    HUD_STAT_SNAPSHOTS {
+        varchar id PK
+        varchar user_id FK
+        varchar layout_id "qual layout HUD"
+        jsonb values "Record<statId, number | null>"
+        integer sample_size
+        timestamp captured_at
+        timestamp created_at
+    }
+
+    HUD_STAT_CATALOG {
+        string id PK "string ex 'cbet_flop_ip' — em codigo TS"
+        string label "ex 'C-Bet Flop IP'"
+        string group "ex 'pos_flop_pfr_ip'"
+        string unit "pct | bb | int"
+        string direction "higher_better | lower_better | context | neutral"
+        decimal target_min
+        decimal target_max
+    }

@@ -1,0 +1,197 @@
+%% Coach Lesson Recommendation — Sequencia ponta-a-ponta
+%% Cobre: cron semanal -> geracao -> render Home -> consume tracking
+%% Ver ADRs 111-115 para justificativas
+
+sequenceDiagram
+    autonumber
+
+    participant Clock as node-cron<br/>(seg 06:00 BRT)
+    participant Cron as generateCoachRecommendationsTick
+    participant Storage as storage.ts
+    participant Leaks as detectLeaks
+    participant Service as recommendLessonForUser
+    participant Anthropic as Anthropic Claude
+    participant DB as Postgres
+    participant User as User
+    participant Home as Home.tsx
+    participant API as GET /api/home/coach-recommendation
+    participant Card as CoachRecommendationCard
+    participant Lesson as /biblioteca/lesson/:id
+    participant Player as Player (video/audio/article)
+    participant Consume as POST /api/home/coach-recommendation/:id/consume
+
+    %% =============================
+    %% Fase 1 — Geracao via cron
+    %% =============================
+    Note over Clock,DB: FASE 1 — Cron weekly (segunda 06:00 BRT)
+
+    Clock->>Cron: tick (seg 06:00 BRT)
+    Cron->>Storage: getCurrentWeekStartBRT()
+    Storage-->>Cron: weekStart = 2026-05-04
+    Cron->>Storage: listUsersForCron({ plans: free/pro/premium, activeOnly })
+    Storage-->>Cron: users[]
+
+    loop para cada user
+        Cron->>Storage: getCoachRecommendationByUserAndWeek(userId, weekStart)
+        alt rec ja existe
+            Storage-->>Cron: rec existente
+            Note over Cron: skip (idempotencia)
+        else rec ausente
+            Storage-->>Cron: null
+
+            Cron->>Leaks: detectLeaks(userId, { minSeverity: 'low' })
+            Leaks-->>Cron: top 5 leaks
+
+            Cron->>Storage: getPerformanceByPeriod(userId, '7d' + '30d')
+            Storage-->>Cron: analytics { roi, volume, profit }
+
+            Cron->>Storage: getActiveProfile(userId)
+            Storage-->>Cron: 'A' | 'B' | 'C' | null
+
+            Cron->>Storage: getLastConsumedLessonIds(userId, 10)
+            Storage-->>Cron: lastConsumed[]
+
+            Cron->>Storage: getCatalogLessonsForRecommendation({ limit: 200 })
+            Storage-->>Cron: catalog[]
+
+            Cron->>Service: recommendLessonForUser(input)
+
+            alt Tier 0: user sem dados (R1)
+                Note over Service: short-circuit -> Tier 3
+            else Tier 1: tentar Coach IA
+                Service->>Anthropic: messages.create<br/>system + catalog (cache_control ephemeral)<br/>user (leaks + analytics)
+                Anthropic-->>Service: { lesson_id, reason }
+                alt JSON valido + lesson_id no catalog + pt-BR
+                    Note over Service: source = 'coach'
+                else falhou validacao
+                    Note over Service: -> Tier 2 (leak->tag)
+                end
+            end
+
+            alt Tier 2: leak->tag (deterministico)
+                Service->>Service: getTagsForLeakCode(leak.code)
+                Service->>Service: filtrar catalog por tags<br/>excluir lastConsumed
+                alt match encontrado
+                    Note over Service: source = 'fallback_leak_tag'
+                else sem match
+                    Note over Service: -> Tier 3 (popular)
+                end
+            end
+
+            alt Tier 3: popular (seed-randomizado)
+                Service->>Storage: getMostPopularLessonIds({ sinceDays: 30, limit: 10 })
+                Storage-->>Service: popularIds[]
+                Service->>Service: pickWithSeed(popularIds, userId+weekStart)
+                alt OK
+                    Note over Service: source = 'fallback_popular'
+                else vazio
+                    Note over Service: -> Tier 4 (recent)
+                end
+            end
+
+            alt Tier 4: lessons recentes
+                Service->>Storage: getCatalogLessonsForRecommendation({ orderBy: 'createdAt DESC', limit: 10 })
+                Storage-->>Service: recent[]
+                Service->>Service: pickWithSeed(recent, userId+weekStart)
+                alt OK
+                    Note over Service: source = 'fallback_recent'
+                else vazio
+                    Note over Service: return null<br/>(catalog vazio absoluto)
+                end
+            end
+
+            Service-->>Cron: { lessonId, reason, source } | null
+
+            alt result != null
+                Cron->>DB: INSERT coach_lesson_recommendations<br/>(userId, lessonId, weekStart, reason,<br/>source, inputSummary)
+                DB-->>Cron: rec criada
+            else null
+                Note over Cron: nao insere — frontend mostra empty state
+            end
+        end
+    end
+
+    Cron-->>Clock: { generated, skipped, errors }
+    Note over Clock: log coach.cron.weekly_rec.done
+
+    %% =============================
+    %% Fase 2 — User abre Home
+    %% =============================
+    Note over User,Card: FASE 2 — User abre Home
+
+    User->>Home: navega /
+    Home->>API: GET /api/home/coach-recommendation
+    API->>API: requireAuth -> userId
+    API->>Storage: getCurrentWeekStartBRT()
+    Storage-->>API: weekStart
+    API->>Storage: getCoachRecommendationByUserAndWeek(userId, weekStart)
+    Storage-->>API: rec | null
+
+    alt rec === null
+        API-->>Home: { recommendation: null, weekStartDate }
+        Home->>Card: render empty state
+    else rec.dismissedAt OR rec.consumedAt setados
+        API-->>Home: { recommendation: null, status: 'dismissed' | 'consumed' }
+        Home->>Card: render "ja consumida / dispensada"
+    else rec ativa
+        API->>Storage: getLibraryLessonById(rec.lessonId)<br/>(filter isPublished=true)
+        alt lesson despublicada
+            Storage-->>API: null
+            API-->>Home: { recommendation: null, status: 'lesson_unavailable' }
+            Home->>Card: render "lesson indisponivel"
+        else lesson valida
+            Storage-->>API: lesson hidratada
+            API->>Storage: hasLessonAccess(userId, lesson.id)
+            Storage-->>API: hasAccess: bool
+            API-->>Home: { recommendation: { id, lessonId, lessonTitle,<br/>reason, source, hasAccess, ctaTarget,<br/>ctaLabel } }
+            Home->>Card: render card ativo<br/>data-testid=home-coach-rec-card
+        end
+    end
+
+    Note over Card: tracker home_coach_rec_view emit
+
+    %% =============================
+    %% Fase 3 — User clica CTA + consume
+    %% =============================
+    Note over User,Consume: FASE 3 — Consume tracking auto
+
+    User->>Card: clica CTA "Assistir agora"
+    Note over Card: tracker home_coach_rec_cta_click emit
+    Card->>Lesson: navigate(/biblioteca/lesson/{lessonId}<br/>?source=home-coach-rec&recId={recId})
+    Lesson->>Lesson: parse query: source + recId
+    Lesson->>Player: mount player + useCoachRecommendationConsumeTracker(recId, format)
+
+    User->>Player: play / scroll
+
+    loop timeupdate / scroll events
+        Player->>Player: check elapsed >= 30s OR pct >= 80%
+    end
+
+    alt threshold atingido
+        Note over Player: fired = true (idempotencia client)
+        Player->>Consume: POST /api/home/coach-recommendation/{recId}/consume
+        Consume->>Storage: getCoachRecommendationById(recId)
+        Storage-->>Consume: rec
+        alt ownership ok + !consumedAt
+            Consume->>DB: UPDATE coach_lesson_recommendations<br/>SET consumedAt = NOW()
+            Consume->>DB: INSERT library_events<br/>(userId, lessonId, event_type='coach_recommend',<br/>metadata: { recId, source, weekStart, viaAutomatic: true })
+            Consume-->>Player: { ok: true, consumedAt }
+            Note over Consume: tracker coach_recommendation_consumed
+        else ja consumida
+            Consume-->>Player: { ok: true, consumedAt } (idempotente)
+        else ownership fail
+            Consume-->>Player: 403
+        end
+    end
+
+    %% =============================
+    %% Fase 4 — User abre Home de novo
+    %% =============================
+    Note over User,Card: FASE 4 — Home apos consume
+
+    User->>Home: re-navega /
+    Home->>API: GET /api/home/coach-recommendation
+    API->>Storage: getCoachRecommendationByUserAndWeek(userId, weekStart)
+    Storage-->>API: rec com consumedAt setado
+    API-->>Home: { recommendation: null, status: 'consumed' }
+    Home->>Card: render "Ja consumida — proxima na segunda"

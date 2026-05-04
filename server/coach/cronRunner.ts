@@ -13,6 +13,7 @@
 import { storage } from "../storage";
 import { processBSnapshotTick } from "./jobs/processBSnapshot";
 import { processBStudyTick } from "./jobs/processBStudy";
+import { generateCoachRecommendationsTick } from "./jobs/generateCoachRecommendations";
 
 let started = false;
 
@@ -64,6 +65,19 @@ export function startCoachCrons(): void {
       console.error("coach.cron.b_study.tick.error", { err });
     }
   });
+
+  // Sprint home-reform-4 / Item 4 (ADR-112) — segunda 06:00 BRT
+  cron.schedule(
+    "0 6 * * 1",
+    async () => {
+      try {
+        await generateCoachRecommendationsTick({});
+      } catch (err) {
+        console.error("coach.cron.weekly_rec.tick.error", { err });
+      }
+    },
+    { timezone: "America/Sao_Paulo" },
+  );
 
   started = true;
   console.info("coach.cron.started");

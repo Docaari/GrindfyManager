@@ -1,0 +1,183 @@
+%% Focus Stats — Diagrama de sequencia (3 fluxos principais)
+%% ADR-116, ADR-117, ADR-118
+%% Sprint home-reform-4 Item 7
+
+sequenceDiagram
+    actor User
+    participant SA as StatsAnalyzerTab<br/>(/estudos/stats)
+    participant Home as Home.tsx
+    participant Card as FocusStatsCard
+    participant TQ as TanStack Query<br/>(client cache)
+    participant API as Express API<br/>(/api/focus-stats)
+    participant Cache as homeFocusStatsCache<br/>(in-memory Map<userId, ...>)
+    participant Storage as storage.ts
+    participant DB as PostgreSQL
+    participant Catalog as HUD_STAT_CATALOG<br/>(shared/hud-stat-catalog.ts)
+    participant ThemePage as Tela /estudos/temas/:id
+
+    %% =========================================================
+    %% FLUXO 1: User MARCA stat foco em /estudos/stats
+    %% =========================================================
+    Note over User,DB: FLUXO 1 — Marcar stat foco
+
+    User->>SA: Click botao "Foco" na row da stat (FocusStatToggle)
+    SA->>SA: Render FocusStatThemePickerDialog
+    SA->>API: GET /api/study-themes (lista temas do user)
+    API->>Storage: getStudyThemes(userId)
+    Storage->>DB: SELECT * FROM study_themes WHERE user_id=?
+    DB-->>Storage: themes[]
+    Storage-->>API: themes[]
+    API-->>SA: 200 themes[]
+    SA->>User: Mostra dialog com lista de temas
+
+    User->>SA: Seleciona tema + clicar "Confirmar"
+    SA->>API: POST /api/focus-stats { statId, studyThemeId }
+    API->>API: requireAuth (JWT)
+    API->>API: Zod validate body
+    API->>API: month = currentMonth(UTC)
+    API->>Catalog: HUD_STAT_CATALOG.find(s => s.id === statId)
+
+    alt statId nao existe no catalog
+        Catalog-->>API: undefined
+        API-->>SA: 400 INVALID_STAT_ID
+    else statId valido
+        Catalog-->>API: StatField
+        API->>Storage: validateThemeOwnership(themeId, userId)
+        Storage->>DB: SELECT 1 FROM study_themes WHERE id=? AND user_id=?
+
+        alt tema nao pertence ao user
+            DB-->>Storage: 0 rows
+            Storage-->>API: false
+            API-->>SA: 404 THEME_NOT_FOUND
+        else tema valido
+            DB-->>Storage: 1 row
+            Storage-->>API: true
+            API->>Storage: createUserFocusStat (transacao + re-check)
+            Storage->>DB: BEGIN
+            Storage->>DB: SELECT count(*) FROM user_focus_stats WHERE user_id=? AND month=?
+
+            alt count >= 3
+                DB-->>Storage: count = 3
+                Storage->>DB: ROLLBACK
+                Storage-->>API: throw LIMIT_REACHED
+                API-->>SA: 409 LIMIT_REACHED
+            else count < 3
+                DB-->>Storage: count = 0..2
+                Storage->>DB: INSERT INTO user_focus_stats (id, user_id, stat_id, study_theme_id, month, created_at, updated_at)
+
+                alt UNIQUE catch (PG 23505)
+                    DB-->>Storage: error 23505
+                    Storage->>DB: ROLLBACK
+                    Storage-->>API: throw STAT_ALREADY_FOCUSED
+                    API-->>SA: 409 STAT_ALREADY_FOCUSED
+                else insert OK
+                    DB-->>Storage: row inserted
+                    Storage->>DB: COMMIT
+                    Storage-->>API: UserFocusStat
+                    API->>Cache: cache.delete(userId)
+                    API-->>SA: 201 UserFocusStat
+                    SA->>TQ: queryClient.invalidateQueries(['/api/home/focus-stats'])
+                    SA->>User: Toast "Stat marcada como foco do mes"
+                    SA->>SA: Fecha dialog + atualiza UI (botao vira solid)
+                end
+            end
+        end
+    end
+
+    %% =========================================================
+    %% FLUXO 2: User abre Home → renderiza FocusStatsCard
+    %% =========================================================
+    Note over User,DB: FLUXO 2 — Render FocusStatsCard na Home
+
+    User->>Home: Navega para /
+    Home->>Card: Render FocusStatsCard (zona "Estudos")
+    Card->>TQ: useQuery(['/api/home/focus-stats'])
+
+    alt cache hit em TQ (staleTime 30s nao expirou)
+        TQ-->>Card: data cached
+    else cache miss em TQ
+        TQ->>API: GET /api/home/focus-stats?month=YYYY-MM
+        API->>API: requireAuth (JWT)
+        API->>API: validar month (default = currentMonth UTC)
+        API->>Cache: cache.get(userId)
+
+        alt cache hit em homeFocusStatsCache (TTL 30s)
+            Cache-->>API: cached response
+            API-->>TQ: 200 + meta.cacheHit=true
+        else cache miss
+            Cache-->>API: undefined
+            API->>Storage: getUserFocusStats(userId, month)
+            Storage->>DB: SELECT * FROM user_focus_stats WHERE user_id=? AND month=? ORDER BY created_at ASC
+            DB-->>Storage: rows[] (0..3)
+            Storage-->>API: rows[]
+
+            loop para cada row
+                API->>Catalog: HUD_STAT_CATALOG.find(s => s.id === row.statId)
+                Catalog-->>API: StatField | undefined
+                API->>Storage: getLatestSnapshotValueForStat(userId, statId, monthStart, monthEnd)
+                Storage->>DB: SELECT values FROM hud_stat_snapshots WHERE user_id=? AND captured_at BETWEEN ? AND ? ORDER BY captured_at DESC
+                DB-->>Storage: snapshot mais recente do mes
+                Storage-->>API: { value, sampleSize, capturedAt }
+                API->>Storage: getLatestSnapshotValueForStat(userId, statId, prevMonthStart, prevMonthEnd)
+                Storage->>DB: SELECT values FROM hud_stat_snapshots WHERE user_id=? AND captured_at BETWEEN ? AND ?
+                DB-->>Storage: snapshot mais recente do mes anterior
+                Storage-->>API: { value, sampleSize, capturedAt } | null
+                API->>Storage: getStudyTheme(themeId, userId)
+                Storage->>DB: SELECT id, name, color, emoji, progress FROM study_themes WHERE id=? AND user_id=?
+                DB-->>Storage: theme
+                Storage-->>API: theme
+                API->>Storage: getStudyMinutesByThemeMonth(userId, themeId, monthStart, monthEnd)
+                Storage->>DB: SELECT COALESCE(SUM(duration), 0) FROM study_sessions WHERE user_id=? AND theme_id=? AND date BETWEEN ? AND ?
+                DB-->>Storage: minutes
+                Storage-->>API: minutes
+                API->>API: compose item: stat metadata + currentValue + previousValue + delta + deltaDirection + theme + studyMinutesMonth
+            end
+
+            API->>Cache: cache.set(userId, { data, expiresAt: now + 30_000 })
+            API-->>TQ: 200 { month, previousMonth, items[], meta }
+        end
+
+        TQ->>TQ: store in client cache + emit success
+        TQ-->>Card: data fresh
+    end
+
+    Card->>Card: emit('home_focus_stats_view', { itemsCount })
+
+    alt items.length === 0
+        Card->>User: Render EmptyFocusStatsState + CTA "Ir para Stats Analyzer"
+    else items.length === 1..2
+        Card->>User: Render items + EmptyFocusStatSlot (parcial)
+    else items.length === 3
+        Card->>User: Render 3 items completos
+    end
+
+    %% =========================================================
+    %% FLUXO 3: User clica "Estudar agora" → navega para tema
+    %% =========================================================
+    Note over User,DB: FLUXO 3 — Click "Estudar agora"
+
+    User->>Card: Click "Estudar agora" no item
+    Card->>Card: emit('focus_stats_cta_studynow_click', { themeId, statId })
+    Card->>ThemePage: Navega via Wouter Link href="/estudos/temas/{themeId}"
+    ThemePage->>API: GET /api/study-themes/:id (carrega tema)
+    API->>Storage: getStudyTheme(themeId, userId)
+    Storage->>DB: SELECT * FROM study_themes WHERE id=? AND user_id=?
+    DB-->>Storage: theme
+    Storage-->>API: theme
+    API-->>ThemePage: 200 theme
+    ThemePage->>User: Render tela tema + botao "Iniciar sessao"
+
+    User->>ThemePage: Click "Iniciar sessao"
+    ThemePage->>ThemePage: Render StudySessionTimer themeId={theme.id}
+
+    Note over User,ThemePage: User estuda...
+
+    User->>ThemePage: Click "Parar timer"
+    ThemePage->>API: POST /api/study-sessions { ..., themeId }
+    API->>Storage: createStudySession({ ..., themeId })
+    Storage->>DB: INSERT INTO study_sessions (id, user_id, study_card_id, theme_id, date, duration, ...)
+    DB-->>Storage: row inserted
+    Storage-->>API: StudySession
+    API-->>ThemePage: 201 StudySession
+
+    Note over User,Card: Proxima vez que User abre Home, FocusStatsCard ja mostra studyMinutesMonth atualizado<br/>(cache TTL 30s pode demorar; ou TQ refetchOnWindowFocus)

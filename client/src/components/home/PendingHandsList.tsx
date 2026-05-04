@@ -25,7 +25,10 @@ interface Props {
 export default function PendingHandsList({ data }: Props): JSX.Element {
   if (!data || data.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-card p-4">
+      <div
+        data-testid="home-pending-hands-list"
+        className="rounded-lg border border-border bg-card p-4"
+      >
         <p className="text-sm text-muted-foreground">
           Nenhuma mao pendente — voce esta em dia
         </p>
@@ -36,7 +39,10 @@ export default function PendingHandsList({ data }: Props): JSX.Element {
   const items = data.slice(0, 5);
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <div
+      data-testid="home-pending-hands-list"
+      className="rounded-lg border border-border bg-card p-4"
+    >
       <h3 className="text-sm font-semibold mb-3">Maos pendentes</h3>
       <ul className="space-y-2">
         {items.map((h) => {

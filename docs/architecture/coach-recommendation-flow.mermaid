@@ -1,0 +1,79 @@
+%% Coach Lesson Recommendation — Decision Tree do Fallback
+%% Algoritmo recommendLessonForUser (RF-03 da spec, ADR-113)
+%% 5 Tiers em ordem: 0 (short-circuit) -> 1 (Coach) -> 2 (leak->tag) -> 3 (popular) -> 4 (recent) -> null
+
+flowchart TD
+    Start(["recommendLessonForUser(input)"])
+
+    Start --> Tier0{"Tier 0: user sem dados?<br/>volume7d == 0 AND<br/>leaks.length == 0"}
+
+    Tier0 -- "Sim<br/>(R1: cold-start)" --> Tier3Entry["pular para Tier 3<br/>(popular)"]
+    Tier0 -- "Nao" --> Tier1Entry
+
+    Tier1Entry["Tier 1: Coach IA<br/>(Anthropic)"]
+    Tier1Entry --> ChamaCoach["client.messages.create<br/>system + catalog cached<br/>+ user input dinamico"]
+
+    ChamaCoach --> CoachOK{"Coach respondeu?<br/>JSON valido +<br/>lesson_id no catalog +<br/>reason 20-240 chars +<br/>pt-BR"}
+
+    CoachOK -- "Sim" --> SourceCoach["source = 'coach'<br/>retorna { lessonId, reason }"]
+
+    CoachOK -- "Nao<br/>(timeout/erro/<br/>JSON malformado/<br/>lesson_id alucinado/<br/>reason em ingles)" --> Reprompt{"Tentou re-prompt 1x?"}
+
+    Reprompt -- "Nao" --> ChamaCoach
+    Reprompt -- "Sim<br/>(ainda falhou)" --> Tier2Entry
+
+    Tier2Entry["Tier 2: leak->tag<br/>(deterministico)"]
+    Tier2Entry --> TemLeak{"Existe leak<br/>severity high<br/>OR medium?"}
+
+    TemLeak -- "Nao" --> Tier3Entry
+    TemLeak -- "Sim" --> MapLeak["leak prioritario<br/>+ getTagsForLeakCode(code)"]
+
+    MapLeak --> FiltrarCatalog["filtrar catalog:<br/>tags ∩ leak.tags != ∅<br/>OR categoryId == tag<br/>EXCLUIR lastConsumed"]
+
+    FiltrarCatalog --> TemMatch{"candidatos > 0?"}
+
+    TemMatch -- "Sim" --> SourceLeakTag["pegar primeiro<br/>(estavel)<br/>source = 'fallback_leak_tag'<br/>retorna { lessonId,<br/>reason: template leak }"]
+
+    TemMatch -- "Nao" --> Tier3Entry
+
+    Tier3Entry["Tier 3: popular<br/>(seed-randomizado)"]
+    Tier3Entry --> QueryPopular["getMostPopularLessonIds<br/>({ sinceDays: 30, limit: 10 })"]
+
+    QueryPopular --> ExcluirConsumido["excluir lastConsumed"]
+    ExcluirConsumido --> TemPopular{"restou >= 1?"}
+
+    TemPopular -- "Sim" --> PickSeed["pickWithSeed(<br/>candidatos,<br/>userId + weekStart)<br/>R5: diversidade"]
+    PickSeed --> SourcePopular["source = 'fallback_popular'<br/>retorna { lessonId,<br/>reason: template popular }"]
+
+    TemPopular -- "Nao<br/>(R7: Biblioteca<br/>cold-start)" --> Tier4Entry
+
+    Tier4Entry["Tier 4: lessons recentes"]
+    Tier4Entry --> QueryRecent["getCatalogLessonsForRecommendation<br/>({ orderBy: 'createdAt DESC',<br/>limit: 10 })"]
+
+    QueryRecent --> ExcluirConsumido2["excluir lastConsumed"]
+    ExcluirConsumido2 --> TemRecent{"restou >= 1?"}
+
+    TemRecent -- "Sim" --> PickSeedRecent["pickWithSeed(<br/>recent, userId + weekStart)"]
+    PickSeedRecent --> SourceRecent["source = 'fallback_recent'<br/>retorna { lessonId,<br/>reason: template recente }"]
+
+    TemRecent -- "Nao<br/>(catalog vazio absoluto)" --> Null["return null<br/>frontend: empty state<br/>'Sem recomendacao essa semana'"]
+
+    SourceCoach --> End(["return result"])
+    SourceLeakTag --> End
+    SourcePopular --> End
+    SourceRecent --> End
+    Null --> End
+
+    classDef tier0 fill:#fef3c7,stroke:#f59e0b
+    classDef tier1 fill:#dbeafe,stroke:#3b82f6
+    classDef tier2 fill:#fce7f3,stroke:#ec4899
+    classDef tier3 fill:#dcfce7,stroke:#16a34a
+    classDef tier4 fill:#e9d5ff,stroke:#9333ea
+    classDef nullState fill:#fee2e2,stroke:#dc2626
+
+    class Tier0,Tier3Entry tier0
+    class Tier1Entry,ChamaCoach,CoachOK,Reprompt,SourceCoach tier1
+    class Tier2Entry,TemLeak,MapLeak,FiltrarCatalog,TemMatch,SourceLeakTag tier2
+    class Tier3Entry,QueryPopular,ExcluirConsumido,TemPopular,PickSeed,SourcePopular tier3
+    class Tier4Entry,QueryRecent,ExcluirConsumido2,TemRecent,PickSeedRecent,SourceRecent tier4
+    class Null nullState

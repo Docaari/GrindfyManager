@@ -35,7 +35,8 @@ import HomeFooter from '@/components/home/HomeFooter';
 import EmptyHomeOnboarding from '@/components/home/EmptyHomeOnboarding';
 // Sprint home-reform-1-5 (RF-22 + RF-23): forward-looking blocks.
 import DailyInsight from '@/components/home/DailyInsight';
-import LibraryResume from '@/components/home/LibraryResume';
+// Sprint home-reform-4 / Item 4 — substitui LibraryResume na zona Acao Imediata.
+import CoachRecommendationCard from '@/components/home/CoachRecommendationCard';
 // Sprint home-reform-2 Onda 2 (RF-29 / RF-30 / RF-31 / RF-34).
 import StatsTopDeltas from '@/components/home/StatsTopDeltas';
 import VarianceCard from '@/components/home/VarianceCard';
@@ -357,7 +358,7 @@ const Home: React.FC = () => {
               <ZoneHeading>Acao Imediata</ZoneHeading>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <PendingHandsList data={data.pendingHands} />
-                <LibraryResume />
+                <CoachRecommendationCard />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-2">

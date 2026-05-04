@@ -11,6 +11,7 @@ import {
   index,
   uniqueIndex,
   real,
+  date,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -4171,6 +4172,69 @@ export const coachLeakFocus = pgTable("coach_leak_focus", {
 
 export type CoachLeakFocus = typeof coachLeakFocus.$inferSelect;
 export type InsertCoachLeakFocus = typeof coachLeakFocus.$inferInsert;
+
+// =============================================================================
+// coach_lesson_recommendations — Sprint home-reform-4 / Item 4 (ADR-111)
+// Migration: migrations/0042_coach_lesson_recommendations.sql
+// 1 recomendacao curada por user/semana. Coach IA + fallback determinista.
+// =============================================================================
+
+export const coachLessonRecommendations = pgTable(
+  "coach_lesson_recommendations",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    lessonId: varchar("lesson_id")
+      .notNull()
+      .references(() => libraryLessons.id, { onDelete: "cascade" }),
+    weekStartDate: date("week_start_date").notNull(),
+    reason: text("reason").notNull(),
+    /** 'coach' | 'fallback_leak_tag' | 'fallback_popular' | 'fallback_recent' | 'manual' */
+    source: varchar("source", { length: 20 }).notNull(),
+    inputSummary: jsonb("input_summary"),
+    chatSessionId: varchar("chat_session_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    dismissedAt: timestamp("dismissed_at"),
+    consumedAt: timestamp("consumed_at"),
+  },
+  (table) => [
+    uniqueIndex("uq_coach_rec_user_week").on(table.userId, table.weekStartDate),
+    index("idx_coach_rec_user_active").on(
+      table.userId,
+      table.dismissedAt,
+      table.consumedAt,
+    ),
+    index("idx_coach_rec_lesson").on(table.lessonId),
+  ],
+);
+
+export const coachLessonRecommendationsRelations = relations(
+  coachLessonRecommendations,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [coachLessonRecommendations.userId],
+      references: [users.userPlatformId],
+    }),
+    lesson: one(libraryLessons, {
+      fields: [coachLessonRecommendations.lessonId],
+      references: [libraryLessons.id],
+    }),
+  }),
+);
+
+export const insertCoachLessonRecommendationSchema = createInsertSchema(
+  coachLessonRecommendations,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CoachLessonRecommendation =
+  typeof coachLessonRecommendations.$inferSelect;
+export type InsertCoachLessonRecommendation =
+  typeof coachLessonRecommendations.$inferInsert;
 
 // =============================================================================
 // News Feed — Sprint News-1 (ADR-106)

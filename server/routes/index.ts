@@ -46,6 +46,8 @@ import { registerHomeRoutes } from "./home";
 import { registerNewsRoutes } from "./news";
 // Sprint home-reform-1-5 (RF-28): /api/library/continue.
 import { registerLibraryContinueRoutes } from "./library-continue";
+// Sprint home-reform-4 / Item 4: /api/home/coach-recommendation/*.
+import { registerHomeCoachRecRoutes } from "./home-coach-recommendation";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -177,6 +179,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerNewsRoutes(app);
   // Sprint home-reform-1-5 (RF-28): /api/library/continue.
   registerLibraryContinueRoutes(app);
+  // Sprint home-reform-4 / Item 4: /api/home/coach-recommendation/*.
+  registerHomeCoachRecRoutes(app);
 
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);

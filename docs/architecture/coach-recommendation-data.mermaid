@@ -1,0 +1,68 @@
+%% Coach Lesson Recommendation — Modelo de Dados
+%% Tabela nova: coach_lesson_recommendations
+%% Reuso: users, library_lessons, library_events, user_lesson_access
+%% Ver ADR-111 (schema), ADR-114 (library_events tracking)
+
+erDiagram
+    USERS ||--o{ COACH_LESSON_RECOMMENDATIONS : "1:N CASCADE"
+    LIBRARY_LESSONS ||--o{ COACH_LESSON_RECOMMENDATIONS : "1:N CASCADE"
+    USERS ||--o{ LIBRARY_EVENTS : "1:N CASCADE"
+    LIBRARY_LESSONS ||--o{ LIBRARY_EVENTS : "1:N CASCADE"
+    USERS ||--o{ USER_LESSON_ACCESS : "1:N CASCADE"
+    LIBRARY_LESSONS ||--o{ USER_LESSON_ACCESS : "1:N CASCADE"
+    COACH_LESSON_RECOMMENDATIONS ||..o{ LIBRARY_EVENTS : "metadata.recId<br/>(soft FK via consume tracking)"
+
+    USERS {
+        varchar user_platform_id PK "USER-XXXX"
+        varchar email
+        varchar subscription_plan "free|pro|premium"
+        boolean is_active
+        varchar timezone "America/Sao_Paulo default"
+    }
+
+    LIBRARY_LESSONS {
+        varchar id PK "nanoid"
+        varchar course_id FK
+        varchar module_id FK
+        varchar category_id
+        varchar title
+        text description
+        text learning_objectives_json "Sprint Biblioteca-2"
+        varchar format "video|podcast|article|pdf"
+        integer duration_seconds
+        text cover_key "ADR-057 spot storage"
+        boolean is_published
+        timestamp published_at
+        timestamp created_at
+    }
+
+    USER_LESSON_ACCESS {
+        varchar id PK "nanoid"
+        varchar user_id FK
+        varchar lesson_id FK
+        timestamp granted_at
+        varchar grant_source "purchase|admin|trial"
+    }
+
+    LIBRARY_EVENTS {
+        varchar id PK "nanoid"
+        varchar user_id FK
+        varchar lesson_id FK
+        varchar event_type "view|play|complete|coach_recommend|... (enum existente)"
+        jsonb metadata "{ recId, source, weekStartDate, viaAutomatic }"
+        timestamp created_at
+    }
+
+    COACH_LESSON_RECOMMENDATIONS {
+        varchar id PK "nanoid — NEW"
+        varchar user_id FK "NEW — CASCADE em users.user_platform_id"
+        varchar lesson_id FK "NEW — CASCADE em library_lessons.id"
+        date week_start_date "NEW — segunda 00:00 BRT do ciclo"
+        text reason "NEW — pt-BR 20-240 chars"
+        varchar source "NEW — coach|fallback_leak_tag|fallback_popular|fallback_recent|manual"
+        jsonb input_summary "NEW — { leaks, analytics, profile, sampleSize, catalogHash }"
+        varchar chat_session_id "NEW — soft FK reservado para futuro"
+        timestamp created_at "NEW — defaultNow"
+        timestamp dismissed_at "NEW — nullable, terminal"
+        timestamp consumed_at "NEW — nullable, terminal"
+    }

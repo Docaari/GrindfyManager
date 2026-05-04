@@ -1,0 +1,75 @@
+%% Focus Stats — Fluxograma de decisao (FocusStatsCard render tree)
+%% ADR-118
+%% Sprint home-reform-4 Item 7
+%%
+%% Decision tree para renderizar o FocusStatsCard na Home,
+%% cobrindo todos os edge cases descritos em RF-09 da spec.
+
+flowchart TD
+    Start(["FocusStatsCard mount"]) --> Q1{"useQuery loading?"}
+    Q1 -->|"Sim"| Loading["Render Skeleton<br/>(3 rows placeholders)"]
+    Q1 -->|"Nao"| Q2{"useQuery erro?"}
+    Q2 -->|"Sim (5xx)"| ErrorState["Render fallback:<br/>'Falha ao carregar stats foco'<br/>+ botao [Tentar novamente]"]
+    Q2 -->|"Nao"| Q3{"items.length === 0?"}
+
+    Q3 -->|"Sim"| EmptyState["Render EmptyFocusStatsState:<br/>'Defina suas 3 stats foco do mes'<br/>+ CTA [Ir para Stats Analyzer]<br/>→ /estudos/stats<br/><br/>emit('focus_stats_cta_define_click')"]
+    Q3 -->|"Nao"| RenderItems["Render FocusStatsCardItem para cada item<br/>+ EmptyFocusStatSlot para slots restantes (ate 3 total)<br/><br/>emit('home_focus_stats_view', { itemsCount })"]
+
+    RenderItems --> ForEach["Para cada item de items[]"]
+
+    ForEach --> Q4{"item.stat === null?<br/>(stat removida do catalog)"}
+    Q4 -->|"Sim"| WarnState["Render warning amarelo:<br/>'Stat removida do catalogo'<br/>+ botao [Remover marcacao]<br/>→ DELETE /api/focus-stats/:id<br/>+ emit('focus_stat_unmarked', { statId })"]
+    Q4 -->|"Nao"| RenderHeader["Render header:<br/>{stat.label} + badge 'Foco · N'"]
+
+    RenderHeader --> Q5{"item.currentValue === null?"}
+    Q5 -->|"Sim"| NoCurrentValue["Render 'Sem dado este mes'<br/>+ CTA pequena [Registrar snapshot agora]<br/>→ /estudos/stats"]
+    Q5 -->|"Nao"| RenderCurrentValue["Render currentValue formatado<br/>(ex '62.4%' se unit=pct)"]
+
+    RenderCurrentValue --> Q6{"item.previousValue === null?<br/>OU item.delta === null?"}
+    Q6 -->|"Sim"| NoDelta["Render '—' no slot de delta<br/>+ Tooltip 'Sem snapshot no mes anterior'"]
+    Q6 -->|"Nao"| Q7{"item.deltaDirection?"}
+
+    Q7 -->|"improving"| GreenDelta["Render delta verde:<br/>'▲ +Xpp' (vs Y mes anterior)"]
+    Q7 -->|"degrading"| RedDelta["Render delta vermelho:<br/>'▼ -Xpp' (vs Y mes anterior)"]
+    Q7 -->|"neutral"| GrayDelta["Render delta cinza:<br/>'→ Xpp' ou '0pp'"]
+
+    GreenDelta --> RenderTheme
+    RedDelta --> RenderTheme
+    GrayDelta --> RenderTheme
+    NoDelta --> RenderTheme
+    NoCurrentValue --> RenderTheme
+
+    RenderTheme["Render theme line:<br/>{theme.emoji} {theme.name}"] --> Q8{"item.studyMinutesMonth === 0?"}
+    Q8 -->|"Sim"| ZeroMinutes["Render '0min — comece agora'<br/>(italic cinza)"]
+    Q8 -->|"Nao"| RenderMinutes["Render '{studyMinutesMonth}min este mes'"]
+
+    ZeroMinutes --> RenderCTA["Render CTA [Estudar agora →]<br/>→ Wouter Link href='/estudos/temas/{theme.id}'<br/><br/>onClick: emit('focus_stats_cta_studynow_click', { themeId, statId })"]
+    RenderMinutes --> RenderCTA
+
+    RenderCTA --> ItemDone(["Item renderizado"])
+    WarnState --> ItemDone
+
+    ItemDone --> CheckSlot{"Restam slots vazios?<br/>(items.length < 3)"}
+    CheckSlot -->|"Sim"| EmptySlot["Render EmptyFocusStatSlot<br/>(opacity 50%)<br/>+ CTA [Adicionar stat]<br/>→ /estudos/stats<br/><br/>emit('focus_stats_cta_define_click')"]
+    CheckSlot -->|"Nao"| CardComplete(["Card completo renderizado"])
+
+    EmptySlot --> CardComplete
+    EmptyState --> CardComplete
+    Loading --> CardComplete
+    ErrorState --> CardComplete
+
+    classDef startEnd fill:#7c2d12,stroke:#9a3412,color:#fff,stroke-width:2px
+    classDef decision fill:#1f2937,stroke:#374151,color:#9ca3af
+    classDef positive fill:#166534,stroke:#14532d,color:#fff
+    classDef warning fill:#854d0e,stroke:#713f12,color:#fff
+    classDef danger fill:#7f1d1d,stroke:#991b1b,color:#fff
+    classDef neutral fill:#374151,stroke:#4b5563,color:#fff
+    classDef action fill:#0c4a6e,stroke:#075985,color:#fff
+
+    class Start,CardComplete,ItemDone startEnd
+    class Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,CheckSlot decision
+    class GreenDelta,RenderCurrentValue,RenderMinutes positive
+    class WarnState,NoCurrentValue,NoDelta,ZeroMinutes,EmptySlot warning
+    class RedDelta,ErrorState danger
+    class GrayDelta,RenderHeader,RenderTheme,EmptyState,Loading neutral
+    class RenderCTA,RenderItems action

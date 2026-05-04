@@ -255,6 +255,32 @@ describe('RF-A3 — StatusStrip sticky', () => {
 });
 
 // =============================================================================
+// home-reform-4 / Item 4 — CoachRecommendationCard substitui LibraryResume
+// Spec: Docs/specs/home-reform-4-item-4-coach-recommendation.md §RF-10
+// =============================================================================
+
+describe('home-reform-4 item 4 — CoachRecommendationCard substitui LibraryResume', () => {
+  it('zona "Acao Imediata" NAO renderiza mais LibraryResume', async () => {
+    await renderHome(buildPowerPayload());
+    const action = await screen.findByTestId('home-zone-action');
+    // LibraryResume usava data-testid="home-library-resume" (ver
+    // client/src/components/home/__tests__/LibraryResume.test.tsx)
+    expect(action.querySelector('[data-testid="home-library-resume"]')).toBeNull();
+  });
+
+  it('zona "Acao Imediata" renderiza CoachRecommendationCard (loading OU card OU empty)', async () => {
+    await renderHome(buildPowerPayload());
+    const action = await screen.findByTestId('home-zone-action');
+    // Componente novo deve aparecer em algum dos estados (loading | active | empty).
+    // Aceitamos qualquer testid do prefixo home-coach-rec-* dentro da zona.
+    const node = action.querySelector(
+      '[data-testid="home-coach-rec-card"], [data-testid="home-coach-rec-empty"], [data-testid="home-coach-rec-loading"]',
+    );
+    expect(node).not.toBeNull();
+  });
+});
+
+// =============================================================================
 // RF-A5 — EmptyPerformanceCluster
 // =============================================================================
 

@@ -131,6 +131,10 @@ import {
   type InsertCoachLeakFocus,
   type CoachNudgeLog,
   type InsertCoachNudgeLog,
+  // Sprint home-reform-4 / Item 4 (ADR-111) — coach lesson recommendations.
+  coachLessonRecommendations,
+  type CoachLessonRecommendation,
+  type InsertCoachLessonRecommendation,
   chatSessions,
   chatMessages,
   // Sprint Flight-1 RF-01 (ADR-090).
@@ -11003,5 +11007,329 @@ export async function hasAnyUserEnabledForSource(src: {
 (storage as any).getUserNewsPreferencesPayload = getUserNewsPreferencesPayload;
 (storage as any).detectUserPlatforms = detectUserPlatforms;
 (storage as any).hasAnyUserEnabledForSource = hasAnyUserEnabledForSource;
+
+// =============================================================================
+// Sprint home-reform-4 / Item 4 (RF-11, ADR-111).
+// Helpers para coach_lesson_recommendations + auxiliares (catalog, popular,
+// last consumed, hasLessonAccess, insertLibraryEvent).
+// =============================================================================
+
+async function getCoachRecommendationByUserAndWeek(
+  userId: string,
+  weekStartDate: string,
+): Promise<CoachLessonRecommendation | null> {
+  try {
+    const [row] = await db
+      .select()
+      .from(coachLessonRecommendations)
+      .where(
+        and(
+          eq(coachLessonRecommendations.userId, userId),
+          eq(coachLessonRecommendations.weekStartDate, weekStartDate),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  } catch (err) {
+    console.error("storage.getCoachRecommendationByUserAndWeek.error", { userId, err });
+    return null;
+  }
+}
+
+async function getCoachRecommendationById(
+  id: string,
+): Promise<CoachLessonRecommendation | null> {
+  try {
+    const [row] = await db
+      .select()
+      .from(coachLessonRecommendations)
+      .where(eq(coachLessonRecommendations.id, id))
+      .limit(1);
+    return row ?? null;
+  } catch (err) {
+    console.error("storage.getCoachRecommendationById.error", { id, err });
+    return null;
+  }
+}
+
+async function createCoachRecommendation(
+  payload: Partial<InsertCoachLessonRecommendation> & {
+    userId: string;
+    lessonId: string;
+    weekStartDate: string;
+    reason: string;
+    source: string;
+  },
+): Promise<CoachLessonRecommendation> {
+  const id = nanoid();
+  const [row] = await db
+    .insert(coachLessonRecommendations)
+    .values({
+      id,
+      userId: payload.userId,
+      lessonId: payload.lessonId,
+      weekStartDate: payload.weekStartDate,
+      reason: payload.reason,
+      source: payload.source,
+      inputSummary: payload.inputSummary ?? null,
+      chatSessionId: payload.chatSessionId ?? null,
+    } as InsertCoachLessonRecommendation)
+    .returning();
+  return row;
+}
+
+async function dismissCoachRecommendation(id: string): Promise<void> {
+  await db
+    .update(coachLessonRecommendations)
+    .set({ dismissedAt: new Date() })
+    .where(eq(coachLessonRecommendations.id, id));
+}
+
+async function consumeCoachRecommendation(id: string): Promise<void> {
+  await db
+    .update(coachLessonRecommendations)
+    .set({ consumedAt: new Date() })
+    .where(eq(coachLessonRecommendations.id, id));
+}
+
+async function deleteCoachRecommendation(id: string): Promise<void> {
+  await db
+    .delete(coachLessonRecommendations)
+    .where(eq(coachLessonRecommendations.id, id));
+}
+
+async function getLibraryLessonById(
+  lessonId: string,
+): Promise<any | null> {
+  try {
+    const [row] = await db
+      .select({
+        id: libraryLessons.id,
+        slug: libraryLessons.slug,
+        title: libraryLessons.title,
+        coverKey: libraryLessons.coverKey,
+        videoMuxPlaybackId: libraryLessons.videoMuxPlaybackId,
+        videoDurationSeconds: libraryLessons.videoDurationSeconds,
+        audioKey: libraryLessons.audioKey,
+        audioDurationSeconds: libraryLessons.audioDurationSeconds,
+        articleHtml: libraryLessons.articleHtml,
+        categoryId: libraryLessons.categoryId,
+        isPublished: libraryLessons.isPublished,
+        courseSlug: libraryCourses.slug,
+        courseTitle: libraryCourses.title,
+        moduleTitle: libraryModules.title,
+      })
+      .from(libraryLessons)
+      .innerJoin(libraryCourses, eq(libraryLessons.courseId, libraryCourses.id))
+      .innerJoin(libraryModules, eq(libraryLessons.moduleId, libraryModules.id))
+      .where(
+        and(
+          eq(libraryLessons.id, lessonId),
+          eq(libraryLessons.isPublished, true),
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+    let format: "video" | "podcast" | "article" = "video";
+    if (row.videoMuxPlaybackId) format = "video";
+    else if (row.audioKey) format = "podcast";
+    else if (row.articleHtml) format = "article";
+    const durationSeconds =
+      row.videoDurationSeconds ?? row.audioDurationSeconds ?? null;
+    return {
+      id: row.id,
+      slug: row.slug,
+      lessonSlug: row.slug,
+      title: row.title,
+      coverImageUrl: row.coverKey ?? null,
+      coverKey: row.coverKey ?? null,
+      format,
+      durationSeconds,
+      categoryId: row.categoryId,
+      isPublished: row.isPublished,
+      courseSlug: row.courseSlug,
+      courseTitle: row.courseTitle,
+      moduleTitle: row.moduleTitle,
+    };
+  } catch (err) {
+    console.error("storage.getLibraryLessonById.error", { lessonId, err });
+    return null;
+  }
+}
+
+async function hasLessonAccess(
+  userId: string,
+  lessonId: string,
+): Promise<boolean> {
+  try {
+    const [row] = await db
+      .select({ id: userLessonAccess.id })
+      .from(userLessonAccess)
+      .where(
+        and(
+          eq(userLessonAccess.userId, userId),
+          eq(userLessonAccess.lessonId, lessonId),
+        ),
+      )
+      .limit(1);
+    return !!row;
+  } catch (err) {
+    console.error("storage.hasLessonAccess.error", { userId, lessonId, err });
+    return false;
+  }
+}
+
+async function insertLibraryEvent(input: {
+  userId: string;
+  lessonId: string;
+  eventType: string;
+  format?: string | null;
+  positionSeconds?: number | null;
+  metadata?: Record<string, any> | null;
+}): Promise<void> {
+  try {
+    await db.insert(libraryEvents).values({
+      id: nanoid(),
+      userId: input.userId,
+      lessonId: input.lessonId,
+      eventType: input.eventType as any,
+      format: (input.format ?? null) as any,
+      positionSeconds: input.positionSeconds ?? null,
+      metadata: (input.metadata ?? {}) as any,
+    } as any);
+  } catch (err) {
+    console.error("storage.insertLibraryEvent.error", { err });
+    throw err;
+  }
+}
+
+async function getCatalogLessonsForRecommendation(opts: {
+  limit?: number;
+  orderBy?: string;
+} = {}): Promise<Array<{
+  id: string;
+  title: string;
+  courseTitle: string;
+  moduleTitle: string;
+  categoryId: string;
+  tags: string[];
+  learningObjectives: string[];
+  durationSeconds: number | null;
+}>> {
+  try {
+    const safeLimit = Math.min(Math.max(1, Math.floor(opts.limit ?? 200)), 200);
+    const rows = await db
+      .select({
+        id: libraryLessons.id,
+        title: libraryLessons.title,
+        courseTitle: libraryCourses.title,
+        moduleTitle: libraryModules.title,
+        categoryId: libraryLessons.categoryId,
+        tags: libraryLessons.tags,
+        learningObjectives: libraryLessons.learningObjectives,
+        videoDurationSeconds: libraryLessons.videoDurationSeconds,
+        audioDurationSeconds: libraryLessons.audioDurationSeconds,
+        createdAt: libraryLessons.createdAt,
+      })
+      .from(libraryLessons)
+      .innerJoin(libraryCourses, eq(libraryLessons.courseId, libraryCourses.id))
+      .innerJoin(libraryModules, eq(libraryLessons.moduleId, libraryModules.id))
+      .where(eq(libraryLessons.isPublished, true))
+      .orderBy(desc(libraryLessons.createdAt), libraryLessons.id)
+      .limit(safeLimit);
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      courseTitle: r.courseTitle,
+      moduleTitle: r.moduleTitle,
+      categoryId: r.categoryId,
+      tags: Array.isArray(r.tags) ? r.tags : [],
+      learningObjectives: Array.isArray(r.learningObjectives)
+        ? (r.learningObjectives as string[])
+        : [],
+      durationSeconds: r.videoDurationSeconds ?? r.audioDurationSeconds ?? null,
+    }));
+  } catch (err) {
+    console.error("storage.getCatalogLessonsForRecommendation.error", { err });
+    return [];
+  }
+}
+
+async function getMostPopularLessonIds(opts: {
+  sinceDays?: number;
+  limit?: number;
+} = {}): Promise<string[]> {
+  try {
+    const sinceDays = Math.max(1, opts.sinceDays ?? 30);
+    const limit = Math.min(Math.max(1, opts.limit ?? 10), 50);
+    const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        lessonId: libraryEvents.lessonId,
+        n: sql<number>`COUNT(*)::int`,
+      })
+      .from(libraryEvents)
+      .where(
+        and(
+          sql`${libraryEvents.eventType}::text = 'complete'`,
+          gte(libraryEvents.eventTimestamp, since),
+        ),
+      )
+      .groupBy(libraryEvents.lessonId)
+      .orderBy(desc(sql`COUNT(*)`))
+      .limit(limit);
+    return rows.map((r) => String(r.lessonId));
+  } catch (err) {
+    console.error("storage.getMostPopularLessonIds.error", { err });
+    return [];
+  }
+}
+
+async function getLastConsumedLessonIds(
+  userId: string,
+  limit: number = 10,
+): Promise<string[]> {
+  try {
+    const safeLimit = Math.min(Math.max(1, limit), 50);
+    const rows = await db
+      .select({ lessonId: libraryProgress.lessonId })
+      .from(libraryProgress)
+      .where(
+        and(
+          eq(libraryProgress.userId, userId),
+          sql`${libraryProgress.completedAt} IS NOT NULL`,
+        ),
+      )
+      .orderBy(desc(libraryProgress.completedAt))
+      .limit(safeLimit);
+    return rows.map((r) => String(r.lessonId));
+  } catch (err) {
+    console.error("storage.getLastConsumedLessonIds.error", { userId, err });
+    return [];
+  }
+}
+
+async function getActiveProfile(
+  _userId: string,
+): Promise<"A" | "B" | "C" | null> {
+  // Stub: profile detection real vive em outro lugar do dominio user.
+  // Coach recommendation usa apenas como input opcional ao prompt.
+  return null;
+}
+
+(storage as any).getCoachRecommendationByUserAndWeek = getCoachRecommendationByUserAndWeek;
+(storage as any).getCoachRecommendationById = getCoachRecommendationById;
+(storage as any).createCoachRecommendation = createCoachRecommendation;
+(storage as any).dismissCoachRecommendation = dismissCoachRecommendation;
+(storage as any).consumeCoachRecommendation = consumeCoachRecommendation;
+(storage as any).deleteCoachRecommendation = deleteCoachRecommendation;
+(storage as any).getLibraryLessonById = getLibraryLessonById;
+(storage as any).hasLessonAccess = hasLessonAccess;
+(storage as any).insertLibraryEvent = insertLibraryEvent;
+(storage as any).getCatalogLessonsForRecommendation = getCatalogLessonsForRecommendation;
+(storage as any).getMostPopularLessonIds = getMostPopularLessonIds;
+(storage as any).getLastConsumedLessonIds = getLastConsumedLessonIds;
+(storage as any).getActiveProfile = getActiveProfile;
+
 // Tests que dependiam dos IDs fixture (tkt-1, etc.) declaram seu proprio
 // vi.mock('../../../server/db', ...) com Drizzle-shape fake backed por Map.

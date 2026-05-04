@@ -34,6 +34,7 @@ import {
   writeVideoSpeed,
 } from "@/lib/library-video-speed-storage";
 import { NextLessonCTA } from "@/components/biblioteca/NextLessonCTA";
+import { useCoachRecommendationConsume } from "@/hooks/useCoachRecommendationConsume";
 
 // MuxPlayer module shape varies (default export vs namespace). Resolve once.
 const MuxPlayer = (MuxPlayerRaw as any)?.default ?? MuxPlayerRaw;
@@ -211,6 +212,13 @@ export function LessonViewer({
   // F20: previousTab is render-derived signal only (no UI re-render needed
   // when it flips), so a ref avoids extra renders on tab change.
   const previousTabRef = useRef<FormatTab | null>(null);
+  // Sprint home-reform-4 / Item 4 RF-07: container ref usado para descobrir
+  // o <video>/<audio> real (Mux Player wrappa em web component custom). O
+  // useCoachRecommendationConsume escuta timeupdate quando media existe;
+  // caso contrario (article), cai no scroll listener.
+  const playerContainerRef = useRef<HTMLDivElement | null>(null);
+  const mediaElementRef = useRef<HTMLMediaElement | null>(null);
+  useCoachRecommendationConsume({ mediaRef: mediaElementRef });
   // F-A4.5: persisted font size for article reader.
   const [articleFontSize, setArticleFontSize] = useState<ArticleFontSize>(
     () => readStoredFontSize(),
@@ -242,6 +250,23 @@ export function LessonViewer({
     if (formats.video) setActiveTab("video");
     else if (formats.podcast) setActiveTab("podcast");
     else if (formats.article) setActiveTab("article");
+  }, [lesson, activeTab]);
+
+  // Sprint home-reform-4 / Item 4 RF-07: localiza media element apos render.
+  // Mux Player wrappa em web component (<mux-player>); o <video> real fica
+  // dentro do shadow DOM, mas a Mux expone `mediaTime`/timeupdate diretamente
+  // via custom element. Como fallback, procuramos um <audio>/<video> tradicional.
+  useEffect(() => {
+    const container = playerContainerRef.current;
+    if (!container) return;
+    // Busca em ordem: <video>, <audio>, <mux-player> (custom element).
+    const found =
+      (container.querySelector("video") as HTMLMediaElement | null) ||
+      (container.querySelector("audio") as HTMLMediaElement | null) ||
+      // mux-player expoe API similar a HTMLMediaElement (currentTime/duration/
+      // timeupdate event), entao podemos trata-lo como tal.
+      (container.querySelector("mux-player") as unknown as HTMLMediaElement | null);
+    mediaElementRef.current = found ?? null;
   }, [lesson, activeTab]);
 
   // F3a: shape do erro lancado por apiRequest eh `error.response.status`.
@@ -624,6 +649,7 @@ export function LessonViewer({
       )}
 
       <div
+        ref={playerContainerRef}
         data-testid={stackedFormats ? "lesson-format-stack" : undefined}
         className="space-y-6"
       >
