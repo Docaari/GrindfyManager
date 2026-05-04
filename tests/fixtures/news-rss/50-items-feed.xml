@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Big Feed</title>
+    <link>https://example.com</link>
+    <description>50 items for top-10 enforcement test.</description>
+    <item><title>Item 01</title><link>https://example.com/01</link><description>desc 01</description><pubDate>Mon, 28 Apr 2026 12:00:00 +0000</pubDate></item>
+    <item><title>Item 02</title><link>https://example.com/02</link><description>desc 02</description><pubDate>Mon, 28 Apr 2026 12:01:00 +0000</pubDate></item>
+    <item><title>Item 03</title><link>https://example.com/03</link><description>desc 03</description><pubDate>Mon, 28 Apr 2026 12:02:00 +0000</pubDate></item>
+    <item><title>Item 04</title><link>https://example.com/04</link><description>desc 04</description><pubDate>Mon, 28 Apr 2026 12:03:00 +0000</pubDate></item>
+    <item><title>Item 05</title><link>https://example.com/05</link><description>desc 05</description><pubDate>Mon, 28 Apr 2026 12:04:00 +0000</pubDate></item>
+    <item><title>Item 06</title><link>https://example.com/06</link><description>desc 06</description><pubDate>Mon, 28 Apr 2026 12:05:00 +0000</pubDate></item>
+    <item><title>Item 07</title><link>https://example.com/07</link><description>desc 07</description><pubDate>Mon, 28 Apr 2026 12:06:00 +0000</pubDate></item>
+    <item><title>Item 08</title><link>https://example.com/08</link><description>desc 08</description><pubDate>Mon, 28 Apr 2026 12:07:00 +0000</pubDate></item>
+    <item><title>Item 09</title><link>https://example.com/09</link><description>desc 09</description><pubDate>Mon, 28 Apr 2026 12:08:00 +0000</pubDate></item>
+    <item><title>Item 10</title><link>https://example.com/10</link><description>desc 10</description><pubDate>Mon, 28 Apr 2026 12:09:00 +0000</pubDate></item>
+    <item><title>Item 11</title><link>https://example.com/11</link><description>desc 11</description><pubDate>Mon, 28 Apr 2026 12:10:00 +0000</pubDate></item>
+    <item><title>Item 12</title><link>https://example.com/12</link><description>desc 12</description><pubDate>Mon, 28 Apr 2026 12:11:00 +0000</pubDate></item>
+    <item><title>Item 13</title><link>https://example.com/13</link><description>desc 13</description><pubDate>Mon, 28 Apr 2026 12:12:00 +0000</pubDate></item>
+    <item><title>Item 14</title><link>https://example.com/14</link><description>desc 14</description><pubDate>Mon, 28 Apr 2026 12:13:00 +0000</pubDate></item>
+    <item><title>Item 15</title><link>https://example.com/15</link><description>desc 15</description><pubDate>Mon, 28 Apr 2026 12:14:00 +0000</pubDate></item>
+    <item><title>Item 16</title><link>https://example.com/16</link><description>desc 16</description><pubDate>Mon, 28 Apr 2026 12:15:00 +0000</pubDate></item>
+    <item><title>Item 17</title><link>https://example.com/17</link><description>desc 17</description><pubDate>Mon, 28 Apr 2026 12:16:00 +0000</pubDate></item>
+    <item><title>Item 18</title><link>https://example.com/18</link><description>desc 18</description><pubDate>Mon, 28 Apr 2026 12:17:00 +0000</pubDate></item>
+    <item><title>Item 19</title><link>https://example.com/19</link><description>desc 19</description><pubDate>Mon, 28 Apr 2026 12:18:00 +0000</pubDate></item>
+    <item><title>Item 20</title><link>https://example.com/20</link><description>desc 20</description><pubDate>Mon, 28 Apr 2026 12:19:00 +0000</pubDate></item>
+    <item><title>Item 21</title><link>https://example.com/21</link><description>desc 21</description><pubDate>Mon, 28 Apr 2026 12:20:00 +0000</pubDate></item>
+    <item><title>Item 22</title><link>https://example.com/22</link><description>desc 22</description><pubDate>Mon, 28 Apr 2026 12:21:00 +0000</pubDate></item>
+    <item><title>Item 23</title><link>https://example.com/23</link><description>desc 23</description><pubDate>Mon, 28 Apr 2026 12:22:00 +0000</pubDate></item>
+    <item><title>Item 24</title><link>https://example.com/24</link><description>desc 24</description><pubDate>Mon, 28 Apr 2026 12:23:00 +0000</pubDate></item>
+    <item><title>Item 25</title><link>https://example.com/25</link><description>desc 25</description><pubDate>Mon, 28 Apr 2026 12:24:00 +0000</pubDate></item>
+  </channel>
+</rss>

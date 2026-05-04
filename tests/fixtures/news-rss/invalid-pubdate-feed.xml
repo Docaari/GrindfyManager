@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Mixed Valid/Invalid Pubdate</title>
+    <link>https://example.com</link>
+    <description>Mistura de datas validas e invalidas.</description>
+    <item>
+      <title>Valid date item</title>
+      <link>https://example.com/valid</link>
+      <description>Item com data valida.</description>
+      <pubDate>Mon, 28 Apr 2026 12:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Invalid date item</title>
+      <link>https://example.com/invalid</link>
+      <description>Item com data invalida.</description>
+      <pubDate>not-a-date</pubDate>
+    </item>
+    <item>
+      <title>Empty date item</title>
+      <link>https://example.com/empty-date</link>
+      <description>Item sem pubDate.</description>
+    </item>
+  </channel>
+</rss>
