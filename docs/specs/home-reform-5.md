@@ -29,7 +29,7 @@ Regra de execucao:
 | 5 | Grade do Dia: Primeiro Registro + Ultimo Registro | Concluido (2026-05-04) | Feature pequena | 1-2h |
 | 6 | Renomear Performance -> Sessoes Registradas + KPIs corretos + ITM/MF/Cravadas | Concluido (2026-05-04) | Bug fix + feature | 3-4h |
 | 7 | Dashboard: All Time + KPIs ITM/MF/Cravadas + grafico evolucao all-time | Concluido (2026-05-04) | Feature | 3-4h |
-| 8 | Performance baseada em registros /grind (toggle futuro) | Pendente | Refactor | 2h |
+| 8 | Performance baseada em registros /grind (toggle futuro) | Concluido (2026-05-04) | Refactor | 2h |
 | 9 | Estudos: OK, nao mexer | Skip | — | 0 |
 | 10 | News: renomear + botoes novos + carousel com setas+dots | **POR ULTIMO** | UI/feature | 4-6h |
 | 11 | Engrenagem habilita/desabilita sessoes da Home | Pendente | Feature | 3-4h |
@@ -332,6 +332,14 @@ Ordem de execucao recomendada: **1 -> 2 -> 5 -> 3 -> 4 -> 6 -> 7 -> 8 -> 11 -> 1
 - Sem UI de toggle agora (item 11 entrega).
 
 **Atencao:** este item se sobrepoe parcialmente ao item 6. Se item 6 ja garantiu fonte /grind para "Sessoes Registradas", item 8 pode ficar como **fundacao da flag**, sem refactor adicional. Reavaliar quando for executar.
+
+#### Resolucao (2026-05-04) — absorvido pelo item 6
+
+- **Decisao**: nenhuma mudanca de codigo / schema executada neste item. Item 6 (`SessionsRegisteredCard` + `getSessionsRegisteredAggregate` + `getRecentSessionsWithKpis`) ja consome `session_tournaments` por default — comportamento alvo do item 8 esta entregue.
+- **Schema flag deferida pro item 11**: spec original (linha 330) diz "adicionar coluna em users ou tabela user_home_settings (a decidir, ver item 11)". Item 11 vai entregar engrenagem de visibilidade de **todas** as sessoes da Home (Header, Coach, Acao Imediata, Grade, Sessoes Registradas, Dashboard, Performance, Estudos, News) + persistencia. Faz sentido decidir formato (JSONB unica vs. tabela dedicada) **junto** com o consumidor real do schema, em vez de pre-commitar uma coluna agora que pode ser reshaped quando item 11 desenhar o modelo de settings completo.
+- **Contrato preservado para item 11**: quando item 11 introduzir o schema, deve incluir campo `performanceFromGrind: boolean` (default `true`) ao lado dos toggles de visibilidade. Caminho de leitura: `homeOptions.performanceFromGrind` no payload `/api/home/settings`. Backend respeita flag em `getSessionsRegisteredSummary` (false -> rotear pra `tournaments WHERE grind_session_id IS NULL` reaproveitando `getDashboardAllTimeAggregate` ou variante com range mensal).
+- **Risco zero**: card "Sessoes Registradas" continua mostrando dados /grind (default desejado); nenhum usuario pode atualmente desativar; toggle UI sera entregue por item 11.
+- **Sem testes / sem migration / sem commit de codigo** — apenas atualizacao desta secao de spec + Status Tracker.
 
 ---
 
