@@ -221,13 +221,15 @@ export async function handleGetNewsFeed(req: any, res: Response): Promise<void> 
     }
 
     // Carrega items de cada categoria habilitada, agrega e ranqueia.
+    // Sprint News-3.5: limit 100 per category — antes 20 ocultava platforms
+    // com datas mais antigas (e.g. pokerstars 04-10..05-01 perdia espaco para
+    // ggpoker hoje). Frontend filtra por chip => ve todas plataformas.
     const collected: NewsItem[] = [];
     for (const [category, sourceIds] of enabledByCategory.entries()) {
       const rows = (await storage.listNewsItems({
         category,
         sourceIds,
-        // pegamos um pool maior (20) por categoria pra dar massa ao ranking.
-        limit: 20,
+        limit: 100,
       })) as NewsItem[];
       collected.push(...rows);
     }

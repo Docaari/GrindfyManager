@@ -11270,7 +11270,7 @@ export async function listNewsItems(opts: {
       ),
     )
     .orderBy(desc(newsItemsTable.publishedAt))
-    .limit(Math.min(20, Math.max(1, opts.limit)));
+    .limit(Math.min(100, Math.max(1, opts.limit)));
   return rows.map((r) => ({
     id: r.id,
     source: r.category,

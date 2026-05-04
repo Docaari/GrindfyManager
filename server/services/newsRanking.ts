@@ -14,11 +14,10 @@ import type { NewsItem, NewsCategory } from '@shared/types/news';
 import { NEWS_CATEGORY_PRIORITY } from '@shared/types/news';
 
 const SEVEN_DAYS_MS = 7 * 24 * 3600 * 1000;
-// Sprint News-3.4 fix: cap subiu de 10 para 50 para que filtros por categoria
-// no frontend (FilterChips) tenham itens reais — antes top-10 global era
-// dominado por sites recentes e categorias menos recentes (Estudos, Tools,
-// Fofocas) sumiam quando user clicava no chip.
-const MAX_FEED_ITEMS = 50;
+// Sprint News-3.5 fix: cap subiu para 200 (todas plataformas/categorias visiveis
+// nos chips filter). Antes 10 truncava demais; 50 ainda escondia pokerstars
+// (recency menor que ggpoker hoje). 200 cobre o pool real (~95-150 items).
+const MAX_FEED_ITEMS = 200;
 
 function engagementRaw(item: NewsItem): number {
   const e = item.engagement ?? {};
