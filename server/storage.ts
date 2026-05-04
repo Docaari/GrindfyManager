@@ -3417,8 +3417,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       throw new Error('UserPlatformId é obrigatório para buscar torneios');
     }
     
+    // home-reform-5 audit fix #1: filtrar isActive=true ao requisitar
+    // por dia (Home/HeaderStrip/CoachContext). Sem o filtro, soft-deleted
+    // entries inflavam o count "Hoje" (founder relatou 100 ao inves de 152).
     const whereCondition = dayOfWeek !== undefined
-      ? and(eq(plannedTournaments.userId, userId), eq(plannedTournaments.dayOfWeek, dayOfWeek))
+      ? and(
+          eq(plannedTournaments.userId, userId),
+          eq(plannedTournaments.dayOfWeek, dayOfWeek),
+          eq(plannedTournaments.isActive, true),
+        )
       : eq(plannedTournaments.userId, userId);
 
     const result = await db
@@ -3426,8 +3433,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .from(plannedTournaments)
       .where(whereCondition)
       .orderBy(plannedTournaments.dayOfWeek, plannedTournaments.time);
-    
-    
+
+
     return result;
   }
 
@@ -6603,7 +6610,20 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     finalTablesCount: number;
     winsCount: number;
   }>> {
-    const conditions = [eq(sessionTournaments.userId, userId)];
+    // home-reform-5 audit fix #2: alinhar com /grind calculateSessionStats.
+    //  - count: filtra status IN ('registered','active','finished','completed')
+    //    (matches `registros = registered + finished` em /grind, exclui upcoming
+    //    e deleted/soft-deleted que inflavam o total — DB tinha 201 mas /grind
+    //    mostrava 124 = exatos finished).
+    //  - itmCount: usa `result > 0 OR prize > 0` (calculateSessionStats:656).
+    //    Schema tem `position`/`prize` frequentemente null + `result` populado;
+    //    o predicado antigo so com `prize > 0` zerava ITM ainda que o usuario
+    //    tenha registrado profit positivo via `result`.
+    const COUNTED_STATUSES = ['registered', 'active', 'finished', 'completed'];
+    const conditions = [
+      eq(sessionTournaments.userId, userId),
+      inArray(sessionTournaments.status, COUNTED_STATUSES),
+    ];
     if (opts.from) conditions.push(gte(sessionTournaments.createdAt, opts.from));
     if (opts.to) conditions.push(lt(sessionTournaments.createdAt, opts.to));
 
@@ -6624,7 +6644,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           END
           + COALESCE(CAST(${sessionTournaments.bounty} AS DECIMAL), 0)
         ), 0)::text`,
-        itmCount: sql<number>`COUNT(CASE WHEN COALESCE(CAST(${sessionTournaments.prize} AS DECIMAL), 0) > 0 THEN 1 END)::int`,
+        itmCount: sql<number>`COUNT(CASE WHEN COALESCE(CAST(${sessionTournaments.result} AS DECIMAL), 0) > 0 OR COALESCE(CAST(${sessionTournaments.prize} AS DECIMAL), 0) > 0 THEN 1 END)::int`,
         finalTablesCount: sql<number>`COUNT(CASE WHEN ${sessionTournaments.position} BETWEEN 1 AND 9 THEN 1 END)::int`,
         winsCount: sql<number>`COUNT(CASE WHEN ${sessionTournaments.position} = 1 THEN 1 END)::int`,
       })
@@ -6680,6 +6700,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       const sessionIds = sessions.map((s: any) => s.id).filter(Boolean);
       if (sessionIds.length === 0) return [];
 
+      // home-reform-5 audit fix #2: mesmas regras de getSessionsRegisteredAggregate
+      // (status counted + ITM via result OR prize) pra recentSessions chips.
+      const COUNTED_STATUSES = ['registered', 'active', 'finished', 'completed'];
       const aggRows = await db
         .select({
           sessionId: sessionTournaments.sessionId,
@@ -6698,12 +6721,16 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
             END
             + COALESCE(CAST(${sessionTournaments.bounty} AS DECIMAL), 0)
           ), 0)::text`,
-          itmCount: sql<number>`COUNT(CASE WHEN COALESCE(CAST(${sessionTournaments.prize} AS DECIMAL), 0) > 0 THEN 1 END)::int`,
+          itmCount: sql<number>`COUNT(CASE WHEN COALESCE(CAST(${sessionTournaments.result} AS DECIMAL), 0) > 0 OR COALESCE(CAST(${sessionTournaments.prize} AS DECIMAL), 0) > 0 THEN 1 END)::int`,
           finalTablesCount: sql<number>`COUNT(CASE WHEN ${sessionTournaments.position} BETWEEN 1 AND 9 THEN 1 END)::int`,
           winsCount: sql<number>`COUNT(CASE WHEN ${sessionTournaments.position} = 1 THEN 1 END)::int`,
         })
         .from(sessionTournaments)
-        .where(and(eq(sessionTournaments.userId, userId), inArray(sessionTournaments.sessionId, sessionIds)))
+        .where(and(
+          eq(sessionTournaments.userId, userId),
+          inArray(sessionTournaments.sessionId, sessionIds),
+          inArray(sessionTournaments.status, COUNTED_STATUSES),
+        ))
         .groupBy(sessionTournaments.sessionId, sessionTournaments.site);
 
       const bySession = new Map<string, Array<{

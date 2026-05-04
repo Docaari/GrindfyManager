@@ -142,7 +142,7 @@ describe('Sidebar reform — 5 grupos na ordem (Opcao A)', () => {
 // =============================================================================
 
 describe('Sidebar reform — VISAO grupo', () => {
-  it('VISAO contem Hoje (/), Dashboard, Banca', async () => {
+  it('VISAO contem Inicio (/), Dashboard, Banca', async () => {
     render(wrap(<Sidebar />));
     const sec = await screen.findByTestId('sidebar-section-visao');
     const links = within(sec).getAllByRole('link');
@@ -150,11 +150,12 @@ describe('Sidebar reform — VISAO grupo', () => {
     expect(hrefs).toEqual(expect.arrayContaining(['/', '/dashboard', '/bankroll']));
   });
 
-  it('item raiz tem label "Hoje" (NAO "Home")', async () => {
+  it('item raiz tem label "Inicio" (home-reform-5 audit fix #3)', async () => {
     render(wrap(<Sidebar />));
-    const link = await screen.findByRole('link', { name: /hoje/i });
+    const link = await screen.findByRole('link', { name: /inicio/i });
     expect(link.getAttribute('href')).toBe('/');
     expect(screen.queryByRole('link', { name: /^home$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^hoje$/i })).not.toBeInTheDocument();
   });
 });
 

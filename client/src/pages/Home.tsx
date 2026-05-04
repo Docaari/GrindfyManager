@@ -439,7 +439,7 @@ const Home: React.FC = () => {
             {/* Zona 1 — Hoje (toggle visibility.coach) */}
             {visibility.coach ? (
               <section data-testid="home-zone-today" className="space-y-3">
-                <ZoneHeading>Hoje</ZoneHeading>
+                <ZoneHeading>Inicio</ZoneHeading>
                 <DailyInsight data={data} />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="md:col-span-2">

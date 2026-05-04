@@ -78,7 +78,7 @@ const Sidebar: React.FC = () => {
       slug: 'visao',
       title: 'VISAO',
       items: [
-        { path: '/', icon: User, label: 'Hoje', adminOnly: false },
+        { path: '/', icon: User, label: 'Inicio', adminOnly: false },
         { path: '/dashboard', icon: BarChart3, label: 'Dashboard', adminOnly: false },
         { path: '/bankroll', icon: Wallet, label: 'Banca', adminOnly: false },
       ]
