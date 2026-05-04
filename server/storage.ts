@@ -824,6 +824,30 @@ export interface IStorage {
     profitNative: string;
   }>>;
 
+  // Sprint home-reform-5 item 7 — Dashboard All Time aggregate (KPIs estendidos)
+  getDashboardAllTimeAggregate(
+    userId: string,
+  ): Promise<Array<{
+    site: string;
+    count: number;
+    investedNative: string;
+    profitNative: string;
+    itmCount: number;
+    finalTablesCount: number;
+    winsCount: number;
+  }>>;
+
+  // Sprint home-reform-5 item 7 — Dashboard All Time monthly (evolution chart)
+  getDashboardAllTimeMonthlyAggregate(
+    userId: string,
+  ): Promise<Array<{
+    month: string;
+    site: string;
+    count: number;
+    investedNative: string;
+    profitNative: string;
+  }>>;
+
   // Sprint home-reform-4 item 5 — Grade hoje aggregate por profile
   getGradeTodayAggregate(
     userId: string,
@@ -6822,6 +6846,113 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     return rows.map((r: any) => ({
       date: String(r.date ?? ''),
+      site: String(r.site ?? ''),
+      count: Number(r.count) || 0,
+      investedNative: String(r.investedNative ?? '0'),
+      profitNative: String(r.profitNative ?? '0'),
+    }));
+  }
+
+  // ============================================================================
+  // Sprint home-reform-5 item 7 — Dashboard All Time aggregate (6 KPIs estendidos)
+  // ============================================================================
+  //
+  // Spec: Docs/specs/home-reform-5.md item 7. Card "Dashboard - All Time" com
+  // 6 KPIs (Torneios | Profit | ROI | ITM | Mesas Finais | Cravadas) baseado
+  // em `tournaments WHERE grind_session_id IS NULL` (CLAUDE.md §6.1) sem filtro
+  // de mes. Espelha shape de getDashboardMonthAggregate + adiciona itmCount,
+  // finalTablesCount, winsCount via DISTINCT seriesId/id (consistente com
+  // getDashboardPerformance linha ~2750).
+  //
+  // Exclui baggedAt NOT NULL (Day-2 ainda em jogo).
+  async getDashboardAllTimeAggregate(
+    userId: string,
+  ): Promise<Array<{
+    site: string;
+    count: number;
+    investedNative: string;
+    profitNative: string;
+    itmCount: number;
+    finalTablesCount: number;
+    winsCount: number;
+  }>> {
+    const conditions = [
+      eq(tournaments.userId, userId),
+      isNull(tournaments.grindSessionId),
+      isNull(tournaments.baggedAt),
+    ];
+
+    const rows = await db
+      .select({
+        site: tournaments.site,
+        count: sql<number>`COUNT(DISTINCT COALESCE(${tournaments.seriesId}, ${tournaments.id}))::int`,
+        investedNative: sql<string>`COALESCE(SUM(
+          CAST(${tournaments.buyIn} AS DECIMAL)
+          + COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL)
+          + CASE WHEN ${tournaments.addOnTaken} = true THEN COALESCE(CAST(${tournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END
+        ), 0)::text`,
+        profitNative: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)::text`,
+        itmCount: sql<number>`COUNT(DISTINCT CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)::int`,
+        finalTablesCount: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.position} >= 1 AND ${tournaments.position} <= 9 AND ${tournaments.position} IS NOT NULL THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)::int`,
+        winsCount: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.position} = 1 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)::int`,
+      })
+      .from(tournaments)
+      .where(and(...conditions))
+      .groupBy(tournaments.site);
+
+    return rows.map((r: any) => ({
+      site: String(r.site ?? ''),
+      count: Number(r.count) || 0,
+      investedNative: String(r.investedNative ?? '0'),
+      profitNative: String(r.profitNative ?? '0'),
+      itmCount: Number(r.itmCount) || 0,
+      finalTablesCount: Number(r.finalTablesCount) || 0,
+      winsCount: Number(r.winsCount) || 0,
+    }));
+  }
+
+  // ============================================================================
+  // Sprint home-reform-5 item 7 — Dashboard All Time monthly aggregate (chart)
+  // ============================================================================
+  //
+  // Spec: Docs/specs/home-reform-5.md item 7. Grafico evolucao all-time agrupa
+  // dados por mes UTC + site. Service aplica FX por site -> USD por mes e
+  // acumula sequencialmente.
+  async getDashboardAllTimeMonthlyAggregate(
+    userId: string,
+  ): Promise<Array<{
+    month: string;
+    site: string;
+    count: number;
+    investedNative: string;
+    profitNative: string;
+  }>> {
+    const conditions = [
+      eq(tournaments.userId, userId),
+      isNull(tournaments.grindSessionId),
+      isNull(tournaments.baggedAt),
+    ];
+
+    const monthExpr = sql<string>`TO_CHAR(${tournaments.datePlayed} AT TIME ZONE 'UTC', 'YYYY-MM')`;
+
+    const rows = await db
+      .select({
+        month: monthExpr,
+        site: tournaments.site,
+        count: sql<number>`COUNT(DISTINCT COALESCE(${tournaments.seriesId}, ${tournaments.id}))::int`,
+        investedNative: sql<string>`COALESCE(SUM(
+          CAST(${tournaments.buyIn} AS DECIMAL)
+          + COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL)
+          + CASE WHEN ${tournaments.addOnTaken} = true THEN COALESCE(CAST(${tournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END
+        ), 0)::text`,
+        profitNative: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)::text`,
+      })
+      .from(tournaments)
+      .where(and(...conditions))
+      .groupBy(monthExpr, tournaments.site);
+
+    return rows.map((r: any) => ({
+      month: String(r.month ?? ''),
       site: String(r.site ?? ''),
       count: Number(r.count) || 0,
       investedNative: String(r.investedNative ?? '0'),

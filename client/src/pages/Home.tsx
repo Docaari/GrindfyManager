@@ -68,10 +68,11 @@ import EmptyPerformanceCluster from '@/components/home/EmptyPerformanceCluster';
 import NewsFeed from '@/components/home/NewsFeed';
 // Sprint home-reform-4 item 1.
 import SessionsMonthCard from '@/components/home/SessionsMonthCard';
-// Sprint home-reform-4 item 2+6.
-import DashboardMonthCard from '@/components/home/DashboardMonthCard';
-// Sprint home-reform-4 item 10.
-import MonthEvolutionChart from '@/components/home/MonthEvolutionChart';
+// Sprint home-reform-5 item 7 — Dashboard All Time substitui DashboardMonthCard +
+// MonthEvolutionChart na Home (componentes antigos preservados pra uso no
+// /dashboard, se necessario).
+import DashboardAllTimeCard from '@/components/home/DashboardAllTimeCard';
+import AllTimeEvolutionChart from '@/components/home/AllTimeEvolutionChart';
 // Sprint home-reform-4 item 7 — nova zona Estudos.
 import FocusStatsCard from '@/components/home/FocusStatsCard';
 
@@ -248,6 +249,16 @@ interface HomeOverviewResponse {
     profitUsd: number;
     investedUsd: number;
     roiPct: number | null;
+  } | null;
+  // Sprint home-reform-5 item 7.
+  dashboardAllTime?: {
+    tournaments: number;
+    profit: number;
+    invested: number;
+    roi: number | null;
+    itm: number;
+    finalTables: number;
+    wins: number;
   } | null;
   meta: { generatedAt: string; cacheHit: boolean; subqueryTimingsMs: Record<string, number>; userTimezone?: string };
 }
@@ -470,10 +481,10 @@ const Home: React.FC = () => {
               <SessionsMonthCard data={data.sessionsMonth ?? null} />
               {/* home-reform-4 item 9: RecentSessionsList entre Sessoes e Dashboard */}
               <RecentSessionsList data={data.recentSessions ?? []} />
-              {/* home-reform-4 item 2+6: Card Dashboard mes atual (uploads/historico) */}
-              <DashboardMonthCard data={data.dashboardMonth ?? null} />
-              {/* home-reform-4 item 10: grafico evolucao mes selecionado */}
-              <MonthEvolutionChart />
+              {/* home-reform-5 item 7: Dashboard - All Time (renome + 6 KPIs all-time) */}
+              <DashboardAllTimeCard data={data.dashboardAllTime ?? null} />
+              {/* home-reform-5 item 7: grafico evolucao all-time agrupado por mes */}
+              <AllTimeEvolutionChart />
               <PerformanceMini data={data.performance} />
               {perfClusterEmpty ? (
                 <EmptyPerformanceCluster

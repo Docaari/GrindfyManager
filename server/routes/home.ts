@@ -28,6 +28,11 @@ import { fxResolver as homeFxResolver } from '../services/fxResolver';
 import { getCurrencyForSite as homeGetCurrencyForSite } from '@shared/platform-currency';
 import { getDashboardMonthSummary } from '../services/dashboardMonth';
 import { getHomeEvolution, parseMonthIso } from '../services/homeEvolution';
+// Sprint home-reform-5 item 7 — Dashboard All Time + grafico evolucao all-time.
+import {
+  getDashboardAllTimeSummary,
+  getHomeEvolutionAllTime,
+} from '../services/dashboardAllTime';
 import { getGradeTodaySummary, type GradeProfile } from '../services/gradeToday';
 import { buildHeaderStrip, type HeaderStripData } from '../services/homeHeader';
 import { buildCoachContext, type CoachContextData } from '../services/coachContext';
@@ -254,6 +259,16 @@ interface HomeOverviewBody {
     investedUsd: number;
     roiPct: number | null;
   } | null;
+  // Sprint home-reform-5 item 7 — Dashboard All Time (uploads/historico, all-time).
+  dashboardAllTime: {
+    tournaments: number;
+    profit: number;
+    invested: number;
+    roi: number | null;
+    itm: number;
+    finalTables: number;
+    wins: number;
+  } | null;
   meta: {
     generatedAt: string;
     cacheHit: boolean;
@@ -448,6 +463,8 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       // Sprint home-reform-5 item 6 — Sessoes Registradas + RecentSessions com KPIs.
       timed('sessionsRegistered', () => getSessionsRegisteredSummary(userId), timings),
       timed('recentSessionsKpis', () => (storage as any).getRecentSessionsWithKpis(userId, 5), timings),
+      // Sprint home-reform-5 item 7 — Dashboard All Time (uploads/historico).
+      timed('dashboardAllTime', () => getDashboardAllTimeSummary(userId), timings),
     ]);
 
     const unwrap = <T,>(idx: number): T | null => {
@@ -486,6 +503,7 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     const hasActiveGrindSessionResult = unwrap<boolean>(23) ?? false;
     const sessionsRegisteredResult = unwrap<any>(24);
     const recentSessionsKpisResult = unwrap<any[]>(25);
+    const dashboardAllTimeResult = unwrap<any>(26);
 
     // Tipos usados localmente (cast porque mocks retornam any).
     const qs = quickStats as any;
@@ -987,6 +1005,18 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
             roiPct: dashboardMonthResult.roiPct == null ? null : Number(dashboardMonthResult.roiPct),
           }
         : null,
+      // Sprint home-reform-5 item 7 — Dashboard All Time (6 KPIs).
+      dashboardAllTime: dashboardAllTimeResult && typeof dashboardAllTimeResult === 'object'
+        ? {
+            tournaments: Number(dashboardAllTimeResult.tournaments ?? 0),
+            profit: Number(dashboardAllTimeResult.profit ?? 0),
+            invested: Number(dashboardAllTimeResult.invested ?? 0),
+            roi: dashboardAllTimeResult.roi == null ? null : Number(dashboardAllTimeResult.roi),
+            itm: Number(dashboardAllTimeResult.itm ?? 0),
+            finalTables: Number(dashboardAllTimeResult.finalTables ?? 0),
+            wins: Number(dashboardAllTimeResult.wins ?? 0),
+          }
+        : null,
       meta: {
         generatedAt: new Date().toISOString(),
         cacheHit: false,
@@ -1016,17 +1046,29 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
 }
 
 // =============================================================================
-// Sprint home-reform-4 item 10 — /api/home/evolution
+// Sprint home-reform-4 item 10 + home-reform-5 item 7 — /api/home/evolution
 // =============================================================================
 //
-// Spec: Docs/specs/home-reform-4.md item 10. Grafico evolucao do mes
-// selecionado abaixo do DashboardMonthCard.
-// Query: ?month=YYYY-MM (default mes corrente UTC). Mes invalido -> 400.
+// Spec: Docs/specs/home-reform-4.md item 10 (mes) + Docs/specs/home-reform-5.md
+// item 7 (all-time). Grafico evolucao do mes selecionado OU all-time agrupado
+// por mes.
+//
+// Query:
+//   - ?month=YYYY-MM (default mes corrente UTC): retorna serie diaria do mes.
+//   - ?scope=all: retorna serie mensal continua all-time (item 7).
+// Mes invalido -> 400.
 export async function handleHomeEvolution(req: any, res: Response): Promise<void> {
   try {
     const userId = req?.user?.userPlatformId;
     if (!userId) {
       res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+    const scopeRaw = typeof req?.query?.scope === 'string' ? req.query.scope : null;
+    if (scopeRaw === 'all') {
+      const summary = await getHomeEvolutionAllTime(userId);
+      res.setHeader('Cache-Control', 'private, max-age=30');
+      res.status(200).json(summary);
       return;
     }
     const monthRaw = typeof req?.query?.month === 'string' ? req.query.month : null;

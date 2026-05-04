@@ -28,7 +28,7 @@ Regra de execucao:
 | 4 | Acao Imediata: stat destaque + Iniciar sessao | Concluido (2026-05-04) | Feature (depende de stat destaque futura) | 2h |
 | 5 | Grade do Dia: Primeiro Registro + Ultimo Registro | Concluido (2026-05-04) | Feature pequena | 1-2h |
 | 6 | Renomear Performance -> Sessoes Registradas + KPIs corretos + ITM/MF/Cravadas | Concluido (2026-05-04) | Bug fix + feature | 3-4h |
-| 7 | Dashboard: All Time + KPIs ITM/MF/Cravadas + grafico evolucao all-time | Pendente | Feature | 3-4h |
+| 7 | Dashboard: All Time + KPIs ITM/MF/Cravadas + grafico evolucao all-time | Concluido (2026-05-04) | Feature | 3-4h |
 | 8 | Performance baseada em registros /grind (toggle futuro) | Pendente | Refactor | 2h |
 | 9 | Estudos: OK, nao mexer | Skip | — | 0 |
 | 10 | News: renomear + botoes novos + carousel com setas+dots | **POR ULTIMO** | UI/feature | 4-6h |
@@ -293,6 +293,27 @@ Ordem de execucao recomendada: **1 -> 2 -> 5 -> 3 -> 4 -> 6 -> 7 -> 8 -> 11 -> 1
 - KPIs: tournaments, profit, roi, itm, finalTables, wins.
 - Grafico de evolucao: timeline all-time agrupando por mes (label eixo X = "Jan 2024", "Fev 2024", ...).
 - Pipeline TDD obrigatorio (agregacao all time + grafico).
+
+#### Resolucao (2026-05-04)
+
+- **Storage helpers novos** em `server/storage.ts`:
+  - `getDashboardAllTimeAggregate(userId)` — agrupa `tournaments` por site, filtros `grind_session_id IS NULL` + `bagged_at IS NULL` (CLAUDE.md §6.1, exclui Day 2 em jogo). Retorna count, investedNative, profitNative + KPIs estendidos: itmCount, finalTablesCount, winsCount via `COUNT(DISTINCT CASE WHEN ... THEN COALESCE(seriesId, id) END)::int`. Espelha formula de `getDashboardPerformance` (linha ~2750) para consistencia com /dashboard.
+  - `getDashboardAllTimeMonthlyAggregate(userId)` — mesma fonte, agrupa por mes UTC (`TO_CHAR(date_played AT TIME ZONE 'UTC', 'YYYY-MM')`) + site para alimentar grafico de evolucao mensal. Sem filtro de range (all-time).
+  - Interface `IStorage` atualizada com ambas assinaturas.
+- **Service novo** `server/services/dashboardAllTime.ts`:
+  - `getDashboardAllTimeSummary(userId)` -> `{ tournaments, profit, invested, roi, itm, finalTables, wins }`. FX cascade via `fxResolver.resolveExchangeRates` + `getCurrencyForSite` (lesson #6). Empty/error -> shape vazio sem throw (lesson #9). `roi: null` quando `invested = 0`.
+  - `getHomeEvolutionAllTime(userId)` -> `{ months: [...], totalProfitUsd }` com serie continua mensal (preenche meses sem volume) entre primeiro mes com dados e mes corrente UTC. `cumulativeProfitUsd` cresce mes a mes. Storage falha -> `{ months: [], totalProfitUsd: 0 }`.
+- **Route** `/api/home/overview`:
+  - Subquery nova `dashboardAllTime` (Promise.allSettled, padrao `timed()`).
+  - Bloco `dashboardAllTime: { tournaments, profit, invested, roi, itm, finalTables, wins } | null` no payload final.
+- **Route** `/api/home/evolution`:
+  - Aceita `?scope=all` retornando `{ months, totalProfitUsd }` via `getHomeEvolutionAllTime`. Sem `scope=all`, comportamento original (mes selecionado) preservado.
+- **Frontend novo** `client/src/components/home/DashboardAllTimeCard.tsx`: header "Dashboard - All Time" + grid responsivo 6 KPIs (Torneios | Profit | ROI | ITM | Mesas Finais | Cravadas). Padrao identico ao SessionsRegisteredCard (item 6) mas linka para `/dashboard`. Empty state quando `data == null` ou `tournaments === 0` ("Sem torneios upados ainda — importe um CSV ou registre na grade.").
+- **Frontend novo** `client/src/components/home/AllTimeEvolutionChart.tsx`: line chart agrupado por mes via Recharts. Eixo X label = "Jan 2024", "Fev 2024", ... (`Intl.DateTimeFormat pt-BR { month: 'short', year: 'numeric' }`). Loading skeleton, empty state, error state. Total acumulado all-time exibido acima do grafico. Endpoint: `GET /api/home/evolution?scope=all`.
+- **Wiring** `Home.tsx`: zona 3 (Sessoes Registradas) substitui `<DashboardMonthCard />` + `<MonthEvolutionChart />` por `<DashboardAllTimeCard />` + `<AllTimeEvolutionChart />`. Imports antigos removidos da Home (componentes ainda existem no repo para uso futuro em outras paginas).
+- **Tests**: 24/24 verde nos 5 arquivos focados (`tests/storage/getDashboardAllTimeAggregate.test.ts` 7 casos, `tests/services/dashboardAllTime.test.ts` 4 casos, `tests/services/homeEvolutionAllTime.test.ts` 3 casos, `client/src/components/home/__tests__/DashboardAllTimeCard.test.tsx` 6 casos, `client/src/components/home/__tests__/AllTimeEvolutionChart.test.tsx` 4 casos). Regressao home + services + components: 615/618 verde, 3 falhas pre-existentes (Sprint News-3 em desenvolvimento — `tests/services/news/titleFingerprint.test.ts:106` lesson #25 + 2 falhas `NewsSlot.test.tsx`). `Home.test.tsx`: 9/9 verde.
+- **Type-check**: zero erros novos introduzidos.
+- **Branch**: founder pediu trabalho direto em `main`. Inicial detectei via `git status` que harness havia colocado em `feature/news-3.1-agent-tools-and-real-selectors` (lesson #24 — auto-mode harness pode trocar branch). Resolvi: `git diff > patch`, `git checkout main`, `git apply --3way`, continuei a partir de main com mods preservadas.
 
 ---
 
