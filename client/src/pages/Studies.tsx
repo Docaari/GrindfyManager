@@ -29,6 +29,8 @@ import { StudiesBottomNav } from '@/components/studies/StudiesBottomNav';
 import { QuickSearchPalette } from '@/components/studies/QuickSearchPalette';
 import { OnboardingWizard } from '@/components/studies/onboarding/OnboardingWizard';
 import { ThemesView } from '@/components/studies/ThemesView';
+// MEDIUM-6 reviewer: novo detail view para /estudos/temas/:id.
+import ThemeDetailView from '@/components/studies/ThemeDetailView';
 import { StatsView } from '@/components/studies/StatsView';
 import { SpotsView } from '@/components/studies/SpotsView';
 import { StudiesDashboard } from '@/components/studies/dashboard/StudiesDashboard';
@@ -36,7 +38,14 @@ import { RecommendationsView } from '@/components/studies/recommendations/Recomm
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
-type ViewKey = 'dashboard' | 'temas' | 'stats' | 'spots' | 'recomendacoes' | 'unknown';
+type ViewKey =
+  | 'dashboard'
+  | 'temas'
+  | 'tema-detail'
+  | 'stats'
+  | 'spots'
+  | 'recomendacoes'
+  | 'unknown';
 
 const COLLAPSE_KEY = 'grindfy:studies:sidebar_collapsed';
 const ONBOARDING_KEY = 'grindfy:studies:onboarding_completed';
@@ -64,12 +73,26 @@ function detectBreakpoint(): Breakpoint {
   return 'mobile';
 }
 
+// MEDIUM-6 reviewer: extrai themeId do path '/estudos/temas/:id'.
+// Retorna null para `/estudos/temas` (lista) e `/estudos/temas/novo` (criacao).
+function extractThemeIdFromPath(path: string): string | null {
+  const stripped = path.split('?')[0].replace(/\/+$/, '');
+  const m = /^\/estudos\/temas\/([^/]+)$/.exec(stripped);
+  if (!m) return null;
+  const id = m[1];
+  // 'novo' eh rota de criacao — nao eh detail.
+  if (!id || id === 'novo') return null;
+  return id;
+}
+
 function viewFromPath(path: string): ViewKey {
   const stripped = path.split('?')[0];
   if (stripped === '/estudos' || stripped === '/estudos/' || stripped.startsWith('/estudos/dashboard')) {
     return 'dashboard';
   }
-  if (stripped.startsWith('/estudos/temas')) return 'temas';
+  if (stripped.startsWith('/estudos/temas')) {
+    return extractThemeIdFromPath(stripped) ? 'tema-detail' : 'temas';
+  }
   if (stripped.startsWith('/estudos/stats')) return 'stats';
   if (stripped.startsWith('/estudos/spots')) return 'spots';
   if (stripped.startsWith('/estudos/recomendacoes')) return 'recomendacoes';
@@ -155,6 +178,16 @@ export default function Studies() {
         );
       case 'temas':
         return <ThemesView />;
+      case 'tema-detail': {
+        // MEDIUM-6 reviewer: render ThemeDetailView para /estudos/temas/:id.
+        const themeId = extractThemeIdFromPath(location || '/estudos/temas');
+        if (!themeId) return <ThemesView />;
+        return (
+          <div data-testid="studies-view-tema-detail">
+            <ThemeDetailView themeId={themeId} />
+          </div>
+        );
+      }
       case 'stats':
         return (
           <div data-testid="studies-view-stats">

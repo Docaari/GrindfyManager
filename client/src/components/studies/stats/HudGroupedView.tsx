@@ -13,6 +13,9 @@ import {
   getStatsByGroup,
   type HudGroupId,
 } from "../../../../../shared/hud-stat-catalog";
+// HIGH-1 reviewer: wira <FocusStatToggle /> em cada stat row para permitir
+// marcar foco do mes direto do Stats Analyzer.
+import FocusStatToggle from "./FocusStatToggle";
 
 const LOCAL_STORAGE_KEY = "stats-v3-expand-state";
 
@@ -193,13 +196,15 @@ function StatCell({
       data-testid={`stats-v3-cell-${field.id}`}
       className={`grid grid-cols-2 sm:grid-cols-3 gap-2 px-3 py-1.5 text-sm border-l-2 bg-slate-900 text-slate-100 ${accent}`}
     >
-      <span className="font-medium text-slate-200 truncate">
-        {field.label}
+      <span className="font-medium text-slate-200 truncate flex items-center gap-2">
+        <span className="truncate">{field.label}</span>
         {field.isCustom && (
-          <span className="ml-1.5 text-[10px] uppercase tracking-wide bg-slate-700 text-slate-200 rounded px-1.5 py-0.5">
+          <span className="ml-1 text-[10px] uppercase tracking-wide bg-slate-700 text-slate-200 rounded px-1.5 py-0.5">
             custom
           </span>
         )}
+        {/* HIGH-1 reviewer: focus toggle inline (lazy by useQuery cache). */}
+        <FocusStatToggle statId={field.id} statLabel={field.label} />
       </span>
       <span
         data-testid={`stats-v3-cell-${field.id}-target`}

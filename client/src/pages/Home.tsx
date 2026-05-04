@@ -14,6 +14,18 @@
  *   #1  hooks first
  *   #13 apiRequest retorna JSON parseado direto
  *   #17 nao reusar nome `profile` (ja em uso). Aqui usamos `data.profile`.
+ *
+ * Notas conhecidas (HIGH-2 reviewer):
+ *   Wouter v3.3.5: o padrao `<Link href><a>...</a></Link>` esta CORRETO.
+ *   Em v3 o Link com child element transfere props/href para o child anchor
+ *   sem renderizar uma anchor extra (sem nested anchors). Verificado em
+ *   wouter/index.d.ts e usage docs. Mantemos o `<a>` filho explicito para
+ *   herdar `href` em SSR/copy-link.
+ *
+ *   LOW-17 reviewer (deferred OK pre-existente): StatusStrip sticky pode
+ *   sobrepor banners (Cooldown/Flight) em viewports estreitos quando o
+ *   usuario rola. Conhecido e fora do escopo deste sprint — fix deve
+ *   considerar reordering banners-ABOVE-strip OU dynamic offset top.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -53,6 +65,8 @@ import SessionsMonthCard from '@/components/home/SessionsMonthCard';
 import DashboardMonthCard from '@/components/home/DashboardMonthCard';
 // Sprint home-reform-4 item 10.
 import MonthEvolutionChart from '@/components/home/MonthEvolutionChart';
+// Sprint home-reform-4 item 7 — nova zona Estudos.
+import FocusStatsCard from '@/components/home/FocusStatsCard';
 
 import type { NewsItem } from '@shared/types/news';
 
@@ -360,18 +374,35 @@ const Home: React.FC = () => {
                 <PendingHandsList data={data.pendingHands} />
                 <CoachRecommendationCard />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="md:col-span-2">
-                  <GradeTodayCard
-                    defaultProfile={
-                      data.today?.profile === 'A' || data.today?.profile === 'B' || data.today?.profile === 'C'
-                        ? data.today.profile
-                        : 'A'
-                    }
-                  />
+              {/*
+                * MEDIUM-10 reviewer: render condicional do grid 3-col. Quando
+                * heuristics esta vazio, o GradeTodayCard ocupa full-width e
+                * eliminamos a coluna fantasma do HeuristicsCard (que renderiza
+                * `null` interno + space vazio). Resultado: layout responsivo
+                * sem espaco em branco inutil.
+                */}
+              {(data.heuristics ?? []).length === 0 ? (
+                <GradeTodayCard
+                  defaultProfile={
+                    data.today?.profile === 'A' || data.today?.profile === 'B' || data.today?.profile === 'C'
+                      ? data.today.profile
+                      : 'A'
+                  }
+                />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="md:col-span-2">
+                    <GradeTodayCard
+                      defaultProfile={
+                        data.today?.profile === 'A' || data.today?.profile === 'B' || data.today?.profile === 'C'
+                          ? data.today.profile
+                          : 'A'
+                      }
+                    />
+                  </div>
+                  <HeuristicsCard data={data.heuristics ?? null} />
                 </div>
-                <HeuristicsCard data={data.heuristics ?? null} />
-              </div>
+              )}
             </section>
 
             {/* Zona 3 — Performance */}
@@ -398,7 +429,14 @@ const Home: React.FC = () => {
               )}
             </section>
 
-            {/* Zona 4 — Sinal Externo */}
+            {/* Zona 4 — Estudos (Sprint home-reform-4 item 7) */}
+            <section data-testid="home-zone-estudos" className="space-y-3">
+              {/* MEDIUM-9 reviewer: usa ZoneHeading consistente em vez de h2 inline. */}
+              <ZoneHeading>Estudos</ZoneHeading>
+              <FocusStatsCard />
+            </section>
+
+            {/* Zona 5 — Sinal Externo */}
             <section data-testid="home-zone-news" className="space-y-3">
               <NewsFeed />
             </section>

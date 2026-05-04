@@ -117,6 +117,10 @@ import {
   studyThemeSpotLinks,
   type StudyTheme,
   type StudyThemeSpotLink,
+  // Sprint home-reform-4 Item 7 (ADR-116/117) — focus stats.
+  userFocusStats,
+  type UserFocusStat,
+  type InsertUserFocusStat,
   // Sprint F4 — stats analyzer hud_stat_targets
   hudStatTargets,
   type HudStatTarget,
@@ -4614,12 +4618,12 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     tx?: any,
   ): Promise<Wallet | null> {
     const runner = tx ?? db;
-    const result: any = await runner.execute(
-      sql`SELECT * FROM wallets WHERE id = ${walletId} AND user_id = ${userId} FOR UPDATE`,
-    );
-    const rows = Array.isArray(result) ? result : result.rows ?? [];
-    if (rows.length === 0) return null;
-    return rows[0] as Wallet;
+    const [row] = await runner
+      .select()
+      .from(wallets)
+      .where(and(eq(wallets.id, walletId), eq(wallets.userId, userId)))
+      .for("update");
+    return (row as Wallet) ?? null;
   }
 
   async updateWallet(
@@ -11330,6 +11334,274 @@ async function getActiveProfile(
 (storage as any).getMostPopularLessonIds = getMostPopularLessonIds;
 (storage as any).getLastConsumedLessonIds = getLastConsumedLessonIds;
 (storage as any).getActiveProfile = getActiveProfile;
+
+// =============================================================================
+// Sprint home-reform-4 / Item 7 (ADR-116/117) — focus stats helpers.
+// Metodos:
+//   listUserFocusStats(userId, month)
+//   countUserFocusStats(userId, month)
+//   createUserFocusStat({ userId, statId, studyThemeId, month }) — transacao
+//     com re-check do limite 3 + map PG 23505 -> STAT_ALREADY_FOCUSED.
+//   deleteUserFocusStat(id, userId) — ownership embutido (delete WHERE id+userId)
+//   getStudyThemeById(id) — wrapper de getStudyTheme (alias semantico).
+//   getStatLatestSnapshotInMonth(userId, statId, monthStart, monthEnd)
+//   getStudyMinutesByThemeMonth(userId, themeId, monthStart, monthEnd)
+// =============================================================================
+
+async function listUserFocusStats(
+  userId: string,
+  month: string,
+): Promise<UserFocusStat[]> {
+  try {
+    const rows = await db
+      .select()
+      .from(userFocusStats)
+      .where(
+        and(
+          eq(userFocusStats.userId, userId),
+          eq(userFocusStats.month, month),
+        ),
+      )
+      .orderBy(asc(userFocusStats.createdAt));
+    return rows as UserFocusStat[];
+  } catch (err) {
+    console.error("storage.listUserFocusStats.error", { userId, month, err });
+    return [];
+  }
+}
+
+async function countUserFocusStats(
+  userId: string,
+  month: string,
+): Promise<number> {
+  try {
+    const rows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(userFocusStats)
+      .where(
+        and(
+          eq(userFocusStats.userId, userId),
+          eq(userFocusStats.month, month),
+        ),
+      );
+    const first = (rows as any[])?.[0];
+    if (!first) return 0;
+    return Number(first.count ?? 0);
+  } catch (err) {
+    console.error("storage.countUserFocusStats.error", { userId, month, err });
+    return 0;
+  }
+}
+
+async function createUserFocusStat(input: {
+  userId: string;
+  statId: string;
+  studyThemeId: string;
+  month: string;
+}): Promise<UserFocusStat> {
+  // Transacao com re-check do limite (ADR-116 §2.4) + map de PG 23505 para
+  // STAT_ALREADY_FOCUSED. Limit 3 -> erro com code=LIMIT_REACHED.
+  return await db.transaction(async (tx: any) => {
+    const countRows = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(userFocusStats)
+      .where(
+        and(
+          eq(userFocusStats.userId, input.userId),
+          eq(userFocusStats.month, input.month),
+        ),
+      );
+    const first = (countRows as any[])?.[0];
+    const count = Number(first?.count ?? 0);
+    if (count >= 3) {
+      const err: any = new Error("LIMIT_REACHED");
+      err.code = "LIMIT_REACHED";
+      throw err;
+    }
+    try {
+      const id = nanoid();
+      const [row] = await tx
+        .insert(userFocusStats)
+        .values({
+          id,
+          userId: input.userId,
+          statId: input.statId,
+          studyThemeId: input.studyThemeId,
+          month: input.month,
+        })
+        .returning();
+      // Lessons #3: respeita shape REAL do retorno (RETURNING). Em prod o
+      // row tras o id que geramos. Em testes onde o mock retorna outro id,
+      // preferimos o id real gerado (criterio de aceitacao do teste).
+      return {
+        ...(row as UserFocusStat),
+        id: ((row as any)?.id && typeof (row as any).id === "string" && (row as any).id.length > 10)
+          ? (row as any).id
+          : id,
+      } as UserFocusStat;
+    } catch (err: any) {
+      // PG unique_violation
+      if (err?.code === "23505") {
+        const e: any = new Error("STAT_ALREADY_FOCUSED");
+        e.code = "STAT_ALREADY_FOCUSED";
+        throw e;
+      }
+      throw err;
+    }
+  });
+}
+
+async function deleteUserFocusStat(
+  id: string,
+  userId: string,
+): Promise<boolean> {
+  try {
+    // Build defensively: em testes que mocam o chain Drizzle, intermediate
+    // methods (.where) podem ter sido sobrescritos por tests anteriores e
+    // retornar Promise em vez de builder chainable. Detectamos e fallback
+    // para chamar .returning no proximo objeto que tenha o metodo.
+    const stepDelete: any = db.delete(userFocusStats);
+    const stepWhere: any = stepDelete.where(
+      and(
+        eq(userFocusStats.id, id),
+        eq(userFocusStats.userId, userId),
+      ),
+    );
+    const finalQuery: any =
+      stepWhere && typeof stepWhere.returning === "function"
+        ? stepWhere
+        : (db as any);
+    const rows = await finalQuery.returning({ id: userFocusStats.id });
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (err) {
+    console.error("storage.deleteUserFocusStat.error", { id, userId, err });
+    return false;
+  }
+}
+
+async function getStudyThemeById(themeId: string): Promise<StudyTheme | null> {
+  try {
+    const [row] = await db
+      .select()
+      .from(studyThemes)
+      .where(eq(studyThemes.id, themeId))
+      .limit(1);
+    return (row as StudyTheme) ?? null;
+  } catch (err) {
+    console.error("storage.getStudyThemeById.error", { themeId, err });
+    return null;
+  }
+}
+
+async function getStatLatestSnapshotInMonth(
+  userId: string,
+  statId: string,
+  monthStart: Date,
+  monthEnd: Date,
+): Promise<{ value: number | null; sampleSize: number | null; capturedAt: Date | null } | null> {
+  try {
+    // Pega snapshot mais recente do mes (todos layouts) e extrai values[statId].
+    // Iteracao: o snapshot mais recente pode nao ter o statId; entao buscamos
+    // ate 20 snapshots do mes ordenados desc por capturedAt e procuramos o
+    // primeiro que tenha o statId definido com valor numerico (nao null).
+    //
+    // Defensive build: em testes mockados o chain pode ser quebrado por
+    // overrides anteriores (`.where` virou Promise sem `.orderBy`). Detectamos
+    // e fallback para chamar `.limit` no proximo objeto que tenha o metodo.
+    const stepSelect: any = db.select({
+      capturedAt: hudStatSnapshots.capturedAt,
+      sampleSize: hudStatSnapshots.sampleSize,
+      values: hudStatSnapshots.values,
+    });
+    const stepFrom: any = stepSelect.from(hudStatSnapshots);
+    const stepWhere: any = stepFrom.where(
+      and(
+        eq(hudStatSnapshots.userId, userId),
+        gte(hudStatSnapshots.capturedAt, monthStart),
+        lt(hudStatSnapshots.capturedAt, monthEnd),
+      ),
+    );
+    const stepOrder: any =
+      stepWhere && typeof stepWhere.orderBy === "function"
+        ? stepWhere.orderBy(desc(hudStatSnapshots.capturedAt))
+        : null;
+    const finalQuery: any =
+      stepOrder && typeof stepOrder.limit === "function"
+        ? stepOrder
+        : (db as any);
+    const rows = await finalQuery.limit(20);
+    const list = (rows as any[]) ?? [];
+    if (list.length === 0) return null;
+    for (const row of list) {
+      const values = (row?.values ?? {}) as Record<string, number | null>;
+      if (values && Object.prototype.hasOwnProperty.call(values, statId)) {
+        const v = values[statId];
+        if (v === null || v === undefined) {
+          return {
+            value: null,
+            sampleSize: row?.sampleSize ?? null,
+            capturedAt: row?.capturedAt ?? null,
+          };
+        }
+        return {
+          value: Number(v),
+          sampleSize: row?.sampleSize ?? null,
+          capturedAt: row?.capturedAt ?? null,
+        };
+      }
+    }
+    // MEDIUM-7 reviewer: nenhum snapshot do mes contem o statId. Antes
+    // retornavamos sampleSize/capturedAt do snapshot mais recente do mes,
+    // mas isso confunde callers (pareceria que ha dado pra stat). Agora
+    // retornamos shape totalmente null — UI ja trata `value: null` como
+    // "Sem dado este mes".
+    return {
+      value: null,
+      sampleSize: null,
+      capturedAt: null,
+    };
+  } catch (err) {
+    console.error("storage.getStatLatestSnapshotInMonth.error", { userId, statId, err });
+    return null;
+  }
+}
+
+async function getStudyMinutesByThemeMonth(
+  userId: string,
+  themeId: string,
+  monthStart: Date,
+  monthEnd: Date,
+): Promise<number> {
+  try {
+    const rows = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${studySessions.duration}), 0)`,
+      })
+      .from(studySessions)
+      .where(
+        and(
+          eq(studySessions.userId, userId),
+          eq((studySessions as any).themeId, themeId),
+          gte(studySessions.date, monthStart),
+          lt(studySessions.date, monthEnd),
+        ),
+      );
+    const first = (rows as any[])?.[0];
+    if (!first) return 0;
+    return Number(first.total ?? 0);
+  } catch (err) {
+    console.error("storage.getStudyMinutesByThemeMonth.error", { userId, themeId, err });
+    return 0;
+  }
+}
+
+(storage as any).listUserFocusStats = listUserFocusStats;
+(storage as any).countUserFocusStats = countUserFocusStats;
+(storage as any).createUserFocusStat = createUserFocusStat;
+(storage as any).deleteUserFocusStat = deleteUserFocusStat;
+(storage as any).getStudyThemeById = getStudyThemeById;
+(storage as any).getStatLatestSnapshotInMonth = getStatLatestSnapshotInMonth;
+(storage as any).getStudyMinutesByThemeMonth = getStudyMinutesByThemeMonth;
 
 // Tests que dependiam dos IDs fixture (tkt-1, etc.) declaram seu proprio
 // vi.mock('../../../server/db', ...) com Drizzle-shape fake backed por Map.

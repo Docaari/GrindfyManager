@@ -109,6 +109,16 @@ const _color = {
     bg: 'bg-purple-500/15',
     border: 'border-purple-500/40',
   },
+  /**
+   * LOW-18 reviewer — tokens dedicados para sinais de delta KPI (vermelho/verde
+   * em saturacao 500 para destaque visual em numeros grandes). Diferente de
+   * `success`/`danger` que usam saturacao 300 (badges/banners). Manter ambos.
+   */
+  delta: {
+    positive: 'text-emerald-500',
+    negative: 'text-rose-500',
+    neutral: 'text-muted-foreground',
+  },
 } as const;
 
 /**
@@ -181,8 +191,25 @@ export type Tokens = typeof tokens;
 export type SpaceKey = keyof Tokens['space'];
 export type FontKey = keyof Tokens['font'];
 export type FontWeightKey = keyof Tokens['fontWeight'];
-export type ColorKey = keyof Tokens['color'];
+/**
+ * ColorKey — chaves do `tokens.color` que sao "swatches" (compartilham shape
+ * { text, bg, border }). Exclui `delta` que tem shape distinto
+ * (positive/negative/neutral). Use `DeltaTone` para `tokens.color.delta`.
+ *
+ * LOW-18 reviewer: introduzido para nao quebrar consumidores
+ * (`FilterChip`, swatches em badges) ao adicionar `delta`.
+ */
+export type ColorKey =
+  | 'success'
+  | 'danger'
+  | 'warn'
+  | 'info'
+  | 'action'
+  | 'neutral'
+  | 'accent';
 export type ColorVariant = keyof Tokens['color']['success'];
+/** Tokens dedicados a sinais de delta (KPIs grandes). */
+export type DeltaTone = keyof Tokens['color']['delta'];
 export type MotionKey = keyof Tokens['motion'];
 export type RadiusKey = keyof Tokens['radius'];
 export type ShadowKey = keyof Tokens['shadow'];

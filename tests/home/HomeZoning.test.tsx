@@ -255,6 +255,52 @@ describe('RF-A3 — StatusStrip sticky', () => {
 });
 
 // =============================================================================
+// home-reform-4 / Item 7 — Nova zona "Estudos" + FocusStatsCard
+// Spec: Docs/specs/home-reform-4-item-7-focus-stats.md §RF-06
+// ADR-118: zona Estudos entre Performance (Z3) e Sinal Externo (Z5)
+// =============================================================================
+
+describe('home-reform-4 item 7 — zona Estudos + FocusStatsCard', () => {
+  it('renderiza nova section data-testid="home-zone-estudos"', async () => {
+    await renderHome(buildPowerPayload());
+    expect(await screen.findByTestId('home-zone-estudos')).toBeInTheDocument();
+  });
+
+  it('zona "Estudos" tem h2 visivel com label "Estudos"', async () => {
+    await renderHome(buildPowerPayload());
+    const estudos = await screen.findByTestId('home-zone-estudos');
+    expect(estudos.querySelector('h2')?.textContent ?? '').toMatch(/Estudos/i);
+  });
+
+  it('zona "Estudos" renderiza FocusStatsCard (loading|empty|card)', async () => {
+    await renderHome(buildPowerPayload());
+    const estudos = await screen.findByTestId('home-zone-estudos');
+    // Componente novo deve aparecer em algum estado (loading | empty | card).
+    const node = estudos.querySelector(
+      '[data-testid="home-focus-stats-card"], [data-testid="home-focus-stats-empty"], [data-testid="home-focus-stats-loading"]',
+    );
+    expect(node).not.toBeNull();
+  });
+
+  it('ordem das zonas: today -> action -> perf -> ESTUDOS -> news', async () => {
+    await renderHome(buildPowerPayload());
+    const allZones = await screen.findAllByTestId(/^home-zone-/);
+    const ids = allZones.map((el) => el.getAttribute('data-testid'));
+    const idxToday = ids.indexOf('home-zone-today');
+    const idxAction = ids.indexOf('home-zone-action');
+    const idxPerf = ids.indexOf('home-zone-perf');
+    const idxEstudos = ids.indexOf('home-zone-estudos');
+    const idxNews = ids.indexOf('home-zone-news');
+
+    expect(idxToday).toBeGreaterThanOrEqual(0);
+    expect(idxAction).toBeGreaterThan(idxToday);
+    expect(idxPerf).toBeGreaterThan(idxAction);
+    expect(idxEstudos).toBeGreaterThan(idxPerf);
+    expect(idxNews).toBeGreaterThan(idxEstudos);
+  });
+});
+
+// =============================================================================
 // home-reform-4 / Item 4 — CoachRecommendationCard substitui LibraryResume
 // Spec: Docs/specs/home-reform-4-item-4-coach-recommendation.md §RF-10
 // =============================================================================

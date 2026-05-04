@@ -835,6 +835,11 @@ export const studySessions = pgTable("study_sessions", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   studyCardId: varchar("study_card_id"),
+  // Sprint home-reform-4 Item 7 (ADR-117): nullable FK ao tema, SET NULL para
+  // preservar audit. Sem back-fill historico (sessoes antigas ficam NULL).
+  // LOW-15 reviewer: lazy callback (`() => studyThemes.id`) eh resolvido em
+  // runtime, evitando hoisting issue com `studyThemes` declarado abaixo.
+  themeId: varchar("theme_id", { length: 21 }).references(() => studyThemes.id, { onDelete: "set null" }),
   date: timestamp("date").notNull(),
   duration: integer("duration").notNull(), // em minutos
   activities: jsonb("activities").$type<string[]>().default([]), // video, notes, flashcards, etc.
@@ -1108,6 +1113,11 @@ export const studySessionsRelations = relations(studySessions, ({ one }) => ({
   studyCard: one(studyCards, {
     fields: [studySessions.studyCardId],
     references: [studyCards.id],
+  }),
+  // Sprint home-reform-4 Item 7 (ADR-117): theme relation (nullable).
+  theme: one(studyThemes, {
+    fields: [studySessions.themeId],
+    references: [studyThemes.id],
   }),
 }));
 
@@ -2125,6 +2135,60 @@ export const insertStudyThemeSpotLinkSchema = createInsertSchema(studyThemeSpotL
 });
 export type StudyThemeSpotLink = typeof studyThemeSpotLinks.$inferSelect;
 export type InsertStudyThemeSpotLink = z.infer<typeof insertStudyThemeSpotLinkSchema>;
+
+// =============================================================================
+// Sprint home-reform-4 Item 7 (ADR-116) — user_focus_stats
+// =============================================================================
+// Marcacoes mensais de stats foco do user. Escopo mensal via coluna `month`
+// (varchar YYYY-MM). UNIQUE (user_id, stat_id, month) DB-level. Limite 3 por
+// (user, month) enforced em servico (ADR-116 §2.4).
+//
+// stat_id NAO eh FK (catalog estatico em shared/hud-stat-catalog.ts).
+// study_theme_id CASCADE: deletar tema remove marcacao.
+// =============================================================================
+export const userFocusStats = pgTable("user_focus_stats", {
+  id: varchar("id", { length: 21 }).primaryKey().notNull(),
+  userId: varchar("user_id", { length: 21 })
+    .notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  statId: varchar("stat_id", { length: 64 }).notNull(),
+  studyThemeId: varchar("study_theme_id", { length: 21 })
+    .notNull()
+    .references(() => studyThemes.id, { onDelete: "cascade" }),
+  month: varchar("month", { length: 7 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("uq_user_focus_stats_user_stat_month").on(
+    table.userId,
+    table.statId,
+    table.month,
+  ),
+  index("idx_user_focus_stats_user_month").on(table.userId, table.month),
+  index("idx_user_focus_stats_theme").on(table.studyThemeId),
+]);
+
+export const userFocusStatsRelations = relations(userFocusStats, ({ one }) => ({
+  user: one(users, {
+    fields: [userFocusStats.userId],
+    references: [users.userPlatformId],
+  }),
+  studyTheme: one(studyThemes, {
+    fields: [userFocusStats.studyThemeId],
+    references: [studyThemes.id],
+  }),
+}));
+
+export const insertUserFocusStatSchema = createInsertSchema(userFocusStats, {
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Formato deve ser YYYY-MM"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserFocusStat = typeof userFocusStats.$inferSelect;
+export type InsertUserFocusStat = z.infer<typeof insertUserFocusStatSchema>;
 
 // Tournament Library - curated list of tournaments for grade planning
 export const tournamentLibrary = pgTable("tournament_library", {

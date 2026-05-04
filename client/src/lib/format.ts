@@ -87,3 +87,53 @@ export function formatCurrency(
 }
 
 export default formatCurrency;
+
+// =============================================================================
+// MEDIUM-11 reviewer: helpers de formatacao reutilizados por
+// SessionsMonthCard e DashboardMonthCard (KPIs mes corrente). Centralizamos
+// para garantir consistencia visual + eliminar duplicacao.
+// =============================================================================
+
+/**
+ * fmtUsdShort — USD sem casas decimais com sinal explicito + simbolo $.
+ * Exemplo: 1180 -> "+$1.180", -250.5 -> "-$251".
+ */
+export function fmtUsdShort(v: number): string {
+  if (!Number.isFinite(v)) return "$0";
+  const sign = v >= 0 ? "+" : "-";
+  const abs = Math.abs(v);
+  return `${sign}$${abs.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
+}
+
+/**
+ * fmtRoi — percentual com 1 casa, "+" explicito quando positivo, em-dash quando null.
+ */
+export function fmtRoi(v: number | null): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "—";
+  const sign = v >= 0 ? "+" : "";
+  return `${sign}${v.toFixed(1)}%`;
+}
+
+/**
+ * fmtMonth — converte 'YYYY-MM-DD' OU 'YYYY-MM' em "Maio 2026" (PT-BR).
+ * Retorna string vazia para input invalido.
+ */
+export function fmtMonth(iso: string): string {
+  if (!iso) return "";
+  const [y, m] = iso.split("-");
+  if (!y || !m) return "";
+  const year = Number(y);
+  const monthIdx = Number(m) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(monthIdx) || monthIdx < 0 || monthIdx > 11) {
+    return "";
+  }
+  const d = new Date(Date.UTC(year, monthIdx, 1, 12, 0, 0));
+  const label = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+  }).format(d);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
