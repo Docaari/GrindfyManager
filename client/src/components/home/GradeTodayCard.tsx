@@ -19,12 +19,20 @@ import { apiRequest } from '@/lib/queryClient';
 
 type GradeProfile = 'A' | 'B' | 'C';
 
+interface GradeTodayEntry {
+  time: string;
+  name: string;
+}
+
 interface GradeTodayResponse {
   date: string;
   profile: GradeProfile;
   count: number;
   totalInvestmentUsd: number;
   abi: number | null;
+  // Sprint home-reform-5 item 5 — primeiro + ultimo registro do dia.
+  firstEntry?: GradeTodayEntry | null;
+  lastEntry?: GradeTodayEntry | null;
 }
 
 interface Props {
@@ -124,20 +132,48 @@ export default function GradeTodayCard({ defaultProfile = 'A' }: Props): JSX.Ele
           Nenhum torneio planejado para perfil {profile}
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-4">
-          <div data-testid="grade-today-card-count" className="flex flex-col gap-0.5">
-            <span className="text-3xl font-bold text-foreground">{data!.count}</span>
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">Torneios</span>
+        <>
+          <div className="grid grid-cols-3 gap-4">
+            <div data-testid="grade-today-card-count" className="flex flex-col gap-0.5">
+              <span className="text-3xl font-bold text-foreground">{data!.count}</span>
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">Torneios</span>
+            </div>
+            <div data-testid="grade-today-card-investment" className="flex flex-col gap-0.5">
+              <span className="text-3xl font-bold text-foreground">{fmtUsd(data!.totalInvestmentUsd)}</span>
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">Investimento</span>
+            </div>
+            <div data-testid="grade-today-card-abi" className="flex flex-col gap-0.5">
+              <span className="text-3xl font-bold text-foreground">{fmtAbi(data!.abi)}</span>
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">ABI</span>
+            </div>
           </div>
-          <div data-testid="grade-today-card-investment" className="flex flex-col gap-0.5">
-            <span className="text-3xl font-bold text-foreground">{fmtUsd(data!.totalInvestmentUsd)}</span>
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">Investimento</span>
-          </div>
-          <div data-testid="grade-today-card-abi" className="flex flex-col gap-0.5">
-            <span className="text-3xl font-bold text-foreground">{fmtAbi(data!.abi)}</span>
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">ABI</span>
-          </div>
-        </div>
+          {(data!.firstEntry || data!.lastEntry) ? (
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              {data!.firstEntry ? (
+                <div
+                  data-testid="grade-today-card-first"
+                  className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5"
+                >
+                  <span className="uppercase tracking-wide text-muted-foreground">1º registro</span>
+                  <span className="font-medium text-foreground truncate">
+                    {data!.firstEntry.time} · {data!.firstEntry.name}
+                  </span>
+                </div>
+              ) : null}
+              {data!.lastEntry ? (
+                <div
+                  data-testid="grade-today-card-last"
+                  className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5"
+                >
+                  <span className="uppercase tracking-wide text-muted-foreground">Último registro</span>
+                  <span className="font-medium text-foreground truncate">
+                    {data!.lastEntry.time} · {data!.lastEntry.name}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </>
       )}
     </div>
   );

@@ -1,8 +1,10 @@
 /**
- * gradeToday — Sprint home-reform-4 item 5.
+ * gradeToday — Sprint home-reform-4 item 5 + home-reform-5 item 5.
  *
- * Spec: Docs/specs/home-reform-4.md item 5 (Card "Grade do dia" — chips A|B|C
- * + count/totalInvestmentUsd/abi).
+ * Spec home-reform-4 item 5: Card "Grade do dia" — chips A|B|C +
+ * count/totalInvestmentUsd/abi.
+ * Spec home-reform-5 item 5: Adiciona firstEntry + lastEntry (primeiro e
+ * ultimo registro do dia para o profile selecionado).
  *
  * Orchestrator: pega rows nativas do storage.getGradeTodayAggregate (filtrado
  * por user + dayOfWeek + profile), converte buy-in nativo para USD via
@@ -11,6 +13,9 @@
  *
  * date e dayOfWeek sao calculados pelo caller (route handler) considerando o
  * users.timezone. Aqui o service eh agnostico de timezone.
+ *
+ * Boundaries via storage.getDayPlanBoundaries(userId, weekday, [profile]).
+ * Retorno do storage e null-tolerant; falha eh logada e degrada para null.
  */
 
 import { storage } from "../storage";
@@ -18,6 +23,13 @@ import { fxResolver } from "./fxResolver";
 import { getCurrencyForSite } from "@shared/platform-currency";
 
 export type GradeProfile = 'A' | 'B' | 'C';
+
+export interface GradeTodayEntry {
+  /** HH:MM (registrationTime quando preenchido, senao time padrao da grade). */
+  time: string;
+  /** Nome do torneio. */
+  name: string;
+}
 
 export interface GradeTodaySummary {
   /** ISO YYYY-MM-DD do dia computado. */
@@ -30,6 +42,10 @@ export interface GradeTodaySummary {
   totalInvestmentUsd: number;
   /** Average Buy-In = totalInvestmentUsd / count. null quando count=0. */
   abi: number | null;
+  /** Primeiro registro do dia (menor horario). null quando nao ha grade. */
+  firstEntry: GradeTodayEntry | null;
+  /** Ultimo registro do dia (maior horario). null quando nao ha grade. */
+  lastEntry: GradeTodayEntry | null;
 }
 
 export async function getGradeTodaySummary(
@@ -65,11 +81,28 @@ export async function getGradeTodaySummary(
 
   const abi = count > 0 ? totalInvestmentUsd / count : null;
 
+  // Sprint home-reform-5 item 5 — boundaries.
+  let firstEntry: GradeTodayEntry | null = null;
+  let lastEntry: GradeTodayEntry | null = null;
+  if (typeof storageAny.getDayPlanBoundaries === "function") {
+    try {
+      const boundaries = await storageAny.getDayPlanBoundaries(userId, opts.dayOfWeek, [opts.profile]);
+      if (boundaries && boundaries.first && boundaries.last) {
+        firstEntry = { time: String(boundaries.first.time ?? ''), name: String(boundaries.first.name ?? '') };
+        lastEntry = { time: String(boundaries.last.time ?? ''), name: String(boundaries.last.name ?? '') };
+      }
+    } catch (err) {
+      console.error("[gradeToday] storage.getDayPlanBoundaries failed:", (err as any)?.message);
+    }
+  }
+
   return {
     date: opts.date,
     profile: opts.profile,
     count,
     totalInvestmentUsd,
     abi,
+    firstEntry,
+    lastEntry,
   };
 }

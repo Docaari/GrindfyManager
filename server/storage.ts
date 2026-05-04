@@ -801,6 +801,16 @@ export interface IStorage {
     investedNative: string;
   }>>;
 
+  // Sprint home-reform-5 item 5 — boundaries (primeiro + ultimo registro do dia)
+  getDayPlanBoundaries(
+    userId: string,
+    weekday: number,
+    profileIds: Array<'A' | 'B' | 'C'>,
+  ): Promise<{
+    first: { time: string; name: string };
+    last: { time: string; name: string };
+  } | null>;
+
   // Sprint F3 — Stats Analyzer (ADR-051)
   getHudLayouts(userId: string): Promise<HudLayout[]>;
   getHudLayout(id: string, userId: string): Promise<HudLayout | undefined>;
@@ -6664,6 +6674,57 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       count: Number(r.count) || 0,
       investedNative: String(r.investedNative ?? '0'),
     }));
+  }
+
+  // ============================================================================
+  // Sprint home-reform-5 item 5 — Grade do Dia: Primeiro + Ultimo Registro
+  // ============================================================================
+  //
+  // Spec: Docs/specs/home-reform-5.md item 5. Card "Grade do dia" estende o
+  // payload do home-reform-4 item 5 com 2 horarios chave: primeiro e ultimo
+  // registro do dia para o(s) profile(s) ativo(s).
+  //
+  // ORDER BY COALESCE(registration_time, time) ASC: usa registrationTime quando
+  // preenchido (intencao explicita do jogador, ADR-090 / Sprint News-3 6/7) e
+  // fallback para time padrao (HH:MM da grade). Mesma cascata que /grind-live.
+  //
+  // Retorna { first: { time, name }, last: { time, name } } | null.
+  // Quando profileIds vazio -> null sem hit DB.
+  async getDayPlanBoundaries(
+    userId: string,
+    weekday: number,
+    profileIds: Array<'A' | 'B' | 'C'>,
+  ): Promise<{ first: { time: string; name: string }; last: { time: string; name: string } } | null> {
+    if (!Array.isArray(profileIds) || profileIds.length === 0) return null;
+
+    const conditions = [
+      eq(plannedTournaments.userId, userId),
+      eq(plannedTournaments.dayOfWeek, weekday),
+      inArray(plannedTournaments.profile, profileIds as string[]),
+      eq(plannedTournaments.isActive, true),
+    ];
+
+    const rows = await db
+      .select({
+        time: plannedTournaments.time,
+        name: plannedTournaments.name,
+        registrationTime: plannedTournaments.registrationTime,
+      })
+      .from(plannedTournaments)
+      .where(and(...conditions))
+      .orderBy(sql`COALESCE(${plannedTournaments.registrationTime}, ${plannedTournaments.time}) ASC`);
+
+    if (!rows || rows.length === 0) return null;
+
+    const pick = (r: any): { time: string; name: string } => ({
+      time: String(r.registrationTime ?? r.time ?? ''),
+      name: String(r.name ?? ''),
+    });
+
+    return {
+      first: pick(rows[0]),
+      last: pick(rows[rows.length - 1]),
+    };
   }
 
   async getRoiByPlatform(
