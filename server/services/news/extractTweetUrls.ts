@@ -22,7 +22,8 @@ export function extractTweetUrls(summary: string): string[] {
   const out: string[] = [];
   for (const raw of matches) {
     // Strip trailing punctuation that the regex may have captured.
-    const trimmed = raw.replace(/[.,;)]+$/, "");
+    // Review LOW-1 fix: incluir `]!?` que tambem aparecem como trailing real.
+    const trimmed = raw.replace(/[.,;)\]!?]+$/, "");
     let host = "";
     try {
       host = new URL(trimmed).hostname.toLowerCase();

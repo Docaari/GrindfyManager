@@ -27,6 +27,9 @@ import { applyDedupe } from "./dedupeLayers";
 import { canonicalizeUrl } from "./urlCanonicalize";
 import { titleFingerprint } from "./titleFingerprint";
 import type { NewsSourceLike, ScrapedNewsItem } from "./blogScraperProvider";
+// Review M1: invalida cache do /api/news/feed apos run para que admin trigger
+// + cron run reflitam imediatamente no proximo /feed (evita janela 5min stale).
+import { _clearFeedCache } from "../../routes/news";
 
 const CONCURRENCY = 3;
 const NEWS_TTL_DAYS = 30; // Layer 1/2 windows = 30 dias.
@@ -253,6 +256,16 @@ export async function runOrchestration(): Promise<OrchestrationResult> {
       completedAt,
     })}`,
   );
+
+  // Review M1 fix: invalida cache /api/news/feed se algo foi inserido,
+  // para que proximo GET ja veja items novos sem aguardar TTL 5min.
+  if (inserted > 0) {
+    try {
+      _clearFeedCache();
+    } catch {
+      // Defensive — cache module pode nao estar carregado em test env.
+    }
+  }
 
   return result;
 }
