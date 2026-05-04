@@ -24,7 +24,7 @@ Regra de execucao:
 |---|------|--------|------|------------|
 | 1 | Remover aviso "Day 2 do Mystery Mini comeca em 145h..." | Concluido (2026-05-04) | Remocao | 15min |
 | 2 | Corrigir Header Sessao (Banca, Hoje, ROI 30D, Pendencias priorizadas) | Concluido (2026-05-04) | Bug fix + feature | 4-6h |
-| 3 | Pergunte ao Coach: perfis multiplos + Iniciar Sessao + DAY OFF | Pendente | Feature | 2-3h |
+| 3 | Pergunte ao Coach: perfis multiplos + Iniciar Sessao + DAY OFF | Concluido (2026-05-04) | Feature | 2-3h |
 | 4 | Acao Imediata: stat destaque + Iniciar sessao | Pendente | Feature (depende de stat destaque futura) | 2h |
 | 5 | Grade do Dia: Primeiro Registro + Ultimo Registro | Concluido (2026-05-04) | Feature pequena | 1-2h |
 | 6 | Renomear Performance -> Sessoes Registradas + KPIs corretos + ITM/MF/Cravadas | Pendente | Bug fix + feature | 3-4h |
@@ -147,6 +147,26 @@ Ordem de execucao recomendada: **1 -> 2 -> 5 -> 3 -> 4 -> 6 -> 7 -> 8 -> 11 -> 1
 - Endpoint `/api/home/overview` retorna `coachContext: { activeProfiles: ['A','B'], todayTournamentsTotal: 304, isDayOff: false }`.
 - Componente `client/src/components/home/CoachQuickAccess.tsx` (ou pago similar) refatorado.
 - Testes: agregacao por perfil ativo + dia da semana.
+
+#### Resolucao (2026-05-04)
+
+- Service puro novo: `server/services/coachContext.ts` com `buildCoachContext({ activeProfile, plannedTournaments })` retornando `{ activeProfiles, todayTournamentsTotal, isDayOff }`. Aceita `activeProfile` singular (schema atual `profile_states.activeProfile`) OU array (forward-compat para multi-profile futuro). Filtra valores invalidos. 16/16 testes verde em `tests/services/coachContext.test.ts`.
+- `/api/home/overview` carrega bloco novo `coachContext` no payload. Reusa subqueries existentes `profile` (profile_states do dia) + `planned` (planned_tournaments do dia atual) — zero subqueries novas. CLAUDE.md §6.1 nao se aplica (planned_tournaments NAO usa filtro grindSessionId).
+- **3.1 Label refatorado** — `TodayCard` aceita prop `coachContext` opcional. Quando fornecido, substitui `"X torneios"` por:
+  - 1 perfil: `"B - 152 torneios"` (singular: `"B - 1 torneio"`).
+  - 2 perfis: `"A + B - 304 torneios"`.
+  - 3 perfis: `"A + B + C - X torneios"`.
+  - DAY OFF: `"DAY OFF"`.
+  - Quando coachContext ausente, mantem layout antigo (back-compat).
+- **3.2 Iniciar Sessao** — `NextTournamentCountdown` aceita prop `coachContext` opcional. Quando fornecido:
+  - Titulo renomeado de `"Proximo torneio"` para `"Iniciar Sessao"`.
+  - Conteudo: `"X torneios planejados"` + linha `"A + B"` dos perfis ativos.
+  - CTA `"Inicio Rapido →"` aponta para `/grind?open=quickstart`.
+  - Empty state DAY OFF (`testid iniciar-sessao-day-off`) sem CTA.
+  - Quando coachContext ausente, mantem countdown legacy (back-compat).
+- **GrindSession.tsx wiring** — novo `useEffect` watching `useSearch()`. Quando query `open=quickstart`, aguarda `sessionsLoading`/`historyLoading`/`warmupGateLoading` resolverem + `startSessionMutation` ocioso, ai dispara `handleQuickStart()` 1x (ref guard). Limpa o query param via `history.replaceState` para evitar re-fire em refetch/back-nav. Permite que warmup gate, conflict dialog e demais branches do `handleQuickStart` operem normalmente.
+- `Home.tsx` passa `data.coachContext` para os 2 cards (TodayCard + NextTournamentCountdown). Tipo da resposta atualizado em `HomeOverviewResponse.coachContext` (opcional, back-compat com versoes antigas do backend).
+- Tests: 11/11 verdes em `tests/home/CoachQuickAccess.test.tsx`. Regressao home + services: 360/361 verdes (1 fail pre-existente em `tests/services/news/titleFingerprint.test.ts:106` — lesson #25 documenta inconsistencia logica do test-writer no Sprint News-3, sem relacao com este item). Type-check zero erros novos.
 
 ---
 

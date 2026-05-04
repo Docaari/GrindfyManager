@@ -2,9 +2,14 @@
  * RF-10 — TodayCard sessao do dia (Sprint home-reform-1).
  *
  * Spec: Docs/specs/home-reform-1.md §RF-10, §5.2 S2
+ *       Docs/specs/home-reform-5.md item 3.1 — label multi-profile + DAY OFF.
  *
  * Mostra perfil A/B/C/OFF + qtd torneios + stops + 2 CTAs (warm-up condicional, grade sempre).
  * Empty state quando data=null com CTA "Configurar grade".
+ *
+ * home-reform-5 item 3.1: quando coachContext fornecido, substitui linha de
+ * "X torneios" por label "A + B - 304 torneios" / "DAY OFF" (consome
+ * activeProfiles + todayTournamentsTotal + isDayOff).
  */
 
 import React from 'react';
@@ -20,11 +25,24 @@ interface TodayData {
   hasWarmupToday: boolean;
 }
 
-interface TodayCardProps {
-  data: TodayData | null;
+interface CoachContext {
+  activeProfiles: ('A' | 'B' | 'C')[];
+  todayTournamentsTotal: number;
+  isDayOff: boolean;
 }
 
-export default function TodayCard({ data }: TodayCardProps): JSX.Element {
+interface TodayCardProps {
+  data: TodayData | null;
+  coachContext?: CoachContext;
+}
+
+function formatCoachLabel(ctx: CoachContext): string {
+  if (ctx.isDayOff || ctx.activeProfiles.length === 0) return 'DAY OFF';
+  const noun = ctx.todayTournamentsTotal === 1 ? 'torneio' : 'torneios';
+  return `${ctx.activeProfiles.join(' + ')} - ${ctx.todayTournamentsTotal} ${noun}`;
+}
+
+export default function TodayCard({ data, coachContext }: TodayCardProps): JSX.Element {
   if (!data) {
     return (
       <div
@@ -66,9 +84,22 @@ export default function TodayCard({ data }: TodayCardProps): JSX.Element {
         )}
         <div className="flex-1">
           <div className="text-base font-semibold">
-            {data.plannedCount} torneios
-            {data.firstStartTime ? ` · primeiro ${data.firstStartTime}` : ''}
+            {coachContext ? (
+              <span data-testid="today-card-coach-label">
+                {formatCoachLabel(coachContext)}
+              </span>
+            ) : (
+              <>
+                {data.plannedCount} torneios
+                {data.firstStartTime ? ` · primeiro ${data.firstStartTime}` : ''}
+              </>
+            )}
           </div>
+          {coachContext && data.firstStartTime && !coachContext.isDayOff && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Primeiro {data.firstStartTime}
+            </div>
+          )}
           {data.stopLoss && (
             <div className="text-xs text-muted-foreground">
               Stop loss: {data.stopLoss.currency} {data.stopLoss.amount}

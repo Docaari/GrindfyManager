@@ -26,6 +26,7 @@ import { getDashboardMonthSummary } from '../services/dashboardMonth';
 import { getHomeEvolution, parseMonthIso } from '../services/homeEvolution';
 import { getGradeTodaySummary, type GradeProfile } from '../services/gradeToday';
 import { buildHeaderStrip, type HeaderStripData } from '../services/homeHeader';
+import { buildCoachContext, type CoachContextData } from '../services/coachContext';
 
 // =============================================================================
 // Cache in-memory per-userId — D4 / ADR-102 §2.3
@@ -116,6 +117,8 @@ interface HomeOverviewBody {
   // antiga ainda renderiza statusStrip (deprecated, vai sair quando Onda 2
   // limpar componentes obsoletos).
   headerStrip: HeaderStripData;
+  // Sprint home-reform-5 item 3 — Pergunte ao Coach + Iniciar Sessao.
+  coachContext: CoachContextData;
   today: {
     profile: 'A' | 'B' | 'C' | 'OFF' | null;
     plannedCount: number;
@@ -784,6 +787,26 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       }
     })();
 
+    // Sprint home-reform-5 item 3 — coachContext (Pergunte ao Coach + Iniciar Sessao).
+    const coachContextData: CoachContextData = (() => {
+      try {
+        const activeProfileRaw = profile?.profile;
+        return buildCoachContext({
+          activeProfile:
+            activeProfileRaw === 'A'
+              || activeProfileRaw === 'B'
+              || activeProfileRaw === 'C'
+              || activeProfileRaw === 'OFF'
+              ? activeProfileRaw
+              : null,
+          plannedTournaments: planned,
+        });
+      } catch (ccErr) {
+        console.error('[home/overview] buildCoachContext failed:', ccErr);
+        return { activeProfiles: [], todayTournamentsTotal: 0, isDayOff: true };
+      }
+    })();
+
     const body: HomeOverviewBody = {
       userState,
       profile: playerProfile,
@@ -795,6 +818,7 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
         pendencias,
       },
       headerStrip: headerStripData,
+      coachContext: coachContextData,
       today: todayBlock,
       banners: {
         cooldown: cooldownBanner,
