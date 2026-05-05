@@ -313,4 +313,43 @@ export function registerWarmupRitualsRoutes(app: Express): void {
     requirePermission("mental_prep_access"),
     (req: Request, res: Response) => handleUpdateWeeklyHeuristics(req, res),
   );
+  app.put(
+    "/api/user-settings/warmup-setup-items",
+    requireAuth,
+    requirePermission("mental_prep_access"),
+    (req: Request, res: Response) => handleUpdateWarmupSetupItems(req, res),
+  );
+}
+
+// Reform 2026-05-05 (ADR-120): items custom Setup Fisico.
+const updateSetupItemsBodySchema = z.object({
+  items: z.array(z.string().min(1).max(120)).min(0).max(50).nullable(),
+});
+
+export async function handleUpdateWarmupSetupItems(req: any, res: Response) {
+  const userId = userIdOf(req);
+  if (!userId) return unauthorized(res);
+  if (!hasMentalPrepAccess(req)) return forbidden(res);
+
+  const parsed = updateSetupItemsBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    return res.status(400).json({
+      message: first?.message ?? "Body invalido",
+      issues: parsed.error.issues,
+    });
+  }
+
+  try {
+    const cleaned = parsed.data.items
+      ? parsed.data.items.map((s) => s.trim()).filter((s) => s.length > 0)
+      : null;
+    const result = await warmupService.updateWarmupSetupItems(userId, cleaned);
+    return res.status(200).json(result);
+  } catch (err: any) {
+    console.error("PUT /api/user-settings/warmup-setup-items failed:", err);
+    return res
+      .status(500)
+      .json({ message: err?.message ?? "Erro ao atualizar setup items" });
+  }
 }

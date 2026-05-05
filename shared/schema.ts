@@ -752,6 +752,10 @@ export const userSettings = pgTable("user_settings", {
   // Sprint W-1 (Warm-up): heuristicas semanais e drillUrl customizavel
   weeklyHeuristics: jsonb("weekly_heuristics").$type<[string, string, string] | null>().default(null),
   drillUrl: varchar("drill_url", { length: 500 }).default("https://app.gtowizard.com/"),
+  // Reform 2026-05-05 (ADR-120): items custom do Setup Fisico (warm-up bloco 1).
+  // null = usa defaults do client (DEFAULT_SETUP_ITEMS). Array de strings; min 3 marcados
+  // pra avancar (validacao client-side). User pode add/edit/remove via dialog.
+  warmupSetupItems: jsonb("warmup_setup_items").$type<string[] | null>().default(null),
   // Sprint Bankroll-2 (Multi-Wallet Foundation) — RF-06.
   // bankrollAggregationMode: 'global' soma todas wallets em USD; 'per_wallet'
   // (futuro) trata cada wallet com sua propria regra de banca no Selector.

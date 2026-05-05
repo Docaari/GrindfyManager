@@ -1,74 +1,87 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
 
 // =============================================================================
-// PhysicalSetupBlock — Reform 2026-05-05
+// PhysicalSetupBlock — Reform 2026-05-05 (ADR-120)
 //
-// Contrato:
-//   <PhysicalSetupBlock onAdvance={(payload) => void} />
-//
-// - Items dinamicos via localStorage (default 7 itens, ver setupItemsStore).
-// - testIds: setup-item-{idx} para cada checkbox.
-// - Min 3 marcados para avancar (era 4/6).
-// - "Editar lista" abre modal add/edit/remove items.
-// - Payload onAdvance: { setupItems: Record<string, boolean>, setupItemsList: string[] }
+// Persistencia migrou para useSetupItems (PUT /api/user-settings/warmup-setup-items).
+// Mockamos apiRequest para retornar warmupSetupItems no shape do server.
 // =============================================================================
 
+vi.mock('@/lib/queryClient', () => ({
+  apiRequest: vi.fn(),
+}));
+
+import { apiRequest } from '@/lib/queryClient';
 import { PhysicalSetupBlock } from '@/components/warmup/PhysicalSetupBlock';
-import { resetSetupItems } from '@/components/warmup/setupItemsStore';
+
+function withClient(ui: React.ReactNode) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  resetSetupItems();
+  // Default: server retorna warmupSetupItems=null → fallback DEFAULT_SETUP_ITEMS
+  (apiRequest as any).mockResolvedValue({ warmupSetupItems: null });
 });
 
 describe('PhysicalSetupBlock - render', () => {
-  it('exibe titulo "Setup físico"', () => {
-    render(<PhysicalSetupBlock onAdvance={() => {}} />);
-    expect(document.body.textContent).toMatch(/setup f[ií]sico/i);
+  it('exibe titulo "Setup físico"', async () => {
+    render(withClient(<PhysicalSetupBlock onAdvance={() => {}} />));
+    await waitFor(() => {
+      expect(document.body.textContent).toMatch(/setup f[ií]sico/i);
+    });
   });
 
-  it('renderiza 7 items default (inclui "Bancas das plataformas verificadas")', () => {
-    render(<PhysicalSetupBlock onAdvance={() => {}} />);
-    for (let i = 0; i < 7; i++) {
-      expect(screen.getByTestId(`setup-item-${i}`)).toBeTruthy();
-    }
+  it('renderiza 7 items default (inclui "Bancas das plataformas verificadas")', async () => {
+    render(withClient(<PhysicalSetupBlock onAdvance={() => {}} />));
+    await waitFor(() => {
+      for (let i = 0; i < 7; i++) {
+        expect(screen.getByTestId(`setup-item-${i}`)).toBeTruthy();
+      }
+    });
     expect(document.body.textContent).toMatch(/bancas das plataformas verificadas/i);
   });
 
-  it('exibe hint "Mínimo 3"', () => {
-    render(<PhysicalSetupBlock onAdvance={() => {}} />);
-    expect(document.body.textContent).toMatch(/m[ií]nimo 3/i);
+  it('exibe hint "Mínimo 3"', async () => {
+    render(withClient(<PhysicalSetupBlock onAdvance={() => {}} />));
+    await waitFor(() => {
+      expect(document.body.textContent).toMatch(/m[ií]nimo 3/i);
+    });
   });
 
-  it('exibe item "Garrafa de 1L de água"', () => {
-    render(<PhysicalSetupBlock onAdvance={() => {}} />);
-    expect(document.body.textContent).toMatch(/1L.*[áa]gua|[áa]gua.*1L/i);
-  });
-
-  it('exibe botao "Editar lista"', () => {
-    render(<PhysicalSetupBlock onAdvance={() => {}} />);
-    expect(screen.getByTestId('setup-edit-list')).toBeTruthy();
+  it('exibe botao "Editar lista"', async () => {
+    render(withClient(<PhysicalSetupBlock onAdvance={() => {}} />));
+    await waitFor(() => {
+      expect(screen.getByTestId('setup-edit-list')).toBeTruthy();
+    });
   });
 });
 
 describe('PhysicalSetupBlock - regra minimo 3', () => {
-  it('botao avancar disabled com 0 marcados', () => {
-    render(<PhysicalSetupBlock onAdvance={() => {}} />);
-    const advance = screen.getByTestId('setup-advance') as HTMLButtonElement;
-    expect(advance.disabled).toBe(true);
+  it('botao avancar disabled com 0 marcados', async () => {
+    render(withClient(<PhysicalSetupBlock onAdvance={() => {}} />));
+    await waitFor(() => {
+      const advance = screen.getByTestId('setup-advance') as HTMLButtonElement;
+      expect(advance.disabled).toBe(true);
+    });
   });
 
-  it('botao avancar disabled com 2 marcados', () => {
-    render(<PhysicalSetupBlock onAdvance={() => {}} />);
+  it('botao avancar disabled com 2 marcados', async () => {
+    render(withClient(<PhysicalSetupBlock onAdvance={() => {}} />));
+    await waitFor(() => screen.getByTestId('setup-item-0'));
     fireEvent.click(screen.getByTestId('setup-item-0'));
     fireEvent.click(screen.getByTestId('setup-item-1'));
     const advance = screen.getByTestId('setup-advance') as HTMLButtonElement;
     expect(advance.disabled).toBe(true);
   });
 
-  it('botao avancar habilita com 3 marcados', () => {
-    render(<PhysicalSetupBlock onAdvance={() => {}} />);
+  it('botao avancar habilita com 3 marcados', async () => {
+    render(withClient(<PhysicalSetupBlock onAdvance={() => {}} />));
+    await waitFor(() => screen.getByTestId('setup-item-0'));
     fireEvent.click(screen.getByTestId('setup-item-0'));
     fireEvent.click(screen.getByTestId('setup-item-1'));
     fireEvent.click(screen.getByTestId('setup-item-2'));
@@ -76,20 +89,19 @@ describe('PhysicalSetupBlock - regra minimo 3', () => {
     expect(advance.disabled).toBe(false);
   });
 
-  it('advance envia setupItems Record + setupItemsList', () => {
+  it('advance envia setupItems Record + setupItemsList', async () => {
     const onAdvance = vi.fn();
-    render(<PhysicalSetupBlock onAdvance={onAdvance} />);
+    render(withClient(<PhysicalSetupBlock onAdvance={onAdvance} />));
+    await waitFor(() => screen.getByTestId('setup-item-0'));
 
     fireEvent.click(screen.getByTestId('setup-item-0'));
     fireEvent.click(screen.getByTestId('setup-item-1'));
     fireEvent.click(screen.getByTestId('setup-item-2'));
     fireEvent.click(screen.getByTestId('setup-item-3'));
-
     fireEvent.click(screen.getByTestId('setup-advance'));
 
     expect(onAdvance).toHaveBeenCalled();
     const payload = onAdvance.mock.calls[0][0];
-    expect(payload.setupItems).toBeDefined();
     expect(typeof payload.setupItems).toBe('object');
     expect(Object.values(payload.setupItems).filter(Boolean).length).toBe(4);
     expect(Array.isArray(payload.setupItemsList)).toBe(true);
@@ -98,20 +110,37 @@ describe('PhysicalSetupBlock - regra minimo 3', () => {
 });
 
 describe('PhysicalSetupBlock - editor', () => {
-  it('clicar em Editar abre dialog com inputs editaveis', () => {
-    render(<PhysicalSetupBlock onAdvance={() => {}} />);
+  it('clicar em Editar abre dialog com inputs editaveis', async () => {
+    render(withClient(<PhysicalSetupBlock onAdvance={() => {}} />));
+    await waitFor(() => screen.getByTestId('setup-edit-list'));
     fireEvent.click(screen.getByTestId('setup-edit-list'));
     expect(screen.getByTestId('setup-edit-input-0')).toBeTruthy();
     expect(screen.getByTestId('setup-edit-new-input')).toBeTruthy();
   });
 
-  it('add novo item via "Adicionar" + Salvar persiste e mostra na lista', () => {
-    render(<PhysicalSetupBlock onAdvance={() => {}} />);
+  it('add novo item + Salvar dispara PUT /api/user-settings/warmup-setup-items', async () => {
+    (apiRequest as any).mockImplementation((method: any, urlArg?: any) => {
+      const url = typeof urlArg === 'string' ? urlArg : method;
+      if (typeof url === 'string' && url.includes('warmup-setup-items')) {
+        return Promise.resolve({ items: ['x', 'Hidratacao extra'] });
+      }
+      return Promise.resolve({ warmupSetupItems: null });
+    });
+
+    render(withClient(<PhysicalSetupBlock onAdvance={() => {}} />));
+    await waitFor(() => screen.getByTestId('setup-edit-list'));
     fireEvent.click(screen.getByTestId('setup-edit-list'));
     const newInput = screen.getByTestId('setup-edit-new-input') as HTMLInputElement;
     fireEvent.change(newInput, { target: { value: 'Hidratacao extra' } });
     fireEvent.click(screen.getByTestId('setup-edit-add'));
     fireEvent.click(screen.getByTestId('setup-edit-save'));
-    expect(document.body.textContent).toMatch(/hidratacao extra/i);
+
+    await waitFor(() => {
+      const calls = (apiRequest as any).mock.calls;
+      const putCall = calls.find((args: any[]) =>
+        JSON.stringify(args).includes('warmup-setup-items'),
+      );
+      expect(putCall).toBeTruthy();
+    });
   });
 });

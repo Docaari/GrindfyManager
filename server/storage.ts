@@ -11119,6 +11119,25 @@ export async function updateUserSettingsWeeklyHeuristics(
   return { heuristics };
 }
 
+// Reform 2026-05-05 (ADR-120): persiste lista custom de items do Setup Fisico.
+export async function updateUserSettingsWarmupSetupItems(
+  userId: string,
+  items: string[] | null,
+): Promise<{ items: string[] | null }> {
+  await (db as any)
+    .insert(userSettingsTable)
+    .values({
+      id: nanoid(),
+      userId,
+      warmupSetupItems: items,
+    })
+    .onConflictDoUpdate({
+      target: (userSettingsTable as any).userId,
+      set: { warmupSetupItems: items, updatedAt: new Date() },
+    });
+  return { items };
+}
+
 // ============================================================================
 // Sprint Tickets-1 — Module-level facade (Drizzle-backed)
 //

@@ -40,11 +40,14 @@ Setup nao tem timer cronometrado. Total real do "6m" sao 7m e do "15m" sao 16m p
 
 ### Setup Fisico — items custom
 
-- Persistencia: `localStorage` com chave `warmup-setup-items-v1::${userPlatformId}` (segregada por user).
-- Defaults (7 items): os 6 originais + "Bancas das plataformas verificadas".
+- Persistencia: `user_settings.warmup_setup_items jsonb` (migration 0048).
+  - GET via `GET /api/user-settings`
+  - PUT via `PUT /api/user-settings/warmup-setup-items` (body `{ items: string[] | null }`)
+  - Hook client `useSetupItems` (TanStack Query)
+- Defaults (7 items): os 6 originais + "Bancas das plataformas verificadas". Aplicados client-side quando `warmupSetupItems = null` no DB.
 - Min 3 marcados para avancar (era 4 de 6 fixos).
 - Payload em `WarmupBlockSnapshot`: `setupItems: Record<string, boolean>` + `setupItemsList: string[]` (lista atual no momento da gravacao).
-- TODO: migrar para `user_settings.warmupSetupItems jsonb` (ainda nao prioritario).
+- `setupItemsStore.ts` mantem helpers localStorage marcados @deprecated apenas para retro-compat de testes.
 
 ### Intencao opcional
 

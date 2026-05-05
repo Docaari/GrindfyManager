@@ -11,13 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import {
-  DEFAULT_SETUP_ITEMS,
-  loadSetupItems,
-  saveSetupItems,
-  resetSetupItems,
-} from "./setupItemsStore";
+import { useSetupItems } from "@/hooks/useSetupItems";
+import { DEFAULT_SETUP_ITEMS } from "./setupItemsStore";
 
 const MIN_CHECKED = 3;
 
@@ -29,9 +24,7 @@ export interface PhysicalSetupBlockProps {
 }
 
 export function PhysicalSetupBlock({ onAdvance }: PhysicalSetupBlockProps) {
-  const auth = useAuth();
-  const userId = (auth as any)?.user?.userPlatformId ?? null;
-  const [items, setItems] = useState<string[]>(() => loadSetupItems(userId));
+  const { items, save } = useSetupItems();
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [editorOpen, setEditorOpen] = useState(false);
 
@@ -110,11 +103,9 @@ export function PhysicalSetupBlock({ onAdvance }: PhysicalSetupBlockProps) {
       <SetupEditorDialog
         open={editorOpen}
         items={items}
-        userId={userId}
         onOpenChange={setEditorOpen}
-        onSave={(next) => {
-          setItems(next);
-          saveSetupItems(next, userId);
+        onSave={async (next) => {
+          await save(next);
           // remove checks de items que sumiram
           setChecked((prev) => {
             const out: Record<string, boolean> = {};
@@ -132,12 +123,11 @@ export function PhysicalSetupBlock({ onAdvance }: PhysicalSetupBlockProps) {
 interface SetupEditorDialogProps {
   open: boolean;
   items: string[];
-  userId: string | null;
   onOpenChange: (v: boolean) => void;
-  onSave: (items: string[]) => void;
+  onSave: (items: string[]) => void | Promise<void>;
 }
 
-function SetupEditorDialog({ open, items, userId, onOpenChange, onSave }: SetupEditorDialogProps) {
+function SetupEditorDialog({ open, items, onOpenChange, onSave }: SetupEditorDialogProps) {
   const [draft, setDraft] = useState<string[]>(items);
   const [newItem, setNewItem] = useState("");
 
@@ -168,13 +158,12 @@ function SetupEditorDialog({ open, items, userId, onOpenChange, onSave }: SetupE
   };
 
   const restoreDefaults = () => {
-    resetSetupItems(userId);
     setDraft(DEFAULT_SETUP_ITEMS.slice());
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const cleaned = draft.map((s) => s.trim()).filter((s) => s.length > 0);
-    onSave(cleaned.length > 0 ? cleaned : DEFAULT_SETUP_ITEMS.slice());
+    await onSave(cleaned.length > 0 ? cleaned : DEFAULT_SETUP_ITEMS.slice());
     onOpenChange(false);
   };
 

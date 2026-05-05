@@ -1,14 +1,11 @@
 /**
- * setupItemsStore — persistencia de items custom do Setup Fisico em localStorage.
+ * setupItemsStore — defaults dos items do Setup Fisico.
  *
- * Defaults incluem os 6 originais + "Bancas das plataformas verificadas".
- * User pode add/edit/remove. Min 3 marcados para avancar (validado no Block).
+ * Reform 2026-05-05 (ADR-120): persistencia migrou para `user_settings.warmup_setup_items`
+ * via hook `useSetupItems`. Este modulo agora exporta APENAS os defaults.
  *
- * Key segregada por userId quando disponivel (multi-user no mesmo browser
- * NAO compartilha lista). Fallback para chave global em sessao anonima.
- *
- * TODO (futuro): migrar para user_settings.warmupSetupItems jsonb quando
- * houver migration disponivel.
+ * As funcoes load/save/reset legacy (localStorage) permanecem para retro-compat
+ * de testes — em runtime nao sao mais usadas pelo PhysicalSetupBlock.
  */
 
 const STORAGE_KEY_PREFIX = "warmup-setup-items-v1";
@@ -28,6 +25,7 @@ export const DEFAULT_SETUP_ITEMS: string[] = [
   "Bancas das plataformas verificadas",
 ];
 
+/** @deprecated Use `useSetupItems` hook (ADR-120). Mantido para retro-compat de testes. */
 export function loadSetupItems(userId?: string | null): string[] {
   if (typeof localStorage === "undefined") return DEFAULT_SETUP_ITEMS.slice();
   try {
@@ -45,6 +43,7 @@ export function loadSetupItems(userId?: string | null): string[] {
   }
 }
 
+/** @deprecated Use `useSetupItems` hook (ADR-120). */
 export function saveSetupItems(items: string[], userId?: string | null): void {
   if (typeof localStorage === "undefined") return;
   try {
@@ -55,11 +54,11 @@ export function saveSetupItems(items: string[], userId?: string | null): void {
   }
 }
 
+/** @deprecated Use `useSetupItems` hook (ADR-120). */
 export function resetSetupItems(userId?: string | null): void {
   if (typeof localStorage === "undefined") return;
   try {
     localStorage.removeItem(storageKey(userId));
-    // Fallback: tambem limpa a key global legada (pre-segregacao)
     if (userId) localStorage.removeItem(STORAGE_KEY_PREFIX);
   } catch {
     /* ignore */

@@ -18,6 +18,7 @@ import {
   getLatestWarmupRitual,
   listWarmupRituals,
   updateUserSettingsWeeklyHeuristics,
+  updateUserSettingsWarmupSetupItems,
   type CreateWarmupRitualInput,
   type ListWarmupRitualsParams,
 } from "../storage";
@@ -74,5 +75,12 @@ export const warmupService = {
     heuristics: [string, string, string],
   ): Promise<{ heuristics: [string, string, string] }> {
     return updateUserSettingsWeeklyHeuristics(userId, heuristics);
+  },
+
+  async updateWarmupSetupItems(
+    userId: string,
+    items: string[] | null,
+  ): Promise<{ items: string[] | null }> {
+    return updateUserSettingsWarmupSetupItems(userId, items);
   },
 };
