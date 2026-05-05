@@ -91,8 +91,8 @@ import {
   buildUndoFinishPayload,
   UNDO_FINISH_TOAST_DURATION_MS,
 } from "@/components/grind-session-live/finish-undo-helpers";
-import { WalletReconciliationDialog } from "@/components/grind-session-live/WalletReconciliationDialog";
-import { runSessionEndFlow } from "@/components/grind-session-live/session-end-flow";
+// runSessionEndFlow legacy nao mais usado pos HIGH-4 fix; handleEndSession
+// chama PUT direto + redirect.
 
 export default function GrindSessionLive() {
   const [, setLocation] = useLocation();
@@ -179,25 +179,30 @@ export default function GrindSessionLive() {
   const [showSessionSummary, setShowSessionSummary] = useState(false);
   const [sessionSummaryData, setSessionSummaryData] = useState<any>(null);
   const [finalNotes, setFinalNotes] = useState('');
-  const [pendingTournaments, setPendingTournaments] = useState<any[]>([]);
 
-  // ADR-040: Wallet reconciliation dialog ao fim da sessao
-  const [showReconcileDialog, setShowReconcileDialog] = useState(false);
-  const [reconcileSessionId, setReconcileSessionId] = useState<string | null>(null);
-  const reconcileResolveRef = useRef<((info?: any) => void) | null>(null);
+  // ADR-040 legacy state REMOVIDO em 2026-05-05 (HIGH-4 audit). Reconcile
+  // inline em SessionSummaryModal cobre o fluxo. WalletReconciliationDialog
+  // import mantido apenas pra back-compat de testes; nao renderizado.
 
   // Sprint B2 (M1/M3): dados pre-fetched de reconcilable-wallets pra o summary inline.
   // Carrega quando summary aparece e sessionId conhecido.
+  // MEDIUM-1 fix (audit 2026-05-05): loadFailed distingue "fetch falhou"
+  // (network/500) de "sem wallets eligiveis" — sem este flag founder em rede
+  // ruim finaliza sessao sem ajustar saldos pensando que esta tudo certo.
   const [summaryReconcilable, setSummaryReconcilable] = useState<{
     wallets: any[];
     missingPlatforms: string[];
     playedPlatforms: string[];
     bankrollManagementEnabled: boolean;
+    loadFailed: boolean;
+    loading: boolean;
   }>({
     wallets: [],
     missingPlatforms: [],
     playedPlatforms: [],
     bankrollManagementEnabled: true,
+    loadFailed: false,
+    loading: false,
   });
 
   // QA fix BUG 2: cooldown ativo (CTA Cool-down Rapido / Cool-down Full no summary)
@@ -569,7 +574,63 @@ export default function GrindSessionLive() {
     try {
       const investedNorm = stats.totalInvestidoUSD ?? stats.totalInvestido;
       const profitNorm = stats.profitUSD ?? stats.profit;
+
+      // HIGH-3 fix: cooldownCompleted via lookup do log existente para esta
+      // sessao. Sem este pre-fetch, Modal sempre mostra 3 CTAs mesmo apos
+      // cooldown completed (re-abrir sessao historica = botoes duplicados).
+      // Endpoint GET /api/cooldown-logs/:sessionId retorna single log ou null.
+      let cooldownCompleted = false;
+      if (activeSession?.id) {
+        try {
+          const log: any = await apiRequest(
+            'GET',
+            `/api/cooldown-logs/${encodeURIComponent(activeSession.id)}`,
+          ).catch(() => null);
+          cooldownCompleted = !!(log && log.completedAt);
+        } catch {
+          // fail-open: assume false. Pior caso founder ve 3 CTAs e bate 409
+          // (que agora redireciona corretamente via HIGH-1 fix).
+        }
+      }
+
+      // LOW-2 fix (audit 2026-05-05): calcula best result a partir dos
+      // session_tournaments finished. Antes: hardcoded null, section nunca
+      // renderizava no Modal (feature incompleta).
+      let bestResult: { name: string; details: string; profit: number } | null = null;
+      try {
+        const finished = (sessionTournaments ?? []).filter(
+          (t: any) => t.status === 'finished',
+        );
+        for (const t of finished) {
+          const bi = parseFloat(String(t.buyIn ?? 0)) || 0;
+          const res = parseFloat(String(t.result ?? 0)) || 0;
+          const bounty = parseFloat(String(t.bounty ?? 0)) || 0;
+          const rebuys = parseInt(String(t.rebuys ?? 0), 10) || 0;
+          const reentries = parseInt(String(t.reentries ?? 0), 10) || 0;
+          const addonCost = parseFloat(String(t.addonCost ?? 0)) || 0;
+          const addonTaken = !!t.addonTaken;
+          const profit =
+            res + bounty - bi * (1 + rebuys + reentries) - (addonTaken ? addonCost : 0);
+          if (!bestResult || profit > bestResult.profit) {
+            bestResult = {
+              name: t.name ?? '—',
+              details: `${t.site ?? ''}${t.position ? ` • ${t.position}o` : ''}`.trim(),
+              profit,
+            };
+          }
+        }
+        // So mostra se houver profit positivo (busts nao merecem destaque).
+        if (bestResult && bestResult.profit <= 0) bestResult = null;
+      } catch {
+        bestResult = null;
+      }
+
       const summaryData = {
+        cooldownCompleted,
+        bestResult,
+        // MEDIUM-7 fix: sinaliza ausencia de breaks pra Modal mostrar "—"
+        // ao inves de "0.0" enganoso em todas as 5 medias mentais.
+        breaksRecorded: breakFeedbacks.length,
         // V2 (RF-08, fix bug P3): inclui sessionId para POST /cooldown-logs nao retornar 400.
         sessionId: activeSession?.id,
         volume: stats.registros,
@@ -578,7 +639,6 @@ export default function GrindSessionLive() {
         roi: stats.roi,
         fts: stats.fts,
         wins: stats.cravadas,
-        bestResult: null,
         mentalAverages: {
           focus: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.foco, 0) / breakFeedbacks.length : 0,
           energy: breakFeedbacks.length > 0 ? breakFeedbacks.reduce((sum: number, b: any) => sum + b.energia, 0) / breakFeedbacks.length : 0,
@@ -609,6 +669,11 @@ export default function GrindSessionLive() {
       const organized = organizeTournaments(allTournaments, plannedTournaments || []);
       const pendingList = organized.registered?.filter(t => t.status === 'registered') || [];
 
+      // MEDIUM-6 fix (audit 2026-05-05): conta falhas + toast agregado.
+      // Sem este contador, todos PUTs falhando passava silencioso e summary
+      // abria com stats incoerentes (torneios ainda em "registered" no DB).
+      let failures = 0;
+      let attempts = 0;
       for (const tournament of pendingList) {
         try {
           // Skip planned-X: PUT em planned mutaria a recorrencia da grade.
@@ -616,13 +681,23 @@ export default function GrindSessionLive() {
           if (typeof tournament.id === 'string' && tournament.id.startsWith('planned-')) {
             continue;
           }
+          attempts++;
           await updateTournamentMutation.mutateAsync({
             id: tournament.id,
             data: { status: 'finished', endTime: new Date().toISOString(), result: '0', bounty: '0', position: null }
           });
         } catch {
-          // Continuar com os demais mesmo se um falhar
+          failures++;
         }
+      }
+      if (failures > 0) {
+        toast({
+          title: failures === attempts
+            ? `Nenhum dos ${attempts} torneios pendentes pode ser finalizado`
+            : `${failures} de ${attempts} torneios pendentes nao foram finalizados`,
+          description: "O resumo pode ter estatisticas incompletas. Cheque /grind apos.",
+          variant: "destructive",
+        });
       }
       setShowConfirmationModal(false);
       generateSessionSummary();
@@ -649,83 +724,86 @@ export default function GrindSessionLive() {
       }
     };
 
-    await runSessionEndFlow({
-      sessionId,
-      completeSession: async () => {
-        await apiRequest('PUT', `/api/grind-sessions/${sessionId}`, {
-          status: 'completed', endTime: new Date().toISOString(), finalNotes: finalNotes || '',
-          objectiveCompleted: sessionData.objectiveStatus === 'completed',
-          volume: sessionData.volume, profit: sessionData.profit.toString(),
-          abiMed: sessionData.invested > 0 ? (sessionData.invested / sessionData.volume).toString() : '0',
-          roi: sessionData.roi.toString(), fts: sessionData.fts, cravadas: sessionData.wins,
-          energiaMedia: sessionData.mentalAverages.energy.toString(),
-          focoMedio: sessionData.mentalAverages.focus.toString(),
-          confiancaMedia: sessionData.mentalAverages.confidence.toString(),
-          inteligenciaEmocionalMedia: sessionData.mentalAverages.emotionalIntelligence.toString(),
-          interferenciasMedia: sessionData.mentalAverages.interference.toString(),
-        });
-      },
-      fetchReconcilable: async () => {
-        const data: any = await apiRequest('GET', `/api/grind-sessions/${sessionId}/reconcilable-wallets`);
-        return {
-          wallets: Array.isArray(data?.wallets) ? data.wallets : [],
-          alreadyReconciled: !!data?.alreadyReconciled,
-        };
-      },
-      openReconcileDialog: () => new Promise<any>((resolve) => {
-        reconcileResolveRef.current = resolve;
-        setReconcileSessionId(sessionId);
-        setShowReconcileDialog(true);
-      }),
-      openSummaryModal: () => {
-        setQuickNotes([]);
-        localStorage.removeItem('grindfy_session_backup');
-        setLocation('/grind');
-      },
-      toast,
-      onError: (err) => {
-        console.error("Failed to end session:", err);
-        toast({ title: "Erro ao Finalizar", description: "Nao foi possivel salvar os dados da sessao. Tente novamente.", variant: "destructive" });
-      },
-    });
-  };
-
-  function handleReconcileComplete(info?: any) {
-    // HIGH-4 reviewer fix: torna idempotente. Sem essa guarda, double trigger
-    // (onComplete + onOpenChange(false) consecutivos) podia causar resolve
-    // multiplo do ref ou races sutis em reabertura.
-    if (!showReconcileDialog && reconcileResolveRef.current === null) {
+    // HIGH-4 fix (audit 2026-05-05): reconcile inline em SessionSummaryModal
+    // ja foi executado via submitReconcile() ANTES de onEndSession dispatch.
+    // Etapas legadas (fetchReconcilable + openReconcileDialog) removidas —
+    // server retornava alreadyReconciled=true e mostrava toast confuso ao
+    // founder. Aqui apenas marca completed e redireciona.
+    try {
+      await apiRequest('PUT', `/api/grind-sessions/${sessionId}`, {
+        status: 'completed',
+        endTime: new Date().toISOString(),
+        finalNotes: finalNotes || '',
+        objectiveCompleted: sessionData.objectiveStatus === 'completed',
+        volume: sessionData.volume,
+        profit: sessionData.profit.toString(),
+        abiMed: sessionData.invested > 0
+          ? (sessionData.invested / sessionData.volume).toString()
+          : '0',
+        roi: sessionData.roi.toString(),
+        fts: sessionData.fts,
+        cravadas: sessionData.wins,
+        energiaMedia: sessionData.mentalAverages.energy.toString(),
+        focoMedio: sessionData.mentalAverages.focus.toString(),
+        confiancaMedia: sessionData.mentalAverages.confidence.toString(),
+        inteligenciaEmocionalMedia: sessionData.mentalAverages.emotionalIntelligence.toString(),
+        interferenciasMedia: sessionData.mentalAverages.interference.toString(),
+      });
+    } catch (err) {
+      console.error("Failed to end session:", err);
+      toast({
+        title: "Erro ao Finalizar",
+        description: "Nao foi possivel salvar os dados da sessao. Tente novamente.",
+        variant: "destructive",
+      });
       return;
     }
-    setShowReconcileDialog(false);
-    if (reconcileResolveRef.current) {
-      reconcileResolveRef.current(info);
-      reconcileResolveRef.current = null;
-    }
-  }
+
+    setQuickNotes([]);
+    localStorage.removeItem('grindfy_session_backup');
+    // MEDIUM-5: limpa rascunho final notes apos persist OK.
+    if (sessionId) localStorage.removeItem(`grindfy_finalNotes_${sessionId}`);
+    setLocation('/grind');
+  };
 
   const handleContinueSession = () => {
     setShowSessionSummary(false); setSessionSummaryData(null); setFinalNotes('');
-    setShowConfirmationModal(false); setPendingTournaments([]);
+    setShowConfirmationModal(false);
   };
 
   // Sprint B2 (M1/M3): pre-fetch reconcilable-wallets + user-settings ao abrir
   // summary. Resultado popula `summaryReconcilable` consumido por
   // SessionSummaryModal (props).
+  // MEDIUM-1 fix (audit 2026-05-05): seta loadFailed/loading explicitamente
+  // pra distinguir 500/network failure de "sem wallets eligiveis".
+  const [reconcileFetchTrigger, setReconcileFetchTrigger] = useState(0);
   useEffect(() => {
     if (!showSessionSummary) return;
     const sid = sessionSummaryData?.sessionId;
     if (!sid) return;
     let cancelled = false;
+    setSummaryReconcilable((prev) => ({ ...prev, loading: true, loadFailed: false }));
     (async () => {
+      let walletsErr = false;
+      let walletsData: any = null;
+      let settingsData: any = null;
       try {
-        const [wallets, settings] = await Promise.all([
-          apiRequest('GET', `/api/grind-sessions/${sid}/reconcilable-wallets`).catch(() => null),
-          apiRequest('GET', '/api/user-settings').catch(() => null),
+        const [wResult, sResult] = await Promise.allSettled([
+          apiRequest('GET', `/api/grind-sessions/${sid}/reconcilable-wallets`),
+          apiRequest('GET', '/api/user-settings'),
         ]);
+        if (wResult.status === 'fulfilled') {
+          walletsData = wResult.value;
+        } else {
+          walletsErr = true;
+          console.error('[reconcilable-wallets] fetch failed:', wResult.reason);
+        }
+        if (sResult.status === 'fulfilled') {
+          settingsData = sResult.value;
+        }
         if (cancelled) return;
-        const w: any = wallets ?? {};
-        const s: any = settings ?? {};
+        const w: any = walletsData ?? {};
+        const s: any = settingsData ?? {};
         setSummaryReconcilable({
           wallets: Array.isArray(w?.wallets) ? w.wallets : [],
           missingPlatforms: Array.isArray(w?.missingPlatforms) ? w.missingPlatforms : [],
@@ -734,18 +812,51 @@ export default function GrindSessionLive() {
             typeof s?.bankrollManagementEnabled === 'boolean'
               ? s.bankrollManagementEnabled
               : true,
+          loadFailed: walletsErr,
+          loading: false,
         });
-      } catch {
-        // fail-open: sem reconcile inline, summary segue funcional.
+      } catch (err) {
+        if (cancelled) return;
+        console.error('[reconcilable-wallets] unexpected error:', err);
+        setSummaryReconcilable((prev) => ({ ...prev, loading: false, loadFailed: true }));
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [showSessionSummary, sessionSummaryData?.sessionId]);
+  }, [showSessionSummary, sessionSummaryData?.sessionId, reconcileFetchTrigger]);
 
   // ===== EFFECTS =====
   useEffect(() => { localStorage.setItem('grindSessionDashboardVisible', JSON.stringify(showDashboard)); }, [showDashboard]);
+
+  // MEDIUM-5 fix (audit 2026-05-05): persist finalNotes em localStorage
+  // (debounced) e restaurar on mount. Evita perda quando founder fecha
+  // tab/refresh mid-summary. Cleared apos persist OK no handleEndSession.
+  useEffect(() => {
+    if (!activeSession?.id) return;
+    try {
+      const stored = localStorage.getItem(`grindfy_finalNotes_${activeSession.id}`);
+      if (stored && !finalNotes) {
+        setFinalNotes(stored);
+      }
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSession?.id]);
+
+  useEffect(() => {
+    if (!activeSession?.id) return;
+    if (!finalNotes) return;
+    const handle = setTimeout(() => {
+      try {
+        localStorage.setItem(`grindfy_finalNotes_${activeSession.id}`, finalNotes);
+      } catch {
+        // ignore — quota exceeded etc
+      }
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [finalNotes, activeSession?.id]);
 
   // RF-03: Load quick notes from session data (DB-backed via session update)
   useEffect(() => {
@@ -2690,6 +2801,9 @@ export default function GrindSessionLive() {
         }
         reconcilableWallets={summaryReconcilable.wallets}
         missingPlatforms={summaryReconcilable.missingPlatforms}
+        reconcilableLoading={summaryReconcilable.loading}
+        reconcilableLoadFailed={summaryReconcilable.loadFailed}
+        onRetryReconcilable={() => setReconcileFetchTrigger((n) => n + 1)}
       />
 
       {/* QA fix BUG 2: CoolDownRunner / QuickCoolDownDialog inline.
@@ -2700,7 +2814,16 @@ export default function GrindSessionLive() {
           sessionId={activeSession.id}
           mode="full"
           sessionTournaments={(sessionTournaments ?? []) as any[]}
-          onClose={() => {
+          onClose={(opts) => {
+            // HIGH-2 fix: distinguir saida com rascunho (debounce parcial salvo)
+            // vs saida limpa. Toast diferente sinaliza ao founder que pode
+            // retornar ao cool-down via /grind history.
+            if (opts?.isDraft) {
+              toast({
+                title: "Cool-down salvo como rascunho",
+                description: "Voce pode continuar pelo historico em /grind.",
+              });
+            }
             setActiveCooldown(null);
             setLocation("/grind");
           }}
@@ -2726,17 +2849,10 @@ export default function GrindSessionLive() {
         />
       )}
 
-      {/* ADR-040: Wallet reconciliation dialog ao fim da sessao */}
-      {showReconcileDialog && reconcileSessionId && (
-        <WalletReconciliationDialog
-          open={showReconcileDialog}
-          onOpenChange={(open) => {
-            if (!open) handleReconcileComplete();
-          }}
-          sessionId={reconcileSessionId}
-          onComplete={handleReconcileComplete}
-        />
-      )}
+      {/* ADR-040 legacy WalletReconciliationDialog REMOVIDO em 2026-05-05.
+          Reconcile inline em SessionSummaryModal cobre o fluxo (Sprint B2).
+          Antes: dialog abria apos submit inline -> server retornava
+          alreadyReconciled=true -> toast confuso pra founder. */}
 
       {/* RF-03 — Dialog de alerta vinculado a torneio.
           Sprint Alarmes 2.0: defaultTournamentId vem do TournamentCard quando o botao

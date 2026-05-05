@@ -79,6 +79,7 @@ interface SessionSummaryModalProps {
     interferenciasMedia?: number;
     cooldownCompleted?: boolean;
     sessionId?: string;
+    breaksRecorded?: number;
   }) | null;
   finalNotes: string;
   setFinalNotes: (notes: string) => void;
@@ -89,6 +90,10 @@ interface SessionSummaryModalProps {
   bankrollManagementEnabled?: boolean;
   reconcilableWallets?: ReconcilableWalletShape[];
   missingPlatforms?: string[];
+  // MEDIUM-1 fix: distinguir loading + loadFailed de "sem wallets" silencioso.
+  reconcilableLoading?: boolean;
+  reconcilableLoadFailed?: boolean;
+  onRetryReconcilable?: () => void;
 }
 
 const MAX_VISIBLE_MISSING = 3;
@@ -111,6 +116,9 @@ export default function SessionSummaryModal({
   bankrollManagementEnabled,
   reconcilableWallets,
   missingPlatforms,
+  reconcilableLoading,
+  reconcilableLoadFailed,
+  onRetryReconcilable,
 }: SessionSummaryModalProps) {
   const [isCreatingCooldown, setIsCreatingCooldown] = useState(false);
   const [isReconciling, setIsReconciling] = useState(false);
@@ -269,6 +277,17 @@ export default function SessionSummaryModal({
       const status: number | undefined = err?.response?.status;
       const errBody = err?.response?.data ?? {};
       const msg = mapCooldownErrorToMessage(status, errBody);
+
+      // HIGH-1 fix (audit 2026-05-05): 409 cooldown_already_exists retorna logId
+      // do existente. Reutilizamos para abrir CoolDownRunner/QuickCoolDownDialog
+      // ao inves de deixar founder preso no Summary com toast mentiroso.
+      if (status === 409 && errBody?.code === "cooldown_already_exists" && errBody?.logId) {
+        toast({ title: "Continuando cool-down ja iniciado..." });
+        if (mode === "full") onStartFullCooldown?.(errBody.logId);
+        else onStartQuickCooldown?.(errBody.logId);
+        return;
+      }
+
       toast(msg);
       try {
         emitCooldownCreateFailed({
@@ -399,6 +418,41 @@ export default function SessionSummaryModal({
           </div>
         )}
 
+        {bankrollEnabled && reconcilableLoadFailed && (
+          <div
+            data-testid="reconcilable-load-error-banner"
+            role="alert"
+            className="rounded-md border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-100 my-3 flex items-center justify-between gap-3"
+          >
+            <div className="flex-1">
+              <div className="font-medium mb-1">Erro ao carregar carteiras</div>
+              <div className="text-red-200/80">
+                Nao foi possivel buscar suas carteiras pra reconciliacao. Tente
+                novamente antes de finalizar.
+              </div>
+            </div>
+            {onRetryReconcilable && (
+              <button
+                type="button"
+                data-testid="reconcilable-retry-cta"
+                onClick={onRetryReconcilable}
+                className="rounded bg-red-500 px-3 py-1.5 text-xs font-medium text-red-950 hover:bg-red-400"
+              >
+                Tentar novamente
+              </button>
+            )}
+          </div>
+        )}
+
+        {bankrollEnabled && reconcilableLoading && !reconcilableLoadFailed && (
+          <div
+            data-testid="reconcilable-loading-banner"
+            className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground my-3"
+          >
+            Carregando carteiras para reconciliacao...
+          </div>
+        )}
+
         {showBankrollSection && (
           <div
             data-testid="bankroll-reconcile-section"
@@ -476,28 +530,39 @@ export default function SessionSummaryModal({
 
         <div className="summary-section">
           <h4>Performance Mental Media</h4>
-          <div className="mental-averages">
-            <div className="mental-average">
-              <div className="mental-average-value">{summaryData.mentalAverages.focus.toFixed(1)}</div>
-              <div className="mental-average-label">Foco</div>
+          {/* MEDIUM-7 fix: sem breaks registrados, mostra placeholder "—" ao
+              inves de "0.0" engan oso em todas as 5 medias. */}
+          {(summaryData.breaksRecorded ?? 0) === 0 ? (
+            <div
+              data-testid="no-breaks-placeholder"
+              className="text-sm text-muted-foreground italic px-2 py-3"
+            >
+              Nenhum break registrado nesta sessao.
             </div>
-            <div className="mental-average">
-              <div className="mental-average-value">{summaryData.mentalAverages.energy.toFixed(1)}</div>
-              <div className="mental-average-label">Energia</div>
+          ) : (
+            <div className="mental-averages">
+              <div className="mental-average">
+                <div className="mental-average-value">{summaryData.mentalAverages.focus.toFixed(1)}</div>
+                <div className="mental-average-label">Foco</div>
+              </div>
+              <div className="mental-average">
+                <div className="mental-average-value">{summaryData.mentalAverages.energy.toFixed(1)}</div>
+                <div className="mental-average-label">Energia</div>
+              </div>
+              <div className="mental-average">
+                <div className="mental-average-value">{summaryData.mentalAverages.confidence.toFixed(1)}</div>
+                <div className="mental-average-label">Confianca</div>
+              </div>
+              <div className="mental-average">
+                <div className="mental-average-value">{summaryData.mentalAverages.emotionalIntelligence.toFixed(1)}</div>
+                <div className="mental-average-label">Int. Emocional</div>
+              </div>
+              <div className="mental-average">
+                <div className="mental-average-value">{summaryData.mentalAverages.interference.toFixed(1)}</div>
+                <div className="mental-average-label">Interferencias</div>
+              </div>
             </div>
-            <div className="mental-average">
-              <div className="mental-average-value">{summaryData.mentalAverages.confidence.toFixed(1)}</div>
-              <div className="mental-average-label">Confianca</div>
-            </div>
-            <div className="mental-average">
-              <div className="mental-average-value">{summaryData.mentalAverages.emotionalIntelligence.toFixed(1)}</div>
-              <div className="mental-average-label">Int. Emocional</div>
-            </div>
-            <div className="mental-average">
-              <div className="mental-average-value">{summaryData.mentalAverages.interference.toFixed(1)}</div>
-              <div className="mental-average-label">Interferencias</div>
-            </div>
-          </div>
+          )}
         </div>
 
         {summaryData.objectives && (

@@ -409,8 +409,11 @@ export async function handleGetBankrollConsolidated(req: any, res: Response): Pr
 // =============================================================================
 
 export const walletLimiter = rateLimit({
+  // MEDIUM-3 fix (audit 2026-05-05): aumentado de 10 para 20 req/min.
+  // Fluxo de reconcile com 8 wallets pode bater 5-7 calls em 30s
+  // (pre-fetch + retries + cooldown logId GET + final POST).
   windowMs: 60_000,
-  max: 10,
+  max: 20,
   keyGenerator: (req: any) => req.user?.userPlatformId || req.ip,
   standardHeaders: true,
   legacyHeaders: false,

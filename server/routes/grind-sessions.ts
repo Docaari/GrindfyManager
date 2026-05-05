@@ -1034,6 +1034,15 @@ export function registerGrindSessionRoutes(app: Express): void {
       const userId = req.user.userPlatformId;
       const { id } = req.params;
       const sessionData = insertGrindSessionSchema.partial().parse(req.body);
+
+      // CRITICAL fix (audit 2026-05-05): ownership check antes do update.
+      // storage.updateGrindSession faz where(eq(id)) sem userId — sem este
+      // pre-check qualquer user autenticado podia mutar sessao alheia.
+      const existing = await storage.getGrindSession(id);
+      if (!existing || existing.userId !== userId) {
+        return res.status(404).json({ message: "Sessao nao encontrada" });
+      }
+
       const session = await storage.updateGrindSession(id, sessionData);
 
       // CRIT-2 fix (Sprint Bankroll-3 RF-6): quando status='completed', avaliar
