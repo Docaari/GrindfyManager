@@ -199,7 +199,7 @@ export default function RegisterSessionDialog({
                       <div className="col-span-4 min-w-0">
                         <div className="text-sm font-medium text-gray-100 truncate">{w.name}</div>
                         <div className="text-[10px] text-gray-500 truncate">
-                          {w.platform ?? ''} {w.nativeCurrency}
+                          {[w.platform, w.nativeCurrency].filter(Boolean).join(' ')}
                         </div>
                       </div>
                       <div className="col-span-3 text-xs text-gray-400">

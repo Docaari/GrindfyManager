@@ -130,7 +130,7 @@ export default function SessionWalletDeltaDialog({ session, onClose, formatCurre
                       <td className="px-3 py-3">
                         <div className="font-medium text-gray-100">{s.walletName ?? s.walletId}</div>
                         <div className="text-xs text-gray-500">
-                          {(s.platform ?? '')} {s.nativeCurrency}
+                          {[s.platform, s.nativeCurrency].filter(Boolean).join(' ')}
                         </div>
                       </td>
                       <td className="px-3 py-3 text-gray-300">

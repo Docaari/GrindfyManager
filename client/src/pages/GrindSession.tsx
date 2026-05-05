@@ -1174,18 +1174,18 @@ export default function GrindSession() {
                   )}
                 </div>
 
-                {/* Personalizar — abre dialog de preferencias da pagina (cards / perf mental / moeda) */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowPersonalizationDialog(true)}
-                  className="text-gray-400 hover:text-white text-sm"
-                >
-                  Personalizar...
-                </Button>
-
               </>
             )}
+
+            {/* Personalizar — disponivel sempre (cards / perf mental / moeda); independe de ter sessao ativa */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowPersonalizationDialog(true)}
+              className="text-gray-400 hover:text-white text-sm"
+            >
+              Personalizar...
+            </Button>
           </div>
 
           {/* Personalizacao da pagina Grind — toggles de visibilidade, performance mental, moeda base */}
