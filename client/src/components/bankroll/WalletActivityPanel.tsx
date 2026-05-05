@@ -33,6 +33,8 @@ interface Tx {
   note?: string | null;
   sessionId?: string | null;
   source?: string | null;
+  previousNativeBalance?: string;
+  newNativeBalance?: string;
 }
 
 interface TxResp {
@@ -108,11 +110,15 @@ export function WalletActivityPanel({ walletId, nativeCurrency }: Props) {
   const transactions = data?.transactions ?? [];
 
   // ============ Chart data: results tab =============================
+  // Linha "Saldo": evolucao do saldo absoluto da wallet apos cada report
+  //   (session_result + manual_report). Founder espera ver curva indo de
+  //   X (saldo prev do primeiro report) ate Y (saldo new do ultimo report).
+  // Linha "Rakeback": cumulativo de rakeback recebido (separado).
+  // Baseline ancorado em (firstReportPrevBalance, 0) 1 dia antes da primeira
+  //   tx — garante 2 pontos minimo pra Recharts plotar linha.
+  // Total canto: (saldoFinal - saldoInicial) + cumRakeback. Positivo = lucro.
   const chartData = useMemo(() => {
-    // Filtra apenas tx que afetam result/rakeback ANTES de iterar — assim o
-    // primeiro elemento eh o primeiro evento contabilizado, e o baseline 0
-    // fica ancorado 1 dia antes (linha visivel mesmo com 1 unico tx).
-    const sorted = transactions
+    const filtered = transactions
       .filter(
         (t) => RESULT_REASONS.has(t.reason) || RAKEBACK_REASONS.has(t.reason),
       )
@@ -121,34 +127,44 @@ export function WalletActivityPanel({ walletId, nativeCurrency }: Props) {
         (a, b) =>
           new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime(),
       );
-    let cumResult = 0;
-    let cumRakeback = 0;
-    const points: Array<{ date: string; results: number; rakeback: number }> = [];
-    if (sorted.length > 0) {
-      // Baseline 0/0 ancorado 1 dia antes do primeiro evento — sem isso
-      // Recharts so ve 1 ponto e nao desenha linha.
-      const firstDate = new Date(sorted[0].occurredAt);
-      firstDate.setDate(firstDate.getDate() - 1);
-      points.push({
-        date: firstDate.toISOString().slice(0, 10),
-        results: 0,
-        rakeback: 0,
-      });
+    const points: Array<{ date: string; saldo: number | null; rakeback: number }> = [];
+    if (filtered.length === 0) {
+      return { points, totalDelta: 0, totalRakeback: 0, baselineSaldo: 0, finalSaldo: 0 };
     }
-    for (const t of sorted) {
-      const signed = signedAmount(t);
-      if (RESULT_REASONS.has(t.reason)) cumResult += signed;
-      else if (RAKEBACK_REASONS.has(t.reason)) cumRakeback += signed;
+    let cumRakeback = 0;
+    let lastSaldo = parseFloat(filtered[0].previousNativeBalance ?? "0");
+    if (!Number.isFinite(lastSaldo)) lastSaldo = 0;
+    const baselineSaldo = lastSaldo;
+    const baselineDate = new Date(filtered[0].occurredAt);
+    baselineDate.setDate(baselineDate.getDate() - 1);
+    points.push({
+      date: baselineDate.toISOString().slice(0, 10),
+      saldo: Math.round(baselineSaldo * 100) / 100,
+      rakeback: 0,
+    });
+    for (const t of filtered) {
+      if (RESULT_REASONS.has(t.reason)) {
+        const newBal = parseFloat(t.newNativeBalance ?? String(lastSaldo));
+        if (Number.isFinite(newBal)) lastSaldo = newBal;
+      } else if (RAKEBACK_REASONS.has(t.reason)) {
+        cumRakeback += signedAmount(t);
+      }
       points.push({
         date: t.occurredAt.slice(0, 10),
-        results: Math.round(cumResult * 100) / 100,
+        saldo: Math.round(lastSaldo * 100) / 100,
         rakeback: Math.round(cumRakeback * 100) / 100,
       });
     }
-    return { points, totalResults: cumResult, totalRakeback: cumRakeback };
+    return {
+      points,
+      totalDelta: lastSaldo - baselineSaldo,
+      totalRakeback: cumRakeback,
+      baselineSaldo,
+      finalSaldo: lastSaldo,
+    };
   }, [transactions]);
 
-  const resultsNet = chartData.totalResults + chartData.totalRakeback;
+  const resultsNet = chartData.totalDelta + chartData.totalRakeback;
 
   // ============ Movements tab =======================================
   const movements = useMemo(
@@ -256,20 +272,21 @@ export function WalletActivityPanel({ walletId, nativeCurrency }: Props) {
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Line
                       type="monotone"
-                      dataKey="results"
-                      name="Resultados"
+                      dataKey="saldo"
+                      name="Saldo apos reports"
                       stroke="hsl(var(--primary))"
-                      dot={{ r: 3 }}
-                      activeDot={{ r: 5 }}
+                      dot={{ r: 4, fill: "hsl(var(--primary))" }}
+                      activeDot={{ r: 6 }}
                       strokeWidth={2}
                       isAnimationActive={false}
+                      connectNulls
                     />
                     <Line
                       type="monotone"
                       dataKey="rakeback"
-                      name="Rakeback"
+                      name="Rakeback acumulado"
                       stroke="#f59e0b"
-                      dot={{ r: 3 }}
+                      dot={{ r: 3, fill: "#f59e0b" }}
                       activeDot={{ r: 5 }}
                       strokeWidth={2}
                       isAnimationActive={false}

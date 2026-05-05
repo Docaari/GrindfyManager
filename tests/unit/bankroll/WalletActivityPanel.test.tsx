@@ -45,16 +45,15 @@ beforeEach(() => {
 });
 
 const baseTxs = [
-  // Result wins/losses
-  { id: 't1', occurredAt: '2026-04-01T12:00:00Z', direction: 'in', nativeAmount: '100', nativeCurrency: 'USD', reason: 'session_result' },
-  { id: 't2', occurredAt: '2026-04-05T12:00:00Z', direction: 'out', nativeAmount: '30', nativeCurrency: 'USD', reason: 'session_result' },
-  { id: 't3', occurredAt: '2026-04-10T12:00:00Z', direction: 'in', nativeAmount: '20', nativeCurrency: 'USD', reason: 'rakeback' },
-  // Manual report
-  { id: 't4', occurredAt: '2026-04-15T12:00:00Z', direction: 'in', nativeAmount: '50', nativeCurrency: 'USD', reason: 'manual_report' },
+  // Reports (saldo absoluto plotado): inicial 1000 -> 1100 -> 1070 -> 1120
+  { id: 't1', occurredAt: '2026-04-01T12:00:00Z', direction: 'in', nativeAmount: '100', nativeCurrency: 'USD', reason: 'session_result', previousNativeBalance: '1000', newNativeBalance: '1100' },
+  { id: 't2', occurredAt: '2026-04-05T12:00:00Z', direction: 'out', nativeAmount: '30', nativeCurrency: 'USD', reason: 'session_result', previousNativeBalance: '1100', newNativeBalance: '1070' },
+  { id: 't3', occurredAt: '2026-04-10T12:00:00Z', direction: 'in', nativeAmount: '20', nativeCurrency: 'USD', reason: 'rakeback', previousNativeBalance: '1070', newNativeBalance: '1090' },
+  { id: 't4', occurredAt: '2026-04-15T12:00:00Z', direction: 'in', nativeAmount: '50', nativeCurrency: 'USD', reason: 'manual_report', previousNativeBalance: '1090', newNativeBalance: '1140' },
   // Movements (excluded da tab results)
-  { id: 't5', occurredAt: '2026-04-02T12:00:00Z', direction: 'in', nativeAmount: '500', nativeCurrency: 'USD', reason: 'deposit' },
-  { id: 't6', occurredAt: '2026-04-20T12:00:00Z', direction: 'out', nativeAmount: '200', nativeCurrency: 'USD', reason: 'withdrawal' },
-  { id: 't7', occurredAt: '2026-04-22T12:00:00Z', direction: 'in', nativeAmount: '15', nativeCurrency: 'USD', reason: 'manual_adjustment' },
+  { id: 't5', occurredAt: '2026-04-02T12:00:00Z', direction: 'in', nativeAmount: '500', nativeCurrency: 'USD', reason: 'deposit', previousNativeBalance: '500', newNativeBalance: '1000' },
+  { id: 't6', occurredAt: '2026-04-20T12:00:00Z', direction: 'out', nativeAmount: '200', nativeCurrency: 'USD', reason: 'withdrawal', previousNativeBalance: '1140', newNativeBalance: '940' },
+  { id: 't7', occurredAt: '2026-04-22T12:00:00Z', direction: 'in', nativeAmount: '15', nativeCurrency: 'USD', reason: 'manual_adjustment', previousNativeBalance: '940', newNativeBalance: '955' },
 ];
 
 describe('WalletActivityPanel', () => {
@@ -69,26 +68,24 @@ describe('WalletActivityPanel', () => {
     expect(screen.queryByTestId('wallet-activity-movements-pane')).toBeNull();
   });
 
-  it('total no canto superior direito = soma results + rakeback', async () => {
+  it('total no canto = (saldoFinal - saldoInicial) + rakeback acumulado', async () => {
     (apiRequest as any).mockResolvedValue({ transactions: baseTxs });
 
     render(withClient(<WalletActivityPanel walletId="w1" nativeCurrency="USD" />));
 
     await waitFor(() => {
       const total = screen.getByTestId('wallet-activity-results-total');
-      // session_result: +100 -30 = +70
-      // rakeback: +20
-      // manual_report: +50
-      // Total = +140
-      expect(total.textContent).toMatch(/140/);
+      // baselineSaldo=1000 (prev do primeiro report), finalSaldo=1140 (newBalance manual_report)
+      // totalDelta = 140; rakeback = +20; total = +160
+      expect(total.textContent).toMatch(/160/);
     });
   });
 
   it('total negativo aparece com sinal vermelho', async () => {
     (apiRequest as any).mockResolvedValue({
       transactions: [
-        { id: 't1', occurredAt: '2026-04-01T12:00:00Z', direction: 'out', nativeAmount: '500', nativeCurrency: 'USD', reason: 'session_result' },
-        { id: 't2', occurredAt: '2026-04-02T12:00:00Z', direction: 'in', nativeAmount: '50', nativeCurrency: 'USD', reason: 'rakeback' },
+        { id: 't1', occurredAt: '2026-04-01T12:00:00Z', direction: 'out', nativeAmount: '500', nativeCurrency: 'USD', reason: 'session_result', previousNativeBalance: '1000', newNativeBalance: '500' },
+        { id: 't2', occurredAt: '2026-04-02T12:00:00Z', direction: 'in', nativeAmount: '50', nativeCurrency: 'USD', reason: 'rakeback', previousNativeBalance: '500', newNativeBalance: '550' },
       ],
     });
 
@@ -96,6 +93,7 @@ describe('WalletActivityPanel', () => {
 
     await waitFor(() => {
       const total = screen.getByTestId('wallet-activity-results-total');
+      // baseline=1000, final=500 (manual_report did go), delta=-500; rakeback=+50; total=-450
       expect(total.textContent).toMatch(/-/);
       expect(total.className).toMatch(/rose|red/);
     });
