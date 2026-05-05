@@ -483,6 +483,8 @@ export const combineTournaments = (sessionTournaments: any[], plannedTournaments
     const n = parseFloat(String(v ?? '0').replace(',', '.'));
     return isNaN(n) ? 0 : n;
   };
+  // Normaliza name/site/time pra tolerar whitespace/casing inconsistente.
+  const normStr = (v: any) => String(v ?? '').trim().toLowerCase();
 
   // Then, add planned tournaments only if they don't have a corresponding session tournament
   // Exception: Suprema tournaments always stay visible (multiple entries allowed)
@@ -496,10 +498,10 @@ export const combineTournaments = (sessionTournaments: any[], plannedTournaments
     const hasSessionTournament = Array.from(combinedTournaments.values()).some(sessionTournament =>
       sessionTournament.plannedTournamentId === tournament.id ||
       (sessionTournament.fromPlannedTournament &&
-       sessionTournament.name === tournament.name &&
-       sessionTournament.site === tournament.site &&
+       normStr(sessionTournament.name) === normStr(tournament.name) &&
+       normStr(sessionTournament.site) === normStr(tournament.site) &&
        normBuyIn(sessionTournament.buyIn) === normBuyIn(tournament.buyIn) &&
-       sessionTournament.time === tournament.time)
+       normStr(sessionTournament.time) === normStr(tournament.time))
     );
 
     // Suprema bypass mantem planned-X visivel mesmo com shadow registrado
@@ -512,10 +514,10 @@ export const combineTournaments = (sessionTournaments: any[], plannedTournaments
       if (st.plannedTournamentId === tournament.id) return true;
       return (
         st.fromPlannedTournament &&
-        st.name === tournament.name &&
-        st.site === tournament.site &&
+        normStr(st.name) === normStr(tournament.name) &&
+        normStr(st.site) === normStr(tournament.site) &&
         normBuyIn(st.buyIn) === normBuyIn(tournament.buyIn) &&
-        st.time === tournament.time
+        normStr(st.time) === normStr(tournament.time)
       );
     });
     if (hasDeletedShadow) return;
@@ -668,7 +670,12 @@ export const buildBustPayload = (
   } else {
     data.bounty = '0';
   }
-  data.position = hasPosition ? parseInt(String(registrationData!.position), 10) : null;
+  if (hasPosition) {
+    const posParsed = parseInt(String(registrationData!.position), 10);
+    data.position = Number.isFinite(posParsed) && posParsed >= 1 ? posParsed : null;
+  } else {
+    data.position = null;
+  }
 
   return { id: tournament.id, data };
 };

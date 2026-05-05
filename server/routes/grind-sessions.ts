@@ -1250,6 +1250,14 @@ export function registerGrindSessionRoutes(app: Express): void {
         });
       }
 
+      // Ownership guard: sessionId (se presente) deve ser sessao do user
+      if (req.body.sessionId) {
+        const session = await storage.getGrindSession(req.body.sessionId);
+        if (!session || session.userId !== userId) {
+          return res.status(404).json({ message: "Grind session not found" });
+        }
+      }
+
       // Clean and prepare data (includes copy-on-promote fields for ADR-014)
       const cleanData: any = {
         userId,
@@ -1296,6 +1304,14 @@ export function registerGrindSessionRoutes(app: Express): void {
   app.put('/api/session-tournaments/:id', requireAuth, async (req: any, res) => {
     const { id } = req.params;
     try {
+      const userId = req.user.userPlatformId;
+      const owner = await storage.getSessionTournamentById(id);
+      if (!owner) {
+        return res.status(404).json({ message: "Session tournament not found" });
+      }
+      if (owner.userId !== userId) {
+        return res.status(404).json({ message: "Session tournament not found" });
+      }
 
       // Convert string numbers to actual numbers for validation
       const processedData = { ...req.body };
@@ -1406,10 +1422,25 @@ export function registerGrindSessionRoutes(app: Express): void {
   app.delete('/api/session-tournaments/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const userId = req.user.userPlatformId;
+      const existing = await storage.getSessionTournamentById(id);
+      if (!existing || existing.userId !== userId) {
+        return res.status(404).json({ message: "Session tournament not found" });
+      }
       await storage.deleteSessionTournament(id);
       res.json({ message: "Session tournament deleted successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to delete session tournament" });
+    } catch (error: any) {
+      console.error('Delete session tournament failed:', error);
+      // PG FK violation
+      if (error?.code === '23503') {
+        return res.status(409).json({
+          message: "Torneio referenciado por outro registro (ticket consumido).",
+        });
+      }
+      res.status(500).json({
+        message: "Failed to delete session tournament",
+        error: error?.message ?? 'Unknown error',
+      });
     }
   });
 

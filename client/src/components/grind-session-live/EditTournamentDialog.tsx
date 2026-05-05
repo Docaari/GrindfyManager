@@ -73,11 +73,11 @@ export default function EditTournamentDialog({
                     id="edit-lateReg"
                     type="number"
                     min="0"
-                    max="999"
+                    max="2880"
                     value={editingTournament.lateRegMinutes ?? ""}
-                    onChange={(e) => setEditingTournament({...editingTournament, lateRegMinutes: e.target.value ? parseInt(e.target.value) : null})}
+                    onChange={(e) => setEditingTournament({...editingTournament, lateRegMinutes: e.target.value ? parseInt(e.target.value, 10) : null})}
                     className="bg-gray-800 border-gray-600 text-white"
-                    placeholder="Ex: 60"
+                    placeholder="Ex: 60 (ate 2880min / 48h)"
                   />
                 </div>
                 <div>

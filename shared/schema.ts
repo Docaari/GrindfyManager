@@ -1505,7 +1505,9 @@ export const insertPlannedTournamentSchemaBase = createInsertSchema(plannedTourn
   time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)(:([0-5]\d))?$/, 'Horario invalido (use HH:MM)'),
   // Sprint 1 RF-01: dayOfWeek validado em [0,6]
   dayOfWeek: z.number().int().min(0).max(6),
-  lateRegMinutes: z.number().int().min(0).max(999).nullable().optional(),
+  // Estado do torneio na grade — enum estrito para impedir corrupcao via API direta.
+  status: z.enum(['upcoming', 'registered', 'active', 'finished', 'completed', 'deleted']).optional().default('upcoming'),
+  lateRegMinutes: z.number().int().min(0).max(2880).nullable().optional(),
   startingStack: z.number().int().min(1).nullable().optional(),
   maxPlayers: z.number().int().min(1).nullable().optional(),
   // Sprint 1 RF-01: tolera gameType='' (legacy form fallback) — converte para null.
@@ -1639,7 +1641,9 @@ export const insertSessionTournamentSchemaBase = createInsertSchema(sessionTourn
   rebuys: z.union([z.number(), z.string().transform(Number)]).default(0),
   startTime: z.union([z.string(), z.date(), z.null()]).optional(),
   endTime: z.union([z.string(), z.date(), z.null()]).optional(),
-  lateRegMinutes: z.number().int().min(0).max(999).nullable().optional(),
+  // Estado do session_tournament — enum estrito.
+  status: z.enum(['upcoming', 'registered', 'active', 'finished', 'completed', 'deleted']).optional().default('upcoming'),
+  lateRegMinutes: z.number().int().min(0).max(2880).nullable().optional(),
   startingStack: z.number().int().min(1).nullable().optional(),
   maxPlayers: z.number().int().min(1).nullable().optional(),
   gameType: z.enum(['NLH', 'PLO']).nullable().optional(),
@@ -2279,7 +2283,7 @@ export const insertTournamentLibrarySchemaBase = createInsertSchema(tournamentLi
   externalId: z.string().nullable().optional(),
   dayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
   currency: z.string().default('USD').optional(),
-  lateRegMinutes: z.number().int().min(0).max(999).nullable().optional(),
+  lateRegMinutes: z.number().int().min(0).max(2880).nullable().optional(),
   ...addOnReaFieldsConfig,
 });
 

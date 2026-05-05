@@ -99,7 +99,7 @@ describe('insertPlannedTournamentSchema — campos enriquecidos', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 4. lateRegMinutes — validacao de range (0-999)
+  // 4. lateRegMinutes — validacao de range (0-2880, 48h cap p/ multi-flight long late regs)
   // -------------------------------------------------------------------------
   describe('lateRegMinutes — validacao', () => {
     it('deve aceitar lateRegMinutes=0 (sem late reg)', () => {
@@ -108,8 +108,14 @@ describe('insertPlannedTournamentSchema — campos enriquecidos', () => {
       expect(result.success).toBe(true);
     });
 
-    it('deve aceitar lateRegMinutes=999 (limite maximo)', () => {
-      const data = makeValidPlannedTournament({ lateRegMinutes: 999 });
+    it('deve aceitar lateRegMinutes=2880 (limite maximo, 48h)', () => {
+      const data = makeValidPlannedTournament({ lateRegMinutes: 2880 });
+      const result = insertPlannedTournamentSchema.safeParse(data);
+      expect(result.success).toBe(true);
+    });
+
+    it('deve aceitar lateRegMinutes=1395 (caso real Mini Rainmaker)', () => {
+      const data = makeValidPlannedTournament({ lateRegMinutes: 1395 });
       const result = insertPlannedTournamentSchema.safeParse(data);
       expect(result.success).toBe(true);
     });
@@ -126,8 +132,8 @@ describe('insertPlannedTournamentSchema — campos enriquecidos', () => {
       expect(result.success).toBe(false);
     });
 
-    it('deve rejeitar lateRegMinutes=1000 (acima do max)', () => {
-      const data = makeValidPlannedTournament({ lateRegMinutes: 1000 });
+    it('deve rejeitar lateRegMinutes=2881 (acima do max)', () => {
+      const data = makeValidPlannedTournament({ lateRegMinutes: 2881 });
       const result = insertPlannedTournamentSchema.safeParse(data);
       expect(result.success).toBe(false);
     });

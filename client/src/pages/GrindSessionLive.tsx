@@ -421,7 +421,8 @@ export default function GrindSessionLive() {
     if (hasBounty || hasPrize || hasPosition) {
       updateData.bounty = normalizeDecimalInput(entryData?.bounty || '0');
       updateData.result = normalizeDecimalInput(entryData?.prize || '0');
-      updateData.position = hasPosition ? parseInt(entryData.position) : null;
+      const posParsed = hasPosition ? parseInt(entryData.position, 10) : NaN;
+      updateData.position = Number.isFinite(posParsed) && posParsed >= 1 ? posParsed : null;
       updateTournamentMutation.mutate({ id: tournamentId, data: updateData });
       setRegistrationData(prev => { const updated = { ...prev }; delete updated[tournamentId]; return updated; });
       const totalResult = parseFloat(updateData.result) + parseFloat(updateData.bounty);
@@ -524,9 +525,23 @@ export default function GrindSessionLive() {
   };
 
   // Add-on handler (ADR-014 / Spec 2) — reuses updateTournamentMutation
+  // Hidrata allowsAddOn/addOnCost da planned source quando o snapshot da
+  // session row esta stale (planned editado pos-session-start). Sem isso o
+  // refinement do Zod (server) rejeita addOnTaken=true com allowsAddOn=false.
   const handleAddOnTaken = (tournamentId: string, value: boolean) => {
+    const sessionRow: any = sessionTournaments?.find(t => t.id === tournamentId);
+    const data: any = { addOnTaken: value };
+    if (value && sessionRow?.fromPlannedTournament && sessionRow?.plannedTournamentId) {
+      const pt: any = plannedTournaments?.find(p => p.id === sessionRow.plannedTournamentId);
+      if (pt?.allowsAddOn === true && sessionRow.allowsAddOn !== true) {
+        data.allowsAddOn = true;
+        if (!sessionRow.addOnCost) {
+          data.addOnCost = pt.addOnCost ?? sessionRow.buyIn ?? null;
+        }
+      }
+    }
     updateTournamentMutation.mutate(
-      { id: tournamentId, data: { addOnTaken: value } },
+      { id: tournamentId, data },
       {
         onSuccess: () => {
           toast({
@@ -596,6 +611,11 @@ export default function GrindSessionLive() {
 
       for (const tournament of pendingList) {
         try {
+          // Skip planned-X: PUT em planned mutaria a recorrencia da grade.
+          // Apenas session_tournaments reais (sem prefixo) sao finalizados.
+          if (typeof tournament.id === 'string' && tournament.id.startsWith('planned-')) {
+            continue;
+          }
           await updateTournamentMutation.mutateAsync({
             id: tournament.id,
             data: { status: 'finished', endTime: new Date().toISOString(), result: '0', bounty: '0', position: null }
@@ -1647,7 +1667,17 @@ export default function GrindSessionLive() {
   };
 
   const handleRebuyTournament = (tournament: any) => {
-    updateTournamentMutation.mutate({ id: tournament.id, data: { rebuys: (tournament.rebuys || 0) + 1 } });
+    // Optimistic update — evita race em double-click rapido (baseline stale).
+    // Le rebuys do cache mais recente, nao do snapshot do click.
+    const cacheKey = ["/api/session-tournaments", activeSession?.id];
+    const cached = queryClient.getQueryData<any[]>(cacheKey);
+    const liveRow = cached?.find(t => t.id === tournament.id);
+    const baseline = liveRow?.rebuys ?? tournament.rebuys ?? 0;
+    const newRebuys = baseline + 1;
+    queryClient.setQueryData<any[]>(cacheKey, (old) =>
+      Array.isArray(old) ? old.map(t => t.id === tournament.id ? { ...t, rebuys: newRebuys } : t) : old
+    );
+    updateTournamentMutation.mutate({ id: tournament.id, data: { rebuys: newRebuys } });
   };
 
   const handleUpdatePriority = (tournamentId: string, newPriority: number) => {
@@ -1687,7 +1717,8 @@ export default function GrindSessionLive() {
 
     const actualId = tournamentId.substring(8);
     const plannedTournament = plannedTournaments?.find(t => t.id === actualId);
-    const existingSessionTournament = sessionTournaments?.find(st => st.plannedTournamentId === actualId);
+    // Filtra shadow soft-deletado pra evitar resurrect (deleted -> registered).
+    const existingSessionTournament = sessionTournaments?.find(st => st.plannedTournamentId === actualId && st.status !== 'deleted');
 
     if (existingSessionTournament && !isSuprema) {
       // Refresh addon/reentry config from the current planned source.
@@ -1807,7 +1838,7 @@ export default function GrindSessionLive() {
   // permanece intacto. Para session_tournament real usa DELETE direto (evita
   // merge-before-validate da rota PUT).
   const deleteTournamentMutation = useMutation({
-    mutationFn: async ({ id, plannedSource }: { id: string; plannedSource?: any }) => {
+    mutationFn: async ({ id, plannedSource, sessionTournament }: { id: string; plannedSource?: any; sessionTournament?: any }) => {
       if (id.startsWith('planned-') && plannedSource && activeSession?.id) {
         return await apiRequest('POST', '/api/session-tournaments', {
           userId: activeSession.userId,
@@ -1829,6 +1860,12 @@ export default function GrindSessionLive() {
           position: null,
           fieldSize: null,
         });
+      }
+      // Session row originada de planned: soft-delete (PUT status='deleted')
+      // em vez de DELETE. Senao planned-X reaparece via combineTournaments
+      // na proxima invalidacao (precisava do shadow pra mascarar o planned).
+      if (sessionTournament?.fromPlannedTournament && sessionTournament?.plannedTournamentId) {
+        return await apiRequest('PUT', `/api/session-tournaments/${id}`, { status: 'deleted' });
       }
       return await apiRequest('DELETE', `/api/session-tournaments/${id}`);
     },
@@ -1859,11 +1896,14 @@ export default function GrindSessionLive() {
   const handleConfirmDeleteTournament = () => {
     if (!deleteTournamentId) return;
     let plannedSource: any = undefined;
+    let sessionTournament: any = undefined;
     if (deleteTournamentId.startsWith('planned-')) {
       const actualId = deleteTournamentId.substring(8);
       plannedSource = plannedTournaments?.find(p => p.id === actualId);
+    } else {
+      sessionTournament = sessionTournaments?.find(t => t.id === deleteTournamentId);
     }
-    deleteTournamentMutation.mutate({ id: deleteTournamentId, plannedSource });
+    deleteTournamentMutation.mutate({ id: deleteTournamentId, plannedSource, sessionTournament });
     setDeleteTournamentId(null);
   };
   const handleCancelDeleteTournament = () => setDeleteTournamentId(null);
@@ -1894,7 +1934,11 @@ export default function GrindSessionLive() {
   };
 
   const adjustTournamentTime = (tournamentId: string, minutesToAdd: number, autoClose: boolean = false) => {
-    let tournament = sessionTournaments?.find(t => t.id === tournamentId);
+    // Le do cache mais recente pra evitar baseline stale em double-click.
+    const cacheKey = ["/api/session-tournaments", activeSession?.id];
+    const cached = queryClient.getQueryData<any[]>(cacheKey);
+    let tournament: any = cached?.find(t => t.id === tournamentId)
+      || sessionTournaments?.find(t => t.id === tournamentId);
     if (!tournament && tournamentId.startsWith('planned-')) { const actualId = tournamentId.substring(8); tournament = plannedTournaments?.find(t => t.id === actualId); }
     if (tournament) {
       const currentTime = tournament.time || '20:00';
@@ -1906,6 +1950,12 @@ export default function GrindSessionLive() {
       const newHours = Math.floor(totalMinutes / 60);
       const newMinutes = totalMinutes % 60;
       const newTime = `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
+      // Optimistic update no cache antes do mutate
+      if (!tournamentId.startsWith('planned-')) {
+        queryClient.setQueryData<any[]>(cacheKey, (old) =>
+          Array.isArray(old) ? old.map(t => t.id === tournamentId ? { ...t, time: newTime } : t) : old
+        );
+      }
       updateTournamentMutation.mutate({ id: tournamentId, data: { time: newTime } });
       setTimeEditValue({ ...timeEditValue, [tournamentId]: newTime });
       if (autoClose) setEditingTimeDialog({ ...editingTimeDialog, [tournamentId]: false });
@@ -2031,7 +2081,8 @@ export default function GrindSessionLive() {
     let filtered = tournaments;
     // Item 19: Apply site filter
     if (siteFilter !== "all") {
-      filtered = filtered.filter(t => t.site === siteFilter);
+      const needle = String(siteFilter).trim().toLowerCase();
+      filtered = filtered.filter(t => String(t.site ?? '').trim().toLowerCase() === needle);
     }
     if (!tournamentSearch.trim()) return filtered;
     const term = tournamentSearch.toLowerCase();
