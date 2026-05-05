@@ -274,10 +274,10 @@ export function WalletActivityPanel({ walletId, nativeCurrency }: Props) {
                       type="monotone"
                       dataKey="saldo"
                       name="Saldo apos reports"
-                      stroke="hsl(var(--primary))"
-                      dot={{ r: 4, fill: "hsl(var(--primary))" }}
-                      activeDot={{ r: 6 }}
-                      strokeWidth={2}
+                      stroke="#22c55e"
+                      dot={{ r: 4, fill: "#22c55e", stroke: "#22c55e" }}
+                      activeDot={{ r: 6, fill: "#22c55e" }}
+                      strokeWidth={2.5}
                       isAnimationActive={false}
                       connectNulls
                     />
