@@ -200,6 +200,21 @@ export default function GrindSession() {
     refetchOnWindowFocus: true,
   });
 
+  // User settings — defaultScreenCap memorizado entre sessoes (persistido em
+  // user_settings via PUT /api/user-settings pelo updateScreenCapMutation em
+  // /grind-live). Usado em getLastSessionDefaults / buildQuickStartSession.
+  const { data: userSettingsData } = useQuery<{ defaultScreenCap?: number | null } & Record<string, any>>({
+    queryKey: ["/api/user-settings"],
+    queryFn: async () => {
+      try {
+        return await apiRequest("GET", "/api/user-settings");
+      } catch {
+        return {} as any;
+      }
+    },
+    staleTime: 60_000,
+  });
+
   // Sprint Bankroll-3 RF-6 wiring: stop-loss/stop-win status + lock countdown.
   // Endpoint: GET /api/user-settings/stops -> {stopLockUntil, currentDayDeltaUsd, ...}
   const { data: stopStatus } = useQuery<{
@@ -362,8 +377,8 @@ export default function GrindSession() {
 
   // FP-09: Quick start session defaults
   const lastSessionDefaults = useMemo(() => {
-    return getLastSessionDefaults(sessionHistory);
-  }, [sessionHistory]);
+    return getLastSessionDefaults(sessionHistory, userSettingsData ?? null);
+  }, [sessionHistory, userSettingsData]);
 
   const quickStartLabel = getQuickStartLabel(warmUpData);
   const warmUpCompleted = hasWarmUpData(warmUpData);
@@ -460,7 +475,7 @@ export default function GrindSession() {
     const previousSession = sessionHistory.length > 0
       ? [...sessionHistory].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
       : null;
-    const quickSession = buildQuickStartSession(warmUpData, previousSession, null);
+    const quickSession = buildQuickStartSession(warmUpData, previousSession, userSettingsData ?? null);
 
     startSessionMutation.mutate({
       date: now.toISOString(),

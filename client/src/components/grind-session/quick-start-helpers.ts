@@ -22,6 +22,7 @@ interface SessionData {
 
 interface UserSettings {
   breakFrequencyMinutes?: number;
+  defaultScreenCap?: number | null;
   [key: string]: any;
 }
 
@@ -54,10 +55,40 @@ export function getQuickStartLabel(warmUpData: WarmUpData | null): string {
 }
 
 /**
- * Extracts defaults from the most recent session.
- * Sorts by date descending and finds the first session with a valid screenCap.
+ * Resolve screenCap com prioridade:
+ *   1. userSettings.defaultScreenCap (memoria persistente — set pelo updateScreenCapMutation
+ *      em /grind-live ao alterar o limite via card "Em Andamento")
+ *   2. previousSession.screenCap (fallback se settings ainda nao foram persistidos)
+ *   3. DEFAULT_SCREEN_CAP (4)
  */
-export function getLastSessionDefaults(sessions: SessionData[]): { screenCap: number } {
+function resolveScreenCap(
+  previousSession: SessionData | null,
+  userSettings: UserSettings | null,
+): number {
+  const fromSettings = userSettings?.defaultScreenCap;
+  if (typeof fromSettings === 'number' && fromSettings >= 1 && fromSettings <= 24) {
+    return fromSettings;
+  }
+  if (previousSession?.screenCap != null) {
+    return previousSession.screenCap;
+  }
+  return DEFAULT_SCREEN_CAP;
+}
+
+/**
+ * Extracts defaults from the most recent session.
+ * Prioriza userSettings.defaultScreenCap (memoria persistente), depois sessao mais recente.
+ */
+export function getLastSessionDefaults(
+  sessions: SessionData[],
+  userSettings: UserSettings | null = null,
+): { screenCap: number } {
+  // Memoria persistente vence sobre qualquer sessao historica.
+  const fromSettings = userSettings?.defaultScreenCap;
+  if (typeof fromSettings === 'number' && fromSettings >= 1 && fromSettings <= 24) {
+    return { screenCap: fromSettings };
+  }
+
   if (sessions.length === 0) {
     return { screenCap: DEFAULT_SCREEN_CAP };
   }
@@ -83,16 +114,13 @@ export function getLastSessionDefaults(sessions: SessionData[]): { screenCap: nu
 export function buildQuickStartSession(
   warmUpData: WarmUpData | null,
   previousSession: SessionData | null,
-  _userSettings: UserSettings | null,
+  userSettings: UserSettings | null,
 ): QuickStartSession {
   const hasWarmUp = hasWarmUpData(warmUpData);
 
   const preparationPercentage = hasWarmUp && warmUpData ? warmUpData.mentalState : 0;
   const preparationNotes = hasWarmUp && warmUpData && warmUpData.notes ? warmUpData.notes : '';
-  const screenCap =
-    previousSession && previousSession.screenCap != null
-      ? previousSession.screenCap
-      : DEFAULT_SCREEN_CAP;
+  const screenCap = resolveScreenCap(previousSession, userSettings);
 
   return {
     preparationPercentage,
