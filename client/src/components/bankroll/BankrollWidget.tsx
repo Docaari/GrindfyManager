@@ -20,6 +20,8 @@ interface BankrollState {
   rulePct?: number;
   tolerance?: number;
   maxBuyInUSD: number | null;
+  softLimitUSD?: number | null;
+  hardLimitUSD?: number | null;
   maxBuyInDisplay?: { USD: number | null; BRL?: number; EUR?: number };
   amountDisplay?: { USD: number | null; BRL?: number; EUR?: number };
   exchangeRateBRL?: number | null;
@@ -82,7 +84,14 @@ export function BankrollWidget() {
     state.amountDisplay?.EUR ??
     (state.exchangeRateEUR != null ? amount * state.exchangeRateEUR : undefined);
 
-  const abi = state.maxBuyInUSD ?? 0;
+  // ABI = soft limit (target). maxBuyInUSD eh HARD limit (soft * 1.5 tolerance);
+  // founder vai chamar de "ABI configurado" o soft. Fallback se backend antigo
+  // nao expoe softLimitUSD: deriva de amount * (rulePct/100).
+  const abi =
+    state.softLimitUSD ??
+    (state.amount != null && state.rulePct != null
+      ? state.amount * (state.rulePct / 100)
+      : 0);
   const abiCount = abi > 0 ? Math.floor(amount / abi) : 0;
   const walletCount = state.walletCount ?? 0;
 

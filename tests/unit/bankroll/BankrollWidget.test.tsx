@@ -150,13 +150,15 @@ describe('BankrollWidget — banca configurada (novo layout)', () => {
     });
   });
 
-  it('ABI count = floor(amount / maxBuyInUSD)', async () => {
+  it('ABI count = floor(amount / softLimitUSD)', async () => {
     (apiRequest as any).mockResolvedValue({
       configured: true,
       amount: 1435,
       rule: 'custom:0.5',
       rulePct: 0.5,
-      maxBuyInUSD: 7,
+      softLimitUSD: 7.175,
+      hardLimitUSD: 10.7625,
+      maxBuyInUSD: 10.7625,
       amountDisplay: { USD: 1435 },
       walletCount: 1,
     });
@@ -165,17 +167,20 @@ describe('BankrollWidget — banca configurada (novo layout)', () => {
 
     await waitFor(() => {
       const el = screen.getByTestId('bankroll-widget-abi-count');
-      // 1435 / 7 = 205
-      expect(el.textContent).toMatch(/205/);
+      // 1435 / 7.175 = 200
+      expect(el.textContent).toMatch(/200/);
     });
   });
 
-  it('botao ABI editavel mostra valor configurado em USD', async () => {
+  it('botao ABI editavel mostra soft limit (ABI configurado), nao hard', async () => {
     (apiRequest as any).mockResolvedValue({
       configured: true,
       amount: 1435,
       rule: 'custom:0.5',
-      maxBuyInUSD: 7,
+      rulePct: 0.5,
+      softLimitUSD: 7.175,
+      hardLimitUSD: 10.7625,
+      maxBuyInUSD: 10.7625,
       amountDisplay: { USD: 1435 },
       walletCount: 1,
     });
