@@ -121,8 +121,7 @@ describe('WalletTransactionDialog — modo balance, sessionId standalone (RF-09)
     expect(body.sessionId).toBeUndefined();
   });
 
-  it('helper text PT-BR "Sem sessao ativa" quando standalone (data-testid wallet-tx-reason-helper)', async () => {
-    // RED: helper text + data-testid ainda nao existem
+  it('balance mode minimal: NAO renderiza helper text (founder spec — modal so saldo+quando+nota)', async () => {
     const user = userEvent.setup();
     render(withClient(
       <WalletTransactionDialog open onOpenChange={() => {}} wallet={mockWallet as any} />,
@@ -130,55 +129,31 @@ describe('WalletTransactionDialog — modo balance, sessionId standalone (RF-09)
 
     await user.click(screen.getByTestId('wallet-tx-mode-balance'));
 
-    await waitFor(() => {
-      const helper = screen.getByTestId('wallet-tx-reason-helper');
-      expect(helper).toBeTruthy();
-      expect(helper.textContent?.toLowerCase()).toMatch(/sem sessao|report manual/);
-    });
+    expect(screen.queryByTestId('wallet-tx-reason-helper')).toBeNull();
   });
 
-  it('helper text PT-BR "Vinculado a sessao" quando sessionId presente', async () => {
-    // RED: nova prop + texto dinamico
+  it('balance mode com sessionId: ainda sem helper visivel (founder pediu balance limpo)', async () => {
     const user = userEvent.setup();
     render(withClient(
       <WalletTransactionDialog
         open
         onOpenChange={() => {}}
         wallet={mockWallet as any}
-        // @ts-expect-error — prop nao existe ainda
         sessionId="SES-1"
       />,
     ));
 
     await user.click(screen.getByTestId('wallet-tx-mode-balance'));
 
-    await waitFor(() => {
-      const helper = screen.getByTestId('wallet-tx-reason-helper');
-      expect(helper).toBeTruthy();
-      expect(helper.textContent?.toLowerCase()).toMatch(/vinculad|sessao/);
-    });
+    expect(screen.queryByTestId('wallet-tx-reason-helper')).toBeNull();
   });
 
-  it('helper visible APENAS em modo balance (NAO em modo movement)', async () => {
-    // RED: helper deve sumir quando em movement
-    const user = userEvent.setup();
+  it('movement mode tambem nao expoe helper', async () => {
     render(withClient(
       <WalletTransactionDialog open onOpenChange={() => {}} wallet={mockWallet as any} />,
     ));
 
-    // movement default — helper NAO existe
     expect(screen.queryByTestId('wallet-tx-reason-helper')).toBeNull();
-
-    await user.click(screen.getByTestId('wallet-tx-mode-balance'));
-    await waitFor(() => {
-      expect(screen.getByTestId('wallet-tx-reason-helper')).toBeTruthy();
-    });
-
-    // volta ao movement — helper somе
-    await user.click(screen.getByTestId('wallet-tx-mode-movement'));
-    await waitFor(() => {
-      expect(screen.queryByTestId('wallet-tx-reason-helper')).toBeNull();
-    });
   });
 
   it('submit success em manual_report invalida queries grind-history e dashboard (#12)', async () => {
@@ -211,17 +186,15 @@ describe('WalletTransactionDialog — modo balance, sessionId standalone (RF-09)
     expect(hasDashboard).toBe(true);
   });
 
-  it('helper text estavel mesmo sem clicar submit (renderiza apenas por mode change)', async () => {
-    // RED: garantir que helper aparece com mode change sem precisar interacao adicional
+  it('balance mode nao renderiza dropdown de Motivo (founder pediu modal minimal)', async () => {
     const user = userEvent.setup();
     render(withClient(
       <WalletTransactionDialog open onOpenChange={() => {}} wallet={mockWallet as any} />,
     ));
 
     await user.click(screen.getByTestId('wallet-tx-mode-balance'));
-    await waitFor(() => {
-      expect(screen.getByTestId('wallet-tx-reason-helper')).toBeTruthy();
-    });
+
+    expect(screen.queryByTestId('wallet-tx-reason-select')).toBeNull();
   });
 
   it('modo balance NAO renderiza campo wallet-tx-session-id-input (auto-derivado da prop)', async () => {
@@ -244,12 +217,13 @@ describe('WalletTransactionDialog — modo balance, sessionId standalone (RF-09)
     expect(screen.queryByTestId('wallet-tx-session-id-input')).toBeNull();
   });
 
-  it('regression: modo movement inalterado (sem helper, dialog continua)', async () => {
+  it('regression: modo movement inalterado (direction+amount+reason-select, sem helper)', async () => {
     render(withClient(
       <WalletTransactionDialog open onOpenChange={() => {}} wallet={mockWallet as any} />,
     ));
     expect(screen.getByTestId('wallet-tx-direction-select')).toBeTruthy();
     expect(screen.getByTestId('wallet-tx-amount-input')).toBeTruthy();
+    expect(screen.getByTestId('wallet-tx-reason-select')).toBeTruthy();
     expect(screen.queryByTestId('wallet-tx-reason-helper')).toBeNull();
   });
 });

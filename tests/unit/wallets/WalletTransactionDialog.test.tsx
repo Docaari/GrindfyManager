@@ -143,11 +143,24 @@ describe('WalletTransactionDialog - validacoes', () => {
     });
   });
 
-  it('reason=session_result mostra campo sessionId', async () => {
+  it('movement-mode dropdown nao expoe session_result (founder pediu deposit/withdrawal/manual_adjustment apenas)', async () => {
     render(withClient(
-      <WalletTransactionDialog open onOpenChange={() => {}} wallet={mockWallet as any} initialReason="session_result" />
+      <WalletTransactionDialog open onOpenChange={() => {}} wallet={mockWallet as any} />
     ));
 
-    expect(screen.getByTestId('wallet-tx-session-id-input')).toBeTruthy();
+    const select = screen.getByTestId('wallet-tx-reason-select') as HTMLSelectElement;
+    const values = Array.from(select.options).map((o) => o.value);
+    expect(values).toContain('deposit');
+    expect(values).toContain('withdrawal');
+    expect(values).toContain('manual_adjustment');
+    expect(values).not.toContain('session_result');
+  });
+
+  it('campo wallet-tx-session-id-input nao existe mais (sessoes usam aba Reportar Resultado)', async () => {
+    render(withClient(
+      <WalletTransactionDialog open onOpenChange={() => {}} wallet={mockWallet as any} />
+    ));
+
+    expect(screen.queryByTestId('wallet-tx-session-id-input')).toBeNull();
   });
 });

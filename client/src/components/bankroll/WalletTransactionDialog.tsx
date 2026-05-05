@@ -23,22 +23,27 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   wallet: WalletProp;
-  initialReason?: "deposit" | "withdrawal" | "session_result" | "manual_adjustment";
+  initialReason?: "deposit" | "withdrawal" | "manual_adjustment";
   /**
    * Sprint Bankroll-Reports-Detail (RF-09): quando presente em modo "Reportar
    * saldo", auto-seleciona reason='session_result' + envia sessionId. Quando
    * ausente, modo balance auto-seleciona reason='manual_report' (standalone).
+   * Modo movement nao expoe mais session_result no dropdown — sessoes usam
+   * a aba "Reportar Resultado" no /grind-live.
    */
   sessionId?: string;
+  /**
+   * Quando true, abre direto em modo balance (Reportar saldo). Default false.
+   */
+  initialMode?: "movement" | "balance";
 }
 
 type Mode = "movement" | "balance";
 
-const REASONS: Array<{ value: "deposit" | "withdrawal" | "session_result" | "manual_adjustment"; label: string }> = [
+const REASONS: Array<{ value: "deposit" | "withdrawal" | "manual_adjustment"; label: string }> = [
   { value: "deposit", label: "Deposito" },
   { value: "withdrawal", label: "Saque" },
-  { value: "session_result", label: "Resultado de sessao" },
-  { value: "manual_adjustment", label: "Ajuste manual" },
+  { value: "manual_adjustment", label: "Ajuste" },
 ];
 
 function formatPreview(value: number, ccy: string): string {
@@ -46,16 +51,15 @@ function formatPreview(value: number, ccy: string): string {
   return `${symbol} ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function WalletTransactionDialog({ open, onOpenChange, wallet, initialReason, sessionId: sessionIdProp }: Props) {
-  const [mode, setMode] = useState<Mode>("movement");
+export function WalletTransactionDialog({ open, onOpenChange, wallet, initialReason, sessionId: sessionIdProp, initialMode }: Props) {
+  const [mode, setMode] = useState<Mode>(initialMode ?? "movement");
   const [direction, setDirection] = useState<"in" | "out">("in");
-  const [reason, setReason] = useState<"deposit" | "withdrawal" | "session_result" | "manual_adjustment">(
+  const [reason, setReason] = useState<"deposit" | "withdrawal" | "manual_adjustment">(
     initialReason ?? "deposit",
   );
   const [amount, setAmount] = useState<string>("");
   const [note, setNote] = useState<string>("");
   const [occurredAt, setOccurredAt] = useState<string>(new Date().toISOString().slice(0, 16));
-  const [sessionId, setSessionId] = useState<string>("");
   const [amountError, setAmountError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -137,11 +141,6 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
       // e edge case de digitar valor identico ao saldo (delta zero silencioso).
       setNewBalanceInput("");
       setKnownBalance(parseFloat(wallet.balance));
-      // Sprint Bankroll-Reports-Detail (RF-09): em modo balance, reason eh
-      // derivado da prop sessionId (presente -> session_result; ausente ->
-      // manual_report). State `reason` ainda usado em modo movement; aqui
-      // apenas registramos o default visual coerente.
-      setReason("session_result");
     }
   }
 
@@ -203,9 +202,6 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
         note: note || null,
         occurredAt: new Date(occurredAt).toISOString(),
       };
-      if (reason === "session_result" && sessionId) {
-        body.sessionId = sessionId;
-      }
     }
 
     setSubmitting(true);
@@ -215,20 +211,22 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
         `/api/wallets/${wallet.id}/transactions`,
         body,
       );
-      try {
-        queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
-        queryClient.invalidateQueries({ queryKey: [`/api/wallets/${wallet.id}/transactions`] });
-        queryClient.invalidateQueries({ queryKey: ["/api/bankroll/consolidated"] });
-        // Sprint Bankroll-Reports-Detail (RF-09): invalida historico /grind +
-        // dashboard ROI por plataforma para refletir novo manual_report.
-        queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
-        queryClient.invalidateQueries({ queryKey: ["grind-history"] });
-        queryClient.invalidateQueries({ queryKey: ["bankroll-snapshots"] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/roi-by-platform"] });
-      } catch {
-        // ignore
-      }
+      queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/wallets/${wallet.id}/transactions`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bankroll/consolidated"] });
+      // Bankroll-Reform 2026-05-05 (HIGH-2): backend espelha wallet_transaction
+      // em bankroll_snapshots (compat v1). Sem invalidar /api/bankroll +
+      // /api/bankroll/history, BankrollWidget e BankrollHistoryTable mostram
+      // dados stale ate refresh manual.
+      queryClient.invalidateQueries({ queryKey: ["/api/bankroll"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bankroll/history"] });
+      // Sprint Bankroll-Reports-Detail (RF-09): invalida historico /grind +
+      // dashboard ROI por plataforma para refletir novo manual_report.
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      queryClient.invalidateQueries({ queryKey: ["grind-history"] });
+      queryClient.invalidateQueries({ queryKey: ["bankroll-snapshots"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/roi-by-platform"] });
       if (resp?.warning === "wallet_negative") {
         setWarning("Saldo da carteira ficou negativo");
       } else {
@@ -302,19 +300,21 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
           </div>
         )}
 
-        <div>
-          <label className="text-sm font-medium block mb-1">Motivo</label>
-          <select
-            data-testid="wallet-tx-reason-select"
-            value={reason}
-            onChange={(e) => setReason(e.target.value as any)}
-            className="w-full rounded border px-3 py-2 bg-background"
-          >
-            {REASONS.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
-        </div>
+        {mode === "movement" && (
+          <div>
+            <label className="text-sm font-medium block mb-1">Motivo</label>
+            <select
+              data-testid="wallet-tx-reason-select"
+              value={reason}
+              onChange={(e) => setReason(e.target.value as any)}
+              className="w-full rounded border px-3 py-2 bg-background"
+            >
+              {REASONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {mode === "movement" && (
           <div>
@@ -405,33 +405,6 @@ export function WalletTransactionDialog({ open, onOpenChange, wallet, initialRea
           </div>
         )}
 
-        {/* Sprint Bankroll-Reports-Detail (RF-09): em modo balance, sessionId vem
-            da prop (auto), nao do input manual. So renderiza em modo movement. */}
-        {mode === "movement" && reason === "session_result" && (
-          <div>
-            <label className="text-sm font-medium block mb-1">ID da sessao</label>
-            <input
-              data-testid="wallet-tx-session-id-input"
-              value={sessionId}
-              onChange={(e) => setSessionId(e.target.value)}
-              className="w-full rounded border px-3 py-2 bg-background"
-              placeholder="ses_..."
-            />
-          </div>
-        )}
-
-        {/* Sprint Bankroll-Reports-Detail (RF-09): helper text dinamico em modo
-            balance — distingue "vinculado a sessao" vs "report manual standalone". */}
-        {mode === "balance" && (
-          <div
-            data-testid="wallet-tx-reason-helper"
-            className="text-xs text-muted-foreground"
-          >
-            {sessionIdProp
-              ? "Vinculado a sessao ativa — sera registrado como Resultado de sessao"
-              : "Sem sessao ativa — sera registrado como Report manual"}
-          </div>
-        )}
 
         <div>
           <label className="text-sm font-medium block mb-1">Quando</label>

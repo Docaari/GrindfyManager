@@ -277,21 +277,22 @@ describe('<WalletTransactionDialog> — input de saldo (RF-02 + RF-03)', () => {
 });
 
 // =============================================================================
-// 3. Reason default em modo balance
+// 3. Modo balance NAO renderiza dropdown de Motivo (Bankroll-Reform 2026-05-05)
 // =============================================================================
 
-describe('<WalletTransactionDialog> — reason default em modo balance (RF-04 Q4)', () => {
-  it('ao entrar em modo balance, reason select pre-seleciona "session_result"', async () => {
+describe('<WalletTransactionDialog> — modo balance minimal (Bankroll-Reform)', () => {
+  it('ao entrar em modo balance, dropdown wallet-tx-reason-select desaparece', async () => {
     const user = userEvent.setup();
     render(wrap(
       <WalletTransactionDialog open onOpenChange={() => {}} wallet={baseWallet} />,
     ));
 
+    expect(screen.getByTestId('wallet-tx-reason-select')).toBeTruthy();
+
     await user.click(screen.getByTestId('wallet-tx-mode-balance'));
 
     await waitFor(() => {
-      const reasonSelect = screen.getByTestId('wallet-tx-reason-select') as HTMLSelectElement;
-      expect(reasonSelect.value).toBe('session_result');
+      expect(screen.queryByTestId('wallet-tx-reason-select')).toBeNull();
     });
   });
 });

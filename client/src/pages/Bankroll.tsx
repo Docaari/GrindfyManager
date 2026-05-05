@@ -1,23 +1,26 @@
 /**
- * Bankroll — Pagina /bankroll v2 (RF-11/RF-12)
+ * Bankroll — Pagina /bankroll (Bankroll-Reform 2026-05-05)
  *
- * Layout 2-paineis: WalletList (sidebar) + WalletDetailPanel (detalhe).
- * Fallback: usuario sem wallets v ainda usa stack v1 (BankrollWidget +
- * BankrollHistoryTable + BankrollMovementDialog).
+ * Header: titulo "Banca" + count carteiras ativas (sem botoes de acao).
+ * BankrollWidget: card "Banca atual" + ABI count + ABI configurado clickavel.
+ * Layout 2-paineis: WalletList sidebar + WalletDetailPanel.
+ *   - WalletList expoe "+ Nova carteira" (botao 5/5).
+ *   - WalletDetailPanel expoe 4 botoes (Registrar movimento, Reportar saldo,
+ *     Reportar rakeback, Transferir) + Editar/Arquivar secundarios.
+ * BankrollHistoryTable: 10 ultimos + "Ver mais" expande.
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { BankrollWidget } from "@/components/bankroll/BankrollWidget";
 import { BankrollHistoryTable } from "@/components/bankroll/BankrollHistoryTable";
-import { BankrollMovementDialog } from "@/components/bankroll/BankrollMovementDialog";
 import { WalletList, type WalletListItem, type WalletSuggestion } from "@/components/bankroll/WalletList";
 import { WalletDetailPanel } from "@/components/bankroll/WalletDetailPanel";
 import { WalletCreateDialog } from "@/components/bankroll/WalletCreateDialog";
 import { RakebackDialog } from "@/components/bankroll/RakebackDialog";
 import { TransferDialog } from "@/components/bankroll/TransferDialog";
 import { WalletTransactionDialog } from "@/components/bankroll/WalletTransactionDialog";
-import { Wallet, ArrowRightLeft } from "lucide-react";
+import { Wallet } from "lucide-react";
 import type { WalletPlatform } from "@shared/wallet-platforms";
 
 interface ConsolidatedWalletEntry {
@@ -39,18 +42,15 @@ interface ConsolidatedResponse {
 }
 
 export default function BankrollPage() {
-  const [legacyDialogOpen, setLegacyDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createPrefill, setCreatePrefill] = useState<
     { name?: string; platform?: WalletPlatform; nativeCurrency?: string } | undefined
   >(undefined);
   const [selectedWalletId, setSelectedWalletId] = useState<string | null>(null);
 
-  // Sprint Bankroll-3 (RF-04): RakebackDialog state
+  // Sprint Bankroll-3 (RF-04): RakebackDialog state. Source sempre 'wallet_menu'
+  // pos-bankroll-reform (founder removeu botoes do header).
   const [rakebackDialogOpen, setRakebackDialogOpen] = useState(false);
-  const [rakebackSource, setRakebackSource] = useState<"page_header" | "wallet_menu">(
-    "page_header",
-  );
   const [rakebackPreSelectedWalletId, setRakebackPreSelectedWalletId] = useState<
     string | undefined
   >(undefined);
@@ -61,9 +61,9 @@ export default function BankrollPage() {
     undefined,
   );
 
-  // Sprint Bankroll-Reports-Detail (R2 fix H3, RF-10): "+ Reportar saldo"
-  // standalone (sem sessionId) — abre WalletTransactionDialog em modo balance.
-  const [reportBalanceDialogOpen, setReportBalanceDialogOpen] = useState(false);
+  // Bankroll-Reform 2026-05-05 (LOW-7): single mount de WalletTransactionDialog.
+  // mode=null -> fechado; 'movement' ou 'balance' aberto no respectivo modo.
+  const [txDialogMode, setTxDialogMode] = useState<"movement" | "balance" | null>(null);
 
   const { data: consolidated } = useQuery<ConsolidatedResponse>({
     queryKey: ["/api/bankroll/consolidated"],
@@ -117,14 +117,7 @@ export default function BankrollPage() {
     setCreateDialogOpen(true);
   }
 
-  function openRakebackFromHeader() {
-    setRakebackSource("page_header");
-    setRakebackPreSelectedWalletId(undefined);
-    setRakebackDialogOpen(true);
-  }
-
   function openRakebackForWallet(walletId: string) {
-    setRakebackSource("wallet_menu");
     setRakebackPreSelectedWalletId(walletId);
     setRakebackDialogOpen(true);
   }
@@ -144,63 +137,17 @@ export default function BankrollPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      <header className="flex items-center justify-between gap-4 rounded-lg border bg-card p-5">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
-            <Wallet className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Banca</h1>
-            <p className="text-xs text-muted-foreground">
-              {hasWallets
-                ? `${consolidated?.walletCount ?? walletItems.filter((w) => w.status === "active").length} carteira(s) ativa(s)`
-                : "Configuracao inicial — adicione sua primeira carteira"}
-            </p>
-          </div>
+      <header className="flex items-center gap-3 rounded-lg border bg-card p-5">
+        <div className="h-10 w-10 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
+          <Wallet className="h-5 w-5 text-primary" />
         </div>
-        <div className="flex flex-wrap gap-2 justify-end">
-          <button
-            onClick={openRakebackFromHeader}
-            className="px-3 py-2 text-sm rounded-md border surface-warning surface-interactive"
-            data-testid="bankroll-rakeback-trigger-header"
-            title="Registrar rakeback recebido"
-          >
-            Reportar rakeback
-          </button>
-          <button
-            onClick={() => openTransferDialog()}
-            disabled={!canTransfer}
-            className="px-3 py-2 text-sm rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-            data-testid="bankroll-transfer-trigger-header"
-            title={canTransfer ? "Transferir entre wallets" : "Crie ao menos 2 wallets para transferir"}
-          >
-            <ArrowRightLeft className="h-4 w-4" />
-            Transferir
-          </button>
-          <button
-            onClick={() => setReportBalanceDialogOpen(true)}
-            disabled={!selectedWallet}
-            className="px-3 py-2 text-sm rounded-md border border-border text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
-            data-testid="bankroll-report-balance-btn"
-            title={selectedWallet ? "Reportar saldo atual da carteira selecionada" : "Selecione uma carteira para reportar saldo"}
-          >
-            + Reportar saldo
-          </button>
-          <button
-            onClick={() => setLegacyDialogOpen(true)}
-            className="px-3 py-2 text-sm rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-foreground"
-            data-testid="bankroll-legacy-movement-button"
-            title="Registrar aporte/saque consolidado (modo legado)"
-          >
-            Aporte/saque legado
-          </button>
-          <button
-            onClick={() => handleCreateClick()}
-            className="px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90"
-            data-testid="bankroll-new-wallet-button"
-          >
-            + Nova carteira
-          </button>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Banca</h1>
+          <p className="text-xs text-muted-foreground">
+            {hasWallets
+              ? `${consolidated?.walletCount ?? walletItems.filter((w) => w.status === "active").length} carteira(s) ativa(s)`
+              : "Configuracao inicial — adicione sua primeira carteira"}
+          </p>
         </div>
       </header>
 
@@ -219,6 +166,10 @@ export default function BankrollPage() {
               <WalletDetailPanel
                 wallet={selectedWallet as any}
                 onRakebackClick={() => openRakebackForWallet(selectedWallet.id)}
+                onRegisterMovementClick={() => setTxDialogMode("movement")}
+                onReportBalanceClick={() => setTxDialogMode("balance")}
+                onTransferClick={() => openTransferDialog(selectedWallet.id)}
+                canTransfer={canTransfer}
               />
             ) : (
               <div className="p-8 text-center text-sm text-muted-foreground">
@@ -236,7 +187,6 @@ export default function BankrollPage() {
         <BankrollHistoryTable />
       </section>
 
-      <BankrollMovementDialog open={legacyDialogOpen} onOpenChange={setLegacyDialogOpen} />
       <WalletCreateDialog
         open={createDialogOpen}
         onOpenChange={(o) => {
@@ -250,7 +200,7 @@ export default function BankrollPage() {
         onOpenChange={setRakebackDialogOpen}
         wallets={walletItems as any}
         preSelectedWalletId={rakebackPreSelectedWalletId}
-        source={rakebackSource}
+        source="wallet_menu"
       />
       <TransferDialog
         open={transferDialogOpen}
@@ -258,15 +208,17 @@ export default function BankrollPage() {
         wallets={transferableWallets as any}
         defaultFromWalletId={transferDefaultFromId}
       />
-      {/* Sprint Bankroll-Reports-Detail (R2 fix H3, RF-09 + RF-10):
-          "+ Reportar saldo" standalone (sem sessionId) — auto-seleciona
-          reason='manual_report' no submit. */}
-      {reportBalanceDialogOpen && selectedWallet && (
+      {/* Bankroll-Reform 2026-05-05 (LOW-7): unico dialog de transaction
+          montado para a wallet selecionada. mode controla aba inicial.
+          modo balance standalone (sem sessionId) auto-deriva reason='manual_report'. */}
+      {txDialogMode != null && selectedWallet && (
         <WalletTransactionDialog
-          open={reportBalanceDialogOpen}
-          onOpenChange={setReportBalanceDialogOpen}
+          open={txDialogMode != null}
+          onOpenChange={(o) => {
+            if (!o) setTxDialogMode(null);
+          }}
           wallet={selectedWallet as any}
-          /* sessionId OMITIDO — modo balance auto-derivado para manual_report */
+          initialMode={txDialogMode}
         />
       )}
     </div>

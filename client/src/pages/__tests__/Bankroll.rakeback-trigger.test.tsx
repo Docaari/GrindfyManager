@@ -2,24 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
 
 // =============================================================================
-// Sprint Bankroll-3 — Disparadores do RakebackDialog em /bankroll (RF-04).
-//
-// Spec: Docs/specs/rakeback-reporting.md (RF-04).
-//
-// Trigger 1 (page_header): botao no header da pagina abre dialog SEM wallet
-// pre-selecionada e telemetria com source='page_header'.
-//
-// Trigger 2 (wallet_menu): botao em WalletDetailPanel abre dialog COM wallet
-// pre-selecionada e telemetria com source='wallet_menu'.
-//
-// data-testids estaveis no codigo real:
-//   bankroll-rakeback-trigger-header
-//   wallet-detail-rakeback-trigger
-//   rakeback-dialog
-//   rakeback-wallet-select
-//   rakeback-wallet-pinned
+// Bankroll-Reform 2026-05-05: founder removeu botao do header.
+// Apenas trigger em WalletDetailPanel permanece (source='wallet_menu').
 // =============================================================================
 
 import BankrollPage from '../Bankroll';
@@ -30,9 +17,6 @@ vi.mock('@/hooks/use-toast', () => ({
 }));
 
 vi.mock('@/lib/queryClient', () => ({
-  // Sprint UI-QW-1 RF-04 (G4): /bankroll passou a usar apiRequest nas queries
-  // consolidated + wallets. Mock delega ao global.fetch para reutilizar
-  // setupFetchMocks() ja existente (sem precisar duplicar fixtures).
   apiRequest: vi.fn(async (method: string, url: string) => {
     const r = await (global.fetch as any)(url, { method, credentials: 'include' });
     if (!r?.ok) throw new Error('mock_fetch_not_ok');
@@ -47,15 +31,11 @@ vi.mock('@/lib/queryClient', () => ({
   getCsrfToken: () => null,
 }));
 
-// Stubs leves para componentes pesados nao relacionados a rakeback.
 vi.mock('@/components/bankroll/BankrollWidget', () => ({
   BankrollWidget: () => null,
 }));
 vi.mock('@/components/bankroll/BankrollHistoryTable', () => ({
   BankrollHistoryTable: () => null,
-}));
-vi.mock('@/components/bankroll/BankrollMovementDialog', () => ({
-  BankrollMovementDialog: () => null,
 }));
 vi.mock('@/components/bankroll/WalletCreateDialog', () => ({
   WalletCreateDialog: () => null,
@@ -128,66 +108,18 @@ function wrap(ui: React.ReactNode) {
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
 }
 
-// =============================================================================
-// 1. Trigger no header
-// =============================================================================
-
-describe('Bankroll page — botao "Reportar rakeback" no header (RF-04)', () => {
-  it('renderiza data-testid="bankroll-rakeback-trigger-header"', async () => {
+describe('Bankroll page — botao "Reportar rakeback" header REMOVIDO (reform)', () => {
+  it('header NAO renderiza mais bankroll-rakeback-trigger-header', async () => {
     setupFetchMocks();
     render(wrap(<BankrollPage />));
 
     await waitFor(() => {
-      expect(screen.getByTestId('bankroll-rakeback-trigger-header')).toBeTruthy();
+      // wait for page render via wallet-detail trigger appearance
+      expect(screen.getByTestId('wallet-detail-rakeback-trigger')).toBeTruthy();
     });
-  });
-
-  it('click no header abre RakebackDialog COM select (sem wallet pre-selecionada)', async () => {
-    setupFetchMocks();
-    const user = userEvent.setup();
-    render(wrap(<BankrollPage />));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('bankroll-rakeback-trigger-header')).toBeTruthy();
-    });
-    await user.click(screen.getByTestId('bankroll-rakeback-trigger-header'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('rakeback-dialog')).toBeTruthy();
-    });
-    expect(screen.getByTestId('rakeback-wallet-select')).toBeTruthy();
-    expect(screen.queryByTestId('rakeback-wallet-pinned')).toBeFalsy();
-  });
-
-  it('telemetria rakeback_dialog_view inclui source="page_header"', async () => {
-    setupFetchMocks();
-    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    try {
-      const user = userEvent.setup();
-      render(wrap(<BankrollPage />));
-
-      await waitFor(() => {
-        expect(screen.getByTestId('bankroll-rakeback-trigger-header')).toBeTruthy();
-      });
-      await user.click(screen.getByTestId('bankroll-rakeback-trigger-header'));
-
-      await waitFor(() => {
-        const events = spy.mock.calls.filter(
-          (c) => String(c[0] ?? '').includes('[telemetry][rakeback]') && c[1] === 'rakeback_dialog_view',
-        );
-        expect(events.length).toBeGreaterThan(0);
-        const lastView = events[events.length - 1];
-        expect(lastView[2]?.source).toBe('page_header');
-      });
-    } finally {
-      spy.mockRestore();
-    }
+    expect(screen.queryByTestId('bankroll-rakeback-trigger-header')).toBeNull();
   });
 });
-
-// =============================================================================
-// 2. Trigger em WalletDetailPanel
-// =============================================================================
 
 describe('Bankroll page — botao "Reportar rakeback" no WalletDetailPanel (RF-04)', () => {
   it('renderiza data-testid="wallet-detail-rakeback-trigger" apos selecionar wallet', async () => {
@@ -236,7 +168,6 @@ describe('Bankroll page — botao "Reportar rakeback" no WalletDetailPanel (RF-0
           .pop();
         expect(lastView).toBeTruthy();
         expect(lastView![2]?.source).toBe('wallet_menu');
-        // walletId pre-selecionado da wallet ativa selecionada por default
         expect(lastView![2]?.walletId).toBeDefined();
       });
     } finally {

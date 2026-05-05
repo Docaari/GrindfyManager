@@ -4,21 +4,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 
 // =============================================================================
-// Testes TDD (Sprint 2 - Bankroll): client/src/components/bankroll/BankrollWidget.tsx
+// BankrollWidget — Bankroll-Reform 2026-05-05
 //
-// Fonte: docs/specs/bankroll-management.md (RF-09)
-//        docs/architecture/flows/bankroll/feature-flow.md (Estados do Dashboard widget)
-//
-// Spec RF-09: Widget no Dashboard com:
-//   - Empty state (banca nao configurada) + CTA para Settings (Q9)
-//   - Banca atual USD + BRL equivalente
-//   - Mini-sparkline dos ultimos 30d (ou periodo do filtro)
-//   - ROI sobre a banca no periodo
-//   - Projecao mensal condicional (ROI30d > 0)
+// Card "Banca atual" minimal:
+//   - Total USD em destaque
+//   - Breakdown USD/BRL/EUR menor
+//   - Quantidade de carteiras
+//   - Lateral direita: ABI count + ABI configurado clickavel pra editar
+// Removido: sparkline, projecao mensal (founder pediu card limpo).
 // =============================================================================
 
 vi.mock('../../../client/src/lib/queryClient', () => ({
   apiRequest: vi.fn(),
+  queryClient: { invalidateQueries: vi.fn() },
 }));
 
 import { apiRequest } from '../../../client/src/lib/queryClient';
@@ -33,12 +31,8 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// ===========================================================================
-// Empty State (banca nao configurada) - Q9
-// ===========================================================================
-
-describe('BankrollWidget - empty state (banca nao configurada)', () => {
-  it('banca nao configurada -> mostra CTA "Configure sua banca" (Q9)', async () => {
+describe('BankrollWidget — empty state', () => {
+  it('banca nao configurada -> CTA "Configure sua banca"', async () => {
     (apiRequest as any).mockResolvedValue({
       configured: false,
       amount: null,
@@ -56,7 +50,7 @@ describe('BankrollWidget - empty state (banca nao configurada)', () => {
     expect(screen.getByTestId('bankroll-widget-cta')).toBeTruthy();
   });
 
-  it('CTA tem link para /settings', async () => {
+  it('CTA aponta para /settings', async () => {
     (apiRequest as any).mockResolvedValue({
       configured: false, amount: null, rule: '1pct', maxBuyInUSD: null, snapshotCount: 0, lastUpdatedAt: null,
     });
@@ -69,30 +63,21 @@ describe('BankrollWidget - empty state (banca nao configurada)', () => {
   });
 });
 
-// ===========================================================================
-// Estado configurado
-// ===========================================================================
-
-describe('BankrollWidget - banca configurada', () => {
-  it('mostra banca atual em USD', async () => {
-    (apiRequest as any).mockImplementation((methodOrUrl: string, urlArg?: string) => {
-      // MED-2 fix (UX-2 2026-04-25): assinatura real eh (method, url, data?).
-      // Suporta ambas formas para compat com testes legados.
-      const url = typeof urlArg === 'string' ? urlArg : methodOrUrl;
-      if (url.includes('/api/bankroll/history')) {
-        return Promise.resolve({ snapshots: [], series: [], summary: { netChange: 0, startBalance: 1000, endBalance: 1000 }, pagination: { total: 0, limit: 100, offset: 0 } });
-      }
-      return Promise.resolve({
-        configured: true,
-        amount: 1000,
-        rule: '1pct',
-        rulePct: 1.0,
-        tolerance: 1.5,
-        maxBuyInUSD: 15,
-        maxBuyInDisplay: { USD: 15, BRL: 78 },
-        snapshotCount: 1,
-        lastUpdatedAt: '2026-04-24T18:00:00-03:00',
-      });
+describe('BankrollWidget — banca configurada (novo layout)', () => {
+  it('mostra total USD em destaque', async () => {
+    (apiRequest as any).mockResolvedValue({
+      configured: true,
+      amount: 1000,
+      rule: '1pct',
+      rulePct: 1.0,
+      tolerance: 1.5,
+      maxBuyInUSD: 10,
+      maxBuyInDisplay: { USD: 10, BRL: 52, EUR: 9.3 },
+      amountDisplay: { USD: 1000, BRL: 5200, EUR: 930 },
+      exchangeRateBRL: 5.2,
+      exchangeRateEUR: 0.93,
+      walletCount: 2,
+      snapshotCount: 1,
     });
 
     render(withClient(<BankrollWidget />));
@@ -103,134 +88,125 @@ describe('BankrollWidget - banca configurada', () => {
     });
   });
 
-  it('mostra equivalente em BRL', async () => {
-    (apiRequest as any).mockImplementation((methodOrUrl: string, urlArg?: string) => {
-      // MED-2 fix (UX-2 2026-04-25): assinatura real eh (method, url, data?).
-      // Suporta ambas formas para compat com testes legados.
-      const url = typeof urlArg === 'string' ? urlArg : methodOrUrl;
-      if (url.includes('/api/bankroll/history')) {
-        return Promise.resolve({ snapshots: [], series: [], summary: { netChange: 0, startBalance: 1000, endBalance: 1000 }, pagination: { total: 0, limit: 100, offset: 0 } });
-      }
-      return Promise.resolve({
-        configured: true,
-        amount: 1000,
-        rule: '1pct',
-        maxBuyInUSD: 15,
-        maxBuyInDisplay: { USD: 15, BRL: 5200 },
-        snapshotCount: 1,
-      });
+  it('breakdown renderiza USD + BRL + EUR', async () => {
+    (apiRequest as any).mockResolvedValue({
+      configured: true,
+      amount: 1000,
+      rule: '1pct',
+      maxBuyInUSD: 10,
+      maxBuyInDisplay: { USD: 10, BRL: 52, EUR: 9.3 },
+      amountDisplay: { USD: 1000, BRL: 5200, EUR: 930 },
+      exchangeRateBRL: 5.2,
+      exchangeRateEUR: 0.93,
+      walletCount: 2,
+      snapshotCount: 1,
     });
 
     render(withClient(<BankrollWidget />));
 
     await waitFor(() => {
-      expect(screen.getByTestId('bankroll-widget-amount-brl')).toBeTruthy();
+      expect(screen.getByTestId('bankroll-widget-breakdown-usd')).toBeTruthy();
+      expect(screen.getByTestId('bankroll-widget-breakdown-brl')).toBeTruthy();
+      expect(screen.getByTestId('bankroll-widget-breakdown-eur')).toBeTruthy();
     });
   });
 
-  it('mini-sparkline renderiza com serie real', async () => {
-    (apiRequest as any).mockImplementation((methodOrUrl: string, urlArg?: string) => {
-      // MED-2 fix (UX-2 2026-04-25): assinatura real eh (method, url, data?).
-      // Suporta ambas formas para compat com testes legados.
-      const url = typeof urlArg === 'string' ? urlArg : methodOrUrl;
-      if (url.includes('/api/bankroll/history')) {
-        return Promise.resolve({
-          // Profit-only sparkline (Sprint Bankroll-Profit-Chart 2026-05-03):
-          // widget agora deriva curva de snapshots filtrados por reason de
-          // lucro (session_result/rakeback/manual_report).
-          snapshots: [
-            { delta: 200, reason: 'session_result', occurredAt: '2026-04-15T12:00:00Z' },
-            { delta: 50, reason: 'rakeback', occurredAt: '2026-04-20T12:00:00Z' },
-            { delta: 100, reason: 'session_result', occurredAt: '2026-04-24T12:00:00Z' },
-          ],
-          series: [
-            { bucket: '2026-04-01', balance: 1000, movements: 1, delta: 1000 },
-            { bucket: '2026-04-15', balance: 1200, movements: 1, delta: 200 },
-            { bucket: '2026-04-24', balance: 1500, movements: 1, delta: 300 },
-          ],
-          summary: { netChange: 500, startBalance: 1000, endBalance: 1500 },
-          pagination: { total: 3, limit: 100, offset: 0 },
-        });
-      }
-      return Promise.resolve({
-        configured: true, amount: 1500, rule: '1pct', maxBuyInUSD: 22.5, snapshotCount: 3,
-      });
+  it('breakdown EUR ausente quando exchangeRateEUR=null', async () => {
+    (apiRequest as any).mockResolvedValue({
+      configured: true,
+      amount: 1000,
+      rule: '1pct',
+      maxBuyInUSD: 10,
+      maxBuyInDisplay: { USD: 10, BRL: 52 },
+      amountDisplay: { USD: 1000, BRL: 5200 },
+      exchangeRateBRL: 5.2,
+      exchangeRateEUR: null,
+      walletCount: 1,
     });
 
     render(withClient(<BankrollWidget />));
 
     await waitFor(() => {
-      expect(screen.getByTestId('bankroll-widget-sparkline')).toBeTruthy();
+      expect(screen.getByTestId('bankroll-widget-breakdown-usd')).toBeTruthy();
     });
-    // Nota explicativa abaixo do grafico (founder request 2026-05-03)
-    expect(screen.getByTestId('bankroll-widget-sparkline-note').textContent).toMatch(
-      /aportes.*retiradas|lucros.*prejui/i,
-    );
+    expect(screen.queryByTestId('bankroll-widget-breakdown-eur')).toBeNull();
   });
 
-  it('sparkline ignora aportes/retiradas e usa cumulative profit', async () => {
-    (apiRequest as any).mockImplementation((methodOrUrl: string, urlArg?: string) => {
-      const url = typeof urlArg === 'string' ? urlArg : methodOrUrl;
-      if (url.includes('/api/bankroll/history')) {
-        return Promise.resolve({
-          snapshots: [
-            { delta: 5000, reason: 'deposit', occurredAt: '2026-04-01T00:00:00Z' },
-            { delta: 200, reason: 'session_result', occurredAt: '2026-04-10T00:00:00Z' },
-            { delta: -1000, reason: 'withdrawal', occurredAt: '2026-04-15T00:00:00Z' },
-            { delta: -50, reason: 'session_result', occurredAt: '2026-04-20T00:00:00Z' },
-          ],
-          series: [],
-          summary: { netChange: 4150, startBalance: 0, endBalance: 4150 },
-          pagination: { total: 4, limit: 100, offset: 0 },
-        });
-      }
-      return Promise.resolve({
-        configured: true, amount: 4150, rule: '1pct', maxBuyInUSD: 41, snapshotCount: 4,
-      });
+  it('quantidade de carteiras visivel quando walletCount>0', async () => {
+    (apiRequest as any).mockResolvedValue({
+      configured: true,
+      amount: 1000,
+      rule: '1pct',
+      maxBuyInUSD: 10,
+      walletCount: 3,
+      amountDisplay: { USD: 1000 },
     });
 
     render(withClient(<BankrollWidget />));
 
-    // Sparkline renderiza pq existem snapshots de profit, mesmo sem `series`.
     await waitFor(() => {
-      expect(screen.getByTestId('bankroll-widget-sparkline')).toBeTruthy();
+      const el = screen.getByTestId('bankroll-widget-wallet-count');
+      expect(el.textContent).toMatch(/3.*carteira/i);
     });
-
-    // Polyline tem exatamente 2 pontos (2 snapshots de profit, deposit/withdrawal ignorados).
-    const svg = screen.getByTestId('bankroll-widget-sparkline').querySelector('polyline');
-    const points = svg?.getAttribute('points')?.trim().split(/\s+/) ?? [];
-    expect(points).toHaveLength(2);
   });
 
-  it('projecao mensal esconde valor quando ROI30d <= 0 (spec RF-09 criterio)', async () => {
-    (apiRequest as any).mockImplementation((methodOrUrl: string, urlArg?: string) => {
-      // MED-2 fix (UX-2 2026-04-25): assinatura real eh (method, url, data?).
-      // Suporta ambas formas para compat com testes legados.
-      const url = typeof urlArg === 'string' ? urlArg : methodOrUrl;
-      if (url.includes('/api/bankroll/history')) {
-        return Promise.resolve({
-          snapshots: [],
-          series: [
-            { bucket: '2026-04-01', balance: 1500, movements: 1, delta: 0 },
-            { bucket: '2026-04-24', balance: 1000, movements: 1, delta: -500 },
-          ],
-          summary: { netChange: -500, startBalance: 1500, endBalance: 1000 },
-          pagination: { total: 2, limit: 100, offset: 0 },
-        });
-      }
-      return Promise.resolve({
-        configured: true, amount: 1000, rule: '1pct', maxBuyInUSD: 15, snapshotCount: 2,
-      });
+  it('ABI count = floor(amount / maxBuyInUSD)', async () => {
+    (apiRequest as any).mockResolvedValue({
+      configured: true,
+      amount: 1435,
+      rule: 'custom:0.5',
+      rulePct: 0.5,
+      maxBuyInUSD: 7,
+      amountDisplay: { USD: 1435 },
+      walletCount: 1,
     });
 
     render(withClient(<BankrollWidget />));
 
     await waitFor(() => {
-      const projection = screen.queryByTestId('bankroll-widget-projection');
-      // Esconde ou mostra mensagem de foco
-      if (projection) {
-        expect(projection.textContent).toMatch(/estabilizar|foco/i);
-      }
+      const el = screen.getByTestId('bankroll-widget-abi-count');
+      // 1435 / 7 = 205
+      expect(el.textContent).toMatch(/205/);
     });
+  });
+
+  it('botao ABI editavel mostra valor configurado em USD', async () => {
+    (apiRequest as any).mockResolvedValue({
+      configured: true,
+      amount: 1435,
+      rule: 'custom:0.5',
+      maxBuyInUSD: 7,
+      amountDisplay: { USD: 1435 },
+      walletCount: 1,
+    });
+
+    render(withClient(<BankrollWidget />));
+
+    await waitFor(() => {
+      const btn = screen.getByTestId('bankroll-widget-abi-edit');
+      expect(btn.textContent).toMatch(/ABI.*\$.*7/);
+    });
+  });
+
+  it('elementos REMOVIDOS no card minimal: sparkline, projection, amount-brl', async () => {
+    (apiRequest as any).mockResolvedValue({
+      configured: true,
+      amount: 1000,
+      rule: '1pct',
+      maxBuyInUSD: 10,
+      amountDisplay: { USD: 1000, BRL: 5200 },
+      walletCount: 1,
+    });
+
+    render(withClient(<BankrollWidget />));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('bankroll-widget-amount')).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId('bankroll-widget-sparkline')).toBeNull();
+    expect(screen.queryByTestId('bankroll-widget-sparkline-note')).toBeNull();
+    expect(screen.queryByTestId('bankroll-widget-projection')).toBeNull();
+    expect(screen.queryByTestId('bankroll-widget-amount-brl')).toBeNull();
   });
 });

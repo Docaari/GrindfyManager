@@ -223,13 +223,23 @@ describe('WALLET_TX_REASONS — enum canonico', () => {
     expect(WALLET_TX_REASONS).toContain('makeup_clear');
   });
 
-  it('WALLET_TX_REASONS_P0 tem exatamente 4 valores', () => {
-    expect(WALLET_TX_REASONS_P0.length).toBe(4);
-    expect(WALLET_TX_REASONS_P0).toEqual([
-      'deposit',
-      'withdrawal',
-      'session_result',
-      'manual_adjustment',
-    ]);
+  // Anti-pattern length absoluta (lessons #8) substituido por presence checks.
+  // Enum P0 cresce conforme features (rakeback Sprint Bankroll-3, manual_report
+  // Sprint Bankroll-Reports-Detail) — assert por inclusao mantem invariantes
+  // do P0 sem romper a cada adicao legitima.
+  it('WALLET_TX_REASONS_P0 inclui reasons P0 base', () => {
+    expect(WALLET_TX_REASONS_P0).toContain('deposit');
+    expect(WALLET_TX_REASONS_P0).toContain('withdrawal');
+    expect(WALLET_TX_REASONS_P0).toContain('session_result');
+    expect(WALLET_TX_REASONS_P0).toContain('manual_adjustment');
+  });
+
+  it('WALLET_TX_REASONS_P0 NAO inclui reasons P1+ (transfer/staking/fees)', () => {
+    expect(WALLET_TX_REASONS_P0).not.toContain('transfer_in');
+    expect(WALLET_TX_REASONS_P0).not.toContain('transfer_out');
+    expect(WALLET_TX_REASONS_P0).not.toContain('fee');
+    expect(WALLET_TX_REASONS_P0).not.toContain('staking_payout');
+    expect(WALLET_TX_REASONS_P0).not.toContain('staking_buyin');
+    expect(WALLET_TX_REASONS_P0).not.toContain('makeup_clear');
   });
 });

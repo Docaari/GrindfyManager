@@ -44,11 +44,13 @@ export interface BankrollState {
   maxBuyInUSD: number | null;
   softLimitUSD: number | null;
   hardLimitUSD: number | null;
-  maxBuyInDisplay: { USD: number | null; BRL?: number };
+  maxBuyInDisplay: { USD: number | null; BRL?: number; EUR?: number };
   // MED-3 fix (UX-2 2026-04-25): novos campos para evitar derivacao fragil
   // da taxa BRL no client (BankrollWidget).
-  amountDisplay: { USD: number | null; BRL?: number };
+  // Bankroll-Reform 2026-05-05: extendido EUR no breakdown card.
+  amountDisplay: { USD: number | null; BRL?: number; EUR?: number };
   exchangeRateBRL: number | null;
+  exchangeRateEUR: number | null;
   lastUpdatedAt: string | null;
   snapshotCount: number;
 }
@@ -199,19 +201,32 @@ function buildStateFromSettings(
     }
   }
 
+  // Bankroll-Reform 2026-05-05: expor EUR para breakdown no card "Banca atual".
+  const exchangeRateEURRaw = exchangeRates.EUR;
+  const exchangeRateEUR =
+    typeof exchangeRateEURRaw === "number" && exchangeRateEURRaw > 0
+      ? exchangeRateEURRaw
+      : null;
+
   // ADR-033: USD -> native (display) = usdAmount * rate.
-  const display: { USD: number | null; BRL?: number } = {
+  const display: { USD: number | null; BRL?: number; EUR?: number } = {
     USD: thresholds.hardLimitUSD,
   };
   if (thresholds.hardLimitUSD != null && exchangeRateBRL != null) {
     display.BRL = thresholds.hardLimitUSD * exchangeRateBRL;
   }
+  if (thresholds.hardLimitUSD != null && exchangeRateEUR != null) {
+    display.EUR = thresholds.hardLimitUSD * exchangeRateEUR;
+  }
 
-  const amountDisplay: { USD: number | null; BRL?: number } = {
+  const amountDisplay: { USD: number | null; BRL?: number; EUR?: number } = {
     USD: amount,
   };
   if (amount != null && exchangeRateBRL != null) {
     amountDisplay.BRL = amount * exchangeRateBRL;
+  }
+  if (amount != null && exchangeRateEUR != null) {
+    amountDisplay.EUR = amount * exchangeRateEUR;
   }
 
   return {
@@ -227,6 +242,7 @@ function buildStateFromSettings(
     maxBuyInDisplay: display,
     amountDisplay,
     exchangeRateBRL,
+    exchangeRateEUR,
     lastUpdatedAt: settings?.updatedAt
       ? (settings.updatedAt instanceof Date
           ? settings.updatedAt.toISOString()

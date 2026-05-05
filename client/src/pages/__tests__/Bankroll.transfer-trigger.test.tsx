@@ -1,13 +1,10 @@
 /**
- * Sprint Bankroll-3 — Implementer UX Round (#1 wiring)
- *
- * Garante que o botao "Transferir" aparece no header da pagina /bankroll
- * e abre o TransferDialog. Antes deste round, TransferDialog existia mas
- * nao era importado em nenhuma pagina (componente orfao).
+ * Bankroll-Reform 2026-05-05: founder removeu botoes do header.
+ * Botao "Transferir" agora vive dentro de WalletDetailPanel (visivel apos
+ * selecionar carteira). Header so tem titulo + count.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -17,12 +14,9 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 vi.mock("@/lib/queryClient", () => ({
-  // Sprint UI-QW-1 RF-04 (G4): /bankroll passou a usar apiRequest nas queries
-  // consolidated + wallets. Mock delega ao global.fetch para reutilizar
-  // setupFetchMocks() existente.
   apiRequest: vi.fn(async (method: string, url: string) => {
-    const r = await (global.fetch as any)(url, { method, credentials: 'include' });
-    if (!r?.ok) throw new Error('mock_fetch_not_ok');
+    const r = await (global.fetch as any)(url, { method, credentials: "include" });
+    if (!r?.ok) throw new Error("mock_fetch_not_ok");
     return r.json();
   }),
   queryClient: {
@@ -34,15 +28,11 @@ vi.mock("@/lib/queryClient", () => ({
   getCsrfToken: () => null,
 }));
 
-// Stubs leves para componentes pesados nao relacionados ao trigger.
 vi.mock("@/components/bankroll/BankrollWidget", () => ({
   BankrollWidget: () => null,
 }));
 vi.mock("@/components/bankroll/BankrollHistoryTable", () => ({
   BankrollHistoryTable: () => null,
-}));
-vi.mock("@/components/bankroll/BankrollMovementDialog", () => ({
-  BankrollMovementDialog: () => null,
 }));
 vi.mock("@/components/bankroll/WalletCreateDialog", () => ({
   WalletCreateDialog: () => null,
@@ -53,13 +43,30 @@ vi.mock("@/components/bankroll/RakebackDialog", () => ({
 vi.mock("@/components/bankroll/WalletList", () => ({
   WalletList: () => null,
 }));
+
+// WalletDetailPanel mock que expoe canTransfer + onTransferClick para o teste.
+const detailPanelSpy = vi.fn();
 vi.mock("@/components/bankroll/WalletDetailPanel", () => ({
-  WalletDetailPanel: () => null,
+  WalletDetailPanel: (props: any) => {
+    detailPanelSpy(props);
+    return (
+      <div data-testid="wallet-detail-mock">
+        <button
+          data-testid="wallet-detail-transfer-button"
+          disabled={!props.canTransfer}
+          onClick={props.onTransferClick}
+        >
+          Transferir
+        </button>
+      </div>
+    );
+  },
 }));
 
 const fetchMock = vi.fn();
 beforeEach(() => {
   fetchMock.mockReset();
+  detailPanelSpy.mockClear();
   global.fetch = fetchMock as any;
 });
 
@@ -75,19 +82,19 @@ function wrap(ui: React.ReactNode) {
 
 import BankrollPage from "../Bankroll";
 
-describe("BankrollPage — TransferDialog wiring (#1)", () => {
-  it("renderiza botao bankroll-transfer-trigger-header no header", async () => {
+describe("BankrollPage — Transfer wiring (pos-reform)", () => {
+  it("header NAO renderiza mais bankroll-transfer-trigger-header", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ wallets: [], totalUSD: "0", walletCount: 0, byWallet: [] }),
     });
     render(wrap(<BankrollPage />));
     await waitFor(() => {
-      expect(screen.getByTestId("bankroll-transfer-trigger-header")).toBeInTheDocument();
+      expect(screen.queryByTestId("bankroll-transfer-trigger-header")).toBeNull();
     });
   });
 
-  it("botao desabilitado quando ha menos de 2 wallets ativas", async () => {
+  it("WalletDetailPanel recebe canTransfer=false quando ha 1 wallet ativa", async () => {
     fetchMock.mockImplementation((url: any) => {
       const u = String(url);
       if (u.includes("/api/wallets")) {
@@ -110,12 +117,12 @@ describe("BankrollPage — TransferDialog wiring (#1)", () => {
     });
     render(wrap(<BankrollPage />));
     await waitFor(() => {
-      const btn = screen.getByTestId("bankroll-transfer-trigger-header") as HTMLButtonElement;
-      expect(btn.disabled).toBe(true);
+      const last = detailPanelSpy.mock.calls.at(-1)?.[0];
+      expect(last?.canTransfer).toBe(false);
     });
   });
 
-  it("abre TransferDialog (data-testid=transfer-dialog) ao clicar no trigger", async () => {
+  it("WalletDetailPanel recebe canTransfer=true + onTransferClick quando ha 2+ wallets ativas", async () => {
     fetchMock.mockImplementation((url: any) => {
       const u = String(url);
       if (u.includes("/api/wallets")) {
@@ -138,14 +145,10 @@ describe("BankrollPage — TransferDialog wiring (#1)", () => {
       return Promise.resolve({ ok: true, json: async () => ({}) });
     });
     render(wrap(<BankrollPage />));
-    const user = userEvent.setup();
     await waitFor(() => {
-      const btn = screen.getByTestId("bankroll-transfer-trigger-header") as HTMLButtonElement;
-      expect(btn.disabled).toBe(false);
-    });
-    await user.click(screen.getByTestId("bankroll-transfer-trigger-header"));
-    await waitFor(() => {
-      expect(screen.getByTestId("transfer-dialog")).toBeInTheDocument();
+      const last = detailPanelSpy.mock.calls.at(-1)?.[0];
+      expect(last?.canTransfer).toBe(true);
+      expect(typeof last?.onTransferClick).toBe("function");
     });
   });
 });

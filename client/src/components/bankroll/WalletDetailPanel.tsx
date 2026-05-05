@@ -9,8 +9,8 @@ import React, { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { WalletTransactionDialog } from "./WalletTransactionDialog";
 import { WalletEditDialog } from "./WalletEditDialog";
+import { WalletActivityPanel } from "./WalletActivityPanel";
 
 interface WalletProp {
   id: string;
@@ -31,7 +31,15 @@ interface Props {
   wallet: WalletProp;
   // Sprint Bankroll-3 (RF-04): callback do parent para abrir RakebackDialog
   // com wallet pre-selecionada (source='wallet_menu').
-  onRakebackClick?: () => void;
+  onRakebackClick: () => void;
+  // Bankroll-Reform 2026-05-05: founder consolidou todos os botoes de acao
+  // dentro do panel da wallet selecionada. Header da pagina ficou limpo.
+  // LOW-7 fix: dialog de transaction agora vive no parent (single mount),
+  // panel apenas dispara callback com mode desejado.
+  onRegisterMovementClick: () => void;
+  onReportBalanceClick: () => void;
+  onTransferClick: () => void;
+  canTransfer: boolean;
 }
 
 function currencySymbol(ccy: string): string {
@@ -48,8 +56,14 @@ function formatBalance(value: string | number): string {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function WalletDetailPanel({ wallet, onRakebackClick }: Props) {
-  const [txDialogOpen, setTxDialogOpen] = useState(false);
+export function WalletDetailPanel({
+  wallet,
+  onRakebackClick,
+  onRegisterMovementClick,
+  onReportBalanceClick,
+  onTransferClick,
+  canTransfer,
+}: Props) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
@@ -91,11 +105,14 @@ export function WalletDetailPanel({ wallet, onRakebackClick }: Props) {
         </div>
       </header>
 
-      <div className="flex items-center gap-2">
+      {/* Linha primaria: 4 acoes principais. Founder pediu 5 botoes (incluindo
+          "Nova carteira", que permanece no WalletList sidebar). Linha secundaria
+          tem Editar/Arquivar (admin da carteira). */}
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           data-testid="wallet-detail-record-tx-button"
-          onClick={() => setTxDialogOpen(true)}
+          onClick={onRegisterMovementClick}
           disabled={archived}
           className="px-3 py-2 text-sm rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50"
         >
@@ -103,10 +120,46 @@ export function WalletDetailPanel({ wallet, onRakebackClick }: Props) {
         </button>
         <button
           type="button"
+          data-testid="wallet-detail-report-balance-button"
+          onClick={onReportBalanceClick}
+          disabled={archived}
+          className="px-3 py-2 text-sm rounded-md border border-border hover:bg-accent disabled:opacity-50"
+          title="Reportar saldo atual desta carteira"
+        >
+          Reportar saldo
+        </button>
+        <button
+          type="button"
+          data-testid="wallet-detail-rakeback-trigger"
+          onClick={onRakebackClick}
+          disabled={archived}
+          className="px-3 py-2 text-sm rounded-md border surface-warning surface-interactive disabled:opacity-50"
+          title="Reportar rakeback recebido nesta carteira"
+        >
+          Reportar rakeback
+        </button>
+        <button
+          type="button"
+          data-testid="wallet-detail-transfer-button"
+          onClick={onTransferClick}
+          disabled={archived || !canTransfer}
+          className="px-3 py-2 text-sm rounded-md border border-border hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+          title={
+            canTransfer
+              ? "Transferir saldo entre carteiras"
+              : "Crie ao menos 2 carteiras ativas para transferir"
+          }
+        >
+          Transferir
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <button
+          type="button"
           data-testid="wallet-detail-edit-button"
           onClick={() => setEditDialogOpen(true)}
           disabled={archived}
-          className="px-3 py-2 text-sm rounded-md border hover:bg-accent disabled:opacity-50"
+          className="px-2 py-1 rounded-md border hover:bg-accent disabled:opacity-50 text-muted-foreground"
         >
           Editar
         </button>
@@ -115,22 +168,10 @@ export function WalletDetailPanel({ wallet, onRakebackClick }: Props) {
           data-testid="wallet-detail-archive-button"
           onClick={() => setArchiveConfirmOpen(true)}
           disabled={archived}
-          className="px-3 py-2 text-sm rounded-md border hover:bg-accent disabled:opacity-50"
+          className="px-2 py-1 rounded-md border hover:bg-accent disabled:opacity-50 text-muted-foreground"
         >
           Arquivar
         </button>
-        {onRakebackClick && (
-          <button
-            type="button"
-            data-testid="wallet-detail-rakeback-trigger"
-            onClick={onRakebackClick}
-            disabled={archived}
-            className="px-3 py-2 text-sm rounded-md border surface-warning surface-interactive disabled:opacity-50"
-            title="Reportar rakeback recebido nesta carteira"
-          >
-            Reportar rakeback
-          </button>
-        )}
       </div>
 
       {archived && (
@@ -139,17 +180,8 @@ export function WalletDetailPanel({ wallet, onRakebackClick }: Props) {
         </div>
       )}
 
-      <div className="border rounded-md p-4 text-sm text-muted-foreground">
-        Lista de movimentos sera renderizada aqui (WalletTransactionsTable).
-      </div>
+      <WalletActivityPanel walletId={wallet.id} nativeCurrency={wallet.nativeCurrency} />
 
-      {txDialogOpen && (
-        <WalletTransactionDialog
-          open={txDialogOpen}
-          onOpenChange={setTxDialogOpen}
-          wallet={wallet as any}
-        />
-      )}
       {editDialogOpen && (
         <WalletEditDialog
           open={editDialogOpen}

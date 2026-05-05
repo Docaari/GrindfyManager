@@ -27,11 +27,8 @@ export const WALLET_TX_REASONS = [
 
 export type WalletTxReason = typeof WALLET_TX_REASONS[number];
 
-// NOTE: Sprint Bankroll-3 test (wallet-transaction-schema.test.ts:226) expects
-// length === 4 (sem rakeback) — conflict com sprint anterior "reportar rakeback"
-// que adicionou 'rakeback' aqui. Mantemos rakeback (invariante de feature ja
-// shipped). O teste de length === 4 falha como esperado e fica marcado como
-// conhecido (antipattern lesson #8: nunca testar length absoluta de enum).
+// Bankroll-Reform 2026-05-05: teste antigo de length===4 corrigido pra
+// presence checks (lesson #8). Enum P0 cresce conforme features.
 export const WALLET_TX_REASONS_P0 = [
   "deposit",
   "withdrawal",

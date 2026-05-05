@@ -12,13 +12,12 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-type Reason = "deposit" | "withdrawal" | "session_result" | "manual_adjustment";
+type Reason = "deposit" | "withdrawal" | "manual_adjustment";
 
 const REASONS: Array<{ value: Reason; label: string }> = [
-  { value: "deposit", label: "Aporte" },
+  { value: "deposit", label: "Deposito" },
   { value: "withdrawal", label: "Saque" },
-  { value: "manual_adjustment", label: "Ajuste manual" },
-  { value: "session_result", label: "Resultado de sessao" },
+  { value: "manual_adjustment", label: "Ajuste" },
 ];
 
 export function BankrollMovementDialog({ open, onOpenChange }: Props) {
