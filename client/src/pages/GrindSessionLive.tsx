@@ -1977,13 +1977,20 @@ export default function GrindSessionLive() {
 
   // Sem sessao ativa pos-loading: redireciona para /grind onde o user faz Quick
   // Start. Modal warm-up legado (EpicStartSessionModal) foi removido — warm-up
-  // tem sessao propria em /mental. setLocation precisa estar em useEffect porque
-  // chamar durante render dispara warning React + loop em strict mode.
+  // tem sessao propria em /mental.
+  //
+  // Reform 2026-05-05 v4: usa derivacao DIRETA de `sessions` em vez do state
+  // local `activeSession` (que e setado por outro useEffect). Sem isso, race
+  // entre useEffects causava redirect imediato pra /grind apos criar sessao.
   useEffect(() => {
-    if (!sessionsLoading && !sessionsError && !activeSession) {
+    if (sessionsLoading || sessionsError) return;
+    const hasActive = Array.isArray(sessions) && sessions.some(
+      (s: GrindSession) => s.status === "active",
+    );
+    if (!hasActive) {
       setLocation('/grind');
     }
-  }, [sessionsLoading, sessionsError, activeSession, setLocation]);
+  }, [sessions, sessionsLoading, sessionsError, setLocation]);
 
   // ===== RENDER =====
   if (sessionsLoading) {

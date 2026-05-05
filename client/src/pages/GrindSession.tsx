@@ -687,14 +687,29 @@ export default function GrindSession() {
     mutationFn: async (data: any) => {
       return apiRequest("POST", "/api/grind-sessions", data);
     },
-    onSuccess: (data) => {
-      // Reform 2026-05-05 v3: redirect IMEDIATO + refetch nao-bloqueante.
-      // Antes o await refetchQueries podia atrasar/quebrar setLocation.
+    onSuccess: (data: any) => {
+      // Reform 2026-05-05 v4: precisa atualizar cache /api/grind-sessions ANTES do
+      // navigate. /grind-live tem useEffect que redireciona de volta pra /grind se
+      // activeSession=null no cache. Sem setQueryData, race do refetch leva user
+      // de volta pra /grind.
       toast({
         title: "Sessão iniciada com sucesso!",
         description: "Sua sessão de grind foi iniciada. Boa sorte!",
       });
+      // Insere sessao recem-criada no cache (head). Server retorna o objeto.
+      try {
+        queryClient.setQueryData(["/api/grind-sessions"], (old: any) => {
+          const list = Array.isArray(old) ? old : [];
+          // Substitui se ja existir (replaceExisting); senao prepend.
+          const filtered = list.filter((s: any) => s?.id !== data?.id);
+          return [data, ...filtered];
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("[grind] setQueryData fallback:", e);
+      }
       setLocation("/grind-live");
+      // Refetch em paralelo para sincronizar com server.
       queryClient.refetchQueries({ queryKey: ["/api/grind-sessions"] }).catch(() => {});
     },
     onError: (error: any) => {
