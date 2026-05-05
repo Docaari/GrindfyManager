@@ -109,3 +109,26 @@ describe('PFCDrillBlock - checkbox completou', () => {
     expect(payload.drillCompleted).toBe(false);
   });
 });
+
+// Reform 2026-05-05 (round 2 follow-up): valida que pause global do ritual
+// suspende ticker do drill PFC.
+describe('PFCDrillBlock - prop paused', () => {
+  it('paused=true congela contador (nao decrementa)', async () => {
+    const { act } = await import('@testing-library/react');
+    render(<PFCDrillBlock paused onAdvance={() => {}} />);
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+    // Continua mostrando 04:00 (nao decrementou)
+    expect(document.body.textContent).toMatch(/04:00/);
+  });
+
+  it('paused=false (default) decrementa normalmente', async () => {
+    const { act } = await import('@testing-library/react');
+    render(<PFCDrillBlock onAdvance={() => {}} />);
+    await act(async () => {
+      vi.advanceTimersByTime(2500);
+    });
+    expect(document.body.textContent).toMatch(/03:5/);
+  });
+});

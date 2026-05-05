@@ -31,12 +31,15 @@ Founder pediu refatoracao da pagina /mental:
 ### Tempos por modo (segundos)
 
 ```ts
-"6m":  { breathing: 60,  heuristics: 60,  intention: 120, pfc: 180 }   // total 7m (rotulado 6m)
-"15m": { breathing: 360, heuristics: 120, intention: 120, pfc: 360 }   // total 16m (rotulado 15m)
+"6m":  { breathing: 60,  heuristics: 60,  intention: 60,  pfc: 180 }   // total 6m exato
+"15m": { breathing: 360, heuristics: 120, intention: 60,  pfc: 360 }   // total 15m exato
 "30m": { breathing: 720, heuristics: 180, intention: 180, pfc: 720 }   // total 30m exato
 ```
 
-Setup nao tem timer cronometrado. Total real do "6m" sao 7m e do "15m" sao 16m por design (founder priorizou tempos de drills/respiracao bem definidos sobre rotulo exato).
+Setup Fisico nao tem timer cronometrado (nao conta no total). Intencao
+encurtada nos modos 6m/15m para fechar a soma exata sem sacrificar
+Respiracao ou Drills (priorizados pela spec). Modo 30m mantem 3m por
+bloco original.
 
 ### Setup Fisico — items custom
 
