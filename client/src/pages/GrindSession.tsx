@@ -394,9 +394,11 @@ export default function GrindSession() {
 
     const now = new Date();
 
-    // forceReplace: chamado pelo botao "Criar Nova e Substituir" ou "Nova Sessao".
-    // Nao reabre conflict dialog — vai direto para mutation com replaceExisting=true.
-    if (!opts.forceReplace) {
+    // Reform 2026-05-05 v3: Inicio Rapido com bypassGate=true SEMPRE forca replace
+    // (user ja decidiu "Iniciar mesmo assim"). Pra outras rotas, mantem conflict dialog
+    // quando ha sessao completed do dia.
+    const shouldSkipConflict = opts.forceReplace === true || opts.bypassGate === true;
+    if (!shouldSkipConflict) {
       const todayStr = now.toISOString().split('T')[0];
 
       // Check activeSessions first (fresher data)
@@ -433,6 +435,23 @@ export default function GrindSession() {
         }
         setConflictingSession(existingSession);
         setShowConflictDialog(true);
+        return;
+      }
+    }
+    // Quando bypassGate=true, ainda checamos active session do dia para retomar
+    // (nao recriar) — apenas pulamos conflict dialog de completed.
+    if (opts.bypassGate === true && !opts.forceReplace) {
+      const todayStr = now.toISOString().split('T')[0];
+      const activeToday = activeSessions.find((s: Record<string, unknown>) => {
+        const sessionDate = s.date ? new Date(s.date as string).toISOString().split('T')[0] : '';
+        return sessionDate === todayStr && s.status !== 'completed';
+      });
+      if (activeToday) {
+        toast({
+          title: "Retomando sessao ativa de hoje",
+          description: "Redirecionando para a sessao em andamento.",
+        });
+        setLocation("/grind-live");
         return;
       }
     }
@@ -668,18 +687,22 @@ export default function GrindSession() {
     mutationFn: async (data: any) => {
       return apiRequest("POST", "/api/grind-sessions", data);
     },
-    onSuccess: async () => {
+    onSuccess: (data) => {
+      // Reform 2026-05-05 v3: redirect IMEDIATO + refetch nao-bloqueante.
+      // Antes o await refetchQueries podia atrasar/quebrar setLocation.
       toast({
         title: "Sessão iniciada com sucesso!",
         description: "Sua sessão de grind foi iniciada. Boa sorte!",
       });
-      await queryClient.refetchQueries({ queryKey: ["/api/grind-sessions"] });
       setLocation("/grind-live");
+      queryClient.refetchQueries({ queryKey: ["/api/grind-sessions"] }).catch(() => {});
     },
     onError: (error: any) => {
+      // eslint-disable-next-line no-console
+      console.error("[grind] startSessionMutation error:", error);
       toast({
         title: "Erro ao iniciar sessão",
-        description: error.message || "Algo deu errado ao iniciar a sessão.",
+        description: error?.message || "Algo deu errado ao iniciar a sessão. Veja o console.",
         variant: "destructive",
       });
     },
