@@ -109,7 +109,13 @@ export function WalletActivityPanel({ walletId, nativeCurrency }: Props) {
 
   // ============ Chart data: results tab =============================
   const chartData = useMemo(() => {
+    // Filtra apenas tx que afetam result/rakeback ANTES de iterar — assim o
+    // primeiro elemento eh o primeiro evento contabilizado, e o baseline 0
+    // fica ancorado 1 dia antes (linha visivel mesmo com 1 unico tx).
     const sorted = transactions
+      .filter(
+        (t) => RESULT_REASONS.has(t.reason) || RAKEBACK_REASONS.has(t.reason),
+      )
       .slice()
       .sort(
         (a, b) =>
@@ -118,15 +124,21 @@ export function WalletActivityPanel({ walletId, nativeCurrency }: Props) {
     let cumResult = 0;
     let cumRakeback = 0;
     const points: Array<{ date: string; results: number; rakeback: number }> = [];
+    if (sorted.length > 0) {
+      // Baseline 0/0 ancorado 1 dia antes do primeiro evento — sem isso
+      // Recharts so ve 1 ponto e nao desenha linha.
+      const firstDate = new Date(sorted[0].occurredAt);
+      firstDate.setDate(firstDate.getDate() - 1);
+      points.push({
+        date: firstDate.toISOString().slice(0, 10),
+        results: 0,
+        rakeback: 0,
+      });
+    }
     for (const t of sorted) {
       const signed = signedAmount(t);
-      if (RESULT_REASONS.has(t.reason)) {
-        cumResult += signed;
-      } else if (RAKEBACK_REASONS.has(t.reason)) {
-        cumRakeback += signed;
-      } else {
-        continue;
-      }
+      if (RESULT_REASONS.has(t.reason)) cumResult += signed;
+      else if (RAKEBACK_REASONS.has(t.reason)) cumRakeback += signed;
       points.push({
         date: t.occurredAt.slice(0, 10),
         results: Math.round(cumResult * 100) / 100,
