@@ -11,6 +11,7 @@ interface SessionDetailsDialogProps {
   selectedSession: SessionHistoryData | null;
   tournaments: any[];
   isLoading: boolean;
+  formatCurrency?: (amountUsd: number) => string;
 }
 
 export default function SessionDetailsDialog({
@@ -19,7 +20,9 @@ export default function SessionDetailsDialog({
   selectedSession,
   tournaments,
   isLoading,
+  formatCurrency,
 }: SessionDetailsDialogProps) {
+  const fmt = formatCurrency ?? localFormatCurrency;
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl bg-slate-800/70 backdrop-blur-sm border-gray-700">
@@ -62,7 +65,7 @@ export default function SessionDetailsDialog({
                     {tournament.name}
                   </div>
                   <div className="text-gray-300">
-                    {localFormatCurrency(tournament.buyIn)}
+                    {fmt(tournament.buyIn)}
                   </div>
                   <div className="text-gray-300">
                     {((tournament as any).rebuys || 0) + 1}
@@ -71,16 +74,16 @@ export default function SessionDetailsDialog({
                     {tournament.position > 0 ? `${tournament.position}º` : '-'}
                   </div>
                   <div className={`font-medium ${((tournament as any).result || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {localFormatCurrency((tournament as any).result || 0)}
+                    {fmt((tournament as any).result || 0)}
                   </div>
                   <div className={`font-medium ${((tournament as any).bounty || 0) > 0 ? 'text-amber-400' : 'text-gray-400'}`}>
-                    {(tournament as any).bounty > 0 ? localFormatCurrency((tournament as any).bounty) : '-'}
+                    {(tournament as any).bounty > 0 ? fmt((tournament as any).bounty) : '-'}
                   </div>
                   <div className="text-gray-300">
                     {tournament.fieldSize || ((tournament as any).guaranteed > 0 && tournament.buyIn > 0 ? Math.round((tournament as any).guaranteed / tournament.buyIn) : '-')}
                   </div>
                   <div className="text-gray-300">
-                    {(tournament as any).guaranteed > 0 ? localFormatCurrency((tournament as any).guaranteed) : '-'}
+                    {(tournament as any).guaranteed > 0 ? fmt((tournament as any).guaranteed) : '-'}
                   </div>
                 </div>
               ))}

@@ -53,7 +53,6 @@ export default function GrindSession() {
   }
 
   const [, setLocation] = useLocation();
-  const [showStartDialog, setShowStartDialog] = useState(false);
   const [showWarmupGateDialog, setShowWarmupGateDialog] = useState(false);
   const [gateBypassedOnce, setGateBypassedOnce] = useState(false);
   const [pendingStartSource, setPendingStartSource] = useState<"quick_start" | "personalizar" | null>(null);
@@ -109,11 +108,6 @@ export default function GrindSession() {
     setFilterStateInternal(defaultFilters);
     localStorage.removeItem('grindSessionFilters');
   }, []);
-
-  const [preparationPercentage, setPreparationPercentage] = useState([50]);
-  const [preparationNotes, setPreparationNotes] = useState("");
-  const [dailyGoals, setDailyGoals] = useState("");
-  const [screenCap, setScreenCap] = useState(10);
 
   // Edit/Delete session states
   const [editingSession, setEditingSession] = useState<SessionHistoryData | null>(null);
@@ -172,7 +166,6 @@ export default function GrindSession() {
 
   // Ensure all modals are closed on component mount to prevent stuck overlay
   useEffect(() => {
-    setShowStartDialog(false);
     setShowConflictDialog(false);
     setIsEditDialogOpen(false);
     setIsDeleteDialogOpen(false);
@@ -288,17 +281,6 @@ export default function GrindSession() {
     },
     [toast],
   );
-
-  // Query for planned tournaments from Grade Planner
-  const { data: plannedTournaments = [], isLoading: isLoadingPlannedTournaments } = useQuery({
-    queryKey: ["/api/planned-tournaments", { dayOfWeek: new Date().getDay() || 7 }],
-    queryFn: async () => {
-      const currentDayOfWeek = new Date().getDay() || 7;
-      const response = await apiRequest("GET", `/api/planned-tournaments?dayOfWeek=${currentDayOfWeek}`);
-      return Array.isArray(response) ? response : [];
-    },
-    enabled: showStartDialog,
-  });
 
   // Fetch session history
   const { data: sessionHistory = [], isLoading: historyLoading, isError: historyError, refetch: refetchHistory } = useQuery({
@@ -691,7 +673,6 @@ export default function GrindSession() {
         title: "Sessão iniciada com sucesso!",
         description: "Sua sessão de grind foi iniciada. Boa sorte!",
       });
-      setShowStartDialog(false);
       await queryClient.refetchQueries({ queryKey: ["/api/grind-sessions"] });
       setLocation("/grind-live");
     },
@@ -743,26 +724,6 @@ export default function GrindSession() {
   // eh mais escrita pelo MentalPrep refatorado. Integracao com /grind agora
   // passa pelo gate via useWarmupGate() (RF-14).
 
-  const loadWarmUpData = () => {
-    try {
-      const warmUpScore = localStorage.getItem('warmUpScore');
-      const warmUpData = localStorage.getItem('warmUpData');
-
-      if (warmUpScore && warmUpData) {
-        const parsedWarmUpData = JSON.parse(warmUpData);
-        setPreparationPercentage([parseInt(warmUpScore, 10) || 0]);
-        setPreparationNotes(parsedWarmUpData.observations || '');
-      }
-    } catch {
-      // localStorage corrompido ou JSON invalido — ignorar silenciosamente
-    } finally {
-      try {
-        localStorage.removeItem('warmUpScore');
-        localStorage.removeItem('warmUpData');
-      } catch { /* ignore */ }
-    }
-  };
-
   // Conflict dialog handlers
   const handleConflictEditSession = () => {
     if (conflictingSession) {
@@ -785,27 +746,6 @@ export default function GrindSession() {
     localStorage.removeItem('warmUpScore');
     localStorage.removeItem('warmUpData');
     localStorage.removeItem('warmUpIntegration');
-  };
-
-  const handleStartSession = () => {
-    const today = new Date();
-    const currentDayOfWeek = today.getDay();
-
-    const sessionData = {
-      date: today.toISOString(),
-      status: "active",
-      preparationNotes: preparationNotes || "",
-      preparationPercentage: preparationPercentage[0],
-      dailyGoals: dailyGoals || "",
-      screenCap: screenCap,
-      skipBreaksToday: false,
-      resetTournaments: true,
-      replaceExisting: true,
-      dayOfWeek: currentDayOfWeek,
-      loadFromGradePlanner: true,
-    };
-
-    startSessionMutation.mutate(sessionData);
   };
 
   // Edit session mutation
@@ -1290,6 +1230,7 @@ export default function GrindSession() {
         selectedSession={selectedSessionForDetails}
         tournaments={allSessionTournaments}
         isLoading={sessionTournamentsLoading}
+        formatCurrency={grindFormat.format}
       />
 
       {/* Session Conflict Dialog */}

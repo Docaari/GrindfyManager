@@ -119,10 +119,6 @@ vi.mock('@/components/grind-session/ConflictDialog', () => ({
   __esModule: true,
   default: () => null,
 }));
-vi.mock('@/components/grind-session/EpicStartSessionModal', () => ({
-  __esModule: true,
-  default: () => null,
-}));
 vi.mock('@/components/grind-session/SessionHistoryList', () => ({
   __esModule: true,
   default: () => <div data-testid="session-history-list-stub" />,

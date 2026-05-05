@@ -63,7 +63,8 @@ export default function RegisterSessionDialog({
       }
     },
     enabled: isOpen,
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const wallets: WalletItem[] = useMemo(() => {
@@ -82,6 +83,9 @@ export default function RegisterSessionDialog({
 
   const [walletEntries, setWalletEntries] = useState<Record<string, WalletEntryState>>({});
 
+  // Dep `walletIdsKey` (lista de IDs) em vez de `wallets.length` para detectar
+  // troca de wallets sem mudanca de tamanho (wallet renomeada/substituida).
+  const walletIdsKey = useMemo(() => wallets.map((w) => w.id).sort().join(','), [wallets]);
   useEffect(() => {
     if (!isOpen) return;
     setWalletEntries((prev) => {
@@ -91,7 +95,7 @@ export default function RegisterSessionDialog({
       });
       return next;
     });
-  }, [isOpen, wallets.length]);
+  }, [isOpen, walletIdsKey]);
 
   const computedProfitUsd = useMemo(() => {
     let total = 0;
@@ -113,6 +117,9 @@ export default function RegisterSessionDialog({
     return total;
   }, [walletEntries, wallets, grindFx.ratesUsdToOther]);
 
+  // Dep apenas `computedProfitUsd`. registerSessionForm eh recriado a cada render
+  // do parent, mas o guard `rounded !== formData.profit` evita loop. Adicionar
+  // o form como dep dispararia infinite render.
   useEffect(() => {
     const rounded = Math.round(computedProfitUsd * 100) / 100;
     if (rounded !== registerSessionForm.formData.profit) {
