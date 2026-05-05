@@ -95,9 +95,9 @@ export interface NewsSourceCatalogEntry {
  * contrato estavel.
  */
 export const NEWS_CATEGORY_PRIORITY: NewsCategory[] = [
+  'studies',
   'tools',
   'sites',
-  'studies',
   'tournament-results',
   'gossip',
 ];

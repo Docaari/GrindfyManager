@@ -66,8 +66,15 @@ export function rankNewsFeed(items: NewsItem[]): NewsItem[] {
     return { item, score, categoryRank: categoryRank(item.source) };
   });
 
-  // 3. ordenar por score desc; tiebreak por categoryRank asc.
+  // 3. ordenar:
+  //    a) Studies sempre primeiro (founder requisitou prioridade absoluta).
+  //    b) Depois por score desc.
+  //    c) Tiebreak por categoryRank asc.
   scored.sort((a, b) => {
+    const aIsStudies = a.item.source === 'studies';
+    const bIsStudies = b.item.source === 'studies';
+    if (aIsStudies && !bIsStudies) return -1;
+    if (bIsStudies && !aIsStudies) return 1;
     if (b.score !== a.score) return b.score - a.score;
     return a.categoryRank - b.categoryRank;
   });
