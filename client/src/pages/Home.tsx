@@ -8,7 +8,7 @@
  *
  * Single TanStack Query → /api/home/overview. Cache staleTime 30s.
  * userState=empty renderiza <EmptyHomeOnboarding>; userState=power renderiza
- * cockpit em 4 zonas semanticas: Hoje | Acao Imediata | Performance | Sinal Externo.
+ * cockpit em 5 zonas semanticas: Inicio | Acao Imediata | Sessoes Registradas | Estudos | Noticias.
  *
  * Lessons aplicadas:
  *   #1  hooks first
@@ -538,7 +538,7 @@ const Home: React.FC = () => {
               </section>
             ) : null}
 
-            {/* Zona 5 — Sinal Externo */}
+            {/* Zona 5 — Noticias, Estudos e Atualizacoes (home-reform-5 item 10) */}
             {visibility.news ? (
               <section data-testid="home-zone-news" className="space-y-3">
                 <NewsFeed />

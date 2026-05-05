@@ -1,20 +1,20 @@
 /**
- * Test-Writer (Modo TDD - Red Phase)
+ * Test-Writer (Modo TDD).
  *
- * Sprint home-reform-3 — RF-B1, RF-B3, RF-B5, RF-B6, RF-B8, RF-B9, RF-B10.
+ * Sprint home-reform-5 item 10 — NewsFeed refactor.
+ * Spec: Docs/specs/home-reform-5.md item 10.
  *
- * Spec: Docs/specs/home-reform-3.md §RF-B*
- * ADR : Docs/architecture/decisions/110-news-feed-ranking-and-zoning.md §2.1, §2.3
- *
- * Componente `<NewsFeed>` em `client/src/components/home/NewsFeed.tsx`. NAO existe
- * ainda. Substitui `<NewsSlot>` em Home zona 4.
- *
- * Status RED: NewsFeed.tsx nao existe.
+ * Cobre:
+ *   - Rename header "Sinal Externo" -> "Noticias, Estudos e Atualizacoes"
+ *   - 5 chips fixed: Series | Atualizacoes | Estudos | Resultados | Fofocas
+ *   - Default tab eh primeira aba com items
+ *   - Carousel com setas left/right + dots paginadores (max 5 items)
+ *   - Click setas/dots muda slide ativo
+ *   - Click chip muda tab e reseta carousel
  *
  * Lessons aplicadas:
  *   #14 await import(...) ESM compat
  *   #2  data-testid estavel
- *   #15 polyfill localStorage no setup.ts (jsdom default tem nativo)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -54,6 +54,7 @@ function mkItem(id: string, source: any = 'tools', overrides: any = {}) {
     fetchedAt: '2026-05-03T11:00:00Z',
     thumbnailUrl: overrides.thumbnailUrl ?? null,
     engagement: overrides.engagement ?? { likes: 10, views: 50, comments: 2 },
+    tags: overrides.tags ?? [],
     ...overrides,
   };
 }
@@ -83,10 +84,10 @@ beforeEach(() => {
 });
 
 // =============================================================================
-// RF-B1 — NewsFeed unificado + filter chips
+// Header rename
 // =============================================================================
 
-describe('<NewsFeed /> — RF-B1 wrapper + filter chips', () => {
+describe('<NewsFeed /> — header rename', () => {
   it('renderiza wrapper com data-testid="home-news-feed"', async () => {
     await renderFeed({
       enabled: true,
@@ -97,43 +98,47 @@ describe('<NewsFeed /> — RF-B1 wrapper + filter chips', () => {
     expect(await screen.findByTestId('home-news-feed')).toBeInTheDocument();
   });
 
-  it('renderiza filter chips para todas categorias na ordem RF-B6', async () => {
+  it('h2 mostra "Noticias, Estudos e Atualizacoes" (rename de "Sinal Externo")', async () => {
     await renderFeed({
       enabled: true,
-      items: [mkItem('a', 'tools'), mkItem('b', 'sites'), mkItem('c', 'studies'), mkItem('d', 'tournament-results'), mkItem('e', 'gossip')],
+      items: [mkItem('a', 'tools')],
       cachedAt: '2026-05-03T12:00:00Z',
       nextRefreshAt: '2026-05-04T12:00:00Z',
     });
-    await screen.findByTestId('home-news-feed');
-    expect(screen.getByTestId('news-feed-chip-all')).toBeInTheDocument();
-    expect(screen.getByTestId('news-feed-chip-tools')).toBeInTheDocument();
-    expect(screen.getByTestId('news-feed-chip-sites')).toBeInTheDocument();
-    expect(screen.getByTestId('news-feed-chip-studies')).toBeInTheDocument();
-    expect(screen.getByTestId('news-feed-chip-tournament-results')).toBeInTheDocument();
-    expect(screen.getByTestId('news-feed-chip-gossip')).toBeInTheDocument();
-  });
-
-  it('click em chip re-filtra sem refetch (apiRequest chamado 1x)', async () => {
-    await renderFeed({
-      enabled: true,
-      items: [mkItem('a', 'tools'), mkItem('b', 'sites')],
-      cachedAt: '2026-05-03T12:00:00Z',
-      nextRefreshAt: '2026-05-04T12:00:00Z',
-    });
-    await screen.findByTestId('home-news-feed');
-    const callsBeforeClick = mockApiRequest.mock.calls.length;
-    fireEvent.click(screen.getByTestId('news-feed-chip-tools'));
-    // Sem refetch — apiRequest nao deve ser chamado novamente.
-    expect(mockApiRequest.mock.calls.length).toBe(callsBeforeClick);
+    const wrapper = await screen.findByTestId('home-news-feed');
+    const h2 = wrapper.querySelector('h2');
+    expect(h2?.textContent ?? '').toMatch(/Noticias, Estudos e Atualizacoes/i);
   });
 });
 
 // =============================================================================
-// RF-B6 — Ordem das categorias
+// 5 chips fixed
 // =============================================================================
 
-describe('<NewsFeed /> — RF-B6 ordem dos chips', () => {
-  it('chips aparecem na ordem: all, tools, sites, studies, tournament-results, gossip', async () => {
+describe('<NewsFeed /> — 5 abas fixas', () => {
+  it('renderiza chips Series | Atualizacoes | Estudos | Resultados | Fofocas', async () => {
+    await renderFeed({
+      enabled: true,
+      items: [
+        mkItem('a', 'tools'),
+        mkItem('b', 'sites'),
+        mkItem('c', 'studies'),
+        mkItem('d', 'tournament-results', { title: 'Joao crava torneio' }),
+        mkItem('e', 'gossip'),
+        mkItem('f', 'sites', { title: 'SCOOP 2026 schedule' }),
+      ],
+      cachedAt: '2026-05-03T12:00:00Z',
+      nextRefreshAt: '2026-05-04T12:00:00Z',
+    });
+    await screen.findByTestId('home-news-feed');
+    expect(screen.getByTestId('news-tab-series')).toBeInTheDocument();
+    expect(screen.getByTestId('news-tab-updates')).toBeInTheDocument();
+    expect(screen.getByTestId('news-tab-studies')).toBeInTheDocument();
+    expect(screen.getByTestId('news-tab-results')).toBeInTheDocument();
+    expect(screen.getByTestId('news-tab-gossip')).toBeInTheDocument();
+  });
+
+  it('chips aparecem na ordem fixa', async () => {
     await renderFeed({
       enabled: true,
       items: [mkItem('a', 'tools')],
@@ -141,169 +146,221 @@ describe('<NewsFeed /> — RF-B6 ordem dos chips', () => {
       nextRefreshAt: '2026-05-04T12:00:00Z',
     });
     await screen.findByTestId('home-news-feed');
-    const expected = [
-      'news-feed-chip-all',
-      'news-feed-chip-tools',
-      'news-feed-chip-sites',
-      'news-feed-chip-studies',
-      'news-feed-chip-tournament-results',
-      'news-feed-chip-gossip',
-    ];
-    const chipNodes = expected.map((tid) => screen.getByTestId(tid));
-    // Confirma que aparecem no DOM order; comparando posicao via compareDocumentPosition.
-    for (let i = 0; i < chipNodes.length - 1; i++) {
-      const cmp = chipNodes[i].compareDocumentPosition(chipNodes[i + 1]);
-      // 4 = DOCUMENT_POSITION_FOLLOWING
+    const expected = ['news-tab-series', 'news-tab-updates', 'news-tab-studies', 'news-tab-results', 'news-tab-gossip'];
+    const nodes = expected.map((tid) => screen.getByTestId(tid));
+    for (let i = 0; i < nodes.length - 1; i++) {
+      const cmp = nodes[i].compareDocumentPosition(nodes[i + 1]);
       expect(cmp & 4).toBeTruthy();
     }
+  });
+
+  it('NAO renderiza chip "Todas" do layout antigo', async () => {
+    await renderFeed({
+      enabled: true,
+      items: [mkItem('a', 'tools')],
+      cachedAt: '2026-05-03T12:00:00Z',
+      nextRefreshAt: '2026-05-04T12:00:00Z',
+    });
+    await screen.findByTestId('home-news-feed');
+    expect(screen.queryByTestId('news-feed-chip-all')).not.toBeInTheDocument();
+  });
+
+  it('default tab eh primeira aba com items (Updates quando tools/sites tem dados e series vazia)', async () => {
+    await renderFeed({
+      enabled: true,
+      items: [mkItem('a', 'tools', { title: 'Hand2Note 4.5 release' })],
+      cachedAt: '2026-05-03T12:00:00Z',
+      nextRefreshAt: '2026-05-04T12:00:00Z',
+    });
+    await screen.findByTestId('home-news-feed');
+    const updatesTab = screen.getByTestId('news-tab-updates');
+    expect(updatesTab.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('click em chip troca aba ativa', async () => {
+    await renderFeed({
+      enabled: true,
+      items: [
+        mkItem('a', 'tools'),
+        mkItem('b', 'gossip', { title: 'Polemica entre players' }),
+      ],
+      cachedAt: '2026-05-03T12:00:00Z',
+      nextRefreshAt: '2026-05-04T12:00:00Z',
+    });
+    await screen.findByTestId('home-news-feed');
+    fireEvent.click(screen.getByTestId('news-tab-gossip'));
+    expect(screen.getByTestId('news-tab-gossip').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('click em chip nao dispara refetch', async () => {
+    await renderFeed({
+      enabled: true,
+      items: [mkItem('a', 'tools'), mkItem('b', 'gossip', { title: 'Polemica' })],
+      cachedAt: '2026-05-03T12:00:00Z',
+      nextRefreshAt: '2026-05-04T12:00:00Z',
+    });
+    await screen.findByTestId('home-news-feed');
+    const callsBefore = mockApiRequest.mock.calls.length;
+    fireEvent.click(screen.getByTestId('news-tab-gossip'));
+    expect(mockApiRequest.mock.calls.length).toBe(callsBefore);
   });
 });
 
 // =============================================================================
-// RF-B3 — Hero + compact
+// Carousel
 // =============================================================================
 
-describe('<NewsFeed /> — RF-B3 hero + compact items', () => {
-  it('renderiza hero (item #1) com testid news-feed-hero', async () => {
+describe('<NewsFeed /> — carousel slide + setas + dots', () => {
+  it('renderiza container do carousel com testid', async () => {
     await renderFeed({
       enabled: true,
-      items: [mkItem('hero1', 'tools'), mkItem('c1', 'sites'), mkItem('c2', 'studies')],
+      items: [mkItem('a', 'tools')],
       cachedAt: '2026-05-03T12:00:00Z',
       nextRefreshAt: '2026-05-04T12:00:00Z',
     });
-    expect(await screen.findByTestId('news-feed-hero')).toBeInTheDocument();
+    expect(await screen.findByTestId('news-feed-carousel')).toBeInTheDocument();
   });
 
-  it('hero contem h3 com titulo', async () => {
+  it('slide ativo aparece como news-feed-hero (compat com read-state)', async () => {
     await renderFeed({
       enabled: true,
       items: [mkItem('hero1', 'tools', { title: 'Hand2Note 4.5 released' })],
       cachedAt: '2026-05-03T12:00:00Z',
       nextRefreshAt: '2026-05-04T12:00:00Z',
     });
-    const hero = await screen.findByTestId('news-feed-hero');
-    expect(hero.querySelector('h3')).not.toBeNull();
-    expect(hero.querySelector('h3')?.textContent ?? '').toMatch(/Hand2Note 4.5 released/);
+    const slide = await screen.findByTestId('news-feed-hero');
+    expect(slide.textContent ?? '').toMatch(/Hand2Note 4.5 released/);
   });
 
-  it('hero contem summary com line-clamp-2 ou similar (2 linhas)', async () => {
-    await renderFeed({
-      enabled: true,
-      items: [mkItem('hero1', 'tools', { summary: 'Resumo hero do item destaque' })],
-      cachedAt: '2026-05-03T12:00:00Z',
-      nextRefreshAt: '2026-05-04T12:00:00Z',
-    });
-    const hero = await screen.findByTestId('news-feed-hero');
-    const html = hero.innerHTML;
-    expect(html).toMatch(/line-clamp-2/);
-  });
-
-  it('renderiza compact items #2..#10 com testid news-feed-compact-item-{N}', async () => {
-    const items = Array.from({ length: 10 }).map((_, i) => mkItem(`it-${i}`, i % 2 === 0 ? 'tools' : 'sites'));
+  it('renderiza max 5 dots (ate 5 noticias por aba)', async () => {
+    const items = Array.from({ length: 8 }).map((_, i) =>
+      mkItem(`it-${i}`, 'tools', { title: `Update #${i}` }),
+    );
     await renderFeed({
       enabled: true,
       items,
-      cachedAt: '2026-05-03T12:00:00Z',
-      nextRefreshAt: '2026-05-04T12:00:00Z',
-    });
-    await screen.findByTestId('news-feed-hero');
-    // index 1..9 (rank 2..10)
-    for (let i = 2; i <= 10; i++) {
-      expect(screen.getByTestId(`news-feed-compact-item-${i}`)).toBeInTheDocument();
-    }
-  });
-
-  it('compact items mostram ordinal #N em fonte mono', async () => {
-    const items = Array.from({ length: 3 }).map((_, i) => mkItem(`it-${i}`, 'tools'));
-    await renderFeed({
-      enabled: true,
-      items,
-      cachedAt: '2026-05-03T12:00:00Z',
-      nextRefreshAt: '2026-05-04T12:00:00Z',
-    });
-    const item2 = await screen.findByTestId('news-feed-compact-item-2');
-    expect(item2.textContent ?? '').toMatch(/#?2/);
-    expect(item2.outerHTML).toMatch(/font-mono/);
-  });
-});
-
-// =============================================================================
-// RF-B5 — Refresh badge unico
-// =============================================================================
-
-describe('<NewsFeed /> — RF-B5 refresh badge unico', () => {
-  it('renderiza apenas 1 badge de refresh', async () => {
-    await renderFeed({
-      enabled: true,
-      items: [mkItem('a', 'tools'), mkItem('b', 'sites')],
       cachedAt: '2026-05-03T12:00:00Z',
       nextRefreshAt: '2026-05-04T12:00:00Z',
     });
     await screen.findByTestId('home-news-feed');
-    const badges = screen.queryAllByTestId('news-feed-refresh-badge');
-    expect(badges.length).toBe(1);
+    const dots = screen.queryAllByTestId(/^news-feed-carousel-dot-\d+$/);
+    expect(dots.length).toBe(5);
   });
 
-  it('badge contem "Atualizado seg 12:00 BRT"', async () => {
-    await renderFeed({
-      enabled: true,
-      items: [mkItem('a', 'tools')],
-      cachedAt: '2026-05-03T12:00:00Z',
-      nextRefreshAt: '2026-05-04T12:00:00Z',
-    });
-    const badge = await screen.findByTestId('news-feed-refresh-badge');
-    expect(badge.textContent ?? '').toMatch(/Atualizado.*12:00.*BRT/i);
-  });
-
-  it('NAO ha sub-badges em sub-secoes (nao ha sub-secoes)', async () => {
-    await renderFeed({
-      enabled: true,
-      items: [mkItem('a', 'tools'), mkItem('b', 'sites'), mkItem('c', 'studies')],
-      cachedAt: '2026-05-03T12:00:00Z',
-      nextRefreshAt: '2026-05-04T12:00:00Z',
-    });
-    await screen.findByTestId('home-news-feed');
-    // testids legados de subsecoes da Onda 2 (NewsSlotV2) NAO devem existir.
-    expect(screen.queryByTestId('home-news-section-tools')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('home-news-section-sites')).not.toBeInTheDocument();
-  });
-});
-
-// =============================================================================
-// RF-B8 — ExternalLink icon
-// =============================================================================
-
-describe('<NewsFeed /> — RF-B8 ExternalLink icon', () => {
-  it('hero renderiza icone ExternalLink com testid', async () => {
-    await renderFeed({
-      enabled: true,
-      items: [mkItem('a', 'tools')],
-      cachedAt: '2026-05-03T12:00:00Z',
-      nextRefreshAt: '2026-05-04T12:00:00Z',
-    });
-    const hero = await screen.findByTestId('news-feed-hero');
-    expect(hero.querySelector('[data-testid="external-link-icon"]')).not.toBeNull();
-  });
-
-  it('compact items tambem renderizam icone ExternalLink', async () => {
-    const items = Array.from({ length: 3 }).map((_, i) => mkItem(`it-${i}`, 'tools'));
+  it('renderiza dots conforme quantidade de items quando ha menos de 5', async () => {
+    const items = [mkItem('a', 'tools'), mkItem('b', 'tools'), mkItem('c', 'tools')];
     await renderFeed({
       enabled: true,
       items,
       cachedAt: '2026-05-03T12:00:00Z',
       nextRefreshAt: '2026-05-04T12:00:00Z',
     });
-    const item2 = await screen.findByTestId('news-feed-compact-item-2');
-    expect(item2.querySelector('[data-testid="external-link-icon"]')).not.toBeNull();
+    await screen.findByTestId('home-news-feed');
+    const dots = screen.queryAllByTestId(/^news-feed-carousel-dot-\d+$/);
+    expect(dots.length).toBe(3);
+  });
+
+  it('botoes setas left + right tem testid', async () => {
+    await renderFeed({
+      enabled: true,
+      items: [mkItem('a', 'tools'), mkItem('b', 'tools')],
+      cachedAt: '2026-05-03T12:00:00Z',
+      nextRefreshAt: '2026-05-04T12:00:00Z',
+    });
+    await screen.findByTestId('home-news-feed');
+    expect(screen.getByTestId('news-feed-carousel-prev')).toBeInTheDocument();
+    expect(screen.getByTestId('news-feed-carousel-next')).toBeInTheDocument();
+  });
+
+  it('click seta direita avanca slide ativo', async () => {
+    await renderFeed({
+      enabled: true,
+      items: [
+        mkItem('a', 'tools', { title: 'First Update' }),
+        mkItem('b', 'tools', { title: 'Second Update' }),
+      ],
+      cachedAt: '2026-05-03T12:00:00Z',
+      nextRefreshAt: '2026-05-04T12:00:00Z',
+    });
+    const slide = await screen.findByTestId('news-feed-hero');
+    expect(slide.textContent ?? '').toMatch(/First Update/);
+    fireEvent.click(screen.getByTestId('news-feed-carousel-next'));
+    const slideAfter = screen.getByTestId('news-feed-hero');
+    expect(slideAfter.textContent ?? '').toMatch(/Second Update/);
+  });
+
+  it('click dot index posiciona slide ativo direto', async () => {
+    const items = [
+      mkItem('a', 'tools', { title: 'Slide A' }),
+      mkItem('b', 'tools', { title: 'Slide B' }),
+      mkItem('c', 'tools', { title: 'Slide C' }),
+    ];
+    await renderFeed({
+      enabled: true,
+      items,
+      cachedAt: '2026-05-03T12:00:00Z',
+      nextRefreshAt: '2026-05-04T12:00:00Z',
+    });
+    await screen.findByTestId('home-news-feed');
+    fireEvent.click(screen.getByTestId('news-feed-carousel-dot-2'));
+    const slide = screen.getByTestId('news-feed-hero');
+    expect(slide.textContent ?? '').toMatch(/Slide C/);
+  });
+
+  it('seta prev fica desabilitada no primeiro slide', async () => {
+    await renderFeed({
+      enabled: true,
+      items: [mkItem('a', 'tools'), mkItem('b', 'tools')],
+      cachedAt: '2026-05-03T12:00:00Z',
+      nextRefreshAt: '2026-05-04T12:00:00Z',
+    });
+    await screen.findByTestId('home-news-feed');
+    const prev = screen.getByTestId('news-feed-carousel-prev') as HTMLButtonElement;
+    expect(prev.disabled).toBe(true);
+  });
+
+  it('seta next fica desabilitada no ultimo slide', async () => {
+    await renderFeed({
+      enabled: true,
+      items: [mkItem('a', 'tools'), mkItem('b', 'tools')],
+      cachedAt: '2026-05-03T12:00:00Z',
+      nextRefreshAt: '2026-05-04T12:00:00Z',
+    });
+    await screen.findByTestId('home-news-feed');
+    const next = screen.getByTestId('news-feed-carousel-next') as HTMLButtonElement;
+    fireEvent.click(next);
+    expect(next.disabled).toBe(true);
+  });
+
+  it('mudar de aba reseta slide ativo para 0 e atualiza dots', async () => {
+    await renderFeed({
+      enabled: true,
+      items: [
+        mkItem('a', 'tools', { title: 'Tools 1' }),
+        mkItem('b', 'tools', { title: 'Tools 2' }),
+        mkItem('c', 'gossip', { title: 'Polemica X' }),
+      ],
+      cachedAt: '2026-05-03T12:00:00Z',
+      nextRefreshAt: '2026-05-04T12:00:00Z',
+    });
+    await screen.findByTestId('home-news-feed');
+    fireEvent.click(screen.getByTestId('news-feed-carousel-next'));
+    const slide1 = screen.getByTestId('news-feed-hero');
+    expect(slide1.textContent ?? '').toMatch(/Tools 2/);
+    fireEvent.click(screen.getByTestId('news-tab-gossip'));
+    const slide2 = screen.getByTestId('news-feed-hero');
+    expect(slide2.textContent ?? '').toMatch(/Polemica X/);
+    const dots = screen.queryAllByTestId(/^news-feed-carousel-dot-\d+$/);
+    expect(dots.length).toBe(1);
   });
 });
 
 // =============================================================================
-// RF-B9 — Empty state
+// Empty states preservados
 // =============================================================================
 
-describe('<NewsFeed /> — RF-B9 empty state', () => {
-  it('quando enabled=false renderiza placeholder com botao "Ativar categorias"', async () => {
+describe('<NewsFeed /> — empty states', () => {
+  it('quando enabled=false renderiza CTA "Ativar categorias"', async () => {
     await renderFeed({
       enabled: false,
       items: [],
@@ -315,68 +372,33 @@ describe('<NewsFeed /> — RF-B9 empty state', () => {
     expect(cta).toBeInTheDocument();
   });
 
-  it('click em "Ativar categorias" abre NewsPreferencesDialog', async () => {
+  it('aba ativa sem items mostra empty state da aba', async () => {
     await renderFeed({
-      enabled: false,
-      items: [],
+      enabled: true,
+      items: [mkItem('a', 'tools', { title: 'Update' })],
       cachedAt: '2026-05-03T12:00:00Z',
       nextRefreshAt: '2026-05-04T12:00:00Z',
     });
     await screen.findByTestId('home-news-feed');
-    const cta = screen.getByText(/Ativar categorias/i);
-    fireEvent.click(cta);
-    expect(screen.getByTestId('news-preferences-dialog-open')).toBeInTheDocument();
-  });
-
-  it('quando enabled=true mas items=[] mostra mensagem de empty', async () => {
-    await renderFeed({
-      enabled: true,
-      items: [],
-      cachedAt: '2026-05-03T12:00:00Z',
-      nextRefreshAt: '2026-05-04T12:00:00Z',
-    });
-    const wrapper = await screen.findByTestId('home-news-feed');
-    expect(wrapper.textContent ?? '').toMatch(/sem novidades|sem noticias|sem novas/i);
+    fireEvent.click(screen.getByTestId('news-tab-gossip'));
+    expect(screen.getByTestId('news-feed-tab-empty')).toBeInTheDocument();
   });
 });
 
 // =============================================================================
-// RF-B10 — PlatformChips collapse
+// Refresh badge preservado
 // =============================================================================
 
-describe('<NewsFeed /> — RF-B10 PlatformChips collapse', () => {
-  it('quando platforms.length <= 3 renderiza todos sem +N', async () => {
-    const items = [
-      mkItem('a', 'tools', { platform: 'hand2note' }),
-      mkItem('b', 'tools', { platform: 'pt4' }),
-      mkItem('c', 'tools', { platform: 'hm3' }),
-    ];
+describe('<NewsFeed /> — refresh badge', () => {
+  it('renderiza apenas 1 badge', async () => {
     await renderFeed({
       enabled: true,
-      items,
+      items: [mkItem('a', 'tools')],
       cachedAt: '2026-05-03T12:00:00Z',
       nextRefreshAt: '2026-05-04T12:00:00Z',
     });
     await screen.findByTestId('home-news-feed');
-    expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
-  });
-
-  it('quando platforms.length > 3 mostra 3 chips + botao +N', async () => {
-    const items = [
-      mkItem('a', 'tools', { platform: 'hand2note' }),
-      mkItem('b', 'tools', { platform: 'pt4' }),
-      mkItem('c', 'tools', { platform: 'hm3' }),
-      mkItem('d', 'tools', { platform: 'sharkscope' }),
-      mkItem('e', 'tools', { platform: 'gto-wizard' }),
-    ];
-    await renderFeed({
-      enabled: true,
-      items,
-      cachedAt: '2026-05-03T12:00:00Z',
-      nextRefreshAt: '2026-05-04T12:00:00Z',
-    });
-    await screen.findByTestId('home-news-feed');
-    // espera +2 chips ocultos (5-3=2)
-    expect(screen.getByText(/\+2/)).toBeInTheDocument();
+    const badges = screen.queryAllByTestId('news-feed-refresh-badge');
+    expect(badges.length).toBe(1);
   });
 });

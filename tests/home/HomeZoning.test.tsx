@@ -202,7 +202,8 @@ describe('RF-A2 — 4 zonas semanticas', () => {
     expect(action.querySelector('h2')?.textContent ?? '').toMatch(/Acao Imediata/i);
     // Sprint home-reform-5 item 6: zona renomeada "Performance" -> "Sessoes Registradas".
     expect(perf.querySelector('h2')?.textContent ?? '').toMatch(/Sessoes Registradas/i);
-    expect(news.querySelector('h2')?.textContent ?? '').toMatch(/Sinal Externo/i);
+    // home-reform-5 item 10: zona renomeada "Sinal Externo" -> "Noticias, Estudos e Atualizacoes".
+    expect(news.querySelector('h2')?.textContent ?? '').toMatch(/Noticias, Estudos e Atualizacoes/i);
   });
 
   it('zona "Hoje" contem componentes esperados (DailyInsight + TodayCard + NextTournamentCountdown)', async () => {

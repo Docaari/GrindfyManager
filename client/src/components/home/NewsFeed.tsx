@@ -1,30 +1,31 @@
 /**
- * NewsFeed — Sprint home-reform-3 (Onda 3) Bloco B.
+ * NewsFeed — Sprint home-reform-5 item 10.
  *
- * Spec : Docs/specs/home-reform-3.md §RF-B1, §RF-B3, §RF-B5, §RF-B6, §RF-B8, §RF-B9, §RF-B10
- * ADR  : Docs/architecture/decisions/110-news-feed-ranking-and-zoning.md §2.1, §2.3
+ * Spec : Docs/specs/home-reform-5.md item 10
+ * Predecessores: home-reform-3 RF-B (NewsFeed antigo) + ADR-110 (ranking).
  *
- * Substitui NewsSlot legado em Home zona 4. 1 endpoint (`/api/news/feed`) +
- * filter chips client-side + hero #1 + compact #2..#10 + read-state localStorage.
+ * Mudancas item 10:
+ *   - Header renomeado de "Sinal Externo" para "Noticias, Estudos e Atualizacoes".
+ *   - 5 chips fixos: Series | Atualizacoes | Estudos | Resultados | Fofocas
+ *     (substitui chip "Todas" + 5 sources antigos).
+ *   - Layout = carousel ate 5 noticias por aba com setas + dots paginadores.
  *
  * Lessons aplicadas:
- *   #1  hooks first (early return so depois de hooks)
+ *   #1  hooks first
  *   #11 spec eh fonte de verdade (testids exatos do test-writer)
  *   #13 apiRequest retorna JSON parseado direto
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, Check, Settings } from 'lucide-react';
+import { ExternalLink, Check, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { emit } from '@/lib/tracker';
-import {
-  CATEGORY_LABELS,
-  NEWS_CATEGORY_PRIORITY,
-} from '@shared/types/news';
+import { CATEGORY_LABELS } from '@shared/types/news';
 import type { NewsCategory, NewsItem } from '@shared/types/news';
 import { useNewsReadState } from '@/hooks/useNewsReadState';
 import { NewsPreferencesDialog } from './NewsPreferencesDialog';
+import { getNewsTab, NEWS_TABS, NEWS_TAB_LABELS, type NewsTab } from '@/lib/newsTabs';
 
 interface FeedResponse {
   enabled: boolean;
@@ -33,9 +34,7 @@ interface FeedResponse {
   nextRefreshAt: string;
 }
 
-type FilterCategory = NewsCategory | 'all';
-
-const CHIP_ORDER: FilterCategory[] = ['all', ...NEWS_CATEGORY_PRIORITY];
+const MAX_SLIDES = 5;
 
 function fmtRefreshBadge(cachedAt: string, nextRefreshAt: string): string {
   const next = new Date(nextRefreshAt).getTime();
@@ -71,13 +70,13 @@ function ReadCheck(): JSX.Element {
   );
 }
 
-interface ItemViewProps {
+interface SlideProps {
   item: NewsItem;
   isRead: boolean;
   onClick: () => void;
 }
 
-function HeroCard({ item, isRead, onClick }: ItemViewProps): JSX.Element {
+function Slide({ item, isRead, onClick }: SlideProps): JSX.Element {
   const opacityCls = isRead ? 'opacity-60' : '';
   const categoryLabel = CATEGORY_LABELS[item.source] ?? item.source;
   return (
@@ -125,107 +124,134 @@ function HeroCard({ item, isRead, onClick }: ItemViewProps): JSX.Element {
   );
 }
 
-interface CompactItemProps extends ItemViewProps {
-  rank: number;
+interface TabsBarProps {
+  active: NewsTab;
+  counts: Record<NewsTab, number>;
+  onSelect: (tab: NewsTab) => void;
 }
 
-function CompactItem({ item, rank, isRead, onClick }: CompactItemProps): JSX.Element {
-  const opacityCls = isRead ? 'opacity-60' : '';
+function TabsBar({ active, counts, onSelect }: TabsBarProps): JSX.Element {
   return (
-    <a
-      href={item.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={onClick}
-      data-testid={`news-feed-compact-item-${rank}`}
-      className={`flex items-center gap-3 px-3 py-2 border-b border-border last:border-0 hover:bg-accent transition-colors ${opacityCls}`}
-    >
-      <span className="font-mono text-xs text-muted-foreground shrink-0 w-8">
-        #{rank}
-      </span>
-      {item.thumbnailUrl ? (
-        <img
-          src={item.thumbnailUrl}
-          alt=""
-          className="w-12 h-12 rounded object-cover shrink-0"
-          loading="lazy"
-        />
-      ) : (
-        <div className="w-12 h-12 bg-muted rounded shrink-0" aria-hidden="true" />
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start gap-1">
-          <h4 className="text-sm font-medium line-clamp-1 flex-1">
-            {item.title}
-            <ExternalLinkIcon />
-          </h4>
-          {isRead ? <ReadCheck /> : null}
-        </div>
-        {item.summary ? (
-          <p className="text-xs text-muted-foreground line-clamp-1">{item.summary}</p>
-        ) : null}
-      </div>
-    </a>
-  );
-}
-
-interface PlatformChipsProps {
-  platforms: string[];
-}
-
-interface PlatformChipsClickableProps {
-  platforms: string[];
-  selected: string | null;
-  onSelect: (p: string | null) => void;
-}
-
-function PlatformChipsCollapsible({
-  platforms,
-  selected,
-  onSelect,
-}: PlatformChipsClickableProps): JSX.Element | null {
-  const [expanded, setExpanded] = useState(false);
-  if (platforms.length === 0) return null;
-  const visible = expanded ? platforms : platforms.slice(0, 6);
-  const hidden = platforms.length - visible.length;
-  return (
-    <div className="flex flex-wrap gap-1 mt-2">
-      {visible.map((p) => {
-        const isActive = selected === p;
+    <div className="flex flex-wrap gap-1" role="tablist" aria-label="Categorias de noticias">
+      {NEWS_TABS.map((tab) => {
+        const isActive = active === tab;
+        const label = NEWS_TAB_LABELS[tab];
+        const count = counts[tab] ?? 0;
         return (
           <button
-            key={p}
+            key={tab}
             type="button"
-            onClick={() => onSelect(isActive ? null : p)}
-            data-testid={`news-feed-platform-chip-${p}`}
-            className={`text-[10px] uppercase rounded-md px-2 py-0.5 border transition-colors ${
+            role="tab"
+            aria-pressed={isActive}
+            onClick={() => onSelect(tab)}
+            data-testid={`news-tab-${tab}`}
+            className={`text-[10px] uppercase rounded-md px-2 py-0.5 border ${
               isActive
-                ? "bg-poker-accent text-black border-poker-accent"
-                : "border-border text-muted-foreground hover:text-foreground"
+                ? 'bg-poker-accent text-black border-poker-accent'
+                : 'border-border text-muted-foreground hover:text-foreground'
             }`}
           >
-            {p}
+            {label}
+            {count > 0 ? <span className="ml-1 opacity-60">{count}</span> : null}
           </button>
         );
       })}
-      {hidden > 0 ? (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className="text-[10px] uppercase rounded-md px-2 py-0.5 border border-border text-muted-foreground hover:text-foreground"
+    </div>
+  );
+}
+
+interface CarouselProps {
+  items: NewsItem[];
+  isRead: (id: string) => boolean;
+  onItemClick: (item: NewsItem, position: number) => void;
+}
+
+function Carousel({ items, isRead, onItemClick }: CarouselProps): JSX.Element {
+  const [active, setActive] = useState(0);
+
+  // Reseta indice quando a lista muda (tab change ou refetch).
+  useEffect(() => {
+    setActive(0);
+  }, [items]);
+
+  const total = items.length;
+  const safeActive = Math.min(active, Math.max(total - 1, 0));
+  const current = items[safeActive];
+
+  if (!current) {
+    return (
+      <div data-testid="news-feed-carousel" className="space-y-2">
+        <div
+          data-testid="news-feed-tab-empty"
+          className="rounded-lg border border-dashed border-border bg-card p-6 text-center"
         >
-          +{hidden}
-        </button>
+          <p className="text-sm text-muted-foreground">Sem itens nessa categoria por enquanto.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const isFirst = safeActive === 0;
+  const isLast = safeActive === total - 1;
+
+  return (
+    <div data-testid="news-feed-carousel" className="space-y-2">
+      <div className="relative">
+        <Slide
+          key={current.id}
+          item={current}
+          isRead={isRead(current.id)}
+          onClick={() => onItemClick(current, safeActive + 1)}
+        />
+        {total > 1 ? (
+          <>
+            <button
+              type="button"
+              data-testid="news-feed-carousel-prev"
+              onClick={() => setActive((i) => Math.max(0, i - 1))}
+              disabled={isFirst}
+              aria-label="Anterior"
+              className="absolute top-1/2 -translate-y-1/2 left-2 rounded-full bg-background/80 border border-border p-1.5 hover:bg-background disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              data-testid="news-feed-carousel-next"
+              onClick={() => setActive((i) => Math.min(total - 1, i + 1))}
+              disabled={isLast}
+              aria-label="Proximo"
+              className="absolute top-1/2 -translate-y-1/2 right-2 rounded-full bg-background/80 border border-border p-1.5 hover:bg-background disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </>
+        ) : null}
+      </div>
+      {total > 0 ? (
+        <div className="flex items-center justify-center gap-1.5" role="tablist" aria-label="Paginacao do carousel">
+          {items.map((_, idx) => {
+            const isActiveDot = idx === safeActive;
+            return (
+              <button
+                key={idx}
+                type="button"
+                data-testid={`news-feed-carousel-dot-${idx}`}
+                onClick={() => setActive(idx)}
+                aria-label={`Ir para ${idx + 1} de ${total}`}
+                aria-pressed={isActiveDot}
+                className={`h-1.5 rounded-full transition-all ${
+                  isActiveDot ? 'w-4 bg-poker-accent' : 'w-1.5 bg-border hover:bg-muted-foreground'
+                }`}
+              />
+            );
+          })}
+        </div>
       ) : null}
-      {expanded && platforms.length > 6 ? (
-        <button
-          type="button"
-          onClick={() => setExpanded(false)}
-          className="text-[10px] uppercase rounded-md px-2 py-0.5 border border-border text-muted-foreground hover:text-foreground"
-          aria-label="Recolher plataformas"
-        >
-          -
-        </button>
+      {total > 1 ? (
+        <p className="text-[10px] text-muted-foreground text-center">
+          {safeActive + 1} de {total}
+        </p>
       ) : null}
     </div>
   );
@@ -259,61 +285,6 @@ function FeedEmptyState({ enabled, onConfigure }: EmptyStateProps): JSX.Element 
   );
 }
 
-interface CategoryEmptyProps {
-  category: NewsCategory;
-  onResetFilter: () => void;
-}
-
-function CategoryEmptyState({ category, onResetFilter }: CategoryEmptyProps): JSX.Element {
-  const label = CATEGORY_LABELS[category] ?? category;
-  return (
-    <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center space-y-3">
-      <p className="text-sm text-muted-foreground">
-        Sem itens em <strong>{label}</strong> agora.
-      </p>
-      <button
-        type="button"
-        onClick={onResetFilter}
-        className="text-sm rounded-md border border-border px-3 py-1.5 hover:bg-accent transition-colors"
-      >
-        Ver todas
-      </button>
-    </div>
-  );
-}
-
-interface FilterChipsProps {
-  active: FilterCategory;
-  onSelect: (cat: FilterCategory) => void;
-}
-
-function FilterChips({ active, onSelect }: FilterChipsProps): JSX.Element {
-  return (
-    <div className="flex flex-wrap gap-1">
-      {CHIP_ORDER.map((cat) => {
-        const isAll = cat === 'all';
-        const label = isAll ? 'Todas' : CATEGORY_LABELS[cat as NewsCategory] ?? cat;
-        const isActive = active === cat;
-        return (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => onSelect(cat)}
-            data-testid={`news-feed-chip-${cat}`}
-            className={`text-[10px] uppercase rounded-md px-2 py-0.5 border ${
-              isActive
-                ? 'bg-poker-accent text-black border-poker-accent'
-                : 'border-border text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function NewsFeed(): JSX.Element {
   // Hooks first (lesson #1).
   const { data, isLoading } = useQuery<FeedResponse>({
@@ -323,57 +294,68 @@ export default function NewsFeed(): JSX.Element {
     refetchOnWindowFocus: false,
   });
 
-  const [filter, setFilter] = useState<FilterCategory>('all');
-  const [platformFilter, setPlatformFilter] = useState<string | null>(null);
+  const [userTab, setUserTab] = useState<NewsTab | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const { isRead, markRead } = useNewsReadState();
 
   const items = useMemo<NewsItem[]>(() => data?.items ?? [], [data?.items]);
   const enabled = data?.enabled ?? false;
 
-  // Filter por categoria primeiro; reset platform filter quando categoria muda.
-  const itemsByCategory = useMemo(() => {
-    if (filter === 'all') return items;
-    return items.filter((it) => it.source === filter);
-  }, [items, filter]);
+  // Bucketiza por aba (cada item em UMA aba via getNewsTab).
+  const buckets = useMemo<Record<NewsTab, NewsItem[]>>(() => {
+    const acc: Record<NewsTab, NewsItem[]> = {
+      series: [],
+      updates: [],
+      studies: [],
+      results: [],
+      gossip: [],
+    };
+    for (const it of items) {
+      acc[getNewsTab(it)].push(it);
+    }
+    return acc;
+  }, [items]);
 
-  // Aplica filtro de plataforma sobre items ja filtrados por categoria.
-  const filtered = useMemo(() => {
-    if (!platformFilter) return itemsByCategory;
-    return itemsByCategory.filter((it) => it.platform === platformFilter);
-  }, [itemsByCategory, platformFilter]);
+  const counts = useMemo<Record<NewsTab, number>>(() => {
+    return {
+      series: buckets.series.length,
+      updates: buckets.updates.length,
+      studies: buckets.studies.length,
+      results: buckets.results.length,
+      gossip: buckets.gossip.length,
+    };
+  }, [buckets]);
 
-  // Plataformas disponiveis derivam dos items DA categoria atual (ou todos).
-  const platforms = useMemo(() => {
-    const set = new Set<string>();
-    for (const it of itemsByCategory) set.add(it.platform);
-    return Array.from(set);
-  }, [itemsByCategory]);
+  // Default tab = primeira com items (sincrono via useMemo). User pick override.
+  const defaultTab = useMemo<NewsTab>(
+    () => NEWS_TABS.find((t) => buckets[t].length > 0) ?? 'series',
+    [buckets],
+  );
+  const tab = userTab ?? defaultTab;
+  const tabItems = buckets[tab].slice(0, MAX_SLIDES);
 
   const refreshBadge = data
     ? fmtRefreshBadge(data.cachedAt, data.nextRefreshAt)
     : 'Atualizado seg 12:00 BRT';
 
-  const handleItemClick = (id: string, position: number, source: NewsCategory) => {
-    const wasRead = isRead(id);
-    markRead(id);
+  const handleItemClick = (item: NewsItem, position: number) => {
+    const wasRead = isRead(item.id);
+    markRead(item.id);
     emit('home_news_feed_item_click', {
-      id,
-      source,
+      id: item.id,
+      source: item.source as NewsCategory,
+      tab,
       position,
       isRead: wasRead,
     });
   };
 
-  const handleSelectFilter = (cat: FilterCategory) => {
-    setFilter(cat);
-    setPlatformFilter(null); // Reset platform ao mudar categoria.
-    if (cat !== 'all') {
-      emit('home_news_feed_filter_applied', {
-        filter: cat,
-        itemsAfterFilter: items.filter((i) => i.source === cat).length,
-      });
-    }
+  const handleSelectTab = (next: NewsTab) => {
+    setUserTab(next);
+    emit('home_news_feed_tab_changed', {
+      tab: next,
+      itemsAfter: buckets[next].length,
+    });
   };
 
   const showFeedEmpty = !isLoading && (!enabled || items.length === 0);
@@ -381,7 +363,7 @@ export default function NewsFeed(): JSX.Element {
   return (
     <div data-testid="home-news-feed" className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <h2 className="text-sm font-semibold">Sinal Externo</h2>
+        <h2 className="text-sm font-semibold">Noticias, Estudos e Atualizacoes</h2>
         <span
           data-testid="news-feed-refresh-badge"
           aria-label="Cron semanal segunda 12:00 BRT (ADR-106)"
@@ -404,47 +386,12 @@ export default function NewsFeed(): JSX.Element {
         <FeedEmptyState enabled={enabled} onConfigure={() => setDialogOpen(true)} />
       ) : (
         <>
-          <FilterChips active={filter} onSelect={handleSelectFilter} />
-          {platforms.length > 0 ? (
-            <PlatformChipsCollapsible
-              platforms={platforms}
-              selected={platformFilter}
-              onSelect={setPlatformFilter}
-            />
-          ) : null}
-
-          {filtered.length === 0 && filter !== 'all' ? (
-            <CategoryEmptyState
-              category={filter as NewsCategory}
-              onResetFilter={() => setFilter('all')}
-            />
-          ) : (
-            <>
-              {filtered[0] ? (
-                <HeroCard
-                  item={filtered[0]}
-                  isRead={isRead(filtered[0].id)}
-                  onClick={() => handleItemClick(filtered[0].id, 1, filtered[0].source)}
-                />
-              ) : null}
-              {filtered.length > 1 ? (
-                <div className="rounded-lg border bg-card overflow-hidden">
-                  {filtered.slice(1, 20).map((it, idx) => {
-                    const rank = idx + 2;
-                    return (
-                      <CompactItem
-                        key={it.id}
-                        item={it}
-                        rank={rank}
-                        isRead={isRead(it.id)}
-                        onClick={() => handleItemClick(it.id, rank, it.source)}
-                      />
-                    );
-                  })}
-                </div>
-              ) : null}
-            </>
-          )}
+          <TabsBar active={tab} counts={counts} onSelect={handleSelectTab} />
+          <Carousel
+            items={tabItems}
+            isRead={isRead}
+            onItemClick={handleItemClick}
+          />
         </>
       )}
 

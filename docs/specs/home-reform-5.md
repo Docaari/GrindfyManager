@@ -31,7 +31,7 @@ Regra de execucao:
 | 7 | Dashboard: All Time + KPIs ITM/MF/Cravadas + grafico evolucao all-time | Concluido (2026-05-04) | Feature | 3-4h |
 | 8 | Performance baseada em registros /grind (toggle futuro) | Concluido (2026-05-04) | Refactor | 2h |
 | 9 | Estudos: OK, nao mexer | Skip | — | 0 |
-| 10 | News: renomear + botoes novos + carousel com setas+dots | **POR ULTIMO** | UI/feature | 4-6h |
+| 10 | News: renomear + botoes novos + carousel com setas+dots | Concluido (2026-05-05) | UI/feature | 4-6h |
 | 11 | Engrenagem habilita/desabilita sessoes da Home | Concluido (2026-05-04) | Feature | 3-4h |
 
 Ordem de execucao recomendada: **1 -> 2 -> 5 -> 3 -> 4 -> 6 -> 7 -> 8 -> 11 -> 10** (deixa News por ultimo conforme pedido).
@@ -365,6 +365,29 @@ Skip. Sem alteracao.
 **Atencao:**
 - Founder pediu para deixar **por ULTIMO**. News esta sendo evoluida em paralelo (RSS + xAI Grok — ADR-106/107).
 - Aguardar founder confirmar que essa feature esta estavel antes de aplicar refactor visual.
+
+#### Resolucao (2026-05-05)
+
+- **Helper puro novo** `client/src/lib/newsTabs.ts`:
+  - `NEWS_TABS` (5 abas fixas: `series | updates | studies | results | gossip`).
+  - `NEWS_TAB_LABELS` (PT-BR: `Series | Atualizacoes | Estudos | Resultados | Fofocas`).
+  - `getNewsTab(item)` mapeia item -> 1 aba via heuristica `isSeriesEvent` (regex `/scoop|wcoop|wsop|wcoss|festival|series|circuito|main\s+event|micro|wpt|ept|brkpt|bsop|micromilions?|millions?|championship|liga/i` em title + summary + tags) com fallback por `source`. Items com keyword serie sempre vao pra aba `series` mesmo se source = `tournament-results` (separa cobertura de circuito de "Joao crava torneio dominical").
+  - 12/12 testes verde em `tests/home/newsTabs.test.ts`.
+- **NewsFeed.tsx refactor**:
+  - **Header renomeado** `Sinal Externo` -> `Noticias, Estudos e Atualizacoes`.
+  - **5 chips fixos** (substitui chip "Todas" + 5 sources Onda 3) renderizados via `TabsBar` interno. testids `news-tab-{series|updates|studies|results|gossip}` + `aria-pressed` + contador de items. Default tab sincrono via `useMemo` = primeira aba com items (fallback `series`). User pick override via `userTab` state.
+  - **Carousel inline custom** (state local `useState<number>(0)`, sem dep externa — embla-carousel-react ja existe em `package.json` mas custom mais determinístico em testes/jsdom). Slide ativo mantem `data-testid="news-feed-hero"` (compat com `NewsReadState.test.tsx`). Setas `news-feed-carousel-prev` + `news-feed-carousel-next` com `disabled` no extremo. Dots `news-feed-carousel-dot-{idx}`. Reset auto `useEffect([items], () => setActive(0))` ao trocar de aba/refetch. Cap `MAX_SLIDES=5`.
+  - **Empty state por aba** novo: quando aba sem items, renderiza `news-feed-tab-empty` dentro do container `news-feed-carousel` (preserva contrato de testid).
+  - PlatformChips legado removido (filtro por plataforma deslocado pra futura iteracao se necessario; abas + carousel ja entregam scope visual).
+  - Lessons aplicadas: #1 (hooks first), #11 (testids exatos), #13 (apiRequest JSON direto).
+- **Home.tsx**: comentario zona 4 atualizado (`Sinal Externo -> Noticias, Estudos e Atualizacoes`). Header doc atualizado (5 zonas). `visibility.news` toggle item 11 preservado.
+- **Tests atualizados**: 
+  - `tests/home/NewsFeed.test.tsx` reescrito (21/21 verde) cobrindo: rename header, 5 chips fixed + ordem + ausencia de "Todas", default tab, click chip, refetch nao dispara, carousel container + slide ativo via hero testid, setas com disabled extremos, dots ate 5 + count exato, click next/prev/dot navega, mudar aba reseta carousel.
+  - `tests/home/HomeZoning.test.tsx` linha 205: regex atualizado `/Sinal Externo/i` -> `/Noticias, Estudos e Atualizacoes/i`.
+  - `NewsReadState.test.tsx` (RF-B4) intocado — ainda usa `news-feed-hero` no slide ativo.
+- **Regressao**: 7 fails pre-existentes (Sprint News-3 ranking + NewsSlot legacy + NewsCategoryLabels) confirmados via `git stash` baseline = mesma quantidade de fails ANTES e DEPOIS deste item. Zero regressao.
+- **Type-check**: zero erros novos introduzidos. Erros pre-existentes (storage.ts/biblioteca/etc) intocados.
+- **Carousel state design**: optei por implementacao custom em vez de `useEmblaCarousel` por 4 razoes: (1) embla mede DOM via `getBoundingClientRect`, jsdom nao reflete layout = testes flaky; (2) 5 slides max nao demanda scroll suave nativo; (3) state local determinístico facilita reset cross-aba; (4) zero overhead bundle. embla-carousel-react permanece como dep mas nao eh consumido aqui.
 
 ---
 
