@@ -14,8 +14,9 @@ import {
   Volume2,
   ChevronDown,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency as formatCurrencyDefault } from "@/lib/utils";
 import { DashboardMetrics } from "./types";
+import type { GrindPageVisibility } from "@/lib/grindPagePreferences";
 
 // Item 18: Simple SVG sparkline for mental metrics
 function MiniSparkline({ values, color }: { values: number[]; color: string }) {
@@ -51,6 +52,10 @@ interface DashboardMetricsCardsProps {
   showMentalToggle: boolean;
   setShowMentalToggle: (value: boolean) => void;
   recentSessions?: Array<{ energiaMedia: number; focoMedio: number; confiancaMedia: number; inteligenciaEmocionalMedia: number; interferenciasMedia: number; preparationPercentage?: number }>;
+  visibility?: GrindPageVisibility;
+  mentalEnabled?: boolean;
+  formatCurrencyBase?: (amountUsd: number) => string;
+  convertCurrencyBase?: (amountUsd: number) => number;
 }
 
 export default function DashboardMetricsCards({
@@ -60,12 +65,20 @@ export default function DashboardMetricsCards({
   showMentalToggle,
   setShowMentalToggle,
   recentSessions = [],
+  visibility,
+  mentalEnabled = true,
+  formatCurrencyBase,
+  convertCurrencyBase,
 }: DashboardMetricsCardsProps) {
   // Item 18: Extract last 5 sessions for sparklines
   const last5 = recentSessions.slice(0, 5).reverse();
+  const fmt = formatCurrencyBase ?? formatCurrencyDefault;
+  void convertCurrencyBase; // reservado para uso futuro (gráficos por moeda base)
+  const show = (k: keyof GrindPageVisibility) => (visibility ? visibility[k] : true);
   return (
     <div className="mb-8">
       {/* Line 1: Contagem | Reentradas | Média Participantes | ABI */}
+      {show('kpisVolume') && (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <div className="weekly-summary-card card-contagem">
           <div className="card-icon">
@@ -102,20 +115,22 @@ export default function DashboardMetricsCards({
             <DollarSign className="w-8 h-8 text-emerald-400" />
           </div>
           <div className="card-content">
-            <div className="card-value">{formatCurrency(dashboardMetrics.avgABI)}</div>
+            <div className="card-value">{fmt(dashboardMetrics.avgABI)}</div>
             <div className="card-label">ABI</div>
           </div>
         </div>
       </div>
+      )}
 
       {/* Line 2: Lucro | ROI | Lucro Médio por Dia | Lucro Médio por Torneio */}
+      {show('kpisProfit') && (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <div className="weekly-summary-card card-lucro">
           <div className="card-icon">
             <TrendingUp className="w-8 h-8 text-green-400" />
           </div>
           <div className="card-content">
-            <div className="card-value">{formatCurrency(dashboardMetrics.totalProfit)}</div>
+            <div className="card-value">{fmt(dashboardMetrics.totalProfit)}</div>
             <div className="card-label">Lucro</div>
           </div>
         </div>
@@ -137,8 +152,8 @@ export default function DashboardMetricsCards({
           <div className="card-content">
             <div className="card-value">
               {dashboardMetrics.totalSessions > 0
-                ? formatCurrency(dashboardMetrics.totalProfit / dashboardMetrics.totalSessions)
-                : formatCurrency(0)
+                ? fmt(dashboardMetrics.totalProfit / dashboardMetrics.totalSessions)
+                : fmt(0)
               }
             </div>
             <div className="card-label">Lucro Médio por Dia</div>
@@ -152,16 +167,18 @@ export default function DashboardMetricsCards({
           <div className="card-content">
             <div className="card-value">
               {dashboardMetrics.totalVolume > 0
-                ? formatCurrency(dashboardMetrics.totalProfit / dashboardMetrics.totalVolume)
-                : formatCurrency(0)
+                ? fmt(dashboardMetrics.totalProfit / dashboardMetrics.totalVolume)
+                : fmt(0)
               }
             </div>
             <div className="card-label">Lucro Médio por Torneio</div>
           </div>
         </div>
       </div>
+      )}
 
       {/* Line 3: ITM | Mesas Finais | Cravadas | Maior Resultado */}
+      {show('kpisItm') && (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <div className="weekly-summary-card card-itm">
           <div className="card-icon">
@@ -198,13 +215,15 @@ export default function DashboardMetricsCards({
             <DollarSign className="w-8 h-8 text-purple-400" />
           </div>
           <div className="card-content">
-            <div className="card-value">{dashboardMetrics.maiorResultado > 0 ? formatCurrency(dashboardMetrics.maiorResultado) : '-'}</div>
+            <div className="card-value">{dashboardMetrics.maiorResultado > 0 ? fmt(dashboardMetrics.maiorResultado) : '-'}</div>
             <div className="card-label">Maior Resultado</div>
           </div>
         </div>
       </div>
+      )}
 
       {/* Toggle 1 - Torneios */}
+      {show('tournaments') && (
       <div className="mb-6">
         <button
           onClick={() => setShowTournamentToggle(!showTournamentToggle)}
@@ -269,7 +288,10 @@ export default function DashboardMetricsCards({
         )}
       </div>
 
+      )}
+
       {/* Toggle 2 - Performance Mental */}
+      {mentalEnabled && (
       <div className="mb-6">
         <button
           onClick={() => setShowMentalToggle(!showMentalToggle)}
@@ -358,6 +380,7 @@ export default function DashboardMetricsCards({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

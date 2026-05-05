@@ -27,7 +27,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BreakFeedbackPopup } from "@/components/BreakFeedbackPopup";
 import SupremaImportModal from "@/components/SupremaImportModal";
 import { buildSupremaMatchKey, buildSupremaMatchKeysFromSession } from "@/lib/supremaDedupe";
-import EpicStartSessionModal from "@/components/grind-session/EpicStartSessionModal";
 import { Download, X } from "lucide-react";
 import { LateRegAlertManager } from "@/lib/lateRegAlerts";
 import { getBreakFrequency, shouldTriggerBreak, getBreakCountdownMinutes, canSnoozeBreak, getSnoozeOptions, calculateNextBreakTime } from "@/components/grind-session/break-notification-helpers";
@@ -1999,26 +1998,11 @@ export default function GrindSessionLive() {
   }
 
   if (!activeSession) {
-    // RF-04: Use EpicStartSessionModal instead of inline dialog
+    // Sem sessao ativa: voltar para /grind onde o user faz Quick Start (modal
+    // warm-up legado deletado — warm-up agora tem sessao propria em /mental).
+    setLocation('/grind');
     return (
-      <div className="p-6 text-white">
-        <EpicStartSessionModal
-          isOpen={true}
-          onClose={() => setLocation('/grind')}
-          onSuccess={handleStartSession}
-          preparationPercentage={preparationPercentage}
-          setPreparationPercentage={setPreparationPercentage}
-          preparationNotes={preparationObservations}
-          setPreparationNotes={setPreparationObservations}
-          dailyGoals={dailyGoals}
-          setDailyGoals={setDailyGoals}
-          screenCap={screenCap}
-          setScreenCap={setScreenCap}
-          isLoading={startSessionMutation.isPending}
-          plannedTournaments={plannedTournaments}
-          isLoadingPlannedTournaments={false}
-        />
-      </div>
+      <div className="p-6 text-white">Redirecionando para /grind...</div>
     );
   }
 

@@ -57,7 +57,7 @@ export default function ConflictDialog({
           >
             <div className="flex items-center justify-center gap-2">
               <span className="text-base">🎮</span>
-              <span>Ir para Sessão Existente</span>
+              <span>Editar Sessão Existente</span>
             </div>
           </Button>
 

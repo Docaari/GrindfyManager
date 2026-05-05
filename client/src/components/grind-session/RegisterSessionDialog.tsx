@@ -1,9 +1,22 @@
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Check } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { InputField } from "@/components/InputField";
 import { MentalSlider } from "@/components/MentalSlider";
 import { TextareaField } from "@/components/TextareaField";
+import { Input } from "@/components/ui/input";
+import { apiRequest } from "@/lib/queryClient";
+import { useGrindCurrency } from "@/hooks/useGrindCurrency";
+import { formatCurrency } from "@/lib/format";
 
 interface RegisterSessionDialogProps {
   isOpen: boolean;
@@ -12,45 +25,127 @@ interface RegisterSessionDialogProps {
   onRegisterSession: (formData: any) => void;
 }
 
+interface WalletItem {
+  id: string;
+  name: string;
+  platform?: string | null;
+  nativeCurrency: string;
+  balanceNative: number;
+  status: string;
+}
+
+interface WalletEntryState {
+  finalBalanceText: string;
+  didNotPlay: boolean;
+}
+
+function asNumber(v: string): number | null {
+  if (v === '' || v === '-' || v === '.') return null;
+  const n = Number(v.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
 export default function RegisterSessionDialog({
   isOpen,
   onOpenChange,
   registerSessionForm,
   onRegisterSession,
 }: RegisterSessionDialogProps) {
+  const grindFx = useGrindCurrency();
+
+  const { data: walletsResp } = useQuery<{ wallets: any[] } | undefined>({
+    queryKey: ['/api/wallets'],
+    queryFn: async () => {
+      try {
+        return await apiRequest('GET', '/api/wallets');
+      } catch {
+        return undefined;
+      }
+    },
+    enabled: isOpen,
+    staleTime: 30_000,
+  });
+
+  const wallets: WalletItem[] = useMemo(() => {
+    const list = Array.isArray(walletsResp?.wallets) ? walletsResp!.wallets : [];
+    return list
+      .filter((w: any) => w.status === 'active')
+      .map((w: any) => ({
+        id: String(w.id),
+        name: String(w.name ?? w.platform ?? w.id),
+        platform: w.platform ?? null,
+        nativeCurrency: String(w.nativeCurrency ?? w.currency ?? 'USD'),
+        balanceNative: Number(w.balanceNative ?? w.balance ?? 0),
+        status: String(w.status ?? 'active'),
+      }));
+  }, [walletsResp]);
+
+  const [walletEntries, setWalletEntries] = useState<Record<string, WalletEntryState>>({});
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setWalletEntries((prev) => {
+      const next: Record<string, WalletEntryState> = {};
+      wallets.forEach((w) => {
+        next[w.id] = prev[w.id] ?? { finalBalanceText: '', didNotPlay: false };
+      });
+      return next;
+    });
+  }, [isOpen, wallets.length]);
+
+  const computedProfitUsd = useMemo(() => {
+    let total = 0;
+    for (const w of wallets) {
+      const entry = walletEntries[w.id];
+      if (!entry || entry.didNotPlay) continue;
+      const finalNative = asNumber(entry.finalBalanceText);
+      if (finalNative === null) continue;
+      const deltaNative = finalNative - w.balanceNative;
+      const rate = grindFx.ratesUsdToOther[w.nativeCurrency];
+      const deltaUsd =
+        w.nativeCurrency === 'USD'
+          ? deltaNative
+          : Number.isFinite(rate) && (rate as number) > 0
+            ? deltaNative / (rate as number)
+            : deltaNative;
+      total += deltaUsd;
+    }
+    return total;
+  }, [walletEntries, wallets, grindFx.ratesUsdToOther]);
+
+  useEffect(() => {
+    const rounded = Math.round(computedProfitUsd * 100) / 100;
+    if (rounded !== registerSessionForm.formData.profit) {
+      registerSessionForm.handleFieldChange('profit', rounded);
+    }
+  }, [computedProfitUsd]);
+
+  const setEntry = (walletId: string, patch: Partial<WalletEntryState>) => {
+    setWalletEntries((prev) => ({
+      ...prev,
+      [walletId]: { ...(prev[walletId] ?? { finalBalanceText: '', didNotPlay: false }), ...patch },
+    }));
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="register-session-popup bg-gray-900 border-gray-700 text-white max-w-5xl max-h-[95vh] overflow-y-auto">
-        {/* Header Otimizado */}
-        <DialogHeader className="pb-4 border-b border-gray-700">
-          <DialogTitle className="text-2xl font-bold text-white flex items-center gap-3">
-            <span className="text-2xl">📋</span>
+        <DialogHeader className="pb-3 border-b border-gray-700">
+          <DialogTitle className="text-xl font-bold text-white">
             Registrar Sessão Passada
           </DialogTitle>
-          <DialogDescription className="text-gray-400 text-base">
-            Registre os resultados de uma sessão que já aconteceu para manter seu histórico completo
+          <DialogDescription className="text-gray-400 text-sm">
+            Informe duração, saldos finais por carteira e métricas. O lucro é calculado automaticamente.
           </DialogDescription>
         </DialogHeader>
 
-        {/* Layout Responsivo com Cards */}
-        <div className="register-session-grid grid grid-cols-1 lg:grid-cols-2 gap-6 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 py-4">
 
-          {/* Card 1: Informações Básicas */}
-          <div className="register-card bg-gray-800 border border-gray-700 p-6 rounded-xl">
-            <div className="card-header flex items-center gap-3 mb-4">
-              <div className="icon-container bg-blue-500/20 p-2 rounded-lg">
-                <span className="text-xl">📅</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">Informações Básicas</h3>
-                <p className="text-sm text-gray-400">Data e duração da sessão</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
+          <div className="register-card bg-gray-800 border border-gray-700 p-4 rounded-xl">
+            <h3 className="text-base font-semibold text-white mb-3">Informações Básicas</h3>
+            <div className="space-y-3">
               <InputField
                 label="Data da Sessão"
-                icon="🗓️"
                 type="date"
                 value={registerSessionForm.formData.date}
                 onChange={(value) => {
@@ -63,12 +158,9 @@ export default function RegisterSessionDialog({
                 isValid={registerSessionForm.isFieldValid('date')}
                 isTouched={registerSessionForm.validationState.touchedFields.has('date')}
                 errorMessage={registerSessionForm.getFieldError('date')}
-                onEnter={() => document.getElementById('duration-field')?.focus()}
               />
-
               <InputField
                 label="Duração"
-                icon="⏱️"
                 type="text"
                 placeholder="Ex: 4h 30min"
                 value={registerSessionForm.formData.duration}
@@ -82,27 +174,85 @@ export default function RegisterSessionDialog({
                 isValid={registerSessionForm.isFieldValid('duration')}
                 isTouched={registerSessionForm.validationState.touchedFields.has('duration')}
                 errorMessage={registerSessionForm.getFieldError('duration')}
-                onEnter={() => document.getElementById('volume-field')?.focus()}
               />
             </div>
           </div>
 
-          {/* Card 2: Métricas de Performance */}
-          <div className="register-card bg-gray-800 border border-gray-700 p-6 rounded-xl">
-            <div className="card-header flex items-center gap-3 mb-4">
-              <div className="icon-container bg-green-500/20 p-2 rounded-lg">
-                <span className="text-xl">📊</span>
+          <div className="register-card bg-gray-800 border border-gray-700 p-4 rounded-xl">
+            <h3 className="text-base font-semibold text-white mb-3">Carteiras</h3>
+            <p className="text-xs text-gray-400 mb-3">
+              Saldo inicial é travado. Reporte o saldo final nas plataformas que jogou. As demais marque "Não joguei".
+            </p>
+            {wallets.length === 0 ? (
+              <p className="text-xs text-gray-500 italic">Nenhuma carteira ativa cadastrada.</p>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {wallets.map((w) => {
+                  const entry = walletEntries[w.id] ?? { finalBalanceText: '', didNotPlay: false };
+                  return (
+                    <div
+                      key={w.id}
+                      className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border ${
+                        entry.didNotPlay ? 'border-gray-800 bg-gray-900/50 opacity-60' : 'border-gray-700 bg-gray-900/30'
+                      }`}
+                    >
+                      <div className="col-span-4 min-w-0">
+                        <div className="text-sm font-medium text-gray-100 truncate">{w.name}</div>
+                        <div className="text-[10px] text-gray-500 truncate">
+                          {w.platform ?? ''} {w.nativeCurrency}
+                        </div>
+                      </div>
+                      <div className="col-span-3 text-xs text-gray-400">
+                        <div className="text-[10px] text-gray-500">Inicial</div>
+                        <div className="font-mono text-gray-300">
+                          {formatCurrency(w.balanceNative, w.nativeCurrency)}
+                        </div>
+                      </div>
+                      <div className="col-span-3">
+                        <div className="text-[10px] text-gray-500 mb-0.5">Final</div>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          value={entry.finalBalanceText}
+                          onChange={(e) => setEntry(w.id, { finalBalanceText: e.target.value })}
+                          disabled={entry.didNotPlay}
+                          className="bg-gray-800 border-gray-600 text-white text-sm h-8"
+                          placeholder={String(w.balanceNative.toFixed(2))}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <button
+                          type="button"
+                          onClick={() => setEntry(w.id, { didNotPlay: !entry.didNotPlay, finalBalanceText: entry.didNotPlay ? entry.finalBalanceText : '' })}
+                          className={`w-full text-[11px] px-2 py-1.5 rounded border transition flex items-center justify-center gap-1 ${
+                            entry.didNotPlay
+                              ? 'bg-gray-700 border-gray-600 text-gray-300'
+                              : 'bg-transparent border-gray-600 text-gray-400 hover:bg-gray-700'
+                          }`}
+                        >
+                          {entry.didNotPlay && <Check className="w-3 h-3" />}
+                          Não joguei
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">Métricas de Performance</h3>
-                <p className="text-sm text-gray-400">Volume, lucro e estatísticas</p>
-              </div>
+            )}
+            <div className="mt-3 pt-3 border-t border-gray-700 flex items-center justify-between">
+              <span className="text-sm text-gray-400">Lucro calculado:</span>
+              <span className={`text-base font-semibold ${computedProfitUsd >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {grindFx.format(computedProfitUsd)}
+              </span>
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
+          <div className="register-card bg-gray-800 border border-gray-700 p-4 rounded-xl">
+            <h3 className="text-base font-semibold text-white mb-3">Métricas</h3>
+            <div className="grid grid-cols-2 gap-3">
               <InputField
                 label="Volume"
-                icon="🎯"
                 type="number"
                 value={registerSessionForm.formData.volume}
                 onChange={(value) => {
@@ -115,31 +265,9 @@ export default function RegisterSessionDialog({
                 isValid={registerSessionForm.isFieldValid('volume')}
                 isTouched={registerSessionForm.validationState.touchedFields.has('volume')}
                 errorMessage={registerSessionForm.getFieldError('volume')}
-                onEnter={() => document.getElementById('profit-field')?.focus()}
               />
-
               <InputField
-                label="Lucro ($)"
-                icon="💰"
-                type="number"
-                step="0.01"
-                value={registerSessionForm.formData.profit}
-                onChange={(value) => {
-                  registerSessionForm.handleFieldChange('profit', Number(value) || 0);
-                  registerSessionForm.touchField('profit');
-                }}
-                required
-                tabIndex={4}
-                hasError={registerSessionForm.hasFieldError('profit')}
-                isValid={registerSessionForm.isFieldValid('profit')}
-                isTouched={registerSessionForm.validationState.touchedFields.has('profit')}
-                errorMessage={registerSessionForm.getFieldError('profit')}
-                onEnter={() => document.getElementById('abi-field')?.focus()}
-              />
-
-              <InputField
-                label="ABI Médio ($)"
-                icon="💵"
+                label="ABI Médio (USD)"
                 type="number"
                 step="0.01"
                 value={registerSessionForm.formData.abiMed}
@@ -148,180 +276,165 @@ export default function RegisterSessionDialog({
                   registerSessionForm.touchField('abiMed');
                 }}
                 required
-                tabIndex={5}
+                tabIndex={4}
                 hasError={registerSessionForm.hasFieldError('abiMed')}
                 isValid={registerSessionForm.isFieldValid('abiMed')}
                 isTouched={registerSessionForm.validationState.touchedFields.has('abiMed')}
                 errorMessage={registerSessionForm.getFieldError('abiMed')}
-                onEnter={() => document.getElementById('roi-field')?.focus()}
               />
-
-              <div className="relative">
-                <InputField
-                  label="ROI (%) - Calculado"
-                  icon="📈"
-                  type="number"
-                  step="0.01"
-                  value={registerSessionForm.formData.roi}
-                  onChange={() => {}}
-                  tabIndex={6}
-                  hasError={false}
-                  isValid={true}
-                  isTouched={true}
-                  errorMessage=""
-                  onEnter={() => document.getElementById('fts-field')?.focus()}
-                />
-                <div className="absolute top-0 right-0 bg-green-600 text-white text-xs px-2 py-1 rounded-bl-md font-medium">
-                  AUTO
-                </div>
-              </div>
-
               <InputField
                 label="Final Tables"
-                icon="🏆"
                 type="number"
                 value={registerSessionForm.formData.fts}
                 onChange={(value) => {
                   registerSessionForm.handleFieldChange('fts', Number(value) || 0);
                   registerSessionForm.touchField('fts');
                 }}
-                tabIndex={7}
+                tabIndex={5}
                 hasError={registerSessionForm.hasFieldError('fts')}
                 isValid={registerSessionForm.isFieldValid('fts')}
                 isTouched={registerSessionForm.validationState.touchedFields.has('fts')}
                 errorMessage={registerSessionForm.getFieldError('fts')}
-                onEnter={() => document.getElementById('cravadas-field')?.focus()}
               />
-
               <InputField
                 label="Cravadas"
-                icon="🎖️"
                 type="number"
                 value={registerSessionForm.formData.cravadas}
                 onChange={(value) => {
                   registerSessionForm.handleFieldChange('cravadas', Number(value) || 0);
                   registerSessionForm.touchField('cravadas');
                 }}
-                tabIndex={8}
+                tabIndex={6}
                 hasError={registerSessionForm.hasFieldError('cravadas')}
                 isValid={registerSessionForm.isFieldValid('cravadas')}
                 isTouched={registerSessionForm.validationState.touchedFields.has('cravadas')}
                 errorMessage={registerSessionForm.getFieldError('cravadas')}
-                onEnter={() => document.getElementById('energia-field')?.focus()}
               />
+              <div className="relative">
+                <InputField
+                  label="Lucro (USD) — auto"
+                  type="number"
+                  step="0.01"
+                  value={registerSessionForm.formData.profit}
+                  onChange={() => {}}
+                  tabIndex={7}
+                  hasError={false}
+                  isValid={true}
+                  isTouched={true}
+                  errorMessage=""
+                />
+                <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded-bl-md font-medium">
+                  AUTO
+                </div>
+              </div>
+              <div className="relative">
+                <InputField
+                  label="ROI (%) — auto"
+                  type="number"
+                  step="0.01"
+                  value={registerSessionForm.formData.roi}
+                  onChange={() => {}}
+                  tabIndex={8}
+                  hasError={false}
+                  isValid={true}
+                  isTouched={true}
+                  errorMessage=""
+                />
+                <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded-bl-md font-medium">
+                  AUTO
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Card 3: Estado Mental */}
-          <div className="register-card bg-gray-800 border border-gray-700 p-6 rounded-xl">
-            <div className="card-header flex items-center gap-3 mb-4">
-              <div className="icon-container bg-purple-500/20 p-2 rounded-lg">
-                <span className="text-xl">🧠</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">Estado Mental</h3>
-                <p className="text-sm text-gray-400">Avaliação dos aspectos mentais</p>
-              </div>
-            </div>
-
-            <div className="space-y-5">
+          <div className="register-card bg-gray-800 border border-gray-700 p-4 rounded-xl">
+            <h3 className="text-base font-semibold text-white mb-3">Estado Mental</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
               <MentalSlider
                 label="Energia"
-                icon="⚡"
                 value={registerSessionForm.formData.energiaMedia}
                 onChange={(value) => {
                   registerSessionForm.handleFieldChange('energiaMedia', value);
                   registerSessionForm.touchField('energiaMedia');
                 }}
                 tabIndex={9}
-                onEnter={() => document.getElementById('foco-field')?.focus()}
               />
-
               <MentalSlider
                 label="Foco"
-                icon="🎯"
                 value={registerSessionForm.formData.focoMedio}
                 onChange={(value) => {
                   registerSessionForm.handleFieldChange('focoMedio', value);
                   registerSessionForm.touchField('focoMedio');
                 }}
                 tabIndex={10}
-                onEnter={() => document.getElementById('confianca-field')?.focus()}
               />
-
               <MentalSlider
                 label="Confiança"
-                icon="💪"
                 value={registerSessionForm.formData.confiancaMedia}
                 onChange={(value) => {
                   registerSessionForm.handleFieldChange('confiancaMedia', value);
                   registerSessionForm.touchField('confiancaMedia');
                 }}
                 tabIndex={11}
-                onEnter={() => document.getElementById('emocional-field')?.focus()}
               />
-
               <MentalSlider
                 label="Int. Emocional"
-                icon="🎭"
                 value={registerSessionForm.formData.inteligenciaEmocionalMedia}
                 onChange={(value) => {
                   registerSessionForm.handleFieldChange('inteligenciaEmocionalMedia', value);
                   registerSessionForm.touchField('inteligenciaEmocionalMedia');
                 }}
                 tabIndex={12}
-                onEnter={() => document.getElementById('interferencias-field')?.focus()}
               />
-
               <MentalSlider
                 label="Interferências"
-                icon="📱"
                 value={registerSessionForm.formData.interferenciasMedia}
                 onChange={(value) => {
                   registerSessionForm.handleFieldChange('interferenciasMedia', value);
                   registerSessionForm.touchField('interferenciasMedia');
                 }}
                 tabIndex={13}
-                onEnter={() => document.getElementById('prep-notes-field')?.focus()}
               />
             </div>
           </div>
 
-          {/* Card 4: Notas e Objetivos */}
-          <div className="register-card bg-gray-800 border border-gray-700 p-6 rounded-xl">
-            <div className="card-header flex items-center gap-3 mb-4">
-              <div className="icon-container bg-orange-500/20 p-2 rounded-lg">
-                <span className="text-xl">📝</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">Notas e Objetivos</h3>
-                <p className="text-sm text-gray-400">Preparação, objetivos e reflexões</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
+          <div className="register-card bg-gray-800 border border-gray-700 p-4 rounded-xl lg:col-span-2">
+            <h3 className="text-base font-semibold text-white mb-3">Notas e Objetivos</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <TextareaField
                 label="Notas de Preparação"
-                icon="🎯"
                 value={registerSessionForm.formData.preparationNotes}
                 onChange={(value) => {
                   registerSessionForm.handleFieldChange('preparationNotes', value);
                   registerSessionForm.touchField('preparationNotes');
                 }}
                 placeholder="Como você se preparou para esta sessão?"
-                rows={3}
+                rows={2}
                 tabIndex={14}
                 maxLength={300}
                 hasError={registerSessionForm.hasFieldError('preparationNotes')}
                 isValid={registerSessionForm.isFieldValid('preparationNotes')}
                 isTouched={registerSessionForm.validationState.touchedFields.has('preparationNotes')}
                 errorMessage={registerSessionForm.getFieldError('preparationNotes')}
-                onEnter={() => document.getElementById('goals-field')?.focus()}
               />
-
+              <TextareaField
+                label="Notas Finais"
+                value={registerSessionForm.formData.finalNotes}
+                onChange={(value) => {
+                  registerSessionForm.handleFieldChange('finalNotes', value);
+                  registerSessionForm.touchField('finalNotes');
+                }}
+                placeholder="Reflexões sobre a sessão, aprendizados, etc."
+                rows={2}
+                tabIndex={15}
+                maxLength={500}
+                hasError={registerSessionForm.hasFieldError('finalNotes')}
+                isValid={registerSessionForm.isFieldValid('finalNotes')}
+                isTouched={registerSessionForm.validationState.touchedFields.has('finalNotes')}
+                errorMessage={registerSessionForm.getFieldError('finalNotes')}
+              />
               <InputField
                 label="Objetivos do Dia"
-                icon="🎪"
                 type="text"
                 value={registerSessionForm.formData.dailyGoals}
                 onChange={(value) => {
@@ -329,83 +442,58 @@ export default function RegisterSessionDialog({
                   registerSessionForm.touchField('dailyGoals');
                 }}
                 placeholder="Quais eram seus objetivos?"
-                tabIndex={15}
+                tabIndex={16}
                 hasError={registerSessionForm.hasFieldError('dailyGoals')}
                 isValid={registerSessionForm.isFieldValid('dailyGoals')}
                 isTouched={registerSessionForm.validationState.touchedFields.has('dailyGoals')}
                 errorMessage={registerSessionForm.getFieldError('dailyGoals')}
-                onEnter={() => document.getElementById('notes-field')?.focus()}
               />
-
-              <TextareaField
-                label="Notas Finais"
-                icon="💭"
-                value={registerSessionForm.formData.finalNotes}
-                onChange={(value) => {
-                  registerSessionForm.handleFieldChange('finalNotes', value);
-                  registerSessionForm.touchField('finalNotes');
-                }}
-                placeholder="Reflexões sobre a sessão, aprendizados, etc."
-                rows={3}
-                tabIndex={16}
-                maxLength={500}
-                hasError={registerSessionForm.hasFieldError('finalNotes')}
-                isValid={registerSessionForm.isFieldValid('finalNotes')}
-                isTouched={registerSessionForm.validationState.touchedFields.has('finalNotes')}
-                errorMessage={registerSessionForm.getFieldError('finalNotes')}
-                onEnter={() => document.getElementById('objective-checkbox')?.focus()}
-              />
-
-              <div className="field-group">
-                <div className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    id="objective-completed"
-                    checked={registerSessionForm.formData.objectiveCompleted}
-                    onChange={(e) => {
-                      registerSessionForm.handleFieldChange('objectiveCompleted', e.target.checked);
-                      registerSessionForm.touchField('objectiveCompleted');
-                    }}
-                    className="w-4 h-4 text-[#16a249] bg-gray-700 border-gray-600 rounded focus:ring-[#16a249] focus:ring-2"
-                    tabIndex={17}
-                  />
-                  <Label htmlFor="objective-completed" className="text-gray-300 font-medium flex items-center gap-2 cursor-pointer">
-                    <span className="text-sm">✅</span>
-                    Objetivo do dia foi cumprido
-                  </Label>
-                </div>
+              <div className="flex items-center space-x-3 self-end pb-2">
+                <input
+                  type="checkbox"
+                  id="objective-completed"
+                  checked={registerSessionForm.formData.objectiveCompleted}
+                  onChange={(e) => {
+                    registerSessionForm.handleFieldChange('objectiveCompleted', e.target.checked);
+                    registerSessionForm.touchField('objectiveCompleted');
+                  }}
+                  className="w-4 h-4 text-emerald-500 bg-gray-700 border-gray-600 rounded focus:ring-emerald-500 focus:ring-2"
+                  tabIndex={17}
+                />
+                <Label htmlFor="objective-completed" className="text-gray-300 font-medium cursor-pointer">
+                  Objetivo do dia foi cumprido
+                </Label>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Footer com botões */}
-        <div className="register-footer flex justify-between items-center pt-6 border-t border-gray-700">
+        <div className="register-footer flex justify-between items-center pt-4 border-t border-gray-700">
           <Button
             variant="outline"
             onClick={() => registerSessionForm.resetMentalValues()}
-            className="border-yellow-600 hover:bg-yellow-700/20 text-yellow-400 px-4 py-2 font-medium"
+            className="border-yellow-600 hover:bg-yellow-700/20 text-yellow-400 px-3 py-1.5 text-sm"
           >
-            Resetar Valores Mentais
+            Resetar Mental
           </Button>
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="border-gray-600 hover:bg-gray-700 text-white px-6"
+              className="border-gray-600 hover:bg-gray-700 text-white px-5"
             >
               Cancelar
             </Button>
             <Button
               onClick={() => registerSessionForm.handleSubmit(onRegisterSession)}
               disabled={registerSessionForm.isSubmitting || !registerSessionForm.isValid}
-              className={`px-6 font-medium transition-all duration-200 ${
+              className={`px-5 font-medium transition ${
                 registerSessionForm.isValid
-                  ? 'bg-[#16a249] hover:bg-[#128a3e] text-white'
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                   : 'bg-gray-600 cursor-not-allowed text-gray-300'
               }`}
             >
-              {registerSessionForm.isSubmitting ? "Registrando..." : "Registrar Sessão"}
+              {registerSessionForm.isSubmitting ? 'Registrando...' : 'Registrar Sessão'}
             </Button>
           </div>
         </div>

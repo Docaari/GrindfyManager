@@ -11,14 +11,15 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
+  Wallet,
   AlertTriangle,
   RefreshCw,
   Target,
 } from "lucide-react";
 import { FilterState } from "@/components/FilterPopupSimple";
 import { SessionHistoryData } from "./types";
-import { localFormatCurrency } from "./helpers";
 import { EmptyState } from "@/components/ui/EmptyState";
+import SessionWalletDeltaDialog from "./SessionWalletDeltaDialog";
 
 interface SessionHistoryListProps {
   filteredSessions: SessionHistoryData[];
@@ -32,6 +33,8 @@ interface SessionHistoryListProps {
   onEditSession: (session: SessionHistoryData) => void;
   onDeleteSession: (session: SessionHistoryData) => void;
   onViewSessionDetails: (session: SessionHistoryData) => void;
+  formatCurrency: (amountUsd: number) => string;
+  mentalEnabled: boolean;
 }
 
 export default function SessionHistoryList({
@@ -46,9 +49,12 @@ export default function SessionHistoryList({
   onEditSession,
   onDeleteSession,
   onViewSessionDetails,
+  formatCurrency,
+  mentalEnabled,
 }: SessionHistoryListProps) {
   const [expandedObservations, setExpandedObservations] = useState<Set<string>>(new Set());
   const [expandedObservationCards, setExpandedObservationCards] = useState<Set<string>>(new Set());
+  const [walletDialogSession, setWalletDialogSession] = useState<SessionHistoryData | null>(null);
 
   const toggleObservations = (sessionId: string) => {
     setExpandedObservations(prev => {
@@ -199,7 +205,7 @@ export default function SessionHistoryList({
                           })}
                         </div>
                         <div className={`session-card-result ${session.profit >= 0 ? 'profit' : 'loss'}`}>
-                          {localFormatCurrency(session.profit)}
+                          {formatCurrency(session.profit)}
                         </div>
                       </div>
 
@@ -210,7 +216,7 @@ export default function SessionHistoryList({
                           <div className="metric-label">Volume</div>
                         </div>
                         <div className="session-summary-metric">
-                          <div className="metric-value">{localFormatCurrency(session.abiMed)}</div>
+                          <div className="metric-value">{formatCurrency(session.abiMed)}</div>
                           <div className="metric-label">ABI</div>
                         </div>
                         <div className="session-summary-metric">
@@ -233,26 +239,37 @@ export default function SessionHistoryList({
 
                       {/* Mental State Balloons & Actions */}
                       <div className="session-mental-balloons">
-                        <div className="mental-balloons-container">
-                          <div className="mental-balloon prep" title="Preparação">
-                            {Math.round(session.preparationPercentage || 0)}
-                          </div>
-                          <div className="mental-balloon energy" title="Energia">
-                            {Math.round(session.energiaMedia || 0)}
-                          </div>
-                          <div className="mental-balloon focus" title="Foco">
-                            {Math.round(session.focoMedio || 0)}
-                          </div>
-                          <div className="mental-balloon confidence" title="Confiança">
-                            {Math.round(session.confiancaMedia || 0)}
-                          </div>
-                          <div className="mental-balloon emotional" title="Inteligência Emocional">
-                            {Math.round(session.inteligenciaEmocionalMedia || 0)}
-                          </div>
-                          <div className="mental-balloon interference" title="Interferências">
-                            {Math.round(session.interferenciasMedia || 0)}
-                          </div>
-                        </div>
+                        {mentalEnabled && (() => {
+                          // Convencao: valor 0 (ou null/undefined) = nao reportado.
+                          // Performance vem de Warm Up + breaks. Quando user pulou,
+                          // backend persiste 0 como sentinel — escondido aqui.
+                          const balloons = [
+                            { key: 'prep', label: 'Preparação', cls: 'prep', value: session.preparationPercentage },
+                            { key: 'energy', label: 'Energia', cls: 'energy', value: session.energiaMedia },
+                            { key: 'focus', label: 'Foco', cls: 'focus', value: session.focoMedio },
+                            { key: 'confidence', label: 'Confiança', cls: 'confidence', value: session.confiancaMedia },
+                            { key: 'emotional', label: 'Inteligência Emocional', cls: 'emotional', value: session.inteligenciaEmocionalMedia },
+                            { key: 'interference', label: 'Interferências', cls: 'interference', value: session.interferenciasMedia },
+                          ].filter((b) => Number(b.value) > 0);
+
+                          if (balloons.length === 0) {
+                            return (
+                              <div className="mental-balloons-container">
+                                <span className="text-xs text-gray-500 italic">Performance não registrada</span>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="mental-balloons-container">
+                              {balloons.map((b) => (
+                                <div key={b.key} className={`mental-balloon ${b.cls}`} title={b.label}>
+                                  {Math.round(Number(b.value))}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
 
                         <div className="session-card-actions">
                           <button
@@ -343,14 +360,23 @@ export default function SessionHistoryList({
                             </div>
                           </div>
 
-                          {/* Full Details Button */}
-                          <button
-                            className="session-details-button"
-                            onClick={() => onViewSessionDetails(session)}
-                          >
-                            <Eye className="w-4 h-4" />
-                            Ver detalhes completos
-                          </button>
+                          {/* Full Details Buttons */}
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              className="session-details-button"
+                              onClick={() => onViewSessionDetails(session)}
+                            >
+                              <Eye className="w-4 h-4" />
+                              Ver detalhes da sessão
+                            </button>
+                            <button
+                              className="session-details-button"
+                              onClick={() => setWalletDialogSession(session)}
+                            >
+                              <Wallet className="w-4 h-4" />
+                              Ver detalhes das carteiras
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -361,6 +387,12 @@ export default function SessionHistoryList({
           })()}
         </div>
       )}
+
+      <SessionWalletDeltaDialog
+        session={walletDialogSession}
+        onClose={() => setWalletDialogSession(null)}
+        formatCurrency={formatCurrency}
+      />
     </div>
   );
 }

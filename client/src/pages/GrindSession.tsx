@@ -23,8 +23,10 @@ import DeleteSessionDialog from "@/components/grind-session/DeleteSessionDialog"
 import RegisterSessionDialog from "@/components/grind-session/RegisterSessionDialog";
 import SessionDetailsDialog from "@/components/grind-session/SessionDetailsDialog";
 import ConflictDialog from "@/components/grind-session/ConflictDialog";
-import EpicStartSessionModal from "@/components/grind-session/EpicStartSessionModal";
 import SpotScreenshotPaster from "@/components/grind-session-live/SpotScreenshotPaster";
+import GrindPersonalizationDialog from "@/components/grind-session/GrindPersonalizationDialog";
+import { useGrindPreferences } from "@/lib/grindPagePreferences";
+import { useGrindCurrency } from "@/hooks/useGrindCurrency";
 import { hasWarmUpData, getQuickStartLabel, getLastSessionDefaults, buildQuickStartSession } from "@/components/grind-session/quick-start-helpers";
 import { mergeWarmupSources } from "@/lib/warmup-persistence-helpers";
 import { CheckCircle, Brain } from "lucide-react";
@@ -143,6 +145,11 @@ export default function GrindSession() {
   // Toggle states for new design
   const [showTournamentToggle, setShowTournamentToggle] = useState(false);
   const [showMentalToggle, setShowMentalToggle] = useState(false);
+
+  // Personalizacao da pagina (cards visiveis, performance mental, moeda base)
+  const [showPersonalizationDialog, setShowPersonalizationDialog] = useState(false);
+  const [grindPrefs] = useGrindPreferences();
+  const grindFormat = useGrindCurrency();
 
   // Session recovery from localStorage backup
   const [recoveryData, setRecoveryData] = useState<{sessionId: string; timestamp: number} | null>(null);
@@ -380,9 +387,11 @@ export default function GrindSession() {
   const warmUpCompleted = hasWarmUpData(warmUpData);
 
   // FP-09: Handle quick start
-  const handleQuickStart = () => {
-    // Sprint W-1 RF-14: Gate Go/No-Go — exigir warm-up valido antes de iniciar grind
-    if (warmupGateActive) {
+  const handleQuickStart = (opts: { bypassGate?: boolean; forceReplace?: boolean } = {}) => {
+    // Sprint W-1 RF-14: Gate Go/No-Go — exigir warm-up valido antes de iniciar grind.
+    // bypassGate true cobre o retry pos-"Iniciar mesmo assim" (closure stale ignorava
+    // gateBypassedOnce ja setado no mesmo tick — bug double-click reportado).
+    if (warmupGateActive && !opts.bypassGate) {
       trackWarmup("grind_blocked_by_gate", { reason: warmupGateReason, source: "quick_start" });
       setPendingStartSource("quick_start");
       setShowWarmupGateDialog(true);
@@ -401,45 +410,49 @@ export default function GrindSession() {
       return;
     }
 
-    // Bug 1: Check activeSessions (1s stale) first, then sessionHistory as fallback
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
 
-    // Check activeSessions first (fresher data)
-    const activeToday = activeSessions.find((s: Record<string, unknown>) => {
-      const sessionDate = s.date ? new Date(s.date as string).toISOString().split('T')[0] : '';
-      return sessionDate === todayStr;
-    });
+    // forceReplace: chamado pelo botao "Criar Nova e Substituir" ou "Nova Sessao".
+    // Nao reabre conflict dialog — vai direto para mutation com replaceExisting=true.
+    if (!opts.forceReplace) {
+      const todayStr = now.toISOString().split('T')[0];
 
-    if (activeToday) {
-      if (activeToday.status !== 'completed') {
-        toast({
-          title: "Retomando sessao ativa de hoje",
-          description: "Redirecionando para a sessao em andamento.",
-        });
-        setLocation("/grind-live");
+      // Check activeSessions first (fresher data)
+      const activeToday = activeSessions.find((s: Record<string, unknown>) => {
+        const sessionDate = s.date ? new Date(s.date as string).toISOString().split('T')[0] : '';
+        return sessionDate === todayStr;
+      });
+
+      if (activeToday) {
+        if (activeToday.status !== 'completed') {
+          toast({
+            title: "Retomando sessao ativa de hoje",
+            description: "Redirecionando para a sessao em andamento.",
+          });
+          setLocation("/grind-live");
+          return;
+        }
+        setConflictingSession(activeToday as SessionHistoryData);
+        setShowConflictDialog(true);
         return;
       }
-      setConflictingSession(activeToday as SessionHistoryData);
-      setShowConflictDialog(true);
-      return;
-    }
 
-    // Fallback: check sessionHistory
-    const existingSession = findTodaySession(sessionHistory, todayStr) as SessionHistoryData | null;
+      // Fallback: check sessionHistory
+      const existingSession = findTodaySession(sessionHistory, todayStr) as SessionHistoryData | null;
 
-    if (existingSession) {
-      if (existingSession.status !== 'completed') {
-        toast({
-          title: "Retomando sessao ativa de hoje",
-          description: "Redirecionando para a sessao em andamento.",
-        });
-        setLocation("/grind-live");
+      if (existingSession) {
+        if (existingSession.status !== 'completed') {
+          toast({
+            title: "Retomando sessao ativa de hoje",
+            description: "Redirecionando para a sessao em andamento.",
+          });
+          setLocation("/grind-live");
+          return;
+        }
+        setConflictingSession(existingSession);
+        setShowConflictDialog(true);
         return;
       }
-      setConflictingSession(existingSession);
-      setShowConflictDialog(true);
-      return;
     }
 
     // Build quick start session using helpers
@@ -566,20 +579,30 @@ export default function GrindSession() {
       }, 0);
     }
 
+    // Avg mental/prep so consideram sessoes com valor reportado (>0); sessoes
+    // sem reporte (sentinel 0) nao puxam a media para baixo. Mesmo padrao dos
+    // baloes do historico para coerencia.
+    const avgPositive = (getter: (s: any) => number): number => {
+      const arr = filteredSessions
+        .map((s) => Number(getter(s)) || 0)
+        .filter((v) => v > 0);
+      return arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    };
+
     return {
       totalSessions: filteredSessions.length,
       totalVolume,
-      totalProfit: filteredSessions.reduce((sum, session) => sum + session.profit, 0),
-      avgABI: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.abiMed, 0) / filteredSessions.length : 0,
-      avgROI: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.roi, 0) / filteredSessions.length : 0,
-      totalFTs: filteredSessions.reduce((sum, session) => sum + session.fts, 0),
-      totalCravadas: filteredSessions.reduce((sum, session) => sum + session.cravadas, 0),
-      avgEnergia: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.energiaMedia, 0) / filteredSessions.length : 0,
-      avgFoco: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.focoMedio, 0) / filteredSessions.length : 0,
-      avgConfianca: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.confiancaMedia, 0) / filteredSessions.length : 0,
-      avgInteligenciaEmocional: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.inteligenciaEmocionalMedia, 0) / filteredSessions.length : 0,
-      avgInterferencias: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + session.interferenciasMedia, 0) / filteredSessions.length : 0,
-      avgPreparationPercentage: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (session.preparationPercentage || 0), 0) / filteredSessions.length : 0,
+      totalProfit: filteredSessions.reduce((sum, session) => sum + (Number(session.profit) || 0), 0),
+      avgABI: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (Number(session.abiMed) || 0), 0) / filteredSessions.length : 0,
+      avgROI: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (Number(session.roi) || 0), 0) / filteredSessions.length : 0,
+      totalFTs: filteredSessions.reduce((sum, session) => sum + (Number(session.fts) || 0), 0),
+      totalCravadas: filteredSessions.reduce((sum, session) => sum + (Number(session.cravadas) || 0), 0),
+      avgEnergia: avgPositive((s) => s.energiaMedia),
+      avgFoco: avgPositive((s) => s.focoMedio),
+      avgConfianca: avgPositive((s) => s.confiancaMedia),
+      avgInteligenciaEmocional: avgPositive((s) => s.inteligenciaEmocionalMedia),
+      avgInterferencias: avgPositive((s) => s.interferenciasMedia),
+      avgPreparationPercentage: avgPositive((s) => s.preparationPercentage),
       vanillaCount,
       pkoCount,
       mysteryCount,
@@ -681,9 +704,11 @@ export default function GrindSession() {
     },
   });
 
-  const checkExistingSessionBeforePreparation = () => {
-    // Sprint W-1 RF-14: Gate Go/No-Go — exigir warm-up valido antes de iniciar grind
-    if (warmupGateActive) {
+  const checkExistingSessionBeforePreparation = (opts: { bypassGate?: boolean } = {}) => {
+    // Sprint W-1 RF-14: Gate Go/No-Go — exigir warm-up valido antes de iniciar grind.
+    // bypassGate true atende retry pos-"Iniciar mesmo assim" (mesmo motivo de
+    // closure stale do handleQuickStart).
+    if (warmupGateActive && !opts.bypassGate) {
       trackWarmup("grind_blocked_by_gate", { reason: warmupGateReason, source: "personalizar" });
       setPendingStartSource("personalizar");
       setShowWarmupGateDialog(true);
@@ -709,7 +734,8 @@ export default function GrindSession() {
       setConflictingSession(existingSession);
       setShowConflictDialog(true);
     } else {
-      setShowStartDialog(true);
+      // Sem sessao existente: dispara quick start direto (sem modal warm-up legado).
+      handleQuickStart({ bypassGate: opts.bypassGate });
     }
   };
 
@@ -748,7 +774,9 @@ export default function GrindSession() {
 
   const handleConflictCreateNew = () => {
     setShowConflictDialog(false);
-    setShowStartDialog(true);
+    // Modal warm-up legado removido — agora cria nova sessao direto via mutation
+    // com replaceExisting=true (warm-up tem sessao propria em /mental).
+    handleQuickStart({ bypassGate: true, forceReplace: true });
   };
 
   const handleConflictCancel = () => {
@@ -815,7 +843,9 @@ export default function GrindSession() {
       });
       setIsDeleteDialogOpen(false);
       setSessionToDelete(null);
+      // Invalidar AMBAS queries para evitar quick-start ver sessao deletada (cache stale).
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions"] });
     },
     onError: (error: any) => {
       toast({
@@ -1098,7 +1128,7 @@ export default function GrindSession() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => setShowStartDialog(true)}
+                  onClick={() => handleQuickStart({ bypassGate: true, forceReplace: true })}
                   className="border-gray-600 text-gray-300 hover:bg-gray-700"
                   title="Criar nova sessao mesmo com sessao ativa"
                 >
@@ -1123,8 +1153,8 @@ export default function GrindSession() {
                 <div className="flex flex-col items-center gap-1">
                   <Button
                     size="lg"
-                    onClick={handleQuickStart}
-                    disabled={startSessionMutation.isPending || historyLoading || showConflictDialog || showStartDialog}
+                    onClick={() => handleQuickStart()}
+                    disabled={startSessionMutation.isPending || historyLoading || showConflictDialog}
                     className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold px-8 py-3 shadow-lg min-h-[44px]"
                   >
                     <Play className="w-5 h-5 mr-2" />
@@ -1144,12 +1174,11 @@ export default function GrindSession() {
                   )}
                 </div>
 
-                {/* FP-09: Personalizar button (secondary) */}
+                {/* Personalizar — abre dialog de preferencias da pagina (cards / perf mental / moeda) */}
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={checkExistingSessionBeforePreparation}
-                  disabled={startSessionMutation.isPending || historyLoading || showConflictDialog || showStartDialog}
+                  onClick={() => setShowPersonalizationDialog(true)}
                   className="text-gray-400 hover:text-white text-sm"
                 >
                   Personalizar...
@@ -1159,23 +1188,12 @@ export default function GrindSession() {
             )}
           </div>
 
-          {/* Modal always mounted so both Quick Start "Personalizar" and "Nova Sessão" (with active session) can open it */}
-          <EpicStartSessionModal
-            isOpen={showStartDialog}
-            onClose={() => setShowStartDialog(false)}
-            onSuccess={handleStartSession}
-            preparationPercentage={preparationPercentage}
-            setPreparationPercentage={setPreparationPercentage}
-            preparationNotes={preparationNotes}
-            setPreparationNotes={setPreparationNotes}
-            dailyGoals={dailyGoals}
-            setDailyGoals={setDailyGoals}
-            screenCap={screenCap}
-            setScreenCap={setScreenCap}
-            isLoading={startSessionMutation.isPending}
-            plannedTournaments={plannedTournaments}
-            isLoadingPlannedTournaments={isLoadingPlannedTournaments}
+          {/* Personalizacao da pagina Grind — toggles de visibilidade, performance mental, moeda base */}
+          <GrindPersonalizationDialog
+            isOpen={showPersonalizationDialog}
+            onOpenChange={setShowPersonalizationDialog}
           />
+
         </div>
       </div>
 
@@ -1202,23 +1220,31 @@ export default function GrindSession() {
           showMentalToggle={showMentalToggle}
           setShowMentalToggle={setShowMentalToggle}
           recentSessions={filteredSessions.slice(0, 5)}
+          visibility={grindPrefs.visibility}
+          mentalEnabled={grindPrefs.mentalEnabled}
+          formatCurrencyBase={grindFormat.format}
+          convertCurrencyBase={grindFormat.convert}
         />
       )}
 
       {/* Session History */}
-      <SessionHistoryList
-        filteredSessions={filteredSessions}
-        historyLoading={historyLoading}
-        historyError={historyError}
-        refetchHistory={refetchHistory}
-        filterState={filterState}
-        setFilterState={setFilterState}
-        activeSession={activeSession}
-        checkExistingSessionBeforePreparation={checkExistingSessionBeforePreparation}
-        onEditSession={handleEditSession}
-        onDeleteSession={handleDeleteSession}
-        onViewSessionDetails={handleViewSessionDetails}
-      />
+      {grindPrefs.visibility.history && (
+        <SessionHistoryList
+          filteredSessions={filteredSessions}
+          historyLoading={historyLoading}
+          historyError={historyError}
+          refetchHistory={refetchHistory}
+          filterState={filterState}
+          setFilterState={setFilterState}
+          activeSession={activeSession}
+          checkExistingSessionBeforePreparation={checkExistingSessionBeforePreparation}
+          onEditSession={handleEditSession}
+          onDeleteSession={handleDeleteSession}
+          onViewSessionDetails={handleViewSessionDetails}
+          formatCurrency={grindFormat.format}
+          mentalEnabled={grindPrefs.mentalEnabled}
+        />
+      )}
 
       {/* Edit Session Dialog */}
       <EditSessionDialog
@@ -1303,8 +1329,8 @@ export default function GrindSession() {
                 setPendingStartSource(null);
                 // Retry no proximo tick — warmupGateActive ja sera false (bypass)
                 setTimeout(() => {
-                  if (source === "quick_start") handleQuickStart();
-                  else if (source === "personalizar") checkExistingSessionBeforePreparation();
+                  if (source === "quick_start") handleQuickStart({ bypassGate: true });
+                  else if (source === "personalizar") checkExistingSessionBeforePreparation({ bypassGate: true });
                 }, 0);
               }}
             >
