@@ -20,7 +20,6 @@ import { storage } from '../storage';
 import { fetchNewsItems } from './news';
 import type { NewsItem } from '@shared/types/news';
 import { computeHeuristics } from '../services/homeHeuristics';
-import { getSessionsMonthSummary } from '../services/sessionsMonth';
 import { getSessionsRegisteredSummary } from '../services/sessionsRegistered';
 import { fxResolver as homeFxResolver } from '../services/fxResolver';
 import { getCurrencyForSite as homeGetCurrencyForSite } from '@shared/platform-currency';
@@ -228,14 +227,6 @@ interface HomeOverviewBody {
     severity: 'info' | 'caution' | 'positive';
     ctaHref: string | null;
   }>;
-  // Sprint home-reform-4 item 1 — Sessoes mes atual.
-  sessionsMonth: {
-    monthStart: string;
-    count: number;
-    profitUsd: number;
-    investedUsd: number;
-    roiPct: number | null;
-  } | null;
   // Sprint home-reform-5 item 7 — Dashboard All Time (uploads/historico, all-time).
   dashboardAllTime: {
     tournaments: number;
@@ -409,8 +400,6 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       timed('performance60d', () => s.getDashboardPerformance(userId, '60d'), timings),
       timed('topDeltas', () => s.getStatsTopDeltas(userId, 3), timings),
       timed('variance', () => s.getVarianceVsExpected(userId), timings),
-      // Sprint home-reform-4 item 1.
-      timed('sessionsMonth', () => getSessionsMonthSummary(userId), timings),
       // Sprint home-reform-5 item 2 — Header Strip subqueries.
       timed('lastBankrollMovementAt', () => s.getLatestBankrollMovementAt(userId), timings),
       timed('lastTournamentUploadAt', () => s.getLatestTournamentUploadAt(userId), timings),
@@ -461,17 +450,16 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     const performance60d = unwrap<any>(12);
     const topDeltasResult = unwrap<any[]>(13);
     const varianceResult = unwrap<any>(14);
-    const sessionsMonthResult = unwrap<any>(15);
-    const lastBankrollMovementAtResult = unwrap<Date>(16);
-    const lastTournamentUploadAtResult = unwrap<Date>(17);
-    const oldestPendingSpotAtResult = unwrap<Date>(18);
-    const bankrollSnapshots30dResult = unwrap<any[]>(19);
-    const bankrollSnapshotPrior30dResult = unwrap<any[]>(20);
-    const hasActiveGrindSessionResult = unwrap<boolean>(21) ?? false;
-    const sessionsRegisteredResult = unwrap<any>(22);
-    const recentSessionsKpisResult = unwrap<any[]>(23);
-    const dashboardAllTimeResult = unwrap<any>(24);
-    const fxRatesResult = unwrap<{ rates: Record<string, number> }>(25);
+    const lastBankrollMovementAtResult = unwrap<Date>(15);
+    const lastTournamentUploadAtResult = unwrap<Date>(16);
+    const oldestPendingSpotAtResult = unwrap<Date>(17);
+    const bankrollSnapshots30dResult = unwrap<any[]>(18);
+    const bankrollSnapshotPrior30dResult = unwrap<any[]>(19);
+    const hasActiveGrindSessionResult = unwrap<boolean>(20) ?? false;
+    const sessionsRegisteredResult = unwrap<any>(21);
+    const recentSessionsKpisResult = unwrap<any[]>(22);
+    const dashboardAllTimeResult = unwrap<any>(23);
+    const fxRatesResult = unwrap<{ rates: Record<string, number> }>(24);
 
     // Tipos usados localmente (cast porque mocks retornam any).
     const qs = quickStats as any;
@@ -922,15 +910,6 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
           }
         : null,
       // Sprint home-reform-4 item 1.
-      sessionsMonth: sessionsMonthResult && typeof sessionsMonthResult === 'object'
-        ? {
-            monthStart: String(sessionsMonthResult.monthStart ?? ''),
-            count: Number(sessionsMonthResult.count ?? 0),
-            profitUsd: Number(sessionsMonthResult.profitUsd ?? 0),
-            investedUsd: Number(sessionsMonthResult.investedUsd ?? 0),
-            roiPct: sessionsMonthResult.roiPct == null ? null : Number(sessionsMonthResult.roiPct),
-          }
-        : null,
       // Sprint home-reform-5 item 7 — Dashboard All Time (6 KPIs).
       dashboardAllTime: dashboardAllTimeResult && typeof dashboardAllTimeResult === 'object'
         ? {

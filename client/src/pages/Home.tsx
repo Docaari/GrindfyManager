@@ -56,7 +56,6 @@ import GradeTodayCard from '@/components/home/GradeTodayCard';
 import HomeHeader from '@/components/home/HomeHeader';
 import EmptyPerformanceCluster from '@/components/home/EmptyPerformanceCluster';
 import NewsFeed from '@/components/home/NewsFeed';
-import SessionsMonthCard from '@/components/home/SessionsMonthCard';
 import DashboardAllTimeCard from '@/components/home/DashboardAllTimeCard';
 import AllTimeEvolutionChart from '@/components/home/AllTimeEvolutionChart';
 import FocusStatsCard from '@/components/home/FocusStatsCard';
@@ -213,13 +212,6 @@ interface HomeOverviewResponse {
   // Sprint home-reform-5 item 4 — Acao Imediata (pending_hand|focus_stat|start_session).
   immediateAction?: ImmediateActionData | null;
   // Sprint home-reform-4 item 1.
-  sessionsMonth?: {
-    monthStart: string;
-    count: number;
-    profitUsd: number;
-    investedUsd: number;
-    roiPct: number | null;
-  } | null;
   // Sprint home-reform-5 item 7.
   dashboardAllTime?: {
     tournaments: number;
@@ -475,7 +467,6 @@ const Home: React.FC = () => {
                 {visibility.sessionsRegistered ? (
                   <>
                     <SessionsRegisteredCard data={data.sessionsRegistered ?? null} />
-                    <SessionsMonthCard data={data.sessionsMonth ?? null} />
                     <RecentSessionsList data={data.recentSessions ?? []} />
                   </>
                 ) : null}
