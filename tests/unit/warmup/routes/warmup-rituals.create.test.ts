@@ -234,13 +234,14 @@ describe('POST /api/warmup-rituals - validacao Zod', () => {
 });
 
 describe('POST /api/warmup-rituals - validacao cross-field (server-side)', () => {
-  it('version=full mas sessionIntention=null -> 400', async () => {
+  it('version=full com sessionIntention=null -> 201 (reform 2026-05-05: opcional, ADR-120)', async () => {
+    (warmupService.createRitual as any).mockResolvedValue({ id: 'r-1' });
     const res = makeRes();
     await handleCreateWarmupRitual(
       makeReq({ body: { ...validFullBody, sessionIntention: null } }) as any,
       res,
     );
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(201);
   });
 
   it('version=full mas decisionToPlay=null -> 400', async () => {

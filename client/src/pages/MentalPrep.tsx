@@ -1,18 +1,10 @@
 /**
- * MentalPrep — Hub Warm-up (Sprint W-1, RF-01, T-13)
+ * MentalPrep — Hub Warm-up.
  *
- * Refatorado completamente:
- *   - Header "Warm-up" simplificado (sem "Preparação Mental")
- *   - Card primario "Iniciar warm-up (10min)" com botao CTA
- *   - WarmupHistoryCard
- *   - ResumeRitualPrompt (recupera draft de localStorage)
- *   - Subsecao rebaixada "Ferramentas de Apoio" (Meditation/Visualization/AudioLibrary)
+ * Reform 2026-05-05:
+ *   - Selector de duracao (6m / 15m / 30m) antes de iniciar runner
+ *   - Ferramentas de Apoio: 1 botao por ferramenta, sempre visivel
  *   - Botao "Iniciar Grind" gated por useWarmupGate
- *
- * Removidos:
- *   - Score 60/40, MentalStateCard (4 sliders), CustomizationDialog,
- *     StatisticsDialog, CorrelationDialog, WarmUpChecklist legado, GoalsCard,
- *     PersonalNotesCard, QuickHistoryCard.
  */
 
 import { useState } from "react";
@@ -22,10 +14,13 @@ import { Button } from "@/components/ui/button";
 import { usePermission } from "@/hooks/usePermission";
 import { useWarmupGate } from "@/hooks/useWarmupGate";
 import AccessDenied from "@/components/AccessDenied";
-import { Brain, Play } from "lucide-react";
+import { Brain, Play, Sparkles, Eye, Headphones } from "lucide-react";
 import { WarmUpRunner } from "@/components/warmup/WarmUpRunner";
 import { WarmupHistoryCard } from "@/components/warmup/WarmupHistoryCard";
 import { ResumeRitualPrompt } from "@/components/warmup/ResumeRitualPrompt";
+import { DurationSelector } from "@/components/warmup/DurationSelector";
+import type { WarmupMode } from "@/components/warmup/durations";
+import { readDraftMode } from "@/hooks/useWarmupRitual";
 import { MeditationDialog } from "@/components/mental-prep/MeditationDialog";
 import { VisualizationDialog } from "@/components/mental-prep/VisualizationDialog";
 import { AudioLibraryDialog } from "@/components/mental-prep/AudioLibraryDialog";
@@ -40,13 +35,14 @@ export default function MentalPrep() {
   // Runner state
   const [showRunner, setShowRunner] = useState<boolean>(false);
   const [resumeMode, setResumeMode] = useState<boolean>(false);
+  const [selectedMode, setSelectedMode] = useState<WarmupMode>("15m");
+  const [showDurationSelector, setShowDurationSelector] = useState<boolean>(false);
 
   // Support tools
   const [showMeditation, setShowMeditation] = useState(false);
   const [showVisualizationSelection, setShowVisualizationSelection] = useState(false);
   const [showVisualizationGuide, setShowVisualizationGuide] = useState(false);
   const [showAudioLibrary, setShowAudioLibrary] = useState(false);
-  const [supportToolsOpen, setSupportToolsOpen] = useState(false);
 
   if (!hasPermission) {
     return (
@@ -57,12 +53,22 @@ export default function MentalPrep() {
     );
   }
 
-  const startWarmup = () => {
+  const openDurationSelector = () => {
+    setShowDurationSelector(true);
+  };
+
+  const handleSelectMode = (mode: WarmupMode) => {
+    setSelectedMode(mode);
+    setShowDurationSelector(false);
     setResumeMode(false);
     setShowRunner(true);
   };
 
   const resumeWarmup = () => {
+    // Recupera mode salvo no draft (sem montar hook) para nao usar default
+    // 15m quando o user tinha escolhido outro modo antes da pausa.
+    const savedMode = readDraftMode();
+    if (savedMode) setSelectedMode(savedMode);
     setResumeMode(true);
     setShowRunner(true);
   };
@@ -92,6 +98,7 @@ export default function MentalPrep() {
         onClose={handleRunnerClose}
         onComplete={handleRunnerComplete}
         resume={resumeMode}
+        mode={selectedMode}
       />
     );
   }
@@ -104,7 +111,7 @@ export default function MentalPrep() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Warm-up</h1>
           <p className="text-sm text-muted-foreground">
-            Ritual de 10 minutos antes de cada sessao.
+            Ritual antes de cada sessao. Escolha a duracao ao iniciar.
           </p>
         </div>
       </header>
@@ -120,17 +127,22 @@ export default function MentalPrep() {
       {/* Card primario */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl">Iniciar warm-up (10min)</CardTitle>
+          <CardTitle className="text-2xl">Iniciar Warm-up</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            5 blocos sequenciais: respiracao + check emocional, foco da semana,
-            drill PFC, setup fisico, intencao da sessao.
+            5 etapas: setup fisico, respiracao, foco da semana, intencao (opcional)
+            e drills GTO/estudo. Tempos adaptados por modo (6m / 15m / 30m).
           </p>
           <div className="flex flex-wrap gap-3">
-            <Button type="button" onClick={startWarmup} size="lg">
+            <Button
+              type="button"
+              onClick={openDurationSelector}
+              size="lg"
+              data-testid="warmup-start-cta"
+            >
               <Play className="h-4 w-4 mr-2" />
-              Iniciar warm-up (10min)
+              Iniciar Warm-up
             </Button>
             <Button
               type="button"
@@ -153,44 +165,50 @@ export default function MentalPrep() {
       {/* Historico */}
       <WarmupHistoryCard />
 
-      {/* Ferramentas de Apoio (rebaixadas) */}
+      {/* Ferramentas de Apoio (sempre visivel, 1 botao por tool) */}
       <Card>
-        <CardHeader
-          className="cursor-pointer"
-          onClick={() => setSupportToolsOpen((v) => !v)}
-        >
-          <CardTitle className="text-base">
-            Ferramentas de Apoio {supportToolsOpen ? "▾" : "▸"}
-          </CardTitle>
+        <CardHeader>
+          <CardTitle className="text-base">Ferramentas de Apoio</CardTitle>
         </CardHeader>
-        {supportToolsOpen && (
-          <CardContent className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowMeditation(true)}
-            >
-              Meditacao guiada
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowVisualizationSelection(true)}
-            >
-              Visualizacao
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowAudioLibrary(true)}
-            >
-              Biblioteca de audios
-            </Button>
-          </CardContent>
-        )}
+        <CardContent className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowMeditation(true)}
+            data-testid="tool-meditation"
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            Meditacao guiada
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowVisualizationSelection(true)}
+            data-testid="tool-visualization"
+          >
+            <Eye className="w-4 h-4 mr-2" />
+            Visualizacao
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowAudioLibrary(true)}
+            data-testid="tool-audio-library"
+          >
+            <Headphones className="w-4 h-4 mr-2" />
+            Biblioteca de audios
+          </Button>
+        </CardContent>
       </Card>
 
-      {/* Dialogs (mantidos como ferramentas) */}
+      {/* Duration selector */}
+      <DurationSelector
+        open={showDurationSelector}
+        onSelect={handleSelectMode}
+        onCancel={() => setShowDurationSelector(false)}
+      />
+
+      {/* Dialogs (controlled-only; sem DialogTrigger interno) */}
       <MeditationDialog
         open={showMeditation}
         onOpenChange={setShowMeditation}

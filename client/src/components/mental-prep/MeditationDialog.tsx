@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Sparkles, Play, Pause, RotateCcw, Volume2, VolumeX, Info } from 'lucide-react';
+import { Play, Pause, RotateCcw, Volume2, VolumeX, Info } from 'lucide-react';
 import type { MeditationTimer } from './types';
 
 interface MeditationDialogProps {
@@ -57,12 +57,6 @@ export function MeditationDialog({ open, onOpenChange }: MeditationDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="border-border hover:bg-accent">
-          <Sparkles className="w-4 h-4 mr-2" />
-          Timer Meditação
-        </Button>
-      </DialogTrigger>
       <DialogContent className="sm:max-w-[500px] bg-poker-surface border-gray-700">
         <DialogHeader>
           <DialogTitle className="text-white">Timer de Meditação</DialogTitle>

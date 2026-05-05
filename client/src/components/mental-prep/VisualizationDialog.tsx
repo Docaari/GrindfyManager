@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Eye, Play, Pause, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Play, Pause, ArrowLeft, ArrowRight } from 'lucide-react';
 import { visualization6Minutes, visualization12Minutes } from './data';
 
 interface VisualizationDialogProps {
@@ -65,12 +65,6 @@ export function VisualizationDialog({ showSelection, onSelectionChange, showGuid
   return (
     <>
       <Dialog open={showSelection} onOpenChange={onSelectionChange}>
-        <DialogTrigger asChild>
-          <Button variant="outline" className="border-border hover:bg-accent">
-            <Eye className="w-4 h-4 mr-2" />
-            Guia Visualização
-          </Button>
-        </DialogTrigger>
         <DialogContent className="sm:max-w-[500px] bg-poker-surface border-gray-700">
           <DialogHeader>
             <DialogTitle className="text-white">Escolha a Duração</DialogTitle>

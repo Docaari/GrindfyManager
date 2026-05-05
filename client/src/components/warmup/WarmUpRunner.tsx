@@ -1,126 +1,154 @@
 /**
- * WarmUpRunner — Sprint W-1 (RF-02, T-11)
+ * WarmUpRunner — Sprint W-1 (RF-02) — Reform 2026-05-05.
  *
  * Componente fullscreen orquestrador dos 5 blocos.
- * Header: timer geral 10:00 + indicador "X/5".
- * Footer: Pausar / Abortar.
- * Aborto requer confirmacao via AlertDialog.
  *
- * Microcopy literal spec.
+ * Nova ordem:
+ *   1. Setup Fisico (sem timer global; user clica Proximo para iniciar)
+ *   2. Respiracao + check emocional (timer global comeca aqui)
+ *   3. Foco da semana (heuristicas)
+ *   4. Intencao (opcional)
+ *   5. Drills GTO/Estudo (PFC)
+ *
+ * Modos: 6m / 15m / 30m. Tempos por bloco em durations.ts.
+ *
+ * Header: timer geral countdown + indicador "X/5".
+ * Footer: Pausar / Abortar (com confirmacao).
  */
 
 import { useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { useWarmupRitual } from "@/hooks/useWarmupRitual";
+import { formatMmSs } from "@/lib/timeFormat";
 import { useWarmupTelemetry } from "@/hooks/useWarmupTelemetry";
+import { PhysicalSetupBlock } from "./PhysicalSetupBlock";
 import { EmotionalCheckBlock } from "./EmotionalCheckBlock";
 import { WeeklyFocusBlock } from "./WeeklyFocusBlock";
-import { PFCDrillBlock } from "./PFCDrillBlock";
-import { PhysicalSetupBlock } from "./PhysicalSetupBlock";
 import { IntentionBlock } from "./IntentionBlock";
+import { PFCDrillBlock } from "./PFCDrillBlock";
+import { MODE_CONFIGS, totalSeconds, type WarmupMode } from "./durations";
 
-const TOTAL_SECONDS = 10 * 60; // 10 min
+const TOTAL_BLOCKS = 5;
+
+const BLOCK_LABELS: Record<number, string> = {
+  1: "Setup fisico",
+  2: "Respiracao",
+  3: "Foco da semana",
+  4: "Intencao",
+  5: "Drills GTO/Estudo",
+};
 
 export interface WarmUpRunnerProps {
   onClose: () => void;
   onComplete: (ritual: any) => void;
   resume?: boolean;
+  mode?: WarmupMode;
 }
 
-function formatMmSs(secs: number): string {
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
-
-export function WarmUpRunner({ onClose, onComplete, resume = false }: WarmUpRunnerProps) {
+export function WarmUpRunner({
+  onClose,
+  onComplete,
+  resume = false,
+  mode = "15m",
+}: WarmUpRunnerProps) {
   const ritual = useWarmupRitual();
   const { track } = useWarmupTelemetry();
   const [showAbortConfirm, setShowAbortConfirm] = useState(false);
+  const cfg = MODE_CONFIGS[mode];
+  const totalSec = totalSeconds(mode);
 
-  // Timer global (10 min countdown). Implementacao com tick contador (compat fakeTimers).
+  // Timer global. Inicia apenas quando entra no bloco 2 (Respiracao).
+  // Pausa quando ritual.status === 'paused'.
   const [, setTick] = useState(0);
   const accRef = useRef(0);
-  const tickerStartedRef = useRef(false);
 
   // Inicia (ou retoma) ritual ao montar (idempotente).
-  // Quando `resume=true`, restaura o draft em vez de sobrescrever.
   useEffect(() => {
     if (ritual.status !== "idle") return;
     if (resume) {
       ritual.restoreDraft();
       track("warmup_resumed", {});
     } else {
-      ritual.start();
-      track("warmup_started", {});
+      ritual.start(mode);
+      track("warmup_started", { mode });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Inicia ticker
+  // Ticker — so roda em bloco >= 2 e quando nao pausado.
+  const shouldTick = ritual.currentBlock >= 2 && ritual.status !== "paused";
   useEffect(() => {
-    if (tickerStartedRef.current) return;
-    tickerStartedRef.current = true;
-    const TICK_MS = 250;
+    if (!shouldTick) return;
+    const TICK_MS = 500;
     const interval = setInterval(() => {
       accRef.current += TICK_MS;
-      flushSync(() => {
-        setTick((t) => t + 1);
-      });
+      setTick((t) => t + 1);
     }, TICK_MS);
     return () => clearInterval(interval);
-  }, []);
+  }, [shouldTick]);
 
   const elapsedSec = Math.floor(accRef.current / 1000);
-  const remaining = Math.max(TOTAL_SECONDS - elapsedSec, 0);
+  const remaining = Math.max(totalSec - elapsedSec, 0);
+  const timerActive = ritual.currentBlock >= 2;
 
-  // Handlers de cada bloco
-  const handleBlock1Submit = (score: number, override: boolean) => {
+  // -------------------------------------------------------------------------
+  // Handlers
+  // -------------------------------------------------------------------------
+
+  const handleSetupAdvance = (payload: any) => {
+    ritual.advanceBlock({ blockId: 1, ...payload });
+    track("block_completed", { blockId: 1 });
+  };
+
+  const handleEmotionalCheckSubmit = (score: number, override: boolean) => {
     track("emotional_check_submitted", { score });
     if (score < 6 && !override) {
       track("gate_triggered", { score });
     }
     if (override) {
-      // O gate ja foi resolvido via OverrideConfirmDialog dentro do block.
       track("override_used", { score });
-      // Set state diretamente — a versao Block fez o roteamento de gate
-      // internamente; aqui aproveitamos para registrar score+override e
-      // avancar.
       ritual.submitEmotionalCheck(score);
       ritual.confirmOverride();
-      track("block_completed", { blockId: 1 });
+      track("block_completed", { blockId: 2 });
       return;
     }
     ritual.submitEmotionalCheck(score);
-    ritual.advanceBlock({ blockId: 1, emotionalCheckScore: score });
-    track("block_completed", { blockId: 1 });
+    ritual.advanceBlock({ blockId: 2, emotionalCheckScore: score });
+    track("block_completed", { blockId: 2 });
   };
 
-  const handleBlock1Cancel = async () => {
-    // "Nao vou jogar" -> abort com gate_no_go
-    track("gate_triggered", { score: ritual.emotionalCheckScore ?? 0 });
-    await ritual.abort("gate_no_go");
+  const handleEmotionalCheckCancel = async (score: number) => {
+    // score passado direto para abort para evitar race com setState async.
+    track("gate_triggered", { score });
+    await ritual.abort("gate_no_go", { emotionalCheckScore: score });
     track("warmup_aborted", { reason: "gate_no_go" });
     onClose();
   };
 
-  const handleBlockAdvance = (blockId: number, payload: any) => {
-    ritual.advanceBlock({ blockId, ...payload });
-    track("block_completed", { blockId });
+  const handleHeuristicsAdvance = (payload: any) => {
+    ritual.advanceBlock({ blockId: 3, ...payload });
+    track("block_completed", { blockId: 3 });
   };
 
-  const handleConcluir = async (intention: any) => {
+  const handleIntentionSubmit = (intention: any) => {
+    ritual.advanceBlock({ blockId: 4, sessionIntention: intention });
+    track("block_completed", { blockId: 4 });
+  };
+
+  const handlePFCAdvance = async (payload: any) => {
+    track("block_completed", { blockId: 5 });
     try {
+      const intention = (ritual.blocksData?.[4] as any)?.sessionIntention ?? null;
       await ritual.completeRitual(intention);
-      track("warmup_completed", {});
+      track("warmup_completed", { mode });
       onComplete({
         intention,
         emotionalCheckScore: ritual.emotionalCheckScore,
         overrideUsed: ritual.overrideUsed,
+        mode,
+        pfc: payload,
       });
     } catch (e) {
-      // mantem warm-up aberto; usuario pode tentar de novo
       // eslint-disable-next-line no-console
       console.error(e);
     }
@@ -176,42 +204,46 @@ export function WarmUpRunner({ onClose, onComplete, resume = false }: WarmUpRunn
       <header className="flex items-center justify-between px-4 py-3 border-b">
         <div
           role="timer"
-          aria-live="polite"
+          aria-live="off"
           aria-label="Tempo total do warm-up"
           className="text-lg font-mono font-bold tabular-nums"
         >
-          {formatMmSs(remaining)}
+          {timerActive ? formatMmSs(remaining) : "--:--"}
         </div>
         <div className="text-sm text-muted-foreground">
-          Bloco {ritual.currentBlock}/5
+          {BLOCK_LABELS[ritual.currentBlock] ?? ""} · {ritual.currentBlock}/{TOTAL_BLOCKS}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {cfg.label}
         </div>
       </header>
 
       {/* Body */}
       <main className="flex-1 overflow-y-auto py-6">
         {ritual.currentBlock === 1 && (
-          <EmotionalCheckBlock
-            onSubmit={handleBlock1Submit}
-            onCancel={handleBlock1Cancel}
-          />
+          <PhysicalSetupBlock onAdvance={handleSetupAdvance} />
         )}
         {ritual.currentBlock === 2 && (
-          <WeeklyFocusBlock
-            onAdvance={(payload) => handleBlockAdvance(2, payload)}
+          <EmotionalCheckBlock
+            onSubmit={handleEmotionalCheckSubmit}
+            onCancel={handleEmotionalCheckCancel}
+            breathingSeconds={cfg.breathingSeconds}
           />
         )}
         {ritual.currentBlock === 3 && (
-          <PFCDrillBlock
-            onAdvance={(payload) => handleBlockAdvance(3, payload)}
+          <WeeklyFocusBlock
+            onAdvance={(payload) => handleHeuristicsAdvance(payload)}
           />
         )}
         {ritual.currentBlock === 4 && (
-          <PhysicalSetupBlock
-            onAdvance={(payload) => handleBlockAdvance(4, payload)}
-          />
+          <IntentionBlock onSubmit={handleIntentionSubmit} />
         )}
         {ritual.currentBlock === 5 && (
-          <IntentionBlock onSubmit={handleConcluir} />
+          <PFCDrillBlock
+            durationSeconds={cfg.pfcSeconds}
+            paused={ritual.status === "paused"}
+            onAdvance={(payload) => handlePFCAdvance(payload)}
+          />
         )}
       </main>
 
@@ -234,7 +266,6 @@ export function WarmUpRunner({ onClose, onComplete, resume = false }: WarmUpRunn
           {ritual.status === "paused" ? "Retomar" : "Pausar"}
         </Button>
       </footer>
-
     </div>
   );
 }

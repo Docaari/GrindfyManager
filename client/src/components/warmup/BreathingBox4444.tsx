@@ -9,8 +9,8 @@
 import { useEffect, useRef, useState } from "react";
 
 const CYCLE_MS = 16_000; // 4+4+4+4 = 16s
-const TOTAL_CYCLES = 5;
-const TOTAL_MS = CYCLE_MS * TOTAL_CYCLES; // 80s
+const DEFAULT_TOTAL_CYCLES = 5;
+const DEFAULT_TOTAL_MS = CYCLE_MS * DEFAULT_TOTAL_CYCLES; // 80s
 
 type Phase = "inhale" | "hold-in" | "exhale" | "hold-out";
 
@@ -39,12 +39,20 @@ function prefersReducedMotion(): boolean {
 export interface BreathingBox4444Props {
   onComplete: () => void;
   onSkip?: () => void;
+  /** Duracao total em segundos. Default 80s (5 ciclos). Arredondado para multiplo de 16s. */
+  durationSeconds?: number;
 }
 
-export function BreathingBox4444({ onComplete, onSkip }: BreathingBox4444Props) {
+export function BreathingBox4444({ onComplete, onSkip, durationSeconds }: BreathingBox4444Props) {
   const reduced = prefersReducedMotion();
   const [elapsedMs, setElapsedMs] = useState(0);
   const [completedFlag, setCompletedFlag] = useState(false);
+
+  // Math.ceil garante que duracao real >= duracao pedida (sem desincronizar com timer global).
+  const totalCycles = durationSeconds && durationSeconds > 0
+    ? Math.max(1, Math.ceil(durationSeconds / 16))
+    : DEFAULT_TOTAL_CYCLES;
+  const totalMs = totalCycles * CYCLE_MS;
 
   const onCompleteRef = useRef(onComplete);
   useEffect(() => {
@@ -54,14 +62,12 @@ export function BreathingBox4444({ onComplete, onSkip }: BreathingBox4444Props) 
   const completedRef = useRef(false);
 
   useEffect(() => {
-    // Usamos contador acumulado (setInterval delta) em vez de Date.now()
-    // para funcionar com vi.useFakeTimers (que nao avanca Date.now sem ajuste).
     const TICK_MS = 100;
     let acc = 0;
     const interval = setInterval(() => {
       acc += TICK_MS;
       setElapsedMs(acc);
-      if (acc >= TOTAL_MS && !completedRef.current) {
+      if (acc >= totalMs && !completedRef.current) {
         completedRef.current = true;
         clearInterval(interval);
         try {
@@ -72,10 +78,9 @@ export function BreathingBox4444({ onComplete, onSkip }: BreathingBox4444Props) 
       }
     }, TICK_MS);
     return () => clearInterval(interval);
-  }, [reduced]);
+  }, [reduced, totalMs]);
 
-  // Computa fase e ciclo atual
-  const cycleIdx = Math.min(Math.floor(elapsedMs / CYCLE_MS), TOTAL_CYCLES - 1);
+  const cycleIdx = Math.min(Math.floor(elapsedMs / CYCLE_MS), totalCycles - 1);
   const intoCycle = elapsedMs % CYCLE_MS;
   let phase: Phase = "inhale";
   if (intoCycle < 4_000) phase = "inhale";
@@ -124,7 +129,7 @@ export function BreathingBox4444({ onComplete, onSkip }: BreathingBox4444Props) 
           <div className="relative z-10 text-center">
             <div className="text-3xl font-bold">{phaseLabel(phase)}</div>
             <div className="text-xs text-muted-foreground mt-1">
-              4s · Ciclo {cycleIdx + 1}/{TOTAL_CYCLES}
+              4s · Ciclo {cycleIdx + 1}/{totalCycles}
             </div>
           </div>
         </div>

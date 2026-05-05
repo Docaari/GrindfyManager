@@ -1,51 +1,55 @@
 /**
- * PhysicalSetupBlock — Sprint W-1 (RF-08, T-10)
+ * PhysicalSetupBlock — Sprint W-1 (RF-08, T-10) — Reformado warm-up reform 2026-05-05.
  *
- * Bloco 4: Setup fisico. 6 toggles, minimo 4/6 marcados para avancar.
- * Microcopy spec secao 9.4.
+ * Bloco 1 (era 4): Setup fisico. Items custom (localStorage), min 3 marcados
+ * para avancar. Botao "Editar lista" abre modal add/edit/remove items.
+ * NAO conta no timer global (timer so inicia em Respiracao).
  */
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  DEFAULT_SETUP_ITEMS,
+  loadSetupItems,
+  saveSetupItems,
+  resetSetupItems,
+} from "./setupItemsStore";
 
-interface SetupItems {
-  water: boolean;
-  snacks: boolean;
-  phoneAirplane: boolean;
-  notificationsOff: boolean;
-  headphones: boolean;
-  light: boolean;
-}
-
-const ITEMS: { key: keyof SetupItems; testid: string; label: string }[] = [
-  { key: "water", testid: "setup-water", label: "Garrafa de 1L de agua na mesa" },
-  { key: "snacks", testid: "setup-snacks", label: "Snacks preparados (nozes, banana, barra)" },
-  { key: "phoneAirplane", testid: "setup-phone-airplane", label: "Celular em modo aviao ou na gaveta" },
-  { key: "notificationsOff", testid: "setup-notifications-off", label: "Notificacoes silenciadas no computador" },
-  { key: "headphones", testid: "setup-headphones", label: "Fone de ouvido (se for grindar com playlist)" },
-  { key: "light", testid: "setup-light", label: "Luz ambiente calibrada" },
-];
+const MIN_CHECKED = 3;
 
 export interface PhysicalSetupBlockProps {
-  onAdvance: (payload: { setupItems: SetupItems }) => void;
+  onAdvance: (payload: {
+    setupItems: Record<string, boolean>;
+    setupItemsList: string[];
+  }) => void;
 }
 
 export function PhysicalSetupBlock({ onAdvance }: PhysicalSetupBlockProps) {
-  const [state, setState] = useState<SetupItems>({
-    water: false,
-    snacks: false,
-    phoneAirplane: false,
-    notificationsOff: false,
-    headphones: false,
-    light: false,
-  });
+  const auth = useAuth();
+  const userId = (auth as any)?.user?.userPlatformId ?? null;
+  const [items, setItems] = useState<string[]>(() => loadSetupItems(userId));
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [editorOpen, setEditorOpen] = useState(false);
 
-  const checkedCount = Object.values(state).filter(Boolean).length;
-  const canAdvance = checkedCount >= 4;
+  const checkedCount = useMemo(
+    () => Object.values(checked).filter(Boolean).length,
+    [checked],
+  );
+  const canAdvance = checkedCount >= MIN_CHECKED;
 
-  const toggle = (key: keyof SetupItems) => {
-    setState((s) => ({ ...s, [key]: !s[key] }));
+  const toggle = (label: string) => {
+    setChecked((prev) => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  const handleAdvance = () => {
+    onAdvance({
+      setupItems: checked,
+      setupItemsList: items,
+    });
   };
 
   return (
@@ -58,36 +62,206 @@ export function PhysicalSetupBlock({ onAdvance }: PhysicalSetupBlockProps) {
       </header>
 
       <ul className="space-y-2">
-        {ITEMS.map((item) => (
-          <li key={item.key} className="flex items-center gap-2">
-            <Checkbox
-              id={item.testid}
-              data-testid={item.testid}
-              checked={state[item.key]}
-              onCheckedChange={() => toggle(item.key)}
-            />
-            <label htmlFor={item.testid} className="text-sm">
-              {item.label}
-            </label>
-          </li>
-        ))}
+        {items.map((label, idx) => {
+          const id = `setup-item-${idx}`;
+          return (
+            <li key={`${idx}-${label}`} className="flex items-center gap-2">
+              <Checkbox
+                id={id}
+                data-testid={id}
+                checked={!!checked[label]}
+                onCheckedChange={() => toggle(label)}
+              />
+              <label htmlFor={id} className="text-sm flex-1">
+                {label}
+              </label>
+            </li>
+          );
+        })}
       </ul>
 
-      <p className="text-xs text-muted-foreground text-center">
-        Minimo 4 de 6 para avancar. Os outros 2 anote como meta para a proxima
-        sessao. ({checkedCount}/6)
-      </p>
+      <div className="flex justify-between items-center">
+        <p className="text-xs text-muted-foreground">
+          Minimo {MIN_CHECKED} para avancar. ({checkedCount}/{items.length})
+        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setEditorOpen(true)}
+          data-testid="setup-edit-list"
+        >
+          <Pencil className="h-3 w-3 mr-1" />
+          Editar lista
+        </Button>
+      </div>
 
       <div className="flex justify-end">
         <Button
           type="button"
           data-testid="setup-advance"
-          onClick={() => onAdvance({ setupItems: state })}
+          onClick={handleAdvance}
           disabled={!canAdvance}
         >
           Proximo
         </Button>
       </div>
+
+      <SetupEditorDialog
+        open={editorOpen}
+        items={items}
+        userId={userId}
+        onOpenChange={setEditorOpen}
+        onSave={(next) => {
+          setItems(next);
+          saveSetupItems(next, userId);
+          // remove checks de items que sumiram
+          setChecked((prev) => {
+            const out: Record<string, boolean> = {};
+            for (const label of next) {
+              if (prev[label]) out[label] = true;
+            }
+            return out;
+          });
+        }}
+      />
     </div>
+  );
+}
+
+interface SetupEditorDialogProps {
+  open: boolean;
+  items: string[];
+  userId: string | null;
+  onOpenChange: (v: boolean) => void;
+  onSave: (items: string[]) => void;
+}
+
+function SetupEditorDialog({ open, items, userId, onOpenChange, onSave }: SetupEditorDialogProps) {
+  const [draft, setDraft] = useState<string[]>(items);
+  const [newItem, setNewItem] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setDraft(items);
+      setNewItem("");
+    }
+  }, [open, items]);
+
+  const updateAt = (idx: number, value: string) => {
+    setDraft((prev) => {
+      const next = [...prev];
+      next[idx] = value;
+      return next;
+    });
+  };
+
+  const removeAt = (idx: number) => {
+    setDraft((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addItem = () => {
+    const v = newItem.trim();
+    if (!v) return;
+    setDraft((prev) => [...prev, v]);
+    setNewItem("");
+  };
+
+  const restoreDefaults = () => {
+    resetSetupItems(userId);
+    setDraft(DEFAULT_SETUP_ITEMS.slice());
+  };
+
+  const handleSave = () => {
+    const cleaned = draft.map((s) => s.trim()).filter((s) => s.length > 0);
+    onSave(cleaned.length > 0 ? cleaned : DEFAULT_SETUP_ITEMS.slice());
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[520px]">
+        <DialogHeader>
+          <DialogTitle>Editar checklist do Setup Fisico</DialogTitle>
+          <DialogDescription>
+            Adicione, edite ou remova itens. Minimo 3 marcados ainda eh exigido para avancar.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-2">
+          {draft.map((value, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={value}
+                onChange={(e) => updateAt(idx, e.target.value)}
+                maxLength={120}
+                className="flex-1 rounded-md border px-3 py-2 text-sm bg-background"
+                data-testid={`setup-edit-input-${idx}`}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => removeAt(idx)}
+                data-testid={`setup-edit-remove-${idx}`}
+                aria-label={`Remover ${value}`}
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 pt-2 border-t">
+          <input
+            type="text"
+            placeholder="Novo item..."
+            value={newItem}
+            onChange={(e) => setNewItem(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addItem();
+              }
+            }}
+            maxLength={120}
+            className="flex-1 rounded-md border px-3 py-2 text-sm bg-background"
+            data-testid="setup-edit-new-input"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addItem}
+            disabled={newItem.trim().length === 0}
+            data-testid="setup-edit-add"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Adicionar
+          </Button>
+        </div>
+
+        <div className="flex justify-between pt-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={restoreDefaults}
+            data-testid="setup-edit-restore"
+          >
+            Restaurar padroes
+          </Button>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleSave} data-testid="setup-edit-save">
+              Salvar
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -30,9 +30,9 @@ afterEach(() => {
 });
 
 describe('PFCDrillBlock - render', () => {
-  it('exibe titulo "Ativação do PFC"', () => {
+  it('exibe titulo "Drills GTO / Estudo"', () => {
     render(<PFCDrillBlock onAdvance={() => {}} />);
-    expect(document.body.textContent).toMatch(/ativa[çc][aã]o do PFC/i);
+    expect(document.body.textContent).toMatch(/drills.*GTO|GTO.*estudo/i);
   });
 
   it('exibe instrucao de drill (spec 9.3 menciona "Close Decisions")', () => {
@@ -70,9 +70,12 @@ describe('PFCDrillBlock - timer 4 min', () => {
     expect(document.body.textContent).toMatch(/04:00/);
   });
 
-  it('decrementa timer apos 1 segundo', () => {
+  it('decrementa timer apos alguns segundos', async () => {
+    const { act } = await import('@testing-library/react');
     render(<PFCDrillBlock onAdvance={() => {}} />);
-    vi.advanceTimersByTime(1500);
+    await act(async () => {
+      vi.advanceTimersByTime(2500);
+    });
     expect(document.body.textContent).toMatch(/03:5/);
   });
 });

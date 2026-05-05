@@ -4,18 +4,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 
 // =============================================================================
-// Testes TDD (Sprint W-1): Fluxo C — Gate com Override (confirmacao dupla)
+// Fluxo C — Gate com Override (confirmacao dupla) — Reform 2026-05-05
 //
-// Fonte: Docs/architecture/sequence-warmup-flow.mermaid (Fluxo C)
-//        Spec secao 10.3
-//        ADR-027 (override registra overrideUsed=true)
+// Nova ordem: Setup -> Respiracao+check -> Heuristicas -> Intencao -> PFC.
 //
 // Cenario:
-//   1. Bloco 1: score=4 → GoNoGoModal abre.
-//   2. Usuario clica "Ainda quero jogar" → OverrideConfirmDialog abre.
-//   3. Confirma → overrideUsed=true, ritual prossegue.
-//   4. Completa Blocos 2-5.
-//   5. POST: version=full + decisionToPlay=true + overrideUsed=true + score=4.
+//   1. Setup Fisico: marca 3 + Proximo
+//   2. Respiracao: score=4 -> GoNoGoModal
+//   3. "Ainda quero jogar" -> OverrideConfirmDialog
+//   4. Confirma -> overrideUsed=true, prossegue
+//   5. Heuristicas, Intencao (vazio = opcional), PFC
+//   6. POST: version=full + decisionToPlay=true + overrideUsed=true + score=4
 // =============================================================================
 
 vi.mock('@/lib/queryClient', () => ({
@@ -58,62 +57,56 @@ describe('Fluxo C - Gate com Override (confirmacao dupla)', () => {
       });
     });
 
-    render(withClient(<WarmUpRunner onClose={() => {}} onComplete={() => {}} />));
+    render(withClient(<WarmUpRunner onClose={() => {}} onComplete={() => {}} mode="6m" />));
 
+    // Bloco 1: Setup Fisico
+    await waitFor(() => {
+      expect(screen.queryByTestId('setup-item-0')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('setup-item-0'));
+    fireEvent.click(screen.getByTestId('setup-item-1'));
+    fireEvent.click(screen.getByTestId('setup-item-2'));
+    fireEvent.click(screen.getByTestId('setup-advance'));
+
+    // Bloco 2: Respiracao + check - score=4
     await waitFor(() => {
       expect(screen.queryByTestId('emotional-check-slider')).toBeTruthy();
     });
-
     const slider = screen.getByTestId('emotional-check-slider') as HTMLInputElement;
     fireEvent.change(slider, { target: { value: '4' } });
     fireEvent.click(screen.getByTestId('emotional-check-submit'));
 
-    // Modal aparece
+    // GoNoGo modal
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /ainda quero jogar/i })).toBeTruthy();
     });
-
     fireEvent.click(screen.getByRole('button', { name: /ainda quero jogar/i }));
 
-    // OverrideConfirm aparece - confirma
+    // OverrideConfirm
     await waitFor(() => {
       expect(document.body.textContent).toMatch(/tem certeza/i);
     });
-
     fireEvent.click(
       screen.getByRole('button', { name: /sim,?\s*registrar override/i }),
     );
 
-    // Avanca os blocos restantes ate o final
+    // Bloco 3: Heuristicas
     await waitFor(() => {
       expect(screen.queryByTestId('weekly-focus-advance')).toBeTruthy();
     });
     fireEvent.click(screen.getByTestId('weekly-focus-advance'));
 
+    // Bloco 4: Intencao (opcional - vazio)
+    await waitFor(() => {
+      expect(screen.queryByTestId('intention-submit')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('intention-submit'));
+
+    // Bloco 5: PFC
     await waitFor(() => {
       expect(screen.queryByTestId('pfc-drill-advance')).toBeTruthy();
     });
     fireEvent.click(screen.getByTestId('pfc-drill-advance'));
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('setup-water')).toBeTruthy();
-    });
-    fireEvent.click(screen.getByTestId('setup-water'));
-    fireEvent.click(screen.getByTestId('setup-snacks'));
-    fireEvent.click(screen.getByTestId('setup-headphones'));
-    fireEvent.click(screen.getByTestId('setup-light'));
-    fireEvent.click(screen.getByTestId('setup-advance'));
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('intention-focus')).toBeTruthy();
-    });
-    fireEvent.change(screen.getByTestId('intention-focus'), { target: { value: 'foco' } });
-    fireEvent.change(screen.getByTestId('intention-tilt-plan'), { target: { value: 'plano' } });
-    fireEvent.change(screen.getByTestId('intention-stop-criteria'), { target: { value: 'stop' } });
-
-    fireEvent.click(
-      screen.getByRole('button', { name: /concluir warm-up.*iniciar grind/i }),
-    );
 
     // POST: full + override=true + decisionToPlay=true + score<6
     await waitFor(() => {

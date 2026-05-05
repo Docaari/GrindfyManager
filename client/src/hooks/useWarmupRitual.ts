@@ -23,6 +23,7 @@ import { useCallback, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import type { SessionIntentionPayload } from "@/components/warmup/IntentionBlock";
+import type { WarmupMode } from "@/components/warmup/durations";
 
 const DRAFT_KEY = "warmup-ritual-draft";
 const DRAFT_TTL_MS = 30 * 60 * 1000; // 30min
@@ -49,6 +50,7 @@ interface DraftShape {
   overrideUsed: boolean;
   blocksData: Record<number, BlockData>;
   status?: WarmupStatus;
+  mode?: WarmupMode;
 }
 
 function readDraft(): DraftShape | null {
@@ -97,6 +99,7 @@ export function useWarmupRitual() {
   const [overrideUsed, setOverrideUsed] = useState<boolean>(false);
   const [gateOpen, setGateOpen] = useState<boolean>(false);
   const [blocksData, setBlocksData] = useState<Record<number, BlockData>>({});
+  const [mode, setMode] = useState<WarmupMode | null>(null);
   const ritualStartedAtRef = useRef<string | null>(null);
 
   const invalidateWarmupQueries = useCallback(() => {
@@ -129,7 +132,7 @@ export function useWarmupRitual() {
   // Public API
   // -------------------------------------------------------------------------
 
-  const start = useCallback(() => {
+  const start = useCallback((modeArg?: WarmupMode) => {
     const startedAt = new Date().toISOString();
     ritualStartedAtRef.current = startedAt;
     setStatus("running");
@@ -138,6 +141,7 @@ export function useWarmupRitual() {
     setOverrideUsed(false);
     setGateOpen(false);
     setBlocksData({});
+    if (modeArg) setMode(modeArg);
     writeDraft({
       ritualStartedAt: startedAt,
       currentBlock: 1,
@@ -145,6 +149,7 @@ export function useWarmupRitual() {
       overrideUsed: false,
       blocksData: {},
       status: "running",
+      mode: modeArg,
     });
   }, []);
 
@@ -160,15 +165,28 @@ export function useWarmupRitual() {
   const confirmOverride = useCallback(() => {
     setOverrideUsed(true);
     setGateOpen(false);
-    setCurrentBlock((b) => Math.min(b + 1, 5));
-    // persist draft
+    const next = Math.min(currentBlock + 1, 5);
+    // Persiste snapshot do bloco atual (gate disparado em bloco 2 = Respiracao+check)
+    // com score + overrideUsed=true. Sem isso, blocksData[currentBlock] fica vazio
+    // e analytics historico perde o registro do override.
+    const nextBlocksData = {
+      ...blocksData,
+      [currentBlock]: {
+        ...(blocksData[currentBlock] ?? {}),
+        blockId: currentBlock,
+        emotionalCheckScore,
+        overrideUsed: true,
+      },
+    };
+    setBlocksData(nextBlocksData);
+    setCurrentBlock(next);
     if (ritualStartedAtRef.current) {
       writeDraft({
         ritualStartedAt: ritualStartedAtRef.current,
-        currentBlock: currentBlock + 1,
+        currentBlock: next,
         emotionalCheckScore,
         overrideUsed: true,
-        blocksData,
+        blocksData: nextBlocksData,
         status: "running",
       });
     }
@@ -204,11 +222,17 @@ export function useWarmupRitual() {
   }, []);
 
   const abort = useCallback(
-    async (reason: AbortReason = "user_cancel"): Promise<void> => {
+    async (
+      reason: AbortReason = "user_cancel",
+      opts: { emotionalCheckScore?: number | null } = {},
+    ): Promise<void> => {
       const startedAt = ritualStartedAtRef.current ?? new Date().toISOString();
       const completedAt = new Date().toISOString();
       const decisionToPlay =
         reason === "gate_no_go" ? false : null;
+      // Permite chamar com score explicito (caso o setState ainda nao tenha
+      // flushado via submitEmotionalCheck — ex: gate_no_go).
+      const finalScore = opts.emotionalCheckScore ?? emotionalCheckScore;
       const blocks = Object.values(blocksData).map((b) => ({
         blockId: (b as any).blockId ?? 0,
         startedAt,
@@ -222,7 +246,7 @@ export function useWarmupRitual() {
           completedAt,
           durationMinutes: 0,
           version: "aborted",
-          emotionalCheckScore,
+          emotionalCheckScore: finalScore,
           decisionToPlay,
           overrideUsed,
           blocksCompleted: blocks,
@@ -283,11 +307,11 @@ export function useWarmupRitual() {
     [emotionalCheckScore, overrideUsed, blocksData, invalidateWarmupQueries],
   );
 
-  const restoreDraft = useCallback(() => {
+  const restoreDraft = useCallback((): WarmupMode | null => {
     const d = readDraft();
     if (!d || !isDraftFresh(d)) {
       clearDraft();
-      return;
+      return null;
     }
     ritualStartedAtRef.current = d.ritualStartedAt;
     setStatus(d.status ?? "running");
@@ -295,7 +319,13 @@ export function useWarmupRitual() {
     setEmotionalCheckScore(d.emotionalCheckScore ?? null);
     setOverrideUsed(d.overrideUsed ?? false);
     setBlocksData(d.blocksData ?? {});
+    if (d.mode) setMode(d.mode);
+    return d.mode ?? null;
   }, []);
+
+  // Helper estatico — le mode salvo SEM montar componente / disparar render.
+  // Util para MentalPrep saber qual mode usar antes de montar Runner.
+  // (chamada fora do hook eh OK porque nao usa useState)
 
   return {
     status,
@@ -304,6 +334,7 @@ export function useWarmupRitual() {
     overrideUsed,
     gateOpen,
     blocksData,
+    mode,
     start,
     submitEmotionalCheck,
     confirmOverride,
@@ -314,4 +345,14 @@ export function useWarmupRitual() {
     completeRitual,
     restoreDraft,
   };
+}
+
+/**
+ * Le mode salvo no draft de localStorage SEM disparar render React.
+ * Util para containers que precisam decidir parametros antes de montar Runner.
+ */
+export function readDraftMode(): WarmupMode | null {
+  const d = readDraft();
+  if (!d || !isDraftFresh(d)) return null;
+  return d.mode ?? null;
 }

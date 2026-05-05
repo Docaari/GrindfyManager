@@ -102,12 +102,9 @@ export async function handleCreateWarmupRitual(req: any, res: Response) {
   const data = parsed.data;
 
   // Cross-field validations (server-side, ADR-027)
+  // Reform 2026-05-05 (ADR-120): sessionIntention agora opcional em version=full.
+  // Demais regras mantidas.
   if (data.version === "full") {
-    if (data.sessionIntention == null) {
-      return res.status(400).json({
-        message: "sessionIntention e obrigatorio quando version=full",
-      });
-    }
     if (data.decisionToPlay == null) {
       return res.status(400).json({
         message: "decisionToPlay e obrigatorio quando version=full",

@@ -1,13 +1,10 @@
 /**
- * IntentionBlock — Sprint W-1 (RF-09, T-10)
+ * IntentionBlock — Sprint W-1 (RF-09) — Reform 2026-05-05.
  *
- * Bloco 5: 3 textareas obrigatorias. Botao "Concluir warm-up e iniciar grind"
- * habilita apenas quando os 3 campos sao nao-vazios apos trim.
- *
- * Microcopy spec secao 9.5.
+ * 3 textareas OPCIONAIS. Botao Proximo sempre habilitado. Campos vazios viram null.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 export interface SessionIntentionPayload {
@@ -17,29 +14,24 @@ export interface SessionIntentionPayload {
 }
 
 export interface IntentionBlockProps {
-  onSubmit: (intention: SessionIntentionPayload) => void;
+  onSubmit: (intention: SessionIntentionPayload | null) => void;
+  ctaLabel?: string;
 }
 
-export function IntentionBlock({ onSubmit }: IntentionBlockProps) {
+export function IntentionBlock({ onSubmit, ctaLabel = "Proximo" }: IntentionBlockProps) {
   const [focus, setFocus] = useState<string>("");
   const [tiltPlan, setTiltPlan] = useState<string>("");
   const [stopCriteria, setStopCriteria] = useState<string>("");
 
-  const allFilled = useMemo(
-    () =>
-      focus.trim().length > 0 &&
-      tiltPlan.trim().length > 0 &&
-      stopCriteria.trim().length > 0,
-    [focus, tiltPlan, stopCriteria],
-  );
-
   const handleSubmit = () => {
-    if (!allFilled) return;
-    onSubmit({
-      focus: focus.trim(),
-      tiltPlan: tiltPlan.trim(),
-      stopCriteria: stopCriteria.trim(),
-    });
+    const f = focus.trim();
+    const t = tiltPlan.trim();
+    const s = stopCriteria.trim();
+    if (!f && !t && !s) {
+      onSubmit(null);
+      return;
+    }
+    onSubmit({ focus: f, tiltPlan: t, stopCriteria: s });
   };
 
   return (
@@ -47,8 +39,7 @@ export function IntentionBlock({ onSubmit }: IntentionBlockProps) {
       <header className="text-center space-y-1">
         <h2 className="text-2xl font-bold">Intencao da sessao</h2>
         <p className="text-sm text-muted-foreground">
-          Tres frases. Fixa intencao, prepara resposta a tilt, define criterio
-          de encerramento.
+          Opcional. Fixa intencao, prepara resposta a tilt, define criterio de encerramento.
         </p>
       </header>
 
@@ -64,7 +55,7 @@ export function IntentionBlock({ onSubmit }: IntentionBlockProps) {
           maxLength={200}
           rows={2}
           placeholder="Ex: 'Defender BB vs BTN open 25bb seguindo a range estudada'"
-          className="w-full rounded-md border px-3 py-2 text-sm"
+          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
         />
       </div>
 
@@ -80,7 +71,7 @@ export function IntentionBlock({ onSubmit }: IntentionBlockProps) {
           maxLength={200}
           rows={2}
           placeholder="Ex: '5 respiracoes 4-4-4-4 + reler a intencao'"
-          className="w-full rounded-md border px-3 py-2 text-sm"
+          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
         />
       </div>
 
@@ -99,24 +90,18 @@ export function IntentionBlock({ onSubmit }: IntentionBlockProps) {
           maxLength={200}
           rows={2}
           placeholder="Ex: 'Stop-loss: -3 buy-ins do dia OU 4h de sessao'"
-          className="w-full rounded-md border px-3 py-2 text-sm"
+          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
         />
       </div>
-
-      {!allFilled && (
-        <p className="text-xs text-amber-600 text-center">
-          Os 3 campos sao obrigatorios. Mesmo curtos.
-        </p>
-      )}
 
       <div className="flex justify-center pt-2">
         <Button
           type="button"
+          data-testid="intention-submit"
           onClick={handleSubmit}
-          disabled={!allFilled}
           className="min-w-[220px]"
         >
-          Concluir warm-up e iniciar grind
+          {ctaLabel}
         </Button>
       </div>
     </div>

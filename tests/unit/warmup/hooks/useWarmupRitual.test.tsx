@@ -135,6 +135,14 @@ describe('useWarmupRitual - Bloco 1 (check emocional)', () => {
     expect(result.current.overrideUsed).toBe(true);
     expect(result.current.gateOpen).toBe(false);
     expect(result.current.currentBlock).toBe(2);
+    // Reform 2026-05-05 (BLOCKER-1 fix): confirmOverride deve persistir
+    // snapshot do bloco onde o gate disparou, com score + overrideUsed=true.
+    // Sem isso, audit historico perde o registro do override.
+    expect(result.current.blocksData[1]).toMatchObject({
+      blockId: 1,
+      emotionalCheckScore: 4,
+      overrideUsed: true,
+    });
   });
 });
 

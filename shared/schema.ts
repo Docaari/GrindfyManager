@@ -622,22 +622,36 @@ export const preparationLogs = pgTable("preparation_logs", {
 // Substitui semanticamente preparation_logs para rituais de warm-up cronometrados.
 // preparation_logs permanece em uso pelo MentalPrep legado por 60 dias (ADR-029).
 
+// Reform 2026-05-05 (ADR-120): nova ordem de blocos.
+//   1 = Setup fisico (sem timer)
+//   2 = Respiracao + check emocional
+//   3 = Foco da semana (heuristicas)
+//   4 = Intencao (opcional)
+//   5 = Drills GTO/Estudo (PFC)
+//
+// Snapshots gravados ANTES de 2026-05-05 usam ordem antiga:
+//   1 = Emocional, 2 = Heuristicas, 3 = PFC, 4 = Setup, 5 = Intencao.
+// Consumers que indexam por blockId devem usar created_at >= 2026-05-05 como
+// cutoff para semantica nova. Ver ADR-120 secao "Compatibilidade".
 export type WarmupBlockSnapshot = {
   blockId: 1 | 2 | 3 | 4 | 5;
   startedAt: string; // ISO
   completedAt: string; // ISO
   durationSeconds: number;
-  // Bloco 1
+  // Score emocional (bloco 2 pos-reform; bloco 1 pre-reform)
   emotionalCheckScore?: number;
   breathingCyclesCompleted?: number;
-  // Bloco 2
+  overrideUsed?: boolean;
+  // Heuristicas (bloco 3 pos-reform; bloco 2 pre-reform)
   heuristicsRead?: boolean;
   heuristicsSnapshot?: [string, string, string];
-  // Bloco 3
+  // PFC drill (bloco 5 pos-reform; bloco 3 pre-reform)
   drillCompleted?: boolean;
   drillUrl?: string;
-  // Bloco 4
-  setupItems?: {
+  // Setup fisico (bloco 1 pos-reform; bloco 4 pre-reform).
+  // Pre-reform: shape fixed (water/snacks/phoneAirplane/notificationsOff/headphones/light).
+  // Pos-reform: Record<label, boolean> com labels editaveis pelo user, lista em setupItemsList.
+  setupItems?: Record<string, boolean> | {
     water: boolean;
     snacks: boolean;
     phoneAirplane: boolean;
@@ -645,7 +659,9 @@ export type WarmupBlockSnapshot = {
     headphones: boolean;
     light: boolean;
   };
-  // Bloco 5: capturado em sessionIntention diretamente
+  setupItemsList?: string[]; // pos-reform: lista de labels usada quando user editou
+  // Intencao (bloco 4 pos-reform; bloco 5 pre-reform): capturada em sessionIntention da row
+  sessionIntention?: { focus: string; tiltPlan: string; stopCriteria: string } | null;
 };
 
 export type SessionIntention = {

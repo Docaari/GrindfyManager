@@ -50,6 +50,16 @@ describe('Fluxo B - Gate Soft disparado, jogador aceita nao jogar', () => {
     const onClose = vi.fn();
     render(withClient(<WarmUpRunner onClose={onClose} onComplete={() => {}} />));
 
+    // Reform 2026-05-05: ordem nova - Setup Fisico eh bloco 1.
+    // Avanca Setup primeiro (marca 3 + Proximo) para chegar em Respiracao+check.
+    await waitFor(() => {
+      expect(screen.queryByTestId('setup-item-0')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('setup-item-0'));
+    fireEvent.click(screen.getByTestId('setup-item-1'));
+    fireEvent.click(screen.getByTestId('setup-item-2'));
+    fireEvent.click(screen.getByTestId('setup-advance'));
+
     await waitFor(() => {
       expect(screen.queryByTestId('emotional-check-slider')).toBeTruthy();
     });

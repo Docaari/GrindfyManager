@@ -1,5 +1,4 @@
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Headphones } from 'lucide-react';
 
 interface AudioLibraryDialogProps {
@@ -10,12 +9,6 @@ interface AudioLibraryDialogProps {
 export function AudioLibraryDialog({ open, onOpenChange }: AudioLibraryDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="border-border hover:bg-accent text-foreground">
-          <Headphones className="w-4 h-4 mr-2" />
-          Biblioteca de Audios
-        </Button>
-      </DialogTrigger>
       <DialogContent className="sm:max-w-[500px] bg-poker-surface border-gray-700">
         <DialogHeader>
           <DialogTitle className="text-white">Biblioteca de Audios</DialogTitle>

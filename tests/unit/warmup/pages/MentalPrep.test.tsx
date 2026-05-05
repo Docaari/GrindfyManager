@@ -61,13 +61,15 @@ describe('MentalPrep refatorada - estrutura', () => {
     });
   });
 
-  it('exibe card primario "Iniciar warm-up (10min)"', async () => {
+  it('exibe card primario "Iniciar Warm-up" e referencia modos 6/15/30m', async () => {
     (apiRequest as any).mockResolvedValue(null);
     render(withClient(<MentalPrep />));
 
     await waitFor(() => {
       expect(document.body.textContent).toMatch(/iniciar warm-up/i);
-      expect(document.body.textContent).toMatch(/10\s*min/i);
+      // Reform 2026-05-05: duracao escolhida via DurationSelector.
+      // Card menciona os modos.
+      expect(document.body.textContent).toMatch(/6m\s*\/\s*15m\s*\/\s*30m/i);
     });
   });
 

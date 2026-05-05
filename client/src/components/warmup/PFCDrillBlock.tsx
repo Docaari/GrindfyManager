@@ -7,28 +7,26 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { formatMmSs } from "@/lib/timeFormat";
 
-const DRILL_SECONDS = 4 * 60;
+const DEFAULT_DRILL_SECONDS = 4 * 60;
 const DEFAULT_DRILL_URL = "https://app.gtowizard.com/";
 
 export interface PFCDrillBlockProps {
   drillUrl?: string;
+  durationSeconds?: number;
+  /** Quando true, ticker pausa (timer global do Runner pausado tambem). */
+  paused?: boolean;
   onAdvance: (payload: {
     drillCompleted: boolean;
     drillUrl: string;
   }) => void;
 }
 
-function formatMmSs(secs: number): string {
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
-
-export function PFCDrillBlock({ drillUrl, onAdvance }: PFCDrillBlockProps) {
+export function PFCDrillBlock({ drillUrl, durationSeconds, paused, onAdvance }: PFCDrillBlockProps) {
+  const drillSeconds = durationSeconds && durationSeconds > 0 ? durationSeconds : DEFAULT_DRILL_SECONDS;
   // Usamos um tick counter (forca re-render) + acc em ref para o tempo real.
   const [tick, setTick] = useState<number>(0);
   const accRef = useRef<number>(0);
@@ -36,26 +34,22 @@ export function PFCDrillBlock({ drillUrl, onAdvance }: PFCDrillBlockProps) {
   const finishedRef = useRef<boolean>(false);
 
   useEffect(() => {
-    const TICK_MS = 250;
+    if (paused) return;
+    const TICK_MS = 500;
     const interval = setInterval(() => {
       accRef.current += TICK_MS;
-      // flushSync para que cada tick reflita imediatamente no DOM (necessario
-      // para tests com vi.useFakeTimers que assertem textContent apos
-      // advanceTimersByTime).
-      flushSync(() => {
-        setTick((t) => t + 1);
-      });
+      setTick((t) => t + 1);
       const elapsed = Math.floor(accRef.current / 1000);
-      if (elapsed >= DRILL_SECONDS) {
+      if (elapsed >= drillSeconds) {
         finishedRef.current = true;
         clearInterval(interval);
       }
     }, TICK_MS);
     return () => clearInterval(interval);
-  }, []);
+  }, [drillSeconds, paused]);
 
   const remaining = Math.max(
-    DRILL_SECONDS - Math.floor(accRef.current / 1000),
+    drillSeconds - Math.floor(accRef.current / 1000),
     0,
   );
   // referencia tick (lint) — forca re-render
@@ -66,21 +60,21 @@ export function PFCDrillBlock({ drillUrl, onAdvance }: PFCDrillBlockProps) {
   return (
     <div className="flex flex-col gap-6 max-w-xl mx-auto px-4">
       <header className="text-center space-y-1">
-        <h2 className="text-2xl font-bold">Ativacao do PFC</h2>
+        <h2 className="text-2xl font-bold">Drills GTO / Estudo</h2>
         <p className="text-sm text-muted-foreground">
-          4 minutos de drill no foco da semana
+          {Math.round(drillSeconds / 60)} minutos no foco da semana
         </p>
       </header>
 
       <p className="text-sm">
-        Abra o GTO Wizard Trainer (ou seu drill preferido) em modo 'Close
-        Decisions — Fast'. Foque no spot da semana. Objetivo NAO e acertar — e
-        pre-ativar os circuitos de decisao. Erros aqui sao informativos.
+        Comece a aquecer o motor e pensar poker. Abra o GTO Wizard Trainer (ou seu
+        drill preferido) em modo 'Close Decisions — Fast' OU revise maos jogadas.
+        Objetivo NAO e acertar — e pre-ativar os circuitos de decisao.
       </p>
 
       <div
         role="timer"
-        aria-live="polite"
+        aria-live="off"
         aria-label="Tempo restante do drill PFC"
         className="text-center text-5xl font-mono font-bold tabular-nums"
       >

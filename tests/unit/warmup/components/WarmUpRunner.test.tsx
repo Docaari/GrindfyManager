@@ -38,10 +38,10 @@ beforeEach(() => {
 });
 
 describe('WarmUpRunner - render', () => {
-  it('inicia no Bloco 1', () => {
+  it('inicia no Bloco 1 (Setup fisico)', () => {
     render(withClient(<WarmUpRunner onClose={() => {}} onComplete={() => {}} />));
-    // Bloco 1 = Check-in emocional
-    expect(document.body.textContent).toMatch(/check-in emocional/i);
+    // Reform 2026-05-05: Bloco 1 = Setup fisico (era check-in emocional)
+    expect(document.body.textContent).toMatch(/setup f[ií]sico/i);
   });
 
   it('exibe indicador de bloco "1/5"', () => {
@@ -61,11 +61,11 @@ describe('WarmUpRunner - render', () => {
 });
 
 describe('WarmUpRunner - timer header', () => {
-  it('timer header tem role="timer" + aria-live=polite (RNF-06)', () => {
+  it('timer header tem role="timer" + aria-live=off (reform: evita anuncio continuo de SR)', () => {
     render(withClient(<WarmUpRunner onClose={() => {}} onComplete={() => {}} />));
     const timer = screen.getByRole('timer');
     expect(timer).toBeTruthy();
-    expect(timer.getAttribute('aria-live')).toBe('polite');
+    expect(timer.getAttribute('aria-live')).toBe('off');
   });
 });
 
@@ -111,7 +111,7 @@ describe('WarmUpRunner - mobile fullscreen (RNF-13)', () => {
 });
 
 describe('WarmUpRunner - prefers-reduced-motion', () => {
-  it('respeita prefers-reduced-motion (RNF-09) — sem animacao no Bloco 1', () => {
+  it('respeita prefers-reduced-motion (RNF-09) — sem animacao no Bloco Respiracao', async () => {
     (window as any).matchMedia = (query: string) => ({
       matches: query.includes('reduced-motion'),
       media: query,
@@ -124,7 +124,14 @@ describe('WarmUpRunner - prefers-reduced-motion', () => {
     });
 
     render(withClient(<WarmUpRunner onClose={() => {}} onComplete={() => {}} />));
-    // sem animacao, mostra texto estatico de 4s
-    expect(document.body.textContent).toMatch(/4s/);
+    // Avanca Setup fisico: marcar 3 + Proximo
+    fireEvent.click(screen.getByTestId('setup-item-0'));
+    fireEvent.click(screen.getByTestId('setup-item-1'));
+    fireEvent.click(screen.getByTestId('setup-item-2'));
+    fireEvent.click(screen.getByTestId('setup-advance'));
+
+    await waitFor(() => {
+      expect(document.body.textContent).toMatch(/4s/);
+    });
   });
 });

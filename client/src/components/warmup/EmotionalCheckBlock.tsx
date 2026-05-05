@@ -13,10 +13,11 @@ import { OverrideConfirmDialog } from "./OverrideConfirmDialog";
 
 export interface EmotionalCheckBlockProps {
   onSubmit: (score: number, overrideUsed: boolean) => void;
-  onCancel: () => void;
+  onCancel: (score: number) => void;
+  breathingSeconds?: number;
 }
 
-export function EmotionalCheckBlock({ onSubmit, onCancel }: EmotionalCheckBlockProps) {
+export function EmotionalCheckBlock({ onSubmit, onCancel, breathingSeconds }: EmotionalCheckBlockProps) {
   const [score, setScore] = useState<number>(6);
   const [showGate, setShowGate] = useState<boolean>(false);
   const [showOverride, setShowOverride] = useState<boolean>(false);
@@ -31,7 +32,7 @@ export function EmotionalCheckBlock({ onSubmit, onCancel }: EmotionalCheckBlockP
 
   const handleNotPlaying = () => {
     setShowGate(false);
-    onCancel();
+    onCancel(score);
   };
 
   const handleWantsToPlay = () => {
@@ -51,13 +52,16 @@ export function EmotionalCheckBlock({ onSubmit, onCancel }: EmotionalCheckBlockP
   return (
     <div className="flex flex-col gap-6 max-w-xl mx-auto px-4">
       <header className="text-center space-y-1">
-        <h2 className="text-2xl font-bold">Check-in emocional</h2>
+        <h2 className="text-2xl font-bold">Respiracao + check-in</h2>
         <p className="text-sm text-muted-foreground">
           Respire. Olhe pra dentro. Decida com honestidade.
         </p>
       </header>
 
-      <BreathingBox4444 onComplete={() => { /* anim termina; UI permanece */ }} />
+      <BreathingBox4444
+        onComplete={() => { /* anim termina; UI permanece */ }}
+        durationSeconds={breathingSeconds}
+      />
 
       <div className="space-y-3">
         <label

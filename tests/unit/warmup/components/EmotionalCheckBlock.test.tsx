@@ -28,9 +28,20 @@ beforeEach(() => {
 });
 
 describe('EmotionalCheckBlock - render', () => {
-  it('exibe titulo "Check-in emocional"', () => {
+  it('onCancel passa score atual (reform 2026-05-05)', () => {
+    const onCancel = vi.fn();
+    render(<EmotionalCheckBlock onSubmit={() => {}} onCancel={onCancel} />);
+    const slider = screen.getByTestId('emotional-check-slider') as HTMLInputElement;
+    fireEvent.change(slider, { target: { value: '3' } });
+    fireEvent.click(screen.getByTestId('emotional-check-submit'));
+    // Gate aparece (score < 6) -> click "Nao vou jogar"
+    fireEvent.click(screen.getByRole('button', { name: /n[aã]o vou jogar/i }));
+    expect(onCancel).toHaveBeenCalledWith(3);
+  });
+
+  it('exibe titulo "Respiração + check-in"', () => {
     render(<EmotionalCheckBlock onSubmit={() => {}} onCancel={() => {}} />);
-    expect(document.body.textContent).toMatch(/check-in emocional/i);
+    expect(document.body.textContent).toMatch(/respira[çc][aã]o.*check-in|check-in.*respira/i);
   });
 
   it('exibe pergunta "Estou OK pra jogar agora?" (copia spec secao 9.1)', () => {
