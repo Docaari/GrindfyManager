@@ -36,44 +36,29 @@ import { WelcomeNameModal } from '@/components/WelcomeNameModal';
 import { emit } from '@/lib/tracker';
 
 import StatusStrip from '@/components/home/StatusStrip';
-// Sprint home-reform-5 item 2: novo header strip (4 KPIs corrigidos).
 import HeaderStrip from '@/components/home/HeaderStrip';
 import TodayCard from '@/components/home/TodayCard';
 import CooldownBanner from '@/components/home/CooldownBanner';
-// Sprint home-reform-5 item 1: FlightBanner removido da Home (ruido visual).
-// Logica Day 2 auto-resume continua viva em /grind (Sprint Flight-1).
 import NextTournamentCountdown from '@/components/home/NextTournamentCountdown';
 import RecentSessionsList from '@/components/home/RecentSessionsList';
 import PerformanceMini from '@/components/home/PerformanceMini';
-// Sprint home-reform-5 item 6 — substitui PerformanceMini por card all-time grind.
 import SessionsRegisteredCard from '@/components/home/SessionsRegisteredCard';
 import PendingHandsList from '@/components/home/PendingHandsList';
-// Sprint home-reform-5 item 4 — primary CTA card da zona Acao Imediata.
 import ImmediateAction, { type ImmediateActionData } from '@/components/home/ImmediateAction';
 import HomeFooter from '@/components/home/HomeFooter';
 import EmptyHomeOnboarding from '@/components/home/EmptyHomeOnboarding';
-// Sprint home-reform-1-5 (RF-22 + RF-23): forward-looking blocks.
 import DailyInsight from '@/components/home/DailyInsight';
-// Sprint home-reform-4 / Item 4 — substitui LibraryResume na zona Acao Imediata.
 import CoachRecommendationCard from '@/components/home/CoachRecommendationCard';
-// Sprint home-reform-2 Onda 2 (RF-29 / RF-30 / RF-31 / RF-34).
 import StatsTopDeltas from '@/components/home/StatsTopDeltas';
 import VarianceCard from '@/components/home/VarianceCard';
 import HeuristicsCard from '@/components/home/HeuristicsCard';
-// Sprint home-reform-4 item 5 — substitui TournamentRecommendations.
 import GradeTodayCard from '@/components/home/GradeTodayCard';
-// Sprint home-reform-3 Onda 3 (RF-A1, RF-A5, RF-B1).
 import HomeHeader from '@/components/home/HomeHeader';
 import EmptyPerformanceCluster from '@/components/home/EmptyPerformanceCluster';
 import NewsFeed from '@/components/home/NewsFeed';
-// Sprint home-reform-4 item 1.
 import SessionsMonthCard from '@/components/home/SessionsMonthCard';
-// Sprint home-reform-5 item 7 — Dashboard All Time substitui DashboardMonthCard +
-// MonthEvolutionChart na Home (componentes antigos preservados pra uso no
-// /dashboard, se necessario).
 import DashboardAllTimeCard from '@/components/home/DashboardAllTimeCard';
 import AllTimeEvolutionChart from '@/components/home/AllTimeEvolutionChart';
-// Sprint home-reform-4 item 7 — nova zona Estudos.
 import FocusStatsCard from '@/components/home/FocusStatsCard';
 
 import type { NewsItem } from '@shared/types/news';
@@ -196,18 +181,6 @@ interface HomeOverviewResponse {
     status: 'lucky' | 'normal' | 'unlucky';
     period: '90d';
   } | null;
-  tournamentRecommendations?: Array<{
-    id: string;
-    name: string;
-    buyinUsd: number;
-    buyinNative: number;
-    currency: string;
-    score: number;
-    grade: 'S' | 'A' | 'B';
-    startTime: string;
-    platform: string;
-    alreadyInGrid: boolean;
-  }>;
   heuristics?: Array<{
     id: string;
     message: string;
@@ -241,14 +214,6 @@ interface HomeOverviewResponse {
   immediateAction?: ImmediateActionData | null;
   // Sprint home-reform-4 item 1.
   sessionsMonth?: {
-    monthStart: string;
-    count: number;
-    profitUsd: number;
-    investedUsd: number;
-    roiPct: number | null;
-  } | null;
-  // Sprint home-reform-4 item 2+6.
-  dashboardMonth?: {
     monthStart: string;
     count: number;
     profitUsd: number;
@@ -335,10 +300,18 @@ const Home: React.FC = () => {
     }
   }, [user]);
 
-  // Tracking home_view (RNF-09): 1x por mount, quando data chega.
+  // Tracking home_view (RNF-09): 1x por sessao do browser via sessionStorage.
+  // Evita inflar metric com mounts subsequentes (cache hits, navegacao back).
   useEffect(() => {
     if (!data || homeViewEmittedRef.current) return;
     homeViewEmittedRef.current = true;
+    try {
+      const sentKey = 'home:viewEmitted';
+      if (sessionStorage.getItem(sentKey) === '1') return;
+      sessionStorage.setItem(sentKey, '1');
+    } catch {
+      // sessionStorage indisponivel (privacy mode) — emite mesmo assim.
+    }
     emit('home_view', {
       userState: data.userState,
       cacheHit: data.meta?.cacheHit ?? false,
@@ -393,7 +366,7 @@ const Home: React.FC = () => {
 
   const userTimezone = data.meta?.userTimezone || 'America/Sao_Paulo';
   const firstName =
-    (user as any)?.firstName ||
+    user?.firstName ||
     (typeof user?.name === 'string' ? user.name.trim().split(/\s+/)[0] : null) ||
     null;
 

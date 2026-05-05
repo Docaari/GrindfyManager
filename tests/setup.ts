@@ -162,6 +162,18 @@ if (typeof (globalThis as any).localStorage === 'undefined') {
   (globalThis as any).localStorage = new MemoryStorage();
 }
 
+// sessionStorage isolado por teste — Home tracking RNF-09 usa sessionStorage
+// pra deduplicar home_view; sem clear entre tests, segundo render no mesmo
+// arquivo nao emite (regressao silenciosa).
+import { afterEach } from 'vitest';
+afterEach(() => {
+  try {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
+  } catch {
+    // ignore
+  }
+});
+
 // Set required environment variables for tests
 process.env.JWT_SECRET = 'test-jwt-secret-for-vitest';
 process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret-for-vitest';

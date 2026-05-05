@@ -20,10 +20,9 @@ import {
   type HomeVisibilitySettings,
 } from '@shared/types/homeSettings';
 
-const visibilityShape = HOME_VISIBILITY_KEYS.reduce<Record<string, z.ZodOptional<z.ZodBoolean>>>((acc, key) => {
-  acc[key] = z.boolean().optional();
-  return acc;
-}, {});
+const visibilityShape = Object.fromEntries(
+  HOME_VISIBILITY_KEYS.map((key) => [key, z.boolean().optional()]),
+) as Record<string, z.ZodOptional<z.ZodBoolean>>;
 
 const visibilityPatchSchema = z.object(visibilityShape).strict();
 

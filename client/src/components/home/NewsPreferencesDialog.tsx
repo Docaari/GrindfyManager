@@ -55,7 +55,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
 export function NewsPreferencesDialog({
   open,
   onOpenChange,
-  defaultCategory = "market",
+  defaultCategory = "sites",
 }: NewsPreferencesDialogProps) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<NewsSource>(defaultCategory);

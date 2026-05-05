@@ -19,14 +19,11 @@ import { requireAuth } from '../auth';
 import { storage } from '../storage';
 import { fetchNewsItems } from './news';
 import type { NewsItem } from '@shared/types/news';
-import { handleTournamentSelector } from './tournament-selector';
 import { computeHeuristics } from '../services/homeHeuristics';
 import { getSessionsMonthSummary } from '../services/sessionsMonth';
-// Sprint home-reform-5 item 6 — Sessoes Registradas (renome "Performance").
 import { getSessionsRegisteredSummary } from '../services/sessionsRegistered';
 import { fxResolver as homeFxResolver } from '../services/fxResolver';
 import { getCurrencyForSite as homeGetCurrencyForSite } from '@shared/platform-currency';
-import { getDashboardMonthSummary } from '../services/dashboardMonth';
 import { getHomeEvolution, parseMonthIso } from '../services/homeEvolution';
 // Sprint home-reform-5 item 7 — Dashboard All Time + grafico evolucao all-time.
 import {
@@ -225,18 +222,6 @@ interface HomeOverviewBody {
     status: 'lucky' | 'normal' | 'unlucky';
     period: '90d';
   } | null;
-  tournamentRecommendations: Array<{
-    id: string;
-    name: string;
-    buyinUsd: number;
-    buyinNative: number;
-    currency: string;
-    score: number;
-    grade: 'S' | 'A' | 'B';
-    startTime: string;
-    platform: string;
-    alreadyInGrid: boolean;
-  }>;
   heuristics: Array<{
     id: string;
     message: string;
@@ -245,14 +230,6 @@ interface HomeOverviewBody {
   }>;
   // Sprint home-reform-4 item 1 — Sessoes mes atual.
   sessionsMonth: {
-    monthStart: string;
-    count: number;
-    profitUsd: number;
-    investedUsd: number;
-    roiPct: number | null;
-  } | null;
-  // Sprint home-reform-4 item 2+6 — Dashboard mes atual (uploads/historico).
-  dashboardMonth: {
     monthStart: string;
     count: number;
     profitUsd: number;
@@ -406,65 +383,57 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       ({ todayIso, dayOfWeek } = formatToTzDateParts(userTimezone));
     }
 
+    // IStorage interface ainda nao expoe alguns metodos especificos da Home;
+    // alias local reduz ruido visual ate sprint debt declarar todos.
+    const s = storage as any;
+
     // Promise.allSettled — graceful degradation por subquery (D5 / ADR-102 §2.1.4).
     // Sprint home-reform-2 RF-29/30/31/34: 4 subqueries novas + perf60d.
     const settled = await Promise.allSettled([
-      timed('quickStats', () => (storage as any).getQuickStats(userId), timings),
-      timed('performance', () => (storage as any).getDashboardPerformance(userId, '30d'), timings),
-      timed('recentSessions', () => (storage as any).getRecentSessions(userId, 5), timings),
+      timed('quickStats', () => s.getQuickStats(userId), timings),
+      timed('performance', () => s.getDashboardPerformance(userId, '30d'), timings),
+      timed('recentSessions', () => s.getRecentSessions(userId, 5), timings),
       // Sprint home-reform-2 RF-34: heuristicas day-of-week precisam >=60 sessoes
       // (ADR-108). Subquery dedicada paralela; nao reusa recentSessions(5).
-      timed('recentSessions60', () => (storage as any).getRecentSessions(userId, 60), timings),
-      timed('pendingHands', () => (storage as any).getPendingStarredHands(userId, 5), timings),
-      timed('planned', () => (storage as any).getPlannedTournamentsForDate(userId, todayIso), timings),
-      timed('profile', () => (storage as any).getProfileStateForDay(userId, dayOfWeek), timings),
-      timed('bankroll', () => (storage as any).getCurrentBankroll(userId), timings),
-      timed('cooldown', () => (storage as any).getActiveCooldown(userId), timings),
-      timed('flight', () => (storage as any).getActiveFlightSeries(userId), timings),
+      timed('recentSessions60', () => s.getRecentSessions(userId, 60), timings),
+      timed('pendingHands', () => s.getPendingStarredHands(userId, 5), timings),
+      timed('planned', () => s.getPlannedTournamentsForDate(userId, todayIso), timings),
+      timed('profile', () => s.getProfileStateForDay(userId, dayOfWeek), timings),
+      timed('bankroll', () => s.getCurrentBankroll(userId), timings),
+      timed('cooldown', () => s.getActiveCooldown(userId), timings),
+      timed('flight', () => s.getActiveFlightSeries(userId), timings),
       timed('news', () => fetchNewsItems('poker-software', 5), timings),
       // Sprint home-reform-1-5 RF-25.3: subquery profile-detect.
-      timed('profileDetect', () => (storage as any).detectPlayerProfile(userId), timings),
+      timed('profileDetect', () => s.detectPlayerProfile(userId), timings),
       // Sprint home-reform-2 — Onda 2 novas subqueries.
-      timed('performance60d', () => (storage as any).getDashboardPerformance(userId, '60d'), timings),
-      timed('topDeltas', () => (storage as any).getStatsTopDeltas(userId, 3), timings),
-      timed('variance', () => (storage as any).getVarianceVsExpected(userId), timings),
-      timed('tournamentRecs', () =>
-        handleTournamentSelector({
-          userId,
-          date: todayIso,
-          sources: 'suprema,library',
-          minScore: 70,
-          bankrollFilter: false,
-          lookbackDays: 180,
-        } as any).catch((selErr) => {
-          console.error('[home/overview] handleTournamentSelector failed:', selErr);
-          return { tournaments: [] };
-        }), timings),
+      timed('performance60d', () => s.getDashboardPerformance(userId, '60d'), timings),
+      timed('topDeltas', () => s.getStatsTopDeltas(userId, 3), timings),
+      timed('variance', () => s.getVarianceVsExpected(userId), timings),
       // Sprint home-reform-4 item 1.
       timed('sessionsMonth', () => getSessionsMonthSummary(userId), timings),
-      // Sprint home-reform-4 item 2+6.
-      timed('dashboardMonth', () => getDashboardMonthSummary(userId), timings),
       // Sprint home-reform-5 item 2 — Header Strip subqueries.
-      timed('lastBankrollMovementAt', () => (storage as any).getLatestBankrollMovementAt(userId), timings),
-      timed('lastTournamentUploadAt', () => (storage as any).getLatestTournamentUploadAt(userId), timings),
-      timed('oldestPendingSpotAt', () => (storage as any).getOldestPendingSpotAt(userId), timings),
+      timed('lastBankrollMovementAt', () => s.getLatestBankrollMovementAt(userId), timings),
+      timed('lastTournamentUploadAt', () => s.getLatestTournamentUploadAt(userId), timings),
+      timed('oldestPendingSpotAt', () => s.getOldestPendingSpotAt(userId), timings),
       timed('bankrollSnapshots30d', () =>
-        (storage as any).getBankrollSnapshots(userId, {
+        s.getBankrollSnapshots(userId, {
           from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
           limit: 500,
         }), timings),
       timed('bankrollSnapshotPrior30d', () =>
-        (storage as any).getBankrollSnapshots(userId, {
+        s.getBankrollSnapshots(userId, {
           to: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
           limit: 1,
         }), timings),
       // Sprint home-reform-5 item 4 — Acao Imediata (start_session check).
-      timed('hasActiveGrindSession', () => (storage as any).hasActiveGrindSession(userId), timings),
+      timed('hasActiveGrindSession', () => s.hasActiveGrindSession(userId), timings),
       // Sprint home-reform-5 item 6 — Sessoes Registradas + RecentSessions com KPIs.
       timed('sessionsRegistered', () => getSessionsRegisteredSummary(userId), timings),
-      timed('recentSessionsKpis', () => (storage as any).getRecentSessionsWithKpis(userId, 5), timings),
+      timed('recentSessionsKpis', () => s.getRecentSessionsWithKpis(userId, 5), timings),
       // Sprint home-reform-5 item 7 — Dashboard All Time (uploads/historico).
       timed('dashboardAllTime', () => getDashboardAllTimeSummary(userId), timings),
+      // FX rates resolvidos em paralelo (consumido por recentSessionsKpis -> USD).
+      timed('fxRates', () => homeFxResolver.resolveExchangeRates(userId), timings),
     ]);
 
     const unwrap = <T,>(idx: number): T | null => {
@@ -492,18 +461,17 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     const performance60d = unwrap<any>(12);
     const topDeltasResult = unwrap<any[]>(13);
     const varianceResult = unwrap<any>(14);
-    const tournamentSelectorResult = unwrap<any>(15);
-    const sessionsMonthResult = unwrap<any>(16);
-    const dashboardMonthResult = unwrap<any>(17);
-    const lastBankrollMovementAtResult = unwrap<Date>(18);
-    const lastTournamentUploadAtResult = unwrap<Date>(19);
-    const oldestPendingSpotAtResult = unwrap<Date>(20);
-    const bankrollSnapshots30dResult = unwrap<any[]>(21);
-    const bankrollSnapshotPrior30dResult = unwrap<any[]>(22);
-    const hasActiveGrindSessionResult = unwrap<boolean>(23) ?? false;
-    const sessionsRegisteredResult = unwrap<any>(24);
-    const recentSessionsKpisResult = unwrap<any[]>(25);
-    const dashboardAllTimeResult = unwrap<any>(26);
+    const sessionsMonthResult = unwrap<any>(15);
+    const lastBankrollMovementAtResult = unwrap<Date>(16);
+    const lastTournamentUploadAtResult = unwrap<Date>(17);
+    const oldestPendingSpotAtResult = unwrap<Date>(18);
+    const bankrollSnapshots30dResult = unwrap<any[]>(19);
+    const bankrollSnapshotPrior30dResult = unwrap<any[]>(20);
+    const hasActiveGrindSessionResult = unwrap<boolean>(21) ?? false;
+    const sessionsRegisteredResult = unwrap<any>(22);
+    const recentSessionsKpisResult = unwrap<any[]>(23);
+    const dashboardAllTimeResult = unwrap<any>(24);
+    const fxRatesResult = unwrap<{ rates: Record<string, number> }>(25);
 
     // Tipos usados localmente (cast porque mocks retornam any).
     const qs = quickStats as any;
@@ -630,7 +598,7 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
     let recentSessionsOut: HomeOverviewBody['recentSessions'] = null;
     if (Array.isArray(recentSessionsKpisResult) && recentSessionsKpisResult.length > 0) {
       try {
-        const { rates } = await homeFxResolver.resolveExchangeRates(userId);
+        const rates = fxRatesResult?.rates ?? {};
         recentSessionsOut = recentSessionsKpisResult.map((s: any) => {
           const sites: any[] = Array.isArray(s?.sites) ? s.sites : [];
           let count = 0;
@@ -768,37 +736,6 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
           period: '90d',
         }
       : null;
-
-    // tournamentRecommendations: filtra grade in [S, A, B], top 3 score DESC + startTime ASC.
-    const allRecs: any[] = Array.isArray(tournamentSelectorResult?.tournaments)
-      ? tournamentSelectorResult.tournaments
-      : [];
-    const nowIsoForRecs = new Date().toISOString();
-    const filteredRecs = allRecs
-      .filter((t: any) =>
-        t
-        && (t.grade === 'S' || t.grade === 'A' || t.grade === 'B')
-        && Number(t?.score ?? 0) >= 70
-        && (typeof t?.startTime !== 'string' || t.startTime >= nowIsoForRecs),
-      )
-      .sort((a: any, b: any) => {
-        const sb = Number(b?.score ?? 0) - Number(a?.score ?? 0);
-        if (sb !== 0) return sb;
-        return String(a?.startTime ?? '').localeCompare(String(b?.startTime ?? ''));
-      })
-      .slice(0, 3);
-    const tournamentRecommendationsOut: HomeOverviewBody['tournamentRecommendations'] = filteredRecs.map((t: any) => ({
-      id: String(t?.id ?? ''),
-      name: String(t?.name ?? ''),
-      buyinUsd: Number(t?.buyinUsd ?? 0),
-      buyinNative: Number(t?.buyinNative ?? t?.buyinUsd ?? 0),
-      currency: String(t?.currency ?? 'USD'),
-      score: Number(t?.score ?? 0),
-      grade: t.grade as 'S' | 'A' | 'B',
-      startTime: String(t?.startTime ?? ''),
-      platform: String(t?.platform ?? ''),
-      alreadyInGrid: !!t?.alreadyInGrid,
-    }));
 
     // heuristics: orchestrator agrega inputs e chama servico puro.
     let heuristicsOut: HomeOverviewBody['heuristics'] = [];
@@ -971,7 +908,6 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
       // Sprint home-reform-2 Onda 2.
       topDeltas: topDeltasOut,
       variance: varianceOut,
-      tournamentRecommendations: tournamentRecommendationsOut,
       heuristics: heuristicsOut,
       // Sprint home-reform-5 item 6 — Sessoes Registradas.
       sessionsRegistered: sessionsRegisteredResult && typeof sessionsRegisteredResult === 'object'
@@ -993,16 +929,6 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
             profitUsd: Number(sessionsMonthResult.profitUsd ?? 0),
             investedUsd: Number(sessionsMonthResult.investedUsd ?? 0),
             roiPct: sessionsMonthResult.roiPct == null ? null : Number(sessionsMonthResult.roiPct),
-          }
-        : null,
-      // Sprint home-reform-4 item 2+6.
-      dashboardMonth: dashboardMonthResult && typeof dashboardMonthResult === 'object'
-        ? {
-            monthStart: String(dashboardMonthResult.monthStart ?? ''),
-            count: Number(dashboardMonthResult.count ?? 0),
-            profitUsd: Number(dashboardMonthResult.profitUsd ?? 0),
-            investedUsd: Number(dashboardMonthResult.investedUsd ?? 0),
-            roiPct: dashboardMonthResult.roiPct == null ? null : Number(dashboardMonthResult.roiPct),
           }
         : null,
       // Sprint home-reform-5 item 7 — Dashboard All Time (6 KPIs).

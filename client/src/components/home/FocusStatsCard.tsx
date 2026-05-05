@@ -19,7 +19,7 @@
  *   #13 apiRequest retorna JSON parseado
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -239,9 +239,15 @@ export default function FocusStatsCard(): JSX.Element {
   const qc = useQueryClient();
   const viewEmittedRef = useRef(false);
 
+  // Mes UTC no queryKey evita cache stale em virada de mes.
+  const month = useMemo(() => {
+    const d = new Date();
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  }, []);
+
   const { data, isLoading, isError, refetch } = useQuery<FocusStatsResponse>({
-    queryKey: ["/api/home/focus-stats"],
-    queryFn: () => apiRequest("GET", "/api/home/focus-stats"),
+    queryKey: ["/api/home/focus-stats", month],
+    queryFn: () => apiRequest("GET", `/api/home/focus-stats?month=${month}`),
     staleTime: 30_000,
     refetchOnWindowFocus: true,
   });

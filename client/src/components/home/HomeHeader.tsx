@@ -7,7 +7,7 @@
  * com logo h-10/h-12 + saudacao contextual + meta (weekday + dd/mm + streak + tz).
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import HeaderLogo from '@/components/branding/HeaderLogo';
 import HomeSettingsGear from './HomeSettingsGear';
 
@@ -72,7 +72,7 @@ function localHourFor(timezone: string | null | undefined): { hour: number; week
 
 export default function HomeHeader({ firstName, timezone, streakDays }: Props): JSX.Element {
   const tz = timezone || 'America/Sao_Paulo';
-  const { hour, weekdayIdx, day, month } = localHourFor(tz);
+  const { hour, weekdayIdx, day, month } = useMemo(() => localHourFor(tz), [tz]);
   const greeting = greetingForHour(hour);
   const safeName = firstName && firstName.trim() ? firstName.trim() : 'jogador';
   const weekday = WEEKDAYS_PT_BR[weekdayIdx] ?? 'dia';

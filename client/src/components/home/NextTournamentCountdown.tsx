@@ -62,12 +62,12 @@ export default function NextTournamentCountdown({
 
   useEffect(() => {
     if (!data || coachContext) return;
+    // Tick a cada 30s — display tem granularidade de minuto, sem necessidade de 1Hz.
     const id = setInterval(() => {
       setNow((prev) => {
         const next = Date.now();
         const prevSecs = diffSeconds(data.startTime, prev);
         const nextSecs = diffSeconds(data.startTime, next);
-        // Skip re-render quando display string nao muda (1 update / minuto em vez de 60).
         if (
           fmtCountdown(prevSecs) === fmtCountdown(nextSecs) &&
           (prevSecs <= 0) === (nextSecs <= 0)
@@ -76,7 +76,7 @@ export default function NextTournamentCountdown({
         }
         return next;
       });
-    }, 1000);
+    }, 30_000);
     return () => clearInterval(id);
   }, [data, coachContext]);
 

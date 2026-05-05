@@ -169,10 +169,12 @@ interface CarouselProps {
 function Carousel({ items, isRead, onItemClick }: CarouselProps): JSX.Element {
   const [active, setActive] = useState(0);
 
-  // Reseta indice quando a lista muda (tab change ou refetch).
+  // Reseta indice apenas quando ids da lista mudam (tab change ou refetch),
+  // evitando re-set por slice() que cria nova ref a cada render.
+  const idsKey = items.map((i) => i.id).join(',');
   useEffect(() => {
     setActive(0);
-  }, [items]);
+  }, [idsKey]);
 
   const total = items.length;
   const safeActive = Math.min(active, Math.max(total - 1, 0));

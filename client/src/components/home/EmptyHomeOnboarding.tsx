@@ -28,6 +28,8 @@ interface Props {
   profile?: PlayerProfile;
 }
 
+const DEFAULT_PROFILE: PlayerProfile = 'new';
+
 interface StepProps {
   testId: string;
   label: string;
@@ -86,7 +88,7 @@ function descriptionForProfile(profile?: PlayerProfile): string {
   return 'Complete os 4 passos abaixo para destravar o cockpit completo.';
 }
 
-export default function EmptyHomeOnboarding({ data, profile }: Props): JSX.Element {
+export default function EmptyHomeOnboarding({ data, profile = DEFAULT_PROFILE }: Props): JSX.Element {
   const handleSkip = () => {
     try {
       localStorage.setItem('home:skipOnboarding', 'true');
