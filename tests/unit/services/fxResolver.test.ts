@@ -55,14 +55,14 @@ async function loadFx() {
   return mod;
 }
 
-describe('fxResolver — RF-11 FALLBACK_FX_RATES', () => {
-  it('exporta USD=1, BRL=5.0, EUR=0.93, USDT=1.0, CNY=7.2', async () => {
+describe('fxResolver — RF-11 FALLBACK_FX_RATES (FX-1 D12: reduzido para USD/BRL/EUR)', () => {
+  it('exporta USD=1, BRL=5.0, EUR=0.93 (USDT/CNY removidos por Sprint FX-1 D12)', async () => {
     const mod = await loadFx();
     expect(mod.FALLBACK_FX_RATES.USD).toBe(1);
     expect(mod.FALLBACK_FX_RATES.BRL).toBeCloseTo(5.0, 2);
     expect(mod.FALLBACK_FX_RATES.EUR).toBeCloseTo(0.93, 2);
-    expect(mod.FALLBACK_FX_RATES.USDT).toBeCloseTo(1.0, 2);
-    expect(mod.FALLBACK_FX_RATES.CNY).toBeCloseTo(7.2, 1);
+    expect(mod.FALLBACK_FX_RATES.USDT).toBeUndefined();
+    expect(mod.FALLBACK_FX_RATES.CNY).toBeUndefined();
   });
 });
 

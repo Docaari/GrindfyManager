@@ -1,72 +1,65 @@
 /**
- * fxResolver — Sprint Bankroll-3 RF-11
+ * fxResolver — Sprint Bankroll-3 RF-11 + Sprint FX-1 RF-05 (cascata estendida).
  *
- * Spec: Docs/specs/sprint-bankroll-3.md (RF-11, D9)
+ * Spec: Docs/specs/sprint-bankroll-3.md (RF-11, D9), Docs/specs/sprint-fx-1.md (RF-05).
  * ADR-061: fxResolver unified service
+ * ADR-121: system_fx_rates global (FX-1).
  *
  * Convencao QW-1 (ADR-033):
  *   rates[ccy] = unidades de ccy por 1 USD
- *   USD = 1, BRL = 5.0, EUR = 0.93, USDT = 1.0
+ *   USD = 1, BRL = 5.0, EUR = 0.93
  *
- * Cascata de resolucao:
- *   1. users.exchangeRates (fonte principal)
- *   2. wallets[*].exchangeRates merge (preenche o que user nao tem)
- *   3. constants FALLBACK_FX_RATES
+ * Cascata de resolucao (FX-1):
+ *   1. users.exchangeRates (override per-user)
+ *   2. system_fx_rates (latest, via fxRatesPersistence) — NOVO FX-1
+ *   3. wallets.exchangeRates (compat ADR-034) — apenas para currencies que
+ *      system nao cobre (CNY, GBP, USDT, BTC).
+ *   4. constants FALLBACK_FX_RATES (USD/BRL/EUR apenas pos-FX-1)
  *
- * Cache em memoria 5min por userId. Invalidate explicito no PUT /user-settings.
+ * source: 'user' | 'system' | 'wallets' | 'fallback' | 'mixed'.
+ *   - 'mixed' quando user override parcial + system completa.
+ *
+ * Cache em memoria 5min por userId. Invalidate explicito no PUT /user-settings
+ * + cron pos-upsert (global).
  */
 
 import { storage } from "../storage";
+import { getLatestSystemRates } from "./fx/fxRatesPersistence";
+
+export type FxResolverSource = "user" | "system" | "wallets" | "fallback" | "mixed";
 
 export interface FxRates {
   /** Map de currency code para taxa (unidades de currency por 1 USD). USD = 1. */
   rates: Record<string, number>;
-  /** Origem dos rates: 'user' | 'wallets' | 'fallback'. */
-  source: "user" | "wallets" | "fallback";
+  /** Origem dos rates. */
+  source: FxResolverSource;
   /** Timestamp da resolucao (cache hint). */
   resolvedAt: Date;
 }
 
+// Sprint FX-1 RF-05 D12: reduzido para USD/BRL/EUR. CNY/GBP/USDT/BTC removidos
+// — wallets legadas com essas moedas continuam via cascata compat.
 export const FALLBACK_FX_RATES: Readonly<Record<string, number>> = Object.freeze({
   USD: 1,
   BRL: 5.0,
   EUR: 0.93,
-  CNY: 7.2,
-  USDT: 1.0,
-  GBP: 0.79,
-  BTC: 0.000016,
 });
 
 interface CacheEntry {
   rates: Record<string, number>;
-  source: "user" | "wallets" | "fallback";
+  source: FxResolverSource;
   resolvedAt: Date;
   expiresAt: number;
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-// HIGH-3 fix (round 2): cache module-level com fallback para globalThis.
-// PRIMARY: `_resetCacheForTests()` exportado para reset explicito. Test setups
-// devem importar e chamar.
-// COMPAT: o ambiente de teste atual nao consegue `require('./fxResolver')`
-// devido ao import `../storage` que colide com a directory `server/storage/`
-// (Node ESM "Directory import unsupported"). Por isso mantemos o ponteiro de
-// cache em `globalThis.__fxResolverCache` para que setup.ts possa zerar sem
-// precisar dynamicamente importar o modulo.
-//
-// Em prod nao ha tests, e o cache vive como Map module-level normalmente.
-// Em testes, ambos os caminhos zeram a MESMA Map (singleton via globalThis).
 const _g = globalThis as any;
 if (!_g.__fxResolverCache) {
   _g.__fxResolverCache = new Map<string, CacheEntry>();
 }
 const cache: Map<string, CacheEntry> = _g.__fxResolverCache;
 
-/**
- * Reset interno do cache. Nome com underscore explicito sinaliza:
- * APIs de teste apenas — nao chamar em prod.
- */
 export function _resetCacheForTests(): void {
   cache.clear();
 }
@@ -89,9 +82,8 @@ function sanitizeRates(input: any): Record<string, number> {
 }
 
 /**
- * Resolve FxRates para um userId.
- * Cascata: user → wallets → fallback. Cache 5min.
- * userId vazio retorna fallback puro.
+ * Resolve FxRates para userId. Cascata: user → system → wallets compat → fallback.
+ * Cache 5min. userId vazio retorna fallback puro.
  */
 export async function resolveExchangeRates(userId: string): Promise<FxRates> {
   if (!userId) {
@@ -113,43 +105,72 @@ export async function resolveExchangeRates(userId: string): Promise<FxRates> {
 
   let userRates: Record<string, number> = {};
   let walletRates: Record<string, number> = {};
+  let systemRates: Record<string, number> = {};
   let userHasRates = false;
   let walletsHaveRates = false;
+  let systemHasRates = false;
 
   try {
     const settings = await storage.getUserSettings(userId);
     userRates = sanitizeRates((settings as any)?.exchangeRates);
     userHasRates = Object.keys(userRates).length > 0;
   } catch (err) {
-    // log + continue with empty user rates
     console.warn("[fxResolver] getUserSettings failed:", (err as any)?.message);
   }
 
+  // FX-1: system rates layer (latest BRL + EUR via fxRatesPersistence).
   try {
-    const wallets = await storage.listWalletsByUser(userId, { includeArchived: true });
+    const sysMap = await getLatestSystemRates();
+    for (const [ccy, sr] of Object.entries(sysMap)) {
+      if (sr && isPositiveNumber(sr.ratePerUsd)) {
+        systemRates[ccy] = sr.ratePerUsd;
+      }
+    }
+    systemHasRates = Object.keys(systemRates).length > 0;
+  } catch (err) {
+    console.warn(
+      "[fxResolver] getLatestSystemRates failed:",
+      (err as any)?.message,
+    );
+  }
+
+  try {
+    const wallets = await storage.listWalletsByUser(userId, {
+      includeArchived: true,
+    });
     for (const w of wallets) {
       const wRates = sanitizeRates((w as any).exchangeRates);
       for (const [k, v] of Object.entries(wRates)) {
-        // user rates have precedence; wallet fills missing currencies
-        if (!(k in userRates) && !(k in walletRates)) {
+        // user + system rates have precedence; wallet preenche apenas o que falta.
+        if (
+          !(k in userRates) &&
+          !(k in systemRates) &&
+          !(k in walletRates)
+        ) {
           walletRates[k] = v;
         }
       }
     }
     walletsHaveRates = Object.keys(walletRates).length > 0;
   } catch (err) {
-    console.warn("[fxResolver] listWalletsByUser failed:", (err as any)?.message);
+    console.warn(
+      "[fxResolver] listWalletsByUser failed:",
+      (err as any)?.message,
+    );
   }
 
-  // Determine source priority
-  let source: "user" | "wallets" | "fallback";
-  if (userHasRates) source = "user";
+  // Determine source priority. 'mixed' quando user override + system populated juntos.
+  let source: FxResolverSource;
+  if (userHasRates && systemHasRates) source = "mixed";
+  else if (userHasRates) source = "user";
+  else if (systemHasRates) source = "system";
   else if (walletsHaveRates) source = "wallets";
   else source = "fallback";
 
   const merged: Record<string, number> = {
     ...FALLBACK_FX_RATES,
     ...walletRates,
+    ...systemRates,
     ...userRates,
     USD: 1,
   };
@@ -178,7 +199,6 @@ export function invalidateCache(userId?: string): void {
 
 /**
  * Converte amount em currency para USD.
- * USD: usd = native / rate.
  */
 export function convertToUSD(
   amount: number,
@@ -187,15 +207,13 @@ export function convertToUSD(
 ): number {
   if (!Number.isFinite(amount)) return 0;
   if (currency === "USD") return amount;
-  const rate =
-    rates[currency] ?? FALLBACK_FX_RATES[currency] ?? 1;
+  const rate = rates[currency] ?? FALLBACK_FX_RATES[currency] ?? 1;
   if (!isPositiveNumber(rate)) return amount;
   return amount / rate;
 }
 
 /**
- * Converte amount em USD para currency target.
- * USD: native = usd * rate.
+ * Converte USD para currency target.
  */
 export function convertFromUSD(
   amountUsd: number,
@@ -204,8 +222,7 @@ export function convertFromUSD(
 ): number {
   if (!Number.isFinite(amountUsd)) return 0;
   if (targetCurrency === "USD") return amountUsd;
-  const rate =
-    rates[targetCurrency] ?? FALLBACK_FX_RATES[targetCurrency] ?? 1;
+  const rate = rates[targetCurrency] ?? FALLBACK_FX_RATES[targetCurrency] ?? 1;
   if (!isPositiveNumber(rate)) return amountUsd;
   return amountUsd * rate;
 }

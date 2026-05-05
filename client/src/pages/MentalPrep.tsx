@@ -78,17 +78,32 @@ export default function MentalPrep() {
     setResumeMode(false);
   };
 
-  const handleRunnerComplete = () => {
+  const handleRunnerComplete = (payload?: { success?: boolean; error?: string | null }) => {
     setShowRunner(false);
     setResumeMode(false);
-    toast({
-      title: "Warm-up registrado",
-      description: "Bom grind!",
-    });
+    if (payload?.success === false) {
+      toast({
+        title: "Warm-up nao registrado",
+        description: payload.error ?? "Falha ao salvar. Voce pode tentar de novo ou iniciar grind direto.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Warm-up registrado",
+        description: "Bom grind!",
+      });
+    }
   };
 
   const handleStartGrind = () => {
-    if (!canStartGrind) return;
+    // Reform 2026-05-05 v2: permite iniciar grind sem warmup recente.
+    // Se sem warmup valido, exibe toast informativo mas NAO bloqueia.
+    if (!canStartGrind) {
+      toast({
+        title: "Iniciando grind sem warm-up",
+        description: "Recomendamos fazer o warm-up antes — mas voce pode prosseguir.",
+      });
+    }
     setLocation("/grind");
   };
 
@@ -149,14 +164,16 @@ export default function MentalPrep() {
               variant={canStartGrind ? "default" : "outline"}
               size="lg"
               onClick={handleStartGrind}
-              disabled={!canStartGrind}
               title={
                 canStartGrind
                   ? "Warm-up valido — bom grind"
-                  : "Faca warm-up nos ultimos 30 min para iniciar grind"
+                  : "Sem warm-up recente. Voce pode iniciar mesmo assim."
               }
             >
               Iniciar Grind
+              {!canStartGrind && (
+                <span className="ml-2 text-xs opacity-70">(sem warm-up)</span>
+              )}
             </Button>
           </div>
         </CardContent>

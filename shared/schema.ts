@@ -10,6 +10,8 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  primaryKey,
+  numeric,
   real,
   date,
 } from "drizzle-orm/pg-core";
@@ -4519,4 +4521,32 @@ export const newsPreferenceUpdateSchema = z.object({
   platformToggles: z.record(z.string(), z.boolean()).optional(),
 });
 export type NewsPreferenceUpdate = z.infer<typeof newsPreferenceUpdateSchema>;
+
+// =============================================================================
+// Sprint FX-1 — system_fx_rates (ADR-121, RF-01).
+// Tabela global de FX rates fetched diariamente pelo cron (BCB PTAX + frankfurter).
+// PK composta (date, currency) impede duplicatas. Audit trail nativo.
+// =============================================================================
+export const systemFxRates = pgTable(
+  "system_fx_rates",
+  {
+    date: date("date").notNull(),
+    currency: varchar("currency", { length: 8 }).notNull(),
+    ratePerUsd: numeric("rate_per_usd", { precision: 18, scale: 8 }).notNull(),
+    source: varchar("source", { length: 16 }).notNull(),
+    fetchedAt: timestamp("fetched_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.date, table.currency] }),
+    currencyDateIdx: index("idx_system_fx_rates_currency_date").on(
+      table.currency,
+      table.date,
+    ),
+  }),
+);
+
+export const systemFxRatesInsertSchema = createInsertSchema(systemFxRates);
+export type SystemFxRate = typeof systemFxRates.$inferSelect;
+export type SystemFxRateInsert = typeof systemFxRates.$inferInsert;
+export type FxSource = "bcb_ptax" | "frankfurter" | "manual" | "fallback";
 

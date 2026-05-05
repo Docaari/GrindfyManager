@@ -75,6 +75,18 @@ export function WarmUpRunner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Reform 2026-05-05 v2: previne fechar/recarregar aba durante warm-up sem confirmacao.
+  // Browser exibe dialog nativo (texto ignorado em browsers modernos).
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (ritual.status === "completed" || ritual.status === "aborted") return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [ritual.status]);
+
   // Ticker — so roda em bloco >= 2 e quando nao pausado.
   const shouldTick = ritual.currentBlock >= 2 && ritual.status !== "paused";
   useEffect(() => {
@@ -137,21 +149,29 @@ export function WarmUpRunner({
 
   const handlePFCAdvance = async (payload: any) => {
     track("block_completed", { blockId: 5 });
+    const intention = (ritual.blocksData?.[4] as any)?.sessionIntention ?? null;
+    let success = true;
+    let error: string | null = null;
     try {
-      const intention = (ritual.blocksData?.[4] as any)?.sessionIntention ?? null;
       await ritual.completeRitual(intention);
       track("warmup_completed", { mode });
-      onComplete({
-        intention,
-        emotionalCheckScore: ritual.emotionalCheckScore,
-        overrideUsed: ritual.overrideUsed,
-        mode,
-        pfc: payload,
-      });
-    } catch (e) {
+    } catch (e: any) {
       // eslint-disable-next-line no-console
-      console.error(e);
+      console.error("[warmup] completeRitual falhou:", e);
+      track("warmup_completed_error", { mode });
+      success = false;
+      error = e?.message ?? "Falha ao salvar warm-up";
     }
+    // Sempre fecha runner — completion final ou erro.
+    onComplete({
+      intention,
+      emotionalCheckScore: ritual.emotionalCheckScore,
+      overrideUsed: ritual.overrideUsed,
+      mode,
+      pfc: payload,
+      success,
+      error,
+    });
   };
 
   const handleAbort = async () => {
@@ -164,7 +184,7 @@ export function WarmUpRunner({
   return (
     <div
       data-testid="warmup-runner"
-      className="fixed inset-0 z-40 bg-background min-h-screen flex flex-col"
+      className="fixed inset-0 z-[60] bg-background min-h-screen flex flex-col"
     >
       {showAbortConfirm && (
         <div

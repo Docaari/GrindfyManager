@@ -1,0 +1,72 @@
+%% Sprint FX-1 — RF-05 fxResolver cascata estendida (ADR-121 + ADR-061)
+%% Nova ordem: users.exchangeRates > system_fx_rates (NOVA) > wallets.exchangeRates > FALLBACK.
+%% source: 'user' | 'system' | 'wallets' | 'fallback' | 'mixed'
+%% Cache 5min user-level (fxResolver) + 5min system-level (fxRatesPersistence). Convencao QW-1 (ADR-033).
+
+flowchart TD
+    Start[Caller chama<br/>fxResolver.resolveExchangeRates userId] --> CacheCheck{Cache user-level<br/>hit? userId in Map<br/>expiresAt > now}
+
+    CacheCheck -->|hit| ReturnCached[Retorna FxRates cacheado<br/>source preservada]
+    CacheCheck -->|miss expired| FetchUser[SELECT exchange_rates FROM users<br/>WHERE user_platform_id eq userId]
+
+    FetchUser --> UserHas{users.exchangeRates<br/>tem rates?}
+
+    UserHas -->|sim override| FetchSystem[fxRatesPersistence<br/>getLatestSystemRates]
+    UserHas -->|nao default| FetchSystemNoUser[fxRatesPersistence<br/>getLatestSystemRates]
+
+    FetchSystem --> SystemCacheCheck{Cache system-level<br/>5min hit?}
+    FetchSystemNoUser --> SystemCacheCheck
+
+    SystemCacheCheck -->|hit| SystemRows[BRL row + EUR row<br/>do cache]
+    SystemCacheCheck -->|miss| SystemQuery[SELECT DISTINCT ON currency<br/>currency, rate_per_usd, source, fetched_at<br/>FROM system_fx_rates<br/>ORDER BY currency, date DESC]
+    SystemQuery --> SystemRows
+
+    SystemRows --> SystemHas{system_fx_rates<br/>tem BRL EUR?}
+
+    SystemHas -->|sim| FetchWalletsCompat[SELECT exchange_rates FROM wallets<br/>WHERE user_id eq userId AND status active<br/>ORDER BY updated_at DESC]
+    SystemHas -->|nao DB vazia primeiro deploy| FetchWalletsCompat
+
+    FetchWalletsCompat --> Merge[Merge logic 4 layers<br/>1 base FALLBACK_FX_RATES<br/>USD 1, BRL 5.0, EUR 0.93<br/>2 wallets.exchangeRates compat<br/>cobre CNY GBP USDT BTC legacy<br/>3 system_fx_rates latest<br/>cobre BRL EUR oficial<br/>4 users.exchangeRates override<br/>precede tudo se existe]
+
+    Merge --> ClassifySource{Origem dominante<br/>para BRL EUR?}
+
+    ClassifySource -->|user override existe e system existe| SourceMixed[source mixed]
+    ClassifySource -->|user override existe sem system| SourceUser[source user]
+    ClassifySource -->|sem user override system existe| SourceSystem[source system]
+    ClassifySource -->|sem user sem system wallets compat| SourceWallets[source wallets]
+    ClassifySource -->|nada tudo fallback| SourceFallback[source fallback]
+
+    SourceMixed --> Build[Build FxRates:<br/>rates merged final<br/>source<br/>resolvedAt = new Date]
+    SourceUser --> Build
+    SourceSystem --> Build
+    SourceWallets --> Build
+    SourceFallback --> Build
+
+    Build --> CacheStore[cache.set userId<br/>rates expiresAt now plus 5min]
+    CacheStore --> ReturnFresh[Retorna FxRates fresh]
+
+    ReturnCached --> Helper[Caller usa helper<br/>convertToUSD amount currency rates<br/>amount dividido por rates currency<br/>QW-1 usd igual native dividido por rate]
+    ReturnFresh --> Helper
+
+    Helper --> Result[Valor convertido USD]
+
+    %% Invalidation paths
+    InvalidateUser[PUT api user-settings<br/>body.exchangeRates] -.->|invalidateCache userId| CacheCheck
+    InvalidateWallet[PUT POST api wallets<br/>body.exchangeRates] -.->|invalidateCache userId| CacheCheck
+    InvalidateCron[Cron pos-upsert<br/>refreshFxRates] -.->|invalidateCache global<br/>system e user caches| CacheCheck
+
+    %% Reset to system flow
+    ResetBtn[UI Resetar para taxas do sistema<br/>PUT api user-settings exchangeRates] -.->|zera users.exchangeRates<br/>e invalidateCache| FetchUser
+
+    %% userId null edge
+    UserNull[userId null<br/>tests anonymous system call] --> ReturnFallbackDirect[Retorna FALLBACK_FX_RATES<br/>USD 1 BRL 5.0 EUR 0.93<br/>source fallback]
+    Start --> UserNull
+
+    Note1[Cascata FX-1 4 camadas<br/>1 user override 2 system 3 wallets compat 4 fallback<br/>Currency unknown vai para proxima camada<br/>Convencao QW-1 ADR-033]
+    Build -.- Note1
+
+    Note2[FALLBACK_FX_RATES reduzido em FX-1<br/>USD BRL EUR apenas<br/>CNY GBP USDT BTC removidos<br/>Wallets legadas continuam via cascade compat layer 2]
+    Merge -.- Note2
+
+    Note3[Cache duplo invalidation<br/>User updates invalidate userId entry<br/>Cron pos-upsert invalidate global<br/>Garantia freshness em 5min pior caso]
+    InvalidateCron -.- Note3

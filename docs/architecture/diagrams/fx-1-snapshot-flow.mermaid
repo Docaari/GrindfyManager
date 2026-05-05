@@ -1,0 +1,59 @@
+%% Sprint FX-1 — RF-09 Snapshot bankroll usa getRatesForDate (ADR-121)
+%% Antes (Bankroll-3): snapshot usava fxResolver.resolveExchangeRates rate corrente do momento.
+%% Depois (FX-1): snapshot usa getRatesForDate(snapshotDate) - rate exata do dia.
+%% wallets.exchangeRates IMUTAVEL ADR-034 NAO afeta snapshot novo (apenas snapshots pre-FX-1).
+%% Auditabilidade temporal: snapshot 2026-04-15 le rate 2026-04-15.
+
+flowchart TD
+    Trigger[Trigger createBankrollSnapshot<br/>userId occurredAt<br/>RF-2 auto-cooldown OU manual endpoint] --> ExtractDate[snapshotDate igual occurredAt<br/>toISOString slice 0 10<br/>formato YYYY-MM-DD UTC]
+
+    ExtractDate --> FetchSystemForDate[fxRatesPersistence<br/>getRatesForDate snapshotDate]
+
+    FetchSystemForDate --> SystemQuery[SELECT DISTINCT ON currency<br/>currency rate_per_usd source fetched_at<br/>FROM system_fx_rates<br/>WHERE date menorIgual snapshotDate<br/>ORDER BY currency date DESC]
+
+    SystemQuery --> SystemHas{Rates encontradas<br/>para snapshotDate?}
+
+    SystemHas -->|sim working day exato| RatesForDate[systemRatesForDate<br/>BRL row e EUR row<br/>data menorIgual snapshotDate]
+    SystemHas -->|nao weekend ou feriado| LookupDescending[LATERAL lookup descending<br/>retorna ultimo working day anterior]
+    LookupDescending --> RatesForDate
+    SystemHas -->|nao DB vazia primeiro deploy| EmptySystem[systemRatesForDate vazio<br/>log warn fx snapshot rates not available]
+    EmptySystem --> RatesForDate
+
+    RatesForDate --> FetchUserOverride[SELECT exchange_rates FROM users<br/>WHERE user_platform_id eq userId]
+
+    FetchUserOverride --> MergeRates[helper mergeRates<br/>1 base FALLBACK_FX_RATES<br/>USD 1 BRL 5.0 EUR 0.93<br/>2 systemRatesForDate sobrepoe<br/>ex BRL 5.10 daquele dia<br/>3 userOverride sobrepoe<br/>precede sistema se user editou]
+
+    MergeRates --> Note1[NOTA wallets.exchangeRates<br/>NAO entra em snapshots novos<br/>Cascata snapshot user system fallback<br/>Wallets compat eh para queries live nao snapshots]
+
+    Note1 --> ConsolidatedUSD[walletService<br/>getConsolidatedBalanceUSD<br/>userId mergedRates]
+
+    ConsolidatedUSD --> SumLoop[loop wallets ativas<br/>SUM convertToUSD balance currency rates<br/>QW-1 usd igual native dividido por rate]
+
+    SumLoop --> CalcDelta[delta igual consolidatedUSD menos previousAmount<br/>previousAmount igual SELECT new_amount FROM<br/>bankroll_snapshots ORDER BY occurred_at DESC LIMIT 1]
+
+    CalcDelta --> InsertSnapshot[INSERT INTO bankroll_snapshots<br/>id user_id new_amount igual consolidatedUSD<br/>delta source reason origin source_ref_id<br/>occurred_at]
+
+    InsertSnapshot --> Result[Snapshot persistido<br/>com rate da data correta<br/>Auditabilidade temporal preservada]
+
+    %% Edge snapshots pre-FX-1
+    PreFXSnapshots[Snapshots pre-FX-1 existentes<br/>gravados com rate do momento<br/>nao com getRatesForDate] -.- NotePreservation[NAO sao re-escritos<br/>continuam usando rate gravada<br/>migration nao toca dados antigos]
+    NotePreservation -.- Result
+
+    %% Edge user override
+    UserOverrideSnap[User com override BRL 5.20<br/>em snapshot 2026-04-15] -.- NoteOverride[Override eh ATUAL do user<br/>nao historico do user override<br/>Decisao snapshot usa estado atual override<br/>Limitacao mudancas nao retroagem]
+    NoteOverride -.- MergeRates
+
+    %% Edge system empty primeiro deploy
+    EmptySystem -.- NoteFallback[Sem backfill primeiro deploy<br/>fallback FALLBACK_FX_RATES usado<br/>BRL 5.0 EUR 0.93<br/>Resolve apos cron rodar OU<br/>fx-backfill script popular 90 dias]
+    NoteFallback -.- MergeRates
+
+    %% Edge wallets imutaveis
+    WalletsImmutable[wallets.exchangeRates ADR-034<br/>congelada no momento da criacao da wallet] -.- NoteImmutable[NAO eh consultada em snapshots novos<br/>FX-1 quebra esse acoplamento<br/>Snapshots novos usam SOMENTE<br/>system_fx_rates user override fallback]
+    NoteImmutable -.- Note1
+
+    %% Comparison antes depois
+    Before[ANTES Bankroll-3 ADR-061<br/>fxResolver resolveExchangeRates userId<br/>rate corrente do momento<br/>snapshot historico errado] -.- Comparison[FX-1 mudanca chave<br/>rate temporal correta<br/>auditabilidade fiscal BR<br/>reconciliacao retroativa viavel]
+    Comparison -.- Result
+
+    Note2[Coluna fxRateSnapshot jsonb<br/>para auditabilidade per-snapshot<br/>DEFERIDA Sprint FX-2<br/>v1 usa source label do system_fx_rates]
+    Result -.- Note2

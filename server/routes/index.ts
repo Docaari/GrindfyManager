@@ -53,6 +53,9 @@ import { registerHomeFocusStatsRoutes } from "./home-focus-stats";
 import { registerFocusStatsRoutes } from "./focus-stats";
 // Sprint home-reform-5 item 11: /api/home/settings (engrenagem).
 import { registerHomeSettingsRoutes } from "./home-settings";
+// Sprint FX-1: /api/fx/current (user-level) + /api/admin/fx/* (admin-only).
+import { registerFxRoutes } from "./fx";
+import { registerAdminFxRoutes } from "./adminFx";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -191,6 +194,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerFocusStatsRoutes(app);
   // Sprint home-reform-5 item 11: /api/home/settings (engrenagem).
   registerHomeSettingsRoutes(app);
+  // Sprint FX-1: /api/fx/current + /api/admin/fx/*.
+  registerFxRoutes(app);
+  registerAdminFxRoutes(app);
 
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);

@@ -1,0 +1,11 @@
+{
+  "@odata.context": "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/$metadata#CotacaoMoedaPeriodo",
+  "value": [
+    {
+      "cotacaoCompra": 5.1198,
+      "cotacaoVenda": 5.1234,
+      "dataHoraCotacao": "2026-05-05 13:00:00.000",
+      "tipoBoletim": "Fechamento"
+    }
+  ]
+}

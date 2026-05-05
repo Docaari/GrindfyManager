@@ -70,9 +70,43 @@ if (typeof globalThis !== 'undefined' && typeof (globalThis as any).window !== '
   }
 }
 
-// Patch require to resolve .ts/.tsx files (needed for TDD try/catch require pattern in tests)
+// Patch require to resolve .ts/.tsx files + path aliases (TDD require pattern).
+// Aliases: @/ → client/src/, @shared/ → shared/, @assets/ → attached_assets/.
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const ALIAS_MAP: Record<string, string> = {
+  '@/': path.join(PROJECT_ROOT, 'client/src/'),
+  '@shared/': path.join(PROJECT_ROOT, 'shared/'),
+  '@assets/': path.join(PROJECT_ROOT, 'attached_assets/'),
+};
+
+function resolveAlias(request: string): string | null {
+  for (const [prefix, abs] of Object.entries(ALIAS_MAP)) {
+    if (request.startsWith(prefix)) {
+      const rest = request.slice(prefix.length);
+      const candidate = path.join(abs, rest);
+      const candidates = [
+        candidate,
+        candidate + '.ts',
+        candidate + '.tsx',
+        candidate + '.js',
+        candidate + '/index.ts',
+        candidate + '/index.tsx',
+      ];
+      for (const c of candidates) {
+        if (fs.existsSync(c) && fs.statSync(c).isFile()) {
+          return c;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 const originalResolveFilename = (Module as any)._resolveFilename;
 (Module as any)._resolveFilename = function (request: string, parent: any, ...args: any[]) {
+  // Handle aliases first (vite-style @/, @shared/).
+  const aliased = resolveAlias(request);
+  if (aliased) return aliased;
   try {
     return originalResolveFilename.call(this, request, parent, ...args);
   } catch (err: any) {
@@ -120,8 +154,12 @@ try {
     });
     module._compile(result.code, filename);
   };
-  if (!(Module as any)._extensions['.tsx']) {
-    (Module as any)._extensions['.tsx'] = handler;
+  // Sprint FX-1: forcar registro do handler tsx mesmo se algo (vite) ja
+  // registrou um — handlers existentes podem nao transpilar JSX corretamente
+  // para `require()` sincrono em testes jsdom.
+  (Module as any)._extensions['.tsx'] = handler;
+  if (!(Module as any)._extensions['.ts']) {
+    (Module as any)._extensions['.ts'] = handler;
   }
 } catch {
   // ok — vitest may handle this differently in some envs.

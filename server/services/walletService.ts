@@ -629,10 +629,18 @@ async function listWalletTransactions(
 // Aggregation
 // =============================================================================
 
-async function getConsolidatedBalance(userId: string): Promise<ConsolidatedBalance> {
+async function getConsolidatedBalance(
+  userId: string,
+  opts?: { rates?: Record<string, number>; date?: string },
+): Promise<ConsolidatedBalance> {
   const allWallets = await storage.getActiveWalletsByUser(userId);
   const settings = await storage.getUserSettings(userId);
-  const exchangeRates = (settings?.exchangeRates ?? {}) as Record<string, number>;
+  // Sprint FX-1 RF-09: rates pode ser injetado externamente (ex: bankroll
+  // snapshot novo passa rates do dia). Quando ausente, usa user override
+  // legado (mantem comportamento atual para todas as outras chamadas).
+  const exchangeRates: Record<string, number> = opts?.rates
+    ? { ...opts.rates }
+    : ((settings?.exchangeRates ?? {}) as Record<string, number>);
   const rule = (settings as any)?.bankrollRule ?? "1pct";
   const aggregationMode = ((settings as any)?.bankrollAggregationMode ?? "global") as
     | "global"

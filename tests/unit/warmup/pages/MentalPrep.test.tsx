@@ -112,18 +112,15 @@ describe('MentalPrep - elementos REMOVIDOS', () => {
 });
 
 describe('MentalPrep - gate Iniciar Grind (RF-13)', () => {
-  it('botao "Iniciar Grind" disabled quando latest=null', async () => {
+  it('botao "Iniciar Grind" exibe label "(sem warm-up)" quando latest=null (reform v2: nao bloqueia)', async () => {
     (apiRequest as any).mockResolvedValue(null);
     render(withClient(<MentalPrep />));
 
     await waitFor(() => {
       const btn = screen.queryByRole('button', { name: /iniciar grind/i });
-      if (btn) {
-        expect((btn as HTMLButtonElement).disabled).toBe(true);
-      } else {
-        // botao pode nao existir; aceitamos mensagem em tooltip.
-        expect(document.body.textContent).toMatch(/warm-up/i);
-      }
+      expect(btn).toBeTruthy();
+      // Reform 2026-05-05 v2: botao sempre habilitado; aviso "(sem warm-up)" inline.
+      expect(document.body.textContent).toMatch(/sem warm-up/i);
     });
   });
 

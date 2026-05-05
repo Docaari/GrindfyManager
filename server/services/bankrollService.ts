@@ -109,6 +109,18 @@ function parseDecimal(v: any): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
+function sanitizeRatesObject(input: any): Record<string, number> {
+  if (!input || typeof input !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(input)) {
+    const n = typeof v === "number" ? v : Number(v);
+    if (typeof k === "string" && k.length >= 2 && Number.isFinite(n) && n > 0) {
+      out[k] = n;
+    }
+  }
+  return out;
+}
+
 function toDateOrNull(v: any): Date | null {
   if (v == null) return null;
   if (v instanceof Date) return v;
@@ -674,8 +686,6 @@ async function createAutoSnapshot(
   }
 
   // HIGH-5 fix (round 2): fail closed em erro de getUserSettings.
-  // Antes: try/catch logado e seguia com default=true, podendo violar opt-out
-  // se a query estivesse degradada por permission/perm error.
   let settings: any = null;
   try {
     settings = await storage.getUserSettings(userId);
@@ -691,11 +701,56 @@ async function createAutoSnapshot(
     return null;
   }
 
+  // Sprint FX-1 RF-09: rates do dia do snapshot (NAO momento da gravacao).
+  // Cascata: user override > system_fx_rates(date) > FALLBACK_FX_RATES.
+  // wallets.exchangeRates NAO entra no merge para snapshots novos (ADR-034).
+  const snapshotOccurredAt = occurredAt
+    ? occurredAt instanceof Date ? occurredAt : new Date(occurredAt)
+    : new Date();
+  const snapshotDate = snapshotOccurredAt.toISOString().slice(0, 10);
+
+  let systemRatesForDate: Record<string, number> = {};
+  try {
+    const fxMod = await import("./fx/fxRatesPersistence");
+    const sysMap = await fxMod.getRatesForDate(snapshotDate);
+    for (const [ccy, sr] of Object.entries(sysMap)) {
+      if (sr && typeof sr.ratePerUsd === "number" && sr.ratePerUsd > 0) {
+        systemRatesForDate[ccy] = sr.ratePerUsd;
+      }
+    }
+  } catch (err) {
+    console.warn(
+      "[bankrollService.createAutoSnapshot] getRatesForDate falhou:",
+      (err as any)?.message,
+    );
+  }
+
+  if (Object.keys(systemRatesForDate).length === 0) {
+    console.warn(
+      "[bankrollService.createAutoSnapshot] system rates vazios — usando FALLBACK_FX_RATES",
+      { userId, date: snapshotDate },
+    );
+  }
+
+  const userOverride = sanitizeRatesObject((settings as any)?.exchangeRates);
+
+  // Sprint FX-1 RF-09: helper merge — user > system > FALLBACK. Sem wallets.
+  const fxModule = await import("./fxResolver");
+  const ratesForSnapshot: Record<string, number> = {
+    ...fxModule.FALLBACK_FX_RATES,
+    ...systemRatesForDate,
+    ...userOverride,
+    USD: 1,
+  };
+
   // Consolidated balance via walletService (import dinamico para evitar ciclo).
   let totalUSD = 0;
   try {
     const mod = await import("./walletService");
-    const consolidated = await mod.walletService.getConsolidatedBalance(userId);
+    const consolidated = await mod.walletService.getConsolidatedBalance(
+      userId,
+      { rates: ratesForSnapshot, date: snapshotDate },
+    );
     totalUSD = parseDecimal(consolidated?.totalUSD ?? "0");
   } catch (err) {
     console.error("[bankrollService.createAutoSnapshot] getConsolidatedBalance falhou:", (err as any)?.message);

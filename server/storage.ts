@@ -174,6 +174,7 @@ import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, lt, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { normalizeTournamentTypePayload } from "./storage/normalizeTournamentTypePayload";
+import { getDisplayRegistrationTime } from "@shared/grade-time";
 
 // Utility function to build period conditions with custom date range support
 function buildPeriodCondition(period: string, filters: any) {
@@ -7068,6 +7069,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         time: plannedTournaments.time,
         name: plannedTournaments.name,
         registrationTime: plannedTournaments.registrationTime,
+        lateRegMinutes: plannedTournaments.lateRegMinutes,
       })
       .from(plannedTournaments)
       .where(and(...conditions))
@@ -7075,14 +7077,18 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     if (!rows || rows.length === 0) return null;
 
-    const pick = (r: any): { time: string; name: string } => ({
-      time: String(r.registrationTime ?? r.time ?? ''),
+    const items = (rows as any[]).map((r: any) => ({
+      time: getDisplayRegistrationTime(r),
       name: String(r.name ?? ''),
-    });
+    }));
+    // Re-sort em JS pelo display time (cobre rows onde lateReg empurra deadline
+    // alem do time + registrationTime explicito de outra row). Sort string ASC
+    // funciona pra HH:MM dentro do mesmo dia.
+    items.sort((a, b) => a.time.localeCompare(b.time));
 
     return {
-      first: pick(rows[0]),
-      last: pick(rows[rows.length - 1]),
+      first: items[0],
+      last: items[items.length - 1],
     };
   }
 
@@ -10816,6 +10822,144 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       console.error('[storage.getContinueWatching] failed', err);
       throw err;
     }
+  }
+
+  // ===========================================================================
+  // Sprint FX-1 RF-01/RF-03: system_fx_rates queries.
+  // ===========================================================================
+
+  async insertSystemFxRates(
+    rows: Array<{
+      currency: string;
+      date: string;
+      ratePerUsd: number;
+      source: string;
+    }>,
+    referenceDate?: string,
+  ): Promise<{ inserted: number; skipped: number }> {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return { inserted: 0, skipped: 0 };
+    }
+    let inserted = 0;
+    for (const r of rows) {
+      const rateDate = r.date ?? referenceDate ?? new Date().toISOString().slice(0, 10);
+      const result: any = await db.execute(
+        sql`INSERT INTO system_fx_rates (date, currency, rate_per_usd, source, fetched_at)
+            VALUES (${rateDate}, ${r.currency}, ${String(r.ratePerUsd)}, ${r.source}, NOW())
+            ON CONFLICT (date, currency) DO NOTHING`,
+      );
+      const rowCount = result?.rowCount ?? result?.count ?? 0;
+      if (rowCount > 0) inserted += 1;
+    }
+    return { inserted, skipped: rows.length - inserted };
+  }
+
+  async getSystemFxRatesLatest(): Promise<
+    Array<{
+      currency: string;
+      date: string;
+      ratePerUsd: number;
+      source: string;
+      fetchedAt: Date;
+    }>
+  > {
+    const result: any = await db.execute(
+      sql`SELECT DISTINCT ON (currency)
+            currency,
+            date::text AS date,
+            rate_per_usd,
+            source,
+            fetched_at
+          FROM system_fx_rates
+          ORDER BY currency, date DESC, fetched_at DESC`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    return rows.map((r: any) => ({
+      currency: String(r.currency),
+      date: typeof r.date === 'string' ? r.date.slice(0, 10) : new Date(r.date).toISOString().slice(0, 10),
+      ratePerUsd: Number(r.rate_per_usd ?? r.ratePerUsd),
+      source: String(r.source),
+      fetchedAt:
+        r.fetched_at instanceof Date
+          ? r.fetched_at
+          : new Date(r.fetched_at ?? r.fetchedAt ?? Date.now()),
+    }));
+  }
+
+  async getSystemFxRatesForDate(
+    targetDate: string,
+  ): Promise<
+    Array<{
+      currency: string;
+      date: string;
+      ratePerUsd: number;
+      source: string;
+      fetchedAt: Date;
+    }>
+  > {
+    // LATERAL: ultimo working day <= targetDate por currency.
+    const result: any = await db.execute(
+      sql`SELECT DISTINCT ON (currency)
+            currency,
+            date::text AS date,
+            rate_per_usd,
+            source,
+            fetched_at
+          FROM system_fx_rates
+          WHERE date <= ${targetDate}
+          ORDER BY currency, date DESC, fetched_at DESC`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    return rows.map((r: any) => ({
+      currency: String(r.currency),
+      date: typeof r.date === 'string' ? r.date.slice(0, 10) : new Date(r.date).toISOString().slice(0, 10),
+      ratePerUsd: Number(r.rate_per_usd ?? r.ratePerUsd),
+      source: String(r.source),
+      fetchedAt:
+        r.fetched_at instanceof Date
+          ? r.fetched_at
+          : new Date(r.fetched_at ?? r.fetchedAt ?? Date.now()),
+    }));
+  }
+
+  async getSystemFxRatesHistory(
+    currency: string,
+    days: number,
+    offset: number = 0,
+  ): Promise<
+    Array<{
+      currency: string;
+      date: string;
+      ratePerUsd: number;
+      source: string;
+      fetchedAt: Date;
+    }>
+  > {
+    const limit = Math.max(1, Math.min(365, Number(days) || 30));
+    const off = Math.max(0, Number(offset) || 0);
+    const result: any = await db.execute(
+      sql`SELECT
+            currency,
+            date::text AS date,
+            rate_per_usd,
+            source,
+            fetched_at
+          FROM system_fx_rates
+          WHERE currency = ${currency}
+          ORDER BY date DESC
+          LIMIT ${limit} OFFSET ${off}`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    return rows.map((r: any) => ({
+      currency: String(r.currency),
+      date: typeof r.date === 'string' ? r.date.slice(0, 10) : new Date(r.date).toISOString().slice(0, 10),
+      ratePerUsd: Number(r.rate_per_usd ?? r.ratePerUsd),
+      source: String(r.source),
+      fetchedAt:
+        r.fetched_at instanceof Date
+          ? r.fetched_at
+          : new Date(r.fetched_at ?? r.fetchedAt ?? Date.now()),
+    }));
   }
 }
 

@@ -1,0 +1,76 @@
+%% Sprint FX-1 — RF-04 Cron diario refreshFxRates (ADR-123)
+%% Schedule 0 0 17 * * * UTC = 14:00 SP. Pipeline: BCB primary BRL + frankfurter primary EUR.
+%% Cross-fallback assimetrico: BCB falha BRL -> frankfurter cobre. Sem fallback EUR.
+%% Idempotencia ON CONFLICT (date, currency) DO NOTHING (ADR-121).
+%% Server NUNCA derrubado: top-level try/catch + adapters retornam null/[] em falha.
+
+sequenceDiagram
+    participant Cron as node-cron<br/>0 0 17 * * * UTC
+    participant Job as runFxRatesRefresh
+    participant BCB as bcbPtaxAdapter
+    participant Frank as frankfurterAdapter
+    participant Persist as fxRatesPersistence
+    participant Resolver as fxResolver
+    participant DB as Postgres<br/>system_fx_rates
+
+    Cron->>Job: tick 17:00 UTC
+    Job->>Job: runId = nanoid(10)<br/>today = YYYY-MM-DD UTC<br/>start = Date.now()
+
+    par Fetch BRL primary
+        Job->>BCB: fetchLatestBrl()
+        BCB->>BCB: GET olinda.bcb.gov.br/odata PTAX<br/>UA: GrindfyFxBot/1.0<br/>timeout 30s
+        alt BCB ok
+            BCB-->>Job: { currency: 'BRL', date, ratePerUsd, source: 'bcb_ptax' }
+        else BCB falha (timeout / 5xx / parse error / weekend)
+            BCB-->>Job: null<br/>log warn [fx/adapter] bcb_ptax failed
+            Job->>Frank: fetchLatest(['BRL'])
+            alt frankfurter ok BRL
+                Frank-->>Job: [{ currency: 'BRL', source: 'frankfurter' }]<br/>(cross-fallback)
+            else frankfurter falha BRL
+                Frank-->>Job: []<br/>BRL ausente neste run
+            end
+        end
+    and Fetch EUR primary
+        Job->>Frank: fetchLatest(['EUR'])
+        Frank->>Frank: GET api.frankfurter.dev/v1/latest<br/>?base=USD&symbols=EUR
+        alt frankfurter ok EUR
+            Frank-->>Job: [{ currency: 'EUR', source: 'frankfurter' }]
+        else frankfurter falha EUR
+            Frank-->>Job: []<br/>log warn [fx/cron] EUR provider down<br/>SEM cross-fallback (BCB nao cobre EUR)
+        end
+    end
+
+    Job->>Job: collect FxRow[] validas
+
+    Job->>Persist: upsertDailyRates(today, rows)
+    Persist->>DB: INSERT INTO system_fx_rates<br/>(date, currency, rate_per_usd, source, fetched_at)<br/>VALUES (...)<br/>ON CONFLICT (date, currency) DO NOTHING
+    DB-->>Persist: { inserted: N, skipped: M }
+    Persist-->>Job: counts
+
+    Job->>Persist: invalidateLatestCache()
+    Persist->>Persist: cache.clear()<br/>proxima getLatestSystemRates re-fetch DB
+
+    Job->>Resolver: invalidateCache() global
+    Resolver->>Resolver: cacheMap.clear()<br/>proxima resolveExchangeRates user re-fetch full cascade
+
+    Job->>Job: duration_ms = Date.now() - start
+
+    alt rows.length === 2 (BRL + EUR)
+        Job->>Job: status = 'ok'<br/>console.info [fx/cron] runId=X status=ok currencies_fetched=BRL,EUR
+    else rows.length === 1
+        Job->>Job: status = 'partial'<br/>console.warn [fx/cron] runId=X status=partial currencies_failed=...
+    else rows.length === 0
+        Job->>Job: status = 'failed'<br/>console.error [fx/cron] runId=X status=failed
+    end
+
+    Job-->>Cron: { runId, status, inserted, skipped, duration_ms }
+
+    Note over Cron,Job: Top-level try/catch no cron handler:<br/>exception nao tratada -> console.error<br/>server CONTINUA up. Proximo tick 24h depois.
+
+    Note over BCB,Frank: Weekend / feriado: BCB e ECB nao publicam.<br/>Adapters retornam vazios. ON CONFLICT DO NOTHING<br/>evita duplicar last business day. Status = 'ok' com<br/>log info "no rates fetched".
+
+    Note over Persist,DB: Idempotencia DB-level: PK composta (date, currency)<br/>garante zero duplicates em race condition<br/>(force admin + scheduled overlap). Sempre seguro.
+
+    Note over Job: runFxRatesRefresh exportado:<br/>endpoint admin POST /api/admin/fx/refresh chama<br/>direto, sem duplicacao de codigo (RF-06).
+
+    Note over Cron: FX_CRON_DISABLED=true em env -><br/>cron.schedule NAO registra handler.<br/>Permite tests/CI sem internet.

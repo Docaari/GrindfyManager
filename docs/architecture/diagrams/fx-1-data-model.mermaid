@@ -1,0 +1,56 @@
+%% Sprint FX-1 — RF-01 Data model system_fx_rates + read paths conceituais (ADR-121)
+%% Tabela nova system_fx_rates global (PK composta date+currency).
+%% users.exchangeRates jsonb override per-user (preexistente).
+%% wallets.exchangeRates jsonb imutavel ADR-034 (preexistente, compat).
+%% bankroll_snapshots consome getRatesForDate na criacao (RF-09).
+%% Relacoes ||..o{ representadas sao READ PATHS conceituais (NAO FKs reais).
+%% Index nativo: idx_system_fx_rates_currency_date ON (currency, date DESC) — lookup latest por currency.
+%% Audit trail: cada row de system_fx_rates eh imutavel pos-insert via ON CONFLICT DO NOTHING.
+
+erDiagram
+    USERS ||--o{ WALLETS : "owns"
+    USERS ||--o{ BANKROLL_SNAPSHOTS : "owns"
+    USERS ||..o{ SYSTEM_FX_RATES : "reads via fxResolver (override layer 1)"
+    WALLETS ||..o{ SYSTEM_FX_RATES : "compat fallback (currencies fora v1)"
+    BANKROLL_SNAPSHOTS ||..o{ SYSTEM_FX_RATES : "reads getRatesForDate snapshot date RF-09"
+
+    SYSTEM_FX_RATES {
+        date date PK "FX-1 NEW data referencia ISO YYYY-MM-DD"
+        varchar currency PK "FX-1 NEW BRL ou EUR (USD nunca implicito 1)"
+        numeric rate_per_usd "QW-1 ADR-033 unidades por 1 USD precision 18 scale 8"
+        varchar source "CHECK bcb_ptax frankfurter manual fallback"
+        timestamp fetched_at "DEFAULT NOW audit nativo imutavel pos-insert"
+    }
+
+    USERS {
+        varchar user_platform_id PK "USER-XXXX"
+        varchar email
+        jsonb exchange_rates "OVERRIDE per-user opcional precede system (ADR-121 cascata)"
+        varchar timezone "ex America Sao Paulo"
+    }
+
+    WALLETS {
+        varchar id PK "nanoid"
+        varchar user_id FK "user_platform_id"
+        varchar platform "GG Suprema OffPlatform_Bank OffPlatform_Crypto"
+        varchar native_currency "USD BRL EUR CNY USDT GBP BTC"
+        decimal balance "current balance native ccy"
+        varchar status "active archived"
+        boolean is_shot_pocket "exclui de consolidatedUSD"
+        integer version "ADR-038 optimistic concurrency"
+        jsonb exchange_rates "IMUTAVEL ADR-034 compat para CNY GBP USDT BTC"
+        timestamp updated_at
+    }
+
+    BANKROLL_SNAPSHOTS {
+        varchar id PK "nanoid"
+        varchar user_id FK "user_platform_id CASCADE"
+        decimal new_amount "consolidatedUSD calculado com getRatesForDate FX-1 RF-09"
+        decimal delta "newAmount menos previousAmount"
+        varchar source "auto_session manual etc"
+        varchar reason
+        varchar origin "manual auto-cooldown transfer import migration_v1"
+        varchar source_ref_id "cooldown_log id ou transfer_group_id"
+        date snapshot_date "extraida de occurred_at usada em getRatesForDate"
+        timestamp occurred_at
+    }
