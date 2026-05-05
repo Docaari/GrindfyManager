@@ -287,12 +287,13 @@ describe('SessionSummaryModal Sprint B2 (M3) — apos criar wallet refetch desbl
 // =============================================================================
 
 describe('SessionSummaryModal Sprint B2 (M3) — mapping platform->currency no register-wallet-cta', () => {
-  // Tabela ADR-048
+  // Tabela ADR-048 (CoinPoker mudado para USD em 2026-05-05: founder trata
+  // stables 1:1 USD na pratica, evita orphan quando user nao tem rate USDT).
   const cases: Array<[string, string]> = [
     ['Suprema', 'BRL'],
     ['GGNetwork', 'USD'],
     ['PokerStars', 'USD'],
-    ['CoinPoker', 'USDT'],
+    ['CoinPoker', 'USD'],
     ['Chico', 'USD'],
   ];
 

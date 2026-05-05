@@ -4920,7 +4920,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const [activeWallets, stRows, settings] = await Promise.all([
       this.listWalletsByUser(userId, { includeArchived: false }, tx),
       runner.execute(
-        sql`SELECT id, site, buy_in, result, bounty, rebuys, add_on_taken, add_on_cost, status
+        sql`SELECT id, site, buy_in, result, bounty, rebuys, addon_taken, addon_cost, status,
+                   entered_via_satellite, consumed_ticket_id
             FROM session_tournaments
             WHERE session_id = ${sessionId}
               AND user_id = ${userId}`,
@@ -4936,8 +4937,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       prize: parseFloat(String(r.result ?? "0")) || 0,
       bounty: parseFloat(String(r.bounty ?? "0")) || 0,
       rebuys: parseInt(String(r.rebuys ?? "0"), 10) || 0,
-      addOnTaken: !!(r.add_on_taken ?? r.addOnTaken),
-      addOnCost: parseFloat(String(r.add_on_cost ?? r.addOnCost ?? "0")) || 0,
+      addOnTaken: !!(r.addon_taken ?? r.addOnTaken),
+      addOnCost: parseFloat(String(r.addon_cost ?? r.addOnCost ?? "0")) || 0,
       status: r.status,
       // RF-06: ticket bypass — buy-in efetivo = 0 quando entered_via_satellite=true.
       enteredViaSatellite: !!(r.entered_via_satellite ?? r.enteredViaSatellite),

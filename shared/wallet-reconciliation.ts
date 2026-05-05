@@ -20,7 +20,7 @@ export interface SiteAliasGroup {
 export const SITE_ALIAS_GROUPS: SiteAliasGroup[] = [
   {
     group: "WPN",
-    aliases: ["BlackChip", "BlackChipPoker", "BCP", "AmericasCardroom", "ACR", "WPN"],
+    aliases: ["BlackChip", "BlackChipPoker", "BCP", "AmericasCardroom", "ACR", "WPN", "YaPoker", "Ya Poker", "Ya"],
   },
   {
     group: "GG",
@@ -41,6 +41,18 @@ export const SITE_ALIAS_GROUPS: SiteAliasGroup[] = [
   {
     group: "Suprema",
     aliases: ["Suprema", "SupremaPoker", "Liga Suprema", "LigaSuprema"],
+  },
+  {
+    group: "iPoker",
+    aliases: ["iPoker", "ChampionPoker", "Champion"],
+  },
+  {
+    group: "WPT",
+    aliases: ["WPT", "WPT Global", "WPTGlobal"],
+  },
+  {
+    group: "CoinPoker",
+    aliases: ["CoinPoker", "Coin"],
   },
 ];
 
@@ -78,13 +90,23 @@ export const SITE_DEFAULT_CURRENCY: Record<string, string> = {
   Suprema: "BRL",
   SupremaPoker: "BRL",
   PPoker: "BRL",
-  CoinPoker: "USDT",
+  // CoinPoker default USD: founder trata stables 1:1 USD na pratica
+  // (USDT removido para evitar fallback orphan quando user nao tem rate USDT).
+  CoinPoker: "USD",
+  Coin: "USD",
   Chico: "USD",
   Revolution: "USD",
   // iPoker eh europeu — defaulta para EUR (ADR Bankroll-3 RF-3).
   iPoker: "EUR",
+  ChampionPoker: "EUR",
+  Champion: "EUR",
   "PS.ES": "EUR",
   Bodog: "USD",
+  WPT: "USD",
+  "WPT Global": "USD",
+  WPTGlobal: "USD",
+  YaPoker: "USD",
+  "Ya Poker": "USD",
 };
 
 export function getDefaultCurrencyForSite(site: string | null | undefined): string {
