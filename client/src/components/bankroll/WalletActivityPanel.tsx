@@ -259,16 +259,20 @@ export function WalletActivityPanel({ walletId, nativeCurrency }: Props) {
                       dataKey="results"
                       name="Resultados"
                       stroke="hsl(var(--primary))"
-                      dot={false}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
                       strokeWidth={2}
+                      isAnimationActive={false}
                     />
                     <Line
                       type="monotone"
                       dataKey="rakeback"
                       name="Rakeback"
                       stroke="#f59e0b"
-                      dot={false}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
                       strokeWidth={2}
+                      isAnimationActive={false}
                     />
                   </LineChart>
                 </ResponsiveContainer>
