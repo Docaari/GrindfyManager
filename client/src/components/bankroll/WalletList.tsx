@@ -117,6 +117,31 @@ export function WalletList({ wallets, selectedWalletId, onSelect, onCreateClick 
         </div>
       )}
 
+      {/* Bankroll-Reform 2026-05-05 (founder): item virtual "Geral" no topo,
+          read-only consolidado das wallets ativas. id reservado '__overall__'. */}
+      {wallets.length > 0 && (
+        <button
+          type="button"
+          data-testid="wallet-item-overall"
+          data-selected={selectedWalletId === "__overall__" ? "true" : "false"}
+          onClick={() => onSelect("__overall__")}
+          className={
+            "text-left rounded-md px-3 py-2 border transition-colors mb-1 " +
+            (selectedWalletId === "__overall__"
+              ? "bg-primary/10 border-primary/60 ring-1 ring-primary/40"
+              : "bg-card border-border hover:bg-accent")
+          }
+        >
+          <div className="flex items-center gap-2">
+            <span aria-hidden className="inline-block w-2 h-2 rounded-full bg-primary" />
+            <span className="font-semibold text-sm">Geral</span>
+          </div>
+          <div className="text-[11px] text-muted-foreground mt-1">
+            Visao consolidada
+          </div>
+        </button>
+      )}
+
       <div className="flex flex-col gap-1">
         {active.map((w) => {
           const selected = selectedWalletId === w.id;

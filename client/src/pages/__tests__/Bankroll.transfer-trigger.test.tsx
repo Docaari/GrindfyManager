@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -40,8 +41,25 @@ vi.mock("@/components/bankroll/WalletCreateDialog", () => ({
 vi.mock("@/components/bankroll/RakebackDialog", () => ({
   RakebackDialog: () => null,
 }));
+// Mock expoe botao por wallet pra teste poder selecionar manualmente
+// (default agora eh "Geral", precisa click pra montar WalletDetailPanel).
 vi.mock("@/components/bankroll/WalletList", () => ({
-  WalletList: () => null,
+  WalletList: ({ wallets, onSelect }: any) => (
+    <div data-testid="wallet-list-mock">
+      {wallets.map((w: any) => (
+        <button
+          key={w.id}
+          data-testid={`mock-select-${w.id}`}
+          onClick={() => onSelect(w.id)}
+        >
+          {w.name}
+        </button>
+      ))}
+    </div>
+  ),
+}));
+vi.mock("@/components/bankroll/OverallWalletPanel", () => ({
+  OverallWalletPanel: () => <div data-testid="overall-mock">overall</div>,
 }));
 
 // WalletDetailPanel mock que expoe canTransfer + onTransferClick para o teste.
@@ -115,7 +133,12 @@ describe("BankrollPage — Transfer wiring (pos-reform)", () => {
       }
       return Promise.resolve({ ok: true, json: async () => ({}) });
     });
+    const user = userEvent.setup();
     render(wrap(<BankrollPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId("mock-select-w1")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("mock-select-w1"));
     await waitFor(() => {
       const last = detailPanelSpy.mock.calls.at(-1)?.[0];
       expect(last?.canTransfer).toBe(false);
@@ -144,7 +167,12 @@ describe("BankrollPage — Transfer wiring (pos-reform)", () => {
       }
       return Promise.resolve({ ok: true, json: async () => ({}) });
     });
+    const user = userEvent.setup();
     render(wrap(<BankrollPage />));
+    await waitFor(() => {
+      expect(screen.getByTestId("mock-select-w1")).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId("mock-select-w1"));
     await waitFor(() => {
       const last = detailPanelSpy.mock.calls.at(-1)?.[0];
       expect(last?.canTransfer).toBe(true);

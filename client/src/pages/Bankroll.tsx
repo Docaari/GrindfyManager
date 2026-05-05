@@ -16,6 +16,7 @@ import { BankrollWidget } from "@/components/bankroll/BankrollWidget";
 import { BankrollHistoryTable } from "@/components/bankroll/BankrollHistoryTable";
 import { WalletList, type WalletListItem, type WalletSuggestion } from "@/components/bankroll/WalletList";
 import { WalletDetailPanel } from "@/components/bankroll/WalletDetailPanel";
+import { OverallWalletPanel } from "@/components/bankroll/OverallWalletPanel";
 import { WalletCreateDialog } from "@/components/bankroll/WalletCreateDialog";
 import { RakebackDialog } from "@/components/bankroll/RakebackDialog";
 import { TransferDialog } from "@/components/bankroll/TransferDialog";
@@ -97,15 +98,17 @@ export default function BankrollPage() {
     }));
   }, [walletsResp, consolidated]);
 
-  // Auto-selecionar primeira wallet quando lista carrega.
+  // Auto-selecionar "Geral" como default quando ha pelo menos 1 wallet.
   useEffect(() => {
     if (selectedWalletId == null && walletItems.length > 0) {
-      const firstActive = walletItems.find((w) => w.status === "active");
-      if (firstActive) setSelectedWalletId(firstActive.id);
+      setSelectedWalletId("__overall__");
     }
   }, [walletItems, selectedWalletId]);
 
-  const selectedWallet = walletItems.find((w) => w.id === selectedWalletId) ?? null;
+  const isOverallSelected = selectedWalletId === "__overall__";
+  const selectedWallet = isOverallSelected
+    ? null
+    : walletItems.find((w) => w.id === selectedWalletId) ?? null;
   const hasWallets = walletItems.length > 0;
 
   function handleCreateClick(suggestion?: WalletSuggestion) {
@@ -162,7 +165,9 @@ export default function BankrollPage() {
             onCreateClick={handleCreateClick}
           />
           <div className="flex-1">
-            {selectedWallet ? (
+            {isOverallSelected ? (
+              <OverallWalletPanel wallets={walletItems as any} />
+            ) : selectedWallet ? (
               <WalletDetailPanel
                 wallet={selectedWallet as any}
                 onRakebackClick={() => openRakebackForWallet(selectedWallet.id)}

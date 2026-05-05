@@ -40,6 +40,30 @@ vi.mock('@/components/bankroll/BankrollHistoryTable', () => ({
 vi.mock('@/components/bankroll/WalletCreateDialog', () => ({
   WalletCreateDialog: () => null,
 }));
+// Bankroll-Reform: default agora e "Geral" (overall). Tests precisam click
+// manual em wallet pra montar WalletDetailPanel real.
+vi.mock('@/components/bankroll/OverallWalletPanel', () => ({
+  OverallWalletPanel: () => <div data-testid="overall-mock">overall</div>,
+}));
+vi.mock('@/components/bankroll/WalletList', async () => {
+  const real = await vi.importActual<any>('@/components/bankroll/WalletList');
+  return {
+    ...real,
+    WalletList: ({ wallets, onSelect }: any) => (
+      <div data-testid="wallet-list-mock">
+        {wallets.map((w: any) => (
+          <button
+            key={w.id}
+            data-testid={`mock-select-${w.id}`}
+            onClick={() => onSelect(w.id)}
+          >
+            {w.name}
+          </button>
+        ))}
+      </div>
+    ),
+  };
+});
 
 const fetchMock = vi.fn();
 beforeEach(() => {
@@ -114,8 +138,7 @@ describe('Bankroll page — botao "Reportar rakeback" header REMOVIDO (reform)',
     render(wrap(<BankrollPage />));
 
     await waitFor(() => {
-      // wait for page render via wallet-detail trigger appearance
-      expect(screen.getByTestId('wallet-detail-rakeback-trigger')).toBeTruthy();
+      expect(screen.getByTestId('mock-select-wlt_brl')).toBeTruthy();
     });
     expect(screen.queryByTestId('bankroll-rakeback-trigger-header')).toBeNull();
   });
@@ -127,6 +150,10 @@ describe('Bankroll page — botao "Reportar rakeback" no WalletDetailPanel (RF-0
     render(wrap(<BankrollPage />));
 
     await waitFor(() => {
+      expect(screen.getByTestId('mock-select-wlt_brl')).toBeTruthy();
+    });
+    await userEvent.setup().click(screen.getByTestId('mock-select-wlt_brl'));
+    await waitFor(() => {
       expect(screen.getByTestId('wallet-detail-rakeback-trigger')).toBeTruthy();
     });
   });
@@ -136,6 +163,10 @@ describe('Bankroll page — botao "Reportar rakeback" no WalletDetailPanel (RF-0
     const user = userEvent.setup();
     render(wrap(<BankrollPage />));
 
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-select-wlt_brl')).toBeTruthy();
+    });
+    await userEvent.setup().click(screen.getByTestId('mock-select-wlt_brl'));
     await waitFor(() => {
       expect(screen.getByTestId('wallet-detail-rakeback-trigger')).toBeTruthy();
     });
@@ -155,6 +186,10 @@ describe('Bankroll page — botao "Reportar rakeback" no WalletDetailPanel (RF-0
       const user = userEvent.setup();
       render(wrap(<BankrollPage />));
 
+      await waitFor(() => {
+        expect(screen.getByTestId('mock-select-wlt_brl')).toBeTruthy();
+      });
+      await user.click(screen.getByTestId('mock-select-wlt_brl'));
       await waitFor(() => {
         expect(screen.getByTestId('wallet-detail-rakeback-trigger')).toBeTruthy();
       });
