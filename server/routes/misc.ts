@@ -129,7 +129,11 @@ export function registerMiscRoutes(app: Express): void {
     try {
       const userId = req.user.userPlatformId;
       const existing = (await storage.getUserSettings(userId)) ?? {};
-      const merged = { ...existing, ...req.body, userId };
+      // Omitir campos auto-managed (id/createdAt/updatedAt) antes do merge —
+      // insertUserSettingsSchema.strict() rejeita keys nao listadas no schema
+      // de input. Sem isso, qualquer PUT parcial falha apos primeiro upsert.
+      const { id: _id, createdAt: _ca, updatedAt: _ua, ...existingSafe } = existing as any;
+      const merged = { ...existingSafe, ...req.body, userId };
       const settingsData = insertUserSettingsSchema.parse(merged);
       const settings = await storage.upsertUserSettings(settingsData);
       res.json(settings);
