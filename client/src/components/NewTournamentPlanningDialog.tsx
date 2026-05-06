@@ -5,6 +5,7 @@ import { Clock, X, Edit, Trash2, Plus, Edit2 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useMemo } from 'react';
 import { getPlannerSiteColor } from "@/lib/poker-colors";
+import { TYPE_COLORS, type TournamentPrimaryType } from "@shared/tournamentTypes";
 
 interface NewTournamentPlanningDialogProps {
   isOpen: boolean;
@@ -131,11 +132,14 @@ export function NewTournamentPlanningDialog({
       return acc;
     }, {} as Record<string, number>);
 
-    const typeChartData = Object.entries(typeStats).map(([type, count]) => ({
-      name: type,
-      value: count,
-      color: type === 'Mystery' ? '#9333ea' : type === 'PKO' ? '#ea580c' : '#2563eb'
-    }));
+    const typeChartData = Object.entries(typeStats).map(([type, count]) => {
+      const fromSsot = TYPE_COLORS[type as TournamentPrimaryType]?.hex;
+      return {
+        name: type,
+        value: count,
+        color: fromSsot ?? '#6b7280',
+      };
+    });
 
     // Speed chart data
     const speedStats = tournaments.reduce((acc, t) => {

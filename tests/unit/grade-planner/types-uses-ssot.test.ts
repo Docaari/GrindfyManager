@@ -23,12 +23,13 @@ describe('grade-planner/types.ts (RF-02 - SSoT consumer)', () => {
     expect(Array.from(types)).toEqual(Array.from(TOURNAMENT_PRIMARY_TYPES));
   });
 
-  it('contem os 4 tipos primarios atuais (Vanilla, PKO, Mystery, Satellite)', () => {
+  it('contem os 5 tipos primarios atuais (Vanilla, PKO, Mystery, Satellite, Add-on)', () => {
     expect(types).toContain('Vanilla');
     expect(types).toContain('PKO');
     expect(types).toContain('Mystery');
     expect(types).toContain('Satellite');
-    expect(types.length).toBe(4);
+    expect(types).toContain('Add-on');
+    expect(types.length).toBe(5);
   });
 
   it('NAO contem "Flight" como tipo primario (Flight virou modificador)', () => {

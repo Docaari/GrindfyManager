@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Filter, X, Calendar, RotateCcw, Loader2 } from "lucide-react";
+import { TOURNAMENT_PRIMARY_TYPES } from "@shared/tournamentTypes";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -191,7 +192,7 @@ export default function FilterDropdown({ onApplyFilters, initialFilters }: Filte
               <div className="space-y-3">
                 <Label className="text-gray-300 font-medium">🎲 Tipos de Torneio</Label>
                 <div className="space-y-2">
-                  {['Vanilla', 'PKO', 'Mystery'].map(type => (
+                  {TOURNAMENT_PRIMARY_TYPES.map(type => (
                     <label key={type} className="flex items-center space-x-2 cursor-pointer">
                       <Checkbox
                         checked={filters.tournamentTypes.includes(type)}

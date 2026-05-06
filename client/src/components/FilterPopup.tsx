@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Calendar, Filter, X, DollarSign, Target, Zap, Brain, Heart, Volume2, Users, RotateCcw, Check } from 'lucide-react';
 import RangeSlider from './RangeSlider';
 import MultiSelect from './MultiSelect';
+import { TOURNAMENT_PRIMARY_TYPES, TYPE_LABELS_PT_BR, TYPE_COLORS } from '@shared/tournamentTypes';
 
 interface FilterPopupProps {
   isOpen: boolean;
@@ -190,11 +191,11 @@ const FilterPopup: React.FC<FilterPopupProps> = ({
     { value: 'custom', label: 'Personalizado', description: 'Escolha as datas' }
   ];
 
-  const tournamentTypeOptions = [
-    { value: 'vanilla', label: 'Vanilla', color: 'blue' },
-    { value: 'pko', label: 'PKO', color: 'orange' },
-    { value: 'mystery', label: 'Mystery', color: 'pink' }
-  ];
+  const tournamentTypeOptions = TOURNAMENT_PRIMARY_TYPES.map(t => ({
+    value: t.toLowerCase(),
+    label: TYPE_LABELS_PT_BR[t],
+    color: TYPE_COLORS[t].hex,
+  }));
 
   const tournamentSpeedOptions = [
     { value: 'normal', label: 'Normal', color: 'green' },

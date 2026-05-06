@@ -34,6 +34,7 @@ export const TOURNAMENT_PRIMARY_TYPES = [
   'PKO',
   'Mystery',
   'Satellite',
+  'Add-on',
 ] as const;
 
 export type TournamentPrimaryType = (typeof TOURNAMENT_PRIMARY_TYPES)[number];
@@ -102,6 +103,12 @@ export const TYPE_COLORS: Record<TournamentPrimaryType, TypeColor> = {
     ring: 'ring-amber-300 dark:ring-amber-700',
     hex: '#fbbf24',
   },
+  'Add-on': {
+    bg: 'bg-orange-100 dark:bg-orange-950',
+    text: 'text-orange-700 dark:text-orange-300',
+    ring: 'ring-orange-300 dark:ring-orange-700',
+    hex: '#fb923c',
+  },
 };
 
 export const MODIFIER_COLORS: Record<TournamentModifier, TypeColor> = {
@@ -136,6 +143,7 @@ export const TYPE_LABELS_PT_BR: Record<TournamentPrimaryType, string> = {
   PKO: 'PKO (Bounty)',
   Mystery: 'Mystery Bounty',
   Satellite: 'Satélite',
+  'Add-on': 'Add-on',
 };
 
 export const MODIFIER_LABELS_PT_BR: Record<TournamentModifier, string> = {
@@ -161,6 +169,10 @@ export function isSatellite(type: TournamentPrimaryType | string | null | undefi
 
 export function isPKO(type: TournamentPrimaryType | string | null | undefined): boolean {
   return type === 'PKO';
+}
+
+export function isAddOn(type: TournamentPrimaryType | string | null | undefined): boolean {
+  return type === 'Add-on';
 }
 
 /**

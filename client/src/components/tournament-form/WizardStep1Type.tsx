@@ -8,8 +8,9 @@ import {
 // =============================================================================
 // Sprint 2 - RF-06 Step 1: Tipo Primario
 //
-// 4 botoes radio (Vanilla, PKO, Mystery, Satellite). Cada botao mostra label
-// PT-BR via getTypeLabel + cores do SSoT (TYPE_COLORS).
+// 5 botoes radio (Vanilla, PKO, Mystery, Satellite, Add-on). Cada botao mostra
+// label PT-BR via getTypeLabel + cores do SSoT (TYPE_COLORS).
+// Add-on adicionado em 2026-05-06 (extensao ADR-031).
 // =============================================================================
 
 export interface WizardStep1TypeProps {
@@ -19,7 +20,7 @@ export interface WizardStep1TypeProps {
 
 export default function WizardStep1Type({ value, onChange }: WizardStep1TypeProps) {
   return (
-    <div role="radiogroup" aria-label="Tipo de torneio" className="grid grid-cols-2 gap-3">
+    <div role="radiogroup" aria-label="Tipo de torneio" className="grid grid-cols-2 md:grid-cols-3 gap-3">
       {TOURNAMENT_PRIMARY_TYPES.map((t) => {
         const colors = TYPE_COLORS[t];
         const selected = value === t;

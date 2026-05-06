@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getPlannerSiteColor, getPlannerTypeColor, getPlannerSpeedColor } from "@/lib/poker-colors";
 import { weekDays, sites, types, speeds, type TournamentForm, type DayStats } from './types';
+import { TYPE_COLORS, type TournamentPrimaryType } from "@shared/tournamentTypes";
 
 const getSiteColor = getPlannerSiteColor;
 const getTypeColor = getPlannerTypeColor;
@@ -114,11 +115,14 @@ export function PlanningDialog({
     return acc;
   }, {});
 
-  const typeChartData = Object.entries(typeStats).map(([type, count]) => ({
-    name: type,
-    value: count,
-    color: type === 'Mystery' ? '#ec4899' : type === 'PKO' ? '#f97316' : '#3b82f6'
-  }));
+  const typeChartData = Object.entries(typeStats).map(([type, count]) => {
+    const fromSsot = TYPE_COLORS[type as TournamentPrimaryType]?.hex;
+    return {
+      name: type,
+      value: count,
+      color: fromSsot ?? '#6b7280',
+    };
+  });
 
   // Speed analysis for pie chart
   const speedStats = tournaments.reduce((acc: Record<string, number>, tournament: any) => {

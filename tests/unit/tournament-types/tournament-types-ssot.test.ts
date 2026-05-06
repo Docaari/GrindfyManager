@@ -38,12 +38,12 @@ import {
 // ---------------------------------------------------------------------------
 
 describe('TOURNAMENT_PRIMARY_TYPES', () => {
-  it('contem exatamente 4 valores', () => {
-    expect(TOURNAMENT_PRIMARY_TYPES).toHaveLength(4);
+  it('contem exatamente 5 valores', () => {
+    expect(TOURNAMENT_PRIMARY_TYPES).toHaveLength(5);
   });
 
-  it('valores sao exatamente Vanilla, PKO, Mystery, Satellite (na ordem)', () => {
-    expect(TOURNAMENT_PRIMARY_TYPES).toEqual(['Vanilla', 'PKO', 'Mystery', 'Satellite']);
+  it('valores sao exatamente Vanilla, PKO, Mystery, Satellite, Add-on (na ordem)', () => {
+    expect(TOURNAMENT_PRIMARY_TYPES).toEqual(['Vanilla', 'PKO', 'Mystery', 'Satellite', 'Add-on']);
   });
 
   it('NAO contem "Flight" (foi removido do enum primario, virou modificador)', () => {
@@ -52,6 +52,10 @@ describe('TOURNAMENT_PRIMARY_TYPES', () => {
 
   it('NAO contem "Live" (e modificador, nao tipo primario)', () => {
     expect(TOURNAMENT_PRIMARY_TYPES).not.toContain('Live' as any);
+  });
+
+  it('contem "Add-on" como tipo primario (extensao 2026-05-06)', () => {
+    expect(TOURNAMENT_PRIMARY_TYPES).toContain('Add-on');
   });
 });
 
@@ -86,6 +90,10 @@ describe('TournamentPrimaryTypeSchema', () => {
 
   it('aceita "Satellite"', () => {
     expect(TournamentPrimaryTypeSchema.parse('Satellite')).toBe('Satellite');
+  });
+
+  it('aceita "Add-on"', () => {
+    expect(TournamentPrimaryTypeSchema.parse('Add-on')).toBe('Add-on');
   });
 
   it('rejeita "Flight" (foi removido do enum primario)', () => {
@@ -150,6 +158,11 @@ describe('getTypeColor', () => {
     expect(c.hex).toBe('#fbbf24');
   });
 
+  it('Add-on mapeia para orange (hex #fb923c)', () => {
+    const c = getTypeColor('Add-on');
+    expect(c.hex).toBe('#fb923c');
+  });
+
   it('retorna objeto com bg, text, ring, hex', () => {
     const c = getTypeColor('PKO');
     expect(c).toHaveProperty('bg');
@@ -204,7 +217,11 @@ describe('getTypeLabel (PT-BR)', () => {
     expect(getTypeLabel('Satellite')).toBe('Satélite');
   });
 
-  it('TYPE_LABELS_PT_BR tem todos os 4 tipos', () => {
+  it('Add-on -> "Add-on"', () => {
+    expect(getTypeLabel('Add-on')).toBe('Add-on');
+  });
+
+  it('TYPE_LABELS_PT_BR tem todos os 5 tipos', () => {
     for (const t of TOURNAMENT_PRIMARY_TYPES) {
       expect(typeof TYPE_LABELS_PT_BR[t]).toBe('string');
       expect(TYPE_LABELS_PT_BR[t].length).toBeGreaterThan(0);

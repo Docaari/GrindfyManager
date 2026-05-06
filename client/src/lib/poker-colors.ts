@@ -28,7 +28,9 @@ const PLANNER_SITE_COLORS: Record<string, string> = {
 const PLANNER_TYPE_COLORS: Record<string, string> = {
   "Vanilla": "bg-blue-600",
   "PKO": "bg-orange-600",
-  "Mystery": "bg-green-600"
+  "Mystery": "bg-green-600",
+  "Satellite": "bg-amber-600",
+  "Add-on": "bg-orange-500"
 };
 
 const PLANNER_SPEED_COLORS: Record<string, string> = {
@@ -86,6 +88,10 @@ export const getTableTypeColor = (type: string): string => {
       return 'bg-orange-600 text-white';
     case 'mystery':
       return 'bg-pink-600 text-white';
+    case 'satellite':
+      return 'bg-amber-600 text-white';
+    case 'add-on':
+      return 'bg-orange-500 text-white';
     default:
       return 'bg-gray-600 text-white';
   }
@@ -123,7 +129,9 @@ const LIBRARY_CATEGORY_COLORS: Record<string, string> = {
   'Mystery': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
   'PKO': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
   'Bounty': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-  'Vanilla': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200'
+  'Vanilla': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+  'Satellite': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+  'Add-on': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
 };
 
 const LIBRARY_SPEED_COLORS: Record<string, string> = {

@@ -547,6 +547,7 @@ export default function GrindSession() {
     const vanillaCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.type === 'Vanilla').length;
     const pkoCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.type === 'PKO').length;
     const mysteryCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.type === 'Mystery').length;
+    const addOnCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.type === 'Add-on').length;
     const normalCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.speed === 'Normal').length;
     const turboCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.speed === 'Turbo').length;
     const hyperCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.speed === 'Hyper').length;

@@ -1,5 +1,6 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { weekDays, type DayStats } from './types';
+import { TYPE_COLORS, type TournamentPrimaryType } from "@shared/tournamentTypes";
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
@@ -59,11 +60,14 @@ export function WeeklySummaryDashboard({
     return acc;
   }, {});
 
-  const typeChartData = Object.entries(typeStats).map(([type, count]) => ({
-    name: type,
-    value: count,
-    color: type === 'Mystery' ? '#ec4899' : type === 'PKO' ? '#f97316' : '#3b82f6'
-  }));
+  const typeChartData = Object.entries(typeStats).map(([type, count]) => {
+    const fromSsot = TYPE_COLORS[type as TournamentPrimaryType]?.hex;
+    return {
+      name: type,
+      value: count,
+      color: fromSsot ?? '#6b7280',
+    };
+  });
 
   // Speed stats
   const speedStats = activeDayTournaments.reduce((acc: Record<string, number>, t: any) => {

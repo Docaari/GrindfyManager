@@ -1732,13 +1732,19 @@ export class PokerCSVParser {
     }
 
     // PKO has second priority
-    if (flagsUpper.includes('BOUNTY') || 
-        nameUpper.includes('PROGRESSIVE') || 
+    if (flagsUpper.includes('BOUNTY') ||
+        nameUpper.includes('PROGRESSIVE') ||
         nameUpper.includes('KNOCKOUT') ||
         /\bKO\b/.test(nameUpper) ||
         nameUpper.includes('BOUNTY') ||
         nameUpper.includes('PKO')) {
       return 'PKO';
+    }
+
+    // Add-on (Plus pattern) — primary type per ADR-031 extension 2026-05-06
+    const detected = detectAddonReaFromName(name);
+    if (detected.allowsAddOn) {
+      return 'Add-on';
     }
 
     // Default to Vanilla
