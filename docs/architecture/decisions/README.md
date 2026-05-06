@@ -86,6 +86,7 @@ Cada ADR documenta o contexto, opcoes consideradas, decisao tomada e consequenci
 | [121](121-system-fx-rates-global-table.md) | Tabela global `system_fx_rates` (PK composta `(date, currency)`) + override per-user opcional via `users.exchangeRates` + cascata estendida no `fxResolver` (Sprint FX-1) | Aceito | 2026-05-05 |
 | [122](122-fx-multi-source-fallback-chain.md) | Multi-source fallback chain: BCB PTAX primary BRL (auditabilidade fiscal) + frankfurter primary EUR (ECB coverage) + cross-fallback assimetrico BCB→frankfurter para BRL (Sprint FX-1) | Aceito | 2026-05-05 |
 | [123](123-fx-cron-daily-17utc.md) | Cron diario `0 0 17 * * *` UTC (14:00 SP, apos PTAX + ECB publicados) + idempotencia DB-level via `ON CONFLICT (date, currency) DO NOTHING` + force refresh reutiliza pipeline (Sprint FX-1) | Aceito | 2026-05-05 |
+| [124](124-break-auto-open-clock-aligned-brt.md) | Break Auto-Open clock-aligned em America/Sao_Paulo (BRT, UTC-3 sem DST) com toggle persistente em `user_settings.break_auto_open_enabled` (default true) + dedupe via hour key `YYYY-MM-DD-HH` + helpers puros TDD-friendly (Sprint Grind-Live Break Auto-Open) | Aceito | 2026-05-05 |
 | [AI-001](../ai-coach/adr-001-llm-provider.md) | Usar Claude API (Anthropic) como provedor LLM para AI Coach | Proposto | 2026-04-08 |
 | [AI-002](../ai-coach/adr-002-memory-architecture.md) | Estrategia de memoria persistente com perfil + resumos + compactacao | Proposto | 2026-04-08 |
 

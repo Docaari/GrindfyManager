@@ -1,26 +1,26 @@
 /**
  * Bulk-import torneios de CSV para tournament_library + planned_tournaments.
  *
- * CSV format (Sprint Library Import 2026-05-02):
- *   Nome,Site,Buy In,Moeda,Dia,Inicio,Tipo,Velocidade,Garantido,Add-on,Horario de Registro
+ * CSV format (Sprint Library Import 2026-05-02 + Flight Day 2 2026-05-05):
+ *   Nome,Site,Buy In,Moeda,Dia,Inicio,Tipo,Velocidade,Garantido,Add-on,Horario de Registro,Dia 2
  *
  * Comportamento:
- *   - Filtra apenas linhas Dia=Sab (skip outros dias e linhas Break/vazias).
+ *   - Filtra linhas pelo --day (0=Dom..6=Sab); skip Break/vazias.
  *   - Normaliza site (Champion/Party/GG/PS/Ya/Suprema/Coin/WPT) para nomes
  *     usados no resto do app.
  *   - Mapeia Velocidade=Regular -> Normal.
- *   - Parseia buy-in/garantido/add-on aceitando formato europeu/BR
- *     ("$1.000,00", "R$ 15,00", "€10,00").
+ *   - Parseia buy-in/garantido/add-on aceitando formato europeu/BR.
  *   - Calcula late_reg_minutes = (HorarioRegistro - Inicio) em minutos.
  *   - Dedup library por (userId, name, site, time) — ignora soft-deleted.
- *   - Cria planned_tournament para cada linha valida com dayOfWeek=6,
- *     profile=B, libraryTemplateId apontando para o template inserido.
+ *   - Coluna "Dia 2" preenchida (formato "DD/MM HH:MM") -> cria
+ *     tournament_series (totalDay1s=1, day2DateTime, network=site) e marca
+ *     planned_tournament com isFlight=true + seriesId.
  *
  * Uso:
  *   tsx --env-file=.env scripts/import-tournaments-csv.ts \
  *     --user ricardo.agnolo@hotmail.com \
  *     --csv "C:/Users/.../arquivo.csv" \
- *     [--day 6] [--profile B] [--dry]
+ *     [--day 2] [--profile B] [--dry]
  */
 
 import fs from "node:fs";
@@ -198,6 +198,37 @@ function fixShortTime(raw: string): string {
   return raw;
 }
 
+// ---------------------------------------------------------------------------
+// Day-of-week mapping CSV sigla <-> dayOfWeek numerico (0=Dom..6=Sab)
+// ---------------------------------------------------------------------------
+const DAY_NUM_TO_SIGLA: Record<number, string> = {
+  0: "Dom",
+  1: "Seg",
+  2: "Ter",
+  3: "Qua",
+  4: "Qui",
+  5: "Sex",
+  6: "Sab",
+};
+
+// ---------------------------------------------------------------------------
+// Parse "Dia 2" cell — formato "DD/MM HH:MM" (ex: "10/05 17:05").
+// Ano = ano corrente. Retorna Date ou null.
+// ---------------------------------------------------------------------------
+function parseDay2(raw: string): Date | null {
+  if (!raw || !raw.trim()) return null;
+  const m = raw.trim().match(/^(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{1,2})$/);
+  if (!m) return null;
+  const [, ddS, mmS, hhS, minS] = m;
+  const dd = parseInt(ddS, 10);
+  const mm = parseInt(mmS, 10);
+  const hh = parseInt(hhS, 10);
+  const min = parseInt(minS, 10);
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || hh > 23 || min > 59) return null;
+  const year = new Date().getFullYear();
+  return new Date(year, mm - 1, dd, hh, min, 0, 0);
+}
+
 interface LibraryRow {
   name: string;
   site: string;
@@ -212,14 +243,20 @@ interface LibraryRow {
   lateRegMinutes: number;
   source: string;
   csvLine: number;
+  // Flight Day 2 (ADR-090): se preenchido, criar tournament_series + isFlight em planned
+  day2DateTime: Date | null;
 }
 
-function processRows(rows: Record<string, string>[]): {
+function processRows(
+  rows: Record<string, string>[],
+  targetDayOfWeek: number,
+): {
   valid: LibraryRow[];
   skipped: { line: number; reason: string }[];
 } {
   const valid: LibraryRow[] = [];
   const skipped: { line: number; reason: string }[] = [];
+  const targetSigla = DAY_NUM_TO_SIGLA[targetDayOfWeek];
 
   rows.forEach((r, idx) => {
     const csvLine = idx + 2; // +2: header + 1-based
@@ -235,8 +272,8 @@ function processRows(rows: Record<string, string>[]): {
       skipped.push({ line: csvLine, reason: "site vazio" });
       return;
     }
-    if (dia !== "Sab") {
-      skipped.push({ line: csvLine, reason: `dia=${dia || "vazio"} (nao Sab)` });
+    if (dia !== targetSigla) {
+      skipped.push({ line: csvLine, reason: `dia=${dia || "vazio"} (nao ${targetSigla})` });
       return;
     }
 
@@ -274,6 +311,13 @@ function processRows(rows: Record<string, string>[]): {
     const addOnCost = addOnRaw ? parseMoney(addOnRaw) : null;
     const allowsAddOn = !!addOnCost;
 
+    const day2Raw = r["Dia 2"]?.trim() ?? "";
+    const day2DateTime = day2Raw ? parseDay2(day2Raw) : null;
+    if (day2Raw && !day2DateTime) {
+      skipped.push({ line: csvLine, reason: `Dia 2 invalido: ${day2Raw}` });
+      return;
+    }
+
     valid.push({
       name: nome,
       site: normalizeSite(site),
@@ -288,6 +332,7 @@ function processRows(rows: Record<string, string>[]): {
       lateRegMinutes,
       source: "csv",
       csvLine,
+      day2DateTime,
     });
   });
 
@@ -376,27 +421,65 @@ async function findExistingPlanned(
   return r.rows[0]?.id ?? null;
 }
 
+async function findExistingSeries(
+  client: pg.Client,
+  userId: string,
+  name: string,
+  day2DateTime: Date,
+): Promise<string | null> {
+  const r = await client.query<{ id: string }>(
+    `SELECT id FROM tournament_series
+     WHERE user_id=$1 AND name=$2 AND day2_datetime=$3
+     LIMIT 1`,
+    [userId, name, day2DateTime]
+  );
+  return r.rows[0]?.id ?? null;
+}
+
+async function insertSeries(
+  client: pg.Client,
+  userId: string,
+  row: LibraryRow,
+): Promise<string> {
+  const id = nanoid();
+  await client.query(
+    `INSERT INTO tournament_series (
+       id, user_id, name, network, total_day1s, day2_datetime,
+       day2_status, stack_mode, created_at, updated_at
+     ) VALUES (
+       $1, $2, $3, $4, 1, $5,
+       'pending', 'single', NOW(), NOW()
+     )`,
+    [id, userId, row.name, row.site, row.day2DateTime]
+  );
+  return id;
+}
+
 async function insertPlanned(
   client: pg.Client,
   userId: string,
   row: LibraryRow,
   templateId: string,
   dayOfWeek: number,
-  profile: string
+  profile: string,
+  seriesId: string | null,
 ): Promise<string> {
   const id = nanoid();
+  const isFlight = !!seriesId;
   await client.query(
     `INSERT INTO planned_tournaments (
        id, user_id, day_of_week, profile, site, time, type, speed, name,
        buy_in, guaranteed, library_template_id, status,
        prioridade, is_active, late_reg_minutes,
        allows_addon, addon_cost,
+       is_flight, series_id,
        created_at, updated_at
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9,
        $10, $11, $12, 'upcoming',
        2, true, $13,
        $14, $15,
+       $16, $17,
        NOW(), NOW()
      )`,
     [
@@ -415,6 +498,8 @@ async function insertPlanned(
       row.lateRegMinutes,
       row.allowsAddOn,
       row.addOnCost,
+      isFlight,
+      seriesId,
     ]
   );
   return id;
@@ -434,8 +519,14 @@ async function main() {
   const rows = readCsv(csvPath);
   console.log(`Linhas raw: ${rows.length}`);
 
-  const { valid, skipped } = processRows(rows);
+  if (!(args.dayOfWeek in DAY_NUM_TO_SIGLA)) {
+    throw new Error(`--day invalido: ${args.dayOfWeek} (esperado 0..6)`);
+  }
+  const { valid, skipped } = processRows(rows, args.dayOfWeek);
+  console.log(`Filtro dia=${DAY_NUM_TO_SIGLA[args.dayOfWeek]} (${args.dayOfWeek})`);
   console.log(`Validas: ${valid.length} | Skipped: ${skipped.length}`);
+  const flightCount = valid.filter((v) => v.day2DateTime).length;
+  if (flightCount > 0) console.log(`Flights detectados (Dia 2): ${flightCount}`);
 
   if (skipped.length) {
     console.log("Skipped:");
@@ -460,6 +551,8 @@ async function main() {
     let libReused = 0;
     let planCreated = 0;
     let planReused = 0;
+    let seriesCreated = 0;
+    let seriesReused = 0;
 
     await client.query("BEGIN");
 
@@ -478,6 +571,17 @@ async function main() {
         libCreated++;
       }
 
+      let seriesId: string | null = null;
+      if (row.day2DateTime) {
+        seriesId = await findExistingSeries(client, userId, row.name, row.day2DateTime);
+        if (seriesId) {
+          seriesReused++;
+        } else {
+          seriesId = await insertSeries(client, userId, row);
+          seriesCreated++;
+        }
+      }
+
       const existingPlanned = await findExistingPlanned(
         client,
         userId,
@@ -488,7 +592,15 @@ async function main() {
       if (existingPlanned) {
         planReused++;
       } else {
-        await insertPlanned(client, userId, row, templateId, args.dayOfWeek, args.profile);
+        await insertPlanned(
+          client,
+          userId,
+          row,
+          templateId,
+          args.dayOfWeek,
+          args.profile,
+          seriesId,
+        );
         planCreated++;
       }
     }
@@ -497,7 +609,8 @@ async function main() {
     console.log(`\n=== Resultado ===`);
     console.log(`Library: ${libCreated} novos | ${libReused} reusados`);
     console.log(`Planned: ${planCreated} novos | ${planReused} reusados`);
-    console.log(`Sabado profile=${args.profile} dayOfWeek=${args.dayOfWeek}`);
+    console.log(`Series:  ${seriesCreated} novos | ${seriesReused} reusados`);
+    console.log(`Dia ${DAY_NUM_TO_SIGLA[args.dayOfWeek]} profile=${args.profile} dayOfWeek=${args.dayOfWeek}`);
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

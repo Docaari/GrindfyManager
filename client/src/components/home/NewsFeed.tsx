@@ -93,8 +93,12 @@ function Slide({ item, isRead, onClick }: SlideProps): JSX.Element {
           <img
             src={item.thumbnailUrl}
             alt=""
-            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
             loading="lazy"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = 'none';
+            }}
+            className="w-full h-full object-cover"
           />
         </div>
       ) : (
@@ -156,6 +160,86 @@ function TabsBar({ active, counts, onSelect }: TabsBarProps): JSX.Element {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+interface CompactItemProps {
+  item: NewsItem;
+  rank: number;
+  isRead: boolean;
+  onClick: () => void;
+}
+
+function CompactItem({ item, rank, isRead, onClick }: CompactItemProps): JSX.Element {
+  const opacityCls = isRead ? 'opacity-60' : '';
+  return (
+    <a
+      href={item.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      referrerPolicy="no-referrer"
+      onClick={onClick}
+      data-testid={`news-feed-compact-item-${rank}`}
+      className={`flex items-center gap-3 px-3 py-2 border-b border-border last:border-0 hover:bg-accent transition-colors ${opacityCls}`}
+    >
+      <span className="font-mono text-xs text-muted-foreground shrink-0 w-6">
+        #{rank}
+      </span>
+      {item.thumbnailUrl ? (
+        <img
+          src={item.thumbnailUrl}
+          alt=""
+          referrerPolicy="no-referrer"
+          loading="lazy"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+          className="w-12 h-12 rounded object-cover shrink-0 bg-muted"
+        />
+      ) : (
+        <div className="w-12 h-12 rounded bg-muted shrink-0" aria-hidden="true" />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-1">
+          <h4 className="text-sm font-medium line-clamp-1 flex-1">
+            {item.title}
+            <ExternalLinkIcon />
+          </h4>
+          {isRead ? <ReadCheck /> : null}
+        </div>
+        {item.summary ? (
+          <p className="text-[11px] text-muted-foreground line-clamp-1">{item.summary}</p>
+        ) : null}
+      </div>
+    </a>
+  );
+}
+
+interface CompactListProps {
+  items: NewsItem[];
+  isRead: (id: string) => boolean;
+  onItemClick: (item: NewsItem, position: number) => void;
+}
+
+function CompactList({ items, isRead, onItemClick }: CompactListProps): JSX.Element | null {
+  if (items.length === 0) return null;
+  return (
+    <div data-testid="news-feed-compact-list" className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="px-3 py-1.5 border-b border-border bg-muted/30">
+        <span className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide">
+          Mais nessa categoria
+        </span>
+      </div>
+      {items.map((item, idx) => (
+        <CompactItem
+          key={item.id}
+          item={item}
+          rank={idx + 1}
+          isRead={isRead(item.id)}
+          onClick={() => onItemClick(item, idx + 1)}
+        />
+      ))}
     </div>
   );
 }
@@ -391,6 +475,11 @@ export default function NewsFeed(): JSX.Element {
           <TabsBar active={tab} counts={counts} onSelect={handleSelectTab} />
           <Carousel
             items={tabItems}
+            isRead={isRead}
+            onItemClick={handleItemClick}
+          />
+          <CompactList
+            items={buckets[tab]}
             isRead={isRead}
             onItemClick={handleItemClick}
           />

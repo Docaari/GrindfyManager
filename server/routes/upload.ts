@@ -17,6 +17,21 @@ import { selectorCache } from "../services/selectorCache";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+// Backfill default FX rates (CNY/EUR/BRL) when user settings missing/invalid.
+// Mirrors GET /api/settings/exchange-rates defaults so SharkScope/CSV multi-currency
+// imports always convert to USD even before user opens Settings.
+function withExchangeRateDefaults(stored: unknown): Record<string, number> {
+  const src = (stored && typeof stored === 'object') ? stored as Record<string, unknown> : {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(src)) {
+    if (typeof v === 'number' && v > 0) out[k] = v;
+  }
+  if (!out.BRL || out.BRL <= 0) out.BRL = 5.0;
+  if (!out.CNY || out.CNY <= 0) out.CNY = 7.20;
+  if (!out.EUR || out.EUR <= 0) out.EUR = 0.92;
+  return out;
+}
+
 // Helper function to detect Coin network TXT format
 function isCoinFormat(fileContent: string): boolean {
   // Coin format should contain these specific patterns
@@ -87,7 +102,7 @@ export function registerUploadRoutes(app: Express): void {
 
       // Fetch user settings to get exchange rates
       const userSettings = await storage.getUserSettings(userId);
-      const exchangeRates = userSettings?.exchangeRates || {};
+      const exchangeRates = withExchangeRateDefaults(userSettings?.exchangeRates);
 
       try {
         // Detect file format and use appropriate parser
@@ -418,7 +433,7 @@ export function registerUploadRoutes(app: Express): void {
 
       // CORREÇÃO CRÍTICA CNY - CARREGAR TAXAS DE CÂMBIO
       const userSettings = await storage.getUserSettings(userPlatformId);
-      const exchangeRates = userSettings?.exchangeRates || {};
+      const exchangeRates = withExchangeRateDefaults(userSettings?.exchangeRates);
 
 
       // Parse the CSV file based on format
@@ -523,7 +538,7 @@ export function registerUploadRoutes(app: Express): void {
 
       // CORREÇÃO CRÍTICA CNY - CARREGAR TAXAS DE CÂMBIO
       const userSettings = await storage.getUserSettings(userPlatformId);
-      const exchangeRates = userSettings?.exchangeRates || {};
+      const exchangeRates = withExchangeRateDefaults(userSettings?.exchangeRates);
 
 
       // Re-parse the file to get fresh data
@@ -850,7 +865,7 @@ export async function handleUploadCsv(req: any, res: any): Promise<void> {
     }
 
     const userSettings = await (storage as any).getUserSettings(userId);
-    const exchangeRates = userSettings?.exchangeRates || {};
+    const exchangeRates = withExchangeRateDefaults(userSettings?.exchangeRates);
     const fileContent = file.buffer.toString('utf-8');
 
     // Parse via parser default (PokerCSVParser.parseCSV) — testes mockam.

@@ -34,6 +34,7 @@ export interface ScrapedNewsItem {
   category: string;
   platform: string;
   sourceId: string;
+  thumbnailUrl?: string | null;
 }
 
 const USER_AGENT = "GrindfyNewsBot/1.0 (+https://grindfy.com)";
@@ -83,7 +84,16 @@ async function fetchViaRss(
     return [];
   }
 
-  const parser = new RssParser({ timeout: TIMEOUT_MS });
+  const parser = new RssParser({
+    timeout: TIMEOUT_MS,
+    customFields: {
+      item: [
+        ["media:content", "mediaContent", { keepArray: true }],
+        ["media:thumbnail", "mediaThumbnail", { keepArray: true }],
+        ["content:encoded", "contentEncoded"],
+      ],
+    },
+  });
   let feed: any;
   try {
     feed = await parser.parseString(res.text);
@@ -102,6 +112,7 @@ async function fetchViaRss(
     const pubDate = new Date(pubDateRaw);
     if (!isValidDate(pubDate)) continue;
     const summary = truncateSummary(entry.contentSnippet ?? entry.content ?? "");
+    const thumbnailUrl = extractRssThumbnail(entry, link);
     items.push({
       title,
       url: link,
@@ -110,10 +121,84 @@ async function fetchViaRss(
       sourceId: source.id,
       category: source.category,
       platform: source.platform,
+      thumbnailUrl,
     });
     if (items.length >= TOP_LIMIT) break;
   }
   return items;
+}
+
+/**
+ * Extrai thumbnail de RSS entry. Ordem prioridade:
+ *   1. enclosure type=image/* (rss-parser nativo)
+ *   2. media:content url (custom field)
+ *   3. media:thumbnail url (custom field)
+ *   4. itunes/image href (rare em poker mas defensivo)
+ *   5. primeira <img src> em content:encoded
+ *
+ * Resolve URL relativa contra link do entry. Retorna null se nada extraivel.
+ */
+function extractRssThumbnail(entry: any, baseUrl: string): string | null {
+  // Layer 1: enclosure
+  const encUrl = entry?.enclosure?.url;
+  const encType = entry?.enclosure?.type ?? "";
+  if (typeof encUrl === "string" && encUrl.length > 0) {
+    if (!encType || encType.startsWith("image/")) {
+      const abs = resolveAbs(encUrl, baseUrl);
+      if (abs) return abs;
+    }
+  }
+  // Layer 2: media:content (array de {$: {url, medium, type}})
+  const mc = entry?.mediaContent;
+  if (Array.isArray(mc)) {
+    for (const m of mc) {
+      const attrs = m?.$ ?? m;
+      const url = attrs?.url;
+      const medium = attrs?.medium ?? "";
+      const type = attrs?.type ?? "";
+      if (typeof url === "string" && url.length > 0) {
+        if (medium === "image" || type.startsWith("image/") || (!medium && !type)) {
+          const abs = resolveAbs(url, baseUrl);
+          if (abs) return abs;
+        }
+      }
+    }
+  }
+  // Layer 3: media:thumbnail
+  const mt = entry?.mediaThumbnail;
+  if (Array.isArray(mt)) {
+    for (const m of mt) {
+      const url = m?.$?.url ?? m?.url;
+      if (typeof url === "string" && url.length > 0) {
+        const abs = resolveAbs(url, baseUrl);
+        if (abs) return abs;
+      }
+    }
+  }
+  // Layer 4: itunes:image
+  const itunesImg = entry?.itunes?.image;
+  if (typeof itunesImg === "string" && itunesImg.length > 0) {
+    const abs = resolveAbs(itunesImg, baseUrl);
+    if (abs) return abs;
+  }
+  // Layer 5: scan content:encoded ou content
+  const html = entry?.contentEncoded ?? entry?.content ?? "";
+  if (typeof html === "string" && html.length > 0) {
+    const m = /<img[^>]+src=["']([^"']+)["']/i.exec(html);
+    if (m && m[1]) {
+      const abs = resolveAbs(m[1], baseUrl);
+      if (abs) return abs;
+    }
+  }
+  return null;
+}
+
+function resolveAbs(href: string, baseUrl: string): string | null {
+  try {
+    return new URL(href.trim(), baseUrl).toString();
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -137,7 +222,28 @@ const ENRICH_DATE_RES = [
   /<time[^>]+datetime=["']([^"']+)["']/,
 ];
 
-async function fetchArticleDate(articleUrl: string): Promise<string | null> {
+const ENRICH_IMAGE_RES = [
+  /<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]*content=["']([^"']+)["']/i,
+  /<meta[^>]+content=["']([^"']+)["'][^>]*property=["']og:image(?::secure_url)?["']/i,
+  /<meta[^>]+name=["']twitter:image(?::src)?["'][^>]*content=["']([^"']+)["']/i,
+  /<meta[^>]+content=["']([^"']+)["'][^>]*name=["']twitter:image(?::src)?["']/i,
+  /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i,
+  /"image"\s*:\s*"([^"]+)"/,
+];
+
+interface ArticleMeta {
+  date: string | null;
+  image: string | null;
+}
+
+/**
+ * Sprint News-3.6: enrichment co-locado.
+ *
+ * Single HTTP request extrai date (RF anterior) + og:image em paralelo.
+ * Image fica na ordem prioridade: og:image > twitter:image > rel=image_src
+ * > schema.org "image". URL relativa resolvida contra articleUrl.
+ */
+async function fetchArticleMeta(articleUrl: string): Promise<ArticleMeta> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ENRICH_TIMEOUT_MS);
   try {
@@ -145,39 +251,62 @@ async function fetchArticleDate(articleUrl: string): Promise<string | null> {
       headers: { "User-Agent": USER_AGENT },
       signal: ctrl.signal,
     } as any);
-    if (!res.ok) return null;
+    if (!res.ok) return { date: null, image: null };
     const text = await res.text();
+    let date: string | null = null;
     for (const re of ENRICH_DATE_RES) {
       const m = re.exec(text);
       if (m && m[1]) {
         const d = new Date(m[1]);
-        if (isValidDate(d)) return d.toISOString();
+        if (isValidDate(d)) {
+          date = d.toISOString();
+          break;
+        }
       }
     }
-    return null;
+    let image: string | null = null;
+    for (const re of ENRICH_IMAGE_RES) {
+      const m = re.exec(text);
+      if (m && m[1]) {
+        try {
+          image = new URL(m[1].trim(), articleUrl).toString();
+          break;
+        } catch {
+          // ignora url invalida, segue
+        }
+      }
+    }
+    return { date, image };
   } catch {
-    return null;
+    return { date: null, image: null };
   } finally {
     clearTimeout(t);
   }
 }
 
-async function enrichDates(items: ScrapedNewsItem[]): Promise<ScrapedNewsItem[]> {
+/**
+ * Enriquece items HTML com date real (quando publishedAt eh "now sentinel")
+ * + thumbnail og:image (sempre que ainda nao tiver). Reusa um unico HTTP
+ * por article com concurrency limitada.
+ */
+async function enrichArticles(items: ScrapedNewsItem[]): Promise<ScrapedNewsItem[]> {
   const nowMs = Date.now();
-  const needs = items.filter((it) => {
+  const needsDate = (it: ScrapedNewsItem) => {
     const d = new Date(it.publishedAt).getTime();
     return Math.abs(nowMs - d) < NOW_THRESHOLD_MS;
-  });
+  };
+  const needsImage = (it: ScrapedNewsItem) => !it.thumbnailUrl;
+  const needs = items.filter((it) => needsDate(it) || needsImage(it));
   if (needs.length === 0) return items;
 
-  const enriched = new Map<string, string>();
+  const metas = new Map<string, ArticleMeta>();
   let i = 0;
   async function worker() {
     while (i < needs.length) {
       const idx = i++;
       const it = needs[idx];
-      const real = await fetchArticleDate(it.url);
-      if (real) enriched.set(it.url, real);
+      const meta = await fetchArticleMeta(it.url);
+      metas.set(it.url, meta);
     }
   }
   await Promise.all(
@@ -185,8 +314,12 @@ async function enrichDates(items: ScrapedNewsItem[]): Promise<ScrapedNewsItem[]>
   );
 
   return items.map((it) => {
-    const real = enriched.get(it.url);
-    return real ? { ...it, publishedAt: real } : it;
+    const meta = metas.get(it.url);
+    if (!meta) return it;
+    const next: ScrapedNewsItem = { ...it };
+    if (meta.date && needsDate(it)) next.publishedAt = meta.date;
+    if (meta.image && !it.thumbnailUrl) next.thumbnailUrl = meta.image;
+    return next;
   });
 }
 
@@ -234,8 +367,9 @@ async function fetchViaHtml(
     sourceId: source.id,
     category: source.category,
     platform: source.platform,
+    thumbnailUrl: (it as any).thumbnailUrl ?? null,
   }));
-  return await enrichDates(baseItems);
+  return await enrichArticles(baseItems);
 }
 
 export async function fetchBlogSource(

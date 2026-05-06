@@ -1,5 +1,6 @@
 import { Star, Sparkles } from "lucide-react";
 import { prepareTournamentChip } from "@shared/grade-chip-data";
+import { getDisplayRegistrationTime } from "@shared/grade-time";
 import { getPlannerSiteColor, getPlannerTypeColor, getPlannerSpeedColor } from "@/lib/poker-colors";
 import { formatBuyIn } from "@shared/platform-currency";
 import {
@@ -102,7 +103,7 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
               {tournament.time && (
                 <>
                   <span>|</span>
-                  <span>{tournament.time}</span>
+                  <span>Reg {getDisplayRegistrationTime(tournament) || tournament.time}</span>
                 </>
               )}
             </div>

@@ -3,6 +3,7 @@ import { Draggable } from "react-beautiful-dnd";
 import { StrictModeDroppable as Droppable } from "./StrictModeDroppable";
 import { Settings, Plus, Eye } from "lucide-react";
 import { generateTimeSlots } from "@shared/grade-hours";
+import { getDisplayRegistrationTime } from "@shared/grade-time";
 import { getCellDisplayInfo } from "@shared/grade-cell-overflow";
 import { groupBuyInsByCurrency, formatGroupedBuyIns, formatBuyIn } from "@shared/platform-currency";
 import { TournamentChip } from "./TournamentChip";
@@ -103,7 +104,10 @@ export function WeekGrid({
     return tournaments.filter((t: any) => {
       if (t.dayOfWeek !== dayId) return false;
       if (t.profile !== activeProfile) return false;
-      const slot = timeToSlot(t.time);
+      // Bucketing pelo horario de registro (registrationTime explicito ->
+      // time + lateRegMinutes -> time). Mesma cascata do home Grade do Dia
+      // e /grind-live (TournamentCard primaryTimeLabel).
+      const slot = timeToSlot(getDisplayRegistrationTime(t));
       return slot === slotLabel;
     });
   }
@@ -381,7 +385,9 @@ function CellChip({
           <div className="text-xs text-gray-300 space-y-1">
             <div>Site: {tournament.site}</div>
             <div>Buy-in: {formatBuyIn(tournament.buyIn || "0", tournament.site)}</div>
-            {tournament.time && <div>Horario: {tournament.time}</div>}
+            {tournament.time && (
+              <div>Registro: {getDisplayRegistrationTime(tournament) || tournament.time}</div>
+            )}
             <div>Tipo: {tournament.type || "Vanilla"} | {tournament.speed || "Normal"}</div>
             {tournament.guaranteed && parseFloat(tournament.guaranteed) > 0 && (
               <div>GTD: {formatBuyIn(tournament.guaranteed, tournament.site)}</div>

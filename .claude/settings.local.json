@@ -135,7 +135,9 @@
       "Bash(pkill -f drizzle-kit)",
       "WebFetch(domain:blog.lobbyze.com)",
       "Bash(git worktree *)",
-      "Bash(findstr :3000)"
+      "Bash(findstr :3000)",
+      "Bash(git checkout *)",
+      "Bash(findstr /I \"node tsx\")"
     ]
   }
 }

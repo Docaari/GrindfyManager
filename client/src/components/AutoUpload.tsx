@@ -5,6 +5,7 @@ import { Cloud, Upload, File, X, AlertCircle, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest, uploadWithProgress } from "@/lib/queryClient";
 import type { UploadProgress } from "@/lib/queryClient";
+import { LogoLoader } from "@/components/LogoLoader";
 import {
   formatFileSize as formatFileSizeHelper,
   getUploadPhase,
@@ -103,6 +104,7 @@ export default function AutoUpload({
 
     setIsUploading(true);
 
+    let response: any;
     try {
       const formData = new FormData();
       if (selectedFile) {
@@ -115,25 +117,29 @@ export default function AutoUpload({
       }
 
       abortControllerRef.current = new AbortController();
-      const response = await uploadWithProgress(
+      response = await uploadWithProgress(
         '/api/upload-with-duplicates',
         formData,
         (progress) => setUploadProgress(progress),
         abortControllerRef.current.signal
       );
-
+    } catch (error: any) {
       setUploadProgress(null);
+      const msg = error?.response?.data?.message || error?.message || 'Erro ao processar upload';
+      setError(msg);
+      setIsUploading(false);
+      return;
+    }
+
+    setUploadProgress(null);
+    setSelectedFile(null);
+    setAnalysisResult(null);
+    setIsUploading(false);
+
+    try {
       onUploadComplete(response);
-
-      // Reset state
-      setSelectedFile(null);
-      setAnalysisResult(null);
-      setIsUploading(false);
-
-    } catch (error) {
-      setUploadProgress(null);
-      setError('Erro ao processar upload');
-      setIsUploading(false);
+    } catch (cbError) {
+      console.error('AutoUpload onUploadComplete callback failed:', cbError);
     }
   };
 
@@ -250,7 +256,13 @@ export default function AutoUpload({
         )}
 
         {/* Results Phase */}
-        {analysisResult && !isAnalyzing && !isUploading && (
+        {analysisResult && !isAnalyzing && !isUploading && (() => {
+          const dupCount = analysisResult.duplicates?.length || 0;
+          const newCount = analysisResult.validTournaments?.length || 0;
+          const totalCount = analysisResult.totalProcessed || 0;
+          const hasDuplicates = dupCount > 0;
+          const allDuplicates = newCount === 0 && hasDuplicates;
+          return (
           <div className="space-y-6">
             <div className="text-center">
               <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
@@ -262,41 +274,76 @@ export default function AutoUpload({
             <div className="grid grid-cols-3 gap-4 text-center">
               <div className="bg-blue-900/20 rounded-lg p-4">
                 <div className="text-2xl font-bold text-blue-400">
-                  {analysisResult.totalProcessed || 0}
+                  {totalCount}
                 </div>
                 <div className="text-sm text-gray-400">Torneios encontrados</div>
               </div>
               <div className="bg-orange-900/20 rounded-lg p-4">
                 <div className="text-2xl font-bold text-orange-400">
-                  {analysisResult.duplicates?.length || 0}
+                  {dupCount}
                 </div>
                 <div className="text-sm text-gray-400">Torneios duplicados</div>
               </div>
               <div className="bg-green-900/20 rounded-lg p-4">
                 <div className="text-2xl font-bold text-green-400">
-                  {analysisResult.validTournaments?.length || 0}
+                  {newCount}
                 </div>
                 <div className="text-sm text-gray-400">Torneios novos</div>
               </div>
             </div>
 
+            {/* Aviso: duplicados detectados */}
+            {hasDuplicates && (
+              <div className="p-3 rounded-lg border border-orange-500/40 bg-orange-900/10 flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-orange-400 shrink-0 mt-0.5" />
+                <div className="text-sm text-orange-200">
+                  <strong>{dupCount}</strong> torneios já existem no histórico e serão ignorados.{' '}
+                  {allDuplicates
+                    ? 'Não há torneios novos para importar.'
+                    : `Apenas os ${newCount} torneios novos serão importados.`}
+                </div>
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="flex flex-col space-y-3">
-              <Button
-                onClick={() => handleUploadAction('import_all')}
-                className="w-full bg-blue-600 hover:bg-blue-700"
-                size="lg"
-              >
-                Importar Todos ({analysisResult.totalProcessed || 0} torneios)
-              </Button>
-              <Button
-                onClick={() => handleUploadAction('import_new_only')}
-                variant="outline"
-                className="w-full"
-                size="lg"
-              >
-                Importar Apenas Não Duplicados ({analysisResult.validTournaments?.length || 0} torneios)
-              </Button>
+              {!hasDuplicates && (
+                <Button
+                  onClick={() => handleUploadAction('import_all')}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  size="lg"
+                >
+                  Importar {totalCount} torneios
+                </Button>
+              )}
+              {hasDuplicates && !allDuplicates && (
+                <Button
+                  onClick={() => handleUploadAction('import_new_only')}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  size="lg"
+                >
+                  Importar {newCount} torneios novos
+                </Button>
+              )}
+              {hasDuplicates && (
+                <details className="w-full">
+                  <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-400 text-center py-2">
+                    Opções avançadas
+                  </summary>
+                  <Button
+                    onClick={() => {
+                      if (window.confirm(`Forçar reimportação criará ${dupCount} torneios duplicados no histórico. Confirma?`)) {
+                        handleUploadAction('import_all');
+                      }
+                    }}
+                    variant="outline"
+                    className="w-full mt-2 border-orange-500/40 text-orange-300 hover:bg-orange-900/20"
+                    size="sm"
+                  >
+                    Forçar reimportação ({totalCount} torneios, incluindo {dupCount} duplicados)
+                  </Button>
+                </details>
+              )}
               <Button
                 onClick={resetUpload}
                 variant="ghost"
@@ -307,15 +354,13 @@ export default function AutoUpload({
               </Button>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Upload Phase */}
         {isUploading && (
           <div className="text-center space-y-4">
-            <div className="flex items-center justify-center space-x-2">
-              <Upload className="h-5 w-5 animate-spin text-green-400" />
-              <span className="text-lg font-medium">Importando torneios...</span>
-            </div>
+            <LogoLoader size="md" label="Importando torneios..." />
             <p className="text-sm text-gray-400">
               Salvando dados no sistema
             </p>
