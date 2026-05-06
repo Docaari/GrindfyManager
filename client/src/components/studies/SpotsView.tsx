@@ -63,6 +63,7 @@ interface SpotRow {
   userId: string;
   type?: string;
   spot?: string;
+  notes?: string | null;
   conclusion?: string;
   reviewLater?: boolean;
   status?: string;
@@ -94,6 +95,8 @@ export function SpotsView() {
 
   const [activeSpot, setActiveSpot] = useState<SpotRow | null>(null);
   const [linkedThemeId, setLinkedThemeId] = useState<string | null>(null);
+  const [editedNotes, setEditedNotes] = useState<string>('');
+  const [savingNotes, setSavingNotes] = useState(false);
 
   const { data: spots = [] } = useQuery<SpotRow[]>({
     queryKey: ['/api/starred-hands', { reviewLater: true }],
@@ -118,31 +121,49 @@ export function SpotsView() {
 
   const reviewMutation = useMutation({
     mutationFn: async (vars: { spotId: string; themeId: string | null }) => {
-      const url = `/api/starred-hands/${vars.spotId}/review`;
       const csrf = getCsrfToken();
-      const res = await fetch(url, {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+      };
+      // 1) Link spot -> tema (POST). Schema starred-hands PATCH eh strict e
+      //    rejeita themeId; vinculo persiste em study_theme_spot_links.
+      if (vars.themeId) {
+        const linkRes = await fetch('/api/study/theme-spot-links', {
+          method: 'POST',
+          credentials: 'include',
+          headers,
+          body: JSON.stringify({
+            themeId: vars.themeId,
+            spotId: vars.spotId,
+          }),
+        });
+        if (!linkRes.ok && linkRes.status !== 200) {
+          const err: any = new Error(`Link HTTP ${linkRes.status}`);
+          err.status = linkRes.status;
+          try { err.body = await linkRes.json(); } catch {}
+          throw err;
+        }
+      }
+      // 2) Marca review (PATCH). Schema strict — campos validos: reviewLater,
+      //    conclusion, sessionTournamentId, type, spot, notes. Conclusion
+      //    presente + reviewLater=false aciona status='reviewed' + reviewedAt.
+      const patchRes = await fetch(`/api/starred-hands/${vars.spotId}/review`, {
         method: 'PATCH',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
-        },
+        headers,
         body: JSON.stringify({
-          themeId: vars.themeId,
-          reviewedAt: new Date().toISOString(),
+          reviewLater: false,
+          conclusion: vars.themeId ? 'Vinculado a tema' : 'Revisado',
         }),
       });
-      if (!res.ok) {
-        const err: any = new Error(`HTTP ${res.status}`);
-        err.status = res.status;
-        try {
-          err.body = await res.json();
-        } catch {
-          // ignore
-        }
+      if (!patchRes.ok) {
+        const err: any = new Error(`Review HTTP ${patchRes.status}`);
+        err.status = patchRes.status;
+        try { err.body = await patchRes.json(); } catch {}
         throw err;
       }
-      return await res.json();
+      return await patchRes.json();
     },
     onSuccess: (_, vars) => {
       toast({
@@ -156,8 +177,8 @@ export function SpotsView() {
           queryKey: [`/api/study-themes/${vars.themeId}/linked-spots`],
         });
       }
-      setActiveSpot(null);
-      setLinkedThemeId(null);
+      // Modal permanece aberto pra user continuar editando notes/relendo
+      // o print. Fechamento manual via botao "Fechar".
     },
     onError: (err: any) => {
       const status = err?.status ?? err?.response?.status;
@@ -184,6 +205,32 @@ export function SpotsView() {
   function openSpotModal(s: SpotRow) {
     setActiveSpot(s);
     setLinkedThemeId(s.themeLink?.themeId ?? null);
+    setEditedNotes(s.notes ?? '');
+  }
+
+  async function saveNotes() {
+    if (!activeSpot || savingNotes) return;
+    setSavingNotes(true);
+    try {
+      const csrf = getCsrfToken();
+      const res = await fetch(`/api/starred-hands/${activeSpot.id}/review`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+        },
+        body: JSON.stringify({ notes: editedNotes.slice(0, 500) }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast({ title: 'Nota salva' });
+      setActiveSpot((prev) => (prev ? { ...prev, notes: editedNotes } : prev));
+      qc.invalidateQueries({ queryKey: ['/api/starred-hands', { reviewLater: true }] });
+    } catch {
+      toast({ title: 'Erro ao salvar nota', variant: 'destructive' });
+    } finally {
+      setSavingNotes(false);
+    }
   }
 
   // Deep-link via ?spot=<id> abre modal direto quando o spot estiver carregado.
@@ -233,13 +280,28 @@ export function SpotsView() {
               type="button"
               data-testid={`spot-card-${s.id}`}
               onClick={() => openSpotModal(s)}
-              className="text-left rounded-lg border border-gray-700 bg-gray-800/80 p-4 hover:bg-gray-800 transition-colors"
+              className="text-left rounded-lg border border-gray-700 bg-gray-800/80 p-0 hover:bg-gray-800 transition-colors overflow-hidden flex flex-col"
             >
-              <div className="text-sm font-semibold text-white">
-                {s.type ?? 'spot'} {s.spot ? `· ${s.spot}` : ''}
+              <div className="bg-black/40 aspect-[4/3] w-full overflow-hidden flex items-center justify-center">
+                <img
+                  src={`/api/starred-hands/${s.id}/image`}
+                  alt={`Spot ${s.type ?? ''} ${s.spot ?? ''}`.trim()}
+                  className="w-full h-full object-contain"
+                  loading="lazy"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  }}
+                />
               </div>
-              <div className="text-xs text-gray-400 mt-1 line-clamp-2">
-                {s.conclusion ?? 'Sem conclusao'}
+              <div className="p-3">
+                <div className="text-sm font-semibold text-white line-clamp-2">
+                  {s.notes?.trim() || 'Sem nota'}
+                </div>
+                {s.conclusion && (
+                  <div className="text-xs text-gray-400 mt-1 line-clamp-2">
+                    {s.conclusion}
+                  </div>
+                )}
               </div>
             </button>
           ))}
@@ -262,12 +324,47 @@ export function SpotsView() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
               <div className="md:col-span-2 space-y-3">
+                <div className="bg-black/40 rounded border border-gray-800 overflow-hidden flex items-center justify-center max-h-[420px]">
+                  <img
+                    src={`/api/starred-hands/${activeSpot.id}/image`}
+                    alt={`Spot ${activeSpot.type ?? ''} ${activeSpot.spot ?? ''}`.trim()}
+                    className="max-w-full max-h-[420px] object-contain"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
                 <LinkSpotToThemeDropdown
                   spotId={activeSpot.id}
                   themes={themes}
                   value={linkedThemeId}
                   onChange={(id) => setLinkedThemeId(id)}
                 />
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-300">
+                    Nota (max 500)
+                  </label>
+                  <textarea
+                    data-testid="spot-notes-edit"
+                    value={editedNotes}
+                    onChange={(e) => setEditedNotes(e.target.value.slice(0, 500))}
+                    rows={3}
+                    className="w-full rounded bg-gray-800 border border-gray-700 text-white text-sm p-2 resize-none"
+                    placeholder="Anote duvidas, leituras, ranges..."
+                  />
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>{editedNotes.length} / 500</span>
+                    <button
+                      type="button"
+                      data-testid="spot-notes-save"
+                      onClick={saveNotes}
+                      disabled={savingNotes || editedNotes === (activeSpot.notes ?? '')}
+                      className="px-2 py-1 rounded bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50"
+                    >
+                      {savingNotes ? 'Salvando...' : 'Salvar nota'}
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="md:col-span-1">
                 <SuggestedThemeSidePanel
@@ -283,10 +380,11 @@ export function SpotsView() {
                 onClick={() => {
                   setActiveSpot(null);
                   setLinkedThemeId(null);
+                  setEditedNotes('');
                 }}
                 className="px-3 py-1.5 rounded border border-gray-700 text-sm text-gray-300 hover:bg-gray-800"
               >
-                Cancelar
+                Fechar
               </button>
               <button
                 type="button"
@@ -295,7 +393,7 @@ export function SpotsView() {
                 onClick={submitReview}
                 className="px-3 py-1.5 rounded bg-poker-accent text-black text-sm font-semibold"
               >
-                Salvar revisao
+                {reviewMutation.isPending ? 'Salvando...' : 'Salvar revisao'}
               </button>
             </div>
           </div>

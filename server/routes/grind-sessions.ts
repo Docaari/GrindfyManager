@@ -139,37 +139,47 @@ export async function handleGetReconcilableWallets(req: any, res: any): Promise<
       return;
     }
 
-    // V2 (RF-04, P5/ADR-046): snapshot eh fonte PRIMARIA de idempotencia.
-    const snapshotMarker = await (storage as any).findSessionWalletSnapshot?.(
-      sessionId,
-      user.userPlatformId,
-    );
-    if (snapshotMarker) {
-      res.status(200).json({
-        sessionId,
-        alreadyReconciled: true,
-        wallets: [],
-        orphanContribution: [],
-        playedPlatforms: [],
-        missingPlatforms: [],
-        suggestedBindings: [],
-      });
-      return;
-    }
+    // ?force=true bypassa short-circuit de alreadyReconciled — bug 2026-05-05
+    // founder relatou que apos clicar "Iniciar Cooldown" + reload o modal de
+    // conciliacao nao reaparecia. SessionSummaryModal sempre passa force=true
+    // para garantir que o conjunto de wallets seja recalculado a cada
+    // finalizacao. POST /reconcile-wallets ainda enforces idempotencia via
+    // unique constraint em session_wallet_snapshots.
+    const forceList = String(req.query?.force ?? "").toLowerCase() === "true";
 
-    // Fallback secundario: wallet_transactions auto_session marker.
-    const marker = await storage.findReconciliationMarker(sessionId, user.userPlatformId);
-    if ((marker?.count ?? 0) > 0) {
-      res.status(200).json({
+    if (!forceList) {
+      // V2 (RF-04, P5/ADR-046): snapshot eh fonte PRIMARIA de idempotencia.
+      const snapshotMarker = await (storage as any).findSessionWalletSnapshot?.(
         sessionId,
-        alreadyReconciled: true,
-        wallets: [],
-        orphanContribution: [],
-        playedPlatforms: [],
-        missingPlatforms: [],
-        suggestedBindings: [],
-      });
-      return;
+        user.userPlatformId,
+      );
+      if (snapshotMarker) {
+        res.status(200).json({
+          sessionId,
+          alreadyReconciled: true,
+          wallets: [],
+          orphanContribution: [],
+          playedPlatforms: [],
+          missingPlatforms: [],
+          suggestedBindings: [],
+        });
+        return;
+      }
+
+      // Fallback secundario: wallet_transactions auto_session marker.
+      const marker = await storage.findReconciliationMarker(sessionId, user.userPlatformId);
+      if ((marker?.count ?? 0) > 0) {
+        res.status(200).json({
+          sessionId,
+          alreadyReconciled: true,
+          wallets: [],
+          orphanContribution: [],
+          playedPlatforms: [],
+          missingPlatforms: [],
+          suggestedBindings: [],
+        });
+        return;
+      }
     }
 
     const includeAll = String(req.query?.includeAll ?? "").toLowerCase() === "true";
@@ -794,20 +804,31 @@ export function registerGrindSessionRoutes(app: Express): void {
       });
 
 
-      // Combine and format only the completed tournaments
+      // Coerce DECIMAL/NUMERIC strings -> numbers (Drizzle default mapping
+      // retorna string para numeric; UI assume number). Bug 2026-05-06: BI,
+      // prize, garantido apareciam zerados pois `Number("5") > 0` resolvia
+      // bem mas formatadores intermediarios falhavam silenciosamente quando
+      // recebiam strings via `|| 0` (string truthy passa direto).
+      const num = (v: any) => {
+        const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0));
+        return Number.isFinite(n) ? n : 0;
+      };
       const allTournaments = [
         ...completedSessionTournaments.map((t: any) => ({
           id: t.id,
           name: t.name || 'Torneio sem nome',
-          buyIn: t.buyIn || 0,
-          fieldSize: t.participants || 0,
-          profit: (parseFloat(t.result || '0') || 0) + (parseFloat(t.bounty || '0') || 0) - (parseFloat(t.buyIn || '0') || 0),
-          position: t.position || 0,
+          buyIn: num(t.buyIn),
+          fieldSize: num(t.fieldSize ?? t.participants),
+          profit: num(t.result) + num(t.bounty) - num(t.buyIn) * (1 + num(t.rebuys) + num(t.reentries)) - (t.addOnTaken ? num(t.addOnCost) : 0),
+          position: num(t.position),
           itm: t.itm || false,
-          result: t.result || 0,
-          bounty: t.bounty || 0,
-          rebuys: t.rebuys || 0,
-          guaranteed: t.guaranteed || 0,
+          result: num(t.result || t.prize),
+          bounty: num(t.bounty),
+          rebuys: num(t.rebuys),
+          reentries: num(t.reentries),
+          addOnTaken: !!t.addOnTaken,
+          addOnCost: num(t.addOnCost),
+          guaranteed: num(t.guaranteed),
           source: 'session',
           site: t.site || 'N/A',
           type: t.type || 'Vanilla',
@@ -816,15 +837,16 @@ export function registerGrindSessionRoutes(app: Express): void {
         ...completedRegularTournaments.map((t: any) => ({
           id: t.id,
           name: t.name || 'Torneio sem nome',
-          buyIn: t.buyIn || 0,
-          fieldSize: t.fieldSize || 0,
-          profit: (parseFloat(t.result || '0') || 0) - (parseFloat(t.buyIn || '0') || 0),
-          position: t.position || 0,
+          buyIn: num(t.buyIn),
+          fieldSize: num(t.fieldSize),
+          profit: num(t.prize ?? t.result) - num(t.buyIn),
+          position: num(t.position),
           itm: t.itm || false,
-          result: t.result || 0,
-          bounty: 0, // Regular tournaments don't have bounties in this context
-          rebuys: t.rebuys || 0,
-          guaranteed: t.guaranteed || 0,
+          result: num(t.prize ?? t.result),
+          bounty: 0,
+          rebuys: num(t.rebuys),
+          reentries: 0,
+          guaranteed: num(t.guaranteed),
           source: 'regular',
           site: t.site || 'N/A',
           type: t.type || 'Vanilla',

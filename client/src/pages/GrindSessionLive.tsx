@@ -48,6 +48,7 @@ import SessionDashboard from "@/components/grind-session-live/SessionDashboard";
 import AddTournamentDialog from "@/components/grind-session-live/AddTournamentDialog";
 import TournamentCard from "@/components/grind-session-live/TournamentCard";
 import SessionSummaryModal from "@/components/grind-session-live/SessionSummaryModal";
+import { getCurrencyForSite } from "@shared/platform-currency";
 import { CoolDownRunner } from "@/components/cooldown/CoolDownRunner";
 import { QuickCoolDownDialog } from "@/components/cooldown/QuickCoolDownDialog";
 import EditTournamentDialog from "@/components/grind-session-live/EditTournamentDialog";
@@ -609,9 +610,9 @@ export default function GrindSessionLive() {
         }
       }
 
-      // LOW-2 fix (audit 2026-05-05): calcula best result a partir dos
-      // session_tournaments finished. Antes: hardcoded null, section nunca
-      // renderizava no Modal (feature incompleta).
+      // Best result: profit normalizado para USD via FX antes de comparar.
+      // Sem conversao, BRL R$82 batia USD $83.64 (raw > raw) — bug reportado
+      // 2026-05-05 (Suprema BRL aparecia maior que Coin USD).
       let bestResult: { name: string; details: string; profit: number } | null = null;
       try {
         const finished = (sessionTournaments ?? []).filter(
@@ -625,17 +626,27 @@ export default function GrindSessionLive() {
           const reentries = parseInt(String(t.reentries ?? 0), 10) || 0;
           const addonCost = parseFloat(String(t.addonCost ?? 0)) || 0;
           const addonTaken = !!t.addonTaken;
-          const profit =
+          const profitNative =
             res + bounty - bi * (1 + rebuys + reentries) - (addonTaken ? addonCost : 0);
-          if (!bestResult || profit > bestResult.profit) {
+          const site = String(t.site ?? '');
+          const ccy = (t?.currency && t.currency !== 'USD')
+            ? String(t.currency)
+            : getCurrencyForSite(site).code;
+          let profitUSD = profitNative;
+          if (ccy !== 'USD') {
+            const rate = usdConversionRates?.[ccy];
+            if (typeof rate === 'number' && rate > 0) {
+              profitUSD = profitNative / rate;
+            }
+          }
+          if (!bestResult || profitUSD > bestResult.profit) {
             bestResult = {
               name: t.name ?? '—',
-              details: `${t.site ?? ''}${t.position ? ` • ${t.position}o` : ''}`.trim(),
-              profit,
+              details: `${site}${t.position ? ` • ${t.position}o` : ''}`.trim(),
+              profit: profitUSD,
             };
           }
         }
-        // So mostra se houver profit positivo (busts nao merecem destaque).
         if (bestResult && bestResult.profit <= 0) bestResult = null;
       } catch {
         bestResult = null;
@@ -805,7 +816,7 @@ export default function GrindSessionLive() {
       let settingsData: any = null;
       try {
         const [wResult, sResult] = await Promise.allSettled([
-          apiRequest('GET', `/api/grind-sessions/${sid}/reconcilable-wallets`),
+          apiRequest('GET', `/api/grind-sessions/${sid}/reconcilable-wallets?force=true`),
           apiRequest('GET', '/api/user-settings'),
         ]);
         if (wResult.status === 'fulfilled') {
@@ -2880,6 +2891,7 @@ export default function GrindSessionLive() {
         reconcilableLoading={summaryReconcilable.loading}
         reconcilableLoadFailed={summaryReconcilable.loadFailed}
         onRetryReconcilable={() => setReconcileFetchTrigger((n) => n + 1)}
+        usdConversionRates={usdConversionRates}
       />
 
       {/* QA fix BUG 2: CoolDownRunner / QuickCoolDownDialog inline.

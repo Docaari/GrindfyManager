@@ -20,6 +20,7 @@ CSV Field/
 .tmp_*.ts
 .tmp_*.json
 session-log.txt
+dev-server.log
 
 # Sprint F2 — spot screenshots (uploads de prints colados pelo jogador,
 # ADR-051: storage local em F2, S3/R2 em F3).

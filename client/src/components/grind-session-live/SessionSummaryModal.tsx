@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
-import { detectRedFlags } from "@/lib/cooldownHelpers";
-import {
-  emitCooldownStartedFromSummary,
-  emitCooldownCreateFailed,
-} from "@/lib/session-end/telemetry";
 import { track as trackTelemetry } from "@/lib/telemetry";
 import { getDefaultCurrencyForSite } from "@shared/wallet-reconciliation";
 import { WalletCreateDialog } from "@/components/bankroll/WalletCreateDialog";
@@ -18,43 +12,6 @@ function safeTrack(name: string, payload: Record<string, unknown>): void {
   } catch {
     // telemetry must never throw user-facing
   }
-}
-
-/**
- * RF-12: mapeia HTTP status / error code para mensagem PT-BR humana.
- */
-function mapCooldownErrorToMessage(
-  status: number | undefined,
-  errBody: any,
-): { title: string; description?: string } {
-  if (status === undefined || status === 0) {
-    return { title: "Sem conexao. Verifique sua internet e tente novamente." };
-  }
-  if (status === 400) {
-    return { title: "Sessao invalida ou expirada. Recarregue a pagina." };
-  }
-  if (status === 401) {
-    return { title: "Sessao expirada. Faca login novamente." };
-  }
-  if (status === 404) {
-    return {
-      title:
-        "Sessao nao encontrada. Pode ter sido removida noutra aba. Voltando para /grind...",
-    };
-  }
-  if (status === 409) {
-    return { title: "Cool-down ja iniciado para esta sessao. Continuando..." };
-  }
-  if (status === 429) {
-    return { title: "Muitas tentativas. Aguarde 1 minuto e tente novamente." };
-  }
-  if (status >= 500) {
-    return {
-      title:
-        "Erro no servidor. Sua sessao foi salva, mas o cool-down nao iniciou. Tente em alguns minutos.",
-    };
-  }
-  return { title: errBody?.message ?? "Erro ao iniciar cool-down" };
 }
 
 interface ReconcilableWalletShape {
@@ -94,6 +51,9 @@ interface SessionSummaryModalProps {
   reconcilableLoading?: boolean;
   reconcilableLoadFailed?: boolean;
   onRetryReconcilable?: () => void;
+  // FX rates "1 USD = N native units" — usado pra computar lucro total
+  // dinamico em USD a partir dos saldos reportados (delta wallet -> USD).
+  usdConversionRates?: Record<string, number>;
 }
 
 const MAX_VISIBLE_MISSING = 3;
@@ -111,20 +71,21 @@ export default function SessionSummaryModal({
   setFinalNotes,
   onContinueSession: _onContinueSession,
   onEndSession,
-  onStartFullCooldown,
-  onStartQuickCooldown,
+  onStartFullCooldown: _onStartFullCooldown,
+  onStartQuickCooldown: _onStartQuickCooldown,
   bankrollManagementEnabled,
   reconcilableWallets,
   missingPlatforms,
   reconcilableLoading,
   reconcilableLoadFailed,
   onRetryReconcilable,
+  usdConversionRates,
 }: SessionSummaryModalProps) {
-  const [isCreatingCooldown, setIsCreatingCooldown] = useState(false);
   const [isReconciling, setIsReconciling] = useState(false);
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
   void _onContinueSession;
+  void _onStartFullCooldown;
+  void _onStartQuickCooldown;
 
   const [reportedBalances, setReportedBalances] = useState<Record<string, string>>({});
   const [walletDialogOpen, setWalletDialogOpen] = useState(false);
@@ -160,16 +121,9 @@ export default function SessionSummaryModal({
 
   if (!show || !summaryData) return null;
 
-  const redFlags = detectRedFlags({
-    profit: summaryData.profit,
-    abiMed: summaryData.abiMed,
-    focoMedio: summaryData.focoMedio,
-    inteligenciaEmocionalMedia: summaryData.inteligenciaEmocionalMedia,
-    interferenciasMedia: summaryData.interferenciasMedia,
-    duration: summaryData.duration,
-  });
-  const cooldownAlreadyDone = summaryData.cooldownCompleted === true;
-  const fullCtaClass = redFlags.hasFlags ? "cooldown-cta-warning" : "cooldown-cta-neutral";
+  // Cooldown CTAs removidos 2026-05-05 — feature em refator (modal infinito
+  // ao iniciar). Props preservadas para compat com callsite. Reintroduzir
+  // quando UX recuperada.
 
   const adjustments = wallets.map((w) => {
     const reportedRaw = reportedBalances[w.walletId];
@@ -193,6 +147,30 @@ export default function SessionSummaryModal({
   });
 
   const walletsWithAdjustment = adjustments.filter((a) => a.tone !== "neutral");
+
+  // Lucro total dinamico USD: sum over wallets de (reported - opening) / rate.
+  // Opening = expectedPreviousBalance (saldo inicial da sessao). reported =
+  // input do user. Rate = 1 USD = N native; dividir nativa pela rate -> USD.
+  const totalProfitUSD = wallets.reduce((sum, w) => {
+    const reportedRaw = reportedBalances[w.walletId];
+    const reported =
+      reportedRaw === undefined || reportedRaw === ""
+        ? w.expectedClosingBalance
+        : Number(reportedRaw);
+    const reportedNum = Number.isFinite(reported)
+      ? reported
+      : w.expectedClosingBalance;
+    const opening = w.expectedPreviousBalance ?? 0;
+    const profitNative = reportedNum - opening;
+    const ccy = w.nativeCurrency || "USD";
+    if (ccy === "USD") return sum + profitNative;
+    const rate = usdConversionRates?.[ccy];
+    if (typeof rate === "number" && rate > 0) {
+      return sum + profitNative / rate;
+    }
+    return sum + profitNative;
+  }, 0);
+  const showProfitCard = showBankrollSection && wallets.length > 0;
 
   const submitReconcile = async (): Promise<boolean> => {
     if (!sessionId) return true;
@@ -238,6 +216,16 @@ export default function SessionSummaryModal({
     } catch (err: any) {
       const status: number | undefined = err?.response?.status;
       const errBody = err?.response?.data ?? {};
+      // 409 already_reconciled: idempotente — sessao ja teve snapshot criado
+      // (provavelmente em tentativa anterior). Trata como sucesso pra que
+      // handleFinalizeSession prossiga + feche modal + navegue /grind.
+      if (status === 409 && errBody?.code === "already_reconciled") {
+        safeTrack("summary_inline_reconcile_idempotent", {
+          sessionId,
+          existingCount: errBody?.existingCount ?? 0,
+        });
+        return true;
+      }
       const msg = errBody?.message ?? err?.message ?? "Falha ao reconciliar. Tente novamente.";
       toast({ title: msg });
       safeTrack("summary_inline_reconcile_failed", {
@@ -251,65 +239,6 @@ export default function SessionSummaryModal({
     }
   };
 
-  const startCooldown = async (mode: "full" | "quick") => {
-    if (isCreatingCooldown) return;
-
-    if (!summaryData.sessionId) {
-      toast({ title: "Sessao nao identificada. Tente recarregar a pagina." });
-      return;
-    }
-
-    setIsCreatingCooldown(true);
-    try {
-      const result: any = await apiRequest("POST", "/api/cooldown-logs", {
-        sessionId: summaryData.sessionId,
-        mode,
-      });
-      const logId = result?.id ?? "";
-      try {
-        emitCooldownStartedFromSummary({ sessionId: summaryData.sessionId, mode });
-      } catch {
-        // ignore
-      }
-      if (mode === "full") onStartFullCooldown?.(logId);
-      else onStartQuickCooldown?.(logId);
-    } catch (err: any) {
-      const status: number | undefined = err?.response?.status;
-      const errBody = err?.response?.data ?? {};
-      const msg = mapCooldownErrorToMessage(status, errBody);
-
-      // HIGH-1 fix (audit 2026-05-05): 409 cooldown_already_exists retorna logId
-      // do existente. Reutilizamos para abrir CoolDownRunner/QuickCoolDownDialog
-      // ao inves de deixar founder preso no Summary com toast mentiroso.
-      if (status === 409 && errBody?.code === "cooldown_already_exists" && errBody?.logId) {
-        toast({ title: "Continuando cool-down ja iniciado..." });
-        if (mode === "full") onStartFullCooldown?.(errBody.logId);
-        else onStartQuickCooldown?.(errBody.logId);
-        return;
-      }
-
-      toast(msg);
-      try {
-        emitCooldownCreateFailed({
-          sessionId: summaryData.sessionId,
-          httpStatus: status ?? 0,
-          errorMessage: msg.title,
-        });
-      } catch {
-        // ignore
-      }
-      if (status === 401) {
-        setTimeout(() => setLocation("/login"), 3000);
-      } else if (status === 404) {
-        setTimeout(() => setLocation("/grind"), 1500);
-      }
-    } finally {
-      setIsCreatingCooldown(false);
-    }
-  };
-
-  // Guard: bloqueia se ha plataformas faltando, depois tenta reconcile.
-  // Retorna true se chamador pode prosseguir com a acao terminal.
   const guardAndReconcile = async (): Promise<boolean> => {
     if (hasMissing) {
       safeTrack("summary_submit_blocked_missing_platforms", {
@@ -320,18 +249,6 @@ export default function SessionSummaryModal({
       return false;
     }
     return submitReconcile();
-  };
-
-  // Sprint Bankroll-3 RF-10: unificacao dos CTAs (legacy testIds removidos).
-  // Restam apenas os 3 CTAs B2: quick, full (cta-start-cooldown),
-  // finalize (cta-finalize-session). Todos passam por guardAndReconcile +
-  // startCooldown async (B2 contract).
-  const handleStartFullCooldown = async () => {
-    if (await guardAndReconcile()) await startCooldown("full");
-  };
-
-  const handleStartQuickCooldown = async () => {
-    if (await guardAndReconcile()) await startCooldown("quick");
   };
 
   const handleFinalizeSession = async () => {
@@ -489,7 +406,7 @@ export default function SessionSummaryModal({
                       type="number"
                       step="0.01"
                       value={reportedRaw}
-                      disabled={isReconciling || isCreatingCooldown}
+                      disabled={isReconciling}
                       onChange={(e) =>
                         setReportedBalances((prev) => ({
                           ...prev,
@@ -514,16 +431,40 @@ export default function SessionSummaryModal({
           </div>
         )}
 
-        {summaryData.bestResult && (
+        {(summaryData.bestResult || showProfitCard) && (
           <div className="summary-section">
-            <h4>Melhor Resultado</h4>
-            <div className="best-result">
-              <div className="best-result-value">
-                {summaryData.bestResult.profit >= 0 ? '+' : ''}${summaryData.bestResult.profit.toFixed(2)}
-              </div>
-              <div className="best-result-tournament">
-                {summaryData.bestResult.name} - {summaryData.bestResult.details}
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {summaryData.bestResult && (
+                <div>
+                  <h4>Melhor Resultado</h4>
+                  <div className="best-result">
+                    <div className="best-result-value">
+                      {summaryData.bestResult.profit >= 0 ? '+' : ''}${summaryData.bestResult.profit.toFixed(2)}
+                    </div>
+                    <div className="best-result-tournament">
+                      {summaryData.bestResult.name} - {summaryData.bestResult.details}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {showProfitCard && (
+                <div>
+                  <h4>Lucro Total da Sessao</h4>
+                  <div
+                    className="best-result"
+                    data-testid="session-total-profit-card"
+                  >
+                    <div
+                      className={`best-result-value ${totalProfitUSD >= 0 ? 'positive' : 'negative'}`}
+                    >
+                      {totalProfitUSD >= 0 ? '+' : ''}${totalProfitUSD.toFixed(2)}
+                    </div>
+                    <div className="best-result-tournament">
+                      Reconciliado USD (atualiza ao preencher saldos)
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -604,45 +545,14 @@ export default function SessionSummaryModal({
           </div>
         </div>
 
-        {redFlags.hasFlags && !cooldownAlreadyDone && (
-          <div
-            data-testid="summary-modal-flag-warning"
-            className="cooldown-flag-warning"
-            role="status"
-          >
-            Sua sessao teve sinais de fadiga/tilt. Recomendamos cool-down.
-          </div>
-        )}
-
         <div className="session-end-actions">
-          {!cooldownAlreadyDone && (
-            <>
-              <button
-                data-testid="cta-start-cooldown-quick"
-                className="cooldown-cta-quick"
-                onClick={handleStartQuickCooldown}
-                disabled={isCreatingCooldown || isReconciling || hasMissing}
-              >
-                Cool-down Rapido (~3min)
-              </button>
-              <button
-                data-testid="cta-start-cooldown"
-                className={`${fullCtaClass} bg-primary text-primary-foreground`}
-                onClick={handleStartFullCooldown}
-                disabled={isCreatingCooldown || isReconciling || hasMissing}
-              >
-                Iniciar Cool-down (~5min)
-              </button>
-            </>
-          )}
-
           <button
             data-testid="cta-finalize-session"
             className="end-session-btn bg-primary text-primary-foreground"
             onClick={handleFinalizeSession}
-            disabled={isCreatingCooldown || isReconciling || hasMissing}
+            disabled={isReconciling || hasMissing}
           >
-            {cooldownAlreadyDone ? "Fechar" : "Finalizar Sessao"}
+            Finalizar Sessao
           </button>
         </div>
 
