@@ -22,6 +22,19 @@ interface BreakFeedbackPopupProps {
   timeRemaining: number;
   isPending?: boolean;
   sessionId?: string;
+  // Sprint Grind-Live Break Auto-Open (RF-03): callback chamado em
+  // updateSliderValue / handleQuickScoreChange para parent registrar
+  // ultima interacao com slider (lastSliderInteractionAtRef). Permite
+  // ao auto-close NAO fechar enquanto user esta interagindo.
+  onSliderInteraction?: () => void;
+  // Sprint Grind-Live Break Auto-Open (RF-05): callback opcional para
+  // override de onSkipAll com handler que tambem persiste OFF do toggle.
+  // Se omitido, fallback para onSkipAll (compat).
+  onSkipAllBreaksToday?: () => void;
+  // MEDIUM-2 fix: parent observa foco no textarea para alimentar
+  // isInTextarea no runAutoCloseTick. Substitui o `false` hardcoded
+  // anterior. onFocus -> true, onBlur -> false.
+  onTextareaFocusChange?: (focused: boolean) => void;
 }
 
 export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupProps>(({
@@ -35,7 +48,10 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
   sessionProgress,
   timeRemaining,
   isPending = false,
-  sessionId
+  sessionId,
+  onSliderInteraction,
+  onSkipAllBreaksToday,
+  onTextareaFocusChange
 }, ref) => {
   const [feedback, setFeedback] = useState({
     foco: 5,
@@ -122,6 +138,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
 
   const updateSliderValue = (key: string, value: number) => {
     setFeedback(prev => ({ ...prev, [key]: value }));
+    onSliderInteraction?.();
   };
 
   // FP-07 RF-03: Quick Feedback toggle handlers
@@ -152,6 +169,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
       : null;
     const distributed = distributeQuickFeedback(value, historicalAvgs);
     setFeedback(prev => ({ ...prev, ...distributed }));
+    onSliderInteraction?.();
   };
 
   const getProgressColor = () => {
@@ -368,8 +386,8 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
                   id="notes"
                   value={feedback.notes}
                   onChange={(e) => setFeedback({...feedback, notes: e.target.value})}
-                  onFocus={() => setIsInTextarea(true)}
-                  onBlur={() => setIsInTextarea(false)}
+                  onFocus={() => { setIsInTextarea(true); onTextareaFocusChange?.(true); }}
+                  onBlur={() => { setIsInTextarea(false); onTextareaFocusChange?.(false); }}
                   className="bg-gray-800 border-gray-600 text-white min-h-[80px] focus:border-[#16a249] focus:ring-[#16a249]"
                   placeholder="Como voce esta se sentindo? Alguma observacao importante?"
                   maxLength={280}
@@ -427,7 +445,7 @@ export const BreakFeedbackPopup = forwardRef<HTMLDivElement, BreakFeedbackPopupP
 
             <Button
               variant="ghost"
-              onClick={onSkipAll}
+              onClick={onSkipAllBreaksToday ?? onSkipAll}
               className="w-full text-yellow-400 hover:bg-yellow-900/20 text-sm"
             >
               Pular Todos os Breaks Hoje

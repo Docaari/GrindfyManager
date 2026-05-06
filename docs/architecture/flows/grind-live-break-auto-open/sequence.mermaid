@@ -1,0 +1,76 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant GSL as GrindSessionLive
+    participant Helpers as breakClockHelpers
+    participant Popup as BreakFeedbackPopup
+    participant API as userSettingsAPI<br/>(PATCH /api/user-settings)
+
+    Note over User, API: Fluxo 1 — Toggle ON click + persist (otimista + rollback)
+    User->>GSL: clica Switch Auto-Break (OFF -> ON)
+    GSL->>GSL: setQueryData(userAlertSettings, { breakAutoOpenEnabled: true })
+    GSL->>API: PATCH { breakAutoOpenEnabled: true }
+    alt sucesso
+        API-->>GSL: 200 { breakAutoOpenEnabled: true }
+        GSL-->>User: toggle permanece ON (silencio)
+    else falha
+        API-->>GSL: 4xx/5xx
+        GSL->>GSL: rollback setQueryData(prev)
+        GSL-->>User: toast erro + toggle volta OFF
+    end
+
+    Note over User, API: Fluxo 2 — Auto-open em XX:54 BRT (interval 30s)
+    loop a cada 30s (useEffect dedicado, guard breakAutoOpenEnabled === true)
+        GSL->>Helpers: getBrtMinute(now)
+        Helpers-->>GSL: minute (0..59)
+        GSL->>Helpers: getCurrentHourKey(now)
+        Helpers-->>GSL: "YYYY-MM-DD-HH" (BRT)
+        GSL->>Helpers: shouldAutoOpenAtClock(now, lastTriggerHourKey.current)
+        Helpers-->>GSL: boolean
+        alt minute === 54 AND key !== lastTriggerHourKey AND !isPaused AND !skipBreaksToday AND !showBreakDialog
+            GSL->>GSL: lastTriggerHourKey.current = currentHourKey
+            GSL->>GSL: wasAutoOpened.current = true
+            GSL->>GSL: setShowBreakDialog(true)
+            GSL->>GSL: setShowBreakBanner(false)<br/>setBreakBannerActive(false)<br/>(suprime banner FP-07 da hora)
+            GSL->>Popup: render (open=true, onSliderInteraction)
+            Popup-->>User: modal aberto
+        else condicao nao atendida
+            GSL-->>GSL: skip (no-op)
+        end
+    end
+
+    Note over User, API: Fluxo 3 — Auto-close em XX:02 BRT com guards
+    loop a cada 30s (mesmo interval do Fluxo 2)
+        GSL->>Helpers: shouldAutoCloseAtClock(now, openedAt)
+        Helpers-->>GSL: boolean (true em janela [XX:02, XX:06))
+        alt true AND wasAutoOpened.current === true
+            GSL->>Helpers: isInteractingWithModal(lastSliderInteractionAt.current, isInTextarea)
+            Helpers-->>GSL: boolean
+            alt user interagindo (slider <30s OR textarea focused)
+                GSL-->>GSL: skip close, retentar proximo tick
+                Note right of GSL: ate forcar em XX:06 (4 min apos)
+            else nao esta interagindo
+                GSL->>GSL: setShowBreakDialog(false)
+                GSL->>GSL: wasAutoOpened.current = false
+                GSL->>Popup: unmount (open=false)
+                GSL-->>User: toast "Break finalizado.<br/>Voce pode registrar manualmente em Gerenciar Breaks."
+            end
+        else fora da janela OR aberto manualmente
+            GSL-->>GSL: skip (nao auto-fecha modal manual)
+        end
+    end
+
+    Note over User, API: Fluxo 4 — "Pular Todos os Breaks Hoje" -> persiste OFF
+    User->>Popup: clica "Pular Todos os Breaks Hoje"
+    Popup->>GSL: callback onSkipAllToday()
+    GSL->>GSL: setSkipBreaksToday(true)<br/>setShowBreakDialog(false)<br/>wasAutoOpened.current = false
+    GSL->>GSL: setQueryData(userAlertSettings, { breakAutoOpenEnabled: false })<br/>(toggle UI vira OFF otimista)
+    GSL->>API: PATCH { breakAutoOpenEnabled: false }
+    alt sucesso
+        API-->>GSL: 200 { breakAutoOpenEnabled: false }
+        GSL-->>User: toast "Auto-Break desativado. Reative quando quiser via toggle."
+    else falha
+        API-->>GSL: 4xx/5xx
+        GSL->>GSL: rollback setQueryData(prev)
+        GSL-->>User: toast erro + toggle volta ON
+    end

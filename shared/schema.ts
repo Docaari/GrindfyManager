@@ -800,6 +800,11 @@ export const userSettings = pgTable("user_settings", {
   // Usado como pre-fill de grindSessions.screenCap em novas sessoes; pode ser
   // alterado em tempo real clicando no card "Em Andamento" da grind-live.
   defaultScreenCap: integer("default_screen_cap").default(10),
+  // Sprint Grind-Live Break Auto-Open (clock-aligned BRT) — RF-06.
+  // Spec: Docs/specs/grind-live-break-auto-open.md
+  // ADR-124. Toggle persistente do auto-open do BreakFeedbackPopup em XX:54
+  // BRT (close em XX:02). Default true para todos (back-fill via DB DEFAULT).
+  breakAutoOpenEnabled: boolean("break_auto_open_enabled").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1618,6 +1623,9 @@ export const insertUserSettingsSchema = _insertUserSettingsSchemaBase.extend({
   reportsExpandFlightSeries: z.boolean().optional(),
   // Limite de telas memorizado (1-24).
   defaultScreenCap: z.number().int().min(1).max(24).optional(),
+  // Sprint Grind-Live Break Auto-Open (RF-06): toggle clock-aligned auto-open.
+  // Optional + default true — back-fill via DB DEFAULT.
+  breakAutoOpenEnabled: z.boolean().optional(),
 }).strict();
 
 export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit({

@@ -25,6 +25,11 @@ import { apiRequest } from "@/lib/queryClient";
 import { Play, Plus, Clock, Target, Coffee, ChevronDown, ChevronUp, Trophy, AlertTriangle, RefreshCw, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BreakFeedbackPopup } from "@/components/BreakFeedbackPopup";
+// Sprint Grind-Live Break Auto-Open (clock-aligned BRT) — Spec + ADR-124.
+import { BreakAutoOpenToggle } from "@/components/grind-session/BreakAutoOpenToggle";
+import { handleSkipAllBreaksToday as handleSkipAllBreaksTodayHandler } from "@/components/grind-session/break-skip-all-handler";
+import { getCurrentHourKey, getBrtMinute } from "@/components/grind-session/break-clock-helpers";
+import { useBreakAutoOpenWiring } from "@/hooks/useBreakAutoOpenWiring";
 import SupremaImportModal from "@/components/SupremaImportModal";
 import { buildSupremaMatchKey, buildSupremaMatchKeysFromSession } from "@/lib/supremaDedupe";
 import { Download, X } from "lucide-react";
@@ -128,6 +133,17 @@ export default function GrindSessionLive() {
   const [dailyGoals, setDailyGoals] = useState("");
   const [screenCap, setScreenCap] = useState<number>(10);
   const [skipBreaksToday, setSkipBreaksToday] = useState(false);
+
+  // Sprint Grind-Live Break Auto-Open (clock-aligned BRT) — refs sem re-render.
+  // ADR-124. Dedupe key formato YYYY-MM-DD-HH BRT.
+  const lastTriggerHourKeyRef = useRef<string | null>(null);
+  const wasAutoOpenedRef = useRef<boolean>(false);
+  const autoOpenedAtRef = useRef<Date | null>(null);
+  const lastSliderInteractionAtRef = useRef<number>(0);
+  // MEDIUM-2 fix: ref alimentado pelo onTextareaFocusChange do
+  // BreakFeedbackPopup. Substitui o `false` hardcoded no runAutoCloseTick e
+  // garante que o auto-close respeita o foco real no textarea.
+  const lastTextareaFocusRef = useRef<boolean>(false);
 
   // Dialog para alterar limite de telas em tempo real (click no card "Em Andamento").
   const [screenCapDialogOpen, setScreenCapDialogOpen] = useState(false);
@@ -1228,6 +1244,30 @@ export default function GrindSessionLive() {
     }
   }, []);
 
+  // Sprint Grind-Live Break Auto-Open (clock-aligned BRT) — Spec + ADR-124.
+  // MEDIUM-4 fix: useEffect inteiro extraido para hook useBreakAutoOpenWiring
+  // (renderHook-friendly, sem precisar carregar GrindSessionLive em testes).
+  const breakAutoOpenEnabledFromSettings =
+    (userAlertSettings as any)?.breakAutoOpenEnabled !== false;
+  useBreakAutoOpenWiring({
+    enabled: breakAutoOpenEnabledFromSettings,
+    hasActiveSession: !!activeSession,
+    activeSessionId: activeSession?.id ?? null,
+    activeSessionSkipBreaksToday: activeSession?.skipBreaksToday ?? false,
+    isPaused,
+    skipBreaksToday,
+    showBreakDialog,
+    lastTriggerHourKeyRef,
+    wasAutoOpenedRef,
+    openedAtRef: autoOpenedAtRef,
+    lastSliderInteractionAtRef,
+    lastTextareaFocusRef,
+    setShowBreakDialog,
+    setShowBreakBanner,
+    setBreakBannerActive,
+    toast,
+  });
+
   // #16: Listen for snooze reopen event from BreakFeedbackPopup
   useEffect(() => {
     const handleSnoozeReopen = () => {
@@ -1243,7 +1283,20 @@ export default function GrindSessionLive() {
   const handleBreakRespond = () => {
     setShowBreakBanner(false);
     setBreakBannerActive(false);
+    // Sprint Break Auto-Open RF-04: clique manual nao deve auto-fechar em XX:02.
+    wasAutoOpenedRef.current = false;
     setShowBreakDialog(true);
+    // HIGH-2 fix (race do interval recreate): se user clica banner manualmente
+    // dentro do minuto :54 BRT (mesma janela que o auto-open dispararia), claim
+    // o hour key para evitar que um close manual subsequente reabra o modal
+    // quando o interval for recriado pelo cleanup do useEffect (deps mudaram).
+    // Sem este claim, o useEffect que escuta showBreakDialog/etc destroi e
+    // recria o interval, e o tick imediato (`tick()` na linha apos setInterval)
+    // veria minute===54 + lastTriggerHourKey===null e re-abriria o dialog.
+    const now = new Date();
+    if (getBrtMinute(now) === 54) {
+      lastTriggerHourKeyRef.current = getCurrentHourKey(now);
+    }
   };
 
   const handleBreakSnooze = () => {
@@ -2336,6 +2389,13 @@ export default function GrindSessionLive() {
         isPaused={isPaused}
         onPause={handlePauseSession}
         onResume={handleResumeSession}
+        // Sprint Break Auto-Open RF-01: toggle entre [Breaks] e [Pausar].
+        autoBreakToggleSlot={
+          <BreakAutoOpenToggle
+            hasActiveSession={!!activeSession}
+            enabled={breakAutoOpenEnabledFromSettings}
+          />
+        }
       />
 
       {/* Spot screenshots — paste Ctrl+V em qualquer area da pagina (fora de
@@ -2637,10 +2697,26 @@ export default function GrindSessionLive() {
 
       {/* Break Feedback Dialog */}
       <BreakFeedbackPopup isOpen={showBreakDialog}
-        onClose={() => setShowBreakDialog(false)}
-        onSubmit={(feedback) => breakFeedbackMutation.mutate(feedback)}
-        onSkip={() => setShowBreakDialog(false)}
-        onSkipAll={() => { setShowBreakDialog(false); toast({ title: "Breaks Desabilitados", description: "Nao mostraremos mais feedbacks de break hoje" }); }}
+        onClose={() => { wasAutoOpenedRef.current = false; lastTextareaFocusRef.current = false; setShowBreakDialog(false); }}
+        onSubmit={(feedback) => { wasAutoOpenedRef.current = false; lastTextareaFocusRef.current = false; breakFeedbackMutation.mutate(feedback); }}
+        onSkip={() => { wasAutoOpenedRef.current = false; lastTextareaFocusRef.current = false; setShowBreakDialog(false); }}
+        onSkipAll={() => { lastTextareaFocusRef.current = false; setShowBreakDialog(false); toast({ title: "Breaks Desabilitados", description: "Nao mostraremos mais feedbacks de break hoje" }); }}
+        // Sprint Break Auto-Open RF-03/RF-05: callbacks para tracking de
+        // interacao + override do skip-all que desliga toggle persistente.
+        onSliderInteraction={() => { lastSliderInteractionAtRef.current = Date.now(); }}
+        // MEDIUM-2 fix: textarea focus real (substitui false hardcoded).
+        onTextareaFocusChange={(focused) => { lastTextareaFocusRef.current = focused; }}
+        onSkipAllBreaksToday={() => {
+          handleSkipAllBreaksTodayHandler({
+            apiRequest,
+            setSkipBreaksToday,
+            setShowBreakDialog,
+            wasAutoOpenedRef,
+            setQueryData: (k, u) => queryClient.setQueryData(k as any, u as any),
+            getQueryData: (k) => queryClient.getQueryData(k as any),
+            toast,
+          });
+        }}
         breakNumber={breakFeedbacks?.length ? breakFeedbacks.length + 1 : 1} totalBreaks={8}
         sessionProgress={breakFeedbacks?.length ? (breakFeedbacks.length / 8) * 100 : 0}
         timeRemaining={360} isPending={breakFeedbackMutation.isPending} sessionId={activeSession?.id}

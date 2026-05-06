@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, Pause, Play, MoreVertical, StickyNote, Coffee, History } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -14,6 +14,9 @@ interface SessionHeaderProps {
   isPaused?: boolean;
   onPause?: () => void;
   onResume?: () => void;
+  // Sprint Grind-Live Break Auto-Open (RF-01): slot opcional renderizado entre
+  // o botao [Breaks] e [Pausar]. Recebe o BreakAutoOpenToggle do parent.
+  autoBreakToggleSlot?: ReactNode;
 }
 
 export default function SessionHeader({
@@ -26,6 +29,7 @@ export default function SessionHeader({
   isPaused = false,
   onPause,
   onResume,
+  autoBreakToggleSlot,
 }: SessionHeaderProps) {
   const [, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -120,6 +124,7 @@ export default function SessionHeader({
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="btn-breaks"
                   className="btn btn-breaks-mgmt hidden md:inline-flex"
                   onClick={onOpenBreakManagement}
                   title="Ver historico de breaks"
@@ -130,6 +135,14 @@ export default function SessionHeader({
               </TooltipTrigger>
               <TooltipContent side="bottom"><p>Historico de Breaks</p></TooltipContent>
             </Tooltip>
+
+            {/* Sprint Grind-Live Break Auto-Open (RF-01): toggle clock-aligned
+                XX:54/XX:02 BRT. Renderizado pelo parent quando ha sessao ativa. */}
+            {autoBreakToggleSlot && (
+              <div className="hidden md:inline-flex items-center px-2">
+                {autoBreakToggleSlot}
+              </div>
+            )}
 
             {/* #12 + #41: Feedback Break always visible on mobile */}
             <button
@@ -175,6 +188,16 @@ export default function SessionHeader({
                     <History className="w-4 h-4 text-green-400" />
                     Historico Breaks
                   </button>
+                  {/* MEDIUM-1 fix: slot do BreakAutoOpenToggle tambem disponivel
+                      no Popover mobile. Mesmo handler/instance que o desktop —
+                      parent renderiza apenas uma vez via autoBreakToggleSlot. */}
+                  {autoBreakToggleSlot && (
+                    <div className="border-t border-gray-700 mt-1 pt-2">
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-gray-200">
+                        {autoBreakToggleSlot}
+                      </div>
+                    </div>
+                  )}
                 </PopoverContent>
               </Popover>
             </div>
@@ -193,6 +216,7 @@ export default function SessionHeader({
                   </button>
                 ) : (
                   <button
+                    data-testid="btn-pausar"
                     className="btn btn-note"
                     onClick={onPause}
                   >
