@@ -215,7 +215,7 @@ export const tournaments = pgTable("tournaments", {
   site: varchar("site").notNull(),
   format: varchar("format").notNull(), // MTT, SNG, etc
   // Sprint 1 (ADR-031): modelo ortogonal type primario + modificadores booleanos
-  type: varchar("type").default("Vanilla"), // Vanilla | PKO | Mystery | Satellite (SSoT em shared/tournamentTypes.ts)
+  type: varchar("type").default("Vanilla"), // Vanilla | PKO | Mystery | Satellite | Add-on (SSoT em shared/tournamentTypes.ts)
   category: varchar("category").notNull(), // [DEPRECATED ADR-032] espelho de `type` durante deprecation gradual; remover apos migracao concluida
   speed: varchar("speed").notNull(), // Regular, Turbo, Hyper, etc
   fieldSize: integer("field_size"),
@@ -433,7 +433,7 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   profile: varchar("profile").notNull().default("A"), // 'A', 'B' ou 'C' - Profile associated with tournament
   site: varchar("site").notNull(),
   time: varchar("time").notNull(), // e.g. "19:00"
-  type: varchar("type").notNull(), // Vanilla | PKO | Mystery | Satellite (Sprint 1 ADR-031)
+  type: varchar("type").notNull(), // Vanilla | PKO | Mystery | Satellite | Add-on (Sprint 1 ADR-031 + extensao 2026-05-06)
   category: varchar("category"), // [DEPRECATED ADR-032] espelho de `type`; opcional aqui pois pode nao existir em rows antigas
   speed: varchar("speed").notNull(), // e.g. "Normal", "Turbo", "Hyper"
   name: text("name").notNull(),
@@ -569,7 +569,7 @@ export const sessionTournaments = pgTable("session_tournaments", {
   endTime: timestamp("end_time"),
   fromPlannedTournament: boolean("from_planned_tournament").default(false),
   plannedTournamentId: varchar("planned_tournament_id"),
-  type: varchar("type").default("Vanilla"), // Vanilla, PKO, Mystery
+  type: varchar("type").default("Vanilla"), // Vanilla | PKO | Mystery | Satellite | Add-on (SSoT em shared/tournamentTypes.ts)
   speed: varchar("speed").default("Normal"), // Normal, Turbo, Hyper
   category: varchar("category").default("Vanilla"), // Fallback for type
   prioridade: integer("prioridade").default(2), // 1-Alta, 2-Média, 3-Baixa
@@ -589,6 +589,12 @@ export const sessionTournaments = pgTable("session_tournaments", {
   allowsReentry: boolean("allows_reentry").default(false),
   maxReentries: integer("max_reentries"),
   reentries: integer("reentries").default(0),
+  // Sprint 2026-05-07 — modificadores ortogonais ADR-031 + Migration 0051
+  isFlight: boolean("is_flight").default(false),
+  isLive: boolean("is_live").default(false),
+  satelliteRewardType: varchar("satellite_reward_type"),
+  satelliteTicketValue: decimal("satellite_ticket_value"),
+  satelliteTargetName: varchar("satellite_target_name"),
   // Sprint Tickets-1 (RF-01 + data-model/tickets.md):
   // espelha tournaments.enteredViaSatellite no live (antes da migracao session->tournament)
   enteredViaSatellite: boolean("entered_via_satellite").default(false),
@@ -1657,6 +1663,16 @@ export const insertSessionTournamentSchemaBase = createInsertSchema(sessionTourn
   gameType: z.enum(['NLH', 'PLO']).nullable().optional(),
   blindLevelMinutes: z.number().int().nullable().optional(),
   alertMinutesBefore: z.number().int().min(1).max(120).nullable().optional(),
+  // Sprint 2026-05-07: type SSoT enum (5 valores ADR-031). category continua
+  // varchar livre por compat com rows historicos; novos writes recebem enum.
+  type: TournamentPrimaryTypeSchema.optional().default('Vanilla'),
+  // Sprint 2026-05-07 Migration 0051 — modificadores ortogonais
+  isFlight: z.boolean().optional().default(false),
+  isLive: z.boolean().optional().default(false),
+  satelliteRewardType: SatelliteRewardTypeSchema.nullable().optional(),
+  satelliteTicketValue: z.union([z.string(), z.number()]).nullable().optional()
+    .transform((v) => v == null ? null : String(v)),
+  satelliteTargetName: z.string().nullable().optional(),
   ...addOnReaFieldsSession,
 });
 
@@ -2236,7 +2252,7 @@ export const tournamentLibrary = pgTable("tournament_library", {
   buyIn: decimal("buy_in").notNull(),
   guaranteed: decimal("guaranteed"),
   time: varchar("time"),
-  type: varchar("type"), // PKO, Vanilla, Mystery
+  type: varchar("type"), // Vanilla | PKO | Mystery | Satellite | Add-on (SSoT em shared/tournamentTypes.ts)
   speed: varchar("speed"), // Normal, Turbo, Hyper
   fieldSize: integer("field_size"),
   source: varchar("source").default("manual"), // manual, suprema, grind-live

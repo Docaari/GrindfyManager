@@ -9,6 +9,7 @@ import {
 import multer from "multer";
 import { PokerCSVParser } from "../csvParser";
 import { detectFlightCandidate } from "../flightDetector";
+import { enrichTournamentTypeFields } from "@shared/tournament-type-detector";
 import { nanoid } from "nanoid";
 import { eq, desc, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -264,26 +265,35 @@ export function registerUploadRoutes(app: Express): void {
           return res.status(500).json({ message: 'Internal error: Tournament data contains incorrect user identification' });
         }
 
-        // Convert ParsedTournament[] to InsertTournament[] and batch insert
-        const tournamentsToInsert = tournaments.map(tournament => ({
-          userId: userPlatformId,
-          name: tournament.name.trim(),
-          buyIn: tournament.buyIn.toString(),
-          prize: tournament.prize?.toString() || "0",
-          position: tournament.position || null,
-          datePlayed: tournament.datePlayed ?? new Date(),
-          site: tournament.site,
-          format: tournament.format,
-          category: tournament.category,
-          speed: tournament.speed,
-          fieldSize: tournament.fieldSize || null,
-          finalTable: tournament.finalTable || false,
-          bigHit: tournament.bigHit || false,
-          currency: tournament.currency || "USD",
-          prizePool: tournament.prizePool?.toString() || null,
-          reentries: tournament.reentries || 0,
-          tournamentId: tournament.tournamentId || null
-        }));
+        // Convert ParsedTournament[] to InsertTournament[] and batch insert.
+        // enrichTournamentTypeFields garante paridade type<->category + Satellite/Flight/Add-on.
+        const tournamentsToInsert = tournaments.map(tournament => {
+          const enriched = enrichTournamentTypeFields({ name: tournament.name, category: tournament.category });
+          return {
+            userId: userPlatformId,
+            name: tournament.name.trim(),
+            buyIn: tournament.buyIn.toString(),
+            prize: tournament.prize?.toString() || "0",
+            position: tournament.position || null,
+            datePlayed: tournament.datePlayed ?? new Date(),
+            site: tournament.site,
+            format: tournament.format,
+            type: enriched.type,
+            category: enriched.type,
+            isFlight: enriched.isFlight,
+            allowsAddOn: enriched.allowsAddOn,
+            addOnCost: enriched.allowsAddOn ? tournament.buyIn.toString() : null,
+            allowsReentry: enriched.allowsReentry,
+            speed: tournament.speed,
+            fieldSize: tournament.fieldSize || null,
+            finalTable: tournament.finalTable || false,
+            bigHit: tournament.bigHit || false,
+            currency: tournament.currency || "USD",
+            prizePool: tournament.prizePool?.toString() || null,
+            reentries: tournament.reentries || 0,
+            tournamentId: tournament.tournamentId || null,
+          };
+        });
 
         const savedTournaments = await storage.createTournamentsBatch(tournamentsToInsert);
         const successCount = savedTournaments.length;
@@ -613,26 +623,35 @@ export function registerUploadRoutes(app: Express): void {
           return res.status(400).json({ message: 'Ação inválida' });
       }
 
-      // Batch insert tournaments
-      const insertData = tournamentsToSave.map(tournament => ({
-        userId: userPlatformId,
-        name: tournament.name.trim(),
-        buyIn: tournament.buyIn.toString(),
-        prize: tournament.prize?.toString() || "0",
-        position: tournament.position || null,
-        datePlayed: tournament.datePlayed ?? new Date(),
-        site: tournament.site,
-        format: tournament.format,
-        category: tournament.category,
-        speed: tournament.speed,
-        fieldSize: tournament.fieldSize || null,
-        finalTable: tournament.finalTable || false,
-        bigHit: tournament.bigHit || false,
-        currency: tournament.currency || "USD",
-        prizePool: tournament.prizePool?.toString() || null,
-        reentries: tournament.reentries || 0,
-        tournamentId: tournament.tournamentId || null
-      }));
+      // Batch insert tournaments. enrichTournamentTypeFields garante paridade
+      // type<->category + Satellite/Flight/Add-on.
+      const insertData = tournamentsToSave.map(tournament => {
+        const enriched = enrichTournamentTypeFields({ name: tournament.name, category: tournament.category });
+        return {
+          userId: userPlatformId,
+          name: tournament.name.trim(),
+          buyIn: tournament.buyIn.toString(),
+          prize: tournament.prize?.toString() || "0",
+          position: tournament.position || null,
+          datePlayed: tournament.datePlayed ?? new Date(),
+          site: tournament.site,
+          format: tournament.format,
+          type: enriched.type,
+          category: enriched.type,
+          isFlight: enriched.isFlight,
+          allowsAddOn: enriched.allowsAddOn,
+          addOnCost: enriched.allowsAddOn ? tournament.buyIn.toString() : null,
+          allowsReentry: enriched.allowsReentry,
+          speed: tournament.speed,
+          fieldSize: tournament.fieldSize || null,
+          finalTable: tournament.finalTable || false,
+          bigHit: tournament.bigHit || false,
+          currency: tournament.currency || "USD",
+          prizePool: tournament.prizePool?.toString() || null,
+          reentries: tournament.reentries || 0,
+          tournamentId: tournament.tournamentId || null,
+        };
+      });
 
       const savedTournaments = await storage.createTournamentsBatch(insertData);
       const successCount = savedTournaments.length;
@@ -946,10 +965,19 @@ export async function handleUploadCsv(req: any, res: any): Promise<void> {
     for (const { tournament, detection } of detections) {
       const externalId = tournament.tournamentId ?? tournament.id;
       const linkedSeriesId = autoLinkMap.get(externalId) ?? null;
+      const enriched = enrichTournamentTypeFields({ name: tournament.name, category: tournament.category });
       const payload: any = {
         ...tournament,
         userId,
         seriesId: linkedSeriesId,
+        type: enriched.type,
+        category: enriched.type,
+        // detection.isFlightCandidate ja eh trustworthy do flightDetector;
+        // OU caia pro pattern detector quando flightDetector nao matcha
+        isFlight: detection.isFlightCandidate || enriched.isFlight,
+        allowsAddOn: enriched.allowsAddOn,
+        addOnCost: enriched.allowsAddOn ? String(tournament.buyIn ?? '0') : null,
+        allowsReentry: enriched.allowsReentry,
       };
       const persisted = insertFn ? await insertFn(payload) : payload;
       inserted.push(persisted);

@@ -6,6 +6,7 @@ import {
   insertPlannedTournamentSchema,
 } from "@shared/schema";
 import { detectAddonReaFromName } from "@shared/addon-rea-detector";
+import { TOURNAMENT_PRIMARY_TYPES, type TournamentPrimaryType } from "@shared/tournamentTypes";
 import { selectorCache } from "../services/selectorCache";
 import { zodErrorResponse } from "../lib/zodErrorResponse";
 
@@ -223,8 +224,18 @@ export function registerGradePlannerRoutes(app: Express): void {
           updates[key] = Boolean(value);
         } else if (key === 'startTime' || key === 'endTime') {
           updates[key] = value === null || value === undefined ? null : (value ? new Date(String(value)) : null);
-        } else if (key === 'site' || key === 'time' || key === 'type' || key === 'speed' || key === 'name') {
+        } else if (key === 'type') {
+          // Sprint 2026-05-07: gate type contra enum SSoT (5 valores ADR-031).
+          const v = String(value || '');
+          if ((TOURNAMENT_PRIMARY_TYPES as readonly string[]).includes(v)) {
+            updates[key] = v as TournamentPrimaryType;
+          } else {
+            return res.status(400).json({ message: `type invalido: ${v}` });
+          }
+        } else if (key === 'site' || key === 'time' || key === 'speed' || key === 'name') {
           updates[key] = String(value || '');
+        } else if (key === 'isFlight' || key === 'isLive') {
+          updates[key] = Boolean(value);
         } else {
           updates[key] = value;
         }

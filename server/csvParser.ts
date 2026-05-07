@@ -2,6 +2,7 @@ import { Readable } from "stream";
 import csv from "csv-parser";
 import * as XLSX from 'xlsx';
 import { detectAddonReaFromName } from "../shared/addon-rea-detector";
+import { detectSatelliteFromName, detectIsFlightFromName } from "../shared/tournament-type-detector";
 
 export interface ParsedTournament {
   userId: string; // 🎯 ETAPA 2.2: Este campo é preenchido pelo contexto de autenticação, nunca pelos dados CSV
@@ -1723,7 +1724,8 @@ export class PokerCSVParser {
   }
 
   private static detectCategory(name: any, flags?: any): string {
-    const nameUpper = (name || '').toString().toUpperCase();
+    const nameStr = (name || '').toString();
+    const nameUpper = nameStr.toUpperCase();
     const flagsUpper = (flags || '').toString().toUpperCase();
 
     // Mystery has highest priority
@@ -1741,6 +1743,13 @@ export class PokerCSVParser {
       return 'PKO';
     }
 
+    // Satellite — terceiro lugar (defesa em profundidade; upload route tambem
+    // chama enrichTournamentTypeFields, mas se outro caller usar parseCSV
+    // diretamente queremos categorizar corretamente).
+    if (detectSatelliteFromName(nameStr)) {
+      return 'Satellite';
+    }
+
     // Add-on (Plus pattern) — primary type per ADR-031 extension 2026-05-06
     const detected = detectAddonReaFromName(name);
     if (detected.allowsAddOn) {
@@ -1749,6 +1758,14 @@ export class PokerCSVParser {
 
     // Default to Vanilla
     return 'Vanilla';
+  }
+
+  /**
+   * Detecta se torneio do CSV e parte de uma serie multi-flight (modificador
+   * ortogonal ADR-031). Usado pelo upload pipeline para popular `isFlight`.
+   */
+  private static detectIsFlight(name: any): boolean {
+    return detectIsFlightFromName((name || '').toString());
   }
 
   private static detectSpeed(speed: any, name: any): string {

@@ -1415,7 +1415,9 @@ export class DatabaseStorage implements IStorage {
 
     for (let i = 0; i < tournamentsToInsert.length; i += BATCH_SIZE) {
       const batch = tournamentsToInsert.slice(i, i + BATCH_SIZE);
-      const values = batch.map(t => ({ ...t, id: nanoid() }));
+      // Defesa em profundidade: garante paridade type<->category mesmo quando
+      // caller esquece de setar type explicitamente (lesson-learned 2026-05-07).
+      const values = batch.map(t => ({ ...normalizeTournamentTypePayload(t as any), id: nanoid() }));
 
       try {
         const saved = await db

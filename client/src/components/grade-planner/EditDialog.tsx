@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { sites, types, speeds, type TournamentForm } from './types';
 import { getCurrencyForSite } from '@shared/platform-currency';
+import { Switch } from "@/components/ui/switch";
 
 interface EditDialogProps {
   open: boolean;
@@ -266,6 +267,198 @@ export function EditDialog({
                 </FormItem>
               )}
             />
+
+            {/* Sprint 2026-05-07: Modificadores + Add-on + Satellite condicional */}
+            <div className="space-y-3 border-t border-slate-700 pt-4">
+              <div className="text-xs text-slate-400 font-medium uppercase tracking-wider">Modificadores</div>
+
+              {/* isFlight + isLive sempre visiveis */}
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={editForm.control}
+                  name="isFlight"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-2 space-y-0">
+                      <Switch
+                        checked={Boolean(field.value)}
+                        onCheckedChange={field.onChange}
+                        id="edit-isflight"
+                      />
+                      <Label htmlFor="edit-isflight" className="cursor-pointer text-slate-200 text-sm m-0">
+                        Multi-flight (Day 1A/1B...)
+                      </Label>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="isLive"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-2 space-y-0">
+                      <Switch
+                        checked={Boolean(field.value)}
+                        onCheckedChange={field.onChange}
+                        id="edit-islive"
+                      />
+                      <Label htmlFor="edit-islive" className="cursor-pointer text-slate-200 text-sm m-0">
+                        Live (presencial)
+                      </Label>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Add-on toggle */}
+              <FormField
+                control={editForm.control}
+                name="allowsAddOn"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2 space-y-0">
+                    <Switch
+                      checked={Boolean(field.value)}
+                      onCheckedChange={(checked) => {
+                        field.onChange(checked);
+                        if (checked && !editForm.getValues('addOnCost')) {
+                          editForm.setValue('addOnCost', editForm.getValues('buyIn') || '');
+                        }
+                      }}
+                      id="edit-allowsaddon"
+                    />
+                    <Label htmlFor="edit-allowsaddon" className="cursor-pointer text-slate-200 text-sm m-0">
+                      Permite Add-on (Plus)
+                    </Label>
+                  </FormItem>
+                )}
+              />
+              {Boolean(editForm.watch('allowsAddOn')) && (
+                <FormField
+                  control={editForm.control}
+                  name="addOnCost"
+                  render={({ field }) => (
+                    <FormItem className="ml-10">
+                      <FormLabel className="text-slate-300 text-xs">Custo do Add-on ({currencySymbol})</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={field.value ?? ''}
+                          onChange={(e) => field.onChange(e.target.value)}
+                          className="bg-slate-800 border-slate-700 text-slate-200"
+                          placeholder={editForm.watch('buyIn') || '0.00'}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* Re-entry toggle */}
+              <FormField
+                control={editForm.control}
+                name="allowsReentry"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2 space-y-0">
+                    <Switch
+                      checked={Boolean(field.value)}
+                      onCheckedChange={field.onChange}
+                      id="edit-allowsreentry"
+                    />
+                    <Label htmlFor="edit-allowsreentry" className="cursor-pointer text-slate-200 text-sm m-0">
+                      Permite Re-entry (ReA)
+                    </Label>
+                  </FormItem>
+                )}
+              />
+              {Boolean(editForm.watch('allowsReentry')) && (
+                <FormField
+                  control={editForm.control}
+                  name="maxReentries"
+                  render={({ field }) => (
+                    <FormItem className="ml-10">
+                      <FormLabel className="text-slate-300 text-xs">Max. re-entradas (vazio = ilimitado)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={field.value == null ? '' : String(field.value)}
+                          onChange={(e) => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                          className="bg-slate-800 border-slate-700 text-slate-200"
+                          placeholder="Ilimitado"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* Satellite fields — so quando type=Satellite */}
+              {editForm.watch('type') === 'Satellite' && (
+                <div className="border-t border-amber-700/30 bg-amber-950/10 -mx-2 mt-2 px-2 py-3 rounded space-y-3">
+                  <div className="text-xs text-amber-400 font-medium uppercase tracking-wider">Satellite</div>
+                  <FormField
+                    control={editForm.control}
+                    name="satelliteRewardType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-slate-300 text-xs">Tipo de Premio</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                          <FormControl>
+                            <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-200">
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-slate-800 border-slate-700">
+                            <SelectItem value="ticket">Ticket</SelectItem>
+                            <SelectItem value="package">Package (live)</SelectItem>
+                            <SelectItem value="cash">Cash</SelectItem>
+                            <SelectItem value="mixed">Mixed (ticket + cash)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="satelliteTicketValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-slate-300 text-xs">Valor do Ticket ({currencySymbol})</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={field.value ?? ''}
+                            onChange={(e) => field.onChange(e.target.value)}
+                            className="bg-slate-800 border-slate-700 text-slate-200"
+                            placeholder="0.00"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="satelliteTargetName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-slate-300 text-xs">Torneio Alvo</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            value={field.value ?? ''}
+                            className="bg-slate-800 border-slate-700 text-slate-200"
+                            placeholder="Ex: Sunday Million $109"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+            </div>
 
             {/* Enriched fields */}
             {editingTournament && (

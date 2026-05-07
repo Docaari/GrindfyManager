@@ -30,6 +30,15 @@ export const tournamentSchema = z.object({
   // Re-entry
   allowsReentry: z.boolean().optional().default(false),
   maxReentries: z.union([z.string(), z.number()]).nullable().optional(),
+
+  // Modificadores ortogonais (ADR-031)
+  isFlight: z.boolean().optional().default(false),
+  isLive: z.boolean().optional().default(false),
+
+  // Campos Satellite (so quando type=Satellite)
+  satelliteRewardType: z.enum(['ticket', 'package', 'cash', 'mixed']).nullable().optional(),
+  satelliteTicketValue: z.string().nullable().optional(),
+  satelliteTargetName: z.string().nullable().optional(),
 });
 
 export type TournamentForm = z.infer<typeof tournamentSchema>;

@@ -420,6 +420,7 @@ export default function GradePlanner() {
       const s = String(v).trim();
       return s === "" ? null : s;
     };
+    const isSatellite = data.type === 'Satellite';
     return {
       gameType: data.gameType ?? null,
       startingStack: toIntOrNull(data.startingStack),
@@ -427,10 +428,18 @@ export default function GradePlanner() {
       blindLevelMinutes: toIntOrNull(data.blindLevelMinutes),
       lateRegMinutes: toIntOrNull(data.lateRegMinutes),
       alertMinutesBefore: toIntOrNull(data.alertMinutesBefore),
-      allowsAddOn: Boolean(data.allowsAddOn),
-      addOnCost: data.allowsAddOn ? toStringOrNull(data.addOnCost) : null,
+      // Coerencia: type=Add-on implica allowsAddOn=true
+      allowsAddOn: Boolean(data.allowsAddOn) || data.type === 'Add-on',
+      addOnCost: (Boolean(data.allowsAddOn) || data.type === 'Add-on') ? toStringOrNull(data.addOnCost) : null,
       allowsReentry: Boolean(data.allowsReentry),
       maxReentries: data.allowsReentry ? toIntOrNull(data.maxReentries) : null,
+      // Sprint 2026-05-07 — modificadores ortogonais ADR-031
+      isFlight: Boolean(data.isFlight),
+      isLive: Boolean(data.isLive),
+      // Satellite fields — so propaga quando type=Satellite (orthogonality refinement no Zod)
+      satelliteRewardType: isSatellite ? (data.satelliteRewardType ?? null) : null,
+      satelliteTicketValue: isSatellite ? toStringOrNull(data.satelliteTicketValue) : null,
+      satelliteTargetName: isSatellite ? toStringOrNull(data.satelliteTargetName) : null,
     };
   };
 

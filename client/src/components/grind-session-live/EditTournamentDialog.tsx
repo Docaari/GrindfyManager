@@ -228,6 +228,90 @@ export default function EditTournamentDialog({
                 placeholder="Posicao final"
               />
             </div>
+            {/* Sprint 2026-05-07 Migration 0051 — Modificadores ortogonais ADR-031 */}
+            <div className="border border-gray-700 rounded-lg p-3 space-y-3">
+              <div className="text-xs text-cyan-400 font-medium uppercase tracking-wider">
+                Modificadores
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="edit-isFlight"
+                    checked={Boolean(editingTournament.isFlight)}
+                    onChange={(e) => setEditingTournament({ ...editingTournament, isFlight: e.target.checked })}
+                    className="w-4 h-4 text-cyan-500 bg-gray-800 border-gray-600 rounded"
+                    data-testid="edit-checkbox-is-flight"
+                  />
+                  <Label htmlFor="edit-isFlight" className="text-sm text-gray-200 cursor-pointer">
+                    Multi-flight
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="edit-isLive"
+                    checked={Boolean(editingTournament.isLive)}
+                    onChange={(e) => setEditingTournament({ ...editingTournament, isLive: e.target.checked })}
+                    className="w-4 h-4 text-emerald-500 bg-gray-800 border-gray-600 rounded"
+                    data-testid="edit-checkbox-is-live"
+                  />
+                  <Label htmlFor="edit-isLive" className="text-sm text-gray-200 cursor-pointer">
+                    Live (presencial)
+                  </Label>
+                </div>
+              </div>
+            </div>
+
+            {/* Sprint 2026-05-07 — Satellite fields (so visiveis quando type=Satellite) */}
+            {editingTournament.type === 'Satellite' && (
+              <div className="border border-amber-700/40 rounded-lg p-3 space-y-3 bg-amber-950/10">
+                <div className="text-xs text-amber-400 font-medium uppercase tracking-wider">
+                  Satellite
+                </div>
+                <div>
+                  <Label htmlFor="edit-sat-reward" className="text-gray-300 text-xs">Tipo de Premio</Label>
+                  <Select
+                    value={editingTournament.satelliteRewardType ?? ''}
+                    onValueChange={(value) => setEditingTournament({ ...editingTournament, satelliteRewardType: value || null })}
+                  >
+                    <SelectTrigger id="edit-sat-reward" className="bg-gray-800 border-gray-600 text-white">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-800 border-gray-600">
+                      <SelectItem value="ticket">Ticket</SelectItem>
+                      <SelectItem value="package">Package (live)</SelectItem>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="mixed">Mixed (ticket + cash)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="edit-sat-ticket" className="text-gray-300 text-xs">Valor do Ticket ({currency.symbol})</Label>
+                  <Input
+                    id="edit-sat-ticket"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editingTournament.satelliteTicketValue ?? ''}
+                    onChange={(e) => setEditingTournament({ ...editingTournament, satelliteTicketValue: e.target.value || null })}
+                    className="bg-gray-800 border-gray-600 text-white"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-sat-target" className="text-gray-300 text-xs">Torneio Alvo</Label>
+                  <Input
+                    id="edit-sat-target"
+                    value={editingTournament.satelliteTargetName ?? ''}
+                    onChange={(e) => setEditingTournament({ ...editingTournament, satelliteTargetName: e.target.value || null })}
+                    className="bg-gray-800 border-gray-600 text-white"
+                    placeholder="Ex: Sunday Million $109"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Add-on + Re-entry (ADR-014) */}
             <div className="border border-gray-700 rounded-lg p-3 space-y-3">
               <div className="text-xs text-amber-400 font-medium uppercase tracking-wider">
@@ -355,6 +439,10 @@ export default function EditTournamentDialog({
               </Button>
               <Button
                 onClick={() => {
+                  // Sprint 2026-05-07: type=Add-on coerce allowsAddOn=true
+                  const isAddOnType = editingTournament.type === 'Add-on';
+                  const allowsAddOnFinal = Boolean(editingTournament.allowsAddOn) || isAddOnType;
+                  const isSatellite = editingTournament.type === 'Satellite';
                   onSave(editingTournament.id, {
                     site: editingTournament.site,
                     type: editingTournament.type,
@@ -369,9 +457,9 @@ export default function EditTournamentDialog({
                     position: editingTournament.position || null,
                     lateRegMinutes: editingTournament.lateRegMinutes ?? null,
                     alertMinutesBefore: editingTournament.alertMinutesBefore ?? null,
-                    // Add-on + Re-entry (ADR-014)
-                    allowsAddOn: Boolean(editingTournament.allowsAddOn),
-                    addOnCost: editingTournament.allowsAddOn ? editingTournament.addOnCost : null,
+                    // Add-on + Re-entry (ADR-014) — coerencia com type=Add-on
+                    allowsAddOn: allowsAddOnFinal,
+                    addOnCost: allowsAddOnFinal ? (editingTournament.addOnCost || editingTournament.buyIn) : null,
                     addOnTaken: Boolean(editingTournament.addOnTaken),
                     allowsReentry: Boolean(editingTournament.allowsReentry),
                     maxReentries: editingTournament.allowsReentry
@@ -380,6 +468,12 @@ export default function EditTournamentDialog({
                     reentries: editingTournament.allowsReentry
                       ? parseInt(String(editingTournament.reentries ?? 0)) || 0
                       : 0,
+                    // Sprint 2026-05-07 Migration 0051 — modificadores ortogonais
+                    isFlight: Boolean(editingTournament.isFlight),
+                    isLive: Boolean(editingTournament.isLive),
+                    satelliteRewardType: isSatellite ? (editingTournament.satelliteRewardType ?? null) : null,
+                    satelliteTicketValue: isSatellite ? (editingTournament.satelliteTicketValue ?? null) : null,
+                    satelliteTargetName: isSatellite ? (editingTournament.satelliteTargetName ?? null) : null,
                   }, {
                     persistRegistrationTimeToLibrary: Boolean(editingTournament._persistRegistrationTimeToLibrary),
                   });
