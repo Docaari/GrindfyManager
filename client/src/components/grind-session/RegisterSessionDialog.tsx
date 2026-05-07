@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -117,15 +117,25 @@ export default function RegisterSessionDialog({
     return total;
   }, [walletEntries, wallets, grindFx.ratesUsdToOther]);
 
-  // Dep apenas `computedProfitUsd`. registerSessionForm eh recriado a cada render
-  // do parent, mas o guard `rounded !== formData.profit` evita loop. Adicionar
-  // o form como dep dispararia infinite render.
+  // Ref para evitar stale closure (parent recria registerSessionForm a cada
+  // render). Sem ref, useEffect vai usar formData.profit congelado da primeira
+  // execucao.
+  const formRef = useRef(registerSessionForm);
+  useEffect(() => { formRef.current = registerSessionForm; });
+
   useEffect(() => {
     const rounded = Math.round(computedProfitUsd * 100) / 100;
-    if (rounded !== registerSessionForm.formData.profit) {
-      registerSessionForm.handleFieldChange('profit', rounded);
+    if (rounded !== formRef.current.formData.profit) {
+      formRef.current.handleFieldChange('profit', rounded);
     }
   }, [computedProfitUsd]);
+
+  // Reset wallet entries quando dialog fecha (lesson #11 — stale state).
+  useEffect(() => {
+    if (!isOpen) {
+      setWalletEntries({});
+    }
+  }, [isOpen]);
 
   const setEntry = (walletId: string, patch: Partial<WalletEntryState>) => {
     setWalletEntries((prev) => ({
@@ -449,6 +459,7 @@ export default function RegisterSessionDialog({
                   registerSessionForm.touchField('dailyGoals');
                 }}
                 placeholder="Quais eram seus objetivos?"
+                required
                 tabIndex={16}
                 hasError={registerSessionForm.hasFieldError('dailyGoals')}
                 isValid={registerSessionForm.isFieldValid('dailyGoals')}
@@ -486,7 +497,10 @@ export default function RegisterSessionDialog({
           <div className="flex gap-3">
             <Button
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                registerSessionForm.resetForm();
+                onOpenChange(false);
+              }}
               className="border-gray-600 hover:bg-gray-700 text-white px-5"
             >
               Cancelar

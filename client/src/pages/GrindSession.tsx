@@ -50,10 +50,6 @@ export default function GrindSession() {
   const hasPermission = usePermission('grind_session_access');
   const hasWarmupPermission = usePermission('mental_prep_access');
 
-  if (!hasPermission) {
-    return <AccessDenied featureName="Sessao de Grind" description="Acesse o modulo de sessoes de grind para acompanhar suas sessoes em tempo real." />;
-  }
-
   const [, setLocation] = useLocation();
   const [showWarmupGateDialog, setShowWarmupGateDialog] = useState(false);
   const [gateBypassedOnce, setGateBypassedOnce] = useState(false);
@@ -526,21 +522,33 @@ export default function GrindSession() {
   // Filter sessions based on current filters
   const filteredSessions = applyFiltersToSessions(sessionHistory, filterState);
 
-  // Hook to fetch completed tournaments from all sessions
+  // Fetch completed tournaments from all sessions (parallel via Promise.all).
+  // Bug fix 2026-05-07: serial loop bloqueava UI por N requests sequenciais; agora
+  // paraleliza + loga falhas (lesson #9: nao engolir erro silencioso).
+  const filteredSessionIdsKey = useMemo(
+    () => filteredSessions.map(s => s.id).sort().join(','),
+    [filteredSessions],
+  );
   const { data: allCompletedTournaments = [] } = useQuery({
-    queryKey: ["/api/completed-tournaments", filteredSessions.map(s => s.id)],
+    queryKey: ["/api/completed-tournaments", filteredSessionIdsKey],
     queryFn: async () => {
-      const allTournaments: Record<string, unknown>[] = [];
-      for (const session of filteredSessions) {
-        try {
-          const sessionTournaments = await apiRequest("GET", `/api/grind-sessions/${session.id}/tournaments`);
-          if (Array.isArray(sessionTournaments)) {
-            allTournaments.push(...sessionTournaments);
-          }
-        } catch (error) {
+      const settled = await Promise.allSettled(
+        filteredSessions.map((session) =>
+          apiRequest("GET", `/api/grind-sessions/${session.id}/tournaments`),
+        ),
+      );
+      const out: Record<string, unknown>[] = [];
+      settled.forEach((res, idx) => {
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          out.push(...res.value);
+        } else if (res.status === 'rejected') {
+          console.warn(
+            `[grind] tournaments.fetch failed for session ${filteredSessions[idx]?.id}:`,
+            res.reason,
+          );
         }
-      }
-      return allTournaments;
+      });
+      return out;
     },
     enabled: filteredSessions.length > 0,
     staleTime: 2 * 60 * 1000,
@@ -1259,6 +1267,11 @@ export default function GrindSession() {
     setRecoveryDialog(null);
   }, []);
 
+  // Permission gate AFTER hooks (Rules of Hooks compliance — lesson #1).
+  if (!hasPermission) {
+    return <AccessDenied featureName="Sessao de Grind" description="Acesse o modulo de sessoes de grind para acompanhar suas sessoes em tempo real." />;
+  }
+
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       {/* Sprint Bankroll-3 RF-6: Stop-loss/win banner — read-only, dismisses
@@ -1504,10 +1517,14 @@ export default function GrindSession() {
         formatCurrency={grindFormat.format}
       />
 
-      {/* Session Conflict Dialog */}
+      {/* Session Conflict Dialog — onOpenChange routed via onCancel para
+          limpar conflictingSession quando user fecha por backdrop/ESC. */}
       <ConflictDialog
         isOpen={showConflictDialog}
-        onOpenChange={setShowConflictDialog}
+        onOpenChange={(open) => {
+          if (!open) handleConflictCancel();
+          else setShowConflictDialog(true);
+        }}
         conflictingSession={conflictingSession}
         onEditSession={handleConflictEditSession}
         onCreateNew={handleConflictCreateNew}

@@ -4,6 +4,8 @@ import { Trophy } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { SessionHistoryData } from "./types";
 import { localFormatCurrency } from "./helpers";
+import { formatCurrency as formatNativeCurrency } from "@/lib/format";
+import { getCurrencyForSite } from "@shared/platform-currency";
 
 interface SessionDetailsDialogProps {
   isOpen: boolean;
@@ -14,6 +16,17 @@ interface SessionDetailsDialogProps {
   formatCurrency?: (amountUsd: number) => string;
 }
 
+// Tournament money fields are stored in NATIVE currency (USD/BRL/EUR/CNY).
+// formatCurrency prop expects USD input → mixing inflates BRL by ~5x. Format
+// in native currency for accuracy + locale.
+function nativeMoney(t: any, amount: number): string {
+  if (!Number.isFinite(amount)) return '—';
+  const ccy = (typeof t.currency === 'string' && t.currency.length > 0
+    ? t.currency
+    : getCurrencyForSite(String(t.site ?? '')).code).toUpperCase();
+  return formatNativeCurrency(amount, ccy);
+}
+
 export default function SessionDetailsDialog({
   isOpen,
   onOpenChange,
@@ -22,7 +35,8 @@ export default function SessionDetailsDialog({
   isLoading,
   formatCurrency,
 }: SessionDetailsDialogProps) {
-  const fmt = formatCurrency ?? localFormatCurrency;
+  void formatCurrency;
+  void localFormatCurrency;
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl bg-slate-800/70 backdrop-blur-sm border-gray-700">
@@ -39,7 +53,11 @@ export default function SessionDetailsDialog({
         </DialogHeader>
 
         <div className="max-h-[600px] overflow-y-auto">
-          {tournaments.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center py-8 text-gray-400">
+              <p className="text-sm">Carregando torneios...</p>
+            </div>
+          ) : tournaments.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
               <Trophy className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <p>Nenhum torneio encontrado para esta sessão</p>
@@ -57,36 +75,45 @@ export default function SessionDetailsDialog({
                 <div>💰 Garantido</div>
               </div>
 
-              {tournaments.map((tournament, index) => (
-                <div key={tournament.id} className={`grid grid-cols-8 gap-3 px-4 py-3 rounded-lg hover:bg-slate-700/50 transition-colors ${
-                  index % 2 === 0 ? 'bg-slate-700/30' : 'bg-slate-700/20'
-                }`}>
-                  <div className="text-white font-medium truncate" title={tournament.name}>
-                    {tournament.name}
+              {tournaments.map((tournament, index) => {
+                const buyIn = Number(tournament.buyIn) || 0;
+                const result = Number(tournament.result) || 0;
+                const bounty = Number(tournament.bounty) || 0;
+                const guaranteed = Number(tournament.guaranteed) || 0;
+                const rebuys = Number(tournament.rebuys) || 0;
+                const reentries = Number(tournament.reentries) || 0;
+                const position = Number(tournament.position) || 0;
+                return (
+                  <div key={tournament.id} className={`grid grid-cols-8 gap-3 px-4 py-3 rounded-lg hover:bg-slate-700/50 transition-colors ${
+                    index % 2 === 0 ? 'bg-slate-700/30' : 'bg-slate-700/20'
+                  }`}>
+                    <div className="text-white font-medium truncate" title={tournament.name}>
+                      {tournament.name}
+                    </div>
+                    <div className="text-gray-300">
+                      {nativeMoney(tournament, buyIn)}
+                    </div>
+                    <div className="text-gray-300">
+                      {1 + rebuys + reentries}
+                    </div>
+                    <div className="text-gray-300">
+                      {position > 0 ? `${position}º` : '-'}
+                    </div>
+                    <div className={`font-medium ${result >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {nativeMoney(tournament, result)}
+                    </div>
+                    <div className={`font-medium ${bounty > 0 ? 'text-amber-400' : 'text-gray-400'}`}>
+                      {bounty > 0 ? nativeMoney(tournament, bounty) : '-'}
+                    </div>
+                    <div className="text-gray-300">
+                      {tournament.fieldSize || (guaranteed > 0 && buyIn > 0 ? Math.round(guaranteed / buyIn) : '-')}
+                    </div>
+                    <div className="text-gray-300">
+                      {guaranteed > 0 ? nativeMoney(tournament, guaranteed) : '-'}
+                    </div>
                   </div>
-                  <div className="text-gray-300">
-                    {fmt(tournament.buyIn)}
-                  </div>
-                  <div className="text-gray-300">
-                    {((tournament as any).rebuys || 0) + 1}
-                  </div>
-                  <div className="text-gray-300">
-                    {tournament.position > 0 ? `${tournament.position}º` : '-'}
-                  </div>
-                  <div className={`font-medium ${((tournament as any).result || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {fmt((tournament as any).result || 0)}
-                  </div>
-                  <div className={`font-medium ${((tournament as any).bounty || 0) > 0 ? 'text-amber-400' : 'text-gray-400'}`}>
-                    {(tournament as any).bounty > 0 ? fmt((tournament as any).bounty) : '-'}
-                  </div>
-                  <div className="text-gray-300">
-                    {tournament.fieldSize || ((tournament as any).guaranteed > 0 && tournament.buyIn > 0 ? Math.round((tournament as any).guaranteed / tournament.buyIn) : '-')}
-                  </div>
-                  <div className="text-gray-300">
-                    {(tournament as any).guaranteed > 0 ? fmt((tournament as any).guaranteed) : '-'}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

@@ -204,35 +204,35 @@ export default function SessionHistoryList({
                             month: 'long'
                           })}
                         </div>
-                        <div className={`session-card-result ${session.profit >= 0 ? 'profit' : 'loss'}`}>
-                          {formatCurrency(session.profit)}
+                        <div className={`session-card-result ${(Number(session.profit) || 0) >= 0 ? 'profit' : 'loss'}`}>
+                          {formatCurrency(Number(session.profit) || 0)}
                         </div>
                       </div>
 
                       {/* Session Summary Metrics */}
                       <div className="session-summary-metrics">
                         <div className="session-summary-metric">
-                          <div className="metric-value">{session.volume}</div>
+                          <div className="metric-value">{Number(session.volume) || 0}</div>
                           <div className="metric-label">Volume</div>
                         </div>
                         <div className="session-summary-metric">
-                          <div className="metric-value">{formatCurrency(session.abiMed)}</div>
+                          <div className="metric-value">{formatCurrency(Number(session.abiMed) || 0)}</div>
                           <div className="metric-label">ABI</div>
                         </div>
                         <div className="session-summary-metric">
-                          <div className="metric-value">{session.roi.toFixed(1)}%</div>
+                          <div className="metric-value">{(Number(session.roi) || 0).toFixed(1)}%</div>
                           <div className="metric-label">ROI</div>
                         </div>
                         <div className="session-summary-metric">
-                          <div className="metric-value">{session.fts}</div>
+                          <div className="metric-value">{Number(session.fts) || 0}</div>
                           <div className="metric-label">FTs</div>
                         </div>
                         <div className="session-summary-metric">
-                          <div className="metric-value">{session.cravadas}</div>
+                          <div className="metric-value">{Number(session.cravadas) || 0}</div>
                           <div className="metric-label">Cravadas</div>
                         </div>
                         <div className="session-summary-metric">
-                          <div className="metric-value">{session.breakCount || 0}</div>
+                          <div className="metric-value">{Number(session.breakCount) || 0}</div>
                           <div className="metric-label">Breaks</div>
                         </div>
                       </div>

@@ -26,6 +26,7 @@ export const useRegisterSessionForm = ({ onSave, onClose }: UseRegisterSessionFo
     finalNotes: '',
     objectiveCompleted: false
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { validationState, validateField, touchField, resetValidation, calculateROI } = useRegisterSessionValidation(formData);
 
@@ -97,10 +98,17 @@ export const useRegisterSessionForm = ({ onSave, onClose }: UseRegisterSessionFo
     // Marcar todos os campos como tocados
     const allFields = ['date', 'duration', 'volume', 'profit', 'abiMed', 'roi', 'fts', 'cravadas', 'preparationNotes', 'dailyGoals', 'finalNotes'];
     allFields.forEach(field => touchField(field));
-    
+
     // Verificar se o formulário é válido
     if (validationState.isValid) {
-      onSubmit(formData);
+      setIsSubmitting(true);
+      try {
+        onSubmit(formData);
+      } finally {
+        // Mutation parent reseta isOpen → desmonta hook. Fallback timer
+        // garante reset do flag se onSubmit falhar sem desmontar.
+        setTimeout(() => setIsSubmitting(false), 1500);
+      }
     }
   }, [formData, validationState.isValid, touchField]);
 
@@ -130,6 +138,6 @@ export const useRegisterSessionForm = ({ onSave, onClose }: UseRegisterSessionFo
     handleSubmit,
     resetMentalValues,
     isValid: validationState.isValid,
-    isSubmitting: false
+    isSubmitting,
   };
 };
