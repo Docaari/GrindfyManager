@@ -1,9 +1,13 @@
-# Spec — Grind Cards Reform (16 KPIs, 4 linhas)
+# Spec — Grind Cards Reform (16 KPIs, 4 linhas + Breakdowns Tipos/Velocidade/Plataformas)
 
-**Status:** Draft (aguardando arquitetura + testes)
+**Status:** Draft v2 (aguardando arquitetura + testes)
 **Página alvo:** `/grind` (`client/src/pages/GrindSession.tsx` → `DashboardMetricsCards.tsx`)
-**Data:** 2026-05-05
+**Data:** 2026-05-05 (v1) → 2026-05-07 (v2 — breakdowns)
 **Autor:** founder + Claude
+
+## Histórico de revisões
+- **v1 (2026-05-05):** 16 KPIs em 4 linhas + auditoria fórmulas + R7 (datasource = sessões registradas).
+- **v2 (2026-05-07):** Adiciona breakdowns colapsaveis com **Lucro + ROI** por bucket: **Torneios** (5 tipos primários), **Velocidade** (Normal/Turbo/Hyper, novo card próprio), **Plataformas** (network agregado, novo card).
 
 ---
 
@@ -93,6 +97,90 @@ Linha 4: Lucro              | ROI                | Mesas Finais      | Cravadas
 
 ---
 
+## 3.1 Breakdowns (cards colapsaveis abaixo dos KPIs)
+
+A pagina `/grind` ja tem 1 toggle "🏆 Torneios" hoje (5 cards: Vanilla/PKO/Mystery/Normal/Turbo+Hyper, apenas count + %). v2 substitui esse toggle e adiciona dois novos: **Velocidade** e **Plataformas**.
+
+Os 3 toggles ficam abaixo das 4 linhas de KPI (e do toggle "🧠 Performance Mental"), na ordem:
+
+```
+[KPIs L1-L4]
+[🏆 Torneios     — colapsavel — 5 cards]
+[⚡ Velocidade   — colapsavel — 3 cards]
+[🎰 Plataformas  — colapsavel — N cards (N = networks com >=1 registro)]
+[🧠 Performance Mental — colapsavel (existente)]
+```
+
+### Regra comum aos 3 breakdowns
+
+Cada bucket exibe **3 metricas em 1 card** (compacto):
+
+| Linha | Conteudo | Formato |
+|-------|----------|---------|
+| Header | Nome do bucket + ` (XX.X%)` | string |
+| Valor principal | Contagem absoluta | inteiro |
+| Sub-valor 1 | `Lucro: $XX.XX` (FX toggle) | moeda |
+| Sub-valor 2 | `ROI: XX.X%` | percentual 1 dec |
+
+**Formulas:**
+- `count` = `COUNT(tournaments WHERE bucket = X)`
+- `percentage` = `count / totalCompletedTournaments * 100`
+- `totalProfit` = `SUM(profit_usd)` no bucket — ja em USD via FX-1.
+- `totalInvested` = `SUM(buyin_usd × (1 + reentries))` no bucket — usado como denominador do ROI.
+- `roi` = `totalProfit / totalInvested * 100` (se `totalInvested = 0` → mostra `—`).
+
+**Ordenacao:**
+- Torneios: ordem fixa Vanilla → PKO → Mystery → Satellite → Add-on (mesma ordem do `TOURNAMENT_PRIMARY_TYPES`).
+- Velocidade: ordem fixa Normal → Turbo → Hyper.
+- Plataformas: descending por `count`. Empate: ordem alfabetica do network.
+
+**Buckets vazios:**
+- Torneios: SEMPRE mostra os 5 cards (mesmo com count=0). Mantem estabilidade visual durante filtros.
+- Velocidade: SEMPRE mostra os 3 cards.
+- Plataformas: APENAS networks com `count >= 1`. Sem registros no periodo → header colapsavel mostra "Nenhuma plataforma com registros no periodo" e nao expande.
+
+### 3.1.1 Card "🏆 Torneios" (5 tipos primarios)
+
+Buckets = `TOURNAMENT_PRIMARY_TYPES` (`shared/tournamentTypes.ts`):
+
+| # | Bucket | Match | Cor (hex) |
+|---|--------|-------|-----------|
+| 1 | Vanilla | `tournament.type === 'Vanilla'` | `#71717a` |
+| 2 | PKO (Bounty) | `type === 'PKO'` | `#a78bfa` |
+| 3 | Mystery Bounty | `type === 'Mystery'` | `#e879f9` |
+| 4 | Satélite | `type === 'Satellite'` | `#fbbf24` |
+| 5 | Add-on | `type === 'Add-on'` | `#fb923c` |
+
+**Labels PT-BR:** vir de `TYPE_LABELS_PT_BR` (ja existente).
+**Cores:** vir de `TYPE_COLORS[t].hex` (ja existente).
+
+### 3.1.2 Card "⚡ Velocidade" (3 speeds)
+
+Buckets = `tournament.speed`:
+
+| # | Bucket | Match |
+|---|--------|-------|
+| 1 | Normal | `speed === 'Normal'` ou `speed IS NULL` (default) |
+| 2 | Turbo | `speed === 'Turbo'` |
+| 3 | Hyper | `speed === 'Hyper'` |
+
+**Nota:** `speed = NULL` conta como Normal para nao perder torneios sem categoria explicita (mesma convencao da L1 atual).
+
+### 3.1.3 Card "🎰 Plataformas" (network agregado)
+
+Buckets = `getNetworkForSite(tournament.site)` (helper novo, item §4.6).
+
+**Exemplos de mapeamento:**
+- `ACR`, `BlackChip`, `Americas Cardroom` → `WPN`
+- `GGPoker`, `Natural8`, `ClubGG`, `GG` → `GGNetwork`
+- `PS.ES`, `PS.FR`, `PokerStars` → `PokerStars`
+- `Suprema`, `SupremaPoker`, `Liga Suprema` → `Suprema`
+- `Bodog`, `Ignition` → `Bodog`
+
+**Sites desconhecidos** (sem alias resolvido) → bucket `Outras` (agrega todos).
+
+---
+
 ## 4. Mudanças de código (ponta-a-ponta)
 
 ### 4.1 Storage layer (`server/storage.ts`)
@@ -115,6 +203,15 @@ Linha 4: Lucro              | ROI                | Mesas Finais      | Cravadas
    - `itmPercentage` deve usar `prize > 0`, não `position <= X` ou outra heurística.
 4. **FX-aware:** todos os campos monetários (totalProfit, avgABI, maiorResultado, profitPerHour, etc) já devem chegar normalizados em USD via `convertToNativeCurrency`/FX-1. Manter padrão.
 
+5. **v2 — Breakdowns:** ao iterar sobre os torneios da pagina (mesmo dataset que ja alimenta os 16 KPIs), construir 3 maps:
+   - `byType: Map<TournamentPrimaryType, { count, profitUsd, investedUsd }>` — chaves fixas (5).
+   - `bySpeed: Map<'Normal'|'Turbo'|'Hyper', ...>` — chaves fixas (3). `speed = NULL` cai em Normal.
+   - `byPlatform: Map<networkKey, ...>` — chaves dinamicas via `getNetworkForSite(t.site)`.
+
+   Apos a iteracao, transformar em arrays `BreakdownBucket[]` com `percentage` calculado contra `totalCompletedTournaments`. ROI = `profitUsd / investedUsd * 100` ou `null` se invested = 0.
+
+   **Performance:** 1 unico loop sobre `tournaments[]` (ja em memoria); custo O(N). Sem query SQL nova.
+
 ### 4.2 Endpoint
 
 Identificar endpoint que `GrindSession.tsx` consome (`/api/grind-sessions/dashboard-metrics?period=...` ou similar). Adicionar campos novos no DTO de resposta. **Sem breaking change** — campos adicionais são opcionais para clientes antigos (não há clientes além do front).
@@ -131,12 +228,23 @@ Identificar endpoint que `GrindSession.tsx` consome (`/api/grind-sessions/dashbo
 4. **Renomear:** `Lucro Médio por Dia` → `Lucro Médio Dia` (encurtar).
 5. **Renomear:** `Lucro Médio por Torneio` → `Lucro Médio Torneio`.
 6. **Remover** cálculos inline (`dashboardMetrics.totalProfit / dashboardMetrics.totalVolume`); todos os valores derivados vêm prontos do DTO.
-7. **Manter** as toggles existentes (Torneios + Performance Mental) abaixo das 4 linhas de KPI.
-8. **Persistência de visibilidade (`GrindPageVisibility`):** adicionar 4ª chave `kpisSession` para controlar a Linha 2 (Sessões/Tempo/Jogos/Lucro Dia). Linhas existentes: `kpisVolume` (L1), `kpisItm` (L3 nova), `kpisProfit` (L4 nova). Mapear corretamente.
+7. **Manter** o toggle "🧠 Performance Mental" abaixo dos toggles novos (Torneios → Velocidade → Plataformas → Mental).
+8. **Persistência de visibilidade (`GrindPageVisibility`):** chaves novas:
+   - `kpisVolume` (L1) — existente
+   - `kpisSession` (L2) — v1
+   - `kpisItm` (L3) — existente
+   - `kpisProfit` (L4) — existente
+   - `kpisTypes` — bloco "Torneios" (substitui chave antiga `tournaments`, com migracao silenciosa)
+   - `kpisSpeeds` — bloco "Velocidade" (NOVO, default true)
+   - `kpisPlatforms` — bloco "Plataformas" (NOVO, default true)
+   - `mentalEnabled` — bloco "Performance Mental" (existente)
+9. **Substituir cards atuais do toggle Torneios** (Vanilla/PKO/Mystery/Normal/Turbo+Hyper apenas com count) pelos 5 cards novos com count + Lucro + ROI conforme §3.1.1.
+10. **Renderizar cards novos** seguindo padrao `weekly-summary-card`: header com label + percentual, valor principal = count, 2 sub-linhas com Lucro e ROI. Cor do icone = `colorHex` quando disponivel (Torneios). Velocidade reusa cores existentes; Plataformas usa cor neutra.
+11. **Acessibilidade:** cada card colapsavel deve ter `aria-expanded` + `data-testid="grind-breakdown-{types|speeds|platforms}"` para testes (lesson #2).
 
-### 4.4 Tipos (`types.ts`)
+### 4.4 Tipos (`types.ts` + `grindPagePreferences.ts`)
 
-Adicionar ao `DashboardMetrics`:
+**Adicionar ao `DashboardMetrics`:**
 ```ts
 totalRegistros: number;
 avgSessionDurationMin: number;
@@ -144,13 +252,84 @@ gamesPerActiveDay: number;
 profitPerActiveDay: number;
 profitPerHour: number;
 profitPerTournament: number;
+
+// v2 (2026-05-07): breakdowns com Lucro + ROI
+typesBreakdown: BreakdownBucket[];      // 5 buckets fixos (TOURNAMENT_PRIMARY_TYPES)
+speedsBreakdown: BreakdownBucket[];     // 3 buckets fixos (Normal | Turbo | Hyper)
+platformsBreakdown: BreakdownBucket[];  // N buckets (networks com count >= 1)
 ```
+
+**Tipo novo `BreakdownBucket`** (em `client/src/components/grind-session/types.ts`):
+```ts
+export interface BreakdownBucket {
+  key: string;            // 'Vanilla' | 'WPN' | 'Normal' | ...
+  label: string;          // PT-BR label (ja resolvido pelo backend)
+  count: number;
+  percentage: number;     // 0-100 (1 dec na UI)
+  totalProfitUsd: number; // FX-normalizado em USD
+  totalInvestedUsd: number;
+  roi: number | null;     // null quando totalInvestedUsd = 0
+  colorHex?: string;      // opcional (so para Torneios — TYPE_COLORS hex)
+}
+```
+
+**Adicionar ao `GrindPageVisibility`** (`client/src/lib/grindPagePreferences.ts`):
+```ts
+kpisTypes: boolean;       // toggle do bloco "Torneios"  — substitui chave antiga 'tournaments'
+kpisSpeeds: boolean;      // toggle do bloco "Velocidade" — NOVO
+kpisPlatforms: boolean;   // toggle do bloco "Plataformas" — NOVO
+```
+
+Migracao localStorage: ler chave antiga `tournaments` (se existir) e mapear pra `kpisTypes`. Apos primeiro save, chave antiga removida. Default = true para os 3 toggles novos.
 
 ### 4.5 Modal "Personalizar..." (`GrindPersonalizationDialog`)
 
-Adicionar toggle de visibilidade para a Linha 2 (Sessões). As outras 3 linhas já têm toggles existentes (`kpisVolume`, `kpisProfit`, `kpisItm`).
+Adicionar **3 toggles novos** no grupo "Visibilidade dos cards":
+- "Torneios (tipos)" → `kpisTypes`
+- "Velocidade" → `kpisSpeeds`
+- "Plataformas" → `kpisPlatforms`
 
-Toggle de moeda (USD ↔ BRL) já existe — confirmar que afeta os 4 novos cards monetários.
+Mais a Linha 2 (`kpisSession`) ja prevista na v1.
+
+Toggle de moeda (USD ↔ BRL) ja existe — confirmar que afeta `Lucro` dos 3 breakdowns (sub-valor 1 de cada card).
+
+### 4.6 Helper `getNetworkForSite` (`shared/platform-currency.ts`)
+
+Adicionar funcao colateral ao arquivo existente:
+
+```ts
+const SITE_NETWORK: Record<string, string> = {
+  // WPN
+  'wpn': 'WPN', 'acr': 'WPN', 'americascardroom': 'WPN',
+  'blackchip': 'WPN', 'blackchippoker': 'WPN',
+  // GGNetwork
+  'ggpoker': 'GGNetwork', 'ggnetwork': 'GGNetwork',
+  'natural8': 'GGNetwork', 'clubgg': 'GGNetwork', 'gg': 'GGNetwork',
+  // PokerStars (engloba regionais EUR)
+  'pokerstars': 'PokerStars', 'stars': 'PokerStars',
+  'ps.es': 'PokerStars', 'ps.fr': 'PokerStars', 'ps.pt': 'PokerStars',
+  // Outros
+  'partypoker': 'PartyPoker', 'party': 'PartyPoker',
+  '888poker': '888poker', '888': '888poker',
+  'bodog': 'Bodog', 'ignition': 'Bodog',
+  'chico': 'Chico',
+  'ipoker': 'iPoker', 'ipoker network': 'iPoker',
+  'coinpoker': 'CoinPoker', 'coin': 'CoinPoker',
+  'revolution': 'Revolution',
+  'wpt': 'WPT', 'wpt global': 'WPT',
+  'champion': 'Champion', 'championspoker': 'Champion', 'champions poker': 'Champion',
+  'suprema': 'Suprema', 'supremapoker': 'Suprema', 'liga suprema': 'Suprema',
+  'ppoker': 'PPoker',
+};
+
+export function getNetworkForSite(site: string | null | undefined): string {
+  if (!site) return 'Outras';
+  const key = site.toString().toLowerCase().trim();
+  return SITE_NETWORK[key] ?? 'Outras';
+}
+```
+
+**Tests:** cobrir casos exatos (`ACR` → `WPN`), aliases (`ACR ` com trailing space → `WPN`), unknowns (`SuperPoker` → `Outras`), null/undefined (`null` → `Outras`).
 
 ---
 
@@ -211,6 +390,38 @@ Durante o sprint, validar/corrigir:
 - `totalFTs`: filtro `position <= 8 AND position > 0` (excluir `position=null`).
 - `totalCravadas`: filtro `position = 1` (não `position <= 1`).
 
+### CA-13 Breakdown Torneios (v2)
+- Os 5 buckets sempre presentes (Vanilla/PKO/Mystery/Satellite/Add-on), mesmo com count=0.
+- Soma das 5 contagens = `COUNT(tournaments)` no periodo. Soma das 5 percentages = 100% (aceitar arredondamento ate 0.5%).
+- ROI = `null` em bucket sem invested → exibe `—`.
+- Toggle USD: lucro do PKO = soma profits dos torneios PKO em USD; toggle BRL: convertido via `system_fx_rates`.
+- Bucket `Add-on` reflete `tournaments.type === 'Add-on'` (nao `allowsAddOn === true`).
+
+### CA-14 Breakdown Velocidade (v2)
+- Os 3 buckets sempre presentes.
+- Torneios com `speed = NULL` caem em Normal (default).
+- Soma das contagens = total. Sem regressao de count vs L1 (`totalVolume`).
+
+### CA-15 Breakdown Plataformas (v2)
+- 1 card por network com `count >= 1`.
+- Sem registros no periodo → header colapsavel mostra "Nenhuma plataforma com registros no periodo".
+- Sites desconhecidos agregados em `Outras` (nao 1 card por site).
+- Filtro `tournamentTypes` = `[PKO]` → cada plataforma mostra count APENAS de PKO; ROI/Lucro coerente.
+- Ordem: descending por count; tie-break alfabetico.
+
+### CA-16 Persistencia de visibilidade (v2)
+- Toggles `kpisTypes`, `kpisSpeeds`, `kpisPlatforms` persistem em localStorage via `useGrindPreferences`.
+- Migracao silenciosa: chave antiga `tournaments` (se presente) lida no boot e copiada pra `kpisTypes`; depois removida.
+- Recarregar pagina mantem estado.
+
+### CA-17 Helper getNetworkForSite (v2)
+- `getNetworkForSite('ACR')` → `'WPN'`.
+- `getNetworkForSite('GGPoker')` → `'GGNetwork'`.
+- `getNetworkForSite('PS.ES')` → `'PokerStars'`.
+- `getNetworkForSite('SuperPoker')` → `'Outras'`.
+- `getNetworkForSite(null)` → `'Outras'`.
+- Case-insensitive + trim aplicado.
+
 ---
 
 ## 6. Não-objetivos (out of scope)
@@ -223,6 +434,9 @@ Durante o sprint, validar/corrigir:
 - Não suportar mobile.
 - Não criar dashboard separado por sessão (cards são agregados do período).
 - Não tocar em `SessionHistoryList`.
+- v2: nao adicionar drilldown por bucket (clicar em "PKO" e ir pra biblioteca filtrada). Defer.
+- v2: nao adicionar grafico de pizza/barras dentro dos toggles. So cards.
+- v2: nao expor sub-modificadores (`isFlight`/`isLive`) como buckets adicionais. Manter foco em tipos primarios.
 
 ---
 
@@ -236,19 +450,55 @@ Durante o sprint, validar/corrigir:
 | `grind_sessions.duration` pode ser `null` para sessões em andamento | Filtrar `WHERE duration IS NOT NULL` em `Tempo Médio Sessão` e `Lucro Médio Hora`. |
 | `tournaments.position` pode ser `null` (torneio em andamento ou não preenchido) | `Mesas Finais` e `Cravadas` filtram `position IS NOT NULL`. |
 | Lessons #17 (`profile` redeclaração) e #14 (`require()` em testes) — atenção em rotas/testes |
+| **v2:** Migracao silenciosa da chave `tournaments` → `kpisTypes` pode pular casos onde user editou manualmente | test-writer cobre 3 cenarios: chave antiga true, chave antiga false, chave antiga ausente. |
+| **v2:** `getNetworkForSite` divergir do `getCurrencyForSite` (alias proprio) | Ambos compartilham mesmo `SITE_ALIASES` quando possivel; `SITE_NETWORK` adiciona apenas onde difere (ex: `gg` → `GGNetwork`, mas `getCurrencyForSite('gg')` ja resolve via alias). |
+| **v2:** Lucro/ROI de Plataforma `Outras` esconde anomalias (ex: site digitado errado) | Aceitavel — founder valida sites comuns no map; `Outras` serve como catch-all visual. Telemetria opcional defer. |
+| **v2:** Filtro `tournamentTypes` aplicado fora dos breakdowns produz double-filter | UI passa torneios ja filtrados por `applyFiltersToSessions`; backend nao aplica filtro de tipo nos breakdowns (so exibe o que sobrou). |
 
 ---
 
 ## 8. Plano de execução (próximas etapas)
 
-Pipeline TDD padrão (ver CLAUDE.md §11):
+Pipeline TDD padrão (ver CLAUDE.md §11). **v2 escopo amplia o sprint v1**, mas o pipeline executa em uma unica passagem (tudo na main, founder autorizou — `memory/autonomy_db_and_push_2026-05-03.md`):
 
-1. **system-architect** — diagrama de fluxo, ADR sobre exceção §6.1, mapear endpoint/storage afetados.
-2. **test-writer** — testes unitários (storage agregação) + integração (endpoint DTO) + componente (renderização 16 cards + filtros + toggles + empty states + FX). Cobertura mínima: 1 teste por card crítico (16+).
-3. **implementer** — green phase storage + endpoint + componente + tipos.
-4. **simplify** — pos-implementer.
-5. **reviewer** — antes de merge.
-6. **deploy** — manual (founder pede).
+### Fase 1 — Foundation (helper)
+1. **`getNetworkForSite`** + 8 testes em `tests/unit/platform-currency.test.ts` (red).
+2. **Implementer:** adiciona helper em `shared/platform-currency.ts` (green).
+
+### Fase 2 — Backend / DTO
+3. **`getDashboardMetrics`** auditado: §4.1 v1 (recalibrar fórmulas) + v2 (3 maps de breakdown).
+4. **DTO** estendido com `typesBreakdown`, `speedsBreakdown`, `platformsBreakdown` (campos opcionais; sem breaking change).
+5. **Tests integration** cobrindo CA-13/14/15 + cenarios FX (USD/BRL).
+
+### Fase 3 — Frontend / componente
+6. **`DashboardMetricsCards.tsx`** rewrite parcial:
+   - 16 cards KPI (v1 ja parcialmente entregue).
+   - 3 toggles novos (Torneios v2 substitui antigo + Velocidade + Plataformas).
+7. **`GrindPersonalizationDialog`** com 3 toggles novos.
+8. **`grindPagePreferences.ts`** com migracao silenciosa da chave `tournaments` → `kpisTypes`.
+9. **Tests componente** (RTL + Vitest 4) cobrindo CA-13 a CA-17.
+
+### Fase 4 — Validação manual
+10. Founder roda `/grind` localmente em desktop:
+    - Filtra por periodo 30d → confirma counts coerentes com dashboard /dashboard? (Nao — R7 da v1 diz que sao datasets diferentes.)
+    - Toggle USD/BRL → confirma FX em todos os cards monetarios.
+    - Filtro `tournamentTypes = [PKO]` → todos os 3 breakdowns se reduzem (somente PKO em Torneios; Velocidade so com PKO; Plataformas so com counts de PKO).
+
+### Fase 5 — Commit + push
+11. **Commit unico** na main com mensagem: `feat(grind-cards): v2 breakdowns Torneios+Velocidade+Plataformas com Lucro+ROI`.
+12. **Push origin/main**.
+13. **Sem migrations DB** — implementacao inteiramente em camada de leitura/agregacao.
+
+### Pré-requisitos
+- v1 ja parcialmente implementado? **Verificar** se cards `Sessões`, `Tempo Médio Sessão`, `Jogos por Dia`, `Lucro Médio Hora` estão presentes — se não, executar v1 + v2 juntos.
+- Helper `system_fx_rates` (FX-1, sprint anterior) operacional.
+- `TOURNAMENT_PRIMARY_TYPES` SSoT atualizado pos commit `f18b3f8` (5 tipos OK).
+
+### Decisões já alinhadas com founder (2026-05-07)
+- Tipos: 5 primarios completos (Vanilla/PKO/Mystery/Satellite/Add-on).
+- Plataformas: agregadas por **network** (WPN engloba ACR+BlackChip; GGNetwork engloba GGPoker+Natural8).
+- Velocidade: card colapsavel **proprio** separado de Torneios (3 toggles total).
+- Trabalhar direto na main; commits + push permitidos sem perguntar.
 
 ---
 

@@ -47,9 +47,19 @@ const VISIBILITY_LABELS: Array<{ key: keyof typeof DEFAULT_GRIND_PREFERENCES.vis
     hint: 'ITM, Mesas Finais, Cravadas, Maior Resultado',
   },
   {
-    key: 'tournaments',
-    label: 'Tipos de Torneio',
-    hint: 'Toggle expansível com Vanilla/PKO/Mystery/Normal/Turbo',
+    key: 'kpisTypes',
+    label: 'Torneios (tipos)',
+    hint: 'Bloco com 5 tipos primários: Vanilla, PKO, Mystery, Satélite, Add-on',
+  },
+  {
+    key: 'kpisSpeeds',
+    label: 'Velocidade',
+    hint: 'Bloco com Normal, Turbo e Hyper',
+  },
+  {
+    key: 'kpisPlatforms',
+    label: 'Plataformas',
+    hint: 'Bloco com cards por network (WPN, GGNetwork, PokerStars...)',
   },
   {
     key: 'history',

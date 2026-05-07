@@ -17,6 +17,7 @@ import { applyFiltersToSessions, createSessionValidator } from "@/components/gri
 import { findTodaySession } from "@/components/grind-session/session-helpers";
 import { useSessionEdit, useVisualFeedback, useAutoSave, useDebouncedValidation } from "@/components/grind-session/useSessionEdit";
 import DashboardMetricsCards from "@/components/grind-session/DashboardMetricsCards";
+import { computeBreakdowns } from "@/components/grind-session/breakdownHelpers";
 import SessionHistoryList from "@/components/grind-session/SessionHistoryList";
 import EditSessionDialog from "@/components/grind-session/EditSessionDialog";
 import DeleteSessionDialog from "@/components/grind-session/DeleteSessionDialog";
@@ -139,6 +140,10 @@ export default function GrindSession() {
   // Toggle states for new design
   const [showTournamentToggle, setShowTournamentToggle] = useState(false);
   const [showMentalToggle, setShowMentalToggle] = useState(false);
+  // v2 Sprint Grind-Cards-Reform: 3 breakdowns colapsaveis (default = expandido).
+  const [showTypesToggle, setShowTypesToggle] = useState(true);
+  const [showSpeedsToggle, setShowSpeedsToggle] = useState(true);
+  const [showPlatformsToggle, setShowPlatformsToggle] = useState(true);
 
   // Personalizacao da pagina (cards visiveis, performance mental, moeda base)
   const [showPersonalizationDialog, setShowPersonalizationDialog] = useState(false);
@@ -638,6 +643,22 @@ export default function GrindSession() {
       maiorResultado
     };
   }, [filteredSessions, allCompletedTournaments]);
+
+  // v2 (Sprint Grind-Cards-Reform): breakdowns por tipo / velocidade / plataforma.
+  const breakdowns = useMemo(
+    () => computeBreakdowns(allCompletedTournaments as any[], grindFormat.ratesUsdToOther),
+    [allCompletedTournaments, grindFormat.ratesUsdToOther],
+  );
+
+  const dashboardMetricsWithBreakdowns: DashboardMetrics = useMemo(
+    () => ({
+      ...dashboardMetrics,
+      typesBreakdown: breakdowns.types,
+      speedsBreakdown: breakdowns.speeds,
+      platformsBreakdown: breakdowns.platforms,
+    }),
+    [dashboardMetrics, breakdowns],
+  );
 
   // Mental circles animation - only full animation on first load, simple fade on updates
   const hasAnimatedRef = useRef(false);
@@ -1208,7 +1229,7 @@ export default function GrindSession() {
         </div>
       ) : (
         <DashboardMetricsCards
-          dashboardMetrics={dashboardMetrics}
+          dashboardMetrics={dashboardMetricsWithBreakdowns}
           showTournamentToggle={showTournamentToggle}
           setShowTournamentToggle={setShowTournamentToggle}
           showMentalToggle={showMentalToggle}
@@ -1218,6 +1239,12 @@ export default function GrindSession() {
           mentalEnabled={grindPrefs.mentalEnabled}
           formatCurrencyBase={grindFormat.format}
           convertCurrencyBase={grindFormat.convert}
+          showTypesToggle={showTypesToggle}
+          setShowTypesToggle={setShowTypesToggle}
+          showSpeedsToggle={showSpeedsToggle}
+          setShowSpeedsToggle={setShowSpeedsToggle}
+          showPlatformsToggle={showPlatformsToggle}
+          setShowPlatformsToggle={setShowPlatformsToggle}
         />
       )}
 

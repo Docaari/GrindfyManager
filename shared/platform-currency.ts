@@ -106,6 +106,70 @@ export function getCurrencyForSite(site: string): { code: string; symbol: string
   return DEFAULT_CURRENCY;
 }
 
+// ---------------------------------------------------------------------------
+// Network aggregation (Sprint Grind-Cards-Reform v2 \u2014 CA-17).
+// Mapeia variacoes de site (ACR, BlackChip, GGPoker, Natural8, etc) para
+// a network agregada (WPN, GGNetwork, PokerStars, etc). Sites desconhecidos
+// agregam em 'Outras'.
+// ---------------------------------------------------------------------------
+
+const SITE_NETWORK: Record<string, string> = {
+  // WPN
+  wpn: 'WPN',
+  acr: 'WPN',
+  americascardroom: 'WPN',
+  'americas cardroom': 'WPN',
+  blackchip: 'WPN',
+  blackchippoker: 'WPN',
+  // GGNetwork
+  ggpoker: 'GGNetwork',
+  ggnetwork: 'GGNetwork',
+  natural8: 'GGNetwork',
+  clubgg: 'GGNetwork',
+  gg: 'GGNetwork',
+  // PokerStars (engloba regionais EUR)
+  pokerstars: 'PokerStars',
+  stars: 'PokerStars',
+  'ps.es': 'PokerStars',
+  'ps.fr': 'PokerStars',
+  'ps.pt': 'PokerStars',
+  'pokerstars.es': 'PokerStars',
+  // Outros
+  partypoker: 'PartyPoker',
+  party: 'PartyPoker',
+  '888poker': '888poker',
+  '888': '888poker',
+  bodog: 'Bodog',
+  ignition: 'Bodog',
+  chico: 'Chico',
+  ipoker: 'iPoker',
+  'ipoker network': 'iPoker',
+  coinpoker: 'CoinPoker',
+  coin: 'CoinPoker',
+  revolution: 'Revolution',
+  wpt: 'WPT',
+  'wpt global': 'WPT',
+  champion: 'Champion',
+  championspoker: 'Champion',
+  'champions poker': 'Champion',
+  suprema: 'Suprema',
+  supremapoker: 'Suprema',
+  'liga suprema': 'Suprema',
+  ppoker: 'PPoker',
+};
+
+/**
+ * Returns the network key (e.g. 'WPN', 'GGNetwork') for a given poker site.
+ * Case-insensitive + trim aplicado. Sites desconhecidos / null / undefined /
+ * vazio retornam 'Outras'.
+ */
+export function getNetworkForSite(site: string | null | undefined): string {
+  if (site === null || site === undefined) return 'Outras';
+  const key = String(site).toLowerCase().trim();
+  if (key.length === 0) return 'Outras';
+  return SITE_NETWORK[key] ?? 'Outras';
+}
+
 /**
  * Formats a buy-in value with the correct currency symbol for a site.
  * Examples: "$22", "R$15", "\u20ac50"

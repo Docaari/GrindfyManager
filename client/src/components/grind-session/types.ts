@@ -48,6 +48,21 @@ export interface SessionTournament {
   hyperSpeedPercentage?: number;
 }
 
+/**
+ * Sprint Grind-Cards-Reform v2 — CA-13/14/15 (§3.1 + §4.4).
+ * Bucket agregado para os 3 breakdowns colapsaveis (Torneios / Velocidade / Plataformas).
+ */
+export interface BreakdownBucket {
+  key: string;
+  label: string;
+  count: number;
+  percentage: number;
+  totalProfitUsd: number;
+  totalInvestedUsd: number;
+  roi: number | null;
+  colorHex?: string;
+}
+
 export interface DashboardMetrics {
   totalSessions: number;
   totalVolume: number;
@@ -81,4 +96,8 @@ export interface DashboardMetrics {
   avgParticipants: number;
   itmPercentage: number;
   maiorResultado: number;
+  // v2 (2026-05-07): breakdowns com Lucro + ROI por bucket
+  typesBreakdown?: BreakdownBucket[];
+  speedsBreakdown?: BreakdownBucket[];
+  platformsBreakdown?: BreakdownBucket[];
 }

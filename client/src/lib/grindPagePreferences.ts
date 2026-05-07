@@ -23,7 +23,12 @@ export interface GrindPageVisibility {
   kpisVolume: boolean;
   kpisProfit: boolean;
   kpisItm: boolean;
-  tournaments: boolean;
+  /** v2: bloco "Torneios" (tipos primarios). Substitui chave antiga `tournaments`. */
+  kpisTypes: boolean;
+  /** v2: bloco "Velocidade" (Normal/Turbo/Hyper). */
+  kpisSpeeds: boolean;
+  /** v2: bloco "Plataformas" (network agregado). */
+  kpisPlatforms: boolean;
   history: boolean;
 }
 
@@ -38,7 +43,9 @@ export const DEFAULT_GRIND_PREFERENCES: GrindPagePreferences = {
     kpisVolume: true,
     kpisProfit: true,
     kpisItm: true,
-    tournaments: true,
+    kpisTypes: true,
+    kpisSpeeds: true,
+    kpisPlatforms: true,
     history: true,
   },
   mentalEnabled: true,
@@ -49,15 +56,28 @@ const STORAGE_KEY = 'grindPagePreferences';
 const CHANGE_EVENT = 'grindPagePreferences:change';
 
 export function loadGrindPreferences(): GrindPagePreferences {
-  if (typeof window === 'undefined') return DEFAULT_GRIND_PREFERENCES;
+  if (typeof localStorage === 'undefined') return DEFAULT_GRIND_PREFERENCES;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_GRIND_PREFERENCES;
-    const parsed = JSON.parse(raw) as Partial<GrindPagePreferences>;
+    const parsed = JSON.parse(raw) as Partial<GrindPagePreferences> & Record<string, any>;
+
+    // Migracao silenciosa v2: chave antiga `tournaments` -> `kpisTypes`.
+    // Quando ambas existem, `kpisTypes` (chave nova) vence.
+    const rawVisibility = (parsed.visibility ?? {}) as Record<string, any>;
+    const hasNewKey = Object.prototype.hasOwnProperty.call(rawVisibility, 'kpisTypes');
+    const hasOldKey = Object.prototype.hasOwnProperty.call(rawVisibility, 'tournaments');
+    const migratedVisibility: Record<string, any> = { ...rawVisibility };
+    if (!hasNewKey && hasOldKey) {
+      migratedVisibility.kpisTypes = !!rawVisibility.tournaments;
+    }
+    // `tournaments` (legado) e descartado da forma final retornada.
+    delete migratedVisibility.tournaments;
+
     return {
       visibility: {
         ...DEFAULT_GRIND_PREFERENCES.visibility,
-        ...(parsed.visibility ?? {}),
+        ...migratedVisibility,
       },
       mentalEnabled:
         typeof parsed.mentalEnabled === 'boolean'
@@ -74,10 +94,18 @@ export function loadGrindPreferences(): GrindPagePreferences {
 }
 
 export function saveGrindPreferences(prefs: GrindPagePreferences): void {
-  if (typeof window === 'undefined') return;
+  if (typeof localStorage === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: prefs }));
+    // Garante que chave legada `tournaments` nao persista no payload salvo.
+    const payload: GrindPagePreferences = {
+      ...prefs,
+      visibility: { ...prefs.visibility },
+    };
+    delete (payload.visibility as any).tournaments;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: payload }));
+    }
   } catch {
     // ignora storage quota
   }
