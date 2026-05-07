@@ -96,6 +96,13 @@ export interface DashboardMetrics {
   avgParticipants: number;
   itmPercentage: number;
   maiorResultado: number;
+  // v2.3 (2026-05-07): metadata do torneio com maior premio para exibir no card.
+  maiorResultadoMeta?: {
+    name?: string;
+    site?: string;
+    position?: number;
+    prizeUsd: number;
+  } | null;
   // v2 (2026-05-07): breakdowns com Lucro + ROI por bucket
   typesBreakdown?: BreakdownBucket[];
   speedsBreakdown?: BreakdownBucket[];

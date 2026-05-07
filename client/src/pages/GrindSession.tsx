@@ -551,10 +551,14 @@ export default function GrindSession() {
   const dashboardMetrics = useMemo((): DashboardMetrics => {
     const totalVolume = filteredSessions.reduce((sum, session) => sum + session.volume, 0);
 
-    const vanillaCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.type === 'Vanilla').length;
-    const pkoCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.type === 'PKO').length;
-    const mysteryCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.type === 'Mystery').length;
-    const addOnCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.type === 'Add-on').length;
+    // Type counts: addOnTaken=true vence type primario (founder request 2026-05-07
+    // round 3) — torneios com add-on real contam como Add-on mesmo se type='Vanilla'.
+    const resolveType = (t: Record<string, unknown>): string =>
+      t.addOnTaken === true ? 'Add-on' : (typeof t.type === 'string' ? t.type : 'Vanilla');
+    const vanillaCount = allCompletedTournaments.filter((t: Record<string, unknown>) => resolveType(t) === 'Vanilla').length;
+    const pkoCount = allCompletedTournaments.filter((t: Record<string, unknown>) => resolveType(t) === 'PKO').length;
+    const mysteryCount = allCompletedTournaments.filter((t: Record<string, unknown>) => resolveType(t) === 'Mystery').length;
+    const addOnCount = allCompletedTournaments.filter((t: Record<string, unknown>) => resolveType(t) === 'Add-on').length;
     const normalCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.speed === 'Normal').length;
     const turboCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.speed === 'Turbo').length;
     const hyperCount = allCompletedTournaments.filter((t: Record<string, unknown>) => t.speed === 'Hyper').length;
@@ -564,57 +568,61 @@ export default function GrindSession() {
     let avgParticipants = 0;
     let itmPercentage = 0;
     let maiorResultado = 0;
+    let maiorResultadoMeta: {
+      name?: string;
+      site?: string;
+      position?: number;
+      prizeUsd: number;
+    } | null = null;
 
     if (filteredSessions && filteredSessions.length > 0) {
-      // Audit fix 2026-05-07: 4 bugs latentes em dashboardMetrics. Calc agora
-      // deriva de allCompletedTournaments (raw de cada torneio) em vez de
-      // session.{fts,cravadas,profit} agregados que nao mapeam pra metrica certa.
+      // v2.3 (2026-05-07 founder pos-QA round 2): bugs Reentradas/Participantes/MaiorResultado.
 
-      // avgParticipants: filtra outliers acima de 200k (MTT real bate ~50-100k
-      // max — Sunday Million ~30k). fieldSize > 200k indica parsing CSV errado.
+      // Media Participantes via MEDIANA (robusto a outliers — alguns CSV tem
+      // fieldSize errado tipo 1583330 que detonava media). Filtro defensivo
+      // <= 100k (Sunday Million ~30k, GG Bounty Hunters ~80k max real).
       if (allCompletedTournaments.length > 0) {
-        const tournamentsWithFieldSize = allCompletedTournaments.filter(
-          (t: Record<string, unknown>) => {
-            const fs = Number(t.fieldSize);
-            return Number.isFinite(fs) && fs > 0 && fs <= 200_000;
-          }
-        );
-        if (tournamentsWithFieldSize.length > 0) {
-          avgParticipants = tournamentsWithFieldSize.reduce(
-            (sum: number, t: Record<string, unknown>) => sum + Number(t.fieldSize),
-            0
-          ) / tournamentsWithFieldSize.length;
+        const fieldSizes = allCompletedTournaments
+          .map((t: Record<string, unknown>) => Number(t.fieldSize))
+          .filter((n: number) => Number.isFinite(n) && n > 0 && n <= 100_000)
+          .sort((a: number, b: number) => a - b);
+        if (fieldSizes.length > 0) {
+          const mid = Math.floor(fieldSizes.length / 2);
+          avgParticipants = fieldSizes.length % 2 === 0
+            ? (fieldSizes[mid - 1] + fieldSizes[mid]) / 2
+            : fieldSizes[mid];
         }
       }
 
-      // Reentradas: SUM(tournaments.reentries) — bug anterior usava session.cravadas.
+      // Reentradas: SUM(reentries + rebuys) — founder quer ambos contados.
+      // server endpoint trata rebuys e reentries separadamente no profit calc.
       totalReentradas = allCompletedTournaments.reduce((sum: number, t: Record<string, unknown>) => {
         const r = Number(t.reentries);
-        return sum + (Number.isFinite(r) && r > 0 ? r : 0);
+        const rb = Number(t.rebuys);
+        const reentries = Number.isFinite(r) && r > 0 ? r : 0;
+        const rebuys = Number.isFinite(rb) && rb > 0 ? rb : 0;
+        return sum + reentries + rebuys;
       }, 0);
 
-      // ITM%: COUNT(prize > 0) / COUNT(*) * 100 — bug anterior dividia FTs/totalVol.
-      // Spec R3: criterio = prize > 0 (independente de bounty).
+      // ITM%: COUNT(prize > 0) / COUNT(*) * 100 (spec R3).
       const totalCount = allCompletedTournaments.length;
       if (totalCount > 0) {
         const itmCount = allCompletedTournaments.filter((t: Record<string, unknown>) => {
-          // result e prize sao alias do mesmo campo no endpoint (server line 825).
           const prize = Number(t.result ?? t.prize);
           return Number.isFinite(prize) && prize > 0;
         }).length;
         itmPercentage = (itmCount / totalCount) * 100;
       }
 
-      // Maior Resultado: MAX(prize) entre torneios — bug anterior usava session.profit.
-      // Spec R4: premio bruto, nao lucro liquido. FX-aware: converter prize
-      // nativo->USD (alinha com formatCurrencyBase que espera USD).
+      // Maior Resultado: MAX(prize) FX-aware + metadata (name, site, position).
       const rates = grindFormat.ratesUsdToOther ?? {};
-      maiorResultado = allCompletedTournaments.reduce((max: number, t: Record<string, unknown>) => {
-        const prizeNative = Number(t.result ?? t.prize);
-        if (!Number.isFinite(prizeNative) || prizeNative <= 0) return max;
-        const ccy = (typeof t.currency === 'string' && t.currency.length > 0
-          ? t.currency
-          : getCurrencyForSite(String(t.site ?? '')).code).toUpperCase();
+      for (const t of allCompletedTournaments) {
+        const tt = t as Record<string, any>;
+        const prizeNative = Number(tt.result ?? tt.prize);
+        if (!Number.isFinite(prizeNative) || prizeNative <= 0) continue;
+        const ccy = (typeof tt.currency === 'string' && tt.currency.length > 0
+          ? tt.currency
+          : getCurrencyForSite(String(tt.site ?? '')).code).toUpperCase();
         let prizeUsd = prizeNative;
         if (ccy !== 'USD') {
           const rate = rates[ccy];
@@ -622,8 +630,18 @@ export default function GrindSession() {
             prizeUsd = prizeNative / (rate as number);
           }
         }
-        return prizeUsd > max ? prizeUsd : max;
-      }, 0);
+        if (prizeUsd > maiorResultado) {
+          maiorResultado = prizeUsd;
+          maiorResultadoMeta = {
+            name: typeof tt.name === 'string' ? tt.name : undefined,
+            site: typeof tt.site === 'string' ? tt.site : undefined,
+            position: Number.isFinite(Number(tt.position)) && Number(tt.position) > 0
+              ? Number(tt.position)
+              : undefined,
+            prizeUsd,
+          };
+        }
+      }
     }
 
     // Avg mental/prep so consideram sessoes com valor reportado (>0); sessoes
@@ -677,16 +695,21 @@ export default function GrindSession() {
       }
     }
     const totalRegistros = distinctIds.size;
-    const totalDurationMin = filteredSessions.reduce((sum, s) => {
+    // Duration heuristic: se session.duration ausente/0, estima via
+    // `volume * 90 min` (assumindo media 90min por torneio MTT). Founder pediu
+    // estipular media mesmo sem duration registrada (sessions antigas pre-feature).
+    const ESTIMATED_MIN_PER_TOURNAMENT = 90;
+    const FALLBACK_SESSION_MIN = 180;
+    const sessionDurations = filteredSessions.map((s) => {
       const d = Number((s as any).duration);
-      return sum + (Number.isFinite(d) && d > 0 ? d : 0);
-    }, 0);
-    const sessionsWithDuration = filteredSessions.filter((s) => {
-      const d = Number((s as any).duration);
-      return Number.isFinite(d) && d > 0;
-    }).length;
-    const avgSessionDurationMin = sessionsWithDuration > 0
-      ? totalDurationMin / sessionsWithDuration
+      if (Number.isFinite(d) && d > 0) return d;
+      const vol = Number((s as any).volume);
+      if (Number.isFinite(vol) && vol > 0) return vol * ESTIMATED_MIN_PER_TOURNAMENT;
+      return FALLBACK_SESSION_MIN;
+    });
+    const totalDurationMin = sessionDurations.reduce((a, b) => a + b, 0);
+    const avgSessionDurationMin = sessionDurations.length > 0
+      ? totalDurationMin / sessionDurations.length
       : 0;
     const activeDayCount = distinctActiveDays.size;
     const gamesPerActiveDay = activeDayCount > 0
@@ -733,6 +756,7 @@ export default function GrindSession() {
       avgParticipants,
       itmPercentage,
       maiorResultado,
+      maiorResultadoMeta,
       // v1 KPIs novos (Spec §3 — 16 cards)
       totalRegistros,
       avgSessionDurationMin,

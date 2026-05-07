@@ -177,6 +177,28 @@ describe('computeBreakdowns — types (5 fixed buckets)', () => {
     expect(vanilla.colorHex).toBe('#71717a');
     expect(pko.colorHex).toBe('#a78bfa');
   });
+
+  it('addOnTaken=true vence type=Vanilla -> bucket Add-on', () => {
+    const tournaments = [
+      tour({ id: 'a', type: 'Vanilla', addOnTaken: true }),
+      tour({ id: 'b', type: 'Vanilla', addOnTaken: false }),
+    ];
+    const result = computeBreakdowns(tournaments, NO_RATES);
+    const byKey = (k: string) => result.types.find((b) => b.key === k) as BreakdownBucket;
+    expect(byKey('Add-on').count).toBe(1);
+    expect(byKey('Vanilla').count).toBe(1);
+  });
+
+  it('addOnTaken=true vence type=PKO -> bucket Add-on (mutex)', () => {
+    const tournaments = [
+      tour({ id: 'a', type: 'PKO', addOnTaken: true }),
+      tour({ id: 'b', type: 'PKO' }),
+    ];
+    const result = computeBreakdowns(tournaments, NO_RATES);
+    const byKey = (k: string) => result.types.find((b) => b.key === k) as BreakdownBucket;
+    expect(byKey('Add-on').count).toBe(1);
+    expect(byKey('PKO').count).toBe(1);
+  });
 });
 
 // =============================================================================

@@ -301,6 +301,21 @@ export default function DashboardMetricsCards({
           <div className="card-content">
             <div className="card-value">{dashboardMetrics.maiorResultado > 0 ? fmt(dashboardMetrics.maiorResultado) : '—'}</div>
             <div className="card-label">Maior Resultado</div>
+            {dashboardMetrics.maiorResultadoMeta && dashboardMetrics.maiorResultado > 0 && (
+              <div className="text-xs text-gray-400 mt-1 space-y-0.5">
+                {dashboardMetrics.maiorResultadoMeta.name && (
+                  <div className="truncate" title={dashboardMetrics.maiorResultadoMeta.name}>
+                    {dashboardMetrics.maiorResultadoMeta.name}
+                  </div>
+                )}
+                <div>
+                  {dashboardMetrics.maiorResultadoMeta.site ?? '—'}
+                  {dashboardMetrics.maiorResultadoMeta.position
+                    ? ` • ${dashboardMetrics.maiorResultadoMeta.position}º`
+                    : ''}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

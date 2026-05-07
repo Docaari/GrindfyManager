@@ -152,10 +152,14 @@ export function computeBreakdowns(
     const profitUsd = toUsd(profitNative, ccyCode, usdConversionRates);
     const investedUsd = toUsd(investedNative, ccyCode, usdConversionRates);
 
-    // type bucket — so agrega se type valido (esta no enum).
-    const typeKey = t.type as TournamentPrimaryType | undefined;
-    if (typeKey && byType.has(typeKey)) {
-      const acc = byType.get(typeKey)!;
+    // type bucket — addOnTaken=true vence type primario (founder request 2026-05-07
+    // round 3): torneios que efetivamente tiveram add-on contam como Add-on no
+    // breakdown, mesmo que type='Vanilla'/'PKO' por backfill incompleto. Mutex
+    // garantida — cada tournament classifica em exatamente 1 bucket.
+    let resolvedType: TournamentPrimaryType | undefined =
+      t.addOnTaken === true ? 'Add-on' : (t.type as TournamentPrimaryType | undefined);
+    if (resolvedType && byType.has(resolvedType)) {
+      const acc = byType.get(resolvedType)!;
       acc.count += 1;
       acc.profitUsd += profitUsd;
       acc.investedUsd += investedUsd;
