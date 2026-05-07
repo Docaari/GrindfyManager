@@ -9,6 +9,7 @@
 - **v1 (2026-05-05):** 16 KPIs em 4 linhas + auditoria fórmulas + R7 (datasource = sessões registradas).
 - **v2 (2026-05-07):** Adiciona breakdowns colapsaveis com **Lucro + ROI** por bucket: **Torneios** (5 tipos primários), **Velocidade** (Normal/Turbo/Hyper, novo card próprio), **Plataformas** (network agregado, novo card).
 - **v2.1 (2026-05-07, pos-QA founder):** Fixes pos primeira QA: (a) cards colapsados por default (`useState(false)`); (b) chave legada `tournaments` IGNORADA (nao migra) para garantir que founder com toggle antigo desativado veja blocos novos; (c) 4 bugs latentes nos KPIs antigos corrigidos — Reentradas (usar SUM(tournaments.reentries) em vez de session.cravadas), ITM% (criterio prize > 0 em vez de fts/totalVol), Maior Resultado (MAX(prize) entre torneios, FX-aware, em vez de MAX(session.profit)), avgParticipants (filtro outlier > 200_000 contra parsing CSV bizarro).
+- **v2.2 (2026-05-07, founder pediu v1 completo):** Implementacao COMPLETA dos 16 KPIs de §3 em 4 linhas: L1 Registros/Reentradas/ABI/ITM, L2 Sessoes/Tempo Medio Sessao/Jogos por Dia/Lucro Medio Dia, L3 Media Participantes/Lucro Medio Torneio/Lucro Medio Hora/Maior Resultado, L4 Lucro/ROI/Mesas Finais/Cravadas. Auditoria avgABI/avgROI corrigida — agora SUM(buyin*(1+reentries+rebuys)+addOnCost) FX-aware no denominador (vs media de session.abiMed/roi anterior). 6 KPIs novos no DTO. Visibility key nova `kpisSession` (default true). Personalizar dialog estendido. 10 testes novos cobrindo formatDurationMin, KPIs novos, divisor zero "—", visibility off.
 
 ---
 

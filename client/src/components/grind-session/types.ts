@@ -100,4 +100,11 @@ export interface DashboardMetrics {
   typesBreakdown?: BreakdownBucket[];
   speedsBreakdown?: BreakdownBucket[];
   platformsBreakdown?: BreakdownBucket[];
+  // v1 (Spec §3 — 16 KPIs em 4 linhas, implementado v2.2 2026-05-07).
+  totalRegistros?: number;            // L1 — COUNT(DISTINCT torneios) — torneios unicos sem reentries
+  avgSessionDurationMin?: number;     // L2 — AVG(session.duration) em minutos
+  gamesPerActiveDay?: number;         // L2 — torneios / dias com >=1 torneio
+  profitPerActiveDay?: number;        // L2 — totalProfit / dias com >=1 torneio (substitui inline)
+  profitPerHour?: number;             // L3 — totalProfit / SUM(session.duration_min)/60
+  profitPerTournament?: number;       // L3 — totalProfit / COUNT(DISTINCT torneios)
 }

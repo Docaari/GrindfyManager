@@ -21,6 +21,8 @@ export type GrindBaseCurrency = 'USD' | 'BRL';
 
 export interface GrindPageVisibility {
   kpisVolume: boolean;
+  /** v1 (spec §3 16 KPIs): linha "Sessões/Tempo Médio/Jogos por Dia/Lucro Médio Dia". */
+  kpisSession: boolean;
   kpisProfit: boolean;
   kpisItm: boolean;
   /** v2: bloco "Torneios" (tipos primarios). Substitui chave antiga `tournaments`. */
@@ -41,6 +43,7 @@ export interface GrindPagePreferences {
 export const DEFAULT_GRIND_PREFERENCES: GrindPagePreferences = {
   visibility: {
     kpisVolume: true,
+    kpisSession: true,
     kpisProfit: true,
     kpisItm: true,
     kpisTypes: true,

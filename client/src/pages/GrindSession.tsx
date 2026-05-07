@@ -636,12 +636,79 @@ export default function GrindSession() {
       return arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
     };
 
+    // v1 (Spec §3 — 16 KPIs): totals FX-aware computados sobre os tournaments
+    // raw (allCompletedTournaments). Single-pass pra performance.
+    const fxRates = grindFormat.ratesUsdToOther ?? {};
+    const toUsd = (native: number, ccy: string): number => {
+      if (!Number.isFinite(native) || native === 0) return 0;
+      const code = (ccy || 'USD').toUpperCase();
+      if (code === 'USD') return native;
+      const r = fxRates[code];
+      return Number.isFinite(r) && (r as number) > 0 ? native / (r as number) : native;
+    };
+    let totalProfitUsd = 0;
+    let totalInvestedUsd = 0;
+    const distinctIds = new Set<string>();
+    const distinctActiveDays = new Set<string>();
+    for (const t of allCompletedTournaments) {
+      const tt = t as Record<string, any>;
+      const ccy = typeof tt.currency === 'string' && tt.currency.length > 0
+        ? tt.currency
+        : getCurrencyForSite(String(tt.site ?? '')).code;
+      const buyIn = Number(tt.buyIn) || 0;
+      const reentries = Number(tt.reentries) || 0;
+      const rebuys = Number(tt.rebuys) || 0;
+      const addOn = tt.addOnTaken ? (Number(tt.addOnCost) || 0) : 0;
+      const investedNative = buyIn * (1 + reentries + rebuys) + addOn;
+      const profitNative = tt.profit !== undefined && tt.profit !== null && tt.profit !== ''
+        ? Number(tt.profit)
+        : (Number(tt.result ?? tt.prize) || 0) + (Number(tt.bounty) || 0) - investedNative;
+      totalInvestedUsd += toUsd(investedNative, ccy);
+      totalProfitUsd += toUsd(profitNative, ccy);
+      if (typeof tt.id === 'string') distinctIds.add(tt.id);
+      const dateStr = typeof tt.date === 'string' ? tt.date.slice(0, 10) : '';
+      if (dateStr) distinctActiveDays.add(dateStr);
+    }
+    // Fallback active days via session.date quando tournaments sem date.
+    if (distinctActiveDays.size === 0) {
+      for (const s of filteredSessions) {
+        const ds = typeof s.date === 'string' ? s.date.slice(0, 10) : '';
+        if (ds) distinctActiveDays.add(ds);
+      }
+    }
+    const totalRegistros = distinctIds.size;
+    const totalDurationMin = filteredSessions.reduce((sum, s) => {
+      const d = Number((s as any).duration);
+      return sum + (Number.isFinite(d) && d > 0 ? d : 0);
+    }, 0);
+    const sessionsWithDuration = filteredSessions.filter((s) => {
+      const d = Number((s as any).duration);
+      return Number.isFinite(d) && d > 0;
+    }).length;
+    const avgSessionDurationMin = sessionsWithDuration > 0
+      ? totalDurationMin / sessionsWithDuration
+      : 0;
+    const activeDayCount = distinctActiveDays.size;
+    const gamesPerActiveDay = activeDayCount > 0
+      ? allCompletedTournaments.length / activeDayCount
+      : 0;
+    const profitPerActiveDay = activeDayCount > 0 ? totalProfitUsd / activeDayCount : 0;
+    const profitPerHour = totalDurationMin > 0
+      ? totalProfitUsd / (totalDurationMin / 60)
+      : 0;
+    const profitPerTournament = totalRegistros > 0
+      ? totalProfitUsd / totalRegistros
+      : 0;
+    // Auditoria avgABI/avgROI (spec R5 + §4.1.3): formulas corretas FX-aware.
+    const avgABI_v1 = totalRegistros > 0 ? totalInvestedUsd / totalRegistros : 0;
+    const avgROI_v1 = totalInvestedUsd > 0 ? (totalProfitUsd / totalInvestedUsd) * 100 : 0;
+
     return {
       totalSessions: filteredSessions.length,
       totalVolume,
-      totalProfit: filteredSessions.reduce((sum, session) => sum + (Number(session.profit) || 0), 0),
-      avgABI: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (Number(session.abiMed) || 0), 0) / filteredSessions.length : 0,
-      avgROI: filteredSessions.length > 0 ? filteredSessions.reduce((sum, session) => sum + (Number(session.roi) || 0), 0) / filteredSessions.length : 0,
+      totalProfit: totalProfitUsd,
+      avgABI: avgABI_v1,
+      avgROI: avgROI_v1,
       totalFTs: filteredSessions.reduce((sum, session) => sum + (Number(session.fts) || 0), 0),
       totalCravadas: filteredSessions.reduce((sum, session) => sum + (Number(session.cravadas) || 0), 0),
       avgEnergia: avgPositive((s) => s.energiaMedia),
@@ -665,7 +732,14 @@ export default function GrindSession() {
       totalReentradas,
       avgParticipants,
       itmPercentage,
-      maiorResultado
+      maiorResultado,
+      // v1 KPIs novos (Spec §3 — 16 cards)
+      totalRegistros,
+      avgSessionDurationMin,
+      gamesPerActiveDay,
+      profitPerActiveDay,
+      profitPerHour,
+      profitPerTournament,
     };
   }, [filteredSessions, allCompletedTournaments, grindFormat.ratesUsdToOther]);
 

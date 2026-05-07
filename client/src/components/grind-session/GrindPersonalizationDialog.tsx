@@ -34,17 +34,22 @@ const VISIBILITY_LABELS: Array<{ key: keyof typeof DEFAULT_GRIND_PREFERENCES.vis
   {
     key: 'kpisVolume',
     label: 'Cards de Volume',
-    hint: 'Contagem, Reentradas, Média Participantes, ABI',
+    hint: 'Registros, Reentradas, ABI, ITM',
+  },
+  {
+    key: 'kpisSession',
+    label: 'Cards de Sessão',
+    hint: 'Sessões, Tempo Médio Sessão, Jogos por Dia, Lucro Médio Dia',
+  },
+  {
+    key: 'kpisItm',
+    label: 'Cards de Performance Detalhe',
+    hint: 'Média Participantes, Lucro Médio Torneio, Lucro Médio Hora, Maior Resultado',
   },
   {
     key: 'kpisProfit',
     label: 'Cards de Lucro / ROI',
-    hint: 'Lucro, ROI, Lucro Médio por Dia/Torneio',
-  },
-  {
-    key: 'kpisItm',
-    label: 'Cards de ITM / Mesas Finais',
-    hint: 'ITM, Mesas Finais, Cravadas, Maior Resultado',
+    hint: 'Lucro, ROI, Mesas Finais, Cravadas',
   },
   {
     key: 'kpisTypes',

@@ -45,6 +45,10 @@ describe('grindPagePreferences — defaults novos (kpisTypes/kpisSpeeds/kpisPlat
     expect((DEFAULT_GRIND_PREFERENCES.visibility as any).kpisPlatforms).toBe(true);
   });
 
+  it('DEFAULT_GRIND_PREFERENCES.visibility tem kpisSession=true (v1 spec §3)', () => {
+    expect((DEFAULT_GRIND_PREFERENCES.visibility as any).kpisSession).toBe(true);
+  });
+
   it('loadGrindPreferences sem nada no storage retorna defaults com 3 keys novas = true', () => {
     const prefs = loadGrindPreferences();
     expect((prefs.visibility as any).kpisTypes).toBe(true);

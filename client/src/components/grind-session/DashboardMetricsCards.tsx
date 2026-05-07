@@ -21,6 +21,16 @@ import { formatCurrency as formatCurrencyDefault } from "@/lib/utils";
 import { DashboardMetrics, BreakdownBucket } from "./types";
 import type { GrindPageVisibility } from "@/lib/grindPagePreferences";
 
+// Helper: formata minutos como "Xh YYm" (spec §3 v1 — Tempo Médio Sessão).
+function formatDurationMin(min: number): string {
+  if (!Number.isFinite(min) || min <= 0) return '—';
+  const total = Math.round(min);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h <= 0) return `${m}m`;
+  return `${h}h ${String(m).padStart(2, '0')}m`;
+}
+
 // Item 18: Simple SVG sparkline for mental metrics
 function MiniSparkline({ values, color }: { values: number[]; color: string }) {
   if (values.length < 2) return null;
@@ -145,7 +155,7 @@ export default function DashboardMetricsCards({
   const platformsBreakdown = dashboardMetrics.platformsBreakdown ?? [];
   return (
     <div className="mb-8">
-      {/* Line 1: Contagem | Reentradas | Média Participantes | ABI */}
+      {/* L1 (kpisVolume) — Registros | Reentradas | ABI | ITM */}
       {show('kpisVolume') && (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <div className="weekly-summary-card card-contagem">
@@ -153,8 +163,8 @@ export default function DashboardMetricsCards({
             <Users className="w-8 h-8 text-blue-400" />
           </div>
           <div className="card-content">
-            <div className="card-value">{dashboardMetrics.totalVolume}</div>
-            <div className="card-label">Contagem</div>
+            <div className="card-value">{(dashboardMetrics.totalRegistros ?? dashboardMetrics.totalVolume) || 0}</div>
+            <div className="card-label">Registros</div>
           </div>
         </div>
 
@@ -168,16 +178,6 @@ export default function DashboardMetricsCards({
           </div>
         </div>
 
-        <div className="weekly-summary-card card-participantes">
-          <div className="card-icon">
-            <Users className="w-8 h-8 text-purple-400" />
-          </div>
-          <div className="card-content">
-            <div className="card-value">{dashboardMetrics.avgParticipants > 0 ? Math.round(dashboardMetrics.avgParticipants) : '-'}</div>
-            <div className="card-label">Média Participantes</div>
-          </div>
-        </div>
-
         <div className="weekly-summary-card card-abi">
           <div className="card-icon">
             <DollarSign className="w-8 h-8 text-emerald-400" />
@@ -187,10 +187,126 @@ export default function DashboardMetricsCards({
             <div className="card-label">ABI</div>
           </div>
         </div>
+
+        <div className="weekly-summary-card card-itm">
+          <div className="card-icon">
+            <Award className="w-8 h-8 text-green-400" />
+          </div>
+          <div className="card-content">
+            <div className="card-value">{dashboardMetrics.itmPercentage.toFixed(1)}%</div>
+            <div className="card-label">ITM</div>
+          </div>
+        </div>
       </div>
       )}
 
-      {/* Line 2: Lucro | ROI | Lucro Médio por Dia | Lucro Médio por Torneio */}
+      {/* L2 (kpisSession) — Sessões | Tempo Médio Sessão | Jogos por Dia | Lucro Médio Dia */}
+      {show('kpisSession') && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div className="weekly-summary-card card-sessoes">
+          <div className="card-icon">
+            <Calendar className="w-8 h-8 text-cyan-400" />
+          </div>
+          <div className="card-content">
+            <div className="card-value">{dashboardMetrics.totalSessions}</div>
+            <div className="card-label">Sessões</div>
+          </div>
+        </div>
+
+        <div className="weekly-summary-card card-tempo-sessao">
+          <div className="card-icon">
+            <Clock className="w-8 h-8 text-amber-400" />
+          </div>
+          <div className="card-content">
+            <div className="card-value">{formatDurationMin(dashboardMetrics.avgSessionDurationMin ?? 0)}</div>
+            <div className="card-label">Tempo Médio Sessão</div>
+          </div>
+        </div>
+
+        <div className="weekly-summary-card card-jogos-dia">
+          <div className="card-icon">
+            <BarChart3 className="w-8 h-8 text-violet-400" />
+          </div>
+          <div className="card-content">
+            <div className="card-value">{
+              (dashboardMetrics.gamesPerActiveDay ?? 0) > 0
+                ? (dashboardMetrics.gamesPerActiveDay as number).toFixed(1)
+                : '—'
+            }</div>
+            <div className="card-label">Jogos por Dia</div>
+          </div>
+        </div>
+
+        <div className="weekly-summary-card card-lucro-dia">
+          <div className="card-icon">
+            <Calendar className="w-8 h-8 text-cyan-400" />
+          </div>
+          <div className="card-content">
+            <div className="card-value">{
+              (dashboardMetrics.profitPerActiveDay ?? 0) !== 0 || dashboardMetrics.totalSessions > 0
+                ? fmt(dashboardMetrics.profitPerActiveDay ?? 0)
+                : '—'
+            }</div>
+            <div className="card-label">Lucro Médio Dia</div>
+          </div>
+        </div>
+      </div>
+      )}
+
+      {/* L3 (kpisItm) — Média Participantes | Lucro Médio Torneio | Lucro Médio Hora | Maior Resultado */}
+      {show('kpisItm') && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div className="weekly-summary-card card-participantes">
+          <div className="card-icon">
+            <Users className="w-8 h-8 text-purple-400" />
+          </div>
+          <div className="card-content">
+            <div className="card-value">{dashboardMetrics.avgParticipants > 0 ? Math.round(dashboardMetrics.avgParticipants) : '—'}</div>
+            <div className="card-label">Média Participantes</div>
+          </div>
+        </div>
+
+        <div className="weekly-summary-card card-lucro-torneio">
+          <div className="card-icon">
+            <Trophy className="w-8 h-8 text-yellow-400" />
+          </div>
+          <div className="card-content">
+            <div className="card-value">{
+              (dashboardMetrics.totalRegistros ?? 0) > 0
+                ? fmt(dashboardMetrics.profitPerTournament ?? 0)
+                : '—'
+            }</div>
+            <div className="card-label">Lucro Médio Torneio</div>
+          </div>
+        </div>
+
+        <div className="weekly-summary-card card-lucro-hora">
+          <div className="card-icon">
+            <TrendingUp className="w-8 h-8 text-emerald-400" />
+          </div>
+          <div className="card-content">
+            <div className="card-value">{
+              (dashboardMetrics.profitPerHour ?? 0) !== 0
+                ? fmt(dashboardMetrics.profitPerHour as number)
+                : '—'
+            }</div>
+            <div className="card-label">Lucro Médio Hora</div>
+          </div>
+        </div>
+
+        <div className="weekly-summary-card card-maior-resultado">
+          <div className="card-icon">
+            <DollarSign className="w-8 h-8 text-purple-400" />
+          </div>
+          <div className="card-content">
+            <div className="card-value">{dashboardMetrics.maiorResultado > 0 ? fmt(dashboardMetrics.maiorResultado) : '—'}</div>
+            <div className="card-label">Maior Resultado</div>
+          </div>
+        </div>
+      </div>
+      )}
+
+      {/* L4 (kpisProfit) — Lucro | ROI | Mesas Finais | Cravadas */}
       {show('kpisProfit') && (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <div className="weekly-summary-card card-lucro">
@@ -213,51 +329,6 @@ export default function DashboardMetricsCards({
           </div>
         </div>
 
-        <div className="weekly-summary-card card-lucro-dia">
-          <div className="card-icon">
-            <Calendar className="w-8 h-8 text-cyan-400" />
-          </div>
-          <div className="card-content">
-            <div className="card-value">
-              {dashboardMetrics.totalSessions > 0
-                ? fmt(dashboardMetrics.totalProfit / dashboardMetrics.totalSessions)
-                : fmt(0)
-              }
-            </div>
-            <div className="card-label">Lucro Médio por Dia</div>
-          </div>
-        </div>
-
-        <div className="weekly-summary-card card-lucro-torneio">
-          <div className="card-icon">
-            <Trophy className="w-8 h-8 text-yellow-400" />
-          </div>
-          <div className="card-content">
-            <div className="card-value">
-              {dashboardMetrics.totalVolume > 0
-                ? fmt(dashboardMetrics.totalProfit / dashboardMetrics.totalVolume)
-                : fmt(0)
-              }
-            </div>
-            <div className="card-label">Lucro Médio por Torneio</div>
-          </div>
-        </div>
-      </div>
-      )}
-
-      {/* Line 3: ITM | Mesas Finais | Cravadas | Maior Resultado */}
-      {show('kpisItm') && (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        <div className="weekly-summary-card card-itm">
-          <div className="card-icon">
-            <Award className="w-8 h-8 text-green-400" />
-          </div>
-          <div className="card-content">
-            <div className="card-value">{dashboardMetrics.itmPercentage.toFixed(1)}%</div>
-            <div className="card-label">ITM</div>
-          </div>
-        </div>
-
         <div className="weekly-summary-card card-ft">
           <div className="card-icon">
             <Trophy className="w-8 h-8 text-orange-400" />
@@ -275,16 +346,6 @@ export default function DashboardMetricsCards({
           <div className="card-content">
             <div className="card-value">{dashboardMetrics.totalCravadas}</div>
             <div className="card-label">Cravadas</div>
-          </div>
-        </div>
-
-        <div className="weekly-summary-card card-maior-resultado">
-          <div className="card-icon">
-            <DollarSign className="w-8 h-8 text-purple-400" />
-          </div>
-          <div className="card-content">
-            <div className="card-value">{dashboardMetrics.maiorResultado > 0 ? fmt(dashboardMetrics.maiorResultado) : '-'}</div>
-            <div className="card-label">Maior Resultado</div>
           </div>
         </div>
       </div>
