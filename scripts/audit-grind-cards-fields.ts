@@ -274,6 +274,30 @@ async function main() {
   console.log('\nFIELDSIZE coverage across tables:');
   console.table(libStats.rows);
 
+  // 11a. Per-session duration estimate via tournament start/end times
+  const durEst = await pool.query(
+    `
+    SELECT
+      gs.id AS session_id,
+      gs.date::date AS session_date,
+      gs.duration AS stored_duration_min,
+      COUNT(st.id)::int AS tournament_count,
+      MIN(st.start_time) AS first_tournament_start,
+      MAX(st.end_time) AS last_tournament_end,
+      EXTRACT(EPOCH FROM (MAX(st.end_time) - MIN(st.start_time))) / 60 AS span_minutes,
+      COUNT(*) FILTER (WHERE st.start_time IS NOT NULL)::int AS with_start,
+      COUNT(*) FILTER (WHERE st.end_time IS NOT NULL)::int AS with_end
+    FROM grind_sessions gs
+    LEFT JOIN session_tournaments st ON st.session_id = gs.id
+    WHERE gs.user_id = $1
+    GROUP BY gs.id, gs.date, gs.duration
+    ORDER BY gs.date DESC
+    `,
+    [userPlatformId],
+  );
+  console.log('\nSESSION duration estimate via tournament start/end times:');
+  console.table(durEst.rows);
+
   // 11b. session_tournaments guaranteed coverage
   const gtdStats = await pool.query(
     `

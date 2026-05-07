@@ -671,13 +671,45 @@ export function registerGrindSessionRoutes(app: Express): void {
 
           // Calculate session duration
           let duration = undefined;
+          let durationMin: number | undefined = undefined;
           if (session.startTime && session.endTime) {
             const start = new Date(session.startTime);
             const end = new Date(session.endTime);
             const durationMs = end.getTime() - start.getTime();
+            durationMin = Math.max(0, Math.round(durationMs / 60000));
             const hours = Math.floor(durationMs / (1000 * 60 * 60));
             const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
             duration = `${hours}h ${minutes}m`;
+          } else if (typeof (session as any).duration === 'number' && (session as any).duration > 0) {
+            // Fallback: session.duration (minutos) populado direto pela tabela
+            // (alguns flows nao populam startTime/endTime mas gravam duration).
+            durationMin = (session as any).duration as number;
+          }
+
+          // v2.6 (2026-05-07): estimar duration via tournament start/end times
+          // quando session.startTime/endTime ausentes. Audit DB mostrou USER-0005
+          // tem tournament times mas session.duration NULL — span real 4.7-22h.
+          let estimatedDurationMin: number | undefined = undefined;
+          if (Array.isArray(allTournaments) && allTournaments.length > 0) {
+            let minStart: number | null = null;
+            let maxEnd: number | null = null;
+            for (const tn of allTournaments) {
+              const st = (tn as any).startTime;
+              const en = (tn as any).endTime;
+              if (st) {
+                const ts = new Date(st).getTime();
+                if (Number.isFinite(ts) && (minStart === null || ts < minStart)) minStart = ts;
+              }
+              if (en) {
+                const ts = new Date(en).getTime();
+                if (Number.isFinite(ts) && (maxEnd === null || ts > maxEnd)) maxEnd = ts;
+              }
+            }
+            if (minStart !== null && maxEnd !== null && maxEnd > minStart) {
+              const span = Math.round((maxEnd - minStart) / 60000);
+              // Cap defensivo: span > 24h indica overlap entre dias / data corrompida.
+              if (span > 0 && span <= 24 * 60) estimatedDurationMin = span;
+            }
           }
 
           // Sprint Bankroll-Reports-Detail (R2 fix C1): merge campos novos
@@ -688,6 +720,8 @@ export function registerGrindSessionRoutes(app: Express): void {
           return {
             ...session,
             duration,
+            durationMin,
+            estimatedDurationMin,
             volume,
             profit,
             abiMed,

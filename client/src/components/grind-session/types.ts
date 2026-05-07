@@ -3,6 +3,8 @@ export interface SessionHistoryData {
   userId: string;
   date: string;
   duration?: string;
+  durationMin?: number;
+  estimatedDurationMin?: number;
   volume: number;
   profit: number;
   abiMed: number;

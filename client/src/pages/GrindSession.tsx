@@ -713,21 +713,28 @@ export default function GrindSession() {
       }
     }
     const totalRegistros = distinctIds.size;
-    // Duration heuristic: se session.duration ausente/0, estima via
-    // `volume * 90 min` (assumindo media 90min por torneio MTT). Founder pediu
-    // estipular media mesmo sem duration registrada (sessions antigas pre-feature).
-    const ESTIMATED_MIN_PER_TOURNAMENT = 90;
-    const FALLBACK_SESSION_MIN = 180;
-    const sessionDurations = filteredSessions.map((s) => {
-      const d = Number((s as any).duration);
-      if (Number.isFinite(d) && d > 0) return d;
-      const vol = Number((s as any).volume);
-      if (Number.isFinite(vol) && vol > 0) return vol * ESTIMATED_MIN_PER_TOURNAMENT;
-      return FALLBACK_SESSION_MIN;
-    });
-    const totalDurationMin = sessionDurations.reduce((a, b) => a + b, 0);
-    const avgSessionDurationMin = sessionDurations.length > 0
-      ? totalDurationMin / sessionDurations.length
+    // v2.6: chain duration sources — durationMin (real, computado de startTime/
+    // endTime) > estimatedDurationMin (computado server via tournament times) >
+    // sem fallback (skip session). Heuristica volume*90 removida — gerava 57h
+    // pra USER-0005 (38 tournaments * 90 = 57h, multi-table real ~10h).
+    const sessionDurationsMin: number[] = [];
+    for (const s of filteredSessions) {
+      const ss = s as any;
+      const real = Number(ss.durationMin);
+      if (Number.isFinite(real) && real > 0) {
+        sessionDurationsMin.push(real);
+        continue;
+      }
+      const est = Number(ss.estimatedDurationMin);
+      if (Number.isFinite(est) && est > 0) {
+        sessionDurationsMin.push(est);
+        continue;
+      }
+      // Sem dados de tempo, skip (nao puxa media down via 90*volume).
+    }
+    const totalDurationMin = sessionDurationsMin.reduce((a, b) => a + b, 0);
+    const avgSessionDurationMin = sessionDurationsMin.length > 0
+      ? totalDurationMin / sessionDurationsMin.length
       : 0;
     const activeDayCount = distinctActiveDays.size;
     const gamesPerActiveDay = activeDayCount > 0

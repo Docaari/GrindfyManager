@@ -26,6 +26,17 @@
   > 0; mediana de todos estimates. Mediana esperada para USER-0005 = ~925
   (Sharkscope reportou 625; ambos dentro do range 300-1000 que founder validou).
 
+- **v2.6 (2026-05-07, founder pos-QA round 5):** Tempo Medio Sessao
+  exibia 57h 36m (heuristica volume*90 errada — jogador joga multi-table
+  paralelo, ~10h reais nao 57h). Audit DB: 0/5 sessions USER-0005 com
+  session.duration; mas tournament times disponiveis (start_time/end_time)
+  permitem calcular span real 4.7h-22h. **Fix:** server endpoint /history
+  agora retorna `durationMin` (real) + `estimatedDurationMin` (calculado via
+  MIN(tournament.start_time)/MAX(tournament.end_time) com cap defensivo
+  24h pra evitar overlap entre dias). Frontend chain: durationMin >
+  estimatedDurationMin > skip (sem fallback volume*90). Resultado esperado
+  USER-0005: ~660 min (~11h) — bate com expectativa founder 9-13h.
+
 ---
 
 ## 1. Contexto
