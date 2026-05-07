@@ -866,7 +866,11 @@ export function registerGrindSessionRoutes(app: Express): void {
           source: 'session',
           site: t.site || 'N/A',
           type: t.type || 'Vanilla',
-          speed: t.speed || 'Normal'
+          speed: t.speed || 'Normal',
+          // v2.6: tempos do tournament para fallback duration client-side.
+          startTime: t.startTime ?? null,
+          endTime: t.endTime ?? null,
+          sessionId: t.sessionId ?? null,
         })),
         ...completedRegularTournaments.map((t: any) => ({
           id: t.id,
@@ -884,7 +888,10 @@ export function registerGrindSessionRoutes(app: Express): void {
           source: 'regular',
           site: t.site || 'N/A',
           type: t.type || 'Vanilla',
-          speed: t.speed || 'Normal'
+          speed: t.speed || 'Normal',
+          startTime: t.startTime ?? null,
+          endTime: t.endTime ?? null,
+          sessionId: t.grindSessionId ?? null,
         }))
       ];
 

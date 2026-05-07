@@ -713,10 +713,39 @@ export default function GrindSession() {
       }
     }
     const totalRegistros = distinctIds.size;
-    // v2.6: chain duration sources — durationMin (real, computado de startTime/
-    // endTime) > estimatedDurationMin (computado server via tournament times) >
-    // sem fallback (skip session). Heuristica volume*90 removida — gerava 57h
-    // pra USER-0005 (38 tournaments * 90 = 57h, multi-table real ~10h).
+    // v2.6: chain duration sources — durationMin (real, server) > estimatedDurationMin
+    // (server via tournament times) > client-side span (allCompletedTournaments
+    // agrupados por sessionId) > skip session.
+    // Client-side fallback: agrupa tournaments por sessionId, computa MIN(start)/
+    // MAX(end). Cap defensivo 24h.
+    const spanBySession = new Map<string, { minStart: number; maxEnd: number }>();
+    for (const t of allCompletedTournaments) {
+      const tt = t as Record<string, any>;
+      const sid = typeof tt.sessionId === 'string' ? tt.sessionId : null;
+      if (!sid) continue;
+      const stRaw = tt.startTime;
+      const enRaw = tt.endTime;
+      let st: number | null = null;
+      let en: number | null = null;
+      if (stRaw) {
+        const parsed = new Date(stRaw).getTime();
+        if (Number.isFinite(parsed)) st = parsed;
+      }
+      if (enRaw) {
+        const parsed = new Date(enRaw).getTime();
+        if (Number.isFinite(parsed)) en = parsed;
+      }
+      const acc = spanBySession.get(sid);
+      if (!acc) {
+        spanBySession.set(sid, {
+          minStart: st ?? Number.POSITIVE_INFINITY,
+          maxEnd: en ?? Number.NEGATIVE_INFINITY,
+        });
+      } else {
+        if (st !== null && st < acc.minStart) acc.minStart = st;
+        if (en !== null && en > acc.maxEnd) acc.maxEnd = en;
+      }
+    }
     const sessionDurationsMin: number[] = [];
     for (const s of filteredSessions) {
       const ss = s as any;
@@ -730,7 +759,20 @@ export default function GrindSession() {
         sessionDurationsMin.push(est);
         continue;
       }
-      // Sem dados de tempo, skip (nao puxa media down via 90*volume).
+      const span = spanBySession.get(ss.id);
+      if (
+        span &&
+        Number.isFinite(span.minStart) &&
+        Number.isFinite(span.maxEnd) &&
+        span.maxEnd > span.minStart
+      ) {
+        const min = Math.round((span.maxEnd - span.minStart) / 60000);
+        if (min > 0 && min <= 24 * 60) {
+          sessionDurationsMin.push(min);
+          continue;
+        }
+      }
+      // Sem dados de tempo, skip (nao puxa media down via heuristica volume*90 antiga).
     }
     const totalDurationMin = sessionDurationsMin.reduce((a, b) => a + b, 0);
     const avgSessionDurationMin = sessionDurationsMin.length > 0
