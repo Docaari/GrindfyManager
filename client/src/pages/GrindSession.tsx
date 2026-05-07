@@ -578,22 +578,37 @@ export default function GrindSession() {
     if (filteredSessions && filteredSessions.length > 0) {
       // v2.3 (2026-05-07 founder pos-QA round 2): bugs Reentradas/Participantes/MaiorResultado.
 
-      // Media Participantes via MEDIANA (robusto a outliers). Filtro <= 100k.
-      // **Quality gate (v2.4):** requer >= 5 datapoints validos. Audit DB
-      // 2026-05-07 mostrou USER-0005 com 321/324 NULL em fieldSize (CSV parser
-      // nao popula). Mediana de 2-3 outliers gera valores absurdos (62500).
-      // Sem dado suficiente -> UI mostra "—" via avgParticipants=0.
-      const FIELDSIZE_MIN_DATAPOINTS = 5;
+      // Media Participantes via MEDIANA (robusto a outliers). Range valido
+      // 1 < participants <= 100_000.
+      // v2.5 (2026-05-07 founder formula): fallback `guaranteed / buyIn`
+      // quando fieldSize ausente. Audit DB mostrou USER-0005 com 321/324
+      // session_tournaments sem fieldSize, mas 165/192 com guaranteed e buyIn.
+      // Mediana de gtd/buyIn = 925 (Sharkscope reportou 625 — proximo +
+      // dentro range founder 300-1000). CSV parser populou guaranteed mas
+      // nao fieldSize, entao fallback recupera o sinal.
       if (allCompletedTournaments.length > 0) {
-        const fieldSizes = allCompletedTournaments
-          .map((t: Record<string, unknown>) => Number(t.fieldSize))
-          .filter((n: number) => Number.isFinite(n) && n > 0 && n <= 100_000)
-          .sort((a: number, b: number) => a - b);
-        if (fieldSizes.length >= FIELDSIZE_MIN_DATAPOINTS) {
-          const mid = Math.floor(fieldSizes.length / 2);
-          avgParticipants = fieldSizes.length % 2 === 0
-            ? (fieldSizes[mid - 1] + fieldSizes[mid]) / 2
-            : fieldSizes[mid];
+        const estimates: number[] = [];
+        for (const t of allCompletedTournaments) {
+          const tt = t as Record<string, any>;
+          const fs = Number(tt.fieldSize);
+          if (Number.isFinite(fs) && fs > 0 && fs <= 100_000) {
+            estimates.push(fs);
+            continue;
+          }
+          // Fallback: guaranteed / buyIn (formula MTT padrao).
+          const gtd = Number(tt.guaranteed);
+          const bi = Number(tt.buyIn);
+          if (Number.isFinite(gtd) && gtd > 0 && Number.isFinite(bi) && bi > 0) {
+            const est = gtd / bi;
+            if (est > 1 && est <= 100_000) estimates.push(est);
+          }
+        }
+        if (estimates.length >= 5) {
+          estimates.sort((a, b) => a - b);
+          const mid = Math.floor(estimates.length / 2);
+          avgParticipants = estimates.length % 2 === 0
+            ? (estimates[mid - 1] + estimates[mid]) / 2
+            : estimates[mid];
         }
       }
 

@@ -18,6 +18,14 @@
 - CSV parser nao popula `position` em 99% dos session_tournaments importados.
 - Fix futuro: backfill via Sharkscope sync OR re-import com parser corrigido.
 
+- **v2.5 (2026-05-07, founder formula):** Founder forneceu formula MTT padrao
+  `participants ≈ guaranteed / buyIn` (ex: $22 buy-in + $2000 GTD = ~91 players).
+  Audit DB confirmou que 165/192 finished session_tournaments tem ambos guaranteed
+  e buyIn populados (vs apenas 3/192 com fieldSize). **Fix:** avgParticipants
+  agora usa fieldSize quando disponivel; senao `guaranteed / buyIn` quando ambos
+  > 0; mediana de todos estimates. Mediana esperada para USER-0005 = ~925
+  (Sharkscope reportou 625; ambos dentro do range 300-1000 que founder validou).
+
 ---
 
 ## 1. Contexto
