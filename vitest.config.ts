@@ -42,7 +42,9 @@ export default defineConfig({
           environment: 'node',
           globals: true,
           include: ['tests/**/*.test.ts'],
-          exclude: ['tests/**/*.test.tsx'],
+          // Hook tests com renderHook precisam de jsdom; rodam no projeto client.
+          // Sprint coach-page-reform-1: useTabFromUrl + usePlatformsByPopularity.
+          exclude: ['tests/**/*.test.tsx', 'tests/hooks/**/*.test.ts'],
           setupFiles: ['tests/setup.ts'],
           clearMocks: true,
           alias: {
@@ -61,7 +63,13 @@ export default defineConfig({
           name: 'client',
           environment: 'jsdom',
           globals: true,
-          include: ['client/src/**/*.test.tsx', 'client/src/**/*.test.ts', 'tests/**/*.test.tsx'],
+          include: [
+            'client/src/**/*.test.tsx',
+            'client/src/**/*.test.ts',
+            'tests/**/*.test.tsx',
+            // Hook tests que usam renderHook precisam de jsdom (DOM presente).
+            'tests/hooks/**/*.test.ts',
+          ],
           setupFiles: ['tests/setup.ts'],
           clearMocks: true,
           alias: {

@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { Suspense, lazy } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -50,8 +50,6 @@ const Calculadoras = lazy(() => import("@/pages/Calculadoras"));
 const CalculadoraPopup = lazy(() => import("@/pages/CalculadoraPopup"));
 const CoachAI = lazy(() => import("@/pages/CoachAI"));
 const Bankroll = lazy(() => import("@/pages/Bankroll"));
-// Sprint Flight-1 RF-10 — pagina /flight para gerenciar tournament_series
-const Flight = lazy(() => import("@/pages/Flight"));
 // Sprint Biblioteca-1 RF-12 — pagina /biblioteca + viewer + detalhe (F2)
 const BibliotecaPage = lazy(() => import("@/pages/biblioteca/BibliotecaPage").then(m => ({ default: m.BibliotecaPage })));
 const LessonViewerPage: any = lazy(() => import("@/pages/biblioteca/LessonViewer").then(m => ({ default: m.LessonViewer as any })));
@@ -128,7 +126,8 @@ function Router() {
                   <Route path="/subscription-demo" component={() => (<ProtectedRoute><SubscriptionDemo /></ProtectedRoute>)} />
                   <Route path="/coach-ai" component={() => (<ProtectedRoute><CoachAI /></ProtectedRoute>)} />
                   <Route path="/bankroll" component={() => (<ProtectedRoute><Bankroll /></ProtectedRoute>)} />
-                  <Route path="/flight" component={() => (<ProtectedRoute><Flight /></ProtectedRoute>)} />
+                  {/* Sprint coach-page-reform-1 RF-02: redirect legado /flight -> /coach?tab=flights. */}
+                  <Route path="/flight">{() => <Redirect to="/coach?tab=flights" />}</Route>
                   {/* Sprint Biblioteca-1 RF-07 + RF-08 + RF-12 (D2) + F2 drill-down */}
                   <Route path="/biblioteca" component={() => (<ProtectedRoute><BibliotecaPage /></ProtectedRoute>)} />
                   <Route path="/biblioteca/curso/:courseSlug">

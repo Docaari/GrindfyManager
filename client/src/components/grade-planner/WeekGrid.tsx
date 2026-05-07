@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Draggable } from "react-beautiful-dnd";
 import { StrictModeDroppable as Droppable } from "./StrictModeDroppable";
-import { Settings, Plus, Eye } from "lucide-react";
+import { Settings, Plus, Eye, X } from "lucide-react";
 import { generateTimeSlots } from "@shared/grade-hours";
 import { getDisplayRegistrationTime } from "@shared/grade-time";
 import { getCellDisplayInfo } from "@shared/grade-cell-overflow";
@@ -355,9 +355,11 @@ function DaySummaryFooter({
 
 // =============================================================================
 // CellChip — Tournament chip inside a grid cell with popover
+// Sprint coach-page-reform-1 RF-06: hover X delete com gate 1s anti-misclick.
+// Exportado como named export para teste isolado.
 // =============================================================================
 
-function CellChip({
+export function CellChip({
   tournament,
   onClick,
   onRemove,
@@ -366,11 +368,96 @@ function CellChip({
   onClick: () => void;
   onRemove?: (id: string) => void;
 }) {
+  // hovering = mouse dentro do chip mas gate ainda nao completou.
+  // isArmed = gate de 1s completou. Mouseleave apos armed preserva.
+  const [hovering, setHovering] = useState(false);
+  const [isArmed, setIsArmed] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Reset gate quando o chip e reusado para outro torneio (drag-drop, virtual list).
+  useEffect(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setHovering(false);
+    setIsArmed(false);
+  }, [tournament.id]);
+
+  const handleMouseEnter = () => {
+    if (timerRef.current !== null || isArmed) return;
+    setHovering(true);
+    timerRef.current = setTimeout(() => {
+      setIsArmed(true);
+      timerRef.current = null;
+    }, 1000);
+  };
+
+  const handleMouseLeave = () => {
+    if (isArmed) return; // Preserva armed apos saida.
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setHovering(false);
+  };
+
+  const handleXClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isArmed) {
+      // Grace period — noop.
+      return;
+    }
+    if (onRemove) {
+      onRemove(tournament.id);
+    }
+  };
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <div>
+        <div
+          className="group relative"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
           <TournamentChip tournament={tournament} onClick={onClick} />
+          {onRemove && (
+            <button
+              type="button"
+              data-testid={`tournament-chip-x-delete-${tournament.id}`}
+              aria-label={
+                isArmed ? 'Remover torneio' : 'Remover torneio (aguarde 1s)'
+              }
+              aria-disabled={!isArmed}
+              title={isArmed ? 'Remover torneio' : 'Aguarde 1s'}
+              onClick={handleXClick}
+              // Importante: NAO usar `group-hover:` aqui — class*="group" matchearia
+              // este botao em testes que fazem `closest('[class*="group"]')`. Em vez
+              // disso, controlamos visibilidade via opacity inline (via armedAt e isArmed).
+              style={{
+                opacity: !hovering && !isArmed ? 0 : isArmed ? 1 : 0.4,
+                pointerEvents: !hovering && !isArmed ? 'none' : undefined,
+              }}
+              className={
+                'absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-red-600 ' +
+                'flex items-center justify-center text-white transition-opacity ' +
+                (isArmed ? 'cursor-pointer' : 'cursor-not-allowed')
+              }
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
         </div>
       </PopoverTrigger>
       <PopoverContent

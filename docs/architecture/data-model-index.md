@@ -669,3 +669,16 @@ CREATE INDEX IF NOT EXISTS idx_study_sessions_user_theme_date
 
 ADRs relevantes: **ADR-116** (schema mensal), **ADR-117** (study_sessions.theme_id Opcao C),
 **ADR-118** (FocusStatsCard zona "Estudos" no Home — nova Zona 4 entre Performance e Sinal Externo).
+
+---
+
+## Schema Delta — Sprint coach-page-reform-1
+
+**Sem mudancas de schema.** O sprint reorganiza UI da pagina `/coach` (4 abas peer + redirect `/flight -> /coach?tab=flights`) e adiciona quick filters na Biblioteca, mas nao altera tabelas, colunas, indices ou constraints.
+
+Campos USADOS (nao alterados):
+- `tournaments.dayOfWeek` (`shared/schema.ts:2262`, nullable integer 0-6) — RF-05.3 chips dia da semana.
+- `tournaments.site` — RF-05.2 ordem de chips por popularidade. Query agregadora respeita regra de §6.1 (`grind_session_id IS NULL`).
+
+ADR relevante: **ADR-125** (consolidacao de abas em /coach + redirect Wouter + alias testid legacy).
+Diagramas: `Docs/architecture/sprint-coach-page-reform-1/components-after.mermaid`, `routes-migration.mermaid`, `tab-persistence-sequence.mermaid`, `x-delete-gate-flow.mermaid`.

@@ -1,0 +1,37 @@
+%% Sprint coach-page-reform-1 RF-06 — Fluxo do gate 1s no X delete CellChip
+%% Regra canonica: timer arma no PRIMEIRO mouseenter; mouseleave antes de
+%% 1000ms reseta; depois de 1000ms preserva armed. Body click ignora gate.
+
+flowchart TD
+    Mounted(["CellChip montado<br/>armedAt = null"]) --> Idle["Aguardando interacao"]
+
+    Idle -->|"mouseenter no wrapper"| ArmCheck{"armedAt eh null?"}
+    ArmCheck -->|"sim"| SetArm["setArmedAt(Date.now())<br/>start setInterval 100ms"]
+    ArmCheck -->|"nao (ja armado)"| Stay["nao re-arma<br/>(preserva tempo)"]
+
+    SetArm --> Grace["Grace period<br/>X visivel opacity 0.4<br/>cursor not-allowed<br/>aria-disabled=true"]
+    Stay --> Armed
+
+    Grace -->|"mouseleave antes de 1000ms"| Reset["setArmedAt(null)<br/>cleanup interval"]
+    Reset --> Idle
+
+    Grace -->|"now - armedAt >= 1000ms"| Armed["isArmed=true<br/>X opacity 1.0<br/>cursor pointer<br/>aria-disabled=false"]
+
+    Armed -->|"mouseleave"| StayArmed["preserva armed<br/>(re-entry mantem clicavel)"]
+    StayArmed -->|"mouseenter de volta"| Armed
+
+    Grace -->|"click no X"| ClickGrace{"isArmed?"}
+    Armed -->|"click no X"| ClickArmed{"isArmed?"}
+
+    ClickGrace -->|"false"| Noop["event.preventDefault()<br/>event.stopPropagation()<br/>NAO chama onRemove<br/>NAO abre Popover"]
+    ClickArmed -->|"true"| DoRemove["event.stopPropagation()<br/>onRemove(tournament.id)<br/>NAO abre Popover"]
+    DoRemove --> Removed(["Chip desmonta"])
+    Noop --> Grace
+
+    Grace -->|"click body chip"| BypassGrace["Popover abre normalmente<br/>(gate ignorado)"]
+    Armed -->|"click body chip"| BypassArmed["Popover abre normalmente<br/>(gate ignorado)"]
+    BypassGrace --> Grace
+    BypassArmed --> Armed
+
+    Idle -->|"click body sem hover<br/>(touch/keyboard)"| TouchOpen["Popover abre<br/>fallback: botao Remover<br/>interno (sem gate)"]
+    TouchOpen --> Idle

@@ -66,6 +66,7 @@ Codigo em `server/routes/` (modularizado em 17 arquivos desde 2026-03-20).
 | GET | `/api/tournament-templates` | Templates de torneios |
 | POST | `/api/tournament-templates` | Criar template |
 | GET | `/api/tournament-suggestions` | Sugestoes de torneios |
+| GET | `/api/library/platforms-by-popularity` | **Sprint coach-page-reform-1 RF-05** (Path A — opcional). Retorna `{ sites: string[] }` ordenado por volume historico do user (`grind_session_id IS NULL`) + fallback global (PokerStars, GGPoker, WPN, ...) para sites do enum sem historico. Pode ser substituido por hook client-side `usePlatformsByPopularity()` (Path B recomendado pelo PM). Spec: `Docs/specs/sprint-coach-page-reform-1.md` §6 + ADR-125. |
 
 ## Grade & Planejamento
 

@@ -1,0 +1,88 @@
+%% Sprint coach-page-reform-1 — Diagrama de componentes pos-reforma
+%% Mostra a hierarquia de componentes da pagina /coach (GradePlanner)
+%% apos o sprint: 4 abas + banner pendentes + hook de URL + sub-componentes.
+%%
+%% Escopo: estrutura de wiring (props/hooks/data flow) na pagina raiz.
+%% NAO detalha internals de SelectorPanel/FlightsPanel/PrimedopePanel.
+
+graph TB
+    subgraph route["Wouter Route /coach"]
+        gp["GradePlanner.tsx<br/><i>page root, monta 4 abas</i>"]
+    end
+
+    subgraph hooks["Hooks compartilhados"]
+        hookTab["useTabFromUrl<br/><i>(novo)<br/>sync ?tab= com state</i>"]
+        hookBank["useBankroll<br/><i>(existente)<br/>bankrollUsd</i>"]
+        hookPlat["usePlatformsByPopularity<br/><i>(novo) RF-05.2<br/>ordem chips</i>"]
+    end
+
+    subgraph pendingData["Fonte dos pendentes"]
+        items["coach-pending-items.ts<br/><i>const pendingItems</i>"]
+    end
+
+    subgraph topBar["Topo da pagina"]
+        banner["CoachPendingBanner<br/><i>(novo) RF-04<br/>colapsavel + jump-to-tab</i>"]
+        header["Header / titulo Grade"]
+    end
+
+    subgraph tabs["TabsList — 4 abas controladas via URL"]
+        tabPlanner["TabsTrigger<br/>coach-tab-planner"]
+        tabSelector["TabsTrigger<br/>coach-tab-selector<br/><i>+ alias legacy<br/>grade-tab-selector</i>"]
+        tabFlights["TabsTrigger<br/>coach-tab-flights"]
+        tabVariance["TabsTrigger<br/>coach-tab-variance"]
+    end
+
+    subgraph contents["TabsContent — uma por aba"]
+        plannerTab["PlannerTab<br/><i>PanelGroup horizontal</i>"]
+        selectorTab["SelectorTab<br/><i>thin wrapper</i>"]
+        flightsTab["FlightsTab<br/><i>thin wrapper</i>"]
+        varianceTab["VarianceTab<br/><i>thin wrapper</i>"]
+    end
+
+    subgraph plannerInternals["Aba Planner — split horizontal"]
+        biblio["BibliotecaPanel<br/><i>quick chips RF-05<br/>+ filtros avancados</i>"]
+        weekgrid["WeekGrid<br/><i>CellChip com hover X RF-06</i>"]
+    end
+
+    subgraph panels["Painel por aba"]
+        selPanel["SelectorPanel<br/><i>(intacto, fora de escopo)</i>"]
+        flPanel["FlightsPanel<br/><i>(novo) extraido de Flight.tsx<br/>RF-02</i>"]
+        primPanel["PrimedopePanel<br/><i>(intacto, lazy mount)</i>"]
+    end
+
+    subgraph dialogs["Dialogs (mantidos)"]
+        addWiz["AddTournamentWizard"]
+        copyDay["CopyDayDialog"]
+        compare["CompareProfilesDialog"]
+    end
+
+    gp --> hookTab
+    gp --> hookBank
+    gp --> banner
+    gp --> header
+    gp --> tabs
+    gp --> contents
+    gp --> dialogs
+
+    banner --> items
+    banner -.->|setActiveTab targetTab| hookTab
+
+    tabs --> tabPlanner
+    tabs --> tabSelector
+    tabs --> tabFlights
+    tabs --> tabVariance
+
+    contents --> plannerTab
+    contents --> selectorTab
+    contents --> flightsTab
+    contents --> varianceTab
+
+    plannerTab --> plannerInternals
+    plannerInternals --> biblio
+    plannerInternals --> weekgrid
+    biblio --> hookPlat
+
+    selectorTab --> selPanel
+    flightsTab --> flPanel
+    varianceTab --> primPanel
+    primPanel -.->|bankrollUsd| hookBank

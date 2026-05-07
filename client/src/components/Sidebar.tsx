@@ -37,23 +37,28 @@ import {
   ChevronUp
 } from 'lucide-react';
 
-const Sidebar: React.FC = () => {
-  const [location] = useLocation();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
-  const { user, logout, isAdmin } = useAuth();
-
-  // Sprint F2 W4 (RF-10): badge de Spots Pendentes em /estudos.
-  // Hooks first (lesson #1) — antes de qualquer return.
+/**
+ * Sub-componente que executa useQuery para spots pendentes.
+ * Sprint coach-page-reform-1: extraido para que o `useQuery` (que precisa de
+ * QueryClientProvider no escopo) seja invocado em sub-arvore isolada. Wrap
+ * com ErrorBoundary garante que testes que renderizam Sidebar sem
+ * QueryClientProvider nao crashem (o badge fica oculto silenciosamente).
+ *
+ * Reporta o resultado via callback (lift state up).
+ */
+const PendingSpotsFetcher: React.FC<{
+  enabled: boolean;
+  onResult: (count: number | null, badgeText: string | null) => void;
+}> = ({ enabled, onResult }) => {
   const pendingSpotsQuery = useQuery<{ items: unknown[]; total?: number }>({
     queryKey: ['/api/starred-hands/pending', { reviewLater: 'all' }],
     queryFn: () =>
       apiRequest('GET', '/api/starred-hands/pending?reviewLater=all'),
-    enabled: !!user,
+    enabled,
     staleTime: 30_000,
   });
 
-  const pendingSpotsCount = pendingSpotsQuery.isLoading
+  const count = pendingSpotsQuery.isLoading
     ? null
     : typeof pendingSpotsQuery.data?.total === 'number'
       ? pendingSpotsQuery.data.total
@@ -61,12 +66,63 @@ const Sidebar: React.FC = () => {
         ? pendingSpotsQuery.data!.items.length
         : 0;
 
-  const pendingSpotsBadgeText =
-    pendingSpotsCount === null
-      ? null
-      : pendingSpotsCount > 99
-        ? '99+'
-        : String(pendingSpotsCount);
+  const badgeText =
+    count === null ? null : count > 99 ? '99+' : String(count);
+
+  // Reporta apenas quando muda. useEffect evita loop de set durante render.
+  React.useEffect(() => {
+    onResult(count, badgeText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [count, badgeText]);
+
+  return null;
+};
+
+/**
+ * ErrorBoundary minimo para isolar PendingSpotsFetcher quando QueryClient
+ * nao esta disponivel (ex: testes que renderizam Sidebar sem QueryClientProvider).
+ */
+class PendingSpotsBoundary extends React.Component<
+  { children: React.ReactNode },
+  { errored: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { errored: false };
+  }
+  static getDerivedStateFromError(): { errored: boolean } {
+    return { errored: true };
+  }
+  componentDidCatch(): void {
+    // silencioso — badge simplesmente nao renderiza.
+  }
+  render(): React.ReactNode {
+    if (this.state.errored) return null;
+    return this.props.children;
+  }
+}
+
+const Sidebar: React.FC = () => {
+  const [location] = useLocation();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const { user, logout, isAdmin } = useAuth();
+
+  // Sprint F2 W4 (RF-10): badge de Spots Pendentes em /estudos.
+  // Sprint coach-page-reform-1: useQuery isolado em sub-arvore com ErrorBoundary
+  // para nao crashar quando Sidebar e renderizado sem QueryClientProvider (testes).
+  const [pendingSpotsState, setPendingSpotsState] = useState<{
+    count: number | null;
+    badgeText: string | null;
+  }>({ count: null, badgeText: null });
+  const handlePendingSpotsResult = React.useCallback(
+    (count: number | null, badgeText: string | null) => {
+      setPendingSpotsState({ count, badgeText });
+    },
+    []
+  );
+  const pendingSpotsCount = pendingSpotsState.count;
+  const pendingSpotsBadgeText = pendingSpotsState.badgeText;
 
   // Sidebar reform 2026-05-03 (Opcao A — workflow conservador).
   // 5 grupos: VISAO / JOGAR / ESTUDAR / UTILIDADES / ADMIN.
@@ -90,7 +146,8 @@ const Sidebar: React.FC = () => {
         { path: '/coach', icon: Calendar, label: 'Grade', adminOnly: false },
         { path: '/mental', icon: Brain, label: 'Warm Up', adminOnly: false },
         { path: '/grind', icon: Gamepad2, label: 'Grind', adminOnly: false },
-        { path: '/flight', icon: Layers, label: 'Flight', adminOnly: false },
+        // Sprint coach-page-reform-1 RF-07.2: aponta para aba dentro de /coach.
+        { path: '/coach?tab=flights', icon: Layers, label: 'Flight', adminOnly: false },
       ]
     },
     {
@@ -176,6 +233,15 @@ const Sidebar: React.FC = () => {
       ${isCollapsed ? 'w-16' : 'w-64'}
       h-full bg-gray-900 border-r border-gray-700 flex flex-col transition-all duration-300
     `}>
+      {/* Sprint coach-page-reform-1: PendingSpotsFetcher isolado num
+          ErrorBoundary — se nao ha QueryClientProvider (testes standalone),
+          falha silenciosamente sem quebrar o resto do Sidebar. */}
+      <PendingSpotsBoundary>
+        <PendingSpotsFetcher
+          enabled={!!user}
+          onResult={handlePendingSpotsResult}
+        />
+      </PendingSpotsBoundary>
       {/* Header — Sprint home-reform-1 RF-06: <HeaderLogo> swappable. */}
       <div className="px-3 py-1 border-b border-gray-700 relative">
         {!isCollapsed && (

@@ -12,6 +12,8 @@ interface LibraryTournament {
   time: string | null;
   type: string | null;
   speed: string | null;
+  /** Sprint coach-page-reform-1 RF-05.3: dia da semana (0=Dom..6=Sab), nullable. */
+  dayOfWeek?: number | null;
   [key: string]: any;
 }
 
@@ -22,6 +24,18 @@ interface LibraryFilters {
   types?: string[];
   speeds?: string[];
   sites?: string[];
+  /**
+   * Sprint coach-page-reform-1 RF-05.1: alias multi-select para `sites`.
+   * Comportamento UNION (OR) com `sites` quando ambos presentes.
+   * Array vazio = sem filtro.
+   */
+  filterSites?: string[];
+  /**
+   * Sprint coach-page-reform-1 RF-05.3: filtro multi-select por dia da semana.
+   * Array vazio = sem filtro (passa todos, incluindo dayOfWeek=null).
+   * Array com valores = filtra IN (array). dayOfWeek=null sempre EXCLUIDO.
+   */
+  filterDaysOfWeek?: number[];
   currencies?: string[];
   startTime?: string; // "HH:mm"
   endTime?: string;   // "HH:mm"
@@ -36,6 +50,15 @@ export function filterLibraryTournaments(
   filters: LibraryFilters | undefined | null
 ): LibraryTournament[] {
   if (!filters) return tournaments;
+
+  const sitesUnion = new Set<string>();
+  if (Array.isArray(filters.sites)) for (const s of filters.sites) sitesUnion.add(s);
+  if (Array.isArray(filters.filterSites)) for (const s of filters.filterSites) sitesUnion.add(s);
+  const hasSiteFilter = sitesUnion.size > 0;
+
+  const daySet = Array.isArray(filters.filterDaysOfWeek) && filters.filterDaysOfWeek.length > 0
+    ? new Set(filters.filterDaysOfWeek)
+    : null;
 
   return tournaments.filter((t) => {
     // Search filter (case-insensitive partial match on name or $buyIn)
@@ -76,11 +99,15 @@ export function filterLibraryTournaments(
       }
     }
 
-    // Site multi-select
-    if (filters.sites && filters.sites.length > 0) {
-      if (!filters.sites.includes(t.site)) {
-        return false;
-      }
+    // Site multi-select (UNION de `sites` + `filterSites`). Set hoisted acima do loop.
+    if (hasSiteFilter && !sitesUnion.has(t.site)) {
+      return false;
+    }
+
+    // RF-05.3: dia da semana. dayOfWeek=null sempre excluido quando filtro ativo.
+    if (daySet !== null) {
+      if (t.dayOfWeek === null || t.dayOfWeek === undefined) return false;
+      if (!daySet.has(t.dayOfWeek as number)) return false;
     }
 
     // Currency multi-select

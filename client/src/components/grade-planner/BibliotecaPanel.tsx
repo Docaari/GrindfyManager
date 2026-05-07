@@ -36,6 +36,7 @@ import { Draggable } from "react-beautiful-dnd";
 import { StrictModeDroppable as Droppable } from "./StrictModeDroppable";
 import { sites, types, speeds } from "./types";
 import SupremaImportModal from "@/components/SupremaImportModal";
+import { BibliotecaQuickFilters } from "./BibliotecaQuickFilters";
 
 interface BibliotecaPanelProps {
   collapsed: boolean;
@@ -58,7 +59,10 @@ export function BibliotecaPanel({
   const [showSupremaModal, setShowSupremaModal] = useState(false);
   const [filterType, setFilterType] = useState<string>("");
   const [filterSpeed, setFilterSpeed] = useState<string>("");
-  const [filterSite, setFilterSite] = useState<string>("");
+  // RF-05.1: filterSites multi-select (substitui filterSite single).
+  const [filterSites, setFilterSites] = useState<string[]>([]);
+  // RF-05.3: filterDaysOfWeek multi-select.
+  const [filterDaysOfWeek, setFilterDaysOfWeek] = useState<number[]>([]);
   const [filterCurrency, setFilterCurrency] = useState<string>("");
   const [filterMinBuyIn, setFilterMinBuyIn] = useState<string>("");
   const [filterMaxBuyIn, setFilterMaxBuyIn] = useState<string>("");
@@ -167,7 +171,8 @@ export function BibliotecaPanel({
       search: search || undefined,
       types: filterType ? [filterType] : undefined,
       speeds: filterSpeed ? [filterSpeed] : undefined,
-      sites: filterSite ? [filterSite] : undefined,
+      filterSites: filterSites.length > 0 ? filterSites : undefined,
+      filterDaysOfWeek: filterDaysOfWeek.length > 0 ? filterDaysOfWeek : undefined,
       currencies: filterCurrency ? [filterCurrency] : undefined,
       minBuyIn: filterMinBuyIn ? parseFloat(filterMinBuyIn) : undefined,
       maxBuyIn: filterMaxBuyIn ? parseFloat(filterMaxBuyIn) : undefined,
@@ -190,7 +195,7 @@ export function BibliotecaPanel({
           return 0;
       }
     });
-  }, [libraryTournaments, search, filterType, filterSpeed, filterSite, filterCurrency, filterMinBuyIn, filterMaxBuyIn, sortMode]);
+  }, [libraryTournaments, search, filterType, filterSpeed, filterSites, filterDaysOfWeek, filterCurrency, filterMinBuyIn, filterMaxBuyIn, sortMode]);
 
   const totalCount = Array.isArray(libraryTournaments) ? libraryTournaments.length : 0;
   const trashCount = Array.isArray(trashTournaments) ? trashTournaments.length : 0;
@@ -225,14 +230,17 @@ export function BibliotecaPanel({
   const clearFilters = () => {
     setFilterType("");
     setFilterSpeed("");
-    setFilterSite("");
+    setFilterSites([]);
+    setFilterDaysOfWeek([]);
     setFilterCurrency("");
     setFilterMinBuyIn("");
     setFilterMaxBuyIn("");
     setSearch("");
   };
 
-  const hasActiveFilters = filterType || filterSpeed || filterSite || filterCurrency || filterMinBuyIn || filterMaxBuyIn;
+  const hasActiveFilters =
+    filterType || filterSpeed || filterSites.length > 0 || filterDaysOfWeek.length > 0 ||
+    filterCurrency || filterMinBuyIn || filterMaxBuyIn;
 
   // =========================================================================
   // Collapsed mode
@@ -325,7 +333,7 @@ export function BibliotecaPanel({
         </button>
       </div>
 
-      {/* Search + filter toggle */}
+      {/* Search + quick filters + filter toggle */}
       <div className="p-3 border-b border-gray-700 space-y-2">
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -337,6 +345,14 @@ export function BibliotecaPanel({
             className="w-full pl-8 pr-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500"
           />
         </div>
+
+        {/* RF-05: chips multi-select de plataforma + dia da semana. */}
+        <BibliotecaQuickFilters
+          filterSites={filterSites}
+          filterDaysOfWeek={filterDaysOfWeek}
+          onFilterSitesChange={setFilterSites}
+          onFilterDaysOfWeekChange={setFilterDaysOfWeek}
+        />
 
         {/* Filter toggle */}
         <div className="flex items-center gap-2">
@@ -364,20 +380,9 @@ export function BibliotecaPanel({
           )}
         </div>
 
-        {/* Filters panel */}
+        {/* Filtros avancados (chips de site/dia ja estao acima via BibliotecaQuickFilters) */}
         {showFilters && (
           <div className="space-y-2 pt-1">
-            <Select value={filterSite || "_all"} onValueChange={(v) => setFilterSite(v === "_all" ? "" : v)}>
-              <SelectTrigger className="bg-gray-800 border-gray-600 text-xs h-8">
-                <SelectValue placeholder="Todos os sites" />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-600">
-                <SelectItem value="_all">Todos os sites</SelectItem>
-                {sites.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <div className="flex gap-2">
               <Select value={filterType || "_all"} onValueChange={(v) => setFilterType(v === "_all" ? "" : v)}>
                 <SelectTrigger className="bg-gray-800 border-gray-600 text-xs h-8">

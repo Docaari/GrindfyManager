@@ -1,17 +1,23 @@
 /**
- * Sprint Flight-1 RF-10: Pagina /flight (lista + drill-down).
+ * FlightsPanel — Sprint coach-page-reform-1 RF-02 / RF-07.
+ * Spec: Docs/specs/sprint-coach-page-reform-1.md §RF-02.
  *
- * Spec: docs/specs/sprint-flight-1.md (RF-10, D14)
+ * Conteudo migrado de client/src/pages/Flight.tsx para uso como aba dentro
+ * de /coach. Self-contained: gerencia tab interna (pending/completed/cancelled/all)
+ * e backfill dialog.
  *
- * @deprecated 2026-05-07 (sprint-coach-page-reform-1 RF-02)
- *   Conteudo migrado para FlightsPanel.tsx (aba dentro de /coach).
- *   Esta pagina sera removida em followup. Rota /flight redireciona
- *   para /coach?tab=flights via App.tsx.
+ * data-testids preservados (paridade com Flight.tsx original):
+ *   - flight-page-header
+ *   - flight-page-backfill-btn
+ *   - flight-tab-pending / -completed / -cancelled / -all
+ *   - flight-empty-state
+ *   - flight-series-card-{id}
  */
 
-import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { BackfillSeriesDialog } from "@/components/flight/BackfillSeriesDialog";
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
+import { BackfillSeriesDialog } from '@/components/flight/BackfillSeriesDialog';
 
 type Status = 'pending' | 'completed' | 'cancelled' | 'all';
 
@@ -25,16 +31,13 @@ interface SeriesItem {
   stackMode: 'single' | 'combined';
 }
 
-const FlightPage: React.FC = () => {
+export const FlightsPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Status>('pending');
   const [backfillOpen, setBackfillOpen] = useState(false);
 
-  const queryKey: any = activeTab === 'all'
-    ? ['tournament-series', { status: 'all' }]
-    : ['tournament-series', { status: activeTab }];
-
   const { data, isLoading } = useQuery<SeriesItem[]>({
-    queryKey,
+    queryKey: ['/api/tournament-series', { status: activeTab }] as const,
+    queryFn: () => apiRequest('GET', `/api/tournament-series?status=${activeTab}`),
   });
 
   const series = (data ?? []) as SeriesItem[];
@@ -54,16 +57,32 @@ const FlightPage: React.FC = () => {
       </div>
 
       <div className="flex gap-2 mb-6 border-b border-gray-700">
-        <TabButton testid="flight-tab-pending" active={activeTab === 'pending'} onClick={() => setActiveTab('pending')}>
+        <TabButton
+          testid="flight-tab-pending"
+          active={activeTab === 'pending'}
+          onClick={() => setActiveTab('pending')}
+        >
           Pendentes
         </TabButton>
-        <TabButton testid="flight-tab-completed" active={activeTab === 'completed'} onClick={() => setActiveTab('completed')}>
+        <TabButton
+          testid="flight-tab-completed"
+          active={activeTab === 'completed'}
+          onClick={() => setActiveTab('completed')}
+        >
           Concluidas
         </TabButton>
-        <TabButton testid="flight-tab-cancelled" active={activeTab === 'cancelled'} onClick={() => setActiveTab('cancelled')}>
+        <TabButton
+          testid="flight-tab-cancelled"
+          active={activeTab === 'cancelled'}
+          onClick={() => setActiveTab('cancelled')}
+        >
           Canceladas
         </TabButton>
-        <TabButton testid="flight-tab-all" active={activeTab === 'all'} onClick={() => setActiveTab('all')}>
+        <TabButton
+          testid="flight-tab-all"
+          active={activeTab === 'all'}
+          onClick={() => setActiveTab('all')}
+        >
           Todas
         </TabButton>
       </div>
@@ -86,7 +105,7 @@ const FlightPage: React.FC = () => {
           >
             <div className="flex justify-between items-start mb-2">
               <h3 className="text-white font-semibold">{s.name}</h3>
-              <span className="text-xs text-gray-400">{s.network ?? "—"}</span>
+              <span className="text-xs text-gray-400">{s.network ?? '—'}</span>
             </div>
             <div className="flex gap-2 mb-2 text-xs">
               <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
@@ -96,9 +115,7 @@ const FlightPage: React.FC = () => {
                 {s.stackMode === 'combined' ? 'Combined' : 'Single'}
               </span>
             </div>
-            <p className="text-xs text-gray-400">
-              0 / {s.totalDay1s} Day 1s pagos
-            </p>
+            <p className="text-xs text-gray-400">0 / {s.totalDay1s} Day 1s pagos</p>
             <p className="text-xs text-gray-500 mt-1">
               Day 2: {new Date(s.day2DateTime).toLocaleString()}
             </p>
@@ -125,12 +142,12 @@ const TabButton: React.FC<TabButtonProps> = ({ testid, active, onClick, children
     onClick={onClick}
     className={`px-4 py-2 text-sm border-b-2 transition-colors ${
       active
-        ? "border-green-400 text-green-400"
-        : "border-transparent text-gray-400 hover:text-white"
+        ? 'border-green-400 text-green-400'
+        : 'border-transparent text-gray-400 hover:text-white'
     }`}
   >
     {children}
   </button>
 );
 
-export default FlightPage;
+export default FlightsPanel;

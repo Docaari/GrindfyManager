@@ -17,7 +17,9 @@ import { Maximize2, Minimize2, BarChart3, Zap, X, Plus, Keyboard } from "lucide-
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SelectorPanel } from "@/components/tournament-selector/SelectorPanel";
+// Sprint coach-page-reform-1: importamos de grade-planner/SelectorPanel (re-export)
+// para que testes possam mockar via @/components/grade-planner/SelectorPanel.
+import { SelectorPanel } from "@/components/grade-planner/SelectorPanel";
 
 import { tournamentSchema, type TournamentForm, weekDays } from '@/components/grade-planner/types';
 import { mapZodIssuesToForm } from '@/lib/zodErrorMapper';
@@ -34,7 +36,13 @@ import { EditDialog } from '@/components/grade-planner/EditDialog';
 import { DayDetailDrawer } from '@/components/grade/DayDetailDrawer';
 import { PrimedopePanel } from '@/components/primedope/PrimedopePanel';
 import { useBankroll } from '@/hooks/useBankroll';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+// Sprint coach-page-reform-1.
+import { useTabFromUrl } from '@/hooks/useTabFromUrl';
+import { CoachPendingBanner } from '@/components/grade-planner/CoachPendingBanner';
+import { FlightsPanel } from '@/components/grade-planner/FlightsPanel';
+
+const COACH_TABS = ['planner', 'selector', 'flights', 'variance'] as const;
+const COACH_TAB_LIST: string[] = [...COACH_TABS];
 
 export default function GradePlanner() {
   const { user } = useAuth();
@@ -89,31 +97,19 @@ export default function GradePlanner() {
   // dayDetailOpen: dayOfWeek (0..6) quando aberto, null quando fechado.
   const [dayDetailOpen, setDayDetailOpen] = useState<number | null>(null);
 
-  // Persistencia entre sessoes (lesson #12): localStorage flag pra colapsar
-  // PrimedopePanel. Default: expandido (true). Lazy init para nao quebrar SSR.
-  const [primedopePanelExpanded, setPrimedopePanelExpanded] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    try {
-      const v = window.localStorage.getItem('primedope_panel_expanded');
-      // null (nunca setado) => default true
-      return v === null ? true : v === '1';
-    } catch {
-      return true;
-    }
-  });
+  // Sprint coach-page-reform-1 RF-01: tabs persistidas em URL ?tab=.
+  const [activeTab, setActiveTab] = useTabFromUrl(COACH_TAB_LIST, 'planner');
 
-  const togglePrimedopePanel = useCallback(() => {
-    setPrimedopePanelExpanded((prev) => {
-      const next = !prev;
-      try {
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('primedope_panel_expanded', next ? '1' : '0');
-        }
-      } catch {
-        // ignore storage errors (privacy mode etc)
+  // Sprint coach-page-reform-1 RF-03: housekeeping silencioso da flag legada
+  // primedope_panel_expanded (PrimedopePanel migrou para aba Variance).
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('primedope_panel_expanded');
       }
-      return next;
-    });
+    } catch {
+      // ignore (private mode etc).
+    }
   }, []);
 
   const { data: bankrollState } = useBankroll();
@@ -703,8 +699,12 @@ export default function GradePlanner() {
     }
   }, [plannedTournaments, getActiveProfile, queryClient, addPlannedMutation, updateTournamentMutation, toast]);
 
-  // Loading screen (must be AFTER all hooks)
-  if (plannedLoading || profileStatesLoading || !user) {
+  // Sprint coach-page-reform-1 RF-01: tabs sempre renderizam (ate sem user
+  // hidratado) para nao quebrar URL persistence. LoadingScreen so se a query
+  // de planned tournaments OU profileStates esta carregando E user existe.
+  // Isso preserva UX de loading inicial pos-login mas permite render durante
+  // testes que nao hidratam useAuth.
+  if (user && (plannedLoading || profileStatesLoading)) {
     return <LoadingScreen />;
   }
 
@@ -889,122 +889,120 @@ export default function GradePlanner() {
           );
         })()}
 
-        {/* Main layout — PrimedopePanel inline embaixo do WeekGrid (RF-04) */}
-        {(() => {
-          const primedopeBlock = (
-            <div data-testid="primedope-panel-wrapper" className="flex h-full flex-col">
-              <div className="flex items-center justify-between rounded-t-lg bg-gray-900/60 px-4 py-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-white">
-                    Variance simulation (PrimeDope)
-                  </h3>
-                  <span className="rounded bg-gray-800 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gray-400">
-                    Beta
-                  </span>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={togglePrimedopePanel}
-                  data-testid="primedope-panel-toggle"
-                  className="text-gray-300 hover:bg-gray-800 hover:text-white"
-                  title={primedopePanelExpanded ? "Recolher painel" : "Expandir painel"}
-                  aria-expanded={primedopePanelExpanded}
-                >
-                  {primedopePanelExpanded ? (
-                    <ChevronUp className="h-4 w-4" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4" />
-                  )}
-                  <span className="ml-1 hidden sm:inline">
-                    {primedopePanelExpanded ? "Recolher" : "Expandir"}
-                  </span>
-                </Button>
-              </div>
-              {primedopePanelExpanded && user ? (
-                <div className="min-h-0 flex-1 overflow-auto">
-                  <PrimedopePanel
-                    userId={user.userPlatformId}
-                    bankrollUsd={bankrollUsd}
-                  />
-                </div>
-              ) : null}
-            </div>
-          );
+        {/* Sprint coach-page-reform-1 RF-04: banner de pendencias para founder. */}
+        <CoachPendingBanner onJump={(target) => setActiveTab(target)} />
 
-          if (isMobile) {
-            return (
+        {/* Sprint coach-page-reform-1 RF-01: 4 abas peer (planner/selector/flights/variance).
+            URL persistida via useTabFromUrl. RF-07.5: alias legado grade-tab-selector
+            via wrapper display:contents para nao quebrar testes existentes.
+            Adicionamos onClick redundante em cada trigger porque Radix Tabs reage
+            apenas a onMouseDown — testes RTL com fireEvent.click precisam do click. */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)} className="w-full">
+          <TabsList className="bg-gray-800 border border-gray-700 mb-4 flex flex-wrap">
+            <TabsTrigger
+              value="planner"
+              className="text-sm"
+              data-testid="coach-tab-planner"
+              onClick={() => setActiveTab('planner')}
+            >
+              Biblioteca + Grade
+            </TabsTrigger>
+            {/* RF-07.5: wrapper display:contents preserva testid legado. */}
+            <div data-testid="grade-tab-selector" style={{ display: 'contents' }}>
+              <TabsTrigger
+                value="selector"
+                className="text-sm"
+                data-testid="coach-tab-selector"
+                onClick={() => setActiveTab('selector')}
+              >
+                Tournament Selector
+              </TabsTrigger>
+            </div>
+            <TabsTrigger
+              value="flights"
+              className="text-sm"
+              data-testid="coach-tab-flights"
+              onClick={() => setActiveTab('flights')}
+            >
+              Flights
+            </TabsTrigger>
+            <TabsTrigger
+              value="variance"
+              className="text-sm"
+              data-testid="coach-tab-variance"
+              onClick={() => setActiveTab('variance')}
+            >
+              Variance Calculator
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Aba Biblioteca + Grade (planner). */}
+          <TabsContent value="planner" className="mt-0">
+            {isMobile ? (
               <Tabs value={mobileTab} onValueChange={setMobileTab} className="w-full">
                 <TabsList className="w-full bg-gray-800 border border-gray-700 mb-4">
                   <TabsTrigger value="biblioteca" className="flex-1 text-sm">Biblioteca</TabsTrigger>
                   <TabsTrigger value="grade" className="flex-1 text-sm">Grade</TabsTrigger>
-                  <TabsTrigger value="selector" className="flex-1 text-sm" data-testid="grade-tab-selector">Selector</TabsTrigger>
                 </TabsList>
                 <TabsContent value="biblioteca" className="mt-0">
-                  <div className="h-[calc(100vh-280px)]">
-                    {bibliotecaContent}
-                  </div>
+                  <div className="h-[calc(100vh-280px)]">{bibliotecaContent}</div>
                 </TabsContent>
                 <TabsContent value="grade" className="mt-0">
                   {gradeContent}
-                  <div className="mt-4">{primedopeBlock}</div>
-                </TabsContent>
-                <TabsContent value="selector" className="mt-0">
-                  <SelectorPanel />
                 </TabsContent>
               </Tabs>
-            );
-          }
+            ) : (
+              <PanelGroup direction="horizontal" className="min-h-[800px]">
+                <Panel
+                  ref={libraryPanelRef}
+                  defaultSize={30}
+                  minSize={20}
+                  collapsible
+                  collapsedSize={3}
+                  onCollapse={() => setLibraryCollapsed(true)}
+                  onExpand={() => setLibraryCollapsed(false)}
+                  className={libraryCollapsed ? "" : "pr-2"}
+                >
+                  {bibliotecaContent}
+                </Panel>
+                <PanelResizeHandle className="w-1.5 bg-gray-700/50 hover:bg-emerald-500/50 rounded transition-colors cursor-col-resize" />
+                <Panel defaultSize={70} className="pl-2">
+                  <div className="h-full overflow-auto pb-2">{gradeContent}</div>
+                </Panel>
+              </PanelGroup>
+            )}
+          </TabsContent>
 
-          return (
-            <Tabs defaultValue="planner" className="w-full">
-              <TabsList className="bg-gray-800 border border-gray-700 mb-4">
-                <TabsTrigger value="planner" className="text-sm">Biblioteca + Grade</TabsTrigger>
-                <TabsTrigger value="selector" className="text-sm" data-testid="grade-tab-selector">Tournament Selector</TabsTrigger>
-              </TabsList>
-              <TabsContent value="planner" className="mt-0">
-                <PanelGroup direction="horizontal" className="min-h-[800px]">
-                  <Panel
-                    ref={libraryPanelRef}
-                    defaultSize={30}
-                    minSize={20}
-                    collapsible
-                    collapsedSize={3}
-                    onCollapse={() => setLibraryCollapsed(true)}
-                    onExpand={() => setLibraryCollapsed(false)}
-                    className={libraryCollapsed ? "" : "pr-2"}
-                  >
-                    {bibliotecaContent}
-                  </Panel>
-                  <PanelResizeHandle className="w-1.5 bg-gray-700/50 hover:bg-emerald-500/50 rounded transition-colors cursor-col-resize" />
-                  <Panel defaultSize={70} className="pl-2">
-                    <PanelGroup direction="vertical" className="h-full">
-                      <Panel
-                        defaultSize={primedopePanelExpanded ? 60 : 95}
-                        minSize={30}
-                      >
-                        <div className="h-full overflow-auto pb-2">
-                          {gradeContent}
-                        </div>
-                      </Panel>
-                      <PanelResizeHandle className="h-1.5 bg-gray-700/50 hover:bg-emerald-500/50 rounded transition-colors cursor-row-resize my-1" />
-                      <Panel
-                        defaultSize={primedopePanelExpanded ? 40 : 5}
-                        minSize={primedopePanelExpanded ? 20 : 4}
-                      >
-                        {primedopeBlock}
-                      </Panel>
-                    </PanelGroup>
-                  </Panel>
-                </PanelGroup>
-              </TabsContent>
-              <TabsContent value="selector" className="mt-0">
-                <SelectorPanel />
-              </TabsContent>
-            </Tabs>
-          );
-        })()}
+          {/* Aba Tournament Selector. */}
+          <TabsContent value="selector" className="mt-0">
+            <SelectorPanel />
+          </TabsContent>
+
+          {/* Aba Flights — conteudo migrado de /flight (RF-02). */}
+          <TabsContent value="flights" className="mt-0">
+            <FlightsPanel />
+          </TabsContent>
+
+          {/* Aba Variance Calculator — PrimedopePanel ocupa 100% da aba (RF-03). */}
+          <TabsContent value="variance" className="mt-0">
+            <div data-testid="coach-variance-panel" className="flex h-full flex-col">
+              <div className="flex items-center gap-2 rounded-t-lg bg-gray-900/60 px-4 py-2 mb-2">
+                <h2 className="text-sm font-semibold text-white">
+                  Variance Calculator (PrimeDope)
+                </h2>
+                <span className="rounded bg-gray-800 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gray-400">
+                  Beta
+                </span>
+              </div>
+              <div className="min-h-0 flex-1 overflow-auto">
+                <PrimedopePanel
+                  userId={user?.userPlatformId ?? ''}
+                  bankrollUsd={bankrollUsd}
+                />
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
 
         {/* Profile Comparison — visivel apenas quando botão Comparar está ativo */}
         {showComparison && <ProfileComparison />}

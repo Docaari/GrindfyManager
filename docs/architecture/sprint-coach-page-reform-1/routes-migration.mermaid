@@ -1,0 +1,40 @@
+%% Sprint coach-page-reform-1 — Migracao de rotas Wouter
+%% Antes: /coach + /flight standalone.
+%% Depois: /coach unificado com 4 abas + /flight redirect (preserva bookmarks).
+
+graph LR
+    subgraph before["Antes do sprint"]
+        bC["/coach<br/><i>GradePlanner</i>"]
+        bF["/flight<br/><i>Flight (standalone)</i>"]
+        bSide1["Sidebar item<br/>path=/flight"]
+        bSide2["Sidebar item<br/>path=/coach"]
+    end
+
+    subgraph after["Depois do sprint"]
+        aC["/coach<br/><i>GradePlanner<br/>4 abas controladas via ?tab=</i>"]
+        aRedir["/flight<br/><i>&lt;Redirect to=/coach?tab=flights/&gt;</i>"]
+        aSide1["Sidebar item<br/>path=/coach?tab=flights<br/>label=Flight (mantido)"]
+        aSide2["Sidebar item<br/>path=/coach (mantido)"]
+        aP["?tab=planner<br/><i>Biblioteca + Grade (default)</i>"]
+        aS["?tab=selector<br/><i>SelectorPanel</i>"]
+        aFl["?tab=flights<br/><i>FlightsPanel<br/>(extraido de Flight.tsx)</i>"]
+        aV["?tab=variance<br/><i>PrimedopePanel<br/>(migrado de inline split)</i>"]
+    end
+
+    bC -.->|"mantida"| aC
+    bF -.->|"removida +<br/>redirect"| aRedir
+    aRedir -->|"client-side<br/>Wouter Redirect"| aC
+
+    aC --> aP
+    aC --> aS
+    aC --> aFl
+    aC --> aV
+
+    bSide1 -.->|"href atualizado"| aSide1
+    bSide2 -.->|"sem mudanca"| aSide2
+
+    Note1[/"Bookmarks legados<br/>/flight continuam<br/>funcionando via redirect"/]
+    aRedir --- Note1
+
+    Note2[/"Flight.tsx file<br/>marcado @deprecated<br/>removido em followup"/]
+    bF --- Note2

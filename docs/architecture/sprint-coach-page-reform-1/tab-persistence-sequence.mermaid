@@ -1,0 +1,65 @@
+%% Sprint coach-page-reform-1 — Sequencia de persistencia da aba via ?tab=
+%% Cobre: load inicial, deep-link, switch click, refresh, browser back/forward.
+%% Hook central: useTabFromUrl(validTabs, defaultTab).
+
+sequenceDiagram
+    autonumber
+    actor U as Usuario
+    participant B as Browser URL bar
+    participant W as Wouter useLocation
+    participant H as useTabFromUrl
+    participant G as GradePlanner
+    participant T as Tabs Radix
+
+    Note over U,T: Cenario A — Load inicial sem ?tab=
+    U->>B: GET /coach
+    B->>W: location = "/coach"
+    W->>H: useSearch() = ""
+    H->>H: parse vazio → fallback default "planner"
+    H->>G: activeTab = "planner"
+    G->>T: render Tabs value=planner
+    T-->>U: aba Planner exibida
+
+    Note over U,T: Cenario B — Deep-link ?tab=variance
+    U->>B: GET /coach?tab=variance
+    B->>W: location = "/coach", search = "?tab=variance"
+    W->>H: useSearch() = "tab=variance"
+    H->>H: validTabs.includes("variance") → ok
+    H->>G: activeTab = "variance"
+    G->>T: render Tabs value=variance
+    T-->>U: PrimedopePanel renderiza (lazy mount)
+
+    Note over U,T: Cenario C — User clica aba Flights
+    U->>T: click coach-tab-flights
+    T->>G: onValueChange("flights")
+    G->>H: setActiveTab("flights")
+    H->>B: history.replaceState(null, "", "/coach?tab=flights")
+    H->>G: activeTab = "flights"
+    G->>T: render Tabs value=flights
+    T-->>U: FlightsPanel exibido (URL atualizada sem reload)
+
+    Note over U,T: Cenario D — Refresh F5 em /coach?tab=flights
+    U->>B: F5 reload
+    B->>W: location = "/coach", search = "?tab=flights"
+    W->>H: useSearch() = "tab=flights"
+    H->>G: activeTab = "flights"
+    G->>T: render Tabs value=flights
+    T-->>U: aba Flights preservada
+
+    Note over U,T: Cenario E — Back/forward do navegador
+    U->>B: click back (historico tem /coach?tab=variance)
+    B->>W: popstate event → location update
+    W->>H: useSearch reage a search novo
+    H->>G: activeTab = "variance"
+    G->>T: render Tabs value=variance
+    T-->>U: aba Variance exibida<br/>(nota: replaceState evitou poluicao mas back<br/>volta para a entry anterior do historico — outra rota)
+
+    Note over U,T: Cenario F — Param invalido ?tab=foobar
+    U->>B: GET /coach?tab=foobar
+    B->>W: search = "?tab=foobar"
+    W->>H: useSearch() = "tab=foobar"
+    H->>H: validTabs.includes("foobar") = false
+    H->>B: history.replaceState para "/coach" (limpa)
+    H->>G: activeTab = default "planner"
+    G->>T: render Tabs value=planner
+    T-->>U: fallback exibido + URL limpa
