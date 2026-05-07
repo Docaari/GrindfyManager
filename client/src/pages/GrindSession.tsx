@@ -578,15 +578,18 @@ export default function GrindSession() {
     if (filteredSessions && filteredSessions.length > 0) {
       // v2.3 (2026-05-07 founder pos-QA round 2): bugs Reentradas/Participantes/MaiorResultado.
 
-      // Media Participantes via MEDIANA (robusto a outliers — alguns CSV tem
-      // fieldSize errado tipo 1583330 que detonava media). Filtro defensivo
-      // <= 100k (Sunday Million ~30k, GG Bounty Hunters ~80k max real).
+      // Media Participantes via MEDIANA (robusto a outliers). Filtro <= 100k.
+      // **Quality gate (v2.4):** requer >= 5 datapoints validos. Audit DB
+      // 2026-05-07 mostrou USER-0005 com 321/324 NULL em fieldSize (CSV parser
+      // nao popula). Mediana de 2-3 outliers gera valores absurdos (62500).
+      // Sem dado suficiente -> UI mostra "—" via avgParticipants=0.
+      const FIELDSIZE_MIN_DATAPOINTS = 5;
       if (allCompletedTournaments.length > 0) {
         const fieldSizes = allCompletedTournaments
           .map((t: Record<string, unknown>) => Number(t.fieldSize))
           .filter((n: number) => Number.isFinite(n) && n > 0 && n <= 100_000)
           .sort((a: number, b: number) => a - b);
-        if (fieldSizes.length > 0) {
+        if (fieldSizes.length >= FIELDSIZE_MIN_DATAPOINTS) {
           const mid = Math.floor(fieldSizes.length / 2);
           avgParticipants = fieldSizes.length % 2 === 0
             ? (fieldSizes[mid - 1] + fieldSizes[mid]) / 2

@@ -149,13 +149,17 @@ const SITE_NETWORK: Record<string, string> = {
   revolution: 'Revolution',
   wpt: 'WPT',
   'wpt global': 'WPT',
+  wptglobal: 'WPT',
   champion: 'Champion',
   championspoker: 'Champion',
+  championpoker: 'Champion',
   'champions poker': 'Champion',
+  'champion poker': 'Champion',
   suprema: 'Suprema',
   supremapoker: 'Suprema',
   'liga suprema': 'Suprema',
   ppoker: 'PPoker',
+  yapoker: 'YaPoker',
 };
 
 /**
