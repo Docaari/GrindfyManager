@@ -1,12 +1,14 @@
 /**
  * Tests for `grindPagePreferences` migration.
  *
- * Sprint Grind-Cards-Reform v2 — CA-16 + §4.4.
+ * Sprint Grind-Cards-Reform v2 — CA-16 + §4.4 (post-QA founder revisao 2026-05-07).
  *
  * Espera-se que `client/src/lib/grindPagePreferences.ts`:
  * 1. Adicione 3 chaves novas em `GrindPageVisibility`: `kpisTypes`, `kpisSpeeds`, `kpisPlatforms`.
  * 2. Defaults dessas 3 = true.
- * 3. Migracao silenciosa: ler chave antiga `tournaments` (se existir) e mapear pra `kpisTypes`.
+ * 3. Chave legada `tournaments` IGNORADA (nao migrada). Defaults v2 sempre vencem
+ *    para chaves ausentes — garante que founder com toggle antigo desativado veja
+ *    blocos novos. Decisao 2026-05-07 pos-QA founder.
  * 4. Apos primeiro save (saveGrindPreferences), chave antiga `tournaments` removida do payload.
  *
  * Testes rodam em ambiente node — `localStorage` polyfill ja existe em
@@ -51,8 +53,8 @@ describe('grindPagePreferences — defaults novos (kpisTypes/kpisSpeeds/kpisPlat
   });
 });
 
-describe('grindPagePreferences — migracao silenciosa tournaments -> kpisTypes', () => {
-  it('chave antiga tournaments=false e ainda nao tem kpisTypes -> retorna kpisTypes=false', () => {
+describe('grindPagePreferences — chave legada tournaments IGNORADA (default vence)', () => {
+  it('chave antiga tournaments=false NAO afeta kpisTypes (default true vence)', () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -60,7 +62,7 @@ describe('grindPagePreferences — migracao silenciosa tournaments -> kpisTypes'
           kpisVolume: true,
           kpisProfit: true,
           kpisItm: true,
-          tournaments: false, // chave antiga
+          tournaments: false, // chave antiga ignorada
           history: true,
         },
         mentalEnabled: true,
@@ -68,13 +70,12 @@ describe('grindPagePreferences — migracao silenciosa tournaments -> kpisTypes'
       }),
     );
     const prefs = loadGrindPreferences();
-    expect((prefs.visibility as any).kpisTypes).toBe(false);
-    // Speeds e Platforms novas mantem default=true.
+    expect((prefs.visibility as any).kpisTypes).toBe(true);
     expect((prefs.visibility as any).kpisSpeeds).toBe(true);
     expect((prefs.visibility as any).kpisPlatforms).toBe(true);
   });
 
-  it('chave antiga tournaments=true -> retorna kpisTypes=true', () => {
+  it('chave antiga tournaments=true tambem ignorada -> kpisTypes default true', () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -93,7 +94,7 @@ describe('grindPagePreferences — migracao silenciosa tournaments -> kpisTypes'
     expect((prefs.visibility as any).kpisTypes).toBe(true);
   });
 
-  it('chave antiga ausente + chave nova kpisTypes=false -> retorna kpisTypes=false', () => {
+  it('chave nova kpisTypes=false explicita -> retorna false (override default)', () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -112,7 +113,7 @@ describe('grindPagePreferences — migracao silenciosa tournaments -> kpisTypes'
     expect((prefs.visibility as any).kpisTypes).toBe(false);
   });
 
-  it('quando ambas existem (tournaments antigo + kpisTypes novo) -> kpisTypes vence', () => {
+  it('ambas presentes (tournaments=false + kpisTypes=true) -> kpisTypes vence', () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -120,8 +121,8 @@ describe('grindPagePreferences — migracao silenciosa tournaments -> kpisTypes'
           kpisVolume: true,
           kpisProfit: true,
           kpisItm: true,
-          tournaments: false, // antiga
-          kpisTypes: true, // nova — fonte preferida
+          tournaments: false,
+          kpisTypes: true,
           history: true,
         },
         mentalEnabled: true,
@@ -133,7 +134,6 @@ describe('grindPagePreferences — migracao silenciosa tournaments -> kpisTypes'
   });
 
   it('apos saveGrindPreferences, chave antiga tournaments NAO persiste', () => {
-    // Setup pre-existente com tournaments=false.
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -154,10 +154,9 @@ describe('grindPagePreferences — migracao silenciosa tournaments -> kpisTypes'
     const raw = localStorage.getItem(STORAGE_KEY);
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw as string);
-    // Chave antiga deve sumir no segundo save.
     expect(parsed.visibility.tournaments).toBeUndefined();
-    // Chave nova deve estar presente.
-    expect(parsed.visibility.kpisTypes).toBe(false);
+    // Defaults v2 (true) preservados pois localStorage antigo nao tinha as chaves novas.
+    expect(parsed.visibility.kpisTypes).toBe(true);
     expect(parsed.visibility.kpisSpeeds).toBe(true);
     expect(parsed.visibility.kpisPlatforms).toBe(true);
   });

@@ -62,22 +62,17 @@ export function loadGrindPreferences(): GrindPagePreferences {
     if (!raw) return DEFAULT_GRIND_PREFERENCES;
     const parsed = JSON.parse(raw) as Partial<GrindPagePreferences> & Record<string, any>;
 
-    // Migracao silenciosa v2: chave antiga `tournaments` -> `kpisTypes`.
-    // Quando ambas existem, `kpisTypes` (chave nova) vence.
+    // Chave legada `tournaments` ignorada (NAO migra). Defaults v2 (kpisTypes/
+    // kpisSpeeds/kpisPlatforms = true) sempre vencem para chaves ausentes —
+    // garante que founder com toggle antigo desativado veja blocos novos.
     const rawVisibility = (parsed.visibility ?? {}) as Record<string, any>;
-    const hasNewKey = Object.prototype.hasOwnProperty.call(rawVisibility, 'kpisTypes');
-    const hasOldKey = Object.prototype.hasOwnProperty.call(rawVisibility, 'tournaments');
-    const migratedVisibility: Record<string, any> = { ...rawVisibility };
-    if (!hasNewKey && hasOldKey) {
-      migratedVisibility.kpisTypes = !!rawVisibility.tournaments;
-    }
-    // `tournaments` (legado) e descartado da forma final retornada.
-    delete migratedVisibility.tournaments;
+    const cleaned: Record<string, any> = { ...rawVisibility };
+    delete cleaned.tournaments;
 
     return {
       visibility: {
         ...DEFAULT_GRIND_PREFERENCES.visibility,
-        ...migratedVisibility,
+        ...cleaned,
       },
       mentalEnabled:
         typeof parsed.mentalEnabled === 'boolean'

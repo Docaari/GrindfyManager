@@ -8,6 +8,7 @@
 ## Histórico de revisões
 - **v1 (2026-05-05):** 16 KPIs em 4 linhas + auditoria fórmulas + R7 (datasource = sessões registradas).
 - **v2 (2026-05-07):** Adiciona breakdowns colapsaveis com **Lucro + ROI** por bucket: **Torneios** (5 tipos primários), **Velocidade** (Normal/Turbo/Hyper, novo card próprio), **Plataformas** (network agregado, novo card).
+- **v2.1 (2026-05-07, pos-QA founder):** Fixes pos primeira QA: (a) cards colapsados por default (`useState(false)`); (b) chave legada `tournaments` IGNORADA (nao migra) para garantir que founder com toggle antigo desativado veja blocos novos; (c) 4 bugs latentes nos KPIs antigos corrigidos — Reentradas (usar SUM(tournaments.reentries) em vez de session.cravadas), ITM% (criterio prize > 0 em vez de fts/totalVol), Maior Resultado (MAX(prize) entre torneios, FX-aware, em vez de MAX(session.profit)), avgParticipants (filtro outlier > 200_000 contra parsing CSV bizarro).
 
 ---
 

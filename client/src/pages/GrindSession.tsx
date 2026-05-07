@@ -18,6 +18,7 @@ import { findTodaySession } from "@/components/grind-session/session-helpers";
 import { useSessionEdit, useVisualFeedback, useAutoSave, useDebouncedValidation } from "@/components/grind-session/useSessionEdit";
 import DashboardMetricsCards from "@/components/grind-session/DashboardMetricsCards";
 import { computeBreakdowns } from "@/components/grind-session/breakdownHelpers";
+import { getCurrencyForSite } from "@shared/platform-currency";
 import SessionHistoryList from "@/components/grind-session/SessionHistoryList";
 import EditSessionDialog from "@/components/grind-session/EditSessionDialog";
 import DeleteSessionDialog from "@/components/grind-session/DeleteSessionDialog";
@@ -141,9 +142,10 @@ export default function GrindSession() {
   const [showTournamentToggle, setShowTournamentToggle] = useState(false);
   const [showMentalToggle, setShowMentalToggle] = useState(false);
   // v2 Sprint Grind-Cards-Reform: 3 breakdowns colapsaveis (default = expandido).
-  const [showTypesToggle, setShowTypesToggle] = useState(true);
-  const [showSpeedsToggle, setShowSpeedsToggle] = useState(true);
-  const [showPlatformsToggle, setShowPlatformsToggle] = useState(true);
+  // Founder: pagina sempre carrega/atualiza com cards colapsados (2026-05-07).
+  const [showTypesToggle, setShowTypesToggle] = useState(false);
+  const [showSpeedsToggle, setShowSpeedsToggle] = useState(false);
+  const [showPlatformsToggle, setShowPlatformsToggle] = useState(false);
 
   // Personalizacao da pagina (cards visiveis, performance mental, moeda base)
   const [showPersonalizationDialog, setShowPersonalizationDialog] = useState(false);
@@ -564,16 +566,18 @@ export default function GrindSession() {
     let maiorResultado = 0;
 
     if (filteredSessions && filteredSessions.length > 0) {
-      let totalVol = 0;
+      // Audit fix 2026-05-07: 4 bugs latentes em dashboardMetrics. Calc agora
+      // deriva de allCompletedTournaments (raw de cada torneio) em vez de
+      // session.{fts,cravadas,profit} agregados que nao mapeam pra metrica certa.
 
-      filteredSessions.forEach(session => {
-        totalVol += session.volume || 0;
-      });
-
-      // Calculate average participants from actual tournament data
+      // avgParticipants: filtra outliers acima de 200k (MTT real bate ~50-100k
+      // max — Sunday Million ~30k). fieldSize > 200k indica parsing CSV errado.
       if (allCompletedTournaments.length > 0) {
         const tournamentsWithFieldSize = allCompletedTournaments.filter(
-          (t: Record<string, unknown>) => t.fieldSize && Number(t.fieldSize) > 0
+          (t: Record<string, unknown>) => {
+            const fs = Number(t.fieldSize);
+            return Number.isFinite(fs) && fs > 0 && fs <= 200_000;
+          }
         );
         if (tournamentsWithFieldSize.length > 0) {
           avgParticipants = tournamentsWithFieldSize.reduce(
@@ -583,21 +587,42 @@ export default function GrindSession() {
         }
       }
 
-      totalReentradas = filteredSessions.reduce((sum, session) => {
-        return sum + (session.cravadas || 0);
+      // Reentradas: SUM(tournaments.reentries) — bug anterior usava session.cravadas.
+      totalReentradas = allCompletedTournaments.reduce((sum: number, t: Record<string, unknown>) => {
+        const r = Number(t.reentries);
+        return sum + (Number.isFinite(r) && r > 0 ? r : 0);
       }, 0);
 
-      const totalItmTournaments = filteredSessions.reduce((sum, session) => {
-        return sum + (session.fts || 0);
-      }, 0);
-
-      if (totalVol > 0) {
-        itmPercentage = (totalItmTournaments / totalVol) * 100;
+      // ITM%: COUNT(prize > 0) / COUNT(*) * 100 — bug anterior dividia FTs/totalVol.
+      // Spec R3: criterio = prize > 0 (independente de bounty).
+      const totalCount = allCompletedTournaments.length;
+      if (totalCount > 0) {
+        const itmCount = allCompletedTournaments.filter((t: Record<string, unknown>) => {
+          // result e prize sao alias do mesmo campo no endpoint (server line 825).
+          const prize = Number(t.result ?? t.prize);
+          return Number.isFinite(prize) && prize > 0;
+        }).length;
+        itmPercentage = (itmCount / totalCount) * 100;
       }
 
-      maiorResultado = filteredSessions.reduce((max, session) => {
-        const sessionProfit = parseFloat(String(session.profit) || '0');
-        return Math.max(max, sessionProfit);
+      // Maior Resultado: MAX(prize) entre torneios — bug anterior usava session.profit.
+      // Spec R4: premio bruto, nao lucro liquido. FX-aware: converter prize
+      // nativo->USD (alinha com formatCurrencyBase que espera USD).
+      const rates = grindFormat.ratesUsdToOther ?? {};
+      maiorResultado = allCompletedTournaments.reduce((max: number, t: Record<string, unknown>) => {
+        const prizeNative = Number(t.result ?? t.prize);
+        if (!Number.isFinite(prizeNative) || prizeNative <= 0) return max;
+        const ccy = (typeof t.currency === 'string' && t.currency.length > 0
+          ? t.currency
+          : getCurrencyForSite(String(t.site ?? '')).code).toUpperCase();
+        let prizeUsd = prizeNative;
+        if (ccy !== 'USD') {
+          const rate = rates[ccy];
+          if (Number.isFinite(rate) && (rate as number) > 0) {
+            prizeUsd = prizeNative / (rate as number);
+          }
+        }
+        return prizeUsd > max ? prizeUsd : max;
       }, 0);
     }
 
@@ -642,7 +667,7 @@ export default function GrindSession() {
       itmPercentage,
       maiorResultado
     };
-  }, [filteredSessions, allCompletedTournaments]);
+  }, [filteredSessions, allCompletedTournaments, grindFormat.ratesUsdToOther]);
 
   // v2 (Sprint Grind-Cards-Reform): breakdowns por tipo / velocidade / plataforma.
   const breakdowns = useMemo(
