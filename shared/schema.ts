@@ -3205,6 +3205,8 @@ export const STARRED_HAND_TYPES = [
   "other",
   // Sprint F2 — auto-tag para print colado/upload (paste flow)
   "spot_screenshot",
+  // Sprint Spot-Anki-Reentry-3 (ADR-138) — drill GTO orfao criado pelo cron.
+  "drill",
 ] as const;
 export const STARRED_HAND_SPOTS = [
   "preflop",
@@ -3233,7 +3235,10 @@ export const STARRED_HAND_STATUSES = [
 ] as const;
 
 // Sprint Spot-Screenshots — captured_during enum (kebab-case)
-export const STARRED_HAND_CAPTURED_DURING = ["grind-live", "cooldown"] as const;
+// Sprint Spot-Anki-Reentry-3 (ADR-138) — adicionado 'drill_gto' para spots orfaos
+// criados pelo cron materializeDrillDifficultSpotsCron a partir de
+// study_sessions_v2.difficult_spots.
+export const STARRED_HAND_CAPTURED_DURING = ["grind-live", "cooldown", "drill_gto"] as const;
 
 export type AbGameAnswers = {
   aGame: string[];
@@ -3279,11 +3284,11 @@ export const starredHands = pgTable("starred_hands", {
   userId: varchar("user_id")
     .notNull()
     .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  // Sprint Spot-Anki-Reentry-3 (ADR-138) — relaxado para NULLABLE para permitir
+  // drill spots orfaos criados pelo cron materializeDrillDifficultSpotsCron.
   sessionId: varchar("session_id")
-    .notNull()
     .references(() => grindSessions.id, { onDelete: "cascade" }),
   sessionTournamentId: varchar("session_tournament_id")
-    .notNull()
     .references(() => sessionTournaments.id, { onDelete: "cascade" }),
   cooldownLogId: varchar("cooldown_log_id")
     .references(() => cooldownLogs.id, { onDelete: "set null" }),
@@ -3308,6 +3313,12 @@ export const starredHands = pgTable("starred_hands", {
   imageHeight: integer("image_height"),
   capturedDuring: varchar("captured_during", { length: 20 }).notNull().default("cooldown"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Sprint Spot-Anki-Reentry-3 (RF-1) — campos semanticos para aprendizado.
+  // Todas nullable; backfill nao necessario (lesson #7).
+  insight: text("insight"),
+  decisionCorrect: boolean("decision_correct"),
+  confidenceLevel: integer("confidence_level"),
+  tags: jsonb("tags").$type<string[]>(),
 }, (table) => [
   index("idx_starred_user_session").on(table.userId, table.sessionId),
   index("idx_starred_user_type").on(table.userId, table.type),
@@ -3321,7 +3332,69 @@ export const starredHands = pgTable("starred_hands", {
     table.sessionId,
     table.capturedDuring,
   ),
+  // Sprint Spot-Anki-Reentry-3 (RF-1.1) — index parcial spots com insight.
+  // Drizzle nao expoe WHERE clause em pgTable index API, mas o nome bate com
+  // o index criado pela migration 0058 (idx_starred_user_has_insight).
+  index("idx_starred_user_has_insight").on(table.userId, table.createdAt),
 ]);
+
+// =============================================================================
+// Sprint Spot-Anki-Reentry-3 (RF-2 + ADR-136) — spot_reentry_cards
+// =============================================================================
+
+export const SPOT_REENTRY_SOURCES = [
+  "manual_add",
+  "drill_gto_difficult_spot",
+  "coach_session_insight",
+] as const;
+
+export const SPOT_REENTRY_GRADES = ["again", "hard", "good", "easy"] as const;
+
+export const spotReentryCards = pgTable("spot_reentry_cards", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  spotId: varchar("spot_id")
+    .notNull()
+    .references(() => starredHands.id, { onDelete: "cascade" }),
+  source: varchar("source", { length: 32 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // SRS state.
+  nextReviewAt: timestamp("next_review_at", { withTimezone: true }).notNull(),
+  intervalDays: numeric("interval_days", { precision: 8, scale: 2 }).notNull(),
+  easeFactor: numeric("ease_factor", { precision: 3, scale: 2 }).notNull().default("2.50"),
+  // Tracking.
+  reviewCount: integer("review_count").notNull().default(0),
+  correctCount: integer("correct_count").notNull().default(0),
+  lastReviewAt: timestamp("last_review_at", { withTimezone: true }),
+  lastGrade: varchar("last_grade", { length: 8 }),
+  // Lifecycle.
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_srs_user_next_review").on(table.userId, table.nextReviewAt),
+  uniqueIndex("uq_srs_user_spot_active").on(table.userId, table.spotId),
+  index("idx_srs_user_last_review").on(table.userId, table.lastReviewAt),
+]);
+
+export type SpotReentryCard = typeof spotReentryCards.$inferSelect;
+export type SpotReentrySource = (typeof SPOT_REENTRY_SOURCES)[number];
+export type SpotReentryGrade = (typeof SPOT_REENTRY_GRADES)[number];
+
+export const spotReentrySourceSchema = z.enum(SPOT_REENTRY_SOURCES);
+export const spotReentryGradeSchema = z.enum(SPOT_REENTRY_GRADES);
+
+export const insertSpotReentryCardSchema = z.object({
+  userId: z.string().min(1),
+  spotId: z.string().min(1),
+  source: spotReentrySourceSchema,
+  intervalDays: z.number().min(0.01).max(120),
+  easeFactor: z.number().min(1.3).max(3.0),
+  nextReviewAt: z.union([z.string(), z.date()]),
+});
+
+export type InsertSpotReentryCard = z.infer<typeof insertSpotReentryCardSchema>;
 
 // -----------------------------------------------------------------------------
 // Zod schemas
@@ -3373,8 +3446,10 @@ export const updateCooldownLogSchema = z.object({
 
 export const insertStarredHandSchema = z.object({
   userId: z.string().min(1),
-  sessionId: z.string().min(1),
-  sessionTournamentId: z.string().min(1),
+  // Sprint Spot-Anki-Reentry-3 (ADR-138) — sessionId/sessionTournamentId
+  // relaxados para nullable (drill spots orfaos do cron).
+  sessionId: z.string().min(1).nullable().optional(),
+  sessionTournamentId: z.string().min(1).nullable().optional(),
   cooldownLogId: z.string().min(1).nullable().optional(),
   type: starredHandTypeSchema,
   spot: starredHandSpotSchema,
@@ -3396,7 +3471,48 @@ export const insertStarredHandSchema = z.object({
   imageWidth: z.number().int().nonnegative().nullable().optional(),
   imageHeight: z.number().int().nonnegative().nullable().optional(),
   capturedDuring: starredHandCapturedDuringSchema.optional(),
+  // Sprint Spot-Anki-Reentry-3 (RF-1.1) — campos semanticos.
+  insight: z.string().max(1000, "insight max 1000 chars").nullable().optional(),
+  decisionCorrect: z.boolean().nullable().optional(),
+  confidenceLevel: z.number().int().min(1).max(5).nullable().optional(),
+  tags: z.array(z.string().max(40)).max(10).nullable().optional(),
 }).strict();
+
+// Sprint Spot-Anki-Reentry-3 (RF-1.5) — body do PATCH /api/starred-hands/:id
+// extendido com campos semanticos. Tudo opcional (patch parcial). Strict.
+//
+// Sprint Spot-Anki-Reentry-3 (MEDIUM-2 audit fix) — refine cross-field:
+// quando decisionCorrect === false, insight nao pode ser vazio.
+// Patch parcial: regra so dispara se decisionCorrect for enviado.
+export const updateStarredHandInsightSchema = z.object({
+  insight: z.string().max(1000, "insight max 1000 chars").nullable().optional(),
+  decisionCorrect: z.boolean().nullable().optional(),
+  confidenceLevel: z
+    .number()
+    .int()
+    .min(1, "confidence_level minimo 1")
+    .max(5, "confidence_level maximo 5")
+    .nullable()
+    .optional(),
+  tags: z
+    .array(z.string().max(40, "tag max 40 chars"))
+    .max(10, "max 10 tags por spot")
+    .nullable()
+    .optional(),
+}).strict().refine(
+  (data) => {
+    // Se decisionCorrect=false foi enviado, insight precisa ter conteudo.
+    if (data.decisionCorrect === false) {
+      const txt = (data.insight ?? "").trim();
+      if (txt.length === 0) return false;
+    }
+    return true;
+  },
+  {
+    message: "INSIGHT_REQUIRED_WHEN_DECISION_INCORRECT",
+    path: ["insight"],
+  },
+);
 
 // Sprint F2 — body do PATCH /api/starred-hands/:id/review
 // Tudo opcional. Conclusion/notes max 500. Strict rejeita campos desconhecidos

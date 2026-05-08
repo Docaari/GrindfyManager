@@ -1,0 +1,98 @@
+%% Sprint Spot-Anki-Reentry-3 — Feature flow: post-paste spot → SpotInsightDialog → save
+%% RF-1: dialog auto-abre apos paste em /grind-live
+%% RF-4 sequence anexa Coach panel bulk-add
+%% ADRs: 138 (relax FK starred_hands), 140 (coach extension)
+%% Lessons #19 (route confirm), #20 (querySelector mediaRef pos-render — N/A aqui), #29 (ErrorBoundary)
+
+sequenceDiagram
+    actor User as "Usuario (Founder)"
+    participant Paster as "SpotScreenshotPaster<br/>(/grind-live)"
+    participant API_Star as "POST /api/starred-hands"
+    participant Storage as "storage.ts (Drizzle)"
+    participant DB as "PostgreSQL<br/>starred_hands"
+    participant Dialog as "SpotInsightDialog<br/>(client)"
+    participant API_Patch as "PATCH /api/starred-hands/:id"
+    participant API_Reentry as "POST /api/spots/:id/reentry"
+    participant SettingsCheck as "user.home_layout_settings<br/>spotInsightDialogAutoOpen"
+    participant TQClient as "TanStack Query"
+
+    User->>Paster: "Ctrl+V (cola screenshot)"
+    Paster->>Paster: "Resize + compress (Sprint Spot-Screenshots ADR-057)"
+    Paster->>API_Star: "POST /api/starred-hands<br/>{ image, sessionId, sessionTournamentId, type='other', spot='other' }"
+    API_Star->>Storage: "createStarredHand(...)"
+    Storage->>DB: "INSERT INTO starred_hands ... RETURNING *"
+    DB-->>Storage: "{ id, ...row }"
+    Storage-->>API_Star: "starredHand"
+    API_Star-->>Paster: "201 { starredHand }"
+
+    Paster->>SettingsCheck: "useUserSettings()<br/>spotInsightDialogAutoOpen?"
+
+    alt setting=false (opt-out)
+        SettingsCheck-->>Paster: "false"
+        Paster->>User: "Toast: 'Spot salvo'"
+        Note over Paster: Fluxo termina (sem dialog)
+    else setting=true (default)
+        SettingsCheck-->>Paster: "true"
+        Paster->>Dialog: "<SpotInsightDialog<br/>  spotId={starredHand.id}<br/>  open={true}<br/>  showAddToReentry={true}<br/>  defaultAddToReentry={false}<br/>/>"
+
+        Dialog->>User: "Render layout vertical:<br/>1. Textarea Insight (max 1000)<br/>2. Confidence slider 1-5 (default 3)<br/>3. Toggle Decisao correta (Sim/Nao sei/Nao)<br/>4. Tags input pill (autocomplete study_themes)<br/>5. Checkbox 'Adicionar a reentry'<br/>6. Botoes Salvar / Salvar sem revisar"
+
+        User->>Dialog: "Preenche campos<br/>+ marca 'Adicionar reentry' (opcional)"
+
+        Dialog->>Dialog: "Validacao client:<br/>- insight max 1000<br/>- tags max 10, max 40 char each<br/>- confidence in [1,5]<br/>- enable submit se valido"
+
+        alt User clica 'Salvar sem revisar'
+            User->>Dialog: "Click 'Salvar sem revisar'"
+            Dialog->>API_Patch: "PATCH /api/starred-hands/:id<br/>Body: { insight, decision_correct, confidence_level, tags }"
+            API_Patch->>API_Patch: "Zod parse + ownership check (user_id match)"
+            API_Patch->>Storage: "updateStarredHand(...)"
+            Storage->>DB: "UPDATE WHERE id=:id AND user_id=:userId"
+            DB-->>Storage: "1 row updated"
+            Storage-->>API_Patch: "updated row"
+            API_Patch-->>Dialog: "200 { ...starredHand atualizado }"
+            Dialog->>TQClient: "invalidate ['/api/starred-hands', sessionId]"
+            Dialog->>Dialog: "onClose()"
+            Dialog->>User: "Toast: 'Insight salvo'"
+
+        else User clica 'Salvar' (sem reentry)
+            User->>Dialog: "Click 'Salvar' (addToReentry=false)"
+            Dialog->>API_Patch: "PATCH /api/starred-hands/:id"
+            API_Patch-->>Dialog: "200 { atualizado }"
+            Dialog->>TQClient: "invalidate"
+            Dialog->>User: "Toast: 'Insight salvo'"
+
+        else User clica 'Salvar' (com reentry)
+            User->>Dialog: "Click 'Salvar' (addToReentry=true)"
+            Dialog->>API_Patch: "PATCH /api/starred-hands/:id<br/>Body: { insight, decision_correct, confidence_level, tags }"
+            API_Patch-->>Dialog: "200 { atualizado }"
+
+            Dialog->>API_Reentry: "POST /api/spots/:id/reentry<br/>Body: { source: 'manual_add' }"
+            API_Reentry->>API_Reentry: "Ownership check (spot.user_id == req.user.id)"
+
+            API_Reentry->>Storage: "checkActiveReentryCard(userId, spotId)"
+            Storage->>DB: "SELECT id WHERE user_id=:userId AND spot_id=:spotId AND archived_at IS NULL<br/>(unique parcial uq_srs_user_spot_active)"
+
+            alt card ja ativo (idempotent)
+                DB-->>Storage: "existing card"
+                Storage-->>API_Reentry: "existing"
+                API_Reentry-->>Dialog: "409 + { card: existing, isNew: false }"
+                Dialog->>User: "Toast info: 'Ja na fila de revisao'"
+
+            else card novo
+                DB-->>Storage: "null"
+                Storage->>Storage: "computeInitialState({ source:'manual_add' })<br/>→ interval=1d, ease=2.5 (ADR-139)"
+                Storage->>DB: "INSERT INTO spot_reentry_cards (...)<br/>RETURNING *"
+                DB-->>Storage: "newCard"
+                Storage-->>API_Reentry: "newCard"
+                API_Reentry-->>Dialog: "201 { card: newCard, isNew: true }"
+
+                Dialog->>TQClient: "invalidate ['/api/reentry/queue', '/api/reentry/stats']"
+                Dialog->>User: "Toast: 'Card de revisao criado. Volta amanha.'"
+            end
+        end
+
+        Dialog->>Paster: "onClose() — dialog fecha"
+    end
+
+    Note over User: Setting opt-out togglavel em<br/>/estudos > Configuracoes (RF-1.3)<br/>users.home_layout_settings.spotInsightDialogAutoOpen
+    Note over Storage: Lesson #21 — POST reentry chama<br/>invalidateStatsCache(userId) pos-INSERT

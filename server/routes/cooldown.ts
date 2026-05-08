@@ -462,11 +462,24 @@ export async function handleCreateStarredHand(req: any, res: Response): Promise<
     return;
   }
 
+  // Cooldown spots SEMPRE precisam de sessionId/sessionTournamentId.
+  // Sprint Spot-Anki-Reentry-3 (ADR-138) relaxou esses campos para permitir
+  // drill spots orfaos do cron — esta rota mantem a exigencia.
+  if (!parsed.data.sessionId || !parsed.data.sessionTournamentId) {
+    res.status(400).json({
+      code: "missing_session_ids",
+      message: "sessionId e sessionTournamentId sao obrigatorios",
+    });
+    return;
+  }
+  const sessionIdStr = parsed.data.sessionId;
+  const sessionTournamentIdStr = parsed.data.sessionTournamentId;
+
   // Defesa em profundidade: rejeita identifiers com path traversal antes de
   // chegar no storage layer (ADR-057 + lessons-learned #file-uploads).
   if (
-    isPathUnsafe(parsed.data.sessionId) ||
-    isPathUnsafe(parsed.data.sessionTournamentId)
+    isPathUnsafe(sessionIdStr) ||
+    isPathUnsafe(sessionTournamentIdStr)
   ) {
     res.status(400).json({
       code: "invalid_identifier",
@@ -477,7 +490,7 @@ export async function handleCreateStarredHand(req: any, res: Response): Promise<
 
   try {
     // Ownership da sessao + RF-08 (sessao concluida bloqueia novos spots)
-    const session = await storage.getGrindSession(parsed.data.sessionId);
+    const session = await storage.getGrindSession(sessionIdStr);
     if (!session || (session as any).userId !== userId) {
       res.status(404).json({ message: "Sessao nao encontrada" });
       return;
@@ -491,12 +504,12 @@ export async function handleCreateStarredHand(req: any, res: Response): Promise<
     }
 
     // Ownership do session_tournament + FK consistency
-    const st = await storage.getSessionTournament(parsed.data.sessionTournamentId);
+    const st = await storage.getSessionTournament(sessionTournamentIdStr);
     if (!st || (st as any).userId !== userId) {
       res.status(404).json({ message: "Torneio nao encontrado" });
       return;
     }
-    if ((st as any).sessionId !== parsed.data.sessionId) {
+    if ((st as any).sessionId !== sessionIdStr) {
       res.status(400).json({
         code: "invalid_session_tournament",
         message: "Torneio nao pertence a esta sessao",
@@ -506,7 +519,7 @@ export async function handleCreateStarredHand(req: any, res: Response): Promise<
 
     // Cap 3 stars/torneio
     const cTour = await storage.countStarredHandsByTournament(
-      parsed.data.sessionTournamentId,
+      sessionTournamentIdStr,
       userId,
     );
     if (cTour >= 3) {
@@ -520,7 +533,7 @@ export async function handleCreateStarredHand(req: any, res: Response): Promise<
     // Cap 10 spots/sessao cross-tournament (Sprint Spot-Screenshots)
     const cSession = await storage.countStarredHandsBySession(
       userId,
-      parsed.data.sessionId,
+      sessionIdStr,
     );
     if (cSession >= 10) {
       res.status(400).json({
@@ -560,7 +573,7 @@ export async function handleCreateStarredHand(req: any, res: Response): Promise<
       try {
         const putResult = await spotImageStorage.put({
           userId,
-          sessionId: parsed.data.sessionId,
+          sessionId: sessionIdStr,
           ext,
           buffer: buffer as Buffer,
           mime: realMime,

@@ -10,6 +10,7 @@ import {
   BarChart3,
   Bookmark,
   Sparkles,
+  Repeat,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -27,6 +28,14 @@ export const STUDIES_NAV_ITEMS: StudiesNavItem[] = [
   { view: 'temas', path: '/estudos/temas', label: 'Temas', icon: BookOpen },
   { view: 'stats', path: '/estudos/stats', label: 'Stats', icon: BarChart3 },
   { view: 'spots', path: '/estudos/spots', label: 'Spots', icon: Bookmark },
+  // Sprint Spot-Anki-Reentry-3 RF-3: rota nova /estudos/reentry.
+  {
+    view: 'reentry',
+    path: '/estudos/reentry',
+    label: 'Reentry',
+    shortLabel: 'Rev.',
+    icon: Repeat,
+  },
   {
     view: 'recomendacoes',
     path: '/estudos/recomendacoes',

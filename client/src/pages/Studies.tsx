@@ -35,6 +35,8 @@ import { StatsView } from '@/components/studies/StatsView';
 import { SpotsView } from '@/components/studies/SpotsView';
 import { StudiesDashboard } from '@/components/studies/dashboard/StudiesDashboard';
 import { RecommendationsView } from '@/components/studies/recommendations/RecommendationsView';
+// Sprint Spot-Anki-Reentry-3 RF-3: pagina de revisao espacada (Anki-style).
+import { ReentryQueuePage } from '@/pages/studies/Reentry';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
@@ -45,6 +47,7 @@ type ViewKey =
   | 'stats'
   | 'spots'
   | 'recomendacoes'
+  | 'reentry'
   | 'unknown';
 
 const COLLAPSE_KEY = 'grindfy:studies:sidebar_collapsed';
@@ -96,6 +99,7 @@ function viewFromPath(path: string): ViewKey {
   if (stripped.startsWith('/estudos/stats')) return 'stats';
   if (stripped.startsWith('/estudos/spots')) return 'spots';
   if (stripped.startsWith('/estudos/recomendacoes')) return 'recomendacoes';
+  if (stripped.startsWith('/estudos/reentry')) return 'reentry';
   return 'unknown';
 }
 
@@ -198,6 +202,12 @@ export default function Studies() {
         return <SpotsView />;
       case 'recomendacoes':
         return <RecommendationsView />;
+      case 'reentry':
+        return (
+          <div data-testid="studies-view-reentry">
+            <ReentryQueuePage />
+          </div>
+        );
       default:
         return null;
     }

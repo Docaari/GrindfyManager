@@ -1,0 +1,99 @@
+%% Sprint Spot-Anki-Reentry-3 — Feature flow: Coach panel bulk-add reentry
+%% RF-4: pos-finalize sessao /grind-live → CoachSessionInsightsPanel ganha secao "Spots para reentry"
+%% ADR-140 (coach_session_insights extension shape) + ADR-136 (cards) + ADR-139 (initial interval por source)
+%% Lesson #21 (cache invalidator) + #29 (ErrorBoundary se sub-arvore standalone)
+
+sequenceDiagram
+    actor User as "Usuario"
+    participant FinalizeFlow as "GrindSessionLive<br/>finalize sessao"
+    participant CoachPanel as "CoachSessionInsightsPanel<br/>(Sprint 2 RF-4 — extended Sprint 3 RF-4)"
+    participant API_Insights as "GET /api/coach/session-insights/:sessionId"
+    participant Storage as "storage.ts"
+    participant DB as "PostgreSQL"
+    participant Enrichment as "enrichSpotsToReview()<br/>(ADR-140)"
+    participant API_Bulk as "POST /api/reentry/bulk-from-session"
+    participant SrsService as "SpotReentry Service"
+    participant TQClient as "TanStack Query"
+    participant Cache as "stats cache (Map)"
+
+    User->>FinalizeFlow: "Click 'Finalizar sessao'"
+    FinalizeFlow->>FinalizeFlow: "Sprint 2: gera coach_session_insights<br/>(insights_jsonb com topHands + spotsToReview)"
+    FinalizeFlow->>CoachPanel: "Render <CoachSessionInsightsPanel sessionId={id} />"
+
+    CoachPanel->>API_Insights: "GET /api/coach/session-insights/:sessionId"
+    API_Insights->>Storage: "getCoachSessionInsight(sessionId)"
+    Storage->>DB: "SELECT * FROM coach_session_insights WHERE grind_session_id=:id"
+    DB-->>Storage: "{ insights_jsonb: { topHands, spotsToReview } }"
+    Storage-->>API_Insights: "insights row"
+
+    API_Insights->>Enrichment: "enrichSpotsToReview(insights, userId)"
+
+    Enrichment->>Storage: "getStarredHandsByIds(spotIds[])"
+    Storage->>DB: "SELECT id, decision_correct, confidence_level, insight FROM starred_hands<br/>WHERE id IN (:spotIds) AND user_id=:userId"
+    DB-->>Storage: "spots[]"
+    Storage-->>Enrichment: "Map<spotId, spotFields>"
+
+    Enrichment->>Storage: "getActiveReentryCardsBySpotIds(userId, spotIds[])"
+    Storage->>DB: "SELECT spot_id FROM spot_reentry_cards<br/>WHERE user_id=:userId AND spot_id IN (:spotIds)<br/>AND archived_at IS NULL"
+    DB-->>Storage: "activeCards[]"
+    Storage-->>Enrichment: "Set<spotId>"
+
+    Enrichment->>Enrichment: "Para cada spot em spotsToReview:<br/>- Se decision_correct=false → reentryCandidate=true, reason='Decisao errada'<br/>- Senao se confidence_level<=2 → reentryCandidate=true, reason='Baixa confianca (X/5)'<br/>- Senao se insight!=null AND !active → reentryCandidate=true, reason='Tem insight, falta reentry'<br/>- reentryAlreadyActive = activeCards.has(spotId)"
+    Enrichment-->>API_Insights: "enriched insights<br/>(spotsToReview com 3 campos opcionais)"
+
+    API_Insights-->>CoachPanel: "200 { insights: enriched }"
+
+    CoachPanel->>CoachPanel: "Filter:<br/>candidates = spotsToReview.filter(s => s.reentryCandidate)<br/>toAdd = candidates.filter(s => !s.reentryAlreadyActive)"
+
+    alt candidates.length === 0
+        CoachPanel->>User: "Mensagem: 'Sessao limpa — nenhum spot critico detectado. Otimo!'"
+    else toAdd.length === 0 (todos ja ativos)
+        CoachPanel->>User: "Mensagem: 'Todos candidatos ja na fila' + link /estudos/reentry"
+    else has new candidates
+        CoachPanel->>User: "Render section 'Spots para reentry':<br/>- Header '4 candidatos detectados'<br/>- 4 checkboxes pre-marcados (toAdd)<br/>- Spots ja ativos: badge 'Ja ativa' + checkbox disabled<br/>- Botoes [Selecionar todos] [Adicionar X a reentry]"
+
+        User->>CoachPanel: "Click 'Adicionar 4 a reentry'"
+        CoachPanel->>CoachPanel: "Cap 20 client-side (R2 anti-spam)"
+        CoachPanel->>API_Bulk: "POST /api/reentry/bulk-from-session<br/>Body: { sessionId, spotIds: ['s1','s2','s3','s4'] }"
+
+        API_Bulk->>API_Bulk: "Auth + ownership grind_session<br/>+ cap check spotIds.length <= 20 (RF-2.4)"
+
+        API_Bulk->>Storage: "validateSpotsBelongToSession(spotIds, sessionId, userId)"
+        Storage->>DB: "SELECT id FROM starred_hands<br/>WHERE id IN (:spotIds) AND user_id=:userId AND session_id=:sessionId"
+        DB-->>Storage: "validated spotIds"
+
+        loop para cada spotId
+            API_Bulk->>Storage: "checkActiveReentryCard(userId, spotId)"
+            Storage->>DB: "SELECT id WHERE ... archived_at IS NULL"
+
+            alt card ja ativo
+                DB-->>Storage: "existing"
+                Storage-->>API_Bulk: "existing"
+                API_Bulk->>API_Bulk: "skipped++"
+            else card nao existe
+                DB-->>Storage: "null"
+                API_Bulk->>SrsService: "computeInitialState({<br/>  source: 'coach_session_insight',<br/>  decisionCorrect, confidenceLevel<br/>})"
+                SrsService->>SrsService: "ADR-139 logic:<br/>- decision_correct=false → 1d<br/>- confidence<=2 → 2d<br/>- senao → 1d<br/>ease=2.5 sempre"
+                SrsService-->>API_Bulk: "{ intervalDays, easeFactor, nextReviewAt }"
+                API_Bulk->>Storage: "createReentryCard(...)"
+                Storage->>DB: "INSERT INTO spot_reentry_cards (...) RETURNING *"
+                DB-->>Storage: "newCard"
+                Storage-->>API_Bulk: "newCard"
+                API_Bulk->>API_Bulk: "created++"
+            end
+        end
+
+        API_Bulk->>Cache: "invalidateStatsCache(userId)"
+        Cache-->>API_Bulk: "ok"
+
+        API_Bulk-->>CoachPanel: "201 { created: 3, skipped: 1, cards: [...] }"
+
+        CoachPanel->>TQClient: "invalidate:<br/>- /api/coach/session-insights/:sessionId<br/>- /api/reentry/queue<br/>- /api/reentry/stats"
+        TQClient->>API_Insights: "Refetch enriched insights"
+        API_Insights-->>CoachPanel: "Updated (spots agora reentryAlreadyActive=true)"
+        CoachPanel->>User: "Toast: '3 cards de reentry criados. Ver em /estudos/reentry.'<br/>Section atualiza: spots criados viram 'Ja ativa'"
+    end
+
+    Note over Enrichment: Stateless — recomputado a cada GET<br/>(nao persistido em coach_session_insights, ADR-140)
+    Note over API_Bulk: Cap bulk: max 20 spotIds (R2)<br/>Idempotent: skip se ja ativo
+    Note over Storage: Lesson #21 cache invalidator pos-INSERT

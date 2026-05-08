@@ -23,7 +23,8 @@ Para diagramas Mermaid: `Docs/architecture/data-model.mermaid`, `data-model-stud
 | `break_feedbacks` | Feedback durante breaks | sessionId, foco, energia, confianca, inteligenciaEmocional, interferencias |
 | `preparation_logs` | Logs de preparacao mental (3 campos pos-sessao orfaos depreciados em Cooldown-3) | sessionId, mentalState, focusLevel, confidenceLevel, exercisesCompleted |
 | `cooldown_logs` | Cool-down pos-sessao (1:1 com grind_sessions) — Sprint Cooldown-1 | userId, sessionId (UNIQUE), startedAt, completedAt, mode (full/quick), blocksCompleted (jsonb), abGameAnswers (jsonb), tiltSelfAssessment (jsonb, Sprint 2), sleepIntent (Sprint 2). Indices: `uq_cooldown_user_session`, `idx_cooldown_user_completed`. CASCADE em userId e sessionId. |
-| `starred_hands` | Maos criticas estreladas durante cool-down — Sprint Cooldown-1 | userId, sessionId, sessionTournamentId, cooldownLogId (nullable, ON DELETE SET NULL), type (8 valores: tilt/leak/soulread/hero-call/cooler/mistake/sick/other), spot (8 valores: preflop/flop/turn/river/icm/final-table/bubble/other), notes (max 500). Indices: `idx_starred_user_session`, `idx_starred_user_type`. CASCADE em userId, sessionId, sessionTournamentId. |
+| `starred_hands` | Maos criticas estreladas durante cool-down — Sprint Cooldown-1, estendida Sprint Spot-Screenshots, Sprint Spot-Anki-Reentry-3 | userId, **sessionId (NULLABLE Sprint 3 / ADR-138 — drill spots orfaos), sessionTournamentId (NULLABLE Sprint 3 / ADR-138)**, cooldownLogId (nullable, ON DELETE SET NULL), type (9 valores: tilt/leak/soulread/hero-call/cooler/mistake/sick/other/**drill** Sprint 3), spot (8 valores: preflop/flop/turn/river/icm/final-table/bubble/other), notes (max 500), capturedDuring (3 valores: cooldown/grind-live/**drill_gto** Sprint 3). **Sprint 3 +4 col semanticas (RF-1):** `insight` text (max 1000 Zod app), `decision_correct` boolean, `confidence_level` integer CHECK 1..5, `tags` jsonb (array string max 10). Indices: `idx_starred_user_session`, `idx_starred_user_type`, `idx_starred_user_status`, `idx_starred_expires`, `idx_starred_session_source`, `idx_starred_user_session_captured`, **`idx_starred_user_has_insight` (parcial WHERE insight IS NOT NULL — Sprint 3)**. CASCADE em userId, sessionId, sessionTournamentId. |
+| `spot_reentry_cards` | **NEW Sprint Spot-Anki-Reentry-3 (RF-2 / ADR-136 + ADR-137 + ADR-139).** Cards SRS (Spaced Repetition System) com algoritmo SM-2 simplificado. 1 card ativo por (user, spot) via UNIQUE parcial `uq_srs_user_spot_active` WHERE archived_at IS NULL. Campos: `id` nanoid, `user_id` FK CASCADE, `spot_id` FK CASCADE → starred_hands.id, `source` enum (`manual_add` / `drill_gto_difficult_spot` / `coach_session_insight`), `next_review_at` timestamptz, `interval_days` numeric(8,2) CHECK 0<x<=120, `ease_factor` numeric(3,2) DEFAULT 2.5 CHECK 1.3..3.0, `review_count` int DEFAULT 0, `correct_count` int DEFAULT 0 CHECK <=review_count, `last_review_at`, `last_grade` varchar(8) CHECK enum 4 valores (again/hard/good/easy), `archived_at` timestamptz (soft-delete), `updated_at`. Indices: `idx_srs_user_next_review` (parcial archived_at IS NULL), `uq_srs_user_spot_active` (UNIQUE parcial), `idx_srs_user_last_review` (parcial last_review_at IS NOT NULL). Cap diario auto-create: 5 cards/user/dia source='drill_gto_difficult_spot' via cron `materializeDrillDifficultSpotsCron` (06:00 UTC, ADR-137). Initial interval por source: manual_add=1d, drill=1d, coach_session_insight (decision=false → 1d, confidence<=2 → 2d, default → 1d) — ADR-139. |
 
 ## Bankroll (multi-wallet)
 
@@ -868,3 +869,67 @@ Campos USADOS (nao alterados):
 
 ADR relevante: **ADR-125** (consolidacao de abas em /coach + redirect Wouter + alias testid legacy).
 Diagramas: `Docs/architecture/sprint-coach-page-reform-1/components-after.mermaid`, `routes-migration.mermaid`, `tab-persistence-sequence.mermaid`, `x-delete-gate-flow.mermaid`.
+
+---
+
+## Schema Delta — Sprint Spot-Anki-Reentry-3
+
+**Migration:** `migrations/0058_spot_anki_reentry.sql` (consolidada — 1 arquivo unico, R9 spec mitigation).
+
+**Tabela nova:** `spot_reentry_cards`
+- 12 colunas + 6 CHECK constraints + 3 indices.
+- UNIQUE parcial `uq_srs_user_spot_active (user_id, spot_id) WHERE archived_at IS NULL` — idempotency POST `/api/spots/:id/reentry`.
+- Index `idx_srs_user_next_review (user_id, next_review_at) WHERE archived_at IS NULL` — query queue O(log n).
+- Index `idx_srs_user_last_review (user_id, last_review_at) WHERE last_review_at IS NOT NULL` — stats accuracy/streak.
+- ON DELETE CASCADE em `user_id` e `spot_id` (FK starred_hands).
+
+**Alteracoes em `starred_hands`:**
+
+1. **+4 colunas semanticas (RF-1)**, todas nullable, sem back-fill:
+   - `insight TEXT` (max 1000 chars validado por Zod app — sem CHECK DB para flexibilidade futura).
+   - `decision_correct BOOLEAN` (true/false/NULL = "nao sei").
+   - `confidence_level INTEGER` CHECK 1..5.
+   - `tags JSONB` (array string max 10, max 40 chars cada — validado Zod app).
+
+2. **Relax FKs para NULLABLE (ADR-138)** — drill spots orfaos do cron:
+   - `session_id` → DROP NOT NULL (ON DELETE CASCADE preservado, ja tolera NULL).
+   - `session_tournament_id` → DROP NOT NULL.
+
+3. **Estende enum `captured_during`** (ADR-138):
+   - Antes: `('grind-live', 'cooldown')`
+   - Depois: `('grind-live', 'cooldown', 'drill_gto')` — drill spots cron criados com `captured_during='drill_gto'`.
+
+4. **Estende enum `type`** (validado Zod app, sem CHECK DB):
+   - +1 valor: `'drill'` (drill spots criados pelo cron).
+
+5. **Index novo:** `idx_starred_user_has_insight (user_id, created_at DESC) WHERE insight IS NOT NULL` — filtro `?withInsight=true`.
+
+**Alteracoes em `coach_session_insights.insights_jsonb` (ADR-140):** sem migration SQL. Shape extension via Zod — `spotsToReview[]` ganha 3 campos opcionais (`reentryCandidate?: boolean`, `reentryAlreadyActive?: boolean`, `reentryReason?: string`). Backwards compat (Sprint 2 clients ignoram campos novos).
+
+**Alteracoes em `users.home_layout_settings`:** sem migration SQL. JSONB shape extension (ADR-119) — 2 campos opcionais novos:
+- `spotInsightDialogAutoOpen` boolean (default `true`) — RF-1.3 setting opt-out.
+- `showSrsStatsCard` boolean (default `true`) — RF-5.4 widget toggle.
+
+**Cron novo:**
+- `materializeDrillDifficultSpotsCron` — 1x/dia 06:00 UTC. Pattern Sprint News-3 + FX-1 (job-runner). Le `study_sessions_v2.difficult_spots` ultimos 7d, cria starred_hands orfaos + spot_reentry_cards. Cap 5/user/dia (ADR-137). Idempotency hash `md5(study_session.id || item.context)` em `starred_hands.notes`. Logged em `cronJobsLog`.
+
+**ADRs relevantes (5 novos):**
+- **ADR-136** — `spot_reentry_cards` table + algoritmo SM-2 simplificado (4 grades, caps interval [1,120] + ease [1.3, 3.0]).
+- **ADR-137** — Cap diario 5 cards auto-criados (R5 mitigation, anti-overflow).
+- **ADR-138** — Relax `starred_hands.session_id` + `session_tournament_id` para NULLABLE (drill spots orfaos).
+- **ADR-139** — Initial interval por source (decision_correct=false → 1d, confidence<=2 → 2d, default → 1d).
+- **ADR-140** — Coach `session_insights.spotsToReview[]` extension shape (3 campos opcionais, backwards compat).
+
+**Diagramas Mermaid:**
+- `Docs/architecture/data-model-spot-anki-reentry-3.mermaid` — ER spot_reentry_cards + extensoes starred_hands/coach_session_insights.
+- `Docs/architecture/feature-flow-srs-grade.mermaid` — Sequence grade button → applyGrade SM-2 → update + nextCard.
+- `Docs/architecture/feature-flow-drill-materialize-cron.mermaid` — Flowchart cron 06:00 UTC + cap 5/dia + idempotency hash.
+- `Docs/architecture/feature-flow-spot-insight-dialog.mermaid` — Sequence post-paste spot → SpotInsightDialog → PATCH + opcional POST reentry.
+- `Docs/architecture/feature-flow-coach-bulk-reentry.mermaid` — Sequence Coach panel pos-finalize → enrich spotsToReview → bulk-from-session.
+
+**Lessons aplicaveis (ver `lessons-learned.md`):**
+- #14/15 — testes RTL usar `await import()`, evitar `vi.unmock` em scope nested.
+- #19 — confirmar `/estudos/reentry` em rota Wouter via test.
+- #20 — se animacoes confetti usarem ref no container, querySelector pos-render.
+- #21 — invalidator de cache server-side em POST /grade chamado apos commit.
+- #29 — se `<SrsStatsCard>` standalone usar `useQuery`, ErrorBoundary local.

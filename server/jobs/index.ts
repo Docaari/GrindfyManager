@@ -11,6 +11,8 @@ import { registerFxRatesCron } from "./refreshFxRates";
 import { registerStudyFreezesCron } from "./resetStudyFreezes";
 // Sprint Estudos-Coach-Biblio-2 — RF-3.3 cron weekly study plan (segunda 9h UTC).
 import { registerWeeklyStudyPlanCron } from "./generateWeeklyStudyPlan";
+// Sprint Spot-Anki-Reentry-3 — RF-2.3 cron drill spots materialization (06h UTC).
+import { registerMaterializeDrillDifficultSpotsCron } from "./materializeDrillDifficultSpots";
 
 export async function registerAllJobs(): Promise<void> {
   await registerSpotScreenshotsCron();
@@ -18,4 +20,5 @@ export async function registerAllJobs(): Promise<void> {
   registerFxRatesCron();
   await registerStudyFreezesCron();
   await registerWeeklyStudyPlanCron();
+  await registerMaterializeDrillDifficultSpotsCron();
 }

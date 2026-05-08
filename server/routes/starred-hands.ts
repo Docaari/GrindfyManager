@@ -336,6 +336,15 @@ export async function handleUpdateSpotReview(req: any, res: Response): Promise<v
     const patch: Record<string, any> = {};
 
     if (body.sessionTournamentId !== undefined) {
+      // Sprint Spot-Anki-Reentry-3 (ADR-138) — sessionId pode ser null em
+      // drill spots orfaos. Re-tag de torneio nao se aplica nesse caso.
+      if (!existing.sessionId) {
+        res.status(422).json({
+          code: "tournament_session_mismatch",
+          message: "Spot drill nao pode ter torneio",
+        });
+        return;
+      }
       const ok = await storage.assertTournamentInSession(
         body.sessionTournamentId,
         existing.sessionId,
