@@ -1,0 +1,67 @@
+%% Sprint Spot-Anki-Reentry-3 — Feature flow: cron materializeDrillDifficultSpotsCron
+%% RF-2.3: 1x/dia 06:00 UTC le study_sessions_v2.difficult_spots
+%% ADR-137 (cap 5/dia), ADR-138 (drill spots orfaos), ADR-139 (initial interval = 1d)
+%% Lesson #14 jobRunner pattern Sprint News-3 + FX-1
+
+flowchart TD
+    Start([Cron tick 06:00 UTC<br/>job-runner registra<br/>materializeDrillDifficultSpotsCron]) --> ListUsers["SELECT user_platform_id<br/>FROM users<br/>WHERE deleted_at IS NULL"]
+
+    ListUsers --> ForUser{"Para cada user_id"}
+    ForUser --> CapCheck["Query cap diario:<br/>SELECT COUNT(*) FROM spot_reentry_cards<br/>WHERE user_id=X AND source='drill_gto_difficult_spot'<br/>AND created_at >= today_start_UTC"]
+
+    CapCheck --> CapDecision{"createdToday<br/>>= 5?"}
+    CapDecision -->|"Sim"| LogCap["log.info('cap_reached_pre_run')<br/>skip user"]
+    LogCap --> NextUser{"Proximo user?"}
+
+    CapDecision -->|"Nao"| CalcRemaining["remainingCap = 5 - createdToday"]
+    CalcRemaining --> FetchSessions["SELECT id, difficult_spots, registered_at<br/>FROM study_sessions_v2<br/>WHERE user_id=X<br/>AND mode='drill_gto'<br/>AND difficult_spots IS NOT NULL<br/>AND jsonb_array_length(difficult_spots) > 0<br/>AND registered_at > NOW() - INTERVAL '7 days'<br/>AND deleted_at IS NULL<br/>ORDER BY registered_at DESC"]
+
+    FetchSessions --> SessionsEmpty{"Sessions<br/>empty?"}
+    SessionsEmpty -->|"Sim"| LogNoSession["log.info('no_drill_sessions_7d')"]
+    LogNoSession --> NextUser
+
+    SessionsEmpty -->|"Nao"| ForSession{"Para cada session"}
+    ForSession --> ForSpot{"Para cada item em difficult_spots[]<br/>(item = { context, note })"}
+
+    ForSpot --> CapMidCheck{"remainingCap<br/><= 0?"}
+    CapMidCheck -->|"Sim"| LogMidCap["log.info('cap_reached_mid_run')<br/>break inner loop"]
+    LogMidCap --> NextUser
+
+    CapMidCheck -->|"Nao"| HashKey["hash = md5(session.id || item.context)<br/>(idempotency key — lesson #25)"]
+
+    HashKey --> FindStarred["SELECT * FROM starred_hands<br/>WHERE user_id=X<br/>AND source='drill_gto_difficult_spot'<br/>AND notes LIKE '%hash:<hash>%'"]
+
+    FindStarred --> StarredExists{"starred_hand<br/>existe?"}
+
+    StarredExists -->|"Nao"| InsertStarred["INSERT starred_hands (<br/>  id, user_id, source='drill_gto_difficult_spot',<br/>  session_id=NULL,           -- ADR-138 RELAX<br/>  session_tournament_id=NULL, -- ADR-138 RELAX<br/>  type='drill', spot='other',<br/>  captured_during='drill_gto', -- novo enum<br/>  notes='[hash:<hash>] context: <ctx> | note: <note>',<br/>  status='pending',<br/>  pasted_at=NOW()<br/>) RETURNING id"]
+    InsertStarred --> CheckActiveCard
+
+    StarredExists -->|"Sim"| CheckActiveCard["SELECT id FROM spot_reentry_cards<br/>WHERE user_id=X AND spot_id=:starredId<br/>AND archived_at IS NULL<br/>(unique parcial uq_srs_user_spot_active)"]
+
+    CheckActiveCard --> CardExists{"Active card<br/>existe?"}
+    CardExists -->|"Sim"| SkipCard["SKIP — log.debug('idempotent_skip')"]
+    SkipCard --> NextSpot{"Proximo spot?"}
+
+    CardExists -->|"Nao"| InsertCard["INSERT spot_reentry_cards (<br/>  id=nanoid(),<br/>  user_id=X, spot_id=:starredId,<br/>  source='drill_gto_difficult_spot',<br/>  interval_days=1,            -- ADR-139<br/>  ease_factor=2.5,<br/>  next_review_at=NOW() + 1 day,<br/>  review_count=0,<br/>  correct_count=0<br/>)"]
+
+    InsertCard --> Decrement["remainingCap -= 1<br/>cardsCreated += 1"]
+    Decrement --> NextSpot
+    NextSpot --> ForSpot
+
+    NextSpot --> NextSession{"Proxima session?"}
+    NextSession --> ForSession
+
+    NextSession --> LogUserDone["log.info('cron_drill_materialize_done', {<br/>  userId, sessionsProcessed,<br/>  cardsCreated, cardsSkipped, errors=0,<br/>  durationMs<br/>})"]
+    LogUserDone --> NextUser
+    NextUser --> ForUser
+
+    ForUser --> CronComplete([Cron complete<br/>aggregate metrics → cronJobsLog])
+
+    CronComplete --> EndCron([Cron end<br/>release lock])
+
+    classDef errorState fill:#fee,stroke:#c33,color:#933
+    classDef successState fill:#efe,stroke:#3c3,color:#393
+    classDef capState fill:#feb,stroke:#fa3,color:#963
+
+    class LogCap,LogMidCap,LogNoSession capState
+    class InsertCard,InsertStarred successState

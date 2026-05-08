@@ -63,6 +63,10 @@ import { registerFocusStatsAutoSuggestRoutes } from "./focus-stats-auto-suggest"
 import { registerBibliotecaRecommendationsRoutes } from "./biblioteca-recommendations";
 import { registerStudyWeeklyPlanRoutes } from "./study-weekly-plan";
 import { registerCoachSessionInsightsRoutes } from "./coach-session-insights";
+// Sprint Spot-Anki-Reentry-3 — RF-1/2/4: insight extension + reentry endpoints.
+import { registerStarredHandsExtendedRoutes } from "./starred-hands-extended";
+import { registerSpotReentryRoutes } from "./spot-reentry";
+import { registerReentryRoutes } from "./reentry";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -215,6 +219,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerBibliotecaRecommendationsRoutes(app);
   registerStudyWeeklyPlanRoutes(app);
   registerCoachSessionInsightsRoutes(app);
+
+  // Sprint Spot-Anki-Reentry-3 — RF-1/2/4: insight extension + spot/reentry routes.
+  registerStarredHandsExtendedRoutes(app);
+  registerSpotReentryRoutes(app);
+  registerReentryRoutes(app);
 
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);

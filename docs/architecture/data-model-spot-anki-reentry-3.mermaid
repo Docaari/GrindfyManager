@@ -1,0 +1,108 @@
+%% Sprint Spot-Anki-Reentry-3 — ER diagram delta
+%% Tabela nova: spot_reentry_cards
+%% Extensao: starred_hands (+4 col + relax FK)
+%% Extensao: coach_session_insights.insights_jsonb (3 campos opcionais)
+%% Extensao: users.home_layout_settings (+2 campos opcionais)
+%% Diagramas relacionados:
+%%   feature-flow-srs-grade.mermaid
+%%   feature-flow-drill-materialize-cron.mermaid
+%%   feature-flow-spot-insight-dialog.mermaid
+%% ADRs: 136 (table+SM2), 137 (cap), 138 (relax FK), 139 (initial interval), 140 (coach extension)
+
+erDiagram
+    USERS ||--o{ STARRED_HANDS : "1:N CASCADE"
+    USERS ||--o{ SPOT_REENTRY_CARDS : "1:N CASCADE"
+    USERS ||--o{ COACH_SESSION_INSIGHTS : "1:N (Sprint 2)"
+    USERS ||--o{ STUDY_SESSIONS_V2 : "1:N (Sprint 1)"
+
+    GRIND_SESSIONS ||--o{ STARRED_HANDS : "0:N CASCADE (RELAXADO Sprint 3 — drill spots NULL)"
+    SESSION_TOURNAMENTS ||--o{ STARRED_HANDS : "0:N CASCADE (RELAXADO Sprint 3 — drill spots NULL)"
+    COOLDOWN_LOGS ||--o{ STARRED_HANDS : "0:N SET NULL"
+
+    GRIND_SESSIONS ||--|| COACH_SESSION_INSIGHTS : "1:1 sessionId UNIQUE"
+
+    STARRED_HANDS ||--o{ SPOT_REENTRY_CARDS : "1:N CASCADE (UNIQUE active)"
+
+    STUDY_SESSIONS_V2 }o..o{ SPOT_REENTRY_CARDS : "soft via cron (difficult_spots → starred_hands → cards)"
+    COACH_SESSION_INSIGHTS }o..o{ SPOT_REENTRY_CARDS : "soft via bulk-from-session"
+
+    USERS {
+        varchar user_platform_id PK "USER-XXXX"
+        varchar email
+        jsonb home_layout_settings "Sprint 3 EXT: spotInsightDialogAutoOpen + showSrsStatsCard"
+    }
+
+    STARRED_HANDS {
+        varchar id PK "nanoid"
+        varchar user_id FK "CASCADE"
+        varchar session_id FK "CASCADE — RELAXADO Sprint 3 (NULLABLE)"
+        varchar session_tournament_id FK "CASCADE — RELAXADO Sprint 3 (NULLABLE)"
+        varchar cooldown_log_id FK "SET NULL"
+        varchar type "tilt|leak|...|drill (Sprint 3 enum +1)"
+        varchar spot "preflop|...|other"
+        text notes "max 500"
+        text image_url
+        text conclusion
+        boolean review_later
+        varchar source "manual|drill_gto_difficult_spot|..."
+        varchar status
+        varchar captured_during "cooldown|grind-live|drill_gto (Sprint 3 enum +1)"
+        text insight "Sprint 3 RF-1 NEW — max 1000 (Zod app)"
+        boolean decision_correct "Sprint 3 RF-1 NEW — true/false/null"
+        integer confidence_level "Sprint 3 RF-1 NEW — 1..5 CHECK"
+        jsonb tags "Sprint 3 RF-1 NEW — array string max 10"
+        timestamp expires_at
+        timestamp pasted_at
+        timestamp created_at
+    }
+
+    SPOT_REENTRY_CARDS {
+        varchar id PK "nanoid (Sprint 3 NEW)"
+        varchar user_id FK "CASCADE"
+        varchar spot_id FK "CASCADE → starred_hands.id"
+        varchar source "CHECK manual_add|drill_gto_difficult_spot|coach_session_insight"
+        timestamp created_at
+        timestamp next_review_at "indexed (queue)"
+        numeric interval_days "8,2 — CHECK >0 AND <=120"
+        numeric ease_factor "3,2 — CHECK 1.3..3.0 — DEFAULT 2.5"
+        integer review_count "DEFAULT 0"
+        integer correct_count "DEFAULT 0 — CHECK <=review_count"
+        timestamp last_review_at
+        varchar last_grade "again|hard|good|easy"
+        timestamp archived_at "soft-delete"
+        timestamp updated_at
+    }
+
+    COACH_SESSION_INSIGHTS {
+        varchar id PK "nanoid (Sprint 2)"
+        varchar user_id FK "CASCADE"
+        varchar grind_session_id FK "UNIQUE"
+        jsonb insights_jsonb "Sprint 3 EXT: spotsToReview[] +reentryCandidate+reentryAlreadyActive+reentryReason"
+        timestamp generated_at
+    }
+
+    STUDY_SESSIONS_V2 {
+        varchar id PK "nanoid (Sprint 1)"
+        varchar user_id FK "CASCADE"
+        varchar mode "drill_gto|tournament_review|..."
+        jsonb difficult_spots "Array max 5 — input do cron Sprint 3"
+        timestamp registered_at
+        timestamp deleted_at
+    }
+
+    GRIND_SESSIONS {
+        varchar id PK
+        varchar user_id FK
+        timestamp date
+        varchar status
+    }
+
+    SESSION_TOURNAMENTS {
+        varchar id PK
+        varchar session_id FK
+    }
+
+    COOLDOWN_LOGS {
+        varchar id PK
+        varchar session_id FK "UNIQUE"
+    }

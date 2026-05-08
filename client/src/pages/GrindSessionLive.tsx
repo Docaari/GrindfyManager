@@ -63,6 +63,8 @@ import QuickNoteDialog, {
   type QuickNoteSpot,
 } from "@/components/grind-session-live/QuickNoteDialog";
 import SessionSpotsViewerDialog from "@/components/grind-session-live/SessionSpotsViewerDialog";
+// Sprint Spot-Anki-Reentry-3 RF-1.3 — auto-abrir SpotInsightDialog apos paste.
+import { SpotInsightDialog } from "@/components/spots/SpotInsightDialog";
 import {
   TournamentAlertDialog,
   type TournamentAlertCreatePayload,
@@ -1002,6 +1004,10 @@ export default function GrindSessionLive() {
         : 0;
   const [spotNoteQueue, setSpotNoteQueue] = useState<QuickNoteSpot[]>([]);
   const [spotViewerOpen, setSpotViewerOpen] = useState(false);
+  // Sprint Spot-Anki-Reentry-3 RF-1.3 — fila de insight dialogs (abertos
+  // sequencialmente apos QuickNoteDialog fechar). Item shape simples
+  // { spotId } — dialog re-renderiza e busca dado pelo id.
+  const [spotInsightQueue, setSpotInsightQueue] = useState<string[]>([]);
 
   const handleSpotUploaded = useCallback(
     (spot: { id: string; imageUrl: string }) => {
@@ -1018,7 +1024,18 @@ export default function GrindSessionLive() {
   );
 
   const closeSpotNote = useCallback(() => {
-    setSpotNoteQueue((prev) => prev.slice(1));
+    setSpotNoteQueue((prev) => {
+      const closed = prev[0];
+      // Apos fechar a note, enfileira insight dialog para o mesmo spot.
+      if (closed?.id) {
+        setSpotInsightQueue((q) => [...q, closed.id]);
+      }
+      return prev.slice(1);
+    });
+  }, []);
+
+  const closeSpotInsight = useCallback(() => {
+    setSpotInsightQueue((prev) => prev.slice(1));
   }, []);
 
   const openSpotViewer = useCallback(() => {
@@ -3156,6 +3173,17 @@ export default function GrindSessionLive() {
         sessionId={activeSession?.id ?? null}
         onClose={closeSpotViewer}
       />
+      {/* Sprint Spot-Anki-Reentry-3 RF-1.3 — abre auto pos-note dialog para
+          capturar insight + reentry opcional. */}
+      {spotInsightQueue[0] && (
+        <SpotInsightDialog
+          spotId={spotInsightQueue[0]}
+          open={true}
+          onClose={closeSpotInsight}
+          showAddToReentry={true}
+          defaultAddToReentry={false}
+        />
+      )}
     </div>
   );
 }

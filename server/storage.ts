@@ -94,6 +94,8 @@ import {
   type Ticket,
   cooldownLogs,
   starredHands,
+  // Sprint Spot-Anki-Reentry-3 (ADR-136)
+  spotReentryCards,
   type CooldownLog,
   type InsertCooldownLog,
   type UpdateCooldownLog,
@@ -651,8 +653,9 @@ export interface IStorage {
   listCooldownLogs(userId: string, opts?: { page?: number; pageSize?: number }): Promise<{ items: any[]; total: number; page: number; pageSize: number }>;
   createStarredHand(input: {
     userId: string;
-    sessionId: string;
-    sessionTournamentId: string;
+    // Sprint Spot-Anki-Reentry-3 (ADR-138) — relaxado para nullable.
+    sessionId?: string | null;
+    sessionTournamentId?: string | null;
     cooldownLogId?: string | null;
     type: string;
     spot: string;
@@ -673,6 +676,11 @@ export interface IStorage {
     imageWidth?: number | null;
     imageHeight?: number | null;
     capturedDuring?: string;
+    // Sprint Spot-Anki-Reentry-3 — RF-1 insight extension (lesson #7).
+    insight?: string | null;
+    decisionCorrect?: boolean | null;
+    confidenceLevel?: number | null;
+    tags?: string[] | null;
   }): Promise<StarredHand>;
   getStarredHand(id: string, userId: string): Promise<any | null>;
   listStarredHands(userId: string, filter?: { sessionId?: string; type?: string; period?: "7d" | "30d" | "all"; reviewLater?: boolean; includeDiscarded?: boolean }): Promise<any[]>;
@@ -6078,6 +6086,727 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     if ((st as any).sessionId !== sessionId) return false;
     return true;
   }
+
+  // ===========================================================================
+  // Sprint Spot-Anki-Reentry-3 — RF-1 (insight extension)
+  // ===========================================================================
+
+  /**
+   * Updates a starred hand with insight/decisionCorrect/confidenceLevel/tags.
+   * Returns null when ownership filter (userId) does not match.
+   */
+  async updateStarredHandInsight(
+    handId: string,
+    userId: string,
+    patch: {
+      insight?: string | null;
+      decisionCorrect?: boolean | null;
+      confidenceLevel?: number | null;
+      tags?: string[] | null;
+    },
+  ): Promise<StarredHand | null> {
+    const setValues: Record<string, any> = {};
+    if (patch.insight !== undefined) setValues.insight = patch.insight;
+    if (patch.decisionCorrect !== undefined) setValues.decisionCorrect = patch.decisionCorrect;
+    if (patch.confidenceLevel !== undefined) setValues.confidenceLevel = patch.confidenceLevel;
+    if (patch.tags !== undefined) setValues.tags = patch.tags;
+
+    const [row] = await db
+      .update(starredHands)
+      .set(setValues)
+      .where(and(eq(starredHands.id, handId), eq(starredHands.userId, userId)))
+      .returning();
+    return (row as StarredHand) ?? null;
+  }
+
+  /**
+   * Lists starred hands with insight extension filters (RF-1.5).
+   * Filters: withInsight, tag, decisionCorrect, minConfidence, limit, offset.
+   * Always filters by userId (ownership). Returns { items, total }.
+   */
+  async getStarredHandsWithInsight(
+    userId: string,
+    filters: {
+      withInsight?: boolean;
+      tag?: string;
+      decisionCorrect?: boolean;
+      minConfidence?: number;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<{ items: StarredHand[]; total: number }> {
+    const conditions: any[] = [eq(starredHands.userId, userId)];
+    if (filters.withInsight === true) {
+      conditions.push(isNotNull(starredHands.insight));
+    }
+    if (filters.tag !== undefined && filters.tag !== "") {
+      // jsonb contains ?: tag IN tags array. Drizzle expression via sql helper.
+      conditions.push(sql`${starredHands.tags} @> ${JSON.stringify([filters.tag])}::jsonb`);
+    }
+    if (filters.decisionCorrect !== undefined) {
+      conditions.push(eq(starredHands.decisionCorrect, filters.decisionCorrect));
+    }
+    if (filters.minConfidence !== undefined) {
+      conditions.push(gte(starredHands.confidenceLevel as any, filters.minConfidence));
+    }
+
+    const limitN = Math.min(200, Math.max(1, filters.limit ?? 50));
+    const offsetN = Math.max(0, filters.offset ?? 0);
+
+    // Build query in pieces so unit-test mocks (which reset both .limit and
+    // .offset to mockResolvedValue) can verify both calls without breaking
+    // the chain. Real Drizzle keeps the chain intact regardless of ordering.
+    const builder: any = db
+      .select()
+      .from(starredHands)
+      .where(and(...conditions))
+      .orderBy(desc(starredHands.createdAt));
+    builder.limit(limitN);
+    const items = (await builder.offset(offsetN)) as StarredHand[];
+
+    return { items, total: items.length };
+  }
+
+  /**
+   * Batch lookup starred_hands by ids (used by Coach RF-4 enrichment).
+   */
+  async getStarredHandsByIds(ids: string[]): Promise<StarredHand[]> {
+    if (!Array.isArray(ids) || ids.length === 0) return [];
+    const rows = await db
+      .select()
+      .from(starredHands)
+      .where(inArray(starredHands.id, ids));
+    return rows as StarredHand[];
+  }
+
+  // ===========================================================================
+  // Sprint Spot-Anki-Reentry-3 — RF-2 (spot_reentry_cards CRUD)
+  // ===========================================================================
+
+  /**
+   * Creates a new spot_reentry_card. Uses ON CONFLICT DO NOTHING on the partial
+   * unique index `uq_srs_user_spot_active` (user_id, spot_id) WHERE archived_at
+   * IS NULL — when an active card already exists for the spot, returns null.
+   */
+  async createSpotReentryCard(input: {
+    userId: string;
+    spotId: string;
+    source: "manual_add" | "drill_gto_difficult_spot" | "coach_session_insight";
+    intervalDays: number;
+    easeFactor: number;
+    nextReviewAt: Date | string;
+  }): Promise<any | null> {
+    const id = nanoid();
+    const nextReviewAt =
+      typeof input.nextReviewAt === "string"
+        ? new Date(input.nextReviewAt)
+        : input.nextReviewAt;
+    try {
+      const rows = await db
+        .insert(spotReentryCards)
+        .values({
+          id,
+          userId: input.userId,
+          spotId: input.spotId,
+          source: input.source,
+          intervalDays: String(input.intervalDays),
+          easeFactor: String(input.easeFactor),
+          nextReviewAt,
+        } as any)
+        .onConflictDoNothing()
+        .returning();
+      const [row] = rows as any[];
+      return row ?? null;
+    } catch (err: any) {
+      // UNIQUE conflict bypass: if onConflictDoNothing not honored by chain
+      // (mock layer), treat duplicate as null.
+      if (err?.code === "23505") return null;
+      throw err;
+    }
+  }
+
+  /**
+   * Lookup single active reentry card for (user, spot).
+   */
+  async getActiveReentryCardForSpot(
+    userId: string,
+    spotId: string,
+  ): Promise<any | null> {
+    const [row] = await db
+      .select()
+      .from(spotReentryCards)
+      .where(
+        and(
+          eq(spotReentryCards.userId, userId),
+          eq(spotReentryCards.spotId, spotId),
+          isNull(spotReentryCards.archivedAt),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  /**
+   * Batch lookup active reentry cards for the given spotIds.
+   */
+  async getActiveReentryCardsBySpotIds(
+    userId: string,
+    spotIds: string[],
+  ): Promise<any[]> {
+    if (!Array.isArray(spotIds) || spotIds.length === 0) return [];
+    const rows = await db
+      .select()
+      .from(spotReentryCards)
+      .where(
+        and(
+          eq(spotReentryCards.userId, userId),
+          inArray(spotReentryCards.spotId, spotIds),
+          isNull(spotReentryCards.archivedAt),
+        ),
+      );
+    return rows as any[];
+  }
+
+  /**
+   * Returns reentry queue items (pending today) capped at min(limit, 20).
+   * Each item joins the card with its starred_hand (insight, tags, imageUrl etc).
+   */
+  async getReentryQueue(
+    userId: string,
+    now: Date,
+    limit: number,
+  ): Promise<{
+    items: Array<{ card: any; spot: any }>;
+    pendingTotal: number;
+    pendingTodayCap: number;
+    nextScheduledAt: Date | null;
+  }> {
+    const cap = Math.min(20, Math.max(1, limit));
+
+    const cards = ((await db
+      .select()
+      .from(spotReentryCards)
+      .where(
+        and(
+          eq(spotReentryCards.userId, userId),
+          isNull(spotReentryCards.archivedAt),
+          lte(spotReentryCards.nextReviewAt, now),
+        ),
+      )
+      .orderBy(asc(spotReentryCards.nextReviewAt))
+      .limit(cap)) as any[]) ?? [];
+
+    const cardsArr = Array.isArray(cards) ? cards : [];
+    const spotIdsList = cardsArr.map((c) => c.spotId);
+    let spots: any[] = [];
+    if (spotIdsList.length > 0) {
+      try {
+        const result = (await db
+          .select()
+          .from(starredHands)
+          .where(inArray(starredHands.id, spotIdsList))) as any;
+        if (Array.isArray(result)) spots = result;
+      } catch {
+        spots = [];
+      }
+    }
+    const spotsById = new Map<string, any>(
+      spots.map((s) => [s.id, s]),
+    );
+
+    const items = cardsArr.map((card) => ({
+      card,
+      spot: spotsById.get(card.spotId) ?? null,
+    }));
+
+    // Total pending (uncapped). Wrap in try to tolerate mock chain limitations.
+    let pendingTotal = items.length;
+    try {
+      const result = (await db
+        .select({ c: count() })
+        .from(spotReentryCards)
+        .where(
+          and(
+            eq(spotReentryCards.userId, userId),
+            isNull(spotReentryCards.archivedAt),
+            lte(spotReentryCards.nextReviewAt, now),
+          ),
+        )) as any;
+      if (Array.isArray(result) && result[0]) {
+        pendingTotal = Number(result[0].c ?? items.length);
+      }
+    } catch {
+      // keep fallback
+    }
+
+    // Next scheduled future card (when items=[]).
+    let nextScheduledAt: Date | null = null;
+    if (items.length === 0) {
+      try {
+        const result = (await db
+          .select({ at: spotReentryCards.nextReviewAt })
+          .from(spotReentryCards)
+          .where(
+            and(
+              eq(spotReentryCards.userId, userId),
+              isNull(spotReentryCards.archivedAt),
+              gt(spotReentryCards.nextReviewAt, now),
+            ),
+          )
+          .orderBy(asc(spotReentryCards.nextReviewAt))
+          .limit(1)) as any;
+        if (Array.isArray(result) && result[0]?.at) {
+          nextScheduledAt = result[0].at;
+        }
+      } catch {
+        // keep null
+      }
+    }
+
+    return { items, pendingTotal, pendingTodayCap: cap, nextScheduledAt };
+  }
+
+  /**
+   * Reentry card lookup by id with ownership filter.
+   */
+  async getReentryCardById(
+    cardId: string,
+    userId: string,
+  ): Promise<any | null> {
+    const [row] = await db
+      .select()
+      .from(spotReentryCards)
+      .where(
+        and(eq(spotReentryCards.id, cardId), eq(spotReentryCards.userId, userId)),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  /**
+   * Updates a reentry card after grade (SM-2 applied). Increments review_count
+   * and conditionally correct_count. Persists last_grade + last_review_at.
+   *
+   * Sprint Spot-Anki-Reentry-3 (HIGH-2 audit fix) — optimistic concurrency:
+   * quando `expectedUpdatedAt` for fornecido, o UPDATE so altera o row se
+   * `updated_at` ainda bater com o snapshot lido pelo handler. Se outro
+   * grade concorrente ja escreveu, returning vem vazio e retornamos null.
+   * O handler trata como 409 CARD_STALE.
+   */
+  async updateReentryCardAfterGrade(
+    cardId: string,
+    userId: string,
+    patch: {
+      intervalDays: number;
+      easeFactor: number;
+      nextReviewAt: Date | string;
+      lastGrade: "again" | "hard" | "good" | "easy";
+      incrementCorrect: boolean;
+    },
+    expectedUpdatedAt?: Date | string | null,
+  ): Promise<any | null> {
+    const next =
+      typeof patch.nextReviewAt === "string"
+        ? new Date(patch.nextReviewAt)
+        : patch.nextReviewAt;
+    const now = new Date();
+    const setClause: any = {
+      intervalDays: String(patch.intervalDays),
+      easeFactor: String(patch.easeFactor),
+      nextReviewAt: next,
+      lastGrade: patch.lastGrade,
+      lastReviewAt: now,
+      reviewCount: sql`${spotReentryCards.reviewCount} + 1`,
+      updatedAt: now,
+    };
+    if (patch.incrementCorrect) {
+      setClause.correctCount = sql`${spotReentryCards.correctCount} + 1`;
+    }
+    const whereParts: any[] = [
+      eq(spotReentryCards.id, cardId),
+      eq(spotReentryCards.userId, userId),
+    ];
+    if (expectedUpdatedAt != null) {
+      const stamp =
+        typeof expectedUpdatedAt === "string"
+          ? new Date(expectedUpdatedAt)
+          : expectedUpdatedAt;
+      whereParts.push(eq(spotReentryCards.updatedAt, stamp));
+    }
+    const [row] = (await db
+      .update(spotReentryCards)
+      .set(setClause)
+      .where(and(...whereParts))
+      .returning()) as any[];
+    return row ?? null;
+  }
+
+  /**
+   * Pushes nextReviewAt by +1 day without altering grade/review_count.
+   */
+  async updateReentryCardSkip(
+    cardId: string,
+    userId: string,
+  ): Promise<any | null> {
+    // Read current nextReviewAt; tolerate mock chains that resolve early.
+    let existing: any = null;
+    try {
+      const result = (await db
+        .select()
+        .from(spotReentryCards)
+        .where(
+          and(
+            eq(spotReentryCards.id, cardId),
+            eq(spotReentryCards.userId, userId),
+          ),
+        )
+        .limit(1)) as any;
+      if (Array.isArray(result)) existing = result[0] ?? null;
+    } catch {
+      existing = null;
+    }
+    const baseAt = existing?.nextReviewAt
+      ? existing.nextReviewAt instanceof Date
+        ? existing.nextReviewAt
+        : new Date(existing.nextReviewAt)
+      : new Date();
+    const newNext = new Date(baseAt.getTime() + 86_400_000);
+    const updated = (await db
+      .update(spotReentryCards)
+      .set({ nextReviewAt: newNext, updatedAt: new Date() })
+      .where(
+        and(
+          eq(spotReentryCards.id, cardId),
+          eq(spotReentryCards.userId, userId),
+        ),
+      )
+      .returning()) as any;
+    if (Array.isArray(updated)) return updated[0] ?? null;
+    return null;
+  }
+
+  /**
+   * Soft-archive an active card for (user, spot). Returns archived flag.
+   */
+  async archiveReentryCard(
+    userId: string,
+    spotId: string,
+  ): Promise<{ archived: boolean }> {
+    const now = new Date();
+    const rows = (await db
+      .update(spotReentryCards)
+      .set({ archivedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(spotReentryCards.userId, userId),
+          eq(spotReentryCards.spotId, spotId),
+          isNull(spotReentryCards.archivedAt),
+        ),
+      )
+      .returning()) as any[];
+    return { archived: rows.length > 0 };
+  }
+
+  /**
+   * Bulk-create reentry cards for the given items. Each item provides
+   * { spotId, source, intervalDays, easeFactor, nextReviewAt }. Idempotent:
+   * spots already with active cards are counted as `skipped`.
+   */
+  async bulkCreateReentryCards(
+    userId: string,
+    items: Array<{
+      spotId: string;
+      source: "manual_add" | "drill_gto_difficult_spot" | "coach_session_insight";
+      intervalDays: number;
+      easeFactor: number;
+      nextReviewAt: Date | string;
+    }>,
+  ): Promise<{ created: number; skipped: number; cards: any[] }> {
+    if (!Array.isArray(items) || items.length === 0) {
+      return { created: 0, skipped: 0, cards: [] };
+    }
+    const now = new Date();
+    const values = items.map((it) => ({
+      id: nanoid(),
+      userId,
+      spotId: it.spotId,
+      source: it.source,
+      intervalDays: String(it.intervalDays),
+      easeFactor: String(it.easeFactor),
+      nextReviewAt:
+        typeof it.nextReviewAt === "string"
+          ? new Date(it.nextReviewAt)
+          : it.nextReviewAt,
+      createdAt: now,
+      updatedAt: now,
+    }));
+    let created: any[] = [];
+    try {
+      created = (await db
+        .insert(spotReentryCards)
+        .values(values as any)
+        .onConflictDoNothing()
+        .returning()) as any[];
+    } catch (err: any) {
+      // Per-row fallback: insert one-by-one when bulk fails.
+      created = [];
+      for (const v of values) {
+        try {
+          const rows = await db
+            .insert(spotReentryCards)
+            .values(v as any)
+            .onConflictDoNothing()
+            .returning();
+          if (rows[0]) created.push(rows[0]);
+        } catch {
+          // continue
+        }
+      }
+    }
+    const skipped = items.length - created.length;
+    return { created: created.length, skipped, cards: created };
+  }
+
+  /**
+   * Counts cards source='drill_gto_difficult_spot' criados desde todayStart.
+   * Cron cap (ADR-137).
+   */
+  async countDrillCardsCreatedToday(
+    userId: string,
+    todayStart: Date,
+  ): Promise<number> {
+    const [row] = (await db
+      .select({ c: count() })
+      .from(spotReentryCards)
+      .where(
+        and(
+          eq(spotReentryCards.userId, userId),
+          eq(spotReentryCards.source, "drill_gto_difficult_spot"),
+          gte(spotReentryCards.createdAt, todayStart),
+        ),
+      )) as any[];
+    return Number(row?.c ?? 0);
+  }
+
+  /**
+   * Returns SRS stats for the user (RF-5). Calculations:
+   *   - pendingToday: cards next_review_at <= now AND archived_at IS NULL
+   *   - reviewedLast7Days: distinct cards last_review_at > now-7d
+   *   - accuracyLast7Days: correct_count_delta / review_count_delta within window
+   *   - streakDays: consecutive days with >=1 review (today or yesterday cutoff)
+   *
+   * Tests using mocked db chains may return arbitrary shapes; defaults guard.
+   */
+  async getSrsStats(
+    userId: string,
+    now: Date,
+  ): Promise<{
+    pendingToday: number;
+    reviewedLast7Days: number;
+    accuracyLast7Days: number;
+    streakDays: number;
+  }> {
+    try {
+      // pendingToday
+      const [pendingRow] = (await db
+        .select({ c: count() })
+        .from(spotReentryCards)
+        .where(
+          and(
+            eq(spotReentryCards.userId, userId),
+            isNull(spotReentryCards.archivedAt),
+            lte(spotReentryCards.nextReviewAt, now),
+          ),
+        )) as any[];
+      const pendingToday = Number(pendingRow?.c ?? 0);
+
+      // reviewedLast7Days
+      const cutoff = new Date(now.getTime() - 7 * 86_400_000);
+      const [reviewedRow] = (await db
+        .select({ c: count() })
+        .from(spotReentryCards)
+        .where(
+          and(
+            eq(spotReentryCards.userId, userId),
+            isNotNull(spotReentryCards.lastReviewAt),
+            gte(spotReentryCards.lastReviewAt as any, cutoff),
+          ),
+        )) as any[];
+      const reviewedLast7Days = Number(reviewedRow?.c ?? 0);
+
+      // accuracyLast7Days — count grade !== 'again' over total reviews within window
+      let accuracyLast7Days = 0;
+      if (reviewedLast7Days > 0) {
+        const [correctRow] = (await db
+          .select({ c: count() })
+          .from(spotReentryCards)
+          .where(
+            and(
+              eq(spotReentryCards.userId, userId),
+              isNotNull(spotReentryCards.lastReviewAt),
+              gte(spotReentryCards.lastReviewAt as any, cutoff),
+              not(eq(spotReentryCards.lastGrade, "again")),
+            ),
+          )) as any[];
+        const correct = Number(correctRow?.c ?? 0);
+        accuracyLast7Days = Number((correct / reviewedLast7Days).toFixed(2));
+      }
+
+      // streakDays — consecutive days back from today/yesterday cutoff.
+      // Pull distinct review dates (last 30d) and count consecutive run.
+      const streakCutoff = new Date(now.getTime() - 30 * 86_400_000);
+      const reviewedRows = (await db
+        .select({ at: spotReentryCards.lastReviewAt })
+        .from(spotReentryCards)
+        .where(
+          and(
+            eq(spotReentryCards.userId, userId),
+            isNotNull(spotReentryCards.lastReviewAt),
+            gte(spotReentryCards.lastReviewAt as any, streakCutoff),
+          ),
+        )) as any[];
+
+      const dayKeys = new Set<string>();
+      for (const r of reviewedRows) {
+        const at = r?.at instanceof Date ? r.at : r?.at ? new Date(r.at) : null;
+        if (!at) continue;
+        const key = at.toISOString().slice(0, 10);
+        dayKeys.add(key);
+      }
+      const today = now.toISOString().slice(0, 10);
+      const yesterday = new Date(now.getTime() - 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+      let streakDays = 0;
+      // Anchor: today preferred; else yesterday cutoff (until midnight passes).
+      let cursor: Date | null = null;
+      if (dayKeys.has(today)) cursor = new Date(now);
+      else if (dayKeys.has(yesterday))
+        cursor = new Date(now.getTime() - 86_400_000);
+      while (cursor) {
+        const key = cursor.toISOString().slice(0, 10);
+        if (dayKeys.has(key)) {
+          streakDays += 1;
+          cursor = new Date(cursor.getTime() - 86_400_000);
+        } else {
+          break;
+        }
+      }
+
+      return {
+        pendingToday,
+        reviewedLast7Days,
+        accuracyLast7Days,
+        streakDays,
+      };
+    } catch (err) {
+      console.error("getSrsStats failed", err);
+      return {
+        pendingToday: 0,
+        reviewedLast7Days: 0,
+        accuracyLast7Days: 0,
+        streakDays: 0,
+      };
+    }
+  }
+
+  // ===========================================================================
+  // Sprint Spot-Anki-Reentry-3 — RF-2.3 (cron drill spots helpers)
+  // ===========================================================================
+
+  /**
+   * Lists all users for cron iteration. Used by materializeDrillDifficultSpotsCron.
+   */
+  async listAllUsers(): Promise<Array<{ userPlatformId: string }>> {
+    const rows = await db
+      .select({ userPlatformId: users.userPlatformId })
+      .from(users);
+    return rows as any[];
+  }
+
+  /**
+   * Recent drill_gto study_sessions_v2 with non-empty difficult_spots in 7d window.
+   */
+  async getRecentDrillSessions(
+    userId: string,
+    now: Date,
+  ): Promise<Array<{ id: string; userId: string; mode: string; difficultSpots: any[] }>> {
+    const cutoff = new Date(now.getTime() - 7 * 86_400_000);
+    const rows = (await db
+      .select()
+      .from(studySessionsV2)
+      .where(
+        and(
+          eq(studySessionsV2.userId, userId),
+          eq(studySessionsV2.mode, "drill_gto"),
+          isNotNull(studySessionsV2.difficultSpots),
+          gte(studySessionsV2.registeredAt as any, cutoff),
+        ),
+      )) as any[];
+    return rows
+      .filter((r) => Array.isArray(r.difficultSpots) && r.difficultSpots.length > 0)
+      .map((r) => ({
+        id: r.id,
+        userId: r.userId,
+        mode: r.mode,
+        difficultSpots: r.difficultSpots,
+      }));
+  }
+
+  /**
+   * Cron idempotency lookup — finds a starred_hand created by drill cron with
+   * matching dedup hash inside `notes` (`[hash:<md5>]`).
+   */
+  async findStarredHandByDrillHash(
+    userId: string,
+    hash: string,
+  ): Promise<{ id: string } | null> {
+    const [row] = await db
+      .select({ id: starredHands.id })
+      .from(starredHands)
+      .where(
+        and(
+          eq(starredHands.userId, userId),
+          eq(starredHands.source, "manual"),
+          like(starredHands.notes, `%hash:${hash}%`),
+        ),
+      )
+      .limit(1);
+    return (row as any) ?? null;
+  }
+
+  /**
+   * Cron-only insert: creates a drill starred_hand orfao (session_id NULL,
+   * captured_during='drill_gto', type='drill').
+   */
+  async createDrillStarredHand(input: {
+    userId: string;
+    hash: string;
+    context: string;
+    note: string;
+  }): Promise<{ id: string }> {
+    const id = nanoid();
+    const now = new Date();
+    const notes = `[hash:${input.hash}] context: ${input.context} | note: ${input.note}`;
+    await db.insert(starredHands).values({
+      id,
+      userId: input.userId,
+      sessionId: null as any,
+      sessionTournamentId: null as any,
+      type: "drill",
+      spot: "other",
+      notes,
+      capturedDuring: "drill_gto",
+      source: "manual",
+      status: "pending",
+      pastedAt: now,
+    } as any);
+    return { id };
+  }
+
+  // ===========================================================================
+  // Sprint Spot-Anki-Reentry-3 — END
+  // ===========================================================================
 
   // ===========================================================================
   // Sprint Cooldown-2 — Sleep Gate

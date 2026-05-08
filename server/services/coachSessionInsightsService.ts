@@ -197,11 +197,35 @@ export async function getOrGenerateCoachSessionInsights(
       userId,
     );
     if (cached) {
+      // Sprint Spot-Anki-Reentry-3 RF-4 — enriquece spotsToReview com
+      // reentryCandidate/reentryAlreadyActive/reentryReason. Stateless:
+      // computado a cada GET (campos NAO persistidos em jsonb).
+      const cachedInsights = cached.insightsJsonb as SessionInsights;
+      let enriched = cachedInsights;
+      try {
+        const { enrichSpotsToReviewWithReentry } = await import(
+          "./spotReentry/enrichSpotsToReview"
+        );
+        const enrichedSpots = await enrichSpotsToReviewWithReentry(
+          (cachedInsights as any).spotsToReview ?? [],
+          userId,
+        );
+        enriched = {
+          ...cachedInsights,
+          spotsToReview: enrichedSpots as any,
+        };
+      } catch (enrichErr) {
+        // Enrichment best-effort: log e segue sem campos extras.
+        console.warn(
+          "[coachSessionInsightsService] enrich failed (cached path)",
+          enrichErr,
+        );
+      }
       return {
         cached: true,
         generatedAt: new Date(cached.generatedAt).toISOString(),
         expiresAt: new Date(cached.expiresAt).toISOString(),
-        insights: cached.insightsJsonb as SessionInsights,
+        insights: enriched,
       };
     }
   }
@@ -326,13 +350,34 @@ export async function getOrGenerateCoachSessionInsights(
     cached: false,
   });
 
+  // Sprint Spot-Anki-Reentry-3 RF-4 — enrich spotsToReview pos-generate.
+  let enrichedFresh: SessionInsights = validatedInsights;
+  try {
+    const { enrichSpotsToReviewWithReentry } = await import(
+      "./spotReentry/enrichSpotsToReview"
+    );
+    const enrichedSpots = await enrichSpotsToReviewWithReentry(
+      (validatedInsights as any).spotsToReview ?? [],
+      userId,
+    );
+    enrichedFresh = {
+      ...validatedInsights,
+      spotsToReview: enrichedSpots as any,
+    };
+  } catch (enrichErr) {
+    console.warn(
+      "[coachSessionInsightsService] enrich failed (fresh path)",
+      enrichErr,
+    );
+  }
+
   return {
     cached: false,
     generatedAt: new Date(persisted.generatedAt ?? Date.now()).toISOString(),
     expiresAt: new Date(
       persisted.expiresAt ?? Date.now() + 24 * 60 * 60 * 1000,
     ).toISOString(),
-    insights: validatedInsights,
+    insights: enrichedFresh,
   };
 }
 

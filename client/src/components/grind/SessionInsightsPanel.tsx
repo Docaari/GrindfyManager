@@ -59,6 +59,10 @@ interface SpotToReview {
   spotId: string;
   label: string;
   suggestedAction: "add_insight" | "link_theme" | "review_later";
+  // Sprint Spot-Anki-Reentry-3 / RF-4 — campos opcionais (backward compat).
+  reentryCandidate?: boolean;
+  reentryAlreadyActive?: boolean;
+  reentryReason?: string;
 }
 
 interface FocusStatHighlight {
@@ -155,6 +159,62 @@ export function SessionInsightsPanel({ sessionId }: SessionInsightsPanelProps) {
     setReviewDialog({ open: false, handId: null });
   }
 
+  // Sprint Spot-Anki-Reentry-3 / RF-4 — selecao de candidatos para bulk add
+  // a fila de reentry. Pre-marca todos os addable (nao-active).
+  const [reentrySelected, setReentrySelected] = React.useState<
+    Record<string, boolean>
+  >({});
+
+  // Reset selection quando insights mudam (novo sessionId / regenerate).
+  const insightsRef = query.data?.generatedAt;
+  React.useEffect(() => {
+    const list = query.data?.insights?.spotsToReview ?? [];
+    const next: Record<string, boolean> = {};
+    for (const s of list) {
+      if (s.reentryCandidate && !s.reentryAlreadyActive) {
+        next[s.spotId] = true; // pre-marcado
+      }
+    }
+    setReentrySelected(next);
+  }, [insightsRef]);
+
+  const bulkReentryMutation = useMutation({
+    mutationFn: async (spotIds: string[]) =>
+      await apiRequest("POST", "/api/reentry/bulk-from-session", {
+        sessionId,
+        spotIds,
+      }),
+    onSuccess: () => {
+      try {
+        queryClient.invalidateQueries({ queryKey });
+        queryClient.invalidateQueries({ queryKey: ["/api/reentry/queue"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/reentry/stats"] });
+      } catch {
+        // ignore
+      }
+    },
+  });
+
+  function toggleReentrySelected(spotId: string): void {
+    setReentrySelected((prev) => ({ ...prev, [spotId]: !prev[spotId] }));
+  }
+
+  function selectAllReentry(addableIds: string[]): void {
+    const next: Record<string, boolean> = { ...reentrySelected };
+    for (const id of addableIds) next[id] = true;
+    setReentrySelected(next);
+  }
+
+  function handleBulkReentryAdd(addableIds: string[]): void {
+    const ids = addableIds.filter((id) => reentrySelected[id]);
+    const finalIds = ids.length > 0 ? ids : addableIds;
+    if (finalIds.length === 0) return;
+    const mutateFn =
+      (bulkReentryMutation as any).mutateAsync ||
+      (bulkReentryMutation as any).mutate;
+    void mutateFn(finalIds);
+  }
+
   if (query.isLoading) {
     return (
       <div
@@ -221,6 +281,16 @@ export function SessionInsightsPanel({ sessionId }: SessionInsightsPanelProps) {
   const suggestedLessons = (insights!.suggestedLessons ?? []).slice(0, 2);
   const spotsToReview = insights!.spotsToReview ?? [];
   const focusStats = insights!.focusStatsHighlight ?? [];
+
+  // Sprint Spot-Anki-Reentry-3 / RF-4 — split por reentry candidate.
+  const reentryCandidates = spotsToReview.filter(
+    (s) => s.reentryCandidate === true,
+  );
+  const reentryAddable = reentryCandidates.filter(
+    (s) => !s.reentryAlreadyActive,
+  );
+  const reentryAllActive =
+    reentryCandidates.length > 0 && reentryAddable.length === 0;
 
   return (
     <div
@@ -348,6 +418,151 @@ export function SessionInsightsPanel({ sessionId }: SessionInsightsPanelProps) {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {/* Section 4b: Spots para reentry (Sprint Spot-Anki-Reentry-3 / RF-4) */}
+      {spotsToReview.length > 0 && (
+        <section
+          data-testid="session-insights-reentry-section"
+          className="space-y-2"
+        >
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+            Spots para reentry
+          </h4>
+
+          {reentryCandidates.length === 0 ? (
+            <div
+              data-testid="session-insights-reentry-empty"
+              className="text-xs text-gray-400"
+            >
+              Sessao limpa — nenhum spot precisa de revisao espacada agora.
+            </div>
+          ) : reentryAllActive ? (
+            <div
+              data-testid="session-insights-reentry-all-active"
+              className="text-xs text-gray-400 space-y-1"
+            >
+              <p>
+                Todos os candidatos ja estao na fila de revisao.
+              </p>
+              <Link href="/estudos/reentry">
+                <a
+                  href="/estudos/reentry"
+                  className="text-green-400 hover:text-green-300 underline"
+                >
+                  Ver fila /estudos/reentry
+                </a>
+              </Link>
+              <ul className="space-y-1 pt-2">
+                {reentryCandidates.map((s) => (
+                  <li
+                    key={s.spotId}
+                    className="flex items-center gap-2 text-[10px] text-gray-500"
+                  >
+                    <input
+                      type="checkbox"
+                      data-testid={`session-insights-reentry-checkbox-${s.spotId}`}
+                      checked={false}
+                      disabled
+                      aria-disabled="true"
+                      readOnly
+                    />
+                    <span
+                      data-testid={`session-insights-reentry-badge-active-${s.spotId}`}
+                      className="text-[10px] px-1 py-0.5 rounded bg-blue-900/40 text-blue-200 border border-blue-700"
+                    >
+                      Ja ativa
+                    </span>
+                    <span className="font-medium text-gray-300">
+                      {s.label}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <>
+              <ul className="space-y-1.5">
+                {reentryCandidates.map((s) => {
+                  const disabled = !!s.reentryAlreadyActive;
+                  const checked = disabled
+                    ? false
+                    : !!reentrySelected[s.spotId];
+                  return (
+                    <li
+                      key={s.spotId}
+                      className="flex items-start gap-2 rounded border border-gray-800 bg-gray-950/30 p-2"
+                    >
+                      <input
+                        id={`session-insights-reentry-cb-${s.spotId}`}
+                        data-testid={`session-insights-reentry-checkbox-${s.spotId}`}
+                        type="checkbox"
+                        checked={checked}
+                        disabled={disabled}
+                        aria-disabled={disabled}
+                        onChange={() => toggleReentrySelected(s.spotId)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <label
+                          htmlFor={`session-insights-reentry-cb-${s.spotId}`}
+                          className="text-xs font-medium text-gray-200 cursor-pointer"
+                        >
+                          {s.label}
+                        </label>
+                        {disabled && (
+                          <span
+                            data-testid={`session-insights-reentry-badge-active-${s.spotId}`}
+                            className="ml-2 text-[10px] px-1 py-0.5 rounded bg-blue-900/40 text-blue-200 border border-blue-700"
+                          >
+                            Ja ativa
+                          </span>
+                        )}
+                        {s.reentryReason && (
+                          <div
+                            data-testid={`session-insights-reentry-reason-${s.spotId}`}
+                            className="text-[10px] text-gray-500 mt-0.5"
+                          >
+                            {s.reentryReason}
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="flex items-center justify-between gap-2 pt-1">
+                {reentryAddable.length > 1 && (
+                  <button
+                    type="button"
+                    data-testid="session-insights-reentry-select-all"
+                    onClick={() =>
+                      selectAllReentry(reentryAddable.map((s) => s.spotId))
+                    }
+                    className="text-[10px] text-gray-400 hover:text-gray-200"
+                  >
+                    Selecionar todos
+                  </button>
+                )}
+                <button
+                  type="button"
+                  data-testid="session-insights-reentry-bulk-add"
+                  onClick={() =>
+                    handleBulkReentryAdd(
+                      reentryAddable.map((s) => s.spotId),
+                    )
+                  }
+                  disabled={bulkReentryMutation.isPending}
+                  className="ml-auto px-2 py-1 text-xs font-medium rounded bg-green-600 text-white hover:bg-green-500 disabled:opacity-60"
+                >
+                  {bulkReentryMutation.isPending
+                    ? "Adicionando..."
+                    : "Adicionar a reentry"}
+                </button>
+              </div>
+            </>
+          )}
         </section>
       )}
 

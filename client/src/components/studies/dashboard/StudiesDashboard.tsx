@@ -24,6 +24,8 @@ import { useFocusStatsBar } from '@/hooks/useFocusStatsBar';
 // recommendations no header /estudos.
 import { StudyWeeklyPlanCard } from '@/components/study/StudyWeeklyPlanCard';
 import { BibliotecaRecommendationsCard } from '@/components/biblioteca/BibliotecaRecommendationsCard';
+// Sprint Spot-Anki-Reentry-3 RF-5: widget de stats SRS no dashboard.
+import { SrsStatsCard } from '@/components/study/SrsStatsCard';
 
 interface RecResponse {
   items: Array<{
@@ -258,6 +260,16 @@ export function StudiesDashboard() {
         >
           <h2 className="text-sm font-semibold text-gray-300">Streak</h2>
           <StudyStreakBadge />
+        </section>
+
+        {/* Sprint Spot-Anki-Reentry-3 RF-5: widget Cards SRS — wrap em try
+            via ErrorBoundary local interno do componente (lesson #29). */}
+        <section
+          data-testid="studies-dashboard-card-srs-stats"
+          aria-label="Cards de revisao espacada"
+          className="lg:col-span-1"
+        >
+          <SrsStatsCard />
         </section>
       </div>
 
