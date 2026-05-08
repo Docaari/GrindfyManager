@@ -54,6 +54,22 @@ import { db } from '../../server/db';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Reset chain methods (test isolation: previous tests may have replaced
+  // db.X with a one-shot mockResolvedValue, breaking subsequent canonical
+  // chains).
+  const make = () => vi.fn().mockReturnValue(db as any);
+  (db as any).select = make();
+  (db as any).from = make();
+  (db as any).where = make();
+  (db as any).orderBy = make();
+  (db as any).limit = make();
+  (db as any).offset = make();
+  (db as any).insert = make();
+  (db as any).values = make();
+  (db as any).returning = make();
+  (db as any).update = make();
+  (db as any).set = make();
+  (db as any).delete = make();
 });
 
 // =============================================================================

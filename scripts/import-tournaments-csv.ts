@@ -186,6 +186,9 @@ const TYPE_MAP: Record<string, string> = {
   Mystery: "Mystery",
   Satelite: "Satellite",
   Satellite: "Satellite",
+  "Add-on": "Add-on",
+  Addon: "Add-on",
+  AddOn: "Add-on",
 };
 
 // ---------------------------------------------------------------------------
@@ -311,7 +314,7 @@ function processRows(
     const addOnCost = addOnRaw ? parseMoney(addOnRaw) : null;
     const allowsAddOn = !!addOnCost;
 
-    const day2Raw = r["Dia 2"]?.trim() ?? "";
+    const day2Raw = (r["Dia 2"] ?? r["Dia 2/Vaga"] ?? "").trim();
     const day2DateTime = day2Raw ? parseDay2(day2Raw) : null;
     if (day2Raw && !day2DateTime) {
       skipped.push({ line: csvLine, reason: `Dia 2 invalido: ${day2Raw}` });

@@ -71,6 +71,10 @@ export const users = pgTable("users", {
   // Sprint Studies-Reform RF-12 — streak counter persistente (migration 0021).
   studyStreakDays: integer("study_streak_days").notNull().default(0),
   lastStudyActivityAt: timestamp("last_study_activity_at"),
+  // Sprint Estudos-Habito-1 (ADR-128) — daily goal + freezes mensais (migration 0054).
+  dailyStudyGoalMinutes: integer("daily_study_goal_minutes").notNull().default(0),
+  studyStreakFreezesUsedThisMonth: integer("study_streak_freezes_used_this_month").notNull().default(0),
+  lastFreezeResetMonth: varchar("last_freeze_reset_month", { length: 7 }),
   // Sprint home-reform-5 item 11 — Home customization (visibility toggles + flags).
   // Shape em shared/types/homeSettings.ts. JSONB unico (1 row por user, sem joins).
   homeLayoutSettings: jsonb("home_layout_settings"),
@@ -2107,6 +2111,8 @@ export type AuthToken = typeof authTokens.$inferSelect;
 export type InsertAuthToken = z.infer<typeof insertAuthTokenSchema>;
 
 // Study Themes - organized knowledge by poker topic
+// Sprint Estudos-Habito-1 (ADR-127) — extensao com curated taxonomy:
+//   slug + is_curated + category + linked_stats + linked_lessons + seeded_at.
 export const studyThemes = pgTable("study_themes", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull(),
@@ -2116,6 +2122,13 @@ export const studyThemes = pgTable("study_themes", {
   isFavorite: boolean("is_favorite").default(false),
   sortOrder: integer("sort_order").default(0),
   progress: integer("progress").default(0),
+  // Sprint Estudos-Habito-1 (ADR-127): curated taxonomy.
+  slug: varchar("slug", { length: 60 }),
+  isCurated: boolean("is_curated").notNull().default(false),
+  category: varchar("category", { length: 32 }),
+  linkedStats: jsonb("linked_stats").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  linkedLessons: jsonb("linked_lessons").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  seededAt: timestamp("seeded_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -2190,6 +2203,111 @@ export type StudyThemeSpotLink = typeof studyThemeSpotLinks.$inferSelect;
 export type InsertStudyThemeSpotLink = z.infer<typeof insertStudyThemeSpotLinkSchema>;
 
 // =============================================================================
+// Sprint Estudos-Habito-1 (ADR-126) — study_sessions_v2
+// =============================================================================
+// Tabela nova com schema completo para registro de sessoes de estudo:
+//   - 4 modos primarios + escape hatch (drill_gto / tournament_review /
+//     hand_review / lesson / other)
+//   - 4 sources (manual_post_hoc / manual_live / auto_lesson / auto_grind_finalize)
+//   - status running/completed (para cronometro live)
+//   - soft delete 24h gate via deleted_at
+//   - idempotency auto_lesson via indice partial (ADR-130)
+//   - max 1 cronometro live por user via UNIQUE parcial em status='running'
+//
+// Legado `studySessions` mantido read-only (ADR-126 §2). FocusStatsCard usa
+// composer no storage agregando v2 + legacy.
+// =============================================================================
+export const studySessionsV2 = pgTable("study_sessions_v2", {
+  id: varchar("id", { length: 21 }).primaryKey().notNull(),
+  userId: varchar("user_id", { length: 21 })
+    .notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  mode: varchar("mode", { length: 32 }).notNull(),
+  source: varchar("source", { length: 32 }).notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("completed"),
+  themeId: varchar("theme_id", { length: 21 })
+    .references(() => studyThemes.id, { onDelete: "set null" }),
+  tournamentId: varchar("tournament_id"),
+  lessonId: varchar("lesson_id"),
+  starredHandIds: jsonb("starred_hand_ids").$type<string[]>(),
+  drillPlatform: varchar("drill_platform", { length: 32 }),
+  drillAccuracy: integer("drill_accuracy"),
+  difficultSpots: jsonb("difficult_spots").$type<Array<{ context: string; note: string }>>(),
+  durationMinutes: integer("duration_minutes").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  registeredAt: timestamp("registered_at", { withTimezone: true }).notNull().defaultNow(),
+  idlePeriods: jsonb("idle_periods").$type<Array<{ start: string; end: string }>>(),
+  notes: text("notes"),
+  attachments: jsonb("attachments").$type<Array<{ key: string; url: string }>>(),
+  wasProductive: boolean("was_productive"),
+  dailyGoalMet: boolean("daily_goal_met").notNull().default(false),
+  xpAwarded: integer("xp_awarded").notNull().default(0),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_ssv2_user_started").on(table.userId, table.startedAt),
+  index("idx_ssv2_user_mode_started").on(table.userId, table.mode, table.startedAt),
+  index("idx_ssv2_user_registered").on(table.userId, table.registeredAt),
+]);
+
+// Zod enums explicitos (CHECK constraints DB-level garantem alem do Zod).
+export const STUDY_SESSION_MODES = [
+  "drill_gto",
+  "tournament_review",
+  "hand_review",
+  "lesson",
+  "other",
+] as const;
+export type StudySessionMode = (typeof STUDY_SESSION_MODES)[number];
+
+export const STUDY_SESSION_SOURCES = [
+  "manual_post_hoc",
+  "manual_live",
+  "auto_lesson",
+  "auto_grind_finalize",
+] as const;
+export type StudySessionSource = (typeof STUDY_SESSION_SOURCES)[number];
+
+export const STUDY_SESSION_STATUSES = ["running", "completed"] as const;
+export type StudySessionStatus = (typeof STUDY_SESSION_STATUSES)[number];
+
+export type StudySessionV2 = typeof studySessionsV2.$inferSelect;
+export type InsertStudySessionV2 = typeof studySessionsV2.$inferInsert;
+
+// Schema Zod com validacao discriminator-based por mode.
+export const insertStudySessionV2Schema = z.object({
+  userId: z.string(),
+  mode: z.enum(STUDY_SESSION_MODES),
+  source: z.enum(STUDY_SESSION_SOURCES),
+  status: z.enum(STUDY_SESSION_STATUSES).default("completed"),
+  themeId: z.string().nullable().optional(),
+  tournamentId: z.string().nullable().optional(),
+  lessonId: z.string().nullable().optional(),
+  starredHandIds: z.array(z.string()).nullable().optional(),
+  drillPlatform: z.string().max(32).nullable().optional(),
+  drillAccuracy: z.number().int().min(0).max(100).nullable().optional(),
+  difficultSpots: z.array(z.object({
+    context: z.string().max(200),
+    note: z.string().max(500),
+  })).max(5).nullable().optional(),
+  durationMinutes: z.number().int().min(1).max(1440),
+  startedAt: z.coerce.date().nullable().optional(),
+  endedAt: z.coerce.date().nullable().optional(),
+  idlePeriods: z.array(z.object({
+    start: z.string(),
+    end: z.string(),
+  })).nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
+  attachments: z.array(z.object({
+    key: z.string(),
+    url: z.string(),
+  })).max(5).nullable().optional(),
+  wasProductive: z.boolean().nullable().optional(),
+});
+
+// =============================================================================
 // Sprint home-reform-4 Item 7 (ADR-116) — user_focus_stats
 // =============================================================================
 // Marcacoes mensais de stats foco do user. Escopo mensal via coluna `month`
@@ -2205,8 +2323,8 @@ export const userFocusStats = pgTable("user_focus_stats", {
     .notNull()
     .references(() => users.userPlatformId, { onDelete: "cascade" }),
   statId: varchar("stat_id", { length: 64 }).notNull(),
+  // Sprint Estudos-Habito-1 (RF-3.1): nullable agora (migration 0053).
   studyThemeId: varchar("study_theme_id", { length: 21 })
-    .notNull()
     .references(() => studyThemes.id, { onDelete: "cascade" }),
   month: varchar("month", { length: 7 }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),

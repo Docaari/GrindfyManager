@@ -38,6 +38,9 @@ import { getBreakFrequency, shouldTriggerBreak, getBreakCountdownMinutes, canSno
 import { getHistoricalAverages, distributeQuickFeedback } from "@/components/grind-session/quick-feedback-helpers";
 import { calculateLateRegDeadline, resolveAlertThreshold } from "@/lib/lateRegUtils";
 import { SessionAlertManager } from "@shared/generic-alerts";
+// Sprint Estudos-Habito-1 (RF-4): FocusStatsBar placement="grindLive".
+import { FocusStatsBar } from "@/components/study/FocusStatsBar";
+import { useFocusStatsBar } from "@/hooks/useFocusStatsBar";
 import type { SessionAlert } from "@shared/generic-alerts";
 import { fireAlert } from "@/lib/fireAlert";
 import { stopAlertById, stopAllAlerts } from "@/lib/tts/narrationQueue";
@@ -102,6 +105,8 @@ import {
 
 export default function GrindSessionLive() {
   const [, setLocation] = useLocation();
+  // Sprint Estudos-Habito-1 (RF-4): FocusStatsBar placement="grindLive".
+  const focusBar = useFocusStatsBar('grindLive');
   const [activeSession, setActiveSession] = useState<GrindSession | null>(null);
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showBreakDialog, setShowBreakDialog] = useState(false);
@@ -2315,6 +2320,16 @@ export default function GrindSessionLive() {
 
   return (
     <div className="container p-6 text-white">
+      {/* Sprint Estudos-Habito-1 RF-4: stats foco persistentes durante sessao live. */}
+      <div className="mb-3">
+        <FocusStatsBar
+          placement="grindLive"
+          data={focusBar.data}
+          loading={focusBar.loading}
+          error={focusBar.error}
+          visible={focusBar.visible}
+        />
+      </div>
       {/* RF-01: Session recovery banner */}
       {showRecoveryBanner && (
         <div className="mb-4 p-3 bg-green-600/20 border border-green-500/50 rounded-lg text-green-300 text-center font-medium animate-in fade-in duration-300">

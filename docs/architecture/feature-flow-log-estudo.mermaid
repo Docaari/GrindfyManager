@@ -1,0 +1,122 @@
+sequenceDiagram
+    %% =====================================================================
+    %% Sprint Estudos-Habito-1 — Sequence POST /api/study-sessions
+    %% Cobre 2 fluxos: (1) post-hoc completed, (2) live running + finalize
+    %% Ref: spec RF-1, ADR-126 (schema), ADR-128 (streak), ADR-130 (auto_lesson)
+    %% =====================================================================
+    autonumber
+
+    actor User as Usuario
+    participant Form as StudyLogDialog
+    participant API as POST /api/study-sessions
+    participant Auth as requireAuth
+    participant Zod as Zod discriminatedUnion
+    participant Store as storage.createStudySession
+    participant DB as PostgreSQL (tx)
+    participant Streak as bumpStudyStreak (ADR-128)
+    participant HUD as HUD timer sticky
+
+    %% ===== Fluxo 1: Post-hoc (default) =====
+    rect rgb(220, 240, 255)
+    Note over User,HUD: FLUXO 1 — Post-hoc (toggle "cronometrado" OFF)
+
+    User->>Form: Abre dialog (FAB ou Cmd+K)
+    Form->>Form: Pre-preenche com ultima session 7d
+    User->>Form: Seleciona mode=lesson, theme, lesson_id, duration=45
+    User->>Form: Click "Registrar"
+
+    Form->>API: POST { mode, source: 'manual_post_hoc', status: 'completed',<br/>theme_id, lesson_id, duration_minutes: 45, ... }
+    API->>Auth: JWT verify
+    Auth-->>API: userId
+    API->>Zod: parse(body) — discriminatedUnion(mode)
+
+    alt Validation fail
+        Zod-->>API: ZodError
+        API-->>Form: 400 INVALID_INPUT { field, reason }
+    else Valid
+        Zod-->>API: payload
+        API->>Store: createStudySession(userId, payload)
+        Store->>DB: BEGIN
+        Store->>DB: INSERT INTO study_sessions_v2 (...) RETURNING *
+        DB-->>Store: session row
+        Store->>Streak: bumpStudyStreak(tx, userId, registered_at)
+        Streak->>DB: SELECT users.* FOR UPDATE
+        Streak->>DB: SELECT SUM(duration_minutes) WHERE date=today
+        Streak->>Streak: lazy reset freezes if month flipped
+        Streak->>Streak: state machine (idempotent/inc/freeze/reset)
+        Streak->>DB: UPDATE users SET streak, last_activity_at, freezes_used
+        Streak-->>Store: { streakDays, todayMet, freezesRemaining, transition }
+        Store->>DB: COMMIT
+        Store-->>API: { session, streak }
+        API-->>Form: 201 { session, streak: {...} }
+        Form->>Form: Mostra toast "Streak: 7 dias  Meta: 45/45 min"
+        Form->>User: Dialog fecha
+    end
+    end
+
+    %% ===== Fluxo 2: Live cronometrado =====
+    rect rgb(255, 240, 220)
+    Note over User,HUD: FLUXO 2 — Live (toggle "cronometrado" ON)
+
+    User->>Form: Toggle "Comecar agora cronometrado" ON
+    User->>Form: Seleciona mode=drill_gto, theme=ICM, drill_platform=gto_wizard
+    User->>Form: Click "Registrar e Iniciar"
+
+    Form->>API: POST { mode, source: 'manual_live', status: 'running',<br/>theme_id, drill_platform, started_at: now() }
+    API->>Auth: JWT verify
+    API->>Zod: parse — schema 'running' exige started_at NOT NULL ended_at NULL
+    API->>Store: createStudySession(userId, payload)
+    Store->>DB: BEGIN
+
+    Note over Store,DB: Indice UNIQUE parcial uq_ssv2_user_running<br/>previne segunda session running por user
+    Store->>DB: INSERT INTO study_sessions_v2 (status='running', ...)
+
+    alt Outra session running
+        DB-->>Store: PG 23505 unique_violation
+        Store->>DB: ROLLBACK
+        Store-->>API: SESSION_ALREADY_RUNNING
+        API-->>Form: 409 SESSION_ALREADY_RUNNING
+    else OK
+        DB-->>Store: session row (status=running)
+        Note over Streak: bumpStudyStreak NAO roda em status=running.<br/>Streak so atualiza no finalize.
+        Store->>DB: COMMIT
+        Store-->>API: session
+        API-->>Form: 201 session running
+        Form->>HUD: Inicializa HUD sticky "Estudando: ICM · 00:00:00"
+        HUD->>User: Render HUD topo
+
+        loop A cada 1s
+            HUD->>HUD: tick — incrementa display
+            User->>HUD: visibilitychange (>60s) detected
+            HUD->>HUD: pause + push idle_period {start, end}
+            User->>HUD: retorna
+            HUD->>User: Dialog "Voce esteve fora 12min — descontar?"
+            User->>HUD: Sim
+        end
+
+        User->>HUD: Click "Stop"
+        HUD->>API: POST /api/study-sessions/:id/finalize<br/>{ ended_at, duration_minutes, idle_periods, was_productive, notes }
+        API->>Auth: JWT verify
+        API->>Store: finalizeStudySession(userId, sessionId, payload)
+        Store->>DB: BEGIN
+        Store->>DB: SELECT FOR UPDATE WHERE id=sessionId AND status='running' AND user_id=userId
+
+        alt Session nao encontrada ou ja completada
+            DB-->>Store: 0 rows
+            Store->>DB: ROLLBACK
+            Store-->>API: INVALID_STATE
+            API-->>HUD: 409
+        else OK
+            Store->>DB: UPDATE status='completed', ended_at, duration_minutes recalc, ...
+            Store->>Streak: bumpStudyStreak(tx, userId, started_at)
+            Streak->>DB: FOR UPDATE + bump
+            Streak-->>Store: { streakDays, ... }
+            Store->>DB: COMMIT
+            Store-->>API: { session, streak }
+            API-->>HUD: 200 session completed
+            HUD->>User: Toast "Sessao salva — Streak: 8 dias"
+        end
+    end
+    end
+
+    Note over User,DB: Edge case auto_lesson (Sprint 2 — ADR-130):<br/>Mux >=80% → POST com source='auto_lesson'<br/>Lookup janela 24h + UPDATE incremental se exists<br/>Sprint 1 aceita enum, sem trigger ativo.

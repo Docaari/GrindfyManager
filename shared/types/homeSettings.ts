@@ -31,10 +31,40 @@ export interface HomeVisibilitySettings {
   news: boolean;
 }
 
+/**
+ * Sprint Estudos-Habito-1 (ADR-129) — visibility granular cross-product
+ * para FocusStatsBar.
+ */
+export interface FocusStatsVisibility {
+  home: boolean;
+  grindLive: boolean;
+  coach: boolean;
+  estudos: boolean;
+  statsAnalyzer: boolean;
+}
+
+export const FOCUS_STATS_PLACEMENTS: (keyof FocusStatsVisibility)[] = [
+  "home",
+  "grindLive",
+  "coach",
+  "estudos",
+  "statsAnalyzer",
+];
+
+export const DEFAULT_FOCUS_STATS_VISIBILITY: FocusStatsVisibility = {
+  home: true,
+  grindLive: true,
+  coach: true,
+  estudos: true,
+  statsAnalyzer: true,
+};
+
 export interface HomeLayoutSettings {
   visibility: HomeVisibilitySettings;
   /** Item 8 absorvido: card "Sessoes Registradas" lê de session_tournaments quando true. */
   performanceFromGrind: boolean;
+  /** Sprint Estudos-Habito-1 (RF-4.2 / ADR-129). */
+  focusStatsVisibility: FocusStatsVisibility;
 }
 
 export const HOME_VISIBILITY_KEYS: HomeSectionKey[] = [
@@ -74,4 +104,5 @@ export const DEFAULT_HOME_LAYOUT_SETTINGS: HomeLayoutSettings = {
     news: true,
   },
   performanceFromGrind: true,
+  focusStatsVisibility: { ...DEFAULT_FOCUS_STATS_VISIBILITY },
 };

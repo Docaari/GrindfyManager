@@ -15,9 +15,12 @@
 import { z } from 'zod';
 import {
   DEFAULT_HOME_LAYOUT_SETTINGS,
+  DEFAULT_FOCUS_STATS_VISIBILITY,
   HOME_VISIBILITY_KEYS,
+  FOCUS_STATS_PLACEMENTS,
   type HomeLayoutSettings,
   type HomeVisibilitySettings,
+  type FocusStatsVisibility,
 } from '@shared/types/homeSettings';
 
 const visibilityShape = Object.fromEntries(
@@ -26,10 +29,17 @@ const visibilityShape = Object.fromEntries(
 
 const visibilityPatchSchema = z.object(visibilityShape).strict();
 
+const focusStatsVisibilityShape = Object.fromEntries(
+  FOCUS_STATS_PLACEMENTS.map((key) => [key, z.boolean().optional()]),
+) as Record<string, z.ZodOptional<z.ZodBoolean>>;
+
+const focusStatsVisibilityPatchSchema = z.object(focusStatsVisibilityShape).strict();
+
 const homeLayoutSettingsPatchSchema = z
   .object({
     visibility: visibilityPatchSchema.optional(),
     performanceFromGrind: z.boolean().optional(),
+    focusStatsVisibility: focusStatsVisibilityPatchSchema.optional(),
   })
   .strict();
 
@@ -49,6 +59,16 @@ function pickVisibility(stored: unknown): Partial<HomeVisibilitySettings> {
   return out;
 }
 
+function pickFocusStatsVisibility(stored: unknown): Partial<FocusStatsVisibility> {
+  if (!isPlainObject(stored)) return {};
+  const out: Partial<FocusStatsVisibility> = {};
+  for (const key of FOCUS_STATS_PLACEMENTS) {
+    const v = (stored as any)[key];
+    if (typeof v === 'boolean') out[key] = v;
+  }
+  return out;
+}
+
 export function resolveHomeLayoutSettings(stored: unknown): HomeLayoutSettings {
   if (!isPlainObject(stored)) {
     return cloneDefaults();
@@ -58,9 +78,30 @@ export function resolveHomeLayoutSettings(stored: unknown): HomeLayoutSettings {
     typeof (stored as any).performanceFromGrind === 'boolean'
       ? (stored as any).performanceFromGrind
       : DEFAULT_HOME_LAYOUT_SETTINGS.performanceFromGrind;
+  // Sprint Estudos-Habito-1 (ADR-129): lazy back-fill de focusStatsVisibility.
+  // Migra showFocusStatsBar legado se nao houver shape novo.
+  let focusStatsVisibility: FocusStatsVisibility;
+  const fsvRaw = (stored as any).focusStatsVisibility;
+  if (isPlainObject(fsvRaw)) {
+    const partial = pickFocusStatsVisibility(fsvRaw);
+    focusStatsVisibility = { ...DEFAULT_FOCUS_STATS_VISIBILITY, ...partial };
+  } else {
+    const legacy =
+      typeof (stored as any).showFocusStatsBar === 'boolean'
+        ? (stored as any).showFocusStatsBar
+        : true;
+    focusStatsVisibility = {
+      home: legacy,
+      grindLive: legacy,
+      coach: legacy,
+      estudos: legacy,
+      statsAnalyzer: legacy,
+    };
+  }
   return {
     visibility: { ...DEFAULT_HOME_LAYOUT_SETTINGS.visibility, ...visibility },
     performanceFromGrind,
+    focusStatsVisibility,
   };
 }
 
@@ -76,7 +117,10 @@ export function mergeHomeLayoutSettings(
     typeof patch.performanceFromGrind === 'boolean'
       ? patch.performanceFromGrind
       : base.performanceFromGrind;
-  return { visibility, performanceFromGrind };
+  const focusStatsVisibility = patch.focusStatsVisibility
+    ? { ...base.focusStatsVisibility, ...patch.focusStatsVisibility }
+    : base.focusStatsVisibility;
+  return { visibility, performanceFromGrind, focusStatsVisibility };
 }
 
 export function parseHomeLayoutSettingsPatch(body: unknown): HomeLayoutSettingsPatch {
@@ -96,5 +140,6 @@ function cloneDefaults(): HomeLayoutSettings {
   return {
     visibility: { ...DEFAULT_HOME_LAYOUT_SETTINGS.visibility },
     performanceFromGrind: DEFAULT_HOME_LAYOUT_SETTINGS.performanceFromGrind,
+    focusStatsVisibility: { ...DEFAULT_FOCUS_STATS_VISIBILITY },
   };
 }
