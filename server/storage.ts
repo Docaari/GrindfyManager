@@ -117,6 +117,12 @@ import {
   studyThemeSpotLinks,
   type StudyTheme,
   type StudyThemeSpotLink,
+  // Sprint Estudos-Coach-Biblio-2 (ADR-132/133) — study weekly plans + coach session insights.
+  studyWeeklyPlans,
+  STUDY_WEEKLY_PLAN_SOURCES,
+  type StudyWeeklyPlan,
+  coachSessionInsights,
+  type CoachSessionInsight,
   // Sprint home-reform-4 Item 7 (ADR-116/117) — focus stats.
   userFocusStats,
   type UserFocusStat,
@@ -12926,6 +12932,614 @@ function formatYearMonthUTC(d: Date): string {
 (storage as any).updateUserStreakState = updateUserStreakState;
 (storage as any).findCuratedThemeByLinkedStat = findCuratedThemeByLinkedStat;
 (storage as any).ensureCuratedThemesForUser = ensureCuratedThemesForUser;
+
+// =============================================================================
+// Sprint Estudos-Coach-Biblio-2 (ADR-132/133/134) — weekly plans + insights.
+// =============================================================================
+//
+// Storage helpers de:
+//   - upsertStudyWeeklyPlan / getStudyWeeklyPlan / markPlanItemCompleted /
+//     listStudyWeeklyPlans / getRecentStudySessionAvgMinutes
+//   - upsertCoachSessionInsights / getCoachSessionInsights /
+//     getCoachSessionInsightsByUser / hasFreshCoachSessionInsights
+//
+// Lessons:
+//   #3  shape REAL (mocks Drizzle chain insert/values/onConflictDoUpdate/returning)
+//   #5  vi.fn ok
+//   #14 vi.hoisted nos testes (handled by tests)
+// =============================================================================
+
+function utcMondayOfWeek(date: Date): Date {
+  // ISO Monday in UTC. getUTCDay 0=Sun..6=Sat, segunda=1.
+  const d = new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+  ));
+  const dow = d.getUTCDay();
+  // Distancia ate segunda (1). Se domingo (0), volta 6 dias. Outros: dow-1.
+  const delta = dow === 0 ? 6 : dow - 1;
+  d.setUTCDate(d.getUTCDate() - delta);
+  return d;
+}
+
+function dateToYmdUtc(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+async function upsertStudyWeeklyPlan(input: {
+  userId: string;
+  weekStartDate: Date;
+  planJsonb: any;
+  source: string;
+  dailyTargetMinutes: number;
+  costTokensUsed?: number | null;
+  completedItemsJsonb?: string[];
+}): Promise<StudyWeeklyPlan> {
+  // Validacao Zod-like (rejeita source/range fora — tests cobrem).
+  if (!STUDY_WEEKLY_PLAN_SOURCES.includes(input.source as any)) {
+    throw new Error(`INVALID_SOURCE: ${input.source}`);
+  }
+  if (
+    !Number.isFinite(input.dailyTargetMinutes) ||
+    input.dailyTargetMinutes < 5 ||
+    input.dailyTargetMinutes > 240
+  ) {
+    throw new Error(
+      `INVALID_DAILY_TARGET_MINUTES: ${input.dailyTargetMinutes} (must be 5..240)`,
+    );
+  }
+  try {
+    const id = nanoid();
+    const weekDate = dateToYmdUtc(input.weekStartDate);
+    const values: any = {
+      id,
+      userId: input.userId,
+      // pgTable date: aceita string YYYY-MM-DD
+      weekStartDate: weekDate,
+      planJsonb: input.planJsonb,
+      completedItemsJsonb: input.completedItemsJsonb ?? [],
+      source: input.source,
+      dailyTargetMinutes: input.dailyTargetMinutes,
+      costTokensUsed: input.costTokensUsed ?? null,
+    };
+    const rows = await (db.insert(studyWeeklyPlans).values(values) as any)
+      .onConflictDoUpdate({
+        target: [studyWeeklyPlans.userId, studyWeeklyPlans.weekStartDate],
+        set: {
+          planJsonb: input.planJsonb,
+          completedItemsJsonb:
+            input.completedItemsJsonb !== undefined
+              ? input.completedItemsJsonb
+              : sql`${studyWeeklyPlans.completedItemsJsonb}`,
+          source: input.source,
+          dailyTargetMinutes: input.dailyTargetMinutes,
+          costTokensUsed: input.costTokensUsed ?? null,
+          regeneratedAt: sql`NOW()`,
+          regeneratedCount: sql`${studyWeeklyPlans.regeneratedCount} + 1`,
+          updatedAt: sql`NOW()`,
+        },
+      })
+      .returning();
+    const row = (rows as any[])?.[0];
+    return (row ?? { ...values, regeneratedCount: 0 }) as StudyWeeklyPlan;
+  } catch (err) {
+    console.error("storage.upsertStudyWeeklyPlan.error", {
+      userId: input.userId,
+      err,
+    });
+    throw err;
+  }
+}
+
+async function getStudyWeeklyPlan(
+  userId: string,
+  weekStartDate?: Date,
+): Promise<StudyWeeklyPlan | null> {
+  try {
+    const week = weekStartDate ?? utcMondayOfWeek(new Date());
+    const ymd = dateToYmdUtc(week);
+    const rows = await db
+      .select()
+      .from(studyWeeklyPlans)
+      .where(
+        and(
+          eq(studyWeeklyPlans.userId, userId),
+          eq(studyWeeklyPlans.weekStartDate, ymd as any),
+        ),
+      )
+      .limit(1);
+    return ((rows as any[])?.[0] ?? null) as StudyWeeklyPlan | null;
+  } catch (err) {
+    console.error("storage.getStudyWeeklyPlan.error", { userId, err });
+    return null;
+  }
+}
+
+async function markPlanItemCompleted(
+  userId: string,
+  weekStartDate: Date,
+  itemId: string,
+  completed: boolean,
+): Promise<StudyWeeklyPlan> {
+  // ADR-132 §2.4: read-modify-write FOR UPDATE em transacao race-safe.
+  return await db.transaction(async (tx: any) => {
+    const ymd = dateToYmdUtc(weekStartDate);
+    const baseChain: any = tx
+      .select()
+      .from(studyWeeklyPlans)
+      .where(
+        and(
+          eq(studyWeeklyPlans.userId, userId),
+          eq(studyWeeklyPlans.weekStartDate, ymd as any),
+        ),
+      );
+    // Em runtime real, .for('update') eh chainable; em mocks pode nao existir.
+    const lockedChain: any =
+      typeof baseChain.for === "function" ? baseChain.for("update") : baseChain;
+    const rows = await lockedChain.limit(1);
+    const existing = (rows as any[])?.[0];
+    if (!existing) {
+      const e: any = new Error("PLAN_NOT_FOUND");
+      e.code = "PLAN_NOT_FOUND";
+      throw e;
+    }
+    const current: string[] = Array.isArray(existing.completedItemsJsonb)
+      ? [...existing.completedItemsJsonb]
+      : [];
+    let next: string[];
+    if (completed) {
+      next = current.includes(itemId) ? current : [...current, itemId];
+    } else {
+      next = current.filter((x) => x !== itemId);
+    }
+    const updated = await tx
+      .update(studyWeeklyPlans)
+      .set({ completedItemsJsonb: next, updatedAt: new Date() })
+      .where(
+        and(
+          eq(studyWeeklyPlans.userId, userId),
+          eq(studyWeeklyPlans.weekStartDate, ymd as any),
+        ),
+      )
+      .returning();
+    const row = (updated as any[])?.[0];
+    return (row ?? { ...existing, completedItemsJsonb: next }) as StudyWeeklyPlan;
+  });
+}
+
+async function listStudyWeeklyPlans(
+  userId: string,
+  limit: number = 12,
+): Promise<StudyWeeklyPlan[]> {
+  try {
+    const rows = await db
+      .select()
+      .from(studyWeeklyPlans)
+      .where(eq(studyWeeklyPlans.userId, userId))
+      .orderBy(desc(studyWeeklyPlans.generatedAt))
+      .limit(limit);
+    return Array.isArray(rows) ? (rows as StudyWeeklyPlan[]) : [];
+  } catch (err) {
+    console.error("storage.listStudyWeeklyPlans.error", { userId, err });
+    return [];
+  }
+}
+
+async function getRecentStudySessionAvgMinutes(
+  userId: string,
+  days: number = 7,
+): Promise<number | null> {
+  try {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        avg: sql<string>`AVG(${studySessionsV2.durationMinutes})`,
+      })
+      .from(studySessionsV2)
+      .where(
+        and(
+          eq(studySessionsV2.userId, userId),
+          isNull(studySessionsV2.deletedAt),
+          not(eq(studySessionsV2.source, "auto_lesson")),
+          gte(studySessionsV2.registeredAt, cutoff),
+        ),
+      );
+    const first = (rows as any[])?.[0];
+    if (!first) return null;
+    const raw = first.avg;
+    if (raw === null || raw === undefined) return null;
+    const num = Number(raw);
+    return Number.isFinite(num) ? num : null;
+  } catch (err) {
+    console.error("storage.getRecentStudySessionAvgMinutes.error", {
+      userId,
+      err,
+    });
+    return null;
+  }
+}
+
+// =============================================================================
+// Coach Session Insights (ADR-133)
+// =============================================================================
+
+async function upsertCoachSessionInsights(input: {
+  userId: string;
+  grindSessionId: string;
+  insightsJsonb: any;
+  costTokensUsed?: number | null;
+  model?: string | null;
+  promptVersion?: string | null;
+  tokensIn?: number | null;
+  tokensOut?: number | null;
+}): Promise<CoachSessionInsight> {
+  try {
+    const id = nanoid();
+    const generatedAt = new Date();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const values: any = {
+      id,
+      userId: input.userId,
+      grindSessionId: input.grindSessionId,
+      insightsJsonb: input.insightsJsonb,
+      generatedAt,
+      expiresAt,
+      costTokensUsed: input.costTokensUsed ?? null,
+      model: input.model ?? null,
+      promptVersion: input.promptVersion ?? null,
+      tokensIn: input.tokensIn ?? null,
+      tokensOut: input.tokensOut ?? null,
+    };
+    const rows = await (db.insert(coachSessionInsights).values(values) as any)
+      .onConflictDoUpdate({
+        target: coachSessionInsights.grindSessionId,
+        set: {
+          insightsJsonb: input.insightsJsonb,
+          generatedAt: sql`NOW()`,
+          expiresAt: sql`NOW() + INTERVAL '24 hours'`,
+          costTokensUsed: input.costTokensUsed ?? null,
+          model: input.model ?? null,
+          promptVersion: input.promptVersion ?? null,
+          tokensIn: input.tokensIn ?? null,
+          tokensOut: input.tokensOut ?? null,
+          regeneratedCount: sql`${coachSessionInsights.regeneratedCount} + 1`,
+        },
+      })
+      .returning();
+    const row = (rows as any[])?.[0];
+    return (row ?? { ...values, regeneratedCount: 0 }) as CoachSessionInsight;
+  } catch (err) {
+    console.error("storage.upsertCoachSessionInsights.error", {
+      userId: input.userId,
+      grindSessionId: input.grindSessionId,
+      err,
+    });
+    throw err;
+  }
+}
+
+async function getCoachSessionInsights(
+  grindSessionId: string,
+  userId: string,
+): Promise<CoachSessionInsight | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(coachSessionInsights)
+      .where(
+        and(
+          eq(coachSessionInsights.grindSessionId, grindSessionId),
+          eq(coachSessionInsights.userId, userId),
+          gt(coachSessionInsights.expiresAt, sql`NOW()`),
+        ),
+      )
+      .limit(1);
+    return ((rows as any[])?.[0] ?? null) as CoachSessionInsight | null;
+  } catch (err) {
+    console.error("storage.getCoachSessionInsights.error", {
+      grindSessionId,
+      userId,
+      err,
+    });
+    return null;
+  }
+}
+
+async function hasFreshCoachSessionInsights(
+  grindSessionId: string,
+): Promise<boolean> {
+  try {
+    const rows = await db
+      .select({ id: coachSessionInsights.id })
+      .from(coachSessionInsights)
+      .where(
+        and(
+          eq(coachSessionInsights.grindSessionId, grindSessionId),
+          gt(coachSessionInsights.expiresAt, sql`NOW()`),
+        ),
+      )
+      .limit(1);
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (err) {
+    console.error("storage.hasFreshCoachSessionInsights.error", {
+      grindSessionId,
+      err,
+    });
+    return false;
+  }
+}
+
+async function getCoachSessionInsightsByUser(
+  userId: string,
+  limit: number = 50,
+): Promise<CoachSessionInsight[]> {
+  try {
+    const rows = await db
+      .select()
+      .from(coachSessionInsights)
+      .where(eq(coachSessionInsights.userId, userId))
+      .orderBy(desc(coachSessionInsights.generatedAt))
+      .limit(limit);
+    return Array.isArray(rows) ? (rows as CoachSessionInsight[]) : [];
+  } catch (err) {
+    console.error("storage.getCoachSessionInsightsByUser.error", {
+      userId,
+      err,
+    });
+    return [];
+  }
+}
+
+// =============================================================================
+// Whitelist + helpers para Coach orquestrators (RF-2/3/4)
+// =============================================================================
+
+async function findStudyThemesByLinkedStat(
+  statId: string,
+  userId: string,
+): Promise<any | null> {
+  try {
+    // Curated tem prioridade. user-custom permitido se tiver linked_stats.
+    const rows = await db
+      .select()
+      .from(studyThemes)
+      .where(
+        and(
+          or(
+            eq(studyThemes.userId, userId),
+            // curated tipicamente seedados sob o proprio user (sprint 1 seed
+            // usa userId do user). Fallback inclui qualquer curated globais.
+            eq(studyThemes.isCurated, true),
+          ),
+          sql`${studyThemes.linkedStats} @> ${JSON.stringify([statId])}::jsonb`,
+        ),
+      )
+      .orderBy(desc(studyThemes.isCurated))
+      .limit(1);
+    return ((rows as any[])?.[0] ?? null);
+  } catch (err) {
+    console.error("storage.findStudyThemesByLinkedStat.error", {
+      statId,
+      userId,
+      err,
+    });
+    return null;
+  }
+}
+
+async function getLibraryLessonsByIds(ids: string[]): Promise<any[]> {
+  try {
+    if (!Array.isArray(ids) || ids.length === 0) return [];
+    const rows = await db
+      .select({
+        id: libraryLessons.id,
+        title: libraryLessons.title,
+        slug: libraryLessons.slug,
+        courseId: libraryLessons.courseId,
+        courseSlug: libraryCourses.slug,
+        durationSeconds: sql<number>`COALESCE(${libraryLessons.videoDurationSeconds}, ${libraryLessons.audioDurationSeconds}, 0)`,
+        isPublished: libraryLessons.isPublished,
+        thumbnailUrl: libraryLessons.coverKey,
+      })
+      .from(libraryLessons)
+      .leftJoin(libraryCourses, eq(libraryCourses.id, libraryLessons.courseId))
+      .where(inArray(libraryLessons.id, ids));
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.error("storage.getLibraryLessonsByIds.error", { ids, err });
+    return [];
+  }
+}
+
+async function getLibraryLessonProgressByUser(
+  userId: string,
+  lessonIds: string[],
+): Promise<Record<string, number>> {
+  try {
+    if (!userId || !Array.isArray(lessonIds) || lessonIds.length === 0) {
+      return {};
+    }
+    const rows = await db
+      .select({
+        lessonId: libraryProgress.lessonId,
+        lastPositionSeconds: libraryProgress.lastPositionSeconds,
+        totalDurationSeconds: libraryProgress.totalDurationSeconds,
+        completedAt: libraryProgress.completedAt,
+      })
+      .from(libraryProgress)
+      .where(
+        and(
+          eq(libraryProgress.userId, userId),
+          inArray(libraryProgress.lessonId, lessonIds),
+        ),
+      );
+    const out: Record<string, number> = {};
+    for (const r of rows as any[]) {
+      const lessonId = r?.lessonId;
+      if (typeof lessonId !== "string") continue;
+      if (r.completedAt) {
+        out[lessonId] = 1;
+        continue;
+      }
+      const last = Number(r?.lastPositionSeconds ?? 0);
+      const total = Number(r?.totalDurationSeconds ?? 0);
+      if (total > 0 && Number.isFinite(last)) {
+        const pct = Math.max(0, Math.min(1, last / total));
+        out[lessonId] = pct;
+      } else {
+        out[lessonId] = 0;
+      }
+    }
+    return out;
+  } catch (err) {
+    console.error("storage.getLibraryLessonProgressByUser.error", {
+      userId,
+      err,
+    });
+    return {};
+  }
+}
+
+async function listCuratedStudyThemes(userId: string): Promise<any[]> {
+  try {
+    const rows = await db
+      .select()
+      .from(studyThemes)
+      .where(
+        and(
+          eq(studyThemes.userId, userId),
+          eq(studyThemes.isCurated, true),
+        ),
+      );
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.error("storage.listCuratedStudyThemes.error", { userId, err });
+    return [];
+  }
+}
+
+async function listLibraryLessonsCurated(): Promise<any[]> {
+  try {
+    const rows = await db
+      .select({
+        id: libraryLessons.id,
+        title: libraryLessons.title,
+        slug: libraryLessons.slug,
+        courseId: libraryLessons.courseId,
+        courseSlug: libraryCourses.slug,
+      })
+      .from(libraryLessons)
+      .leftJoin(libraryCourses, eq(libraryCourses.id, libraryLessons.courseId))
+      .where(eq(libraryLessons.isPublished, true))
+      .limit(200);
+    return Array.isArray(rows)
+      ? rows.map((r: any) => ({
+          ...r,
+          lessonSlug: r.slug,
+        }))
+      : [];
+  } catch (err) {
+    console.error("storage.listLibraryLessonsCurated.error", { err });
+    return [];
+  }
+}
+
+async function listStarredHandsRecent(
+  userId: string,
+  limit: number = 5,
+): Promise<any[]> {
+  try {
+    const rows = await db
+      .select()
+      .from(starredHands)
+      .where(eq(starredHands.userId, userId))
+      .orderBy(desc((starredHands as any).createdAt))
+      .limit(limit);
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.error("storage.listStarredHandsRecent.error", { userId, err });
+    return [];
+  }
+}
+
+async function getTournamentsByGrindSession(
+  grindSessionId: string,
+): Promise<any[]> {
+  try {
+    const rows = await db
+      .select()
+      .from(tournaments)
+      .where(eq(tournaments.grindSessionId, grindSessionId));
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.error("storage.getTournamentsByGrindSession.error", {
+      grindSessionId,
+      err,
+    });
+    return [];
+  }
+}
+
+async function getStarredHandsByGrindSession(
+  grindSessionId: string,
+): Promise<any[]> {
+  try {
+    const rows = await db
+      .select()
+      .from(starredHands)
+      .where(eq((starredHands as any).grindSessionId, grindSessionId));
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.error("storage.getStarredHandsByGrindSession.error", {
+      grindSessionId,
+      err,
+    });
+    return [];
+  }
+}
+
+async function listUsersForWeeklyStudyPlanCron(): Promise<
+  Array<{ userPlatformId: string; isActive: boolean }>
+> {
+  try {
+    const rows = await db
+      .select({
+        userPlatformId: users.userPlatformId,
+        isActive: sql<boolean>`COALESCE(${users.status} = 'active', false)`,
+      })
+      .from(users)
+      .where(eq(users.status, "active"));
+    return Array.isArray(rows)
+      ? (rows as Array<{ userPlatformId: string; isActive: boolean }>)
+      : [];
+  } catch (err) {
+    console.error("storage.listUsersForWeeklyStudyPlanCron.error", { err });
+    return [];
+  }
+}
+
+(storage as any).upsertStudyWeeklyPlan = upsertStudyWeeklyPlan;
+(storage as any).getStudyWeeklyPlan = getStudyWeeklyPlan;
+(storage as any).markPlanItemCompleted = markPlanItemCompleted;
+(storage as any).listStudyWeeklyPlans = listStudyWeeklyPlans;
+(storage as any).getRecentStudySessionAvgMinutes = getRecentStudySessionAvgMinutes;
+(storage as any).upsertCoachSessionInsights = upsertCoachSessionInsights;
+(storage as any).getCoachSessionInsights = getCoachSessionInsights;
+(storage as any).hasFreshCoachSessionInsights = hasFreshCoachSessionInsights;
+(storage as any).getCoachSessionInsightsByUser = getCoachSessionInsightsByUser;
+(storage as any).findStudyThemesByLinkedStat = findStudyThemesByLinkedStat;
+(storage as any).getLibraryLessonsByIds = getLibraryLessonsByIds;
+(storage as any).getLibraryLessonProgressByUser = getLibraryLessonProgressByUser;
+(storage as any).listCuratedStudyThemes = listCuratedStudyThemes;
+(storage as any).listLibraryLessonsCurated = listLibraryLessonsCurated;
+(storage as any).listStarredHandsRecent = listStarredHandsRecent;
+(storage as any).getTournamentsByGrindSession = getTournamentsByGrindSession;
+(storage as any).getStarredHandsByGrindSession = getStarredHandsByGrindSession;
+(storage as any).listUsersForWeeklyStudyPlanCron = listUsersForWeeklyStudyPlanCron;
 
 // Tests que dependiam dos IDs fixture (tkt-1, etc.) declaram seu proprio
 // vi.mock('../../../server/db', ...) com Drizzle-shape fake backed por Map.

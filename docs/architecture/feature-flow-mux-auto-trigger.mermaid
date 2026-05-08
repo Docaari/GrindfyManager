@@ -1,0 +1,90 @@
+sequenceDiagram
+    %% =====================================================================
+    %% Sprint Estudos-Coach-Biblio-2 — RF-1 Auto-trigger Mux 80%
+    %% Ref: ADR-131 (client-side trigger), ADR-130 (idempotency 24h), ADR-135 (theme_id nullable)
+    %% =====================================================================
+
+    actor User
+    participant Player as Mux Player<br/>(<mux-player>)
+    participant Hook as useLessonStudyAutoLog<br/>(client-side)
+    participant API as POST /api/study-sessions
+    participant Lookup as themeId lookup<br/>(study_themes.linked_lessons)
+    participant DB as PostgreSQL<br/>(study_sessions_v2)
+    participant Toast as Toast UI
+
+    Note over User,Toast: Trigger client-side + cap+validacao+idempotency server-side (ADR-131)
+
+    User->>Player: assiste aula
+    Player->>Hook: timeupdate event<br/>(currentTime, duration)
+    Hook->>Hook: progressPct = currentTime/duration
+
+    alt progressPct < 0.80 OR firedThisMount
+        Hook--xPlayer: no-op
+    else progressPct >= 0.80 AND !firedThisMount
+        Hook->>Hook: setting.studyHabit.autoLogLessons?
+
+        alt autoLogLessons = false (RF-1.5 opt-out)
+            Hook--xPlayer: hook inerte
+        else autoLogLessons = true
+            Hook->>Hook: firedThisMount = true
+
+            Hook->>API: POST { mode: "lesson",<br/>source: "auto_lesson",<br/>lessonId, durationMinutes }
+
+            Note over API: requireAuth — userId from JWT
+
+            API->>API: validate Zod (mode, source, lessonId)
+
+            alt lessonId invalido
+                API-->>Hook: 400 LESSON_NOT_FOUND
+                Hook->>Hook: console.warn dev (lesson #9)
+                Hook--xUser: silent (sem toast erro)
+            else lessonId valido
+                API->>API: validate is_published=true
+
+                alt aula despublicada
+                    API-->>Hook: 400 LESSON_NOT_PUBLISHED
+                    Hook--xUser: silent
+                else aula publicada
+                    API->>API: cap durationMinutes:<br/>min(payload, lessonRuntime/60 + 5)
+
+                    API->>Lookup: SELECT id FROM study_themes<br/>WHERE linked_lessons @> [lessonId]<br/>AND is_curated=true LIMIT 1
+
+                    alt match encontrado
+                        Lookup-->>API: themeId
+                    else zero match (RF-1.2 errata ADR-135)
+                        Lookup-->>API: themeId = NULL
+                    end
+
+                    Note over API,DB: Idempotency 24h (ADR-130)
+
+                    API->>DB: BEGIN TRANSACTION
+                    API->>DB: SELECT * FROM study_sessions_v2<br/>WHERE user_id=$1 AND lesson_id=$2<br/>AND source='auto_lesson'<br/>AND deleted_at IS NULL<br/>AND registered_at > now() - 24h<br/>FOR UPDATE LIMIT 1
+
+                    alt existing AND new.duration > existing.duration
+                        DB-->>API: existing row
+                        API->>DB: UPDATE existing<br/>SET duration_minutes=new,<br/>ended_at=new, updated_at=now()
+                        DB-->>API: updated
+                        API-->>Hook: 200 { updated: true, sessionId }
+                        Hook->>Toast: variant=info<br/>"Aula em andamento — progresso atualizado"
+                        Toast-->>User: no action button
+                    else existing AND new.duration <= existing.duration
+                        DB-->>API: existing row (no progress)
+                        API->>DB: COMMIT (no-op)
+                        API-->>Hook: 200 { updated: false, reason: no_progress }
+                        Hook--xUser: silent (sem toast)
+                    else nao existing
+                        DB-->>API: empty result
+                        API->>DB: INSERT study_sessions_v2<br/>(mode=lesson, source=auto_lesson,<br/>theme_id=themeId OR NULL,<br/>lesson_id, duration_minutes,<br/>registered_at=now())
+                        Note over API,DB: streak/goal update<br/>(mesma transaction RF-2 Sprint 1)
+                        API->>DB: UPDATE users.study_streak_days, etc.
+                        DB-->>API: COMMIT
+                        API-->>Hook: 201 { created: true, sessionId }
+                        Hook->>Toast: variant=success<br/>"Estudo registrado: [titulo] (X min)"
+                        Toast-->>User: action [Ver detalhes] →<br/>navega /estudos?session=ID
+                    end
+                end
+            end
+        end
+    end
+
+    Note over Player,Hook: Re-mount do player reseta firedThisMount<br/>Server faz UPDATE idempotente (no-op real)

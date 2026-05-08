@@ -51,6 +51,12 @@ export interface StudyLogDialogProps {
   initialMode?: Mode;
   defaultThemeId?: string | null;
   defaultDurationMinutes?: number;
+  /**
+   * Sprint Estudos-Coach-Biblio-2 / RF-4.4: pre-fill starredHandIds quando
+   * dialog eh aberto via CTA "Registrar review" do SessionInsightsPanel.
+   * Aplicado apenas para mode='hand_review'.
+   */
+  defaultStarredHandIds?: string[];
 }
 
 function isThemeRequired(mode: Mode): boolean {
@@ -63,6 +69,7 @@ export function StudyLogDialog({
   initialMode = "drill_gto",
   defaultThemeId = null,
   defaultDurationMinutes = 30,
+  defaultStarredHandIds,
 }: StudyLogDialogProps) {
   const [mode, setMode] = React.useState<Mode>(initialMode);
   const [themeId, setThemeId] = React.useState<string | null>(defaultThemeId);
@@ -73,7 +80,11 @@ export function StudyLogDialog({
   const [isLive, setIsLive] = React.useState<boolean>(false);
   const [tournamentId, setTournamentId] = React.useState<string>("");
   const [lessonId, setLessonId] = React.useState<string>("");
-  const [starredHandIds, setStarredHandIds] = React.useState<string>("");
+  const [starredHandIds, setStarredHandIds] = React.useState<string>(
+    defaultStarredHandIds && defaultStarredHandIds.length > 0
+      ? defaultStarredHandIds.join(",")
+      : "",
+  );
   const [drillPlatform, setDrillPlatform] = React.useState<string>("");
   const [submitting, setSubmitting] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -82,12 +93,22 @@ export function StudyLogDialog({
   const themeSearch = useThemeSearch();
 
   // Reset campos especificos ao trocar mode (mantem theme/notes/duration).
+  // Sprint Estudos-Coach-Biblio-2 RF-4.4: quando mode='hand_review' E
+  // defaultStarredHandIds foi passado, mantem o pre-fill em vez de zerar.
   React.useEffect(() => {
     setTournamentId("");
     setLessonId("");
-    setStarredHandIds("");
+    if (
+      mode === "hand_review" &&
+      defaultStarredHandIds &&
+      defaultStarredHandIds.length > 0
+    ) {
+      setStarredHandIds(defaultStarredHandIds.join(","));
+    } else {
+      setStarredHandIds("");
+    }
     setDrillPlatform("");
-  }, [mode]);
+  }, [mode, defaultStarredHandIds]);
 
   // Lessons #1: early return DEPOIS dos hooks.
   if (!open) return null;

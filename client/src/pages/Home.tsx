@@ -59,6 +59,8 @@ import NewsFeed from '@/components/home/NewsFeed';
 import DashboardAllTimeCard from '@/components/home/DashboardAllTimeCard';
 import AllTimeEvolutionChart from '@/components/home/AllTimeEvolutionChart';
 import FocusStatsCard from '@/components/home/FocusStatsCard';
+// Sprint Estudos-Coach-Biblio-2 RF-2.5: aulas recomendadas por leak na zona Estudos.
+import { BibliotecaRecommendationsCard } from '@/components/biblioteca/BibliotecaRecommendationsCard';
 
 import type { NewsItem } from '@shared/types/news';
 // Sprint home-reform-5 item 11 — visibility toggles.
@@ -499,6 +501,9 @@ const Home: React.FC = () => {
               <section data-testid="home-zone-estudos" className="space-y-3">
                 <ZoneHeading>Estudos</ZoneHeading>
                 <FocusStatsCard />
+                {/* Sprint Estudos-Coach-Biblio-2 RF-2.5 — aulas
+                    recomendadas baseadas em leaks atuais. */}
+                <BibliotecaRecommendationsCard placement="home" />
               </section>
             ) : null}
 

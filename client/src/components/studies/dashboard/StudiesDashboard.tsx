@@ -20,6 +20,10 @@ import { StudyHeaderHabit, type StudyHeaderHabitData } from '@/components/study/
 import { FocusStatsBar } from '@/components/study/FocusStatsBar';
 import { StudyLogDialog } from '@/components/study/StudyLogDialog';
 import { useFocusStatsBar } from '@/hooks/useFocusStatsBar';
+// Sprint Estudos-Coach-Biblio-2 RF-2.5 + RF-3.6: weekly plan + biblioteca
+// recommendations no header /estudos.
+import { StudyWeeklyPlanCard } from '@/components/study/StudyWeeklyPlanCard';
+import { BibliotecaRecommendationsCard } from '@/components/biblioteca/BibliotecaRecommendationsCard';
 
 interface RecResponse {
   items: Array<{
@@ -202,6 +206,12 @@ export function StudiesDashboard() {
           Registrar Estudo
         </button>
       </div>
+
+      {/* Sprint Estudos-Coach-Biblio-2 RF-3.6: plano semanal Coach. */}
+      <StudyWeeklyPlanCard />
+
+      {/* Sprint Estudos-Coach-Biblio-2 RF-2.5: aulas recomendadas por leak. */}
+      <BibliotecaRecommendationsCard placement="estudos" />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <section

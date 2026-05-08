@@ -35,6 +35,10 @@ import {
 } from "@/lib/library-video-speed-storage";
 import { NextLessonCTA } from "@/components/biblioteca/NextLessonCTA";
 import { useCoachRecommendationConsume } from "@/hooks/useCoachRecommendationConsume";
+// Sprint Estudos-Coach-Biblio-2 RF-1.1 + RF-1.4: auto-log da aula como study
+// session quando user passa de 80% do progresso (cross-format) + toast.
+import { useLessonAutoLog } from "@/hooks/useLessonAutoLog";
+import { LessonAutoLogToast } from "@/components/study/LessonAutoLogToast";
 
 // MuxPlayer module shape varies (default export vs namespace). Resolve once.
 const MuxPlayer = (MuxPlayerRaw as any)?.default ?? MuxPlayerRaw;
@@ -219,6 +223,51 @@ export function LessonViewer({
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const mediaElementRef = useRef<HTMLMediaElement | null>(null);
   useCoachRecommendationConsume({ mediaRef: mediaElementRef });
+  // Sprint Estudos-Coach-Biblio-2 RF-1.1 + RF-1.4: auto-log study session aos 80%.
+  // autoLogEnabled vem do setting `studyHabit.autoLogLessons` (default true).
+  // FASE A backend ja aceita `source='auto_lesson'`; quando setting layer
+  // estiver no client, plugar via prop. Por ora, default true (RF-1.5 spec).
+  //
+  // HIGH-2 fix: passamos `containerRef` (RefObject) em vez de `.current`. Ref
+  // attach nao re-renderiza, entao `.current` lido fora do useEffect ficava
+  // null pra sempre. Hook agora le `.current` dentro do useEffect — quando
+  // o effect re-roda apos lessonId chegar, o container ja foi attached.
+  const [autoLogEnabled] = useState<boolean>(true);
+  const { lastLogged: autoLogResult } = useLessonAutoLog({
+    lessonId: lessonQuery.data?.id ?? null,
+    containerRef: playerContainerRef,
+    autoLogEnabled,
+  });
+
+  // HIGH-3 / RF-1.4: dispatch toast quando auto-log resolve. Auto-clear no hook
+  // (5s) garante que o toast nao re-emite em re-render.
+  const lastToastIdRef = useRef<string | number | null>(null);
+  useEffect(() => {
+    if (!autoLogResult) return;
+    // Idempotent: usa combinacao lessonId+durationMinutes+status como chave.
+    const key = `${autoLogResult.lessonId}|${autoLogResult.durationMinutes}|${autoLogResult.status}`;
+    if (lastToastIdRef.current === key) return;
+    lastToastIdRef.current = key;
+
+    if (autoLogResult.status === "success" && autoLogResult.sessionId) {
+      const sessionId = autoLogResult.sessionId;
+      const lessonTitle = lessonQuery.data?.title ?? "Aula";
+      const t = toast({
+        duration: 5000,
+        // Wrap component em title (action slot exige ToastActionElement, que
+        // tem typing rigido — usamos title como ReactNode pra simplicidade).
+        title: (
+          <LessonAutoLogToast
+            variant="success"
+            lessonTitle={lessonTitle}
+            durationMinutes={autoLogResult.durationMinutes}
+            sessionId={sessionId}
+            onDismiss={() => t.dismiss()}
+          />
+        ) as any,
+      });
+    }
+  }, [autoLogResult, lessonQuery.data?.title, toast]);
   // F-A4.5: persisted font size for article reader.
   const [articleFontSize, setArticleFontSize] = useState<ArticleFontSize>(
     () => readStoredFontSize(),

@@ -59,6 +59,10 @@ import { registerAdminFxRoutes } from "./adminFx";
 // Sprint Estudos-Habito-1: /api/study-sessions + /api/users/me/study-habit + auto-suggest.
 import { registerStudySessionsRoutes } from "./study-sessions";
 import { registerFocusStatsAutoSuggestRoutes } from "./focus-stats-auto-suggest";
+// Sprint Estudos-Coach-Biblio-2: /api/biblioteca/recommendations, /api/study-weekly-plan, /api/coach/session-insights.
+import { registerBibliotecaRecommendationsRoutes } from "./biblioteca-recommendations";
+import { registerStudyWeeklyPlanRoutes } from "./study-weekly-plan";
+import { registerCoachSessionInsightsRoutes } from "./coach-session-insights";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -206,6 +210,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // canonical /api/home/settings (registrado acima).
   registerStudySessionsRoutes(app);
   registerFocusStatsAutoSuggestRoutes(app);
+
+  // Sprint Estudos-Coach-Biblio-2 — RF-2/3/4 endpoints.
+  registerBibliotecaRecommendationsRoutes(app);
+  registerStudyWeeklyPlanRoutes(app);
+  registerCoachSessionInsightsRoutes(app);
 
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);
