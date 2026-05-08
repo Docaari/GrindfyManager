@@ -36,9 +36,13 @@ function currentMonthUtc(date: Date = new Date()): string {
 // LOW-14 reviewer: month removido do body. Sempre derivado server-side
 // (currentMonthUtc()). Cliente nao pode marcar foco em mes passado/futuro
 // porque o servidor ignora qualquer valor que receba.
+//
+// Sprint Estudos-Habito-1 (RF-3.1): studyThemeId agora aceita null (foco
+// sem tema linkado), mas a chave precisa estar presente no body — evita
+// regressao em testes legados que esperam 400 quando key ausente.
 const createBodySchema = z.object({
   statId: z.string().min(1).max(64),
-  studyThemeId: z.string().min(1).max(21),
+  studyThemeId: z.string().min(1).max(21).nullable(),
 });
 
 export async function handleCreateFocusStat(
@@ -93,7 +97,8 @@ export async function handleCreateFocusStat(
       return;
     }
 
-    const { statId, studyThemeId } = parsed.data;
+    const { statId, studyThemeId: rawThemeId } = parsed.data;
+    const studyThemeId = rawThemeId ?? null;
     // Server SEMPRE deriva month — cliente nao pode escolher.
     const month = currentMonthUtc();
 
@@ -106,14 +111,17 @@ export async function handleCreateFocusStat(
       return;
     }
 
-    // Ownership do tema. 404 (nao 403) para nao vazar existencia.
-    const theme = await (storage as any).getStudyThemeById(studyThemeId);
-    if (!theme || theme.userId !== userId) {
-      res.status(404).json({
-        error: "THEME_NOT_FOUND",
-        message: "Tema nao encontrado",
-      });
-      return;
+    // Ownership do tema (skip quando null — RF-3.1). 404 (nao 403) para nao
+    // vazar existencia.
+    if (studyThemeId !== null) {
+      const theme = await (storage as any).getStudyThemeById(studyThemeId);
+      if (!theme || theme.userId !== userId) {
+        res.status(404).json({
+          error: "THEME_NOT_FOUND",
+          message: "Tema nao encontrado",
+        });
+        return;
+      }
     }
 
     // Pre-check do limite (race protegido pela transacao no storage).

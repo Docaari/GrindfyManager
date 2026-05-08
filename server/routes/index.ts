@@ -56,6 +56,9 @@ import { registerHomeSettingsRoutes } from "./home-settings";
 // Sprint FX-1: /api/fx/current (user-level) + /api/admin/fx/* (admin-only).
 import { registerFxRoutes } from "./fx";
 import { registerAdminFxRoutes } from "./adminFx";
+// Sprint Estudos-Habito-1: /api/study-sessions + /api/users/me/study-habit + auto-suggest.
+import { registerStudySessionsRoutes } from "./study-sessions";
+import { registerFocusStatsAutoSuggestRoutes } from "./focus-stats-auto-suggest";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check — before all middleware (no auth, no CSRF, no rate limit)
@@ -197,6 +200,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sprint FX-1: /api/fx/current + /api/admin/fx/*.
   registerFxRoutes(app);
   registerAdminFxRoutes(app);
+
+  // Sprint Estudos-Habito-1: study sessions v2 + auto-suggest.
+  // Note: aliases /api/users/me/home-layout-settings foram removidos — use
+  // canonical /api/home/settings (registrado acima).
+  registerStudySessionsRoutes(app);
+  registerFocusStatsAutoSuggestRoutes(app);
 
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);

@@ -39,6 +39,8 @@ import HudOcrPreview, {
 } from "./stats/HudOcrPreview";
 import HudCustomStatDialog from "./stats/HudCustomStatDialog";
 import { HUD_GROUP_IDS, type HudGroupId } from "@shared/hud-stat-catalog";
+// Sprint Estudos-Habito-1 (RF-3.2): FocusStatsHeader no topo do StatsAnalyzerTab.
+import { FocusStatsHeader, type FocusStatsHeaderItem } from "@/components/study/FocusStatsHeader";
 
 type ViewMode = "list" | "grouped" | "compare" | "ocr";
 
@@ -120,6 +122,35 @@ export default function StatsAnalyzerTab() {
     queryKey: ["/api/hud-layouts"],
   });
   const layouts = layoutsQuery.data ?? [];
+
+  // Sprint Estudos-Habito-1 (RF-3.2): focus stats do mes corrente.
+  const focusMonth = useMemo(() => {
+    const d = new Date();
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  }, []);
+  const focusStatsQuery = useQuery<{ items: FocusStatsHeaderItem[] }>({
+    queryKey: ["/api/home/focus-stats", focusMonth],
+    queryFn: () =>
+      fetch(`/api/home/focus-stats?month=${focusMonth}`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : { items: [] }))
+        .catch(() => ({ items: [] })),
+    staleTime: 60_000,
+  });
+  const autoSuggestMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", `/api/stats/focus/auto-suggest?month=${focusMonth}`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/home/focus-stats"] });
+      toast({ title: "3 stats foco sugeridas", description: "Revise no header." });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Falha ao sugerir stats",
+        description: err?.message ?? "Tente novamente",
+        variant: "destructive",
+      });
+    },
+  });
 
   // RF-08: wizard primeiro uso quando layouts.length === 0 apos load
   useEffect(() => {
@@ -236,6 +267,12 @@ export default function StatsAnalyzerTab() {
 
   return (
     <div className="space-y-5" data-testid="stats-analyzer-tab">
+      {/* Sprint Estudos-Habito-1 RF-3.2: header dedicado de stats foco. */}
+      <FocusStatsHeader
+        data={{ items: focusStatsQuery.data?.items ?? [] }}
+        onAutoSuggest={() => autoSuggestMutation.mutate()}
+        onManualSelect={() => setEditorOpen(true)}
+      />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-semibold text-white flex items-center gap-2">

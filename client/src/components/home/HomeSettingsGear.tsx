@@ -23,9 +23,20 @@ import {
   DEFAULT_HOME_LAYOUT_SETTINGS,
   HOME_VISIBILITY_KEYS,
   HOME_SECTION_LABELS,
+  FOCUS_STATS_PLACEMENTS,
   type HomeLayoutSettings,
   type HomeSectionKey,
+  type FocusStatsVisibility,
 } from '@shared/types/homeSettings';
+
+// Sprint Estudos-Habito-1 RF-4.2 — labels PT-BR per placement.
+const FOCUS_PLACEMENT_LABELS: Record<keyof FocusStatsVisibility, string> = {
+  home: 'Home',
+  grindLive: 'Grind Live',
+  coach: 'Coach',
+  estudos: 'Estudos',
+  statsAnalyzer: 'Stats Analyzer',
+};
 
 const QUERY_KEY = ['/api/home/settings'];
 
@@ -44,6 +55,10 @@ export default function HomeSettingsGear(): JSX.Element {
       typeof data?.performanceFromGrind === 'boolean'
         ? data.performanceFromGrind
         : DEFAULT_HOME_LAYOUT_SETTINGS.performanceFromGrind,
+    focusStatsVisibility: {
+      ...DEFAULT_HOME_LAYOUT_SETTINGS.focusStatsVisibility,
+      ...((data as any)?.focusStatsVisibility ?? {}),
+    },
   };
 
   const mutation = useMutation<HomeLayoutSettings, Error, Partial<HomeLayoutSettings>>({
@@ -57,6 +72,10 @@ export default function HomeSettingsGear(): JSX.Element {
           typeof patch.performanceFromGrind === 'boolean'
             ? patch.performanceFromGrind
             : settings.performanceFromGrind,
+        focusStatsVisibility: {
+          ...settings.focusStatsVisibility,
+          ...((patch as any).focusStatsVisibility ?? {}),
+        },
       };
       queryClient.setQueryData(QUERY_KEY, optimistic);
       return { prev };
@@ -83,6 +102,14 @@ export default function HomeSettingsGear(): JSX.Element {
 
   const handleTogglePerfFromGrind = () => {
     mutation.mutate({ performanceFromGrind: !settings.performanceFromGrind });
+  };
+
+  // Sprint Estudos-Habito-1 RF-4.2: toggle granular per-placement.
+  const handleToggleFocusPlacement = (key: keyof FocusStatsVisibility) => {
+    const nextValue = !settings.focusStatsVisibility[key];
+    mutation.mutate({
+      focusStatsVisibility: { [key]: nextValue } as any,
+    });
   };
 
   return (
@@ -146,6 +173,28 @@ export default function HomeSettingsGear(): JSX.Element {
               aria-label="Em desenvolvimento"
             />
           </label>
+        </div>
+
+        {/* Sprint Estudos-Habito-1 RF-4.2: visibility per-placement do FocusStatsBar. */}
+        <div className="mt-4 pt-3 border-t">
+          <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">
+            Stats Foco — onde mostrar
+          </h4>
+          <div className="space-y-2">
+            {FOCUS_STATS_PLACEMENTS.map((key) => (
+              <label
+                key={key}
+                className="flex items-center justify-between gap-3 text-sm"
+              >
+                <span className="truncate">{FOCUS_PLACEMENT_LABELS[key]}</span>
+                <Switch
+                  data-testid={`home-settings-focus-toggle-${key}`}
+                  checked={settings.focusStatsVisibility[key]}
+                  onCheckedChange={() => handleToggleFocusPlacement(key)}
+                />
+              </label>
+            ))}
+          </div>
         </div>
       </PopoverContent>
     </Popover>

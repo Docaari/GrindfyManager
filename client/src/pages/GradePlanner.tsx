@@ -38,6 +38,9 @@ import { PrimedopePanel } from '@/components/primedope/PrimedopePanel';
 import { useBankroll } from '@/hooks/useBankroll';
 // Sprint coach-page-reform-1.
 import { useTabFromUrl } from '@/hooks/useTabFromUrl';
+// Sprint Estudos-Habito-1 (RF-4): FocusStatsBar placement="coach".
+import { FocusStatsBar } from '@/components/study/FocusStatsBar';
+import { useFocusStatsBar } from '@/hooks/useFocusStatsBar';
 import { CoachPendingBanner } from '@/components/grade-planner/CoachPendingBanner';
 import { FlightsPanel } from '@/components/grade-planner/FlightsPanel';
 
@@ -45,6 +48,8 @@ const COACH_TABS = ['planner', 'selector', 'flights', 'variance'] as const;
 const COACH_TAB_LIST: string[] = [...COACH_TABS];
 
 export default function GradePlanner() {
+  // Sprint Estudos-Habito-1 (RF-4): FocusStatsBar placement="coach".
+  const focusBar = useFocusStatsBar('coach');
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -738,6 +743,16 @@ export default function GradePlanner() {
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="w-full px-6 py-6">
+        {/* Sprint Estudos-Habito-1 RF-4: stats foco visiveis no /coach. */}
+        <div className="mb-3">
+          <FocusStatsBar
+            placement="coach"
+            data={focusBar.data}
+            loading={focusBar.loading}
+            error={focusBar.error}
+            visible={focusBar.visible}
+          />
+        </div>
         {/* Header com totais semanais */}
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-6">

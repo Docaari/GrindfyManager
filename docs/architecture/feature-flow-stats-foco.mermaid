@@ -1,0 +1,85 @@
+flowchart TD
+    %% =====================================================================
+    %% Sprint Estudos-Habito-1 — Flow Stats Foco (RF-3)
+    %% Ref: spec RF-3, ADR-127 (linked_stats), ADR-129 (visibility), ADR-116 (existing schema)
+    %% =====================================================================
+
+    Start(["User abre /stats-analyzer"]) --> Render["FocusStatsHeader render no topo"]
+
+    Render --> CountQuery{"COUNT user_focus_stats<br/>WHERE user_id=X AND month=YYYY-MM"}
+
+    CountQuery -->|"count = 0"| EmptyState["Empty state:<br/>'Voce ainda nao escolheu suas 3 stats foco'"]
+    CountQuery -->|"count = 1-2"| PartialState["Render N cards reais +<br/>(3-N) ghost cards"]
+    CountQuery -->|"count = 3"| FullState["Render 3 cards reais"]
+
+    EmptyState --> CTAEmpty{"User escolhe acao"}
+    CTAEmpty -->|"Sugerir 3 stats"| AutoSuggest["POST /api/stats/focus/auto-suggest"]
+    CTAEmpty -->|"Escolher manualmente"| ManualPicker["FocusStatPicker dialog"]
+
+    AutoSuggest --> LeaksQuery["getStatsLeaks(userId)"]
+    LeaksQuery --> Top3{"Pega top 3 leaks por severity"}
+
+    Top3 -->|"3+ leaks"| LookupTheme["Para cada leak:<br/>SELECT study_themes WHERE user_id=X<br/>AND is_curated=true<br/>AND linked_stats @> [stat_id]"]
+    Top3 -->|"< 3 leaks"| FewLeaks["Cria N rows + warning 'low data'"]
+    Top3 -->|"0 leaks"| ZeroLeaks["Retorna 200 com warning"]
+
+    LookupTheme --> ThemeMatch{"Tema match curated?"}
+    ThemeMatch -->|"Sim"| InsertWithTheme["INSERT user_focus_stats<br/>(stat_id, theme_id, month)"]
+    ThemeMatch -->|"Nao"| InsertNullTheme["INSERT user_focus_stats<br/>(stat_id, theme_id=NULL, month)"]
+
+    InsertWithTheme --> CheckDuplicates{"PG 23505 unique_violation?"}
+    InsertNullTheme --> CheckDuplicates
+    FewLeaks --> CheckDuplicates
+
+    CheckDuplicates -->|"Yes"| Skip["Skip — ja existe"]
+    CheckDuplicates -->|"No"| Created["Row criada"]
+
+    Skip --> Done200["200 { created: [...], warnings: [...] }"]
+    Created --> Done200
+    ZeroLeaks --> Done200
+
+    Done200 --> Refresh["UI invalida cache TanStack<br/>queryClient.invalidate('/api/home/focus-stats')"]
+    Refresh --> RenderFull["FullState render 3 cards"]
+
+    ManualPicker --> UserPicks{"User escolhe stat + tema (opcional)"}
+    UserPicks --> POST["POST /api/stats/focus<br/>{ stat_id, study_theme_id (nullable), month }"]
+    POST --> ValidateLimit{"COUNT < 3 in (user, month)?"}
+    ValidateLimit -->|"3 ja existem"| LimitDialog["Dialog 'Trocar uma existente?'"]
+    ValidateLimit -->|"OK"| InsertManual["INSERT user_focus_stats"]
+    InsertManual --> Refresh
+
+    LimitDialog -->|"Trocar"| SwapFlow["DELETE old + INSERT new"]
+    LimitDialog -->|"Cancelar"| Cancel["Sem mudanca"]
+    SwapFlow --> Refresh
+
+    %% =====================================================================
+    %% Card render por stat
+    %% =====================================================================
+    RenderFull --> ForEach["Para cada stat foco do mes corrente:"]
+    PartialState --> ForEach
+    ForEach --> StatValue["Buscar valor atual no HUD snapshot"]
+    StatValue --> StatDelta["Calcular delta vs mes anterior"]
+    StatDelta --> ThemeCheck{"Tema linkado (theme_id NOT NULL)?"}
+
+    ThemeCheck -->|"Sim"| RenderWithTheme["Card: stat name + valor + delta + chip 'Tema: ICM'"]
+    ThemeCheck -->|"Nao"| RenderNoTheme["Card: stat name + valor + delta + 'Sem tema' + CTA 'Vincular'"]
+
+    RenderWithTheme --> SwapBtn["Botao 'Trocar' → modal substituicao"]
+    RenderNoTheme --> SwapBtn
+    SwapBtn --> END(["Render concluido"])
+
+    %% =====================================================================
+    %% Click no chip do FocusStatsBar (RF-4) navega para focus
+    %% =====================================================================
+    FocusBar(["FocusStatsBar chip click"]) -.-> Navigate["wouter.push('/stats-analyzer?focus=stat_id')"]
+    Navigate -.-> Highlight["FocusStatsHeader scroll into view + ring highlight"]
+
+    %% =====================================================================
+    %% Estilizacao
+    %% =====================================================================
+    style EmptyState fill:#fef3c7,color:#000
+    style FullState fill:#dcfce7,color:#000
+    style AutoSuggest fill:#dbeafe,color:#000
+    style InsertWithTheme fill:#bbf7d0,color:#000
+    style InsertNullTheme fill:#fde68a,color:#000
+    style Done200 fill:#d1fae5,color:#000

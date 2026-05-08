@@ -8,9 +8,11 @@
 import { registerSpotScreenshotsCron } from "./purgeSpotScreenshots";
 import { registerNewsRefreshCron } from "./refreshNews";
 import { registerFxRatesCron } from "./refreshFxRates";
+import { registerStudyFreezesCron } from "./resetStudyFreezes";
 
 export async function registerAllJobs(): Promise<void> {
   await registerSpotScreenshotsCron();
   await registerNewsRefreshCron();
   registerFxRatesCron();
+  await registerStudyFreezesCron();
 }

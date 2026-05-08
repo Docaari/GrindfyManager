@@ -15,6 +15,9 @@ import type { Express, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../auth';
 import { storage } from '../storage';
+// Sprint Estudos-Habito-1 (P0 #3): unifica streak no service novo (incrementa
+// freezes + race-safe via SELECT FOR UPDATE).
+import { bumpStudyStreak as bumpStudyStreakService } from '../services/studyStreak';
 
 const bumpLimit = rateLimit({
   windowMs: 60 * 1000,
@@ -49,8 +52,19 @@ export async function handleBumpStreak(req: Request, res: Response): Promise<voi
     return;
   }
   try {
-    const result = await storage.bumpStudyStreak(userPlatformId);
-    res.status(200).json(result);
+    // P0 #3: usa service unificado (incrementa freezes + lazy reset + race-safe).
+    // Map para o shape legado {days, last_activity_at, bumped} para nao quebrar
+    // clientes existentes do endpoint /api/study/streak/bump.
+    const result = await bumpStudyStreakService({ userId: userPlatformId });
+    res.status(200).json({
+      days: result.streakDays,
+      last_activity_at: new Date().toISOString(),
+      bumped: result.transition === 'incremented'
+        || result.transition === 'freeze_consumed'
+        || result.transition === 'reset'
+        || result.transition === 'reset_long',
+      transition: result.transition,
+    });
   } catch (err) {
     console.error('[study-misc] bumpStreak failed', {
       userPlatformId,

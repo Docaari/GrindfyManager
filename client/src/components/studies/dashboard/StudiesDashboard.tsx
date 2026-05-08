@@ -6,7 +6,7 @@
  * em queryFn — falha de uma query nao bloqueia outras.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { ContinueWhereLeftOff } from './ContinueWhereLeftOff';
@@ -15,6 +15,11 @@ import { PendingSpotsPreview } from './PendingSpotsPreview';
 import { RecommendationsPreview } from './RecommendationsPreview';
 import { StudyStreakBadge } from '../StudyStreakBadge';
 import { EmptyState } from '../EmptyState';
+// Sprint Estudos-Habito-1 (RF-2.4 / RF-4 / RF-1.6): wiring na home /estudos.
+import { StudyHeaderHabit, type StudyHeaderHabitData } from '@/components/study/StudyHeaderHabit';
+import { FocusStatsBar } from '@/components/study/FocusStatsBar';
+import { StudyLogDialog } from '@/components/study/StudyLogDialog';
+import { useFocusStatsBar } from '@/hooks/useFocusStatsBar';
 
 interface RecResponse {
   items: Array<{
@@ -46,6 +51,26 @@ async function jsonFetch<T>(url: string): Promise<T> {
 
 export function StudiesDashboard() {
   const [, navigate] = useLocation();
+  // Sprint Estudos-Habito-1 RF-1: dialog "Registrar Estudo" controlado.
+  const [logOpen, setLogOpen] = useState(false);
+
+  // RF-2: study habit (streak + meta + freezes).
+  const habitQ = useQuery<StudyHeaderHabitData>({
+    queryKey: ['/api/users/me/study-habit'],
+    queryFn: () =>
+      jsonFetch<StudyHeaderHabitData>('/api/users/me/study-habit').catch(() => ({
+        streakDays: 0,
+        todayMinutes: 0,
+        goalMinutes: 0,
+        todayMet: true,
+        freezesUsedThisMonth: 0,
+        freezesRemaining: 2,
+      })),
+    staleTime: 30 * 1000,
+  });
+
+  // RF-4: FocusStatsBar (placement="estudos").
+  const focusBar = useFocusStatsBar('estudos');
 
   const themesQ = useQuery<any[]>({
     queryKey: ['/api/study-themes'],
@@ -85,13 +110,6 @@ export function StudiesDashboard() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const streakQ = useQuery<{ days: number }>({
-    queryKey: ['/api/study/streak'],
-    queryFn: () =>
-      jsonFetch<{ days: number }>('/api/study/streak').catch(() => ({ days: 0 })),
-    staleTime: 5 * 60 * 1000,
-  });
-
   const themes = themesQ.data ?? [];
   const spots = spotsQ.data ?? [];
   const insights = insightsQ.data ?? {
@@ -100,10 +118,12 @@ export function StudiesDashboard() {
     hoursStudiedThisWeek: 0,
   };
   const recs = recsQ.data ?? { items: [], source_counts: { leaks: 0, stale_spots: 0, dormant_themes: 0 } };
-  const streakDays = streakQ.data?.days ?? 0;
+  // P0 #7: streak agora vem de habitQ (single query) — antes tinhamos duplicate
+  // GET /api/study/streak. StudyStreakBadge tambem ja le de habit endpoint.
+  const streakDays = habitQ.data?.streakDays ?? 0;
 
   const isFirstFetch =
-    themesQ.isLoading || spotsQ.isLoading || insightsQ.isLoading || streakQ.isLoading;
+    themesQ.isLoading || spotsQ.isLoading || insightsQ.isLoading || habitQ.isLoading;
 
   const isEmpty = useMemo(
     () => themes.length === 0 && spots.length === 0,
@@ -159,6 +179,30 @@ export function StudiesDashboard() {
         <p className="text-sm text-gray-400 mt-1">Continue de onde parou nos estudos.</p>
       </div>
 
+      {/* Sprint Estudos-Habito-1 RF-2.4: header habito (streak + meta + freezes). */}
+      {habitQ.data && <StudyHeaderHabit data={habitQ.data} />}
+
+      {/* Sprint Estudos-Habito-1 RF-4: FocusStatsBar para /estudos. */}
+      <FocusStatsBar
+        placement="estudos"
+        data={focusBar.data}
+        loading={focusBar.loading}
+        error={focusBar.error}
+        visible={focusBar.visible}
+      />
+
+      {/* Sprint Estudos-Habito-1 RF-1: CTA primario para abrir dialog. */}
+      <div>
+        <button
+          type="button"
+          data-testid="studies-dashboard-register-study"
+          onClick={() => setLogOpen(true)}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded font-medium"
+        >
+          Registrar Estudo
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <section
           data-testid="studies-dashboard-card-continue"
@@ -206,6 +250,13 @@ export function StudiesDashboard() {
           <StudyStreakBadge />
         </section>
       </div>
+
+      {/* Sprint Estudos-Habito-1 RF-1: dialog de registro lazy mount. P0 #7
+          decisao: /estudos usa botao "Registrar Estudo" + dialog inline; FAB
+          fica reservado para /coach + /grind-live (evita dialog duplicado). */}
+      {logOpen && (
+        <StudyLogDialog open={logOpen} onClose={() => setLogOpen(false)} />
+      )}
     </div>
   );
 }

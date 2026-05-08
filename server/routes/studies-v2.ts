@@ -210,9 +210,21 @@ export function registerStudiesV2Routes(app: Express): void {
   });
 
   // GET /api/study-themes - List all themes for user (seed defaults if empty)
+  // Sprint Estudos-Habito-1 (HIGH-2 fix): chama ensureCuratedThemesForUser
+  // antes do SELECT para garantir que curated themes (ADR-127) estejam seeded
+  // de forma idempotente. Inclui slug, isCurated, category, linkedStats,
+  // linkedLessons no SELECT.
   app.get("/api/study-themes", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
+
+      // Lazy seed curated themes (idempotente).
+      try {
+        await (storage as any).ensureCuratedThemesForUser(userId);
+      } catch (err) {
+        console.error("ensureCuratedThemesForUser failed", err);
+        // Nao falha a request — proceed mesmo se seed falhar.
+      }
 
       let themes = await db
         .select({
@@ -224,6 +236,11 @@ export function registerStudiesV2Routes(app: Express): void {
           isFavorite: studyThemes.isFavorite,
           sortOrder: studyThemes.sortOrder,
           progress: studyThemes.progress,
+          slug: studyThemes.slug,
+          isCurated: studyThemes.isCurated,
+          category: studyThemes.category,
+          linkedStats: studyThemes.linkedStats,
+          linkedLessons: studyThemes.linkedLessons,
           createdAt: studyThemes.createdAt,
           updatedAt: studyThemes.updatedAt,
           tabCount: sql<number>`cast((select count(*) from study_tabs where study_tabs.theme_id = ${studyThemes.id}) as integer)`,
@@ -232,7 +249,7 @@ export function registerStudiesV2Routes(app: Express): void {
         .where(eq(studyThemes.userId, userId))
         .orderBy(desc(studyThemes.isFavorite), asc(studyThemes.sortOrder));
 
-      // Seed default themes on first access
+      // Seed default themes on first access (custom defaults legacy)
       if (themes.length === 0) {
         for (let i = 0; i < DEFAULT_THEMES.length; i++) {
           const def = DEFAULT_THEMES[i];
@@ -264,6 +281,11 @@ export function registerStudiesV2Routes(app: Express): void {
             isFavorite: studyThemes.isFavorite,
             sortOrder: studyThemes.sortOrder,
             progress: studyThemes.progress,
+            slug: studyThemes.slug,
+            isCurated: studyThemes.isCurated,
+            category: studyThemes.category,
+            linkedStats: studyThemes.linkedStats,
+            linkedLessons: studyThemes.linkedLessons,
             createdAt: studyThemes.createdAt,
             updatedAt: studyThemes.updatedAt,
             tabCount: sql<number>`cast((select count(*) from study_tabs where study_tabs.theme_id = ${studyThemes.id}) as integer)`,

@@ -1,0 +1,61 @@
+stateDiagram-v2
+    %% =====================================================================
+    %% Sprint Estudos-Habito-1 — State Machine Streak (ADR-128)
+    %% Ref: spec RF-2, ADR-128 (algoritmo + race-safe + freezes mensais)
+    %% =====================================================================
+
+    [*] --> StreakZero: User cria conta
+
+    StreakZero --> StreakActive: bumpStudyStreak<br/>todayMet=true<br/>(primeira vez)
+    StreakZero --> StreakZero: bumpStudyStreak<br/>todayMet=false<br/>(goal nao atingido)
+
+    state StreakActive {
+        [*] --> Idle
+        Idle --> Idempotent: bump<br/>gap=0<br/>(ja contou hoje)
+        Idle --> Incremented: bump<br/>gap=1<br/>(dia consecutivo)
+        Idle --> FreezeConsumed: bump<br/>gap=2 AND freezesUsed<2
+        Idle --> Reset: bump<br/>gap>=2 AND freezesUsed=2<br/>OR gap>=3
+        Idle --> NotMet: bump<br/>todayMet=false
+
+        Incremented --> Idle: streakDays += 1<br/>lastActivityDate = today
+        FreezeConsumed --> Idle: streakDays += 1<br/>freezesUsed += 1<br/>lastActivityDate = today
+        Reset --> Idle: streakDays = 1<br/>lastActivityDate = today
+        NotMet --> Idle: <i>nada muda</i>
+        Idempotent --> Idle: <i>nada muda</i>
+    }
+
+    StreakActive --> StreakZero: Admin reset manual<br/>(out of scope MVP)
+
+    %% =====================================================================
+    %% Lazy reset mensal de freezes (ADR-128 §2.3)
+    %% =====================================================================
+    state LazyResetCheck {
+        [*] --> CompareCurrentMonth
+        CompareCurrentMonth --> SameMonth: lastFreezeResetMonth == currentMonth
+        CompareCurrentMonth --> MonthFlipped: lastFreezeResetMonth != currentMonth
+        SameMonth --> [*]: freezesUsed inalterado
+        MonthFlipped --> [*]: freezesUsed = 0<br/>lastFreezeResetMonth = currentMonth
+    }
+
+    note right of LazyResetCheck
+        Executado em todo bumpStudyStreak (passo 2 do algoritmo).
+        Cron 00:05 UTC tambem reseta proativamente.
+        Fail-safe — qualquer um sozinho mantem dados consistentes.
+    end note
+
+    %% =====================================================================
+    %% Notas finais
+    %% =====================================================================
+    note left of StreakActive
+        Race-safe: SELECT users FOR UPDATE
+        dentro da mesma tx do INSERT study_sessions_v2.
+        Anchor "today" = registered_at UTC date (NAO started_at).
+        Spec §RF-2.5: log tardio (post-hoc 2 dias atras)
+        conta no dia que registered_at acontece.
+    end note
+
+    note right of StreakZero
+        goal=0 (desligado): qualquer session 1min
+        marca todayMet=true → streak avanca normalmente.
+        goal=30 (default sugerido): exige sum >= 30min/dia.
+    end note

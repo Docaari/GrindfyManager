@@ -1,0 +1,129 @@
+erDiagram
+    %% =====================================================================
+    %% Sprint Estudos-Habito-1 — ER Diagrama
+    %% Ref: Docs/specs/estudos-habito-1.md, ADR-126, ADR-127, ADR-128, ADR-129, ADR-130
+    %% =====================================================================
+
+    users {
+        varchar id PK "nanoid"
+        varchar user_platform_id UK "USER-XXXX"
+        varchar email UK "not null"
+        varchar timezone "default America/Sao_Paulo"
+        integer study_streak_days "default 0 (Studies-Reform)"
+        timestamp last_study_activity_at "Studies-Reform"
+        integer daily_study_goal_minutes "NEW — default 0; enum 0/15/30/45/60/90/120"
+        integer study_streak_freezes_used_this_month "NEW — default 0"
+        varchar last_freeze_reset_month "NEW — len 7 'YYYY-MM' nullable"
+        jsonb home_layout_settings "ADR-119 estendido com focusStatsVisibility nested"
+    }
+
+    study_themes {
+        varchar id PK "nanoid 21"
+        varchar user_id FK "users.user_platform_id, not null"
+        varchar name "max 50"
+        varchar color "default #16a34a"
+        varchar emoji "max 4"
+        varchar slug "NEW — len 60 nullable; UNIQUE parcial WHERE is_curated=true"
+        boolean is_curated "NEW — default false"
+        varchar category "NEW — len 32 nullable; preflop/postflop/icm/mental/specific"
+        jsonb linked_stats "NEW — default '[]'; array de stat_id"
+        jsonb linked_lessons "NEW — default '[]'; array de lesson_id"
+        timestamp seeded_at "NEW — quando o user recebeu copia"
+        boolean is_favorite "default false"
+        integer sort_order "default 0"
+        integer progress "default 0"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    study_sessions_v2 {
+        varchar id PK "nanoid 21"
+        varchar user_id FK "users.user_platform_id, CASCADE"
+        varchar mode "len 32 NOT NULL — drill_gto/tournament_review/hand_review/lesson/other"
+        varchar source "len 32 NOT NULL — manual_post_hoc/manual_live/auto_lesson/auto_grind_finalize"
+        varchar status "len 16 NOT NULL DEFAULT completed — running/completed"
+        varchar theme_id FK "study_themes.id SET NULL"
+        varchar tournament_id FK "tournaments.id SET NULL nullable"
+        varchar lesson_id FK "library_lessons.id SET NULL nullable"
+        jsonb starred_hand_ids "array de starred_hands.id"
+        varchar drill_platform "len 32 nullable"
+        integer drill_accuracy "0-100 nullable"
+        jsonb difficult_spots "array max 5 — {context, note}"
+        integer duration_minutes "NOT NULL — CHECK >=1 AND <=1440"
+        timestamptz started_at "nullable — manual_live anchor"
+        timestamptz ended_at "nullable — manual_live"
+        timestamptz registered_at "NOT NULL DEFAULT now() — anchor do streak"
+        jsonb idle_periods "auto-pause smart"
+        text notes "max 500"
+        jsonb attachments "max 5 — {key, url}"
+        boolean was_productive "nullable — apenas live"
+        boolean daily_goal_met "default false — calc handler RF-2"
+        integer xp_awarded "default 0 — reservado"
+        timestamptz deleted_at "soft delete 24h gate"
+        timestamptz created_at
+        timestamptz updated_at "trigger set_updated_at"
+    }
+
+    user_focus_stats {
+        varchar id PK "nanoid 21"
+        varchar user_id FK "users.user_platform_id, CASCADE"
+        varchar stat_id "len 64 — id em HUD_STAT_CATALOG"
+        varchar study_theme_id FK "study_themes.id CASCADE — DROP NOT NULL (RF-3.1)"
+        varchar month "len 7 — YYYY-MM UTC"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    library_lessons {
+        varchar id PK "nanoid"
+        varchar course_id FK
+        varchar slug "len 80"
+        text title
+        boolean is_published "default false"
+    }
+
+    tournaments {
+        varchar id PK
+        varchar user_id FK "user_platform_id"
+        varchar grind_session_id FK_NULL "regra §6.1 — historico tem grind_session_id IS NULL"
+    }
+
+    starred_hands {
+        varchar id PK "nanoid 21"
+        varchar user_id FK
+        varchar session_id FK
+    }
+
+    %% =====================================================================
+    %% RELACIONAMENTOS
+    %% =====================================================================
+
+    users ||--o{ study_themes : "1:N CASCADE — usuario cria temas (curated copies + custom)"
+    users ||--o{ study_sessions_v2 : "1:N CASCADE — log de estudo"
+    users ||--o{ user_focus_stats : "1:N CASCADE"
+
+    study_themes ||--o{ study_sessions_v2 : "1:N SET NULL — theme_id"
+    study_themes ||--o{ user_focus_stats : "1:N CASCADE — study_theme_id (NULLABLE pos RF-3.1)"
+
+    library_lessons ||--o{ study_sessions_v2 : "1:N SET NULL — lesson_id (auto_lesson + manual lesson mode)"
+
+    tournaments ||--o{ study_sessions_v2 : "1:N SET NULL — tournament_id (mode=tournament_review)"
+
+    starred_hands }o--o{ study_sessions_v2 : "N:N via jsonb starred_hand_ids — sem FK rigida"
+
+    %% =====================================================================
+    %% LEGADO (Studies-Reform / home-reform-4 Item 7)
+    %% =====================================================================
+
+    study_sessions {
+        varchar id PK
+        varchar user_id FK
+        varchar theme_id FK_NULL "ADR-117 — continua alimentando FocusStatsCard"
+        timestamp date "sem TZ awareness"
+        integer duration "minutos — semantica antiga"
+    }
+
+    study_themes ||--o{ study_sessions : "1:N SET NULL — read-only pos ADR-126"
+
+    %% Nota: FocusStatsCard.studyMinutesMonth faz UNION ALL de study_sessions + study_sessions_v2
+    %% durante deprecation gradual. Composer no storage layer (ADR-126 §2).

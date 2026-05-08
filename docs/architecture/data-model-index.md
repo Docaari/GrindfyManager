@@ -233,7 +233,11 @@ Drizzle (em `shared/schema.ts`): Zod `optional + default` em todas as colunas wr
 | `study_tabs` | Abas dentro de tema (boards, ranges, hand_notes, tags). **Coluna opcional Studies-Reform (RF-02 / ADR-067)**: `last_visited_at` timestamp nullable — alimenta "Continue de onde parou" no Dashboard; fallback derivar de `study_sessions.tab_id` mais recente quando nao populada. |
 | `study_materials` | Materiais (video, artigo, pdf) |
 | `study_notes` | Notas de estudo |
-| `study_sessions` | Sessoes de estudo com duracao e scores. **Coluna nova home-reform-4 Item 7 (RF-08 / ADR-117)**: `theme_id` varchar(21) nullable, FK `study_themes(id)` ON DELETE SET NULL — alimenta `studyMinutesMonth` no `FocusStatsCard` da Home. SEM back-fill historico (sessoes pre-Item 7 ficam com `theme_id=NULL`). Indice parcial `idx_study_sessions_user_theme_date` em `(user_id, theme_id, date) WHERE theme_id IS NOT NULL`. Migration `0044_study_sessions_theme_id.sql`. |
+| `study_sessions` | **LEGADO read-only pos Sprint Estudos-Habito-1 (ADR-126).** Sessoes de estudo com duracao e scores. **Coluna nova home-reform-4 Item 7 (RF-08 / ADR-117)**: `theme_id` varchar(21) nullable, FK `study_themes(id)` ON DELETE SET NULL — alimenta `studyMinutesMonth` no `FocusStatsCard` da Home (continua sendo lida via UNION ALL com `study_sessions_v2` durante deprecation gradual — ADR-126 §2). SEM back-fill historico (sessoes pre-Item 7 ficam com `theme_id=NULL`). Indice parcial `idx_study_sessions_user_theme_date` em `(user_id, theme_id, date) WHERE theme_id IS NOT NULL`. Migration `0044_study_sessions_theme_id.sql`. |
+| `study_sessions_v2` | **NOVO Sprint Estudos-Habito-1 (RF-1 / ADR-126).** Tabela nova com schema completo do log de estudo: 4 modos primarios + escape (`drill_gto`/`tournament_review`/`hand_review`/`lesson`/`other`) + 4 sources (`manual_post_hoc`/`manual_live`/`auto_lesson`/`auto_grind_finalize`) + status running/completed + audit (deleted_at 24h gate). Colunas: `id`, `user_id` (CASCADE), `mode`/`source`/`status` (CHECK enum), `theme_id`/`tournament_id`/`lesson_id` (FK SET NULL), `starred_hand_ids` jsonb, `drill_platform`/`drill_accuracy`/`difficult_spots`, `duration_minutes` (CHECK 1-1440), `started_at`/`ended_at`/`registered_at` (anchor do streak), `idle_periods` jsonb (auto-pause smart), `notes` (max 500), `attachments` jsonb, `was_productive`, `daily_goal_met` (calc handler RF-2), `xp_awarded` (reservado), `deleted_at`, timestamps. **CHECK discriminator-based:** `mode='drill_gto'/'lesson'/'other'` exige theme; `mode='lesson'` exige lesson_id; `mode='hand_review'` exige starred_hand_ids array nao vazio; `status='running'` exige started_at NOT NULL ended_at NULL. **Indices:** `idx_ssv2_user_started`, `idx_ssv2_user_mode_started`, `idx_ssv2_user_registered` (FAB lookup), `idx_ssv2_user_lesson_partial` (idempotency auto_lesson 24h ADR-130), `uq_ssv2_user_running` (UNIQUE parcial — enforce max 1 cronometro live por user), `idx_ssv2_user_theme_month` (FocusStatsCard). Trigger `set_updated_at`. Migration `0052_study_sessions_v2.sql`. |
+| `study_themes` (delta Estudos-Habito-1) | **Colunas novas Sprint Estudos-Habito-1 (RF-1.1 + RF-3.3 / ADR-127):** `slug` varchar(60) nullable, `is_curated` boolean default false, `category` varchar(32) (CHECK enum `preflop`/`postflop`/`icm`/`mental`/`specific`/null), `linked_stats` jsonb default `'[]'` (array de stat_id do HUD_STAT_CATALOG — alimenta auto-suggest RF-3.3), `linked_lessons` jsonb default `'[]'` (array de library_lessons.id), `seeded_at` timestamp. **Indices:** UNIQUE parcial `uq_study_themes_user_slug_curated` em `(user_id, slug)` WHERE `is_curated=true AND slug IS NOT NULL`; GIN `idx_study_themes_curated_stats` em `linked_stats jsonb_path_ops` WHERE `is_curated=true`. Seed: 30 themes curated em 5 categorias (preflop=8, postflop=8, icm=6, mental=5, specific=3) em `server/seeds/study-themes-seed.ts`. Lazy seed per-user via `storage.ensureCuratedThemesForUser(userId)` no primeiro GET `/api/study-themes`. Migration `0052_study_sessions_v2.sql` (mesmo arquivo). |
+| `user_focus_stats` (delta Estudos-Habito-1) | **Mudanca Sprint Estudos-Habito-1 (RF-3.1):** `study_theme_id` DROP NOT NULL — passa a aceitar foco sem tema linkado. Sem back-fill (rows existentes mantem theme). Indices preservados. Migration `0053_user_focus_stats_nullable_theme.sql`. |
+| `users` (delta Estudos-Habito-1) | **Colunas novas Sprint Estudos-Habito-1 (RF-2.1 + RF-2.3 / ADR-128):** `daily_study_goal_minutes` integer NOT NULL DEFAULT 0 (CHECK enum 0/15/30/45/60/90/120 — 0=desligado), `study_streak_freezes_used_this_month` integer NOT NULL DEFAULT 0 (CHECK 0-2), `last_freeze_reset_month` varchar(7) nullable (CHECK regex `^[0-9]{4}-(0[1-9]|1[0-2])$`). Reset mensal via cron `resetStudyFreezesMonthly` em `server/jobs/index.ts` `5 0 * * *` UTC (todo dia 00:05 UTC) + lazy reset em `bumpStudyStreak` (defesa em profundidade). Migration `0054_users_habit_columns.sql`. **Extensao JSONB** (sem migration SQL — back-fill lazy via storage layer ADR-129): `home_layout_settings.focusStatsVisibility = { home, grindLive, coach, estudos, statsAnalyzer }` nested object com defaults true; legacy `showFocusStatsBar` mantido como mirror lazy. |
 | `study_schedules` | Agendamentos de estudo |
 | `user_focus_stats` | **NOVO home-reform-4 Item 7 (RF-01 / ADR-116)**. Persiste as marcacoes mensais de stats foco do user (max 3 por user/mes, enforcement em servico). 1 row por (user, stat_id, month). Colunas: `id` varchar(21) PK nanoid; `user_id` varchar(21) FK `users.user_platform_id` ON DELETE CASCADE; `stat_id` varchar(64) (id em `HUD_STAT_CATALOG`, sem FK — catalog estatico em codigo); `study_theme_id` varchar(21) FK `study_themes.id` ON DELETE CASCADE; `month` varchar(7) formato `YYYY-MM` UTC (validado por regex Zod); `created_at`/`updated_at` timestamp (trigger `set_updated_at`). UNIQUE constraint `(user_id, stat_id, month)` previne marcacao duplicada (race condition vira 409 STAT_ALREADY_FOCUSED). Indices: `uq_user_focus_stats_user_stat_month`, `idx_user_focus_stats_user_month`, `idx_user_focus_stats_theme`. **Reset implicito ao virar mes**: query muda mes → rows mudam, sem cron. Migration `0043_user_focus_stats.sql`. Alimenta `GET /api/home/focus-stats` (consumido pelo `FocusStatsCard` na zona "Estudos" da Home — ADR-118). |
 | `study_theme_spot_links` | **NOVO Studies-Reform (RF-08 / ADR-068, opcional D10)**. Tabela N:N entre `study_themes` e `starred_hands`. 1 row por vinculo. Colunas: `id` (nanoid), `theme_id` (FK CASCADE), `spot_id` (FK CASCADE), `user_id` (FK CASCADE), `linked_at` timestamp default NOW. UNIQUE constraint em `(theme_id, spot_id)` para idempotencia. Indices: `idx_study_theme_spot_links_theme`, `idx_study_theme_spot_links_spot`, `idx_study_theme_spot_links_user`. Alimenta `storage.getLinkedSpots()` (compartilhado entre `studyRecommendationsService` RF-06 e Coach tool `read_theme_with_linked_spots` RF-07). Spec MVP: 1 spot pode ter multiplos themes (modelado N:N para futuro), mas UI atual sugere 1 tema por spot. |
@@ -669,6 +673,95 @@ CREATE INDEX IF NOT EXISTS idx_study_sessions_user_theme_date
 
 ADRs relevantes: **ADR-116** (schema mensal), **ADR-117** (study_sessions.theme_id Opcao C),
 **ADR-118** (FocusStatsCard zona "Estudos" no Home — nova Zona 4 entre Performance e Sinal Externo).
+
+---
+
+## Schema Delta — Sprint Estudos-Habito-1
+
+ADR-126 (`study_sessions_v2` nova tabela) + ADR-127 (theme taxonomy hibrida — curated + custom + linked stats/lessons) + ADR-128 (streak algorithm + 2 freezes mensais) + ADR-129 (FocusStatsBar visibility granular per-placement em `homeLayoutSettings`) + ADR-130 (auto_lesson idempotency rolling 24h) introduzem **1 tabela nova + 9 colunas novas (3 em `users`, 6 em `study_themes`) + 1 ALTER em `user_focus_stats`**. Sprint cria a primeira metrica honesta de "tempo investido em estudo" + streak honesto com freezes + lente persistente cross-product.
+
+```mermaid
+erDiagram
+    USERS ||--o{ STUDY_SESSIONS_V2 : "1:N CASCADE"
+    USERS ||--o{ STUDY_THEMES : "1:N CASCADE (curated copies + user custom)"
+    USERS ||--o{ USER_FOCUS_STATS : "1:N CASCADE"
+
+    STUDY_THEMES ||--o{ STUDY_SESSIONS_V2 : "1:N SET NULL"
+    LIBRARY_LESSONS ||--o{ STUDY_SESSIONS_V2 : "1:N SET NULL"
+    TOURNAMENTS ||--o{ STUDY_SESSIONS_V2 : "1:N SET NULL"
+    STARRED_HANDS }o--o{ STUDY_SESSIONS_V2 : "N:N via starred_hand_ids jsonb (sem FK)"
+
+    STUDY_THEMES ||--o{ USER_FOCUS_STATS : "1:N CASCADE (study_theme_id NULLABLE pos RF-3.1)"
+
+    STUDY_SESSIONS_V2 {
+        varchar id PK "nanoid 21"
+        varchar user_id FK "CASCADE"
+        varchar mode "drill_gto/tournament_review/hand_review/lesson/other"
+        varchar source "manual_post_hoc/manual_live/auto_lesson/auto_grind_finalize"
+        varchar status "running/completed; UNIQUE parcial WHERE status=running"
+        varchar theme_id FK_NULL
+        varchar tournament_id FK_NULL
+        varchar lesson_id FK_NULL "indice partial para idempotency auto_lesson 24h"
+        jsonb starred_hand_ids
+        varchar drill_platform
+        integer drill_accuracy "CHECK 0-100"
+        jsonb difficult_spots "max 5 itens"
+        integer duration_minutes "NOT NULL CHECK 1-1440"
+        timestamptz started_at "manual_live anchor"
+        timestamptz ended_at "manual_live"
+        timestamptz registered_at "NOT NULL DEFAULT NOW; anchor do streak"
+        jsonb idle_periods "auto-pause smart"
+        text notes "max 500"
+        jsonb attachments "max 5"
+        boolean was_productive
+        boolean daily_goal_met "calc RF-2 handler"
+        integer xp_awarded "default 0 reservado"
+        timestamptz deleted_at "soft 24h gate"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    STUDY_THEMES_DELTA {
+        varchar slug "NEW len 60 nullable; UNIQUE parcial WHERE is_curated=true"
+        boolean is_curated "NEW default false"
+        varchar category "NEW len 32 — preflop/postflop/icm/mental/specific"
+        jsonb linked_stats "NEW default [] — array stat_id; GIN index"
+        jsonb linked_lessons "NEW default [] — array lesson_id"
+        timestamp seeded_at "NEW"
+    }
+
+    USERS_DELTA {
+        integer daily_study_goal_minutes "NEW default 0; CHECK enum 0/15/30/45/60/90/120"
+        integer study_streak_freezes_used_this_month "NEW default 0; CHECK 0-2"
+        varchar last_freeze_reset_month "NEW len 7 'YYYY-MM'; CHECK regex"
+        jsonb home_layout_settings "EXTENDED — focusStatsVisibility nested object lazy back-fill"
+    }
+```
+
+Migrations afetadas:
+- `migrations/0052_study_sessions_v2.sql` — CREATE TABLE study_sessions_v2 (24 cols + 11 CHECK constraints + 6 indices + trigger updated_at) + ALTER study_themes ADD 6 cols + 2 indices novos.
+- `migrations/0053_user_focus_stats_nullable_theme.sql` — ALTER user_focus_stats DROP NOT NULL em study_theme_id.
+- `migrations/0054_users_habit_columns.sql` — ALTER users ADD 3 cols + 3 CHECK constraints.
+
+**ADRs relevantes Sprint Estudos-Habito-1 (2026-05-08):**
+- **ADR-126** (`study-sessions-v2-new-table`) — tabela nova vs estender legado; FocusStatsCard composer UNION ALL durante deprecation gradual; CHECK constraints discriminator-based; indice UNIQUE parcial `uq_ssv2_user_running` enforce max 1 cronometro live.
+- **ADR-127** (`study-themes-hybrid-taxonomy`) — 30 themes curated em 5 categorias seed via `server/seeds/study-themes-seed.ts`; lazy seed per-user via `storage.ensureCuratedThemesForUser`; linked_stats GIN index para auto-suggest RF-3.3 lookup.
+- **ADR-128** (`study-streak-algorithm`) — state machine streak (idempotent/incremented/freeze_consumed/reset/goal_not_met) com 2 freezes/mes silenciosos; race-safe via SELECT users FOR UPDATE; lazy reset + cron 00:05 UTC; anchor "today" = `registered_at` UTC date (RF-2.5 explicito).
+- **ADR-129** (`focus-stats-bar-visibility-granular`) — nested object `focusStatsVisibility` em `homeLayoutSettings` JSONB; lazy back-fill via storage; legacy `showFocusStatsBar` mantido como mirror para `home` placement.
+- **ADR-130** (`auto-lesson-idempotency-window`) — Sprint 2 prep — janela rolling 24h via lookup em codigo + indice parcial `idx_ssv2_user_lesson_partial` + FOR UPDATE; sem UNIQUE constraint (permite re-watch dia seguinte como nova session).
+
+**Diagramas Mermaid:**
+- `Docs/architecture/data-model-estudos-habito-1.mermaid` — ER novas tabelas + relacionamentos com legados (study_sessions, study_themes, library_lessons, tournaments, starred_hands).
+- `Docs/architecture/feature-flow-log-estudo.mermaid` — Sequence POST /api/study-sessions cobrindo 2 fluxos (post-hoc completed + live running/finalize) com bumpStreak inline.
+- `Docs/architecture/feature-flow-streak.mermaid` — State machine streak (4 transitions + lazy reset mensal).
+- `Docs/architecture/feature-flow-stats-foco.mermaid` — Flowchart auto-suggest + manual picker + render header card states (empty/partial/full).
+
+**Seed file:** `server/seeds/study-themes-seed.ts` (30 themes curated; idempotente via UNIQUE parcial; INSERT ON CONFLICT DO NOTHING).
+
+**Endpoints novos:**
+- `POST /api/study-sessions` (cria post-hoc OR live) + `PATCH /:id` + `DELETE /:id` + `POST /:id/finalize` + `GET /api/study-sessions` (paginated).
+- `GET /api/users/me/study-habit` (streak + goal + freezes status).
+- `POST /api/stats/focus/auto-suggest` (top 3 leaks → 3 rows).
 
 ---
 
