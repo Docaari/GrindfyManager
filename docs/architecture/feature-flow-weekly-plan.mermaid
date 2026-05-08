@@ -1,0 +1,87 @@
+flowchart TD
+    %% =====================================================================
+    %% Sprint Estudos-Coach-Biblio-2 — RF-3 Plano Semanal Coach
+    %% Ref: ADR-132 (study_weekly_plans JSONB), ADR-134 (coachStudyPlan tool), ADR-107 (cron pattern)
+    %% =====================================================================
+
+    Trigger{Trigger?}
+
+    Trigger -->|"Cron segunda 9h UTC"| CronStart["generateWeeklyStudyPlanCron<br/>(server/cron/)"]
+    Trigger -->|"User clica Regenerar"| ManualStart["POST /api/study-weekly-plan/regenerate<br/>(rate limit 1/dia)"]
+
+    CronStart --> CronLoop["FOR each user WHERE<br/>is_active=true<br/>AND has_coach_access=true"]
+    CronLoop --> CheckExist{"Existe plano para<br/>week_start_date=this_monday?"}
+
+    CheckExist -->|"sim (UNIQUE conflict)"| SkipExist["SKIP user — log info"]
+    CheckExist -->|"nao"| CheckQuota{"coach_quota_remaining > 0?"}
+
+    SkipExist --> NextUser["proximo user<br/>(sleep 200ms pacing)"]
+    NextUser --> CronLoop
+
+    CheckQuota -->|"nao"| SkipQuota["SKIP — log info"]
+    SkipQuota --> NextUser
+
+    CheckQuota -->|"sim"| CollectCtx
+    ManualStart --> AuthCheck{"requireAuth +<br/>has_coach_access?"}
+    AuthCheck -->|"403"| RetErr403["403 NO_COACH_ACCESS"]
+    AuthCheck -->|"OK"| RateLimit{"Rate limit 1/dia<br/>OK?"}
+    RateLimit -->|"429"| RetErr429["429 RATE_LIMITED"]
+    RateLimit -->|"OK"| QuotaManual{"quota > 0?"}
+    QuotaManual -->|"nao"| RetErr429q["429 QUOTA_EXCEEDED"]
+    QuotaManual -->|"sim"| CollectCtx
+
+    CollectCtx["studyWeeklyPlanService.generatePlan()<br/>collect context"] --> CtxItems
+
+    CtxItems["context = {<br/>focusStats: SELECT user_focus_stats WHERE month=current<br/>recentLeaks: getStatsLeaks(top=3)<br/>avgDuration: AVG study_sessions_v2 last 7d<br/>recentLessons: top 5 curated + recent watched<br/>starredHandsRecent: 5 high/critical priority<br/>lessonsWhitelist: array de lesson_id reais (anti-hallucinacao)<br/>themesWhitelist: array de theme_id reais<br/>}"]
+
+    CtxItems --> CalcTarget["daily_target_minutes:<br/>avg=NULL → 30<br/>else clamp(avg*0.95, 15, 120)"]
+
+    CalcTarget --> CallCoach["Tool coachStudyPlan<br/>(ADR-134 — registry pattern)"]
+
+    CallCoach --> AnthropicCall["Anthropic SDK call<br/>system prompt cached (ephemeral)<br/>+ user block per-user"]
+
+    AnthropicCall --> ParseOutput{"Output JSON valido?"}
+    ParseOutput -->|"nao (Zod fail)"| Retry1{"primeira tentativa?"}
+    Retry1 -->|"sim"| RetryCall["Retry com prompt:<br/>'Schema correto: <schema>'"]
+    RetryCall --> AnthropicCall
+    Retry1 -->|"nao (2a falha)"| LogFail
+
+    LogFail["log estruturado:<br/>{userId, error: coach_output_invalid, raw}"]
+    LogFail --> ManualOrCron{"Trigger source?"}
+    ManualOrCron -->|"manual"| Ret500["500 INTERNAL_ERROR"]
+    ManualOrCron -->|"cron"| NextUser
+
+    ParseOutput -->|"sim"| ValidateRefs{"lessonId/themeId<br/>existem em whitelists?"}
+    ValidateRefs -->|"nao (hallucinacao)"| Retry1
+    ValidateRefs -->|"sim"| Persist
+
+    Persist["INSERT INTO study_weekly_plans<br/>ON CONFLICT (user_id, week_start_date)<br/>DO UPDATE<br/>SET plan_jsonb=EXCLUDED,<br/>regenerated_at=now(),<br/>regenerated_count=count+1,<br/>completed_items_jsonb=<br/>  CASE resetCompleted<br/>  WHEN true THEN '[]'<br/>  ELSE existing.completed END"]
+
+    Persist --> Telemetry["telemetria event<br/>study_plan_generated<br/>{userId, source, tokensUsed, durationMs}"]
+
+    Telemetry --> ManualOrCron2{"Trigger source?"}
+    ManualOrCron2 -->|"manual"| RetSuccess["200 { plan: <jsonb>, completed: [] }"]
+    ManualOrCron2 -->|"cron"| NextUser
+
+    %% Toggle de completed
+    Toggle["PATCH /api/study-weekly-plan/items/:itemId/toggle<br/>(separate flow)"] --> ToggleAuth{"requireAuth"}
+    ToggleAuth --> TogglePlan["BEGIN TX<br/>SELECT completed_items_jsonb<br/>FROM study_weekly_plans<br/>WHERE user_id=$1<br/>AND week_start_date=current_week<br/>FOR UPDATE"]
+    TogglePlan --> ToggleType{"item.type?"}
+    ToggleType -->|"lesson"| LessonNote["NAO criar study_session<br/>(RF-1 cuida)"]
+    ToggleType -->|"hand_review"| HandPrompt["resposta inclui<br/>promptStudyLogDialog: true"]
+    ToggleType -->|"outros"| JustToggle["apenas marca completed"]
+    LessonNote --> UpdateCompleted
+    HandPrompt --> UpdateCompleted
+    JustToggle --> UpdateCompleted
+    UpdateCompleted["app-level: add/remove itemId<br/>UPDATE completed_items_jsonb<br/>COMMIT TX"]
+    UpdateCompleted --> ToggleResp["200 { plan, completed }"]
+
+    style Persist fill:#1a3d1a,color:#fff
+    style RetSuccess fill:#1a3d1a,color:#fff
+    style ToggleResp fill:#1a3d1a,color:#fff
+    style RetErr403 fill:#5d1a1a,color:#fff
+    style RetErr429 fill:#5d1a1a,color:#fff
+    style RetErr429q fill:#5d1a1a,color:#fff
+    style Ret500 fill:#5d1a1a,color:#fff
+    style SkipExist fill:#3d3d1a,color:#fff
+    style SkipQuota fill:#3d3d1a,color:#fff

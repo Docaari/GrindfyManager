@@ -234,7 +234,7 @@ Drizzle (em `shared/schema.ts`): Zod `optional + default` em todas as colunas wr
 | `study_materials` | Materiais (video, artigo, pdf) |
 | `study_notes` | Notas de estudo |
 | `study_sessions` | **LEGADO read-only pos Sprint Estudos-Habito-1 (ADR-126).** Sessoes de estudo com duracao e scores. **Coluna nova home-reform-4 Item 7 (RF-08 / ADR-117)**: `theme_id` varchar(21) nullable, FK `study_themes(id)` ON DELETE SET NULL — alimenta `studyMinutesMonth` no `FocusStatsCard` da Home (continua sendo lida via UNION ALL com `study_sessions_v2` durante deprecation gradual — ADR-126 §2). SEM back-fill historico (sessoes pre-Item 7 ficam com `theme_id=NULL`). Indice parcial `idx_study_sessions_user_theme_date` em `(user_id, theme_id, date) WHERE theme_id IS NOT NULL`. Migration `0044_study_sessions_theme_id.sql`. |
-| `study_sessions_v2` | **NOVO Sprint Estudos-Habito-1 (RF-1 / ADR-126).** Tabela nova com schema completo do log de estudo: 4 modos primarios + escape (`drill_gto`/`tournament_review`/`hand_review`/`lesson`/`other`) + 4 sources (`manual_post_hoc`/`manual_live`/`auto_lesson`/`auto_grind_finalize`) + status running/completed + audit (deleted_at 24h gate). Colunas: `id`, `user_id` (CASCADE), `mode`/`source`/`status` (CHECK enum), `theme_id`/`tournament_id`/`lesson_id` (FK SET NULL), `starred_hand_ids` jsonb, `drill_platform`/`drill_accuracy`/`difficult_spots`, `duration_minutes` (CHECK 1-1440), `started_at`/`ended_at`/`registered_at` (anchor do streak), `idle_periods` jsonb (auto-pause smart), `notes` (max 500), `attachments` jsonb, `was_productive`, `daily_goal_met` (calc handler RF-2), `xp_awarded` (reservado), `deleted_at`, timestamps. **CHECK discriminator-based:** `mode='drill_gto'/'lesson'/'other'` exige theme; `mode='lesson'` exige lesson_id; `mode='hand_review'` exige starred_hand_ids array nao vazio; `status='running'` exige started_at NOT NULL ended_at NULL. **Indices:** `idx_ssv2_user_started`, `idx_ssv2_user_mode_started`, `idx_ssv2_user_registered` (FAB lookup), `idx_ssv2_user_lesson_partial` (idempotency auto_lesson 24h ADR-130), `uq_ssv2_user_running` (UNIQUE parcial — enforce max 1 cronometro live por user), `idx_ssv2_user_theme_month` (FocusStatsCard). Trigger `set_updated_at`. Migration `0052_study_sessions_v2.sql`. |
+| `study_sessions_v2` | **NOVO Sprint Estudos-Habito-1 (RF-1 / ADR-126).** Tabela nova com schema completo do log de estudo: 4 modos primarios + escape (`drill_gto`/`tournament_review`/`hand_review`/`lesson`/`other`) + 4 sources (`manual_post_hoc`/`manual_live`/`auto_lesson`/`auto_grind_finalize`) + status running/completed + audit (deleted_at 24h gate). Colunas: `id`, `user_id` (CASCADE), `mode`/`source`/`status` (CHECK enum), `theme_id`/`tournament_id`/`lesson_id` (FK SET NULL), `starred_hand_ids` jsonb, `drill_platform`/`drill_accuracy`/`difficult_spots`, `duration_minutes` (CHECK 1-1440), `started_at`/`ended_at`/`registered_at` (anchor do streak), `idle_periods` jsonb (auto-pause smart), `notes` (max 500), `attachments` jsonb, `was_productive`, `daily_goal_met` (calc handler RF-2), `xp_awarded` (reservado), `deleted_at`, timestamps. **CHECK discriminator-based:** `mode='drill_gto'/'other'` exige theme; `mode='lesson'` exige lesson_id (theme_id NULLABLE — errata ADR-135 Sprint 2); `mode='hand_review'` exige starred_hand_ids array nao vazio; `status='running'` exige started_at NOT NULL ended_at NULL. **Indices:** `idx_ssv2_user_started`, `idx_ssv2_user_mode_started`, `idx_ssv2_user_registered` (FAB lookup), `idx_ssv2_user_lesson_partial` (idempotency auto_lesson 24h ADR-130), `uq_ssv2_user_running` (UNIQUE parcial — enforce max 1 cronometro live por user), `idx_ssv2_user_theme_month` (FocusStatsCard). Trigger `set_updated_at`. Migration `0052_study_sessions_v2.sql`. |
 | `study_themes` (delta Estudos-Habito-1) | **Colunas novas Sprint Estudos-Habito-1 (RF-1.1 + RF-3.3 / ADR-127):** `slug` varchar(60) nullable, `is_curated` boolean default false, `category` varchar(32) (CHECK enum `preflop`/`postflop`/`icm`/`mental`/`specific`/null), `linked_stats` jsonb default `'[]'` (array de stat_id do HUD_STAT_CATALOG — alimenta auto-suggest RF-3.3), `linked_lessons` jsonb default `'[]'` (array de library_lessons.id), `seeded_at` timestamp. **Indices:** UNIQUE parcial `uq_study_themes_user_slug_curated` em `(user_id, slug)` WHERE `is_curated=true AND slug IS NOT NULL`; GIN `idx_study_themes_curated_stats` em `linked_stats jsonb_path_ops` WHERE `is_curated=true`. Seed: 30 themes curated em 5 categorias (preflop=8, postflop=8, icm=6, mental=5, specific=3) em `server/seeds/study-themes-seed.ts`. Lazy seed per-user via `storage.ensureCuratedThemesForUser(userId)` no primeiro GET `/api/study-themes`. Migration `0052_study_sessions_v2.sql` (mesmo arquivo). |
 | `user_focus_stats` (delta Estudos-Habito-1) | **Mudanca Sprint Estudos-Habito-1 (RF-3.1):** `study_theme_id` DROP NOT NULL — passa a aceitar foco sem tema linkado. Sem back-fill (rows existentes mantem theme). Indices preservados. Migration `0053_user_focus_stats_nullable_theme.sql`. |
 | `users` (delta Estudos-Habito-1) | **Colunas novas Sprint Estudos-Habito-1 (RF-2.1 + RF-2.3 / ADR-128):** `daily_study_goal_minutes` integer NOT NULL DEFAULT 0 (CHECK enum 0/15/30/45/60/90/120 — 0=desligado), `study_streak_freezes_used_this_month` integer NOT NULL DEFAULT 0 (CHECK 0-2), `last_freeze_reset_month` varchar(7) nullable (CHECK regex `^[0-9]{4}-(0[1-9]|1[0-2])$`). Reset mensal via cron `resetStudyFreezesMonthly` em `server/jobs/index.ts` `5 0 * * *` UTC (todo dia 00:05 UTC) + lazy reset em `bumpStudyStreak` (defesa em profundidade). Migration `0054_users_habit_columns.sql`. **Extensao JSONB** (sem migration SQL — back-fill lazy via storage layer ADR-129): `home_layout_settings.focusStatsVisibility = { home, grindLive, coach, estudos, statsAnalyzer }` nested object com defaults true; legacy `showFocusStatsBar` mantido como mirror lazy. |
@@ -762,6 +762,99 @@ Migrations afetadas:
 - `POST /api/study-sessions` (cria post-hoc OR live) + `PATCH /:id` + `DELETE /:id` + `POST /:id/finalize` + `GET /api/study-sessions` (paginated).
 - `GET /api/users/me/study-habit` (streak + goal + freezes status).
 - `POST /api/stats/focus/auto-suggest` (top 3 leaks → 3 rows).
+
+---
+
+## Schema Delta — Sprint Estudos-Coach-Biblio-2
+
+ADR-131 (auto-lesson trigger client-side + idempotency server-side) + ADR-132 (`study_weekly_plans` JSONB embarcado vs tabela child) + ADR-133 (cache `coach_session_insights` em tabela dedicada vs memoria/Redis) + ADR-134 (Coach tools `coachStudyPlan` + `coachSessionInsights` no registry modular) + ADR-135 (errata ADR-126 — `theme_id` nullable em `mode='lesson'`) introduzem **2 tabelas novas + 1 migration de errata + extensao JSONB em `users.home_layout_settings.studyHabit`**. Sprint fecha o loop Biblioteca→Coach→Estudos: aula assistida vira log automatico (RF-1), Biblioteca recomenda por leak (RF-2), Coach gera plano semanal (RF-3), Coach analisa sessao /grind-live pos-finalize (RF-4).
+
+### Tabelas novas
+
+| Tabela | Descricao |
+|--------|-----------|
+| `study_weekly_plans` | **NOVO Sprint Estudos-Coach-Biblio-2 (RF-3 / ADR-132)**. Plano semanal Coach gerado por cron segunda 9h UTC OU manual via `POST /api/study-weekly-plan/regenerate` (rate limit 1/dia). 1 row por (user, week_start_date) — UNIQUE composite garante idempotency cron+manual via UPSERT. Colunas: `id` varchar(21) PK nanoid; `user_id` FK CASCADE; `week_start_date` date NOT NULL (segunda da semana UTC); `plan_jsonb` jsonb NOT NULL (StudyWeeklyPlan shape: `{ days: [{ dayLabel, date, activities: [{itemId, type, title, description, estimatedMinutes, ctaTarget, themeId, lessonId, handIds, reasoning}] }] }`); `completed_items_jsonb` jsonb default `'[]'` (array de itemId estaveis dentro do plano); `source` varchar(16) CHECK `('coach_auto', 'coach_manual')`; `daily_target_minutes` integer NOT NULL CHECK 5-240 (clamp avg*0.95 do user); `cost_tokens_used` integer (tracking); `generated_at` timestamptz; `regenerated_at` timestamptz nullable; `regenerated_count` integer default 0; timestamps. Indices: `uq_swp_user_week` UNIQUE composite, `idx_swp_user_generated`. Trigger `set_updated_at`. Migration `0055_study_weekly_plans.sql`. Toggle de completed via `PATCH /api/study-weekly-plan/items/:itemId/toggle` (read-modify-write FOR UPDATE em `completed_items_jsonb`). |
+| `coach_session_insights` | **NOVO Sprint Estudos-Coach-Biblio-2 (RF-4 / ADR-133)**. Cache 24h + auditoria de insights Coach pos-sessao /grind-live finalizada. 1 row por `grind_session_id` (UNIQUE — race-safe via INSERT ON CONFLICT DO UPDATE). Colunas: `id` varchar(21) PK nanoid; `user_id` FK CASCADE; `grind_session_id` varchar(21) UNIQUE FK `grind_sessions.id` ON DELETE CASCADE; `insights_jsonb` jsonb NOT NULL (SessionInsights shape: `{ summary, topHands: [{handId, title, rationale, action, ctaUrl, handBadge}], suggestedLessons: [{lessonId, title, courseSlug, lessonSlug, rationale, durationSeconds}], spotsToReview: [{spotId, label, suggestedAction}], focusStatsHighlight: [{statId, statName, occurredCount, rationale}] }`); `generated_at` timestamptz; `expires_at` timestamptz NOT NULL (`generated_at + 24h`); `cost_tokens_used` integer; `model` varchar(64) (ex `claude-opus-4-7`); `prompt_version` varchar(32) (rastreabilidade re-gerar antigos com prompt novo); `tokens_in`, `tokens_out` integer; `regenerated_count` integer default 0 (bumpa em UPSERT — signal qualidade); `created_at` timestamptz. Indices: `uq_csi_session` UNIQUE em `grind_session_id`, `idx_csi_user_generated`, `idx_csi_expires` (cleanup batch futuro). Migration `0056_coach_session_insights.sql`. |
+
+### Tabelas afetadas (sem nova migration de schema)
+
+| Tabela | Mudanca |
+|--------|---------|
+| `study_sessions_v2` | **Errata ADR-135**: clarificacao formal que `mode='lesson'` aceita `theme_id NULL` quando aula nao possui mapping em `study_themes.linked_lessons` curated. Schema real (migration 0052) ja permite — migration `0057_study_sessions_v2_lesson_theme_nullable.sql` apenas atualiza COMMENT da coluna + DROP CONSTRAINT IF EXISTS defensivo. **Zero downtime, zero modificacao de dados.** Storage layer (`server/storage.ts`) faz lookup server-side `SELECT id FROM study_themes WHERE jsonb_path_exists(linked_lessons, '$ ? (@ == $lessonId)') AND is_curated=true LIMIT 1` quando body sem `themeId`; se zero match, INSERT com `theme_id=NULL`. Sessions com `theme_id NULL` nao agregam para `studyMinutesByThemeAndMonth` (FocusStatsCard) — comportamento aceito. |
+| `users` (extensao JSONB sem migration SQL) | **Sprint 2 (RF-1.5 + RF-4.6)**: estende `home_layout_settings.studyHabit` com 2 novos toggles: `autoLogLessons: boolean` (default `true`, opt-out RF-1) e `autoPromptCoachInsightsAfterLive: boolean` (default `false`, opt-in RF-4 modal pos-finalize quando session > 30min). Lazy back-fill via storage layer (lesson #7 — schema deprecation gradual). |
+| `study_themes` | **Sem mudanca de schema.** `linked_lessons` jsonb (Sprint 1 ADR-127) usado por RF-2 (recommendation match) + RF-1.2 (`themeId` lookup server-side derivation). Founder seed manual de mappings continua sendo bloqueador soft (R7 spec). |
+
+### ER delta
+
+```mermaid
+erDiagram
+    USERS ||--o{ STUDY_WEEKLY_PLANS : "1:N CASCADE — UNIQUE (user_id, week_start_date)"
+    USERS ||--o{ COACH_SESSION_INSIGHTS : "1:N CASCADE"
+    GRIND_SESSIONS ||--|| COACH_SESSION_INSIGHTS : "1:1 CASCADE — UNIQUE grind_session_id"
+
+    STUDY_WEEKLY_PLANS {
+        varchar id PK
+        varchar user_id FK
+        date week_start_date "segunda UTC"
+        jsonb plan_jsonb "5 dias x 3-4 atividades"
+        jsonb completed_items_jsonb "default []"
+        varchar source "coach_auto/coach_manual"
+        integer daily_target_minutes "CHECK 5-240"
+        integer cost_tokens_used
+        timestamptz generated_at
+        timestamptz regenerated_at
+        integer regenerated_count
+    }
+
+    COACH_SESSION_INSIGHTS {
+        varchar id PK
+        varchar user_id FK
+        varchar grind_session_id FK_UNIQUE
+        jsonb insights_jsonb
+        timestamptz expires_at "generated_at + 24h"
+        varchar model
+        varchar prompt_version
+        integer tokens_in
+        integer tokens_out
+        integer regenerated_count
+    }
+```
+
+### Migrations afetadas
+
+- `migrations/0055_study_weekly_plans.sql` — CREATE TABLE study_weekly_plans (12 cols + 3 CHECK constraints + 2 indices + trigger updated_at).
+- `migrations/0056_coach_session_insights.sql` — CREATE TABLE coach_session_insights (12 cols + 3 CHECK constraints + 3 indices).
+- `migrations/0057_study_sessions_v2_lesson_theme_nullable.sql` — Errata ADR-135. NO-OP em ambientes ja consistentes (DROP CONSTRAINT IF EXISTS defensivo + COMMENT update). Zero downtime.
+
+### ADRs relevantes Sprint Estudos-Coach-Biblio-2 (2026-05-08)
+
+- **ADR-131** (`auto-lesson-trigger-client-side`) — trigger client-side via hook `useLessonStudyAutoLog` + cap/validacao/idempotency server-side. Webhook Mux descartado (custo Plus tier + cold start + map user complexa). Listener no handler `library_lesson_progress` descartado (acoplamento cross-feature). Cliente NAO trusted: server caps `durationMinutes`, deriva `themeId` via lookup, valida `lessonId`, enforce idempotency 24h (FOR UPDATE).
+- **ADR-132** (`study-weekly-plans-jsonb`) — schema `study_weekly_plans` com `plan_jsonb` array de dias (vs tabela child `study_weekly_plan_activities`). Coach output JSON estruturado cabe direto em INSERT; UNIQUE composite enforce idempotency cron+manual; UPSERT atomico em regenerate; FK soft em lesson_id/theme_id (lesson deletada apos plano = hidratacao runtime); analytics granulares ja em `study_sessions_v2` (plano = intencao, nao fato).
+- **ADR-133** (`coach-session-insights-table-vs-memory`) — cache em tabela PG dedicada (vs Map in-memory ou Redis). Sobrevive restart/deploy; auditoria completa para founder; analytics de custo Coach (`SUM(cost_tokens_used)`); race-safe via UNIQUE `grind_session_id` + INSERT ON CONFLICT DO UPDATE; `regenerated_count` da signal qualidade Coach.
+- **ADR-134** (`coach-tools-study-plan-and-session-insights`) — adiciona 2 tools no registry existente (ADR-023): `coachStudyPlan` (page context `/estudos`) e `coachSessionInsights` (page context `/grind-live/:id/recap`). System prompts em arquivos dedicados (lesson #10 DRY). Servicos orquestradores separados das tools (`studyWeeklyPlanService`, `coachSessionInsightsService`) — tool define contrato + chamada + Zod retry; service collect context + cache + persist + side effects. Determinismo: app faz mapping leak→tema→lesson via whitelist (lesson #11 — Coach gera narrativa, nao decide IDs).
+- **ADR-135** (`errata-adr-126-mode-lesson-theme-id-nullable`) — errata formaliza que `mode='lesson'` em `study_sessions_v2` aceita `theme_id NULL`. Schema real (migration 0052) ja permite — apenas ajuste documental + COMMENT update. Storage faz lookup server-side `study_themes.linked_lessons @> [lessonId]`; zero match = `theme_id NULL`. Backwards compatible, zero downtime.
+
+### Diagramas Mermaid Sprint 2
+
+- `Docs/architecture/data-model-estudos-coach-biblio-2.mermaid` — ER 2 tabelas novas + relacoes com `users`, `grind_sessions`, `study_themes`, `study_sessions_v2`, `library_lessons`, `library_lesson_progress`, `starred_hands`, `user_focus_stats`.
+- `Docs/architecture/feature-flow-mux-auto-trigger.mermaid` — Sequence RF-1: timeupdate → 80% → POST → cap server-side → idempotency 24h → INSERT/UPDATE/no-op → toast variant.
+- `Docs/architecture/feature-flow-weekly-plan.mermaid` — Flowchart RF-3: cron segunda 9h UTC + manual regenerate → collect context → daily_target_minutes calc → coachStudyPlan tool → Zod validate + retry + whitelist enforce → UPSERT (UNIQUE composite) → telemetria. Toggle de completed em fluxo separado com FOR UPDATE.
+- `Docs/architecture/feature-flow-session-insights.mermaid` — Sequence RF-4: finalize → user opens recap → cache check (expires_at > now) → cache hit OR cache miss → collect context → coachSessionInsights tool → Zod + handIds whitelist → UPSERT ON CONFLICT (UNIQUE grind_session_id) → render 4 sections.
+
+### Endpoints novos Sprint 2
+
+- `GET /api/biblioteca/recommendations` — RF-2 leak-driven recommendations, cache 60min in-memory.
+- `POST /api/biblioteca/recommendations/refresh` — invalida cache + re-fetch (rate limit 5/dia).
+- `GET /api/study-weekly-plan?week=YYYY-MM-DD` — plano da semana (default current).
+- `POST /api/study-weekly-plan/regenerate` — RF-3 forca regenerate (rate limit 1/dia + has_coach_access + quota).
+- `PATCH /api/study-weekly-plan/items/:itemId/toggle` — toggle completed (FOR UPDATE).
+- `GET /api/coach/session-insights/:sessionId` — RF-4 cache hit OR generate (5-12s miss).
+- `POST /api/coach/session-insights/:sessionId/regenerate` — forca regenerate (rate limit 3/sessao).
+
+### Coach tools novas (api/coach-tools.md)
+
+- **`coachStudyPlan`** — input `{userContext, weekStartDate}`. Output `StudyWeeklyPlan` (5 dias × 3-4 atividades). Page context `/estudos`. Audit `persist`. System prompt cached (ephemeral). Whitelist de `lessonId`/`themeId` enforce anti-hallucinacao.
+- **`coachSessionInsights`** — input `{sessionContext}`. Output `SessionInsights` (summary, topHands, suggestedLessons, spotsToReview, focusStatsHighlight). Page context `/grind-live/:id/recap`. Audit `persist`. Whitelist de `handId` ∈ spots da sessao.
 
 ---
 

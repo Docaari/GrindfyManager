@@ -4,6 +4,8 @@ import { useToast } from "@/hooks/use-toast";
 import { track as trackTelemetry } from "@/lib/telemetry";
 import { getDefaultCurrencyForSite } from "@shared/wallet-reconciliation";
 import { WalletCreateDialog } from "@/components/bankroll/WalletCreateDialog";
+// Sprint Estudos-Coach-Biblio-2 RF-4.4: insights pos-finalize.
+import { SessionInsightsPanel } from "@/components/grind/SessionInsightsPanel";
 import type { SessionSummaryData } from './types';
 
 function safeTrack(name: string, payload: Record<string, unknown>): void {
@@ -544,6 +546,16 @@ export default function SessionSummaryModal({
             />
           </div>
         </div>
+
+        {/* Sprint Estudos-Coach-Biblio-2 RF-4.4: painel "Insights da sessao".
+            Lazy load via GET /api/coach/session-insights/:sessionId — Coach
+            gera apos abertura. Renderiza apenas quando temos sessionId (p.e.
+            sessao ja finalizada com id retornado pelo backend). */}
+        {sessionId && (
+          <div className="mt-4">
+            <SessionInsightsPanel sessionId={sessionId} />
+          </div>
+        )}
 
         <div className="session-end-actions">
           <button

@@ -4696,3 +4696,105 @@ export type SystemFxRate = typeof systemFxRates.$inferSelect;
 export type SystemFxRateInsert = typeof systemFxRates.$inferInsert;
 export type FxSource = "bcb_ptax" | "frankfurter" | "manual" | "fallback";
 
+// =============================================================================
+// Sprint Estudos-Coach-Biblio-2 (ADR-132) — study_weekly_plans
+// =============================================================================
+// 1 plano semanal por user. plan_jsonb embarca 5 dias x 3-4 atividades. UNIQUE
+// (user_id, week_start_date) garante idempotency cron + manual via UPSERT.
+// completedItemsJsonb = array de itemId completados pelo user. Sources:
+// 'coach_auto' (cron segunda 9h UTC) | 'coach_manual' (POST regenerate).
+// Migration 0055.
+// =============================================================================
+export const studyWeeklyPlans = pgTable(
+  "study_weekly_plans",
+  {
+    id: varchar("id", { length: 21 }).primaryKey().notNull(),
+    userId: varchar("user_id", { length: 21 })
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    weekStartDate: date("week_start_date").notNull(),
+    planJsonb: jsonb("plan_jsonb").notNull(),
+    completedItemsJsonb: jsonb("completed_items_jsonb")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    source: varchar("source", { length: 16 }).notNull(),
+    dailyTargetMinutes: integer("daily_target_minutes").notNull(),
+    costTokensUsed: integer("cost_tokens_used"),
+    generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+    regeneratedAt: timestamp("regenerated_at", { withTimezone: true }),
+    regeneratedCount: integer("regenerated_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_swp_user_week").on(table.userId, table.weekStartDate),
+    index("idx_swp_user_generated").on(table.userId, table.generatedAt),
+  ],
+);
+
+export const STUDY_WEEKLY_PLAN_SOURCES = ["coach_auto", "coach_manual"] as const;
+export type StudyWeeklyPlanSource = (typeof STUDY_WEEKLY_PLAN_SOURCES)[number];
+
+export type StudyWeeklyPlan = typeof studyWeeklyPlans.$inferSelect;
+export type InsertStudyWeeklyPlan = typeof studyWeeklyPlans.$inferInsert;
+
+export const insertStudyWeeklyPlanSchema = z.object({
+  userId: z.string(),
+  weekStartDate: z.coerce.date(),
+  planJsonb: z.any(),
+  completedItemsJsonb: z.array(z.string()).optional().default([]),
+  source: z.enum(STUDY_WEEKLY_PLAN_SOURCES),
+  dailyTargetMinutes: z.number().int().min(5).max(240),
+  costTokensUsed: z.number().int().nullable().optional(),
+});
+
+// =============================================================================
+// Sprint Estudos-Coach-Biblio-2 (ADR-133) — coach_session_insights
+// =============================================================================
+// Cache 24h + auditoria de insights Coach pos-sessao /grind-live (RF-4). 1 row
+// por grind_session_id (UNIQUE) — INSERT ON CONFLICT DO UPDATE race-safe.
+// Migration 0056.
+// =============================================================================
+export const coachSessionInsights = pgTable(
+  "coach_session_insights",
+  {
+    id: varchar("id", { length: 21 }).primaryKey().notNull(),
+    userId: varchar("user_id", { length: 21 })
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    grindSessionId: varchar("grind_session_id", { length: 21 })
+      .notNull()
+      .references(() => grindSessions.id, { onDelete: "cascade" }),
+    insightsJsonb: jsonb("insights_jsonb").notNull(),
+    generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    costTokensUsed: integer("cost_tokens_used"),
+    model: varchar("model", { length: 64 }),
+    promptVersion: varchar("prompt_version", { length: 32 }),
+    tokensIn: integer("tokens_in"),
+    tokensOut: integer("tokens_out"),
+    regeneratedCount: integer("regenerated_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_csi_session").on(table.grindSessionId),
+    index("idx_csi_user_generated").on(table.userId, table.generatedAt),
+    index("idx_csi_expires").on(table.expiresAt),
+  ],
+);
+
+export type CoachSessionInsight = typeof coachSessionInsights.$inferSelect;
+export type InsertCoachSessionInsight = typeof coachSessionInsights.$inferInsert;
+
+export const insertCoachSessionInsightSchema = z.object({
+  userId: z.string(),
+  grindSessionId: z.string(),
+  insightsJsonb: z.any(),
+  costTokensUsed: z.number().int().nullable().optional(),
+  model: z.string().max(64).nullable().optional(),
+  promptVersion: z.string().max(32).nullable().optional(),
+  tokensIn: z.number().int().nullable().optional(),
+  tokensOut: z.number().int().nullable().optional(),
+});
+

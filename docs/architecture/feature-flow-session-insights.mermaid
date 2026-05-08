@@ -1,0 +1,110 @@
+sequenceDiagram
+    %% =====================================================================
+    %% Sprint Estudos-Coach-Biblio-2 — RF-4 Coach Insights pos-sessao /grind-live
+    %% Ref: ADR-133 (cache em tabela), ADR-134 (coachSessionInsights tool), ADR-024 (tool result wrapping)
+    %% =====================================================================
+
+    actor User
+    participant Finalize as POST /api/grind-sessions/:id/finalize<br/>(existente)
+    participant Recap as /grind-live/:id/recap<br/>(UI page)
+    participant API as GET /api/coach/session-insights/:sessionId
+    participant Service as coachSessionInsightsService
+    participant Cache as PG coach_session_insights<br/>(ADR-133)
+    participant Coach as Tool coachSessionInsights<br/>(ADR-134)
+    participant DB as PG (grind_sessions,<br/>tournaments, starred_hands,<br/>user_focus_stats)
+    participant Anthropic as Anthropic SDK
+
+    Note over User,Anthropic: Lazy on-demand (RF-4.1) — finalize NAO bloqueia esperando Coach
+
+    User->>Finalize: finalize sessao
+    Finalize->>Finalize: handler existente — calcula stats<br/>persiste session = completed
+    Finalize-->>User: 200 OK (recap URL)
+
+    Note over User,Anthropic: Setting autoPromptCoachInsightsAfterLive (default false)<br/>Se true E session > 30min → modal abre auto<br/>Senao user precisa abrir /grind-live/:id/recap
+
+    User->>Recap: navega ou modal abre
+    Recap->>API: GET /api/coach/session-insights/:sessionId
+
+    API->>Service: getOrGenerate(userId, sessionId, force=false)
+
+    Service->>DB: SELECT grind_sessions<br/>WHERE id=$1 AND user_id=$2
+
+    alt nao owner
+        DB-->>Service: empty
+        Service-->>API: throw 403
+        API-->>Recap: 403 NOT_OWNER
+        Recap-->>User: error toast
+    else status != completed
+        Service-->>API: throw 400
+        API-->>Recap: 400 SESSION_NOT_FINALIZED
+    else owner + finalized
+        Service->>Cache: SELECT * FROM coach_session_insights<br/>WHERE grind_session_id=$1<br/>AND expires_at > now()
+
+        alt cache HIT
+            Cache-->>Service: { insights_jsonb, expires_at }
+            Service-->>API: { insights, cached: true, expiresAt }
+            API-->>Recap: 200 { insights, cached: true }
+            Recap-->>User: render 4 sections instantly<br/>(<= 80ms p95)
+        else cache MISS
+            Cache-->>Service: empty
+
+            Service->>DB: collect context:<br/>tournaments WHERE grind_session_id=$1<br/>spots WHERE grind_session_id=$1<br/>focusStats WHERE month=current<br/>lessonsWhitelist (curated linkedStats matching focus)
+
+            DB-->>Service: { session, tournaments[], spots[],<br/>focusStats[], lessonsWhitelist[] }
+
+            Service->>Coach: tool call coachSessionInsights({sessionContext})
+
+            Coach->>Anthropic: SDK call<br/>system prompt cached (ephemeral)<br/>user block per-session<br/>output_schema: SessionInsights
+
+            Anthropic-->>Coach: structured output JSON
+
+            Coach->>Coach: validate Zod SessionInsights
+            Coach->>Coach: validate handIds ∈ spots<br/>(anti-hallucinacao)
+            Coach->>Coach: validate lessonIds ∈ whitelist
+
+            alt Zod fail OR refs invalidos (1a)
+                Coach->>Anthropic: retry com prompt corretivo
+                Anthropic-->>Coach: output retry
+                Coach->>Coach: validate again
+
+                alt Zod fail OR refs invalidos (2a)
+                    Coach-->>Service: throw INSIGHTS_INVALID
+                    Service-->>API: 500 INTERNAL_ERROR<br/>(log estruturado)
+                    API-->>Recap: 500 + retry button
+                else valid
+                    Coach-->>Service: insights wrapped (ADR-024)
+                end
+            else valid (1a)
+                Coach-->>Service: insights wrapped
+            end
+
+            Service->>Cache: INSERT coach_session_insights<br/>(insights_jsonb, expires_at = now()+24h,<br/>cost_tokens_used, model, prompt_version,<br/>tokens_in, tokens_out)<br/>ON CONFLICT (grind_session_id) DO UPDATE<br/>SET insights_jsonb=EXCLUDED,<br/>regenerated_count=count+1
+
+            Cache-->>Service: stored
+            Service->>Service: telemetria coach_session_insights_generated<br/>{userId, sessionId, tokensUsed, cached: false}
+
+            Service-->>API: { insights, cached: false, expiresAt }
+            API-->>Recap: 200 { insights, cached: false }
+            Recap-->>User: render 4 sections (5-12s spinner)
+        end
+    end
+
+    Note over User,Recap: User interage com CTAs
+
+    alt User clica "Registrar review" em topHand
+        User->>Recap: click CTA
+        Recap->>Recap: abre StudyLogDialog<br/>mode='hand_review'<br/>starred_hand_ids=[handId]
+        Recap->>Recap: telemetria coach_insight_cta_clicked<br/>{ctaType: review_hand}
+    else User clica "Assistir aula"
+        User->>Recap: click CTA lesson
+        Recap->>Recap: navega Wouter route<br/>/biblioteca/curso/${courseSlug}/${lessonSlug}/play<br/>(lesson #19 — slugs hidratados)
+        Recap->>Recap: telemetria coach_insight_cta_clicked<br/>{ctaType: watch_lesson}
+    else User clica "Adicionar insight" em spot
+        User->>Recap: click
+        Recap->>Recap: dialog inline edit notes/learning
+    else User clica Regenerar (rate limit 3/sessao)
+        User->>Recap: click
+        Recap->>API: POST /api/coach/session-insights/:sessionId/regenerate
+        API->>Service: getOrGenerate(userId, sessionId, force=true)
+        Note over Service,Cache: skip cache check, always regenerate<br/>UPSERT bumpa regenerated_count
+    end

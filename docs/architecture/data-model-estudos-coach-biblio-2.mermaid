@@ -1,0 +1,137 @@
+erDiagram
+    %% =====================================================================
+    %% Sprint Estudos-Coach-Biblio-2 — ER Diagrama (delta sobre Sprint 1)
+    %% Ref: Docs/specs/estudos-coach-biblio-2.md, ADRs 131-135
+    %% =====================================================================
+
+    users {
+        varchar id PK "nanoid"
+        varchar user_platform_id UK "USER-XXXX"
+        varchar email UK "not null"
+        jsonb home_layout_settings "studyHabit estendido: autoLogLessons (default true) + autoPromptCoachInsightsAfterLive (default false)"
+        boolean has_coach_access "premium tier flag — RF-3 cron + manual gating"
+    }
+
+    study_themes {
+        varchar id PK "nanoid 21"
+        varchar user_id FK "users.user_platform_id"
+        varchar name "max 50"
+        boolean is_curated "Sprint 1 — default false"
+        jsonb linked_stats "Sprint 1 — array de stat_id; usado por RF-2"
+        jsonb linked_lessons "Sprint 1 — array de lesson_id; usado por RF-1.2 derivation + RF-2 match"
+        timestamp created_at
+    }
+
+    study_sessions_v2 {
+        varchar id PK "nanoid 21"
+        varchar user_id FK "users.user_platform_id, CASCADE"
+        varchar mode "drill_gto/tournament_review/hand_review/lesson/other"
+        varchar source "manual_post_hoc/manual_live/auto_lesson/auto_grind_finalize"
+        varchar lesson_id FK "library_lessons.id SET NULL — RF-1 ativa"
+        varchar theme_id FK "study_themes.id SET NULL — Errata ADR-135: NULLABLE em mode=lesson"
+        integer duration_minutes "cap server-side min(payload, lessonRuntime/60+5)"
+        timestamptz registered_at "anchor do streak"
+        timestamptz deleted_at "soft delete"
+    }
+
+    user_focus_stats {
+        varchar id PK
+        varchar user_id FK "CASCADE"
+        varchar stat_id "id em HUD_STAT_CATALOG"
+        varchar study_theme_id FK "nullable Sprint 1"
+        varchar month "YYYY-MM UTC"
+    }
+
+    library_lessons {
+        varchar id PK
+        varchar course_id FK
+        varchar slug "len 80"
+        boolean is_published
+        integer runtime_seconds "anti-inflate cap em RF-1"
+        varchar mux_playback_id
+    }
+
+    library_courses {
+        varchar id PK
+        varchar slug "para hidratacao Wouter route /biblioteca/curso/:courseSlug/:lessonSlug — lesson #19"
+    }
+
+    library_lesson_progress {
+        varchar id PK
+        varchar user_id FK
+        varchar lesson_id FK
+        decimal progress_pct "hidrata watchedPct em RF-2"
+    }
+
+    grind_sessions {
+        varchar id PK
+        varchar user_id FK
+        timestamp finalized_at
+        varchar status "completed required para RF-4"
+        integer duration_minutes "threshold 30min para autoPromptCoachInsightsAfterLive"
+    }
+
+    starred_hands {
+        varchar id PK
+        varchar grind_session_id FK
+        varchar type "tilt/leak/soulread/etc — usado em RF-4 spotsToReview"
+    }
+
+    %% ============================================
+    %% TABELAS NOVAS Sprint 2
+    %% ============================================
+
+    study_weekly_plans {
+        varchar id PK "nanoid 21 — NOVA Sprint 2 (ADR-132)"
+        varchar user_id FK "users.user_platform_id CASCADE"
+        date week_start_date "segunda da semana UTC"
+        jsonb plan_jsonb "StudyWeeklyPlan shape — 5 dias x 3-4 atividades"
+        jsonb completed_items_jsonb "default [] — array de itemId"
+        varchar source "coach_auto/coach_manual"
+        integer daily_target_minutes "5-240 — clamp avg*0.95"
+        integer cost_tokens_used "tracking custo Coach"
+        timestamptz generated_at
+        timestamptz regenerated_at
+        integer regenerated_count "default 0"
+        timestamptz created_at
+        timestamptz updated_at "trigger set_updated_at"
+    }
+
+    coach_session_insights {
+        varchar id PK "nanoid 21 — NOVA Sprint 2 (ADR-133)"
+        varchar user_id FK "users.user_platform_id CASCADE"
+        varchar grind_session_id FK "grind_sessions.id CASCADE UNIQUE — 1 insight/sessao"
+        jsonb insights_jsonb "SessionInsights shape: summary, topHands, suggestedLessons, spotsToReview, focusStatsHighlight"
+        timestamptz generated_at
+        timestamptz expires_at "generated_at + 24h"
+        integer cost_tokens_used
+        varchar model "claude-opus-4-7 etc"
+        varchar prompt_version "rastreabilidade"
+        integer tokens_in
+        integer tokens_out
+        integer regenerated_count "default 0 — bumpa em /regenerate"
+        timestamptz created_at
+    }
+
+    %% ============================================
+    %% Relacoes
+    %% ============================================
+
+    users ||--o{ study_weekly_plans : "1:N CASCADE — UNIQUE(user_id, week_start_date)"
+    users ||--o{ coach_session_insights : "1:N CASCADE"
+    grind_sessions ||--|| coach_session_insights : "1:1 CASCADE — UNIQUE grind_session_id"
+
+    users ||--o{ study_themes : "1:N"
+    users ||--o{ study_sessions_v2 : "1:N CASCADE"
+    users ||--o{ user_focus_stats : "1:N CASCADE"
+    users ||--o{ grind_sessions : "1:N"
+
+    study_themes ||--o{ study_sessions_v2 : "SET NULL — theme_id NULLABLE em mode=lesson (Errata 135)"
+    study_themes }o--o{ library_lessons : "linked_lessons jsonb — RF-2 match + RF-1.2 derivation"
+    study_themes }o--o{ user_focus_stats : "linked_stats jsonb — RF-2 leak match"
+
+    library_courses ||--o{ library_lessons : "1:N"
+    library_lessons ||--o{ library_lesson_progress : "1:N — hidrata watchedPct RF-2"
+    library_lessons ||--o{ study_sessions_v2 : "SET NULL — lesson_id"
+
+    grind_sessions ||--o{ starred_hands : "1:N — input para RF-4 spotsToReview"
