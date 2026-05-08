@@ -1,392 +1,436 @@
 // =============================================================================
-// Sprint Estudos-Habito-1 — Curated Study Themes Seed (ADR-127)
+// Curated Study Themes Seed (ADR-127, refactored Sprint Themes-V2 2026-05-08)
 //
-// 30 temas curated em 5 categorias. Cada tema com:
+// Taxonomia v2: 20 temas em 3 categorias (preflop / postflop / multiway).
+// Substitui catalog v1 (30 temas / 5 categorias). Migration 0059 faz soft-drop
+// dos antigos via UPDATE is_curated=false para preservar FKs (sessions,
+// study_theme_spot_links).
+//
+// Cada tema:
 //   - slug (kebab-case unico)
-//   - name (PT-BR)
+//   - name (PT-BR, simplificado)
 //   - color hex + emoji default (string vazia — user customiza no UI)
-//   - category enum
-//   - linkedStats: array de stat_id do HUD_STAT_CATALOG (RF-3.3 auto-suggest)
-//   - linkedLessons: array de lesson_id da Biblioteca (best-effort lookup at seed time)
+//   - category enum (preflop | postflop | multiway)
+//   - linkedStats: stat_id do HUD_STAT_CATALOG (RF-3.3 auto-suggest)
+//   - linkedLessonSlugs: vazio inicial; coach pode mapear via tools depois
 //
 // Idempotente. Roda lazy per-user no primeiro GET /api/study-themes via
 // storage.ensureCuratedThemesForUser(userId).
 // Roda manualmente via scripts/seed-study-themes.ts --user USER-XXXX.
 // =============================================================================
 
-export type CuratedCategory = "preflop" | "postflop" | "icm" | "mental" | "specific";
+export type CuratedCategory = "preflop" | "postflop" | "multiway";
 
 export interface CuratedTheme {
-  slug: string;                         // unique kebab-case
-  name: string;                         // PT-BR
-  color: string;                        // hex 7 chars
-  emoji: string;                        // default empty; user pode customizar
+  slug: string;
+  name: string;
+  color: string;
+  emoji: string;
   category: CuratedCategory;
-  linkedStats: string[];                // stat_id do HUD_STAT_CATALOG
-  linkedLessonSlugs: string[];          // slugs da Biblioteca; o storage resolve para library_lessons.id
+  linkedStats: string[];
+  linkedLessonSlugs: string[];
 }
 
 // =============================================================================
-// PREFLOP — 8 themes
+// PREFLOP — 8 temas
 // =============================================================================
 
 const PREFLOP: CuratedTheme[] = [
   {
-    slug: "preflop-rfi-tight",
-    name: "RFI Tight (mid+late stages)",
+    slug: "preflop-rfi",
+    name: "RFI",
     color: "#0ea5e9",
     emoji: "",
     category: "preflop",
-    linkedStats: ["rfi_overall", "rfi_ep", "rfi_mp"],
+    linkedStats: ["rfi_total", "rfi_btn", "rfi_co", "rfi_hj", "rfi_lj", "rfi_mp", "rfi_ep", "rfi_sb"],
     linkedLessonSlugs: [],
   },
   {
-    slug: "preflop-rfi-loose",
-    name: "RFI Loose (early stages)",
-    color: "#0ea5e9",
+    slug: "preflop-flats",
+    name: "Flats",
+    color: "#06b6d4",
     emoji: "",
     category: "preflop",
-    linkedStats: ["rfi_overall", "rfi_btn", "rfi_co"],
+    linkedStats: ["cold_call_total", "cold_call_btn", "cold_call_co", "cold_call_sb", "cold_call_vs_lp", "flat_3bet"],
     linkedLessonSlugs: [],
   },
   {
-    slug: "preflop-3bet-ip",
-    name: "3-bet em posicao",
+    slug: "preflop-3bets-ip",
+    name: "3bets IP",
     color: "#22c55e",
     emoji: "",
     category: "preflop",
-    linkedStats: ["threebet_pct", "threebet_btn_vs_co", "threebet_co_vs_mp"],
+    linkedStats: ["threebet_btn", "threebet_co", "threebet_vs_lp", "fold_vs_threebet_ip", "call_vs_3bet_ip"],
     linkedLessonSlugs: [],
   },
   {
-    slug: "preflop-3bet-oop",
-    name: "3-bet fora de posicao",
-    color: "#22c55e",
+    slug: "preflop-3bets-oop",
+    name: "3bets OOP",
+    color: "#16a34a",
     emoji: "",
     category: "preflop",
-    linkedStats: ["threebet_pct", "threebet_sb_vs_btn", "threebet_bb_vs_btn"],
-    linkedLessonSlugs: [],
-  },
-  {
-    slug: "preflop-vs-3bet",
-    name: "Defesa vs 3-bet (flat/4-bet)",
-    color: "#a855f7",
-    emoji: "",
-    category: "preflop",
-    linkedStats: ["fold_to_3bet", "call_3bet_pct", "fourbet_pct"],
+    linkedStats: ["threebet_sb", "threebet_bb", "threebet_vs_ep", "fold_vs_threebet_oop", "call_vs_3bet_oop", "squeeze_pf"],
     linkedLessonSlugs: [],
   },
   {
     slug: "preflop-bb-defense",
-    name: "BB Defense (call vs raise)",
+    name: "Defesa de BB",
     color: "#a855f7",
     emoji: "",
     category: "preflop",
-    linkedStats: ["bb_defense_pct", "bb_call_vs_btn", "bb_call_vs_co"],
+    linkedStats: [
+      "bb_defend_vs_steal",
+      "bb_fold_vs_steal",
+      "bb_3bet_vs_steal",
+      "bb_call_vs_btn",
+      "bb_call_vs_co",
+      "bb_fold_vs_btn",
+      "bb_fold_vs_co",
+    ],
     linkedLessonSlugs: [],
   },
   {
-    slug: "preflop-blind-war-squeeze",
-    name: "Blind War + Squeeze",
+    slug: "preflop-blindwar-sb",
+    name: "Blindwar SB",
     color: "#f97316",
     emoji: "",
     category: "preflop",
-    linkedStats: ["squeeze_pct", "sb_vs_btn_steal", "bb_vs_btn_3bet"],
+    linkedStats: ["sb_open_vs_bb", "sb_3bet_vs_bb_iso", "sb_steal_attempt", "sb_steal_success", "sb_3bet_pf_vs_bb", "sb_4bet_vs_bb"],
     linkedLessonSlugs: [],
   },
   {
-    slug: "preflop-late-reg-deep",
-    name: "Late reg deep stack",
+    slug: "preflop-blindwar-bb",
+    name: "Blindwar BB",
     color: "#eab308",
     emoji: "",
     category: "preflop",
-    linkedStats: ["rfi_overall", "threebet_pct"],
+    linkedStats: ["bb_defend_vs_sb_open", "bb_3bet_vs_sb_open", "bb_call_vs_sb_open", "bb_fold_vs_sb_open", "bb_4bet_vs_sb"],
+    linkedLessonSlugs: [],
+  },
+  {
+    slug: "preflop-icm",
+    name: "ICM Preflop",
+    color: "#dc2626",
+    emoji: "",
+    category: "preflop",
+    linkedStats: ["resteal_short", "rfi_sb_short", "rfi_btn_short", "rfi_co_short", "threebet_short", "fold_to_resteal"],
     linkedLessonSlugs: [],
   },
 ];
 
 // =============================================================================
-// POSTFLOP — 8 themes
+// POSTFLOP — 9 temas
 // =============================================================================
 
 const POSTFLOP: CuratedTheme[] = [
   {
-    slug: "postflop-cbet-oop-small",
-    name: "C-bet OOP small (range bet)",
+    slug: "postflop-srp-ip-vs-bb",
+    name: "SRP IP vs BB",
     color: "#f59e0b",
     emoji: "",
     category: "postflop",
-    linkedStats: ["cbet_flop_oop", "cbet_flop_oop_pfr", "cbet_size_small"],
+    linkedStats: [
+      "cbet_ip_vs_bb",
+      "second_barrel_vs_bb",
+      "third_barrel_vs_bb",
+      "cbet_flop_utg_vs_bb",
+      "cbet_turn_utg_vs_bb",
+      "cbet_river_utg_vs_bb",
+      "bxb",
+      "fold_vs_xr_flop",
+    ],
     linkedLessonSlugs: [],
   },
   {
-    slug: "postflop-cbet-oop-polar",
-    name: "C-bet OOP polarizado",
-    color: "#f59e0b",
+    slug: "postflop-srp-bb-vs-ip",
+    name: "SRP BB vs IP",
+    color: "#fb923c",
     emoji: "",
     category: "postflop",
-    linkedStats: ["cbet_flop_oop", "cbet_size_big"],
+    linkedStats: [
+      "bb_check_raise_flop",
+      "bb_donk_flop",
+      "fold_vs_cbet_oop",
+      "bb_call_vs_btn",
+      "bb_call_vs_co",
+    ],
     linkedLessonSlugs: [],
   },
   {
-    slug: "postflop-donk-leads",
-    name: "Donk leads (when, why, when not)",
+    slug: "postflop-flat-pot-oop-agressor",
+    name: "Flat pot OOP agressor",
+    color: "#ef4444",
+    emoji: "",
+    category: "postflop",
+    linkedStats: [
+      "cbet_flop_oop",
+      "xf_flop",
+      "xc_flop",
+      "xr_flop",
+      "second_barrel_oop",
+      "delay_cbet_oop",
+      "third_barrel_oop",
+      "xx_bet_bet",
+      "probe_turn_oop",
+      "probe_river_oop",
+    ],
+    linkedLessonSlugs: [],
+  },
+  {
+    slug: "postflop-flat-pot-ip-pagador",
+    name: "Flat pot IP pagador",
     color: "#84cc16",
     emoji: "",
     category: "postflop",
-    linkedStats: ["donk_lead_flop", "donk_lead_turn"],
+    linkedStats: [
+      "float_flop_ip",
+      "raise_cbet_ip",
+      "call_cbet_ip",
+      "fold_cbet_ip",
+      "lead_flop_ip",
+      "float_turn_ip",
+      "raise_turn_ip",
+      "call_turn_cbet_ip",
+      "fold_turn_cbet_ip",
+      "river_steal_ip",
+    ],
     linkedLessonSlugs: [],
   },
   {
-    slug: "postflop-turn-barrel",
-    name: "Turn barrel decision",
-    color: "#10b981",
-    emoji: "",
-    category: "postflop",
-    linkedStats: ["double_barrel_pct", "turn_cbet_pfr_ip", "fold_to_turn_cbet"],
-    linkedLessonSlugs: [],
-  },
-  {
-    slug: "postflop-river-bluff-value",
-    name: "River bluff vs value",
-    color: "#06b6d4",
-    emoji: "",
-    category: "postflop",
-    linkedStats: ["triple_barrel_pct", "river_bet_pct", "fold_to_river_bet"],
-    linkedLessonSlugs: [],
-  },
-  {
-    slug: "postflop-multiway-cbet",
-    name: "Multiway c-bet (3+ players)",
-    color: "#3b82f6",
-    emoji: "",
-    category: "postflop",
-    linkedStats: ["cbet_flop_multiway", "cbet_flop_3way"],
-    linkedLessonSlugs: [],
-  },
-  {
-    slug: "postflop-cooler-river",
-    name: "Cooler spots no river",
+    slug: "postflop-3bet-pot-oop",
+    name: "3bet pot OOP",
     color: "#8b5cf6",
     emoji: "",
     category: "postflop",
-    linkedStats: ["river_bet_pct", "fold_to_river_bet"],
+    linkedStats: [
+      "cbet_3bet_pot_oop_vs_lp",
+      "xc_3bet_pot_oop",
+      "xr_3bet_pot_oop",
+      "xf_3bet_pot_oop",
+      "second_barrel_3bet_pot_oop",
+      "third_barrel_3bet_pot_oop",
+      "delay_cbet_3bet_pot_oop",
+      "fold_vs_float_3bet_oop",
+    ],
     linkedLessonSlugs: [],
   },
   {
-    slug: "postflop-board-texture",
-    name: "Analise de textura de board",
+    slug: "postflop-3bet-pot-ip",
+    name: "3bet pot IP",
+    color: "#a855f7",
+    emoji: "",
+    category: "postflop",
+    linkedStats: [
+      "cbet_3bet_pot_ip",
+      "second_barrel_3bet_pot_ip",
+      "third_barrel_3bet_pot_ip",
+      "xb_3bet_pot_ip",
+      "fold_vs_xr_3bet_ip",
+      "call_vs_xr_3bet_ip",
+      "raise_xr_3bet_ip",
+      "wwsf_3bet_pot_ip",
+    ],
+    linkedLessonSlugs: [],
+  },
+  {
+    slug: "postflop-blindwar-sb",
+    name: "Blindwar SB",
     color: "#ec4899",
     emoji: "",
     category: "postflop",
-    linkedStats: ["cbet_flop_oop", "cbet_flop_ip"],
-    linkedLessonSlugs: [],
-  },
-];
-
-// =============================================================================
-// ICM — 6 themes
-// =============================================================================
-
-const ICM: CuratedTheme[] = [
-  {
-    slug: "icm-bubble-play",
-    name: "ICM no bubble",
-    color: "#dc2626",
-    emoji: "",
-    category: "icm",
-    linkedStats: ["push_fold_threshold_15bb", "fold_pct_bubble", "shove_range_btn"],
-    linkedLessonSlugs: ["a6-seis-medos-do-poker"],
-  },
-  {
-    slug: "icm-final-table",
-    name: "Final table ICM",
-    color: "#dc2626",
-    emoji: "",
-    category: "icm",
-    linkedStats: ["push_fold_threshold_15bb", "shove_range_btn", "shove_range_co"],
+    linkedStats: [
+      "sb_cbet_vs_bb_flop",
+      "sb_cbet_vs_bb_turn",
+      "sb_cbet_vs_bb_river",
+      "sb_xc_vs_bb_flop",
+      "sb_xr_vs_bb_flop",
+      "sb_xf_vs_bb_flop",
+      "sb_donk_flop",
+      "sb_probe_turn",
+      "sb_probe_river",
+      "sb_xx_river_bet",
+    ],
     linkedLessonSlugs: [],
   },
   {
-    slug: "icm-pay-jumps",
-    name: "Pay jumps strategy",
+    slug: "postflop-blindwar-bb",
+    name: "Blindwar BB",
+    color: "#f43f5e",
+    emoji: "",
+    category: "postflop",
+    linkedStats: [
+      "bb_donk_flop_sb",
+      "bb_xc_flop_sb",
+      "bb_xr_flop_sb",
+      "bb_xf_flop_sb",
+      "bb_xc_turn_sb",
+      "bb_xr_turn_sb",
+      "bb_probe_turn_sb",
+      "bb_probe_river_sb",
+      "bb_call_vs_sb_cbet",
+      "bb_fold_vs_sb_cbet",
+      "bb_raise_vs_sb_cbet",
+      "bb_xx_river_bet_sb",
+      "bb_lead_flop_sb",
+    ],
+    linkedLessonSlugs: [],
+  },
+  {
+    slug: "postflop-icm",
+    name: "ICM Posflop",
     color: "#b91c1c",
     emoji: "",
-    category: "icm",
-    linkedStats: ["fold_pct_bubble"],
-    linkedLessonSlugs: [],
-  },
-  {
-    slug: "icm-ft-ladder",
-    name: "FT ladder management",
-    color: "#b91c1c",
-    emoji: "",
-    category: "icm",
-    linkedStats: ["push_fold_threshold_15bb"],
-    linkedLessonSlugs: [],
-  },
-  {
-    slug: "icm-stack-aware",
-    name: "Stack-aware ICM (covered/coverer)",
-    color: "#991b1b",
-    emoji: "",
-    category: "icm",
-    linkedStats: ["shove_range_btn", "fold_to_shove_pct"],
-    linkedLessonSlugs: [],
-  },
-  {
-    slug: "icm-mtt-push-fold",
-    name: "MTT push/fold (10-20bb)",
-    color: "#991b1b",
-    emoji: "",
-    category: "icm",
-    linkedStats: ["push_fold_threshold_15bb", "shove_range_btn", "fold_to_shove_pct"],
+    category: "postflop",
+    linkedStats: [],
     linkedLessonSlugs: [],
   },
 ];
 
 // =============================================================================
-// MENTAL — 5 themes (heavy linkedLessons — Bloco A "Antes das Cartas")
+// MULTIWAY — 3 temas
 // =============================================================================
 
-const MENTAL: CuratedTheme[] = [
+const MULTIWAY: CuratedTheme[] = [
   {
-    slug: "mental-tilt-control",
-    name: "Tilt control",
-    color: "#7c3aed",
+    slug: "multiway-agressor-oop",
+    name: "Agressor OOP",
+    color: "#3b82f6",
     emoji: "",
-    category: "mental",
-    linkedStats: [],
-    linkedLessonSlugs: ["a7-combustivel-nao-gatilho", "a4-responsabilidade-vs-culpa"],
+    category: "multiway",
+    linkedStats: [
+      "cbet_multiway_3way",
+      "cbet_multiway_4way_plus",
+      "multiway_pot_size_avg",
+      "wwsf_multiway",
+      "wtsd_multiway",
+    ],
+    linkedLessonSlugs: [],
   },
   {
-    slug: "mental-a-game",
-    name: "A-game maintenance",
-    color: "#7c3aed",
-    emoji: "",
-    category: "mental",
-    linkedStats: [],
-    linkedLessonSlugs: ["a1-mentalidade-fixa-vs-crescimento", "a9-sistema-acima-forca-vontade"],
-  },
-  {
-    slug: "mental-loss-recovery",
-    name: "Loss recovery (post-downswing)",
-    color: "#6d28d9",
-    emoji: "",
-    category: "mental",
-    linkedStats: [],
-    linkedLessonSlugs: ["a4-responsabilidade-vs-culpa", "a3-identidade-como-narrativa"],
-  },
-  {
-    slug: "mental-variance-acceptance",
-    name: "Variance acceptance",
-    color: "#6d28d9",
-    emoji: "",
-    category: "mental",
-    linkedStats: [],
-    linkedLessonSlugs: ["a2-dicotomia-do-controle"],
-  },
-  {
-    slug: "mental-decision-fatigue",
-    name: "Decision fatigue",
-    color: "#5b21b6",
-    emoji: "",
-    category: "mental",
-    linkedStats: [],
-    linkedLessonSlugs: ["a9-sistema-acima-forca-vontade"],
-  },
-];
-
-// =============================================================================
-// SPECIFIC — 3 themes
-// =============================================================================
-
-const SPECIFIC: CuratedTheme[] = [
-  {
-    slug: "specific-short-stack",
-    name: "Short stack push/fold (5-15bb)",
+    slug: "multiway-caller-ip",
+    name: "Caller IP",
     color: "#0891b2",
     emoji: "",
-    category: "specific",
-    linkedStats: ["push_fold_threshold_15bb", "shove_range_btn", "fold_to_shove_pct"],
+    category: "multiway",
+    linkedStats: [
+      "fold_to_cbet_multiway",
+      "call_cbet_multiway",
+      "raise_cbet_multiway",
+      "xc_multiway",
+      "xr_multiway",
+    ],
     linkedLessonSlugs: [],
   },
   {
-    slug: "specific-phased-day2",
-    name: "Phased Day 2 strategy",
-    color: "#0891b2",
+    slug: "multiway-bb-oop",
+    name: "BB OOP",
+    color: "#14b8a6",
     emoji: "",
-    category: "specific",
-    linkedStats: [],
-    linkedLessonSlugs: [],
-  },
-  {
-    slug: "specific-satellite-bubble",
-    name: "Satellite bubble (flat ICM)",
-    color: "#0e7490",
-    emoji: "",
-    category: "specific",
-    linkedStats: ["push_fold_threshold_15bb", "fold_pct_bubble"],
+    category: "multiway",
+    linkedStats: [
+      "bb_defense_3way",
+      "bb_3bet_3way",
+      "bb_call_3way",
+      "bb_fold_3way",
+      "bb_squeeze_3way",
+      "bb_donk_3way",
+      "bb_xr_3way",
+      "bb_xc_3way",
+    ],
     linkedLessonSlugs: [],
   },
 ];
 
 // =============================================================================
-// EXPORT — 30 themes total
+// EXPORT — 20 temas total
 // =============================================================================
 
 export const CURATED_STUDY_THEMES: CuratedTheme[] = [
   ...PREFLOP,
   ...POSTFLOP,
-  ...ICM,
-  ...MENTAL,
-  ...SPECIFIC,
+  ...MULTIWAY,
 ];
 
-// Sanity check — fail at module load if count diverges from spec.
-if (CURATED_STUDY_THEMES.length !== 30) {
+if (CURATED_STUDY_THEMES.length !== 20) {
   throw new Error(
-    `[study-themes-seed] expected 30 curated themes, got ${CURATED_STUDY_THEMES.length}. ` +
-    `Categories: preflop=${PREFLOP.length} postflop=${POSTFLOP.length} icm=${ICM.length} ` +
-    `mental=${MENTAL.length} specific=${SPECIFIC.length}.`,
+    `[study-themes-seed] expected 20 curated themes, got ${CURATED_STUDY_THEMES.length}. ` +
+    `Categories: preflop=${PREFLOP.length} postflop=${POSTFLOP.length} multiway=${MULTIWAY.length}.`,
   );
 }
 
 export const CURATED_STUDY_THEMES_BY_CATEGORY: Record<CuratedCategory, CuratedTheme[]> = {
   preflop: PREFLOP,
   postflop: POSTFLOP,
-  icm: ICM,
-  mental: MENTAL,
-  specific: SPECIFIC,
+  multiway: MULTIWAY,
 };
+
+// =============================================================================
+// LEGACY SLUGS (v1 → v2 migration reference)
+// =============================================================================
+// Slugs do catalog v1 que foram dropados (soft-drop via migration 0059).
+// Listados aqui para referencia de queries futuras + UI legacy banner.
+// =============================================================================
+export const LEGACY_CURATED_SLUGS_V1: string[] = [
+  // v1 preflop (8)
+  "preflop-rfi-tight",
+  "preflop-rfi-loose",
+  "preflop-3bet-ip",
+  "preflop-3bet-oop",
+  "preflop-vs-3bet",
+  "preflop-bb-defense",
+  "preflop-blind-war-squeeze",
+  "preflop-late-reg-deep",
+  // v1 postflop (8)
+  "postflop-cbet-oop-small",
+  "postflop-cbet-oop-polar",
+  "postflop-donk-leads",
+  "postflop-turn-barrel",
+  "postflop-river-bluff-value",
+  "postflop-multiway-cbet",
+  "postflop-cooler-river",
+  "postflop-board-texture",
+  // v1 icm (6)
+  "icm-bubble-play",
+  "icm-final-table",
+  "icm-pay-jumps",
+  "icm-ft-ladder",
+  "icm-stack-aware",
+  "icm-mtt-push-fold",
+  // v1 mental (5)
+  "mental-tilt-control",
+  "mental-a-game",
+  "mental-loss-recovery",
+  "mental-variance-acceptance",
+  "mental-decision-fatigue",
+  // v1 specific (3)
+  "specific-short-stack",
+  "specific-phased-day2",
+  "specific-satellite-bubble",
+];
 
 // =============================================================================
 // NOTAS DE INTEGRACAO (storage layer — implementer)
 // =============================================================================
 // 1. ensureCuratedThemesForUser(userId): chamado lazy no primeiro GET /api/study-themes
-//    quando o user nao tem rows com is_curated=true. Faz INSERT ON CONFLICT DO NOTHING
-//    para cada CuratedTheme — UNIQUE parcial uq_study_themes_user_slug_curated garante
-//    idempotency.
+//    quando o user nao tem rows com is_curated=true para os slugs v2. UNIQUE parcial
+//    uq_study_themes_user_slug_curated garante idempotency.
 //
 // 2. resolveLessonSlugsToIds(slugs: string[]): query
 //      SELECT id FROM library_lessons WHERE slug = ANY($1) AND is_published = true
-//    Retorna {slug -> id} map. Slugs nao encontrados sao silenciosamente dropped do
-//    linked_lessons array — nao quebra seed.
+//    Slugs nao encontrados sao silenciosamente dropped do linked_lessons array.
 //
 // 3. Auto-suggest (RF-3.3): query lookup
 //      SELECT id, name FROM study_themes
 //        WHERE user_id = $1 AND is_curated = true
 //        AND linked_stats @> jsonb_build_array($2::text)
 //      LIMIT 1
-//    Hits o GIN index idx_study_themes_curated_stats.
 //
-// 4. Update do catalog futuro: incrementar themes ou ajustar linkedStats requer
-//    re-rodar seed para todos os users (`npx tsx scripts/seed-study-themes.ts --refresh`).
-//    INSERT ON CONFLICT continua idempotent; UPDATE explicito quando linked_stats muda.
+// 4. Migration v1 → v2 (migration 0059):
+//      UPDATE study_themes
+//        SET is_curated = false
+//        WHERE is_curated = true AND slug = ANY($LEGACY_CURATED_SLUGS_V1)
+//    Preserva rows + FKs (sessions, spot_links). Os 20 v2 entram via lazy seed.
 //
 // 5. Note de stat_id: as strings em linkedStats sao referencias logicas ao
-//    HUD_STAT_CATALOG (shared/hud-stat-catalog.ts). NAO ha FK; ao detectar
-//    stat removida do catalog, a UI mostra warning + CTA "Remover" (spec RF-3
-//    edge case "Catalog HUD nao tem stat_id mais"). Implementer deve validar
-//    em runtime que cada stat_id em linkedStats existe no catalog atual antes
-//    de seed (prevenir typos).
+//    HUD_STAT_CATALOG (shared/hud-stat-catalog.ts). Validacao runtime opcional
+//    contra STAT_INDEX_BY_ID.

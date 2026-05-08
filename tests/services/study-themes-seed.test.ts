@@ -1,22 +1,15 @@
 /**
- * Test-Writer (Modo TDD - Red Phase / Caracterizacao)
+ * Sprint Themes-V2 (2026-05-08) — caracterizacao do catalog v2
  *
- * Sprint Estudos-Habito-1 — ADR-127 curated themes seed
- *
- * Spec : Docs/specs/estudos-habito-1.md §RF-3.3
- * ADR  : 127
+ * Spec : taxonomia v2 de 20 temas / 3 categorias (preflop/postflop/multiway)
+ * ADR  : 127 (refactored)
  *
  * Cobertura:
- *   - CURATED_STUDY_THEMES export tem 30 entries
- *   - Por categoria: preflop=8, postflop=8, icm=6, mental=5, specific=3
- *   - Cada tema tem slug unico (kebab-case)
- *   - Cada tema com category enum valido
- *   - linkedStats: array de strings (pode ser vazio)
- *   - linkedLessonSlugs: array de strings
- *   - Slugs unicos cross-categoria (sem duplicate global)
- *   - Mental themes tem heavy linkedLessons (Bloco A integration)
- *
- * Status: Caracterizacao (file ja existe). Documenta o que foi entregue.
+ *   - CURATED_STUDY_THEMES export tem 20 entries
+ *   - Por categoria: preflop=8, postflop=9, multiway=3
+ *   - Cada tema tem slug unico kebab-case + name PT-BR + color hex
+ *   - Cada tema com category enum valido (preflop|postflop|multiway)
+ *   - LEGACY_CURATED_SLUGS_V1 com 30 slugs antigos (referencia migration 0059)
  */
 
 import { describe, it, expect } from 'vitest';
@@ -24,34 +17,27 @@ import { describe, it, expect } from 'vitest';
 import {
   CURATED_STUDY_THEMES,
   CURATED_STUDY_THEMES_BY_CATEGORY,
+  LEGACY_CURATED_SLUGS_V1,
 } from '../../server/seeds/study-themes-seed';
 
-describe('Curated themes seed (ADR-127)', () => {
-  it('exporta 30 themes total', () => {
-    expect(CURATED_STUDY_THEMES).toHaveLength(30);
+describe('Curated themes seed v2', () => {
+  it('exporta 20 themes total', () => {
+    expect(CURATED_STUDY_THEMES).toHaveLength(20);
   });
 
   it('preflop tem 8 themes', () => {
     expect(CURATED_STUDY_THEMES_BY_CATEGORY.preflop).toHaveLength(8);
   });
 
-  it('postflop tem 8 themes', () => {
-    expect(CURATED_STUDY_THEMES_BY_CATEGORY.postflop).toHaveLength(8);
+  it('postflop tem 9 themes', () => {
+    expect(CURATED_STUDY_THEMES_BY_CATEGORY.postflop).toHaveLength(9);
   });
 
-  it('icm tem 6 themes', () => {
-    expect(CURATED_STUDY_THEMES_BY_CATEGORY.icm).toHaveLength(6);
+  it('multiway tem 3 themes', () => {
+    expect(CURATED_STUDY_THEMES_BY_CATEGORY.multiway).toHaveLength(3);
   });
 
-  it('mental tem 5 themes', () => {
-    expect(CURATED_STUDY_THEMES_BY_CATEGORY.mental).toHaveLength(5);
-  });
-
-  it('specific tem 3 themes', () => {
-    expect(CURATED_STUDY_THEMES_BY_CATEGORY.specific).toHaveLength(3);
-  });
-
-  it('cada theme tem slug em kebab-case (lower + dashes)', () => {
+  it('cada theme tem slug em kebab-case', () => {
     for (const t of CURATED_STUDY_THEMES) {
       expect(t.slug).toMatch(/^[a-z0-9-]+$/);
     }
@@ -63,14 +49,14 @@ describe('Curated themes seed (ADR-127)', () => {
     expect(unique.size).toBe(slugs.length);
   });
 
-  it('todos themes tem category valida no enum', () => {
-    const validCategories = new Set(['preflop', 'postflop', 'icm', 'mental', 'specific']);
+  it('todos themes tem category valida no enum v2', () => {
+    const validCategories = new Set(['preflop', 'postflop', 'multiway']);
     for (const t of CURATED_STUDY_THEMES) {
       expect(validCategories.has(t.category)).toBe(true);
     }
   });
 
-  it('todos themes tem linkedStats array (pode ser vazio)', () => {
+  it('todos themes tem linkedStats array', () => {
     for (const t of CURATED_STUDY_THEMES) {
       expect(Array.isArray(t.linkedStats)).toBe(true);
     }
@@ -79,18 +65,6 @@ describe('Curated themes seed (ADR-127)', () => {
   it('todos themes tem linkedLessonSlugs array', () => {
     for (const t of CURATED_STUDY_THEMES) {
       expect(Array.isArray(t.linkedLessonSlugs)).toBe(true);
-    }
-  });
-
-  it('Mental themes tem >=1 linkedLessonSlug (integracao Bloco A)', () => {
-    for (const t of CURATED_STUDY_THEMES_BY_CATEGORY.mental) {
-      expect(t.linkedLessonSlugs.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('ICM themes tem >=1 linkedStat (auto-suggest base)', () => {
-    for (const t of CURATED_STUDY_THEMES_BY_CATEGORY.icm) {
-      expect(t.linkedStats.length).toBeGreaterThan(0);
     }
   });
 
@@ -107,10 +81,30 @@ describe('Curated themes seed (ADR-127)', () => {
     }
   });
 
-  it('icm-bubble-play existe e tem linkedLessonSlugs apontando para a6 ou similar', () => {
-    const icmBubble = CURATED_STUDY_THEMES.find((t) => t.slug === 'icm-bubble-play');
-    expect(icmBubble).toBeDefined();
-    expect(icmBubble?.category).toBe('icm');
-    expect(icmBubble?.linkedLessonSlugs.length).toBeGreaterThan(0);
+  it('preflop-rfi existe e tem >=1 linkedStat', () => {
+    const rfi = CURATED_STUDY_THEMES.find((t) => t.slug === 'preflop-rfi');
+    expect(rfi).toBeDefined();
+    expect(rfi?.category).toBe('preflop');
+    expect(rfi?.linkedStats.length).toBeGreaterThan(0);
+  });
+
+  it('postflop-srp-ip-vs-bb existe', () => {
+    const t = CURATED_STUDY_THEMES.find((x) => x.slug === 'postflop-srp-ip-vs-bb');
+    expect(t).toBeDefined();
+    expect(t?.category).toBe('postflop');
+  });
+
+  it('multiway-bb-oop existe e tem linkedStats threeway_bb group', () => {
+    const t = CURATED_STUDY_THEMES.find((x) => x.slug === 'multiway-bb-oop');
+    expect(t).toBeDefined();
+    expect(t?.category).toBe('multiway');
+    expect(t?.linkedStats).toContain('bb_defense_3way');
+  });
+
+  it('LEGACY_CURATED_SLUGS_V1 tem 30 slugs antigos (referencia soft-drop)', () => {
+    expect(LEGACY_CURATED_SLUGS_V1).toHaveLength(30);
+    expect(LEGACY_CURATED_SLUGS_V1).toContain('preflop-rfi-tight');
+    expect(LEGACY_CURATED_SLUGS_V1).toContain('mental-tilt-control');
+    expect(LEGACY_CURATED_SLUGS_V1).toContain('icm-bubble-play');
   });
 });
