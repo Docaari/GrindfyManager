@@ -17,6 +17,7 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  Tooltip,
 } from "recharts";
 
 interface StatEntry {
@@ -37,6 +38,9 @@ interface ThemeStatsFocoSectionProps {
   themeId: string;
   stats: StatEntry[];
   onConfigureClick?: () => void;
+  // Polish #10 / NIT-2: parent passa estado do drawer para wirar aria-expanded
+  // no botao "Linkar stats" do empty state (Collapsible controlado externamente).
+  pickerOpen?: boolean;
 }
 
 type StatStatus = "ok" | "warn" | "alarm" | "no_data";
@@ -93,9 +97,13 @@ function formatRange(min: number, max: number, _unit: string): string {
 function MiniSparkline({
   data,
   color,
+  unit,
+  label,
 }: {
   data: number[];
   color: string;
+  unit: string;
+  label: string;
 }) {
   const chartData = useMemo(
     () => data.map((value, i) => ({ i, value })),
@@ -109,16 +117,45 @@ function MiniSparkline({
       />
     );
   }
+  // Polish #10: Tooltip Recharts nativo (ARIA + hover preciso).
   return (
-    <div style={{ width: "100%", height: 32 }}>
+    <div
+      style={{ width: "100%", height: 32 }}
+      data-testid="sparkline-chart"
+      role="img"
+      aria-label={`Sparkline ${label} ultimos ${data.length} dias`}
+    >
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData}>
+        <LineChart data={chartData} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
           <Line
             type="monotone"
             dataKey="value"
             stroke={color}
             strokeWidth={1.5}
             dot={false}
+            isAnimationActive={false}
+          />
+          <Tooltip
+            cursor={{ stroke: color, strokeWidth: 1, strokeOpacity: 0.4 }}
+            wrapperStyle={{ outline: "none", zIndex: 10 }}
+            content={({ active, payload }) => {
+              if (!active || !payload || payload.length === 0) return null;
+              const p: any = payload[0];
+              const v = typeof p?.value === "number" ? p.value : null;
+              const idx = typeof p?.payload?.i === "number" ? p.payload.i : 0;
+              const daysAgo = Math.max(0, data.length - 1 - idx);
+              return (
+                <div
+                  data-testid="sparkline-tooltip"
+                  className="rounded border border-border bg-popover px-2 py-1 text-[11px] text-popover-foreground shadow"
+                >
+                  <div className="font-medium">{formatValue(v, unit)}</div>
+                  <div className="text-muted-foreground">
+                    {daysAgo === 0 ? "hoje" : `${daysAgo}d atras`}
+                  </div>
+                </div>
+              );
+            }}
           />
         </LineChart>
       </ResponsiveContainer>
@@ -130,6 +167,7 @@ export function ThemeStatsFocoSection({
   themeId: _themeId,
   stats,
   onConfigureClick,
+  pickerOpen,
 }: ThemeStatsFocoSectionProps) {
   const [, setLocation] = useLocation();
 
@@ -143,11 +181,15 @@ export function ThemeStatsFocoSection({
             Linke stats HUD para acompanhar progresso ao estudar este tema.
             Ex: VPIP/PFR no tema "Pre-flop ranges".
           </p>
+          {/* NIT-1 fix: aria-label removido — texto visivel "Linkar stats" agora
+              eh accessible name (WCAG 2.5.3 label-in-name OK). NIT-2 fix:
+              aria-expanded espelha estado do Collapsible parent. */}
           <button
             type="button"
+            data-testid="theme-stats-foco-empty-cta"
             onClick={() => onConfigureClick?.()}
+            aria-expanded={pickerOpen ?? undefined}
             className="rounded border px-3 py-1 text-sm hover:bg-muted"
-            aria-label="Configurar stats"
           >
             Linkar stats
           </button>
@@ -205,6 +247,8 @@ export function ThemeStatsFocoSection({
                 <MiniSparkline
                   data={stat.sparkline30d ?? []}
                   color={color}
+                  unit={stat.unit}
+                  label={stat.label}
                 />
               </div>
             </button>

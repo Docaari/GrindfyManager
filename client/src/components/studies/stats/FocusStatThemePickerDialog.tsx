@@ -17,7 +17,7 @@
  */
 
 import React, { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -55,6 +55,7 @@ export default function FocusStatThemePickerDialog(props: Props): JSX.Element | 
   const { open, statId, statLabel, onOpenChange, onConfirmed } = props;
   const qc = useQueryClient();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null);
 
   const { data: themes } = useQuery<StudyTheme[]>({
@@ -117,9 +118,18 @@ export default function FocusStatThemePickerDialog(props: Props): JSX.Element | 
           </DialogDescription>
         </DialogHeader>
 
-        {/* CRITICAL-1 reviewer: temas relacionados a esta stat (reverse lookup). */}
+        {/* CRITICAL-1 reviewer: temas relacionados a esta stat (reverse lookup).
+            Polish #7: chip click fecha dialog ANTES de navegar — evita overlay
+            preso sobre /estudos/:slug. Cmd/Ctrl/middle continuam abrindo nova
+            aba via <a href> sem fechar (preserva contexto stat aqui). */}
         <div className="border-b border-border pb-3 mb-3">
-          <RelatedThemesSection statId={statId} />
+          <RelatedThemesSection
+            statId={statId}
+            onNavigate={(slug) => {
+              onOpenChange(false);
+              setLocation(`/estudos/${slug}`);
+            }}
+          />
         </div>
 
         {themeList.length === 0 ? (

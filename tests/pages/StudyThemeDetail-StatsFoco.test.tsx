@@ -7,7 +7,7 @@
  *
  * Cobertura:
  *   - Empty state quando theme.linkedStats === [] -> "Nenhuma stat linkada"
- *   - CTA "Configurar stats" abre drawer
+ *   - CTA "Linkar stats" abre drawer (NIT-1: alinhado a label visivel WCAG 2.5.3)
  *   - Renderiza N cards quando theme tem N linkedStats
  *   - Card mostra label + currentValue + range alvo + sparkline
  *   - Badge verde quando currentValue dentro de [targetMin, targetMax]
@@ -110,13 +110,13 @@ describe('<ThemeStatsFocoSection> — empty state', () => {
     expect(screen.getByTestId('theme-stats-foco-empty')).toBeInTheDocument();
   });
 
-  it('CTA "Configurar stats" no empty state esta presente', async () => {
+  it('CTA "Linkar stats" no empty state esta presente', async () => {
     const Section = await loadSection();
     renderWithClient(
       <Section themeId="thm_1" stats={[]} />,
     );
     expect(
-      screen.getByRole('button', { name: /configurar stats/i }),
+      screen.getByRole('button', { name: /linkar stats/i }),
     ).toBeInTheDocument();
   });
 });

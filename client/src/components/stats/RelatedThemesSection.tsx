@@ -28,9 +28,16 @@ interface ThemeChip {
 
 interface RelatedThemesSectionProps {
   statId: string;
+  // Polish #7: parent (ex: dialog/drawer) pode interceptar nav primaria pra
+  // fechar overlay antes do setLocation. Modifier keys (Ctrl/Cmd/middle/Shift)
+  // continuam abrindo nova aba via <a href> default — preservam contexto stat.
+  onNavigate?: (slug: string) => void;
 }
 
-export function RelatedThemesSection({ statId }: RelatedThemesSectionProps) {
+export function RelatedThemesSection({
+  statId,
+  onNavigate,
+}: RelatedThemesSectionProps) {
   const [, setLocation] = useLocation();
   // CRITICAL-2 reviewer: queryKey precisa ser single-element URL para o
   // default getQueryFn (queryClient.ts:149) usar como path. A versao anterior
@@ -94,8 +101,23 @@ export function RelatedThemesSection({ statId }: RelatedThemesSectionProps) {
               href={`/estudos/${t.slug}`}
               data-testid={`related-theme-chip-${id}`}
               onClick={(e) => {
+                // Polish #7: respeita modifier keys do browser (Ctrl/Cmd/Shift/
+                // middle-click) para abrir nova aba sem fechar drawer/dialog atual.
+                if (
+                  e.metaKey ||
+                  e.ctrlKey ||
+                  e.shiftKey ||
+                  e.altKey ||
+                  e.button === 1
+                ) {
+                  return;
+                }
                 e.preventDefault();
-                setLocation(`/estudos/${t.slug}`);
+                if (onNavigate) {
+                  onNavigate(t.slug);
+                } else {
+                  setLocation(`/estudos/${t.slug}`);
+                }
               }}
               className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm hover:bg-muted"
             >

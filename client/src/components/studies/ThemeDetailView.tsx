@@ -223,6 +223,7 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
           themeId={themeId}
           stats={statsSummary}
           onConfigureClick={() => setPickerOpen(true)}
+          pickerOpen={pickerOpen}
         />
 
         {/* Polish #3: drawer migrado para Collapsible (Radix) — aria-expanded

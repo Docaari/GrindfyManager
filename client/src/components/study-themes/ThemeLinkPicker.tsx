@@ -23,10 +23,17 @@ interface ThemeLite {
   category?: string | null;
 }
 
+type ThemeLinkSaveStatus = "idle" | "saving" | "saved" | "error";
+
 interface ThemeLinkPickerProps {
   customStatId: string;
   initialThemeIds: string[];
   onChange: (ids: string[]) => void;
+  // Polish #9: parent com mutation async pode espelhar status aqui pra
+  // feedback inline (saving/saved/error). Default "idle" — picker continua
+  // funcionando como controlled puro quando parent nao precisa do indicador.
+  saveStatus?: ThemeLinkSaveStatus;
+  saveError?: string | null;
 }
 
 const SOFT_CAP = 10;
@@ -36,6 +43,8 @@ export function ThemeLinkPicker({
   customStatId: _customStatId,
   initialThemeIds,
   onChange,
+  saveStatus = "idle",
+  saveError = null,
 }: ThemeLinkPickerProps) {
   const { toast } = useToast();
   const [ids, setIds] = useState<string[]>(initialThemeIds);
@@ -99,10 +108,47 @@ export function ThemeLinkPicker({
     );
   }, [themes, ids, search]);
 
+  // Polish #9: indicador inline (texto + ponto colorido) reage a saveStatus.
+  // Parent passa estado da mutation; idle = sem indicador.
+  const indicator = (() => {
+    if (saveStatus === "saving") {
+      return { dot: "bg-amber-500", text: "Salvando...", color: "text-muted-foreground" };
+    }
+    if (saveStatus === "saved") {
+      return { dot: "bg-emerald-500", text: "Salvo", color: "text-emerald-600" };
+    }
+    if (saveStatus === "error") {
+      return {
+        dot: "bg-destructive",
+        text: saveError ?? "Erro ao salvar",
+        color: "text-destructive",
+      };
+    }
+    return null;
+  })();
+
   return (
     <div data-testid="theme-link-picker" className="space-y-2">
-      <div className="text-xs text-muted-foreground">
-        Linkar a temas ({ids.length}/{HARD_CAP})
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs text-muted-foreground">
+          Linkar a temas ({ids.length}/{HARD_CAP})
+        </div>
+        {indicator && (
+          <div
+            data-testid="theme-link-save-indicator"
+            data-status={saveStatus}
+            role="status"
+            aria-live="polite"
+            className={`inline-flex items-center gap-1.5 text-[11px] ${indicator.color}`}
+          >
+            <span
+              className={`inline-block h-1.5 w-1.5 rounded-full ${indicator.dot}${
+                saveStatus === "saving" ? " animate-pulse" : ""
+              }`}
+            />
+            <span>{indicator.text}</span>
+          </div>
+        )}
       </div>
       <div className="flex flex-wrap gap-2">
         {ids.map((id) => {
