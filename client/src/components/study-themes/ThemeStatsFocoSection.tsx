@@ -138,16 +138,18 @@ export function ThemeStatsFocoSection({
       <section className="rounded border border-dashed p-4">
         <div data-testid="theme-stats-foco-empty" className="space-y-2">
           <h3 className="font-medium">Stats foco</h3>
+          {/* Polish #6: copy explicativa + verbo "Linkar" consistente. */}
           <p className="text-sm text-muted-foreground">
-            Nenhuma stat linkada — voce pode linkar stats nas Configuracoes
-            deste tema.
+            Linke stats HUD para acompanhar progresso ao estudar este tema.
+            Ex: VPIP/PFR no tema "Pre-flop ranges".
           </p>
           <button
             type="button"
             onClick={() => onConfigureClick?.()}
             className="rounded border px-3 py-1 text-sm hover:bg-muted"
+            aria-label="Configurar stats"
           >
-            Configurar stats
+            Linkar stats
           </button>
         </div>
       </section>

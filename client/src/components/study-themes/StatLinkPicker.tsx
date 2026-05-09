@@ -17,16 +17,33 @@
  *   - Save chama onSave(ids).
  *   - Backend 400 invalidIds: toast com lista, remove chips invalidos visualmente.
  *   - Custom stats com badge "Custom".
+ *
+ * Polish round (2026-05-09):
+ *   - #1 Migracao Combobox hand-rolled -> cmdk Command + Popover (217 stats).
+ *   - #4 add() NAO fecha popover (multi-select friendly + contador inline).
+ *   - #8 Toasts educacionais nos caps (variant default + descricao explicativa).
  */
 
 import { useMemo, useState } from "react";
 import {
   HUD_STAT_CATALOG,
   HUD_GROUP_LABELS,
-  type StatField,
   type HudGroupId,
 } from "@shared/hud-stat-catalog";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 
 interface CustomStatLite {
   id: string;
@@ -56,13 +73,15 @@ export function StatLinkPicker({
 }: StatLinkPickerProps) {
   const { toast } = useToast();
   const [ids, setIds] = useState<string[]>(initialStatIds);
-  const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Index todas as stats (catalog + custom) por id para resolver labels rapido.
   const statById = useMemo(() => {
-    const map = new Map<string, { id: string; label: string; group: string; isCustom: boolean }>();
+    const map = new Map<
+      string,
+      { id: string; label: string; group: string; isCustom: boolean }
+    >();
     for (const s of HUD_STAT_CATALOG) {
       map.set(s.id, { id: s.id, label: s.label, group: s.group, isCustom: false });
     }
@@ -84,45 +103,47 @@ export function StatLinkPicker({
   const add = (id: string) => {
     if (ids.includes(id)) return;
     if (ids.length >= SOFT_CAP) {
+      // #8 Polish: variant default + descricao explicativa (cap atingido).
       toast({
         title: "Limite atingido",
-        description: `Maximo de ${SOFT_CAP} stats por tema.`,
-        variant: "destructive",
+        description: `Maximo de ${SOFT_CAP} stats por tema (foco perde efeito alem disso). Remova alguma antes de adicionar.`,
       });
       return;
     }
     setIds((cur) => [...cur, id]);
-    setSearch("");
-    setOpen(false);
+    // #4 Polish: NAO fechar popover; permite multi-select rapido.
   };
 
-  // Filter Combobox options.
-  const filteredOptions = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const all: Array<{ id: string; label: string; group: string; isCustom: boolean }> = [];
-    // Custom primeiro.
+  // Agrupa opcoes disponiveis (nao selecionadas) por grupo para CommandGroup.
+  // Custom stats ficam em grupo dedicado primeiro.
+  const groupedOptions = useMemo(() => {
+    const customs: Array<{
+      id: string;
+      label: string;
+      group: string;
+      isCustom: boolean;
+    }> = [];
     for (const c of customStats) {
       if (ids.includes(c.id)) continue;
-      all.push({
+      customs.push({
         id: c.id,
         label: c.label ?? c.id,
         group: c.group ?? "basics",
         isCustom: true,
       });
     }
+    const byGroup = new Map<
+      HudGroupId,
+      Array<{ id: string; label: string; group: HudGroupId; isCustom: boolean }>
+    >();
     for (const s of HUD_STAT_CATALOG) {
       if (ids.includes(s.id)) continue;
-      all.push({ id: s.id, label: s.label, group: s.group, isCustom: false });
+      const arr = byGroup.get(s.group) ?? [];
+      arr.push({ id: s.id, label: s.label, group: s.group, isCustom: false });
+      byGroup.set(s.group, arr);
     }
-    if (!q) return all;
-    return all.filter((opt) => {
-      if (opt.label.toLowerCase().includes(q)) return true;
-      if (opt.id.toLowerCase().includes(q)) return true;
-      const gLabel =
-        (HUD_GROUP_LABELS as any)[opt.group as HudGroupId] ?? opt.group;
-      return String(gLabel).toLowerCase().includes(q);
-    });
-  }, [search, ids, customStats]);
+    return { customs, byGroup };
+  }, [ids, customStats]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -195,67 +216,103 @@ export function StatLinkPicker({
         })}
       </div>
 
-      {/* Plus button para abrir Combobox */}
+      {/* Plus button + Save */}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="rounded border border-dashed px-3 py-1 text-sm hover:bg-muted"
-        >
-          + Adicionar stat
-        </button>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="rounded border border-dashed px-3 py-1 text-sm hover:bg-muted"
+            >
+              + Adicionar stat
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="w-80 p-0"
+            align="start"
+            sideOffset={4}
+          >
+            <Command
+              filter={(value, search) => {
+                // value contem id|label|groupLabel concatenados — fuzzy busca em tudo.
+                const v = value.toLowerCase();
+                const q = search.trim().toLowerCase();
+                if (!q) return 1;
+                return v.includes(q) ? 1 : 0;
+              }}
+            >
+              <div className="border-b px-3 py-1.5 text-xs text-muted-foreground">
+                {ids.length} selecionada{ids.length === 1 ? "" : "s"}
+              </div>
+              <CommandInput placeholder="Buscar stat..." />
+              <CommandList>
+                <CommandEmpty>Nenhuma stat encontrada.</CommandEmpty>
+                {groupedOptions.customs.length > 0 && (
+                  <CommandGroup heading="Suas stats custom">
+                    {groupedOptions.customs.map((opt) => {
+                      const groupLabel =
+                        (HUD_GROUP_LABELS as any)[opt.group as HudGroupId] ??
+                        opt.group;
+                      return (
+                        <CommandItem
+                          key={opt.id}
+                          value={`${opt.id}|${opt.label}|${groupLabel}`}
+                          onSelect={() => add(opt.id)}
+                          role="option"
+                        >
+                          <span className="flex-1">{opt.label}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {groupLabel}
+                          </span>
+                          <span className="ml-2 rounded bg-blue-500/10 px-1 py-0.5 text-[10px] text-blue-600">
+                            Custom
+                          </span>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                )}
+                {Array.from(groupedOptions.byGroup.entries()).map(
+                  ([groupId, opts]) => (
+                    <CommandGroup
+                      key={groupId}
+                      heading={
+                        (HUD_GROUP_LABELS as any)[groupId] ?? String(groupId)
+                      }
+                    >
+                      {opts.map((opt) => {
+                        const groupLabel =
+                          (HUD_GROUP_LABELS as any)[opt.group] ?? opt.group;
+                        return (
+                          <CommandItem
+                            key={opt.id}
+                            value={`${opt.id}|${opt.label}|${groupLabel}`}
+                            onSelect={() => add(opt.id)}
+                            role="option"
+                          >
+                            <span className="flex-1">{opt.label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {groupLabel}
+                            </span>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  ),
+                )}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
         <button
           type="button"
           onClick={handleSave}
           disabled={saving}
           className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50"
         >
-          {saving ? "Salvando…" : "Salvar"}
+          {saving ? "Salvando..." : "Salvar"}
         </button>
       </div>
-
-      {open && (
-        <div className="rounded border bg-card p-2">
-          <input
-            type="text"
-            placeholder="Buscar stat ou grupo…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="mb-2 w-full rounded border px-2 py-1 text-sm"
-          />
-          <div role="listbox" className="max-h-64 overflow-auto">
-            {filteredOptions.slice(0, 50).map((opt) => {
-              const groupLabel =
-                (HUD_GROUP_LABELS as any)[opt.group as HudGroupId] ?? opt.group;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  role="option"
-                  aria-selected={false}
-                  onClick={() => add(opt.id)}
-                  className="flex w-full items-center justify-between rounded px-2 py-1 text-left text-sm hover:bg-muted"
-                >
-                  <span>{opt.label}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {groupLabel}
-                    {opt.isCustom && (
-                      <span className="ml-2 rounded bg-blue-500/10 px-1 py-0.5 text-[10px] text-blue-600">
-                        Custom
-                      </span>
-                    )}
-                  </span>
-                </button>
-              );
-            })}
-            {filteredOptions.length === 0 && (
-              <div className="p-2 text-sm text-muted-foreground">
-                Nenhuma stat encontrada.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

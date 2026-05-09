@@ -27,6 +27,10 @@ import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeStatsFocoSection } from '@/components/study-themes/ThemeStatsFocoSection';
 import { StatLinkPicker } from '@/components/study-themes/StatLinkPicker';
+import {
+  Collapsible,
+  CollapsibleContent,
+} from '@/components/ui/collapsible';
 
 interface ThemeRow {
   id: string;
@@ -210,36 +214,45 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
           </div>
         ) : null}
 
-        {/* Sprint stats-themes-linking-1 RF-05: Stats foco section. */}
+        {/* Sprint stats-themes-linking-1 RF-05: Stats foco section.
+            Polish #2: empty-state CTA continua chamando onConfigureClick;
+            esse e o entry point do empty case. Quando ja ha stats linkadas,
+            o empty state nao aparece — entry point fica apenas no rodape
+            ("Editar stats foco"). */}
         <ThemeStatsFocoSection
           themeId={themeId}
           stats={statsSummary}
           onConfigureClick={() => setPickerOpen(true)}
         />
 
-        {/* CRITICAL-1 reviewer: StatLinkPicker drawer wiring. */}
-        {pickerOpen && (
-          <div
-            data-testid="theme-detail-stat-picker-drawer"
-            className="rounded-lg border border-border bg-card/40 p-4 mt-2"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium">Configurar stats foco</h3>
-              <button
-                type="button"
-                onClick={() => setPickerOpen(false)}
-                className="text-xs text-muted-foreground hover:text-foreground underline"
-              >
-                Fechar
-              </button>
+        {/* Polish #3: drawer migrado para Collapsible (Radix) — aria-expanded
+            no trigger gratis, transicao suave, mantido inline (nao overlay).
+            #2: rodape NAO toggle; sempre setPickerOpen(true) e exibe APENAS
+            quando ja ha stats linkadas (entry point complementar ao empty CTA). */}
+        <Collapsible open={pickerOpen} onOpenChange={setPickerOpen}>
+          <CollapsibleContent>
+            <div
+              data-testid="theme-detail-stat-picker-drawer"
+              className="rounded-lg border border-border bg-card/40 p-4 mt-2"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium">Editar stats foco</h3>
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(false)}
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                >
+                  Fechar
+                </button>
+              </div>
+              <StatLinkPicker
+                themeId={themeId}
+                initialStatIds={Array.isArray(theme.linkedStats) ? theme.linkedStats : []}
+                onSave={handleStatsSave}
+              />
             </div>
-            <StatLinkPicker
-              themeId={themeId}
-              initialStatIds={Array.isArray(theme.linkedStats) ? theme.linkedStats : []}
-              onSave={handleStatsSave}
-            />
-          </div>
-        )}
+          </CollapsibleContent>
+        </Collapsible>
 
         <div className="flex flex-wrap gap-2 pt-2">
           <button
@@ -251,14 +264,18 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
           >
             Iniciar sessao de estudo
           </button>
-          <button
-            type="button"
-            data-testid="theme-detail-configure-stats"
-            onClick={() => setPickerOpen((v) => !v)}
-            className="px-4 py-2 text-sm rounded-md border border-border hover:bg-accent"
-          >
-            {pickerOpen ? 'Fechar configuracao' : 'Configurar stats foco'}
-          </button>
+          {/* Polish #2: rodape edit so quando ha stats linkadas; nunca toggle. */}
+          {Array.isArray(theme.linkedStats) && theme.linkedStats.length > 0 && (
+            <button
+              type="button"
+              data-testid="theme-detail-configure-stats"
+              aria-expanded={pickerOpen}
+              onClick={() => setPickerOpen(true)}
+              className="px-4 py-2 text-sm rounded-md border border-border hover:bg-accent"
+            >
+              Editar stats foco
+            </button>
+          )}
           <button
             type="button"
             onClick={() => navigate('/estudos/temas')}

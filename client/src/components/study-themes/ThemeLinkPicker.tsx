@@ -68,22 +68,24 @@ export function ThemeLinkPicker({
   const add = (id: string) => {
     if (ids.includes(id)) return;
     if (ids.length >= HARD_CAP) {
+      // #8 Polish: descricao explicativa.
       toast({
         title: "Limite atingido",
-        description: `Maximo de ${HARD_CAP} temas por stat custom.`,
+        description: `Maximo de ${HARD_CAP} temas por stat custom. Mais que isso e a stat perde contexto.`,
         variant: "destructive",
       });
       return;
     }
     if (ids.length >= SOFT_CAP) {
+      // #8 Polish: descricao educacional.
       toast({
         title: "Aviso",
-        description: `Voce ja tem ${ids.length} temas vinculados.`,
+        description: `Voce ja vinculou ${ids.length} temas. Considerar consolidar para manter foco.`,
       });
     }
     update([...ids, id]);
     setSearch("");
-    setOpen(false);
+    // #4 Polish: NAO fechar popover apos add — multi-select rapido.
   };
 
   const filtered = useMemo(() => {
@@ -141,6 +143,10 @@ export function ThemeLinkPicker({
 
       {open && (
         <div className="rounded border bg-card p-2">
+          {/* #4 Polish: contador inline acima do input. */}
+          <div className="mb-1 px-1 text-[10px] text-muted-foreground">
+            {ids.length} selecionada{ids.length === 1 ? "" : "s"}
+          </div>
           <input
             type="text"
             placeholder="Buscar tema…"
