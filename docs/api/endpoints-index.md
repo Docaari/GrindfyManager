@@ -110,6 +110,15 @@ Codigo em `server/routes/` (modularizado em 17 arquivos desde 2026-03-20).
 | POST | `/api/study-cards/:id/progress` | Atualizar progresso |
 | GET | `/api/study-correlation/:studyCardId` | Correlacao estudo-performance |
 | GET/POST | `/api/study-schedules` | Agendamentos de estudo |
+| PATCH | `/api/study-themes/:id` | Atualiza tema. **Sprint stats-themes-linking-1 (RF-01)**: agora aceita `linkedStats: string[]` (cap 30, valida cada ID contra `STAT_INDEX_BY_ID` ou `hudLayouts.fieldsJson` custom_*). Dedup automatico. Invalida `statsLinkedThemesCache` para previousIds ∪ nextIds. ADR-141. |
+| GET | `/api/themes/:id/stats-summary` | **Sprint stats-themes-linking-1 (RF-05.5)** — Stats com `currentValue + sparkline30d + targetMin/Max + direction + groupId/Label` para detalhe do tema. Novo opcional (pode ser augmenting do GET tema existente — implementer decide). |
+
+## Stats HUD & Linking
+
+| Metodo | Endpoint | Descricao |
+|--------|----------|-----------|
+| GET | `/api/stats/:statId/linked-themes` | **Sprint stats-themes-linking-1 (RF-02)** — Reverse lookup: temas do user atual que linkam essa stat. Cache memoria TTL 60s key `${userId}:${statId}` (lesson #21). GIN index `idx_study_themes_linked_stats_gin`. p95 <50ms / cache hit <5ms. Response: `[{ themeId, name, slug, category }]` ordem `name ASC`. 404 se statId invalido (catalog OR custom_*). ADR-141. |
+| PATCH | `/api/hud-layouts/:id` | Atualiza layout. **Sprint stats-themes-linking-1 (RF-08)**: aceita `fieldsJson[i].linkedThemes: string[]` (cap 20, valida ownership dos themes). Write-through **unidirecional** para `studyThemes.linkedStats` em transacao Drizzle: adiciona customStatId em themes adicionados, remove em themes removidos. Invalida cache. Lesson #7 (optional + default). ADR-141 §2.5. |
 
 ## Calendario
 
@@ -192,6 +201,10 @@ Detalhes em `Docs/specs/tournament-selector.md`. Widget no `/coach` tab GradePla
 ## Coach AI
 
 Detalhes em `Docs/api/coach.md` e `Docs/api/coach-tools.md`.
+
+**Tools (registry, nao endpoints REST):**
+- `read_theme_with_linked_stats_and_spots` — **Sprint stats-themes-linking-1 (RF-03 / ADR-142)** — extensao da tool legada `read_theme_with_linked_spots` com payload `stats[]` (currentValue + sparkline30d 30d + targetMin/Max + direction + isCustom) + `summary.stats_count/_in_range/_alarm`. Tier `pro/premium/admin`. Audit `log`. Description em arquivo dedicado `server/coachTools/readThemeWithLinkedStatsAndSpots.prompts.ts` (lesson #10).
+- `read_theme_with_linked_spots` — **DEPRECATED alias** de `read_theme_with_linked_stats_and_spots`. Mesmo handler, emite `console.warn('[deprecation] ...')`. Sera removido em sprint stats-themes-linking-2.
 
 ## Bug Reports
 

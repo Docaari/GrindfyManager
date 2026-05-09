@@ -3686,6 +3686,8 @@ export type HudSection = z.infer<typeof sectionZodSchema>;
 
 // Sprint Stats-V3 (ADR-064): fields_json holds custom stats + target overrides
 // per layout. Schema validacao zod abaixo aceita dois shapes (custom + override).
+// Sprint stats-themes-linking-1 (ADR-141 §2.2): linkedThemes adicionado em
+// custom fields para write-through unidirecional custom_X -> theme.linkedStats.
 export interface HudLayoutFieldEntry {
   // Compartilhado: pode ser id de catalog (override) OU id custom (`custom_*`).
   id: string;
@@ -3699,6 +3701,8 @@ export interface HudLayoutFieldEntry {
   targetMin?: number;
   targetMax?: number;
   targetOverride?: { min: number; max: number } | null;
+  // Sprint stats-themes-linking-1 (ADR-141): theme IDs do user. Hard cap 20 backend.
+  linkedThemes?: string[];
 }
 
 export const hudLayouts = pgTable(
@@ -3726,7 +3730,9 @@ export const hudLayouts = pgTable(
   ],
 );
 
-// Stats-V3 (ADR-064/RF-05/RF-07): fields_json entries
+// Stats-V3 (ADR-064/RF-05/RF-07): fields_json entries.
+// Sprint stats-themes-linking-1 (ADR-141 §2.2): linkedThemes opcional + default
+// (lesson #7 — back-compat com layouts existentes que nao tinham o campo).
 const hudLayoutFieldEntrySchema = z.object({
   id: z.string().min(1).max(80),
   isCustom: z.boolean().optional(),
@@ -3742,6 +3748,7 @@ const hudLayoutFieldEntrySchema = z.object({
     .object({ min: z.number(), max: z.number() })
     .nullable()
     .optional(),
+  linkedThemes: z.array(z.string()).max(20).optional(),
 });
 
 export const insertHudLayoutSchema = z.object({

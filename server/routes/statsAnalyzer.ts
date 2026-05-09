@@ -13,6 +13,7 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { requireAuth, requirePermission } from "../auth";
 import { storage } from "../storage";
+import { db } from "../db";
 import {
   insertHudLayoutSchema,
   updateHudLayoutSchema,
@@ -370,6 +371,44 @@ export function registerStatsAnalyzerRoutes(app: Express): void {
     requirePermission("studies"),
     handleSaveOcrSnapshot,
   );
+
+  // ---------------------------------------------------------------------------
+  // Sprint stats-themes-linking-1 (RF-02 + RF-08)
+  // ---------------------------------------------------------------------------
+
+  // HIGH-6 reviewer: rate limit no GET reverse lookup. Cache server-side ja
+  // protege CPU, mas limit defende contra scraping de relacao stat<->themes.
+  const statsLinkedThemesRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Muitas requisicoes. Aguarde 1 minuto." },
+  });
+
+  // HIGH-6 reviewer: rate limit no PATCH layout. 30 req/min/user — protege
+  // contra abuso de write-through (cada PATCH faz tx + cache invalidation).
+  const patchHudLayoutRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Muitas requisicoes. Aguarde 1 minuto." },
+  });
+
+  app.get(
+    "/api/stats/:statId/linked-themes",
+    requireAuth,
+    statsLinkedThemesRateLimiter,
+    handleGetStatsLinkedThemes,
+  );
+
+  app.patch(
+    "/api/hud-layouts/:id",
+    requireAuth,
+    patchHudLayoutRateLimiter,
+    handlePatchHudLayoutWithLinkedThemes,
+  );
 }
 
 // MEDIUM-9: Express error handler especifico para multer LIMIT_FILE_SIZE.
@@ -615,6 +654,8 @@ export async function handleCreateCustomStat(
 
 // -----------------------------------------------------------------------------
 // DELETE /api/hud-layouts/:id/custom-stats/:customId (RF-07)
+// Sprint stats-themes-linking-1 (RF-08.5): cleanup proativo do customStatId em
+// study_themes.linked_stats de TODOS themes que continham + invalidate cache.
 // -----------------------------------------------------------------------------
 export async function handleDeleteCustomStat(
   req: Request,
@@ -631,6 +672,28 @@ export async function handleDeleteCustomStat(
     return res.status(404).json({ message: "Layout nao encontrado." });
   }
   try {
+    // RF-08.5: cleanup proativo de theme.linked_stats antes de tocar o layout.
+    // Lista themes que ainda contem o customStatId; remove-os via storage helper.
+    if (
+      typeof (storage as any).listThemesContainingStat === "function" &&
+      typeof (storage as any).removeStatFromThemes === "function"
+    ) {
+      const containing = await (storage as any).listThemesContainingStat(
+        user.userPlatformId,
+        customId,
+      );
+      const themeIds = (Array.isArray(containing) ? containing : []).map(
+        (t: any) => t.id,
+      );
+      if (themeIds.length > 0) {
+        await (storage as any).removeStatFromThemes(
+          user.userPlatformId,
+          customId,
+          themeIds,
+        );
+      }
+    }
+
     const mutateAtomic = (storage as any).mutateHudLayoutFields;
     if (typeof mutateAtomic === "function") {
       await mutateAtomic.call(
@@ -645,6 +708,15 @@ export async function handleDeleteCustomStat(
         fields_json: fields,
       } as any);
     }
+
+    // RF-08.4: invalida cache reverse lookup para o customStatId apagado.
+    try {
+      const svc = await import("../services/statsLinkedThemesService");
+      svc.invalidateStatsLinkedThemesCache(user.userPlatformId, customId);
+    } catch {
+      // service nao disponivel em ambiente degradado — no-op.
+    }
+
     return res.status(200).json({ ok: true });
   } catch (err) {
     console.error("[stats-v3] handleDeleteCustomStat failed", err);
@@ -1311,5 +1383,320 @@ export async function handleSaveOcrSnapshot(
   } catch (err) {
     console.error("[stats-v3] handleSaveOcrSnapshot failed", err);
     return res.status(500).json({ message: "Falha ao salvar snapshot OCR." });
+  }
+}
+
+// =============================================================================
+// Sprint stats-themes-linking-1 — handlers RF-02 + RF-08
+// =============================================================================
+
+/**
+ * Helper compartilhado: extrai set de customStatIds (custom_*) que existem em
+ * fieldsJson dos layouts do user. Usado em validacao.
+ */
+async function getUserCustomStatIds(userId: string): Promise<Set<string>> {
+  const layouts = (await storage.getHudLayouts(userId)) || [];
+  const out = new Set<string>();
+  for (const layout of layouts) {
+    const fields = getLayoutFields(layout);
+    for (const f of fields) {
+      if ((f as any).isCustom && typeof f.id === "string") {
+        out.add(f.id);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * GET /api/stats/:statId/linked-themes (RF-02).
+ * Reverse lookup com cache 60s + validacao (catalog OU custom do user).
+ */
+export async function handleGetStatsLinkedThemes(
+  req: Request,
+  res: Response,
+): Promise<any> {
+  const user = (req as any).user;
+  const userId = user?.userPlatformId;
+  if (!userId) {
+    return res.status(401).json({ message: "Nao autorizado." });
+  }
+  const statId = req.params.statId;
+  if (!statId || typeof statId !== "string") {
+    return res.status(400).json({ message: "statId invalido." });
+  }
+  // Validacao: catalog OU custom do user.
+  const isCatalog = !!getStatById(statId);
+  let isCustomValid = false;
+  if (!isCatalog) {
+    const customIds = await getUserCustomStatIds(userId);
+    isCustomValid = customIds.has(statId);
+  }
+  if (!isCatalog && !isCustomValid) {
+    return res.status(404).json({ message: "Stat nao encontrada." });
+  }
+
+  try {
+    const svc = await import("../services/statsLinkedThemesService");
+    const themes = await svc.getThemesLinkingStat(userId, statId);
+    return res.json(Array.isArray(themes) ? themes : []);
+  } catch (err) {
+    console.error("[stats-v3] handleGetStatsLinkedThemes failed", err);
+    return res
+      .status(500)
+      .json({ message: "Falha ao buscar temas relacionados." });
+  }
+}
+
+/**
+ * Schema do body PATCH /api/hud-layouts/:id quando inclui linkedThemes.
+ * Reuso do hudLayoutFieldEntrySchema implicitamente via updateHudLayoutSchema.
+ */
+const patchHudLayoutLinkedThemesBodySchema = z.object({
+  fieldsJson: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(80),
+        isCustom: z.boolean().optional(),
+        label: z.string().optional(),
+        group: z.string().optional(),
+        unit: z.enum(["pct", "bb", "count"]).optional(),
+        direction: z
+          .enum(["higher_better", "lower_better", "context", "neutral"])
+          .optional(),
+        targetMin: z.number().optional(),
+        targetMax: z.number().optional(),
+        targetOverride: z
+          .object({ min: z.number(), max: z.number() })
+          .nullable()
+          .optional(),
+        // RF-08.1: hard cap 20 themes por custom field.
+        linkedThemes: z.array(z.string()).max(20).optional(),
+      }),
+    )
+    .optional(),
+  fields_json: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(80),
+        linkedThemes: z.array(z.string()).max(20).optional(),
+      }).passthrough(),
+    )
+    .optional(),
+  name: z.string().min(1).max(80).optional(),
+  isDefault: z.boolean().optional(),
+  sections: z.any().optional(),
+});
+
+/**
+ * PATCH /api/hud-layouts/:id (Sprint stats-themes-linking-1 RF-08).
+ * Aceita fieldsJson com linkedThemes opcional. Quando presente:
+ *   - Valida ownership do layout (403 se outro user).
+ *   - Valida cap 20 (Zod hard).
+ *   - Valida ownership de cada theme via storage.getStudyThemesByIds (400 invalidIds).
+ *   - Persiste fieldsJson + chama appendStatToThemes / removeStatFromThemes
+ *     conforme diff (write-through unidirecional ADR-141 §2.5).
+ *   - Invalida cache reverse lookup para o customStatId pos-mutation.
+ *
+ * Mantemos PATCH lado-a-lado do PUT existente.
+ */
+export async function handlePatchHudLayoutWithLinkedThemes(
+  req: Request,
+  res: Response,
+): Promise<any> {
+  const user = (req as any).user;
+  const userId = user?.userPlatformId;
+  if (!userId) {
+    return res.status(401).json({ message: "Nao autorizado." });
+  }
+  const layoutId = req.params.id;
+  const layout = await storage.getHudLayout(layoutId, userId);
+  if (!layout) {
+    return res.status(404).json({ message: "Layout nao encontrado." });
+  }
+  // RF-08.2 ownership check (defesa em profundidade — getHudLayout em prod
+  // ja filtra por userId; em mocks de teste pode retornar layout de outro user).
+  if ((layout as any).userId && (layout as any).userId !== userId) {
+    return res.status(403).json({ message: "Layout de outro usuario." });
+  }
+  let parsed: z.infer<typeof patchHudLayoutLinkedThemesBodySchema>;
+  try {
+    parsed = patchHudLayoutLinkedThemesBodySchema.parse(req.body);
+  } catch (err: any) {
+    return res
+      .status(400)
+      .json({ message: "Body invalido.", issues: err?.issues });
+  }
+  const incomingFields = (parsed.fieldsJson ?? parsed.fields_json) as
+    | HudLayoutFieldEntry[]
+    | undefined;
+  if (!incomingFields) {
+    // Sem fieldsJson — cai no comportamento PUT existente (delegado ao caller).
+    return res.json(layout);
+  }
+
+  // Validacao ownership themes (RF-08.2): coleta todos os themeIds presentes
+  // em qualquer fieldsJson[i].linkedThemes.
+  const allThemeIds = new Set<string>();
+  for (const f of incomingFields) {
+    const themes = (f as any).linkedThemes;
+    if (Array.isArray(themes)) {
+      for (const t of themes) {
+        if (typeof t === "string" && t) allThemeIds.add(t);
+      }
+    }
+  }
+
+  if (allThemeIds.size > 0 && typeof (storage as any).getStudyThemesByIds === "function") {
+    const owned = await (storage as any).getStudyThemesByIds(
+      Array.from(allThemeIds),
+      userId,
+    );
+    const ownedIds = new Set<string>(
+      (Array.isArray(owned) ? owned : []).map((t: any) => t.id),
+    );
+    const invalidIds = Array.from(allThemeIds).filter((id) => !ownedIds.has(id));
+    if (invalidIds.length > 0) {
+      return res.status(400).json({
+        message: "Temas invalidos.",
+        invalidIds,
+      });
+    }
+  }
+
+  // Diff: para cada custom field com linkedThemes mudou -> append/remove.
+  const previousFields = getLayoutFields(layout);
+  const prevByCustomId = new Map<string, string[]>();
+  for (const f of previousFields) {
+    if ((f as any).isCustom && f.id) {
+      prevByCustomId.set(
+        f.id,
+        Array.isArray((f as any).linkedThemes) ? (f as any).linkedThemes : [],
+      );
+    }
+  }
+  const nextByCustomId = new Map<string, string[]>();
+  for (const f of incomingFields) {
+    if ((f as any).isCustom && f.id) {
+      const arr = Array.isArray((f as any).linkedThemes)
+        ? Array.from(new Set((f as any).linkedThemes as string[]))
+        : [];
+      nextByCustomId.set(f.id, arr);
+    }
+  }
+
+  const additions: Array<{ statId: string; themeIds: string[] }> = [];
+  const removals: Array<{ statId: string; themeIds: string[] }> = [];
+  const customStatIdsTouched = new Set<string>();
+  for (const [statId, nextArr] of nextByCustomId.entries()) {
+    const prevArr = prevByCustomId.get(statId) ?? [];
+    const added = nextArr.filter((t) => !prevArr.includes(t));
+    const removed = prevArr.filter((t) => !nextArr.includes(t));
+    if (added.length > 0) {
+      additions.push({ statId, themeIds: added });
+      customStatIdsTouched.add(statId);
+    }
+    if (removed.length > 0) {
+      removals.push({ statId, themeIds: removed });
+      customStatIdsTouched.add(statId);
+    }
+  }
+
+  // Persiste o layout com fieldsJson novo (dedup linkedThemes ja aplicado).
+  const fieldsForUpdate: HudLayoutFieldEntry[] = incomingFields.map((f) => {
+    if ((f as any).isCustom && Array.isArray((f as any).linkedThemes)) {
+      const dedup = Array.from(new Set((f as any).linkedThemes as string[]));
+      return { ...f, linkedThemes: dedup };
+    }
+    return f as HudLayoutFieldEntry;
+  });
+
+  try {
+    // HIGH-3 reviewer: envelopa updateHudLayout + N append/remove em UMA tx
+    // explicita. Falha parcial (ex: layout updated mas append explode) deixava
+    // estado inconsistente entre fieldsJson.linkedThemes e theme.linkedStats.
+    //
+    // db.transaction roda apenas em prod (DB real). Em testes o storage eh
+    // mockado por completo e db.transaction pode nao estar disponivel — neste
+    // caso caimos no path direto (sem tx) preservando back-compat dos testes.
+    // updateHudLayout/append/removeStatFromThemes aceitam `tx` opcional como
+    // ultimo argumento.
+    const txAvailable =
+      db && typeof (db as any).transaction === "function";
+
+    const runInTx = async (tx?: any) => {
+      // Quando tx eh undefined (caminho fallback), NAO passamos 4o argumento
+      // para preservar a aridade esperada por testes que inspecionam
+      // mock.calls[i] e leem o ultimo elemento como `patch`.
+      if (tx) {
+        await storage.updateHudLayout(
+          layoutId,
+          userId,
+          { fieldsJson: fieldsForUpdate } as any,
+          tx,
+        );
+      } else {
+        await storage.updateHudLayout(
+          layoutId,
+          userId,
+          { fieldsJson: fieldsForUpdate } as any,
+        );
+      }
+      if (typeof (storage as any).appendStatToThemes === "function") {
+        for (const { statId, themeIds } of additions) {
+          if (tx) {
+            await (storage as any).appendStatToThemes(
+              userId,
+              statId,
+              themeIds,
+              tx,
+            );
+          } else {
+            await (storage as any).appendStatToThemes(userId, statId, themeIds);
+          }
+        }
+      }
+      if (typeof (storage as any).removeStatFromThemes === "function") {
+        for (const { statId, themeIds } of removals) {
+          if (tx) {
+            await (storage as any).removeStatFromThemes(
+              userId,
+              statId,
+              themeIds,
+              tx,
+            );
+          } else {
+            await (storage as any).removeStatFromThemes(
+              userId,
+              statId,
+              themeIds,
+            );
+          }
+        }
+      }
+    };
+
+    if (txAvailable) {
+      await db.transaction(runInTx);
+    } else {
+      await runInTx(undefined);
+    }
+
+    // Cache invalidation (RF-08.4) para todos os customStatIds tocados.
+    if (customStatIdsTouched.size > 0) {
+      try {
+        const svc = await import("../services/statsLinkedThemesService");
+        for (const statId of customStatIdsTouched) {
+          svc.invalidateStatsLinkedThemesCache(userId, statId);
+        }
+      } catch {
+        // svc indisponivel — no-op.
+      }
+    }
+
+    return res.json({ ok: true, fieldsJson: fieldsForUpdate });
+  } catch (err) {
+    console.error("[stats-v3] handlePatchHudLayoutWithLinkedThemes failed", err);
+    return res.status(500).json({ message: "Falha ao atualizar layout." });
   }
 }

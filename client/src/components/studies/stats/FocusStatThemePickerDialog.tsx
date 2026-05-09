@@ -29,6 +29,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+// CRITICAL-1 reviewer: section "Temas relacionados" reusa reverse lookup
+// /api/stats/:statId/linked-themes para mostrar temas que ja linkam esta stat.
+// Ajuda user a decidir entre "criar tema novo" ou "marcar foco em tema existente".
+import { RelatedThemesSection } from "@/components/stats/RelatedThemesSection";
 
 interface StudyTheme {
   id: string;
@@ -112,6 +116,11 @@ export default function FocusStatThemePickerDialog(props: Props): JSX.Element | 
             dedicado no mes.
           </DialogDescription>
         </DialogHeader>
+
+        {/* CRITICAL-1 reviewer: temas relacionados a esta stat (reverse lookup). */}
+        <div className="border-b border-border pb-3 mb-3">
+          <RelatedThemesSection statId={statId} />
+        </div>
 
         {themeList.length === 0 ? (
           <div className="space-y-3">

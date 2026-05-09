@@ -933,3 +933,74 @@ Diagramas: `Docs/architecture/sprint-coach-page-reform-1/components-after.mermai
 - #20 — se animacoes confetti usarem ref no container, querySelector pos-render.
 - #21 — invalidator de cache server-side em POST /grade chamado apos commit.
 - #29 — se `<SrsStatsCard>` standalone usar `useQuery`, ErrorBoundary local.
+
+---
+
+## Schema Delta — Sprint stats-themes-linking-1
+
+ADR-141 (reaproveitar `studyThemes.linkedStats` JSONB vs nova junction table) + ADR-142 (Coach tool unificada `read_theme_with_linked_stats_and_spots`) introduzem **GIN index novo + extensao do Zod schema de `hudLayouts.fieldsJson`**. Sprint conecta o vinculo bidirecional Stats <-> Temas: editor multi-select de stats no drawer do tema, reverse lookup `GET /api/stats/:statId/linked-themes` para Stats Analyzer drawer, write-through unidirecional do HUD Customizer (`linkedThemes` em custom field) para `studyThemes.linkedStats`.
+
+### Tabelas afetadas (sem nova tabela; apenas reaproveitamento + extensao JSONB)
+
+| Tabela | Mudanca |
+|--------|---------|
+| `study_themes` | **Sem mudanca de schema da tabela.** Coluna `linked_stats jsonb` ja existe (Sprint Estudos-Habito-1, ADR-127) — agora populada via UI editor (RF-04 `StatLinkPicker`) + write-through do HUD Customizer (RF-08). **Migration 0060 adiciona indice GIN global** `idx_study_themes_linked_stats_gin ON study_themes USING gin (linked_stats)` para reverse lookup performatico (RF-02 p95 <50ms). Cap **30 stats/tema** (hard limit Zod no PATCH RF-01.1). Coexiste com indice parcial existente `idx_study_themes_curated_stats` (ADR-127 §2.1, `WHERE is_curated=true`). |
+| `hud_layouts` (extensao JSONB sem migration SQL) | **Sprint stats-themes-linking-1 (RF-08.1)**: estende `fieldsJson[i]` (interface `HudLayoutFieldEntry` em `shared/schema.ts:3689`) com campo opcional `linkedThemes?: string[]` (theme IDs do user). Zod schema `hudLayoutFieldEntrySchema` em `shared/schema.ts:3730` ganha `linkedThemes: z.array(z.string()).max(20).optional().default([])`. Cap **20 themes/custom field** (hard limit). Lesson #7 — `optional + default` para back-compat com layouts existentes (`undefined` interpreta como `[]` no read sem migration de dados). |
+| `hud_stat_snapshots` | **Sem mudanca de schema. Apenas leitura nova.** Coach tool `read_theme_with_linked_stats_and_spots` (ADR-142) e GET stats-summary do detalhe do tema (RF-05) consultam `values` jsonb keyed por `stat_id` para extrair `currentValue` (ultimo snapshot) + `sparkline30d` (ultimos 30 dias). **ATENCAO:** snapshots nao tem coluna `value` por stat — todos os stats sao keys do jsonb `values` num unico snapshot. Query batch via `values ?| ARRAY[$statIds]::text[]` (jsonb existence) evita N+1. Detalhes em ADR-142 §2.3. |
+
+### Migration nova
+
+- `migrations/0060_study_themes_linked_stats_gin.sql` — `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_study_themes_linked_stats_gin ON study_themes USING gin (linked_stats)` + `ANALYZE study_themes`. Rollback em arquivo separado `0060_study_themes_linked_stats_gin_rollback.sql`. Idempotente.
+
+### Cache server (in-memory)
+
+`statsLinkedThemesCache` (sugestao path `server/services/statsLinkedThemesService.ts`):
+- `Map<string, { data: Theme[], expiresAt: number }>` — singleton modulo.
+- Key: `${userId}:${statId}`.
+- TTL 60s (consistente com pattern lesson #21 — focusStats service).
+- Exporta `_resetForTests()` (visivel a tests; signal "nao use em runtime").
+- Exporta `invalidateStatsLinkedThemesCache(userId, statId?)` chamada por:
+  1. `PATCH /api/study-themes/:id` quando `linkedStats` muda (RF-01.4) — invalida para previousIds ∪ nextIds.
+  2. `PATCH /api/hud-layouts/:id` quando `fieldsJson[i].linkedThemes` muda em qualquer custom field (RF-08.4).
+  3. DELETE custom field do layout (RF-08.5) — invalida para o `customStatId` deletado.
+
+### Regra arquitetural critica — Write-through UNIDIRECIONAL (ADR-141 §2.5)
+
+```
+HUD custom field.linkedThemes  ───▶ studyThemes.linkedStats  (sync ATIVO)
+HUD custom field.linkedThemes  ◀────  studyThemes.linkedStats (NAO existe)
+```
+
+PATCH em `study_themes.linkedStats` editando uma stat custom **NAO** atualiza `hudLayouts.fieldsJson[i].linkedThemes` mesmo que estatisticamente "fizesse sentido" sincronizar. Estado assimetrico (custom field aponta para tema A, mas tema A nao tem mais a stat custom em `linkedStats`) **e aceito**. Justificativa: evita ciclo infinito; HUD Customizer e source of truth do "esta custom stat existe e onde eh relevante"; theme picker apenas agrega stats ja declaradas.
+
+### ADRs relevantes (2 novos)
+
+- **ADR-141** (`stats-themes-linking-jsonb-vs-junction-table`) — JSONB + GIN escolhido sobre junction table. Cardinalidade real ~5-15 stats/tema. Custom stats vivem em `hudLayouts.fieldsJson` (jsonb dentro de jsonb), incompativel com FK relacional. Pattern ja consolidado (ADR-127 reusa mesma coluna). Regra unidirecional formalizada.
+- **ADR-142** (`coach-tool-unified-read-theme-with-linked-stats-and-spots`) — Tool legada `read_theme_with_linked_spots` renomeada para `read_theme_with_linked_stats_and_spots`. Alias mantido por 1 sprint com warning. Payload novo inclui `stats[]` com `currentValue + sparkline30d + targetMin/Max + direction + isCustom` + `summary.stats_count/_in_range/_alarm`. Description extraida para `server/coachTools/readThemeWithLinkedStatsAndSpots.prompts.ts` (lesson #10 — DRY).
+
+### Diagramas Mermaid
+
+- `Docs/architecture/diagrams/stats-themes-linking-edit-flow.mermaid` — Sequence PATCH theme.linkedStats com validacao Zod + STAT_INDEX_BY_ID + ownership + dedup + cache invalidation.
+- `Docs/architecture/diagrams/stats-themes-linking-reverse-lookup.mermaid` — Sequence GET reverse lookup com cache hit/miss + GIN containment query.
+- `Docs/architecture/diagrams/stats-themes-linking-hud-write-through.mermaid` — Sequence PATCH HUD custom field.linkedThemes com diff add/remove + transacao + write-through unidirecional + nota visual da regra proibida.
+
+### Endpoints novos / estendidos Sprint stats-themes-linking-1
+
+- `PATCH /api/study-themes/:id` (estende existente) — agora aceita `linkedStats` (RF-01).
+- `GET /api/stats/:statId/linked-themes` (NOVO RF-02).
+- `PATCH /api/hud-layouts/:id` (estende existente) — agora aceita `fieldsJson[i].linkedThemes` (RF-08).
+- `GET /api/themes/:id/stats-summary` (NOVO opcional RF-05.5; pode ser augmenting do GET tema existente — implementer decide).
+
+### Coach tools (api/coach-tools.md)
+
+- `read_theme_with_linked_stats_and_spots` (NOVO — extensao com stats + sparkline + summary).
+- `read_theme_with_linked_spots` (DEPRECATED alias — 1 sprint, emite `console.warn`).
+
+### Lessons aplicaveis (ver `lessons-learned.md`)
+
+- #7 — schema deprecation gradual via Zod `optional + default` para `linkedThemes` em `fieldsJson[i]` (back-compat).
+- #10 — DRY de prompts: extrair description da Coach tool em `*.prompts.ts` dedicado (pattern ja usado em `coachStudyPlan.prompts.ts`, `coachSessionInsights.prompts.ts`).
+- #14 — testes de componentes React em `.tsx` usar `await import()` em vez de `require()`.
+- #19 — confirmar `/stats?focusStatId=X` em rota Wouter (RF-05.4) via test antes de implementar CTA.
+- #21 — cache server-side TTL com invalidator publico chamado por mutations (RF-01.4 + RF-08.4 + RF-08.5).
+- #28 — `vi.mock` por path: garantir que mocks de `@/components/study-themes/StatLinkPicker` casem com path real do import (sem aliases divergentes).

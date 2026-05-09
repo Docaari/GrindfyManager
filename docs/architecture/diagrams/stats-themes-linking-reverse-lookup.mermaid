@@ -1,0 +1,56 @@
+%% Sprint stats-themes-linking-1 (RF-02 + RF-06)
+%% Reverse lookup: GET /api/stats/:statId/linked-themes
+%% ADR-141: GIN index global em study_themes.linked_stats; cache memoria 60s.
+%% Pattern lesson #21: Map<string, {data, expiresAt}> + invalidator publico.
+sequenceDiagram
+    actor User
+    participant Drawer as StatsAnalyzer drawer<br/>(client/src/pages/StatsAnalyzer.tsx)
+    participant API as GET /api/stats/:statId/linked-themes<br/>(server/routes/stats.ts NEW)
+    participant Cache as statsLinkedThemesCache<br/>(Map<string,{data,expiresAt}> TTL 60s)
+    participant Catalog as STAT_INDEX_BY_ID<br/>+ hudLayouts.fieldsJson
+    participant Storage as storage.ts<br/>(Drizzle raw sql)
+    participant DB as PostgreSQL 16<br/>(GIN idx_study_themes_linked_stats_gin)
+
+    User->>Drawer: Click stat card no Stats Analyzer
+    Drawer->>API: GET /api/stats/{statId}/linked-themes<br/>(JWT auth header)
+    API->>API: requireAuth -> ctx.userPlatformId
+
+    Note over API,Catalog: Validacao do statId (catalog OU custom_*)
+    alt prefix custom_*
+        API->>Storage: getUserHudLayouts(userId)
+        Storage->>DB: SELECT fields_json FROM hud_layouts WHERE user_id=$1
+        DB-->>Storage: rows
+        API->>API: Verificar fieldsJson[i].id === statId
+    else catalog
+        API->>Catalog: STAT_INDEX_BY_ID.has(statId)
+        Catalog-->>API: bool
+    end
+    alt statId invalido
+        API-->>Drawer: 404 { message: 'Stat nao encontrada' }
+        Drawer-->>User: Mensagem inline (sem retry)
+    end
+
+    Note over API,Cache: Cache lookup
+    API->>Cache: get(`${userId}:${statId}`)
+    alt CACHE HIT (entry.expiresAt > now)
+        Cache-->>API: { data: themes[] }
+        Note right of Cache: <5ms (RF-02.5)
+        API-->>Drawer: 200 themes[]
+    else CACHE MISS / EXPIRED
+        Cache->>Cache: cache.delete(key) se expirado
+        Cache-->>API: undefined
+        API->>Storage: getThemesLinkingStat(userId, statId)
+        Note over Storage,DB: GIN containment query
+        Storage->>DB: SELECT id, name, slug, category<br/>FROM study_themes<br/>WHERE user_id=$1<br/>  AND linked_stats @> to_jsonb(ARRAY[$2]::text[])<br/>ORDER BY name ASC
+        Note right of DB: Bitmap Index Scan on<br/>idx_study_themes_linked_stats_gin<br/>(p95 <50ms RF-02.5)
+        DB-->>Storage: rows[]
+        Storage-->>API: themes[]
+        API->>Cache: set(`${userId}:${statId}`, { data: themes, expiresAt: now+60s })
+        API-->>Drawer: 200 themes[]
+    end
+
+    Drawer->>Drawer: Render chips clicaveis<br/>(name + badge category)
+    User->>Drawer: Click chip de tema
+    Drawer-->>User: Wouter navigate /estudos/:slug
+
+    Note over API,Cache: Invalidacao acontece em outro fluxo:<br/>RF-01 PATCH theme.linkedStats<br/>RF-08 PATCH hud-layouts custom field linkedThemes<br/>RF-08.5 DELETE custom field

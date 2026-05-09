@@ -18,6 +18,10 @@ import { readCooldownHistoryTool } from './handlers/readCooldownHistory';
 import { readUserHudStatsToolV2 } from '../coach/tools/readUserHudStatsV2';
 import { readUserBankrollHistoryTool } from '../coach/tools/readUserBankrollHistory';
 import { readThemeWithLinkedSpotsTool } from './readThemeWithLinkedSpots';
+import {
+  readThemeWithLinkedStatsAndSpotsTool,
+  readThemeWithLinkedSpotsToolAlias,
+} from './readThemeWithLinkedStatsAndSpots';
 import { recommendLessonTool } from './recommendLesson';
 
 // -----------------------------------------------------------------------------
@@ -98,8 +102,10 @@ safeRegister(simulateBankrollStub);
 // readUserBankrollHistoryTool.gateByTier).
 safeRegister(readUserBankrollHistoryTool as unknown as CoachTool);
 
-// Sprint Studies-Reform RF-07 — read_theme_with_linked_spots
-safeRegister(readThemeWithLinkedSpotsTool as any);
+// Sprint stats-themes-linking-1 (ADR-142) — substitui read_theme_with_linked_spots
+// pelo unificado read_theme_with_linked_stats_and_spots. Alias mantido por 1 sprint.
+safeRegister(readThemeWithLinkedStatsAndSpotsTool as any);
+safeRegister(readThemeWithLinkedSpotsToolAlias as any);
 
 // Sprint Biblioteca-1 RF-10 — recommend_lesson (ADR-075)
 safeRegister(recommendLessonTool as unknown as CoachTool);
@@ -109,17 +115,22 @@ export {
   readUserHudStatsToolV2,
   readUserBankrollHistoryTool,
   readThemeWithLinkedSpotsTool,
+  readThemeWithLinkedStatsAndSpotsTool,
+  readThemeWithLinkedSpotsToolAlias,
   recommendLessonTool,
 };
 
 // Sprint Studies-Reform RF-07 — agregado para introspeccao por testes.
 // Mantem compat com tests anteriores (que olhavam para listRegisteredTools).
+// Sprint stats-themes-linking-1: nova tool unificada + alias deprecated
+// substituem o readThemeWithLinkedSpotsTool legado no array exportado.
 export const coachTools = [
   readCooldownHistoryTool,
   readUserHudStatsToolV2,
   findTopLeaksStub,
   simulateBankrollStub,
   readUserBankrollHistoryTool,
-  readThemeWithLinkedSpotsTool,
+  readThemeWithLinkedStatsAndSpotsTool,
+  readThemeWithLinkedSpotsToolAlias,
   recommendLessonTool,
 ];

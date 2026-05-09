@@ -1,0 +1,59 @@
+%% Sprint stats-themes-linking-1 (RF-01 + RF-04)
+%% Edit theme.linkedStats — sequence diagram.
+%% ADR-141: JSONB + GIN; cap 30 stats/tema; cache invalidation pos-commit.
+sequenceDiagram
+    actor User
+    participant UI as StatLinkPicker<br/>(client/src/components/study-themes)
+    participant API as PATCH /api/study-themes/:id<br/>(server/routes/study-themes.ts)
+    participant Zod as Zod schema<br/>(linkedStats z.array.max(30))
+    participant Catalog as STAT_INDEX_BY_ID<br/>(shared/hud-stat-catalog.ts)
+    participant Storage as storage.ts<br/>(Drizzle)
+    participant DB as PostgreSQL 16<br/>(study_themes JSONB)
+    participant Cache as statsLinkedThemesCache<br/>(Map TTL 60s)
+
+    User->>UI: Adiciona/remove stat no Combobox virtualizado
+    User->>UI: Clica "Salvar" (debounced)
+    UI->>API: PATCH { linkedStats: [statIds] }<br/>JSON dedup client-side
+    API->>API: requireAuth -> ctx.userPlatformId
+    API->>Zod: parse(body)
+    alt 31+ IDs OR shape errado
+        Zod-->>API: throw ZodError
+        API-->>UI: 400 { message: 'IDs invalidos', issues }
+        UI-->>User: Toast erro
+    end
+    API->>Storage: getStudyTheme(themeId)
+    Storage->>DB: SELECT theme WHERE id=$1
+    DB-->>Storage: theme row
+    alt theme.userId !== ctx.userPlatformId
+        Storage-->>API: theme com userId divergente
+        API-->>UI: 403 { message: 'Tema de outro usuario' }
+        UI-->>User: Toast erro
+    end
+    API->>API: Validar cada statId<br/>(catalog OR custom_*)
+    loop Para cada statId in body.linkedStats
+        alt prefix custom_*
+            API->>Storage: getHudLayoutsForUser(userId)
+            Storage->>DB: SELECT fields_json FROM hud_layouts WHERE user_id=$1
+            DB-->>Storage: rows[]
+            API->>API: Confirmar fieldsJson[i].id === statId<br/>AND isCustom === true
+        else catalog
+            API->>Catalog: STAT_INDEX_BY_ID.has(statId)
+            Catalog-->>API: bool
+        end
+    end
+    alt invalidIds.length > 0
+        API-->>UI: 400 { message: 'IDs invalidos', invalidIds: [...] }
+        UI-->>User: Toast com lista + chips invalidos removidos
+    end
+    API->>API: dedup = Array.from(new Set(linkedStats))<br/>preservando ordem
+    API->>API: previousIds = theme.linkedStats<br/>nextIds = dedup
+    API->>Storage: updateStudyTheme(themeId, { linkedStats: dedup, updatedAt: now })
+    Storage->>DB: UPDATE study_themes SET linked_stats=$1, updated_at=$2 WHERE id=$3
+    DB-->>Storage: ok
+    Storage-->>API: theme atualizado
+    Note over API,Cache: Cache invalidation pos-commit (lesson #21)
+    API->>Cache: invalidateStatsLinkedThemesCache<br/>(userId, statId) para cada<br/>id in (previousIds ∪ nextIds)
+    Cache->>Cache: cache.delete(`${userId}:${statId}`)
+    API-->>UI: 200 { theme }
+    UI-->>User: Toast "Stats vinculadas atualizadas"
+    UI->>UI: Atualiza chips com array novo

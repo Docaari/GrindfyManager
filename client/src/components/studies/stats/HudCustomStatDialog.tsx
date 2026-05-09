@@ -13,6 +13,8 @@ import {
   HUD_GROUP_LABELS,
   type HudGroupId,
 } from "../../../../../shared/hud-stat-catalog";
+// CRITICAL-1 reviewer: ThemeLinkPicker — passo opcional "Linkar a temas".
+import { ThemeLinkPicker } from "@/components/study-themes/ThemeLinkPicker";
 
 const NANOID_ALPHABET_LOWER = "abcdefghijklmnopqrstuvwxyz0123456789";
 const generateCustomId = customAlphabet(NANOID_ALPHABET_LOWER, 8);
@@ -39,6 +41,8 @@ export default function HudCustomStatDialog({
   const [direction, setDirection] = React.useState<string>("context");
   const [unit, setUnit] = React.useState<string>("pct");
   const [error, setError] = React.useState<string | null>(null);
+  // CRITICAL-1 reviewer: temas linkados ao novo custom field (write-through RF-08).
+  const [linkedThemes, setLinkedThemes] = React.useState<string[]>([]);
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -65,7 +69,7 @@ export default function HudCustomStatDialog({
     setError(null);
     const id = `custom_${generateCustomId()}`;
     try {
-      const result = await apiRequest(
+      const result: any = await apiRequest(
         "POST",
         `/api/hud-layouts/${layoutId}/custom-stats`,
         {
@@ -79,8 +83,47 @@ export default function HudCustomStatDialog({
           unit,
         },
       );
+
+      // CRITICAL-1 reviewer: se user linkou temas, faz PATCH no layout para
+      // setar linkedThemes no fieldsJson recem criado. PATCH dispara
+      // appendStatToThemes write-through (RF-08.3) automatic.
+      if (linkedThemes.length > 0) {
+        try {
+          // Carrega layout atual para preservar fields existentes + adiciona
+          // linkedThemes ao novo custom field.
+          const layoutResp: any = await apiRequest(
+            "GET",
+            `/api/hud-layouts/${layoutId}`,
+          );
+          const fields = Array.isArray(layoutResp?.fieldsJson)
+            ? layoutResp.fieldsJson
+            : Array.isArray(layoutResp?.fields_json)
+              ? layoutResp.fields_json
+              : [];
+          // Encontra o field recem-criado pelo id retornado.
+          const newFieldId =
+            (result && (result.id ?? result?.fieldId)) ?? id;
+          const updated = fields.map((f: any) =>
+            f?.id === newFieldId
+              ? { ...f, linkedThemes: [...linkedThemes] }
+              : f,
+          );
+          await apiRequest("PATCH", `/api/hud-layouts/${layoutId}`, {
+            fieldsJson: updated,
+          });
+        } catch (linkErr: any) {
+          // Best effort — custom stat ja criada; user pode editar depois.
+          toast({
+            title: "Stat criada, mas link com temas falhou",
+            description: linkErr?.message ?? "Tente editar depois.",
+            variant: "destructive" as any,
+          });
+        }
+      }
+
       try {
         queryClient.invalidateQueries({ queryKey: ["hud-layouts"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/study-themes"] });
       } catch {
         /* best effort */
       }
@@ -181,6 +224,15 @@ export default function HudCustomStatDialog({
             <option value="count">count</option>
           </select>
         </label>
+      </div>
+
+      {/* CRITICAL-1 reviewer: passo opcional "Linkar a temas" (RF-08.6). */}
+      <div className="border-t border-slate-700 pt-3 mt-1">
+        <ThemeLinkPicker
+          customStatId="__pending__"
+          initialThemeIds={linkedThemes}
+          onChange={setLinkedThemes}
+        />
       </div>
 
       {error && (

@@ -19,12 +19,14 @@
  *   #13 apiRequest retorna JSON parseado direto
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useLocation } from 'wouter';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { ThemeStatsFocoSection } from '@/components/study-themes/ThemeStatsFocoSection';
+import { StatLinkPicker } from '@/components/study-themes/StatLinkPicker';
 
 interface ThemeRow {
   id: string;
@@ -33,6 +35,26 @@ interface ThemeRow {
   emoji?: string | null;
   progress?: number | null;
   attacksLeakType?: string | null;
+  linkedStats?: string[];
+}
+
+interface ThemeStatsSummary {
+  statId: string;
+  label: string;
+  groupId: string;
+  groupLabel: string;
+  currentValue: number | null;
+  targetMin: number;
+  targetMax: number;
+  direction: string;
+  unit: string;
+  sparkline30d: number[];
+  isCustom?: boolean;
+}
+
+interface ThemeStatsSummaryResponse {
+  themeId: string;
+  stats: ThemeStatsSummary[];
 }
 
 interface Props {
@@ -43,12 +65,49 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { toast } = useToast();
+  // CRITICAL-1 reviewer: drawer de configuracao de stats foco linkadas ao tema.
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const { data: themes = [], isLoading } = useQuery<ThemeRow[]>({
     queryKey: ['/api/study-themes'],
     queryFn: () => apiRequest('GET', '/api/study-themes'),
     staleTime: 30_000,
   });
+
+  // CRITICAL-1 reviewer: stats foco do tema via endpoint dedicado (RF-05).
+  // Reusa logica do coach tool readThemeWithLinkedStatsAndSpots — currentValue,
+  // sparkline 30d, targetMin/Max + direction-aware status badges.
+  const { data: statsResponse } = useQuery<ThemeStatsSummaryResponse>({
+    queryKey: [`/api/themes/${themeId}/stats-summary`],
+    queryFn: () => apiRequest('GET', `/api/themes/${themeId}/stats-summary`),
+    enabled: !!themeId,
+    staleTime: 30_000,
+  });
+  const statsSummary: ThemeStatsSummary[] = Array.isArray(statsResponse?.stats)
+    ? statsResponse!.stats
+    : [];
+
+  // CRITICAL-1 reviewer: handler de save para StatLinkPicker. PATCH /api/study-themes/:id
+  // com novo array de linkedStats. Em caso de 400 invalidIds, prop o onSave do
+  // StatLinkPicker propaga via err.invalidIds (component remove chips invalidos).
+  const handleStatsSave = async (newStatIds: string[]): Promise<void> => {
+    try {
+      await apiRequest('PATCH', `/api/study-themes/${themeId}`, {
+        linkedStats: newStatIds,
+      });
+    } catch (err: any) {
+      // apiRequest jogou erro — preserva invalidIds quando vem no body 400.
+      if (err?.invalidIds && Array.isArray(err.invalidIds)) {
+        const richErr: any = new Error(err?.message ?? 'IDs invalidos');
+        richErr.invalidIds = err.invalidIds;
+        throw richErr;
+      }
+      throw err;
+    }
+    // RF-01 sync: revalida lista de temas + stats summary deste tema.
+    qc.invalidateQueries({ queryKey: ['/api/study-themes'] });
+    qc.invalidateQueries({ queryKey: [`/api/themes/${themeId}/stats-summary`] });
+  };
 
   const startSessionMutation = useMutation({
     mutationFn: async () => {
@@ -151,6 +210,37 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
           </div>
         ) : null}
 
+        {/* Sprint stats-themes-linking-1 RF-05: Stats foco section. */}
+        <ThemeStatsFocoSection
+          themeId={themeId}
+          stats={statsSummary}
+          onConfigureClick={() => setPickerOpen(true)}
+        />
+
+        {/* CRITICAL-1 reviewer: StatLinkPicker drawer wiring. */}
+        {pickerOpen && (
+          <div
+            data-testid="theme-detail-stat-picker-drawer"
+            className="rounded-lg border border-border bg-card/40 p-4 mt-2"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium">Configurar stats foco</h3>
+              <button
+                type="button"
+                onClick={() => setPickerOpen(false)}
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+              >
+                Fechar
+              </button>
+            </div>
+            <StatLinkPicker
+              themeId={themeId}
+              initialStatIds={Array.isArray(theme.linkedStats) ? theme.linkedStats : []}
+              onSave={handleStatsSave}
+            />
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2 pt-2">
           <button
             type="button"
@@ -160,6 +250,14 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
             className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >
             Iniciar sessao de estudo
+          </button>
+          <button
+            type="button"
+            data-testid="theme-detail-configure-stats"
+            onClick={() => setPickerOpen((v) => !v)}
+            className="px-4 py-2 text-sm rounded-md border border-border hover:bg-accent"
+          >
+            {pickerOpen ? 'Fechar configuracao' : 'Configurar stats foco'}
           </button>
           <button
             type="button"

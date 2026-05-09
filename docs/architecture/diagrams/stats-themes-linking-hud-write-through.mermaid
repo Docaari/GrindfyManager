@@ -1,0 +1,76 @@
+%% Sprint stats-themes-linking-1 (RF-08)
+%% HUD custom field write-through UNIDIRECIONAL (custom field -> theme.linkedStats)
+%% ADR-141 §2.5: write-through NAO existe no sentido reverso (theme -> HUD).
+%%
+%% LEGENDA VISUAL:
+%%   --> setas SOLIDAS = sincronizacao ativa (write-through)
+%%   ..> setas TRACEJADAS = lookup/leitura
+%%   X em vermelho = direcao explicitamente NAO suportada (regra unidirecional)
+sequenceDiagram
+    actor User
+    participant UI as HudCustomizer<br/>(client/src/components/stats)
+    participant API as PATCH /api/hud-layouts/:id<br/>(server/routes/hud-layouts.ts)
+    participant Zod as Zod schema<br/>(linkedThemes max(20))
+    participant Tx as DB Transaction<br/>(Drizzle)
+    participant Layouts as hud_layouts table
+    participant Themes as study_themes table
+    participant Cache as statsLinkedThemesCache<br/>(invalidator)
+
+    User->>UI: Cria/edita custom field<br/>id="custom_my_3bet_kpi"<br/>linkedThemes=["A","B","C"]
+    User->>UI: Save
+    UI->>API: PATCH { fieldsJson: [...field with linkedThemes] }
+
+    API->>API: requireAuth -> ctx.userPlatformId
+    API->>Zod: parse(body) -- valida shape + cap 20 themes/field
+    alt 21+ themes OR shape invalido
+        Zod-->>API: ZodError
+        API-->>UI: 400 { message, issues }
+    end
+    API->>Layouts: getHudLayout(layoutId)
+    Layouts-->>API: layout
+    alt layout.userId !== ctx.userPlatformId
+        API-->>UI: 403 { message: 'Layout de outro usuario' }
+    end
+
+    Note over API,Themes: Validacao ownership dos temas
+    API->>Themes: SELECT id FROM study_themes<br/>WHERE id = ANY($linkedThemes)<br/>  AND user_id = $userId
+    Themes-->>API: validThemes[]
+    API->>API: invalidIds = linkedThemes.filter<br/>(id not in validThemes)
+    alt invalidIds.length > 0
+        API-->>UI: 400 { message: 'Temas invalidos', invalidIds }
+    end
+
+    Note over API: Diff: detectar adicoes/remocoes<br/>previousField = layout.fieldsJson.find(f.id === customStatId)<br/>previousThemes = previousField?.linkedThemes ?? []<br/>nextThemes = body linkedThemes (dedup)<br/>added = nextThemes - previousThemes<br/>removed = previousThemes - nextThemes
+
+    Tx->>Tx: BEGIN TRANSACTION (Drizzle .transaction())
+
+    Note over Tx,Layouts: 1) Persistir hud_layouts.fieldsJson
+    Tx->>Layouts: UPDATE hud_layouts<br/>SET fields_json = $newJson, updated_at = now()<br/>WHERE id = $layoutId
+    Layouts-->>Tx: ok
+
+    Note over Tx,Themes: 2) Para cada theme ADICIONADO: append customStatId<br/>(idempotente — dedup com linked_stats @> antes de append)
+    loop themeId in added
+        Tx->>Themes: UPDATE study_themes<br/>SET linked_stats = (CASE<br/>  WHEN linked_stats @> to_jsonb(ARRAY[$customStatId]::text[])<br/>  THEN linked_stats<br/>  ELSE linked_stats || to_jsonb(ARRAY[$customStatId]::text[])<br/>END), updated_at = now()<br/>WHERE id = $themeId AND user_id = $userId
+        Themes-->>Tx: ok
+    end
+
+    Note over Tx,Themes: 3) Para cada theme REMOVIDO: remover customStatId<br/>(jsonb array - element via subquery)
+    loop themeId in removed
+        Tx->>Themes: UPDATE study_themes<br/>SET linked_stats = COALESCE(<br/>  (SELECT jsonb_agg(elem)<br/>   FROM jsonb_array_elements(linked_stats) elem<br/>   WHERE elem != to_jsonb($customStatId::text)),<br/>  '[]'::jsonb)<br/>WHERE id = $themeId AND user_id = $userId
+        Themes-->>Tx: ok
+    end
+
+    Tx->>Tx: COMMIT
+    Tx-->>API: success
+
+    Note over API,Cache: 4) Cache invalidation pos-commit
+    API->>Cache: invalidateStatsLinkedThemesCache<br/>(userId, customStatId)
+    Cache->>Cache: cache.delete(`${userId}:${customStatId}`)<br/>+ cache.delete para todos themes afetados
+
+    API-->>UI: 200 { layout }
+    UI-->>User: Toast sucesso
+
+    Note over UI,Themes: ⛔ DIRECAO PROIBIDA (UNIDIRECIONAL — ADR-141 §2.5)<br/>PATCH /api/study-themes/:id editando linkedStats<br/>NAO atualiza hudLayouts.fieldsJson[i].linkedThemes<br/>Mesmo se a stat for custom_*. Aceita estado intermediario<br/>assimetrico ate proxima edicao do HUD pelo user.
+    rect rgb(255, 220, 220)
+        Note right of UI: Cenario assimetrico aceito:<br/>1. HUD: custom_X linkedThemes=[A,B] -> sync OK<br/>2. Theme A picker remove custom_X manualmente<br/>3. theme[A].linked_stats nao tem custom_X mais<br/>4. layout.fieldsJson[i].linkedThemes AINDA = [A,B]<br/>5. Proxima edicao do HUD revisita o vinculo
+    end

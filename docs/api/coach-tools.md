@@ -464,6 +464,128 @@ do usuario e benchmark populacional estatico (`server/coach/tools/hudStatsBenchm
 
 ---
 
+## Tool 7: `read_theme_with_linked_stats_and_spots`
+
+**Sprint:** stats-themes-linking-1 (2026-05-08) — extensao da tool `read_theme_with_linked_spots` (Sprint Studies-Reform RF-07 / ADR-068).
+**ADR:** `Docs/architecture/decisions/142-coach-tool-unified-read-theme-with-linked-stats-and-spots.md`
+**Tier gate:** `pro`, `premium`, `admin`
+**Audit:** `log`
+**Confirmation:** nao requer
+
+### Renomeacao + alias deprecation
+
+| Nome | Status | Comportamento |
+|---|---|---|
+| `read_theme_with_linked_stats_and_spots` | **Ativo** (Sprint stats-themes-linking-1) | Tool unificada com payload completo (theme + tabs + linked_spots + stats + summary). |
+| `read_theme_with_linked_spots` | **Deprecated alias** | Mesmo handler. Emite `console.warn('[deprecation] read_theme_with_linked_spots — use read_theme_with_linked_stats_and_spots')` por chamada. Mantido por **1 sprint** (sera removido em stats-themes-linking-2). |
+
+Ambos os nomes resolvem para mesmo handler (`readThemeWithLinkedStatsAndSpots`). Description extraida em arquivo dedicado `server/coachTools/readThemeWithLinkedStatsAndSpots.prompts.ts` (lesson #10 — DRY de prompts; divergencia silenciosa quebra cache Anthropic).
+
+### Descricao (LLM ve via `description` do tool descriptor)
+
+> "Le um tema de estudo do usuario com seu contexto completo: tema base, ate 5 abas (preview 200 chars), ate 10 spots vinculados, e **stats HUD linkadas com valores correntes do usuario, alvo e sparkline dos ultimos 30 dias**. Inclui catalog stats e custom user stats. Use stats para diagnosticar leaks especificos com NUMEROS no contexto. Cross-user isolation: 403 se tema for de outro usuario."
+
+### Input schema (Zod, identico ao da tool legada — XOR)
+
+```ts
+z.object({
+  theme_id: z.string().min(1).optional(),
+  theme_name: z.string().min(1).optional(),
+}).refine(
+  (v) => Boolean(v.theme_id) !== Boolean(v.theme_name),
+  { message: 'Forneca theme_id OU theme_name (XOR).' }
+)
+```
+
+### Output (sucesso)
+
+```ts
+{
+  __type: 'ToolResult',
+  tool: 'read_theme_with_linked_stats_and_spots',
+  ok: true,
+  data: {
+    theme: {
+      id: string,
+      name: string,
+      color: string | null,
+      emoji: string,
+      progress: number,
+      lastVisitedAt: string | null,
+    },
+    tabs: Array<{ id, name, content_preview }>,    // max 5 (existente Sprint Studies-Reform)
+    linked_spots: Array<{                           // max 10 (existente)
+      id, conclusion, type, spot, screenshotUrl
+    }>,
+    stats: Array<{                                  // NOVO Sprint stats-themes-linking-1
+      statId: string,
+      label: string,                                // pt-BR de STAT_INDEX_BY_ID OU fieldsJson[i].label
+      groupId: HudGroupId,
+      groupLabel: string,                           // pt-BR de HUD_GROUP_LABELS
+      currentValue: number | null,                  // ultimo snapshot value; null se nenhum
+      targetMin: number,
+      targetMax: number,
+      direction: 'higher_better' | 'lower_better' | 'context' | 'neutral',
+      unit: 'pct' | 'bb' | 'count',
+      sparkline30d: number[],                       // ordem cronologica ASC, max 30 elementos
+      isCustom: boolean,                            // true se vier de hudLayouts.fieldsJson
+    }>,
+    summary: {
+      spots_count: number,
+      tabs_count: number,
+      last_activity_at: string | null,
+      stats_count: number,                          // NOVO
+      stats_in_range: number,                       // NOVO — direction-aware
+      stats_alarm: number,                          // NOVO — direction-aware
+    }
+  }
+}
+```
+
+### Empty states graceful (RF-03.4)
+
+| Situacao | Comportamento |
+|---|---|
+| `theme.linkedStats === []` ou `null` | `stats: []`, `summary.stats_count: 0`. Sem erro. |
+| `statId` custom_* mas `fieldsJson[i]` foi deletado do HUD | Omitir do `stats[]`. `console.warn('[read_theme] custom stat orfa', { statId, themeId })`. SEM 500. |
+| `statId` catalog mas `STAT_INDEX_BY_ID.get` retorna `undefined` (defensivo) | Omitir + warn. |
+| User sem nenhum snapshot | `currentValue: null`, `sparkline30d: []`. UI render placeholder. |
+
+### Codigos de erro
+
+- `Tema nao encontrado` (404 logico): theme_id/theme_name nao resolvido.
+- `Acesso negado: tema de outro usuario` (403 logico): `theme.userId !== ctx.userPlatformId`.
+- Falha geral: `{ ok: false, code: 'tool_error', message }` (handler envolve em try/catch como Sprint Studies-Reform).
+
+### Fonte de dados
+
+| Campo | Origem |
+|---|---|
+| `theme.*` | `storage.getStudyTheme(themeId)` ou `storage.getStudyThemeByName(name, userId)`. |
+| `tabs[]` | `storage.getStudyTabsByTheme(themeId)`, slice top 5, `previewFromContent` 200 chars. |
+| `linked_spots[]` | `storage.getLinkedSpots(themeId)`, slice top 10. |
+| `stats[].label/groupId/groupLabel/direction/unit/targetMin/targetMax` | catalog: `STAT_INDEX_BY_ID.get(statId)` + `HUD_GROUP_LABELS`. custom: `hudLayouts.fieldsJson[i]` do user. |
+| `stats[].currentValue` | `SELECT (values ->> $statId)::numeric FROM hud_stat_snapshots WHERE user_id=$1 AND values ? $statId ORDER BY captured_at DESC LIMIT 1`. |
+| `stats[].sparkline30d` | Query batch jsonb `?|` para todos statIds: `SELECT captured_at, values FROM hud_stat_snapshots WHERE user_id=$1 AND captured_at >= now()-INTERVAL '30 days' AND values ?\| ARRAY[$statIds]::text[] ORDER BY captured_at ASC`. Iterar e indexar por statId em codigo. ADR-142 §2.3. |
+
+**ATENCAO ao implementar:** `hud_stat_snapshots` armazena TODOS os stats num jsonb `values` por snapshot — NAO ha row por (user, stat). Implementer deve usar operadores jsonb (`->>`, `?`, `?|`) e nao assumir coluna `value`.
+
+### Handler
+
+`server/coachTools/readThemeWithLinkedStatsAndSpots.ts` (renomeado de `readThemeWithLinkedSpots.ts`).
+- Reusa `inputSchema`, `previewFromContent`, lookup XOR theme_id/theme_name.
+- Adiciona builder pure `buildStatsPayload(theme, ctx, options)` testavel separadamente.
+- Query batch unica para snapshots evita N+1 (max ~60 rows para 30 dias × ~2 snapshots/dia).
+- Deduplicate stats_in_range vs stats_alarm contagem direction-aware.
+
+### Lessons aplicadas
+
+- **#10** — description em arquivo `*.prompts.ts` dedicado.
+- **#19/20** — graceful skip de stats orfas (custom field deletado).
+- **#21** — sem cache memoria proprio (a tool roda dentro do registry; cache especializado fica em `statsLinkedThemesCache` ADR-141).
+
+---
+
 ## Sprints futuros (placeholder)
 
 Espaco reservado para tools dos proximos sprints:

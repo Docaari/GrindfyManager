@@ -8091,15 +8091,20 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     id: string,
     userId: string,
     patch: UpdateHudLayout,
+    tx?: any,
   ): Promise<HudLayout | undefined> {
-    return await db.transaction(async (tx) => {
-      const [existing] = await tx
+    // HIGH-3 reviewer: aceita `tx` opcional para participar de transacao externa
+    // (ex: handlePatchHudLayoutWithLinkedThemes precisa atomicidade entre
+    // updateHudLayout + appendStatToThemes + removeStatFromThemes).
+    // Quando `tx` omitido, abre transacao propria como antes.
+    const runner = async (txCtx: any) => {
+      const [existing] = await txCtx
         .select()
         .from(hudLayouts)
         .where(and(eq(hudLayouts.id, id), eq(hudLayouts.userId, userId)));
       if (!existing) return undefined;
       if (patch.isDefault === true && !existing.isDefault) {
-        await tx
+        await txCtx
           .update(hudLayouts)
           .set({ isDefault: false, updatedAt: new Date() })
           .where(
@@ -8117,13 +8122,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       const fieldsJsonInput =
         (patch as any).fieldsJson ?? (patch as any).fields_json;
       if (fieldsJsonInput !== undefined) updateData.fieldsJson = fieldsJsonInput;
-      const [row] = await tx
+      const [row] = await txCtx
         .update(hudLayouts)
         .set(updateData)
         .where(and(eq(hudLayouts.id, id), eq(hudLayouts.userId, userId)))
         .returning();
       return row;
-    });
+    };
+    if (tx) return runner(tx);
+    return await db.transaction(runner);
   }
 
   async deleteHudLayout(id: string, userId: string): Promise<boolean> {
@@ -14269,6 +14276,300 @@ async function listUsersForWeeklyStudyPlanCron(): Promise<
 (storage as any).getTournamentsByGrindSession = getTournamentsByGrindSession;
 (storage as any).getStarredHandsByGrindSession = getStarredHandsByGrindSession;
 (storage as any).listUsersForWeeklyStudyPlanCron = listUsersForWeeklyStudyPlanCron;
+
+// =============================================================================
+// Sprint stats-themes-linking-1 (ADR-141 + ADR-142) — storage methods novos
+//
+// Reverse lookup, write-through bidirecional (custom_X -> theme.linkedStats),
+// batch lookups para Coach tool, ownership validation e sparkline batch.
+// Pattern: mesma estrutura dos demais "function X" + (storage as any).X = X.
+// =============================================================================
+
+/**
+ * Reverse lookup: temas do user que linkam o statId.
+ * Usado por GET /api/stats/:statId/linked-themes (RF-02).
+ * Shape: [{ id, name, slug, category }]
+ */
+async function getThemesLinkingStat(
+  userId: string,
+  statId: string,
+): Promise<Array<{ id: string; name: string; slug: string | null; category: string | null }>> {
+  try {
+    const rows = await db
+      .select({
+        id: studyThemes.id,
+        name: studyThemes.name,
+        slug: studyThemes.slug,
+        category: studyThemes.category,
+      })
+      .from(studyThemes)
+      .where(
+        and(
+          eq(studyThemes.userId, userId),
+          sql`${studyThemes.linkedStats} @> ${JSON.stringify([statId])}::jsonb`,
+        ),
+      )
+      .orderBy(asc(studyThemes.name));
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.error("storage.getThemesLinkingStat.error", { userId, statId, err });
+    return [];
+  }
+}
+
+/**
+ * Append idempotente de statId em studyThemes.linkedStats de cada theme em themeIds.
+ * Usado por write-through HUD custom field -> themes (RF-08.3).
+ *
+ * HIGH-4 reviewer: SINGLE atomic batch UPDATE com jsonb operators (PG 16+) — elimina
+ * race condition do read-modify-write. Idempotente via CASE WHEN.
+ *
+ * Ownership: filtra por userId (themes de outros users nao sao tocados).
+ *
+ * @param tx (opcional) — Drizzle tx context. Se passado, opera dentro da tx.
+ *           Se omitido, usa db global. HIGH-3 reviewer suporte.
+ */
+async function appendStatToThemes(
+  userId: string,
+  statId: string,
+  themeIds: string[],
+  tx?: any,
+): Promise<void> {
+  if (!Array.isArray(themeIds) || themeIds.length === 0) return;
+  const exec = tx ?? db;
+  try {
+    // CASE WHEN: append apenas se linked_stats NAO contem statId.
+    // Note: jsonb || jsonb concatena. Coerce string -> jsonb array com to_jsonb.
+    await exec.execute(sql`
+      UPDATE study_themes
+         SET linked_stats = CASE
+               WHEN linked_stats @> ${JSON.stringify([statId])}::jsonb THEN linked_stats
+               ELSE linked_stats || ${JSON.stringify([statId])}::jsonb
+             END,
+             updated_at = NOW()
+       WHERE user_id = ${userId}
+         AND id = ANY(${themeIds})
+    `);
+  } catch (err) {
+    console.error("storage.appendStatToThemes.error", {
+      userId,
+      statId,
+      themeIds,
+      err,
+    });
+  }
+}
+
+/**
+ * Remove statId de studyThemes.linkedStats dos themes em themeIds.
+ * Usado por write-through HUD custom field -> themes (RF-08.3) e cleanup
+ * proativo no DELETE custom field (RF-08.5).
+ *
+ * HIGH-4 reviewer: SINGLE atomic batch UPDATE; usa jsonb_path_query / array
+ * filter para remover element from jsonb array. Idempotente.
+ */
+async function removeStatFromThemes(
+  userId: string,
+  statId: string,
+  themeIds: string[],
+  tx?: any,
+): Promise<void> {
+  if (!Array.isArray(themeIds) || themeIds.length === 0) return;
+  const exec = tx ?? db;
+  try {
+    // Remove statId do jsonb array via subquery jsonb_array_elements_text.
+    // jsonb - text NAO funciona em jsonb arrays (so em objects), por isso usamos
+    // a expressao COALESCE(jsonb_agg(elem) FILTER (WHERE elem != $1), '[]'::jsonb).
+    await exec.execute(sql`
+      UPDATE study_themes AS st
+         SET linked_stats = COALESCE(
+               (
+                 SELECT jsonb_agg(elem)
+                   FROM jsonb_array_elements_text(st.linked_stats) AS elem
+                  WHERE elem <> ${statId}
+               ),
+               '[]'::jsonb
+             ),
+             updated_at = NOW()
+       WHERE st.user_id = ${userId}
+         AND st.id = ANY(${themeIds})
+         AND st.linked_stats @> ${JSON.stringify([statId])}::jsonb
+    `);
+  } catch (err) {
+    console.error("storage.removeStatFromThemes.error", {
+      userId,
+      statId,
+      themeIds,
+      err,
+    });
+  }
+}
+
+/**
+ * Lista todos os themes do user que contem statId em linked_stats.
+ * Usado por DELETE custom field (RF-08.5) para cleanup.
+ * Inclui linkedStats no payload para o handler decidir o set de themes a updatear.
+ */
+async function listThemesContainingStat(
+  userId: string,
+  statId: string,
+): Promise<Array<{ id: string; linkedStats: string[] }>> {
+  try {
+    const rows = await db
+      .select({
+        id: studyThemes.id,
+        linkedStats: studyThemes.linkedStats,
+      })
+      .from(studyThemes)
+      .where(
+        and(
+          eq(studyThemes.userId, userId),
+          sql`${studyThemes.linkedStats} @> ${JSON.stringify([statId])}::jsonb`,
+        ),
+      );
+    return (Array.isArray(rows) ? rows : []).map((r: any) => ({
+      id: r.id,
+      linkedStats: Array.isArray(r.linkedStats) ? r.linkedStats : [],
+    }));
+  } catch (err) {
+    console.error("storage.listThemesContainingStat.error", {
+      userId,
+      statId,
+      err,
+    });
+    return [];
+  }
+}
+
+/**
+ * Batch ownership validation de themes.
+ * Retorna apenas themes que pertencem ao user E estao em themeIds.
+ * Usado por PATCH /api/hud-layouts/:id (RF-08.2) para detectar invalidIds.
+ */
+async function getStudyThemesByIds(
+  themeIds: string[],
+  userId: string,
+): Promise<Array<{ id: string; userId: string; name: string; linkedStats: string[] }>> {
+  if (!Array.isArray(themeIds) || themeIds.length === 0) return [];
+  try {
+    const rows = await db
+      .select({
+        id: studyThemes.id,
+        userId: studyThemes.userId,
+        name: studyThemes.name,
+        linkedStats: studyThemes.linkedStats,
+      })
+      .from(studyThemes)
+      .where(
+        and(
+          eq(studyThemes.userId, userId),
+          // Drizzle inArray helper se disponivel; caso contrario, raw sql.
+          sql`${studyThemes.id} = ANY(${themeIds})`,
+        ),
+      );
+    return (Array.isArray(rows) ? rows : []).map((r: any) => ({
+      id: r.id,
+      userId: r.userId,
+      name: r.name,
+      linkedStats: Array.isArray(r.linkedStats) ? r.linkedStats : [],
+    }));
+  } catch (err) {
+    console.error("storage.getStudyThemesByIds.error", { themeIds, userId, err });
+    return [];
+  }
+}
+
+/**
+ * Batch sparkline lookup para Coach tool (ADR-142 §2.3).
+ * Retorna snapshots em ordem cronologica ASC, dos ultimos 30 dias, do user, que
+ * contenham AO MENOS UMA das statIds em values jsonb.
+ *
+ * NAO existe coluna `value` por stat — todos vivem em `values` jsonb.
+ * Implementer indexa por statId em codigo (evita N+1 queries).
+ */
+async function getHudStatSnapshotsForUserStats(
+  userId: string,
+  statIds: string[],
+): Promise<Array<{ capturedAt: Date; values: Record<string, number | null> }>> {
+  if (!Array.isArray(statIds) || statIds.length === 0) return [];
+  try {
+    // Janela 30 dias.
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        capturedAt: hudStatSnapshots.capturedAt,
+        values: hudStatSnapshots.values,
+      })
+      .from(hudStatSnapshots)
+      .where(
+        and(
+          eq(hudStatSnapshots.userId, userId),
+          gte(hudStatSnapshots.capturedAt, thirtyDaysAgo),
+          // jsonb existence: any of the keys (operator ?|).
+          sql`${hudStatSnapshots.values} ?| ${statIds}::text[]`,
+        ),
+      )
+      .orderBy(asc(hudStatSnapshots.capturedAt));
+    return (Array.isArray(rows) ? rows : []).map((r: any) => ({
+      capturedAt: r.capturedAt,
+      values: r.values || {},
+    }));
+  } catch (err) {
+    console.error("storage.getHudStatSnapshotsForUserStats.error", {
+      userId,
+      statIds,
+      err,
+    });
+    return [];
+  }
+}
+
+/**
+ * PATCH parcial em studyThemes (RF-01.3). Preserva campos nao informados.
+ * Wrapper limpo em torno de UPDATE com WHERE id (ownership validado em handler).
+ */
+async function updateStudyTheme(
+  themeId: string,
+  patch: Partial<{
+    name: string;
+    color: string;
+    emoji: string;
+    isFavorite: boolean;
+    sortOrder: number;
+    progress: number;
+    linkedStats: string[];
+    linkedLessons: string[];
+  }>,
+): Promise<any> {
+  try {
+    const updateData: Record<string, any> = { updatedAt: new Date() };
+    if (patch.name !== undefined) updateData.name = patch.name;
+    if (patch.color !== undefined) updateData.color = patch.color;
+    if (patch.emoji !== undefined) updateData.emoji = patch.emoji;
+    if (patch.isFavorite !== undefined) updateData.isFavorite = patch.isFavorite;
+    if (patch.sortOrder !== undefined) updateData.sortOrder = patch.sortOrder;
+    if (patch.progress !== undefined) updateData.progress = patch.progress;
+    if (patch.linkedStats !== undefined) updateData.linkedStats = patch.linkedStats;
+    if (patch.linkedLessons !== undefined) updateData.linkedLessons = patch.linkedLessons;
+    const [row] = await db
+      .update(studyThemes)
+      .set(updateData)
+      .where(eq(studyThemes.id, themeId))
+      .returning();
+    return row ?? null;
+  } catch (err) {
+    console.error("storage.updateStudyTheme.error", { themeId, err });
+    throw err;
+  }
+}
+
+(storage as any).getThemesLinkingStat = getThemesLinkingStat;
+(storage as any).appendStatToThemes = appendStatToThemes;
+(storage as any).removeStatFromThemes = removeStatFromThemes;
+(storage as any).listThemesContainingStat = listThemesContainingStat;
+(storage as any).getStudyThemesByIds = getStudyThemesByIds;
+(storage as any).getHudStatSnapshotsForUserStats = getHudStatSnapshotsForUserStats;
+(storage as any).updateStudyTheme = updateStudyTheme;
 
 // Tests que dependiam dos IDs fixture (tkt-1, etc.) declaram seu proprio
 // vi.mock('../../../server/db', ...) com Drizzle-shape fake backed por Map.

@@ -1,5 +1,7 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import express from "express";
+import rateLimit from "express-rate-limit";
+import { z } from "zod";
 import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import { db } from "../db";
@@ -10,6 +12,19 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { detectLeaks } from "../coachLeakDetection";
+import { STAT_INDEX_BY_ID } from "@shared/hud-stat-catalog";
+
+// HIGH-6 reviewer: rate limiter para PATCH /api/study-themes/:id.
+// 30 req/min por IP — protege contra abuso (cada PATCH faz validacao + cache invalidation).
+const patchStudyThemeRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message: "Muitas requisicoes a /api/study-themes. Tente em instantes.",
+  },
+});
 
 // Default themes seeded on first access
 const DEFAULT_THEMES = [
@@ -657,6 +672,233 @@ export function registerStudiesV2Routes(app: Express): void {
     }
   );
 
+  // Sprint stats-themes-linking-1 (RF-01) — PATCH /api/study-themes/:id com linkedStats
+  // HIGH-6 reviewer: rate limit 30 req/min/user para mutations sensiveis.
+  app.patch(
+    "/api/study-themes/:id",
+    requireAuth,
+    patchStudyThemeRateLimiter,
+    handlePatchStudyTheme,
+  );
+
+  // Sprint stats-themes-linking-1 (CRITICAL-1 reviewer) — GET stats summary do tema.
+  // Permite que ThemeDetailView mostre cards de stats foco com dados reais
+  // (currentValue + sparkline 30d + targetMin/Max). Reutiliza logica do
+  // coach tool readThemeWithLinkedStatsAndSpots.
+  app.get(
+    "/api/themes/:id/stats-summary",
+    requireAuth,
+    handleGetThemeStatsSummary,
+  );
+
   // Static file serving for uploaded study images
   app.use("/uploads", express.static(path.resolve("uploads")));
+}
+
+// =============================================================================
+// Sprint stats-themes-linking-1 (RF-01) — handlePatchStudyTheme
+//
+// PATCH parcial: aceita linkedStats (cap Zod 30) + outros campos opcionais.
+// Validacao:
+//   - Ownership do tema (404/403).
+//   - Cada statId deve existir em STAT_INDEX_BY_ID OU em hudLayouts.fieldsJson
+//     do user (custom_*).
+//   - Dedup automatico (preserva ordem da primeira ocorrencia).
+//   - Cache reverse lookup invalidado para union(previous, next) pos-commit.
+// =============================================================================
+
+const patchStudyThemeBodySchema = z.object({
+  name: z.string().min(1).max(50).optional(),
+  color: z.string().optional(),
+  emoji: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
+  progress: z.number().int().min(0).max(100).optional(),
+  // Hard cap 30 (ADR-141 §2.3).
+  linkedStats: z.array(z.string()).max(30).optional(),
+});
+
+export async function handlePatchStudyTheme(
+  req: Request,
+  res: Response,
+): Promise<any> {
+  const user = (req as any).user;
+  const userId = user?.userPlatformId;
+  if (!userId) {
+    return res.status(401).json({ message: "Nao autorizado." });
+  }
+  const themeId = req.params.id;
+
+  // Zod validation FIRST (cap rejection antes de DB).
+  let parsed: z.infer<typeof patchStudyThemeBodySchema>;
+  try {
+    parsed = patchStudyThemeBodySchema.parse(req.body);
+  } catch (err: any) {
+    return res
+      .status(400)
+      .json({ message: "Body invalido.", issues: err?.issues });
+  }
+
+  // Ownership.
+  let theme: any = null;
+  try {
+    if (typeof (storage as any).getStudyTheme === "function") {
+      theme = await (storage as any).getStudyTheme(themeId);
+    }
+  } catch (err) {
+    console.error("[studies-v2] getStudyTheme failed", { themeId, err });
+    return res.status(500).json({ message: "Falha ao carregar tema." });
+  }
+  if (!theme) {
+    return res.status(404).json({ message: "Tema nao encontrado." });
+  }
+  if (theme.userId && theme.userId !== userId) {
+    return res.status(403).json({ message: "Tema de outro usuario." });
+  }
+
+  const previousLinkedStats: string[] = Array.isArray(theme.linkedStats)
+    ? theme.linkedStats
+    : [];
+
+  // Validacao de IDs (catalog OU custom do user).
+  let nextLinkedStats: string[] | undefined;
+  if (parsed.linkedStats !== undefined) {
+    // Dedup preservando ordem.
+    const seen = new Set<string>();
+    const dedup: string[] = [];
+    for (const s of parsed.linkedStats) {
+      if (typeof s !== "string" || !s) continue;
+      if (seen.has(s)) continue;
+      seen.add(s);
+      dedup.push(s);
+    }
+
+    // Coleta IDs invalidos: NAO em catalog E NAO em custom do user.
+    let userCustomIds: Set<string> | null = null;
+    const invalidIds: string[] = [];
+    for (const s of dedup) {
+      if (STAT_INDEX_BY_ID.has(s)) continue;
+      if (userCustomIds === null) {
+        userCustomIds = new Set<string>();
+        try {
+          const layouts = (await (storage as any).getHudLayouts(userId)) || [];
+          for (const layout of layouts) {
+            const fields = Array.isArray(layout?.fieldsJson)
+              ? layout.fieldsJson
+              : Array.isArray(layout?.fields_json)
+                ? layout.fields_json
+                : [];
+            for (const f of fields) {
+              if (f?.isCustom && typeof f?.id === "string") {
+                userCustomIds.add(f.id);
+              }
+            }
+          }
+        } catch {
+          // sem layouts disponiveis -> set fica vazio.
+        }
+      }
+      if (!userCustomIds.has(s)) {
+        invalidIds.push(s);
+      }
+    }
+
+    if (invalidIds.length > 0) {
+      return res.status(400).json({
+        message: "IDs invalidos.",
+        invalidIds,
+      });
+    }
+    nextLinkedStats = dedup;
+  }
+
+  // Build patch (apenas campos enviados).
+  const patch: Record<string, any> = {};
+  if (parsed.name !== undefined) patch.name = parsed.name;
+  if (parsed.color !== undefined) patch.color = parsed.color;
+  if (parsed.emoji !== undefined) patch.emoji = parsed.emoji;
+  if (parsed.isFavorite !== undefined) patch.isFavorite = parsed.isFavorite;
+  if (parsed.sortOrder !== undefined) patch.sortOrder = parsed.sortOrder;
+  if (parsed.progress !== undefined) patch.progress = parsed.progress;
+  if (nextLinkedStats !== undefined) patch.linkedStats = nextLinkedStats;
+
+  if (Object.keys(patch).length === 0) {
+    return res.json(theme);
+  }
+
+  try {
+    const updated = await (storage as any).updateStudyTheme(themeId, patch);
+
+    // RF-01.4 cache invalidation pos-commit.
+    if (nextLinkedStats !== undefined) {
+      const union = new Set<string>([
+        ...previousLinkedStats,
+        ...nextLinkedStats,
+      ]);
+      try {
+        const svc = await import("../services/statsLinkedThemesService");
+        for (const statId of union) {
+          svc.invalidateStatsLinkedThemesCache(userId, statId);
+        }
+      } catch {
+        // svc nao disponivel — no-op.
+      }
+    }
+
+    return res.json(updated ?? theme);
+  } catch (err) {
+    console.error("[studies-v2] handlePatchStudyTheme failed", err);
+    return res.status(500).json({ message: "Falha ao atualizar tema." });
+  }
+}
+
+// =============================================================================
+// CRITICAL-1 reviewer — handleGetThemeStatsSummary
+//
+// GET /api/themes/:id/stats-summary
+// Retorna stats foco do tema com currentValue, sparkline30d, targetMin/Max
+// para popular ThemeStatsFocoSection no detalhe do tema.
+//
+// Reusa a logica de readThemeWithLinkedStatsAndSpots (Coach tool, ADR-142)
+// e retorna apenas o array `stats` — endpoint simples e leve.
+//
+// Comportamento:
+//   - 401 sem auth (padrao requireAuth).
+//   - 404 se tema nao existir.
+//   - 403 se tema de outro user.
+//   - 200 com array de StatPayloadEntry (mesmo shape do coach tool).
+// =============================================================================
+export async function handleGetThemeStatsSummary(
+  req: Request,
+  res: Response,
+): Promise<any> {
+  const user = (req as any).user;
+  const userId = user?.userPlatformId;
+  if (!userId) {
+    return res.status(401).json({ message: "Nao autorizado." });
+  }
+  const themeId = req.params.id;
+  try {
+    const mod = await import("../coachTools/readThemeWithLinkedStatsAndSpots");
+    const fn = mod.readThemeWithLinkedStatsAndSpots ?? mod.default;
+    const result = await fn(
+      { theme_id: themeId },
+      { userPlatformId: userId },
+    );
+    // Resposta canonica: apenas o array `stats` (CTA principal do consumer).
+    return res.json({
+      themeId,
+      stats: Array.isArray(result?.stats) ? result.stats : [],
+    });
+  } catch (err: any) {
+    const msg = String(err?.message ?? err);
+    if (/nao encontrado/i.test(msg)) {
+      return res.status(404).json({ message: "Tema nao encontrado." });
+    }
+    if (/Acesso negado|outro usuario/i.test(msg)) {
+      return res.status(403).json({ message: "Tema de outro usuario." });
+    }
+    console.error("[studies-v2] handleGetThemeStatsSummary failed", err);
+    return res.status(500).json({ message: "Falha ao carregar stats." });
+  }
 }
