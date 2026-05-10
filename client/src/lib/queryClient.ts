@@ -26,6 +26,38 @@ export function getCsrfToken(): string | null {
   return csrfToken;
 }
 
+// FIX (auth-launch P0.3): singleton refresh promise.
+// Sem isso, N requests 401 paralelos disparam N POSTs /api/auth/refresh,
+// invalidando refresh tokens entre si (rotacao) e podendo deslogar o usuario.
+// O singleton garante que so o primeiro 401 inicie um refresh; os demais
+// aguardam o resultado do mesmo POST.
+let refreshPromise: Promise<boolean> | null = null;
+
+async function performRefresh(): Promise<boolean> {
+  try {
+    const refreshRes = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+      },
+      credentials: 'include',
+    });
+    return refreshRes.ok;
+  } catch {
+    return false;
+  }
+}
+
+function getRefreshPromise(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = performRefresh().finally(() => {
+    // Limpa a referencia apos resolve/reject pra permitir refresh subsequente
+    refreshPromise = null;
+  });
+  return refreshPromise;
+}
+
 export async function initCsrf() {
   try {
     const res = await fetch('/api/csrf-token', { credentials: 'include' });
@@ -103,17 +135,11 @@ export async function apiRequest(
     }
 
     try {
-      // Try to refresh the token (cookie-based, no body needed)
-      const refreshRes = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
-        },
-        credentials: 'include',
-      });
+      // P0.3: refresh via singleton — multiplos 401s paralelos compartilham
+      // a mesma promise de refresh ao inves de cada um disparar o seu.
+      const refreshOk = await getRefreshPromise();
 
-      if (refreshRes.ok) {
+      if (refreshOk) {
         // Retry the original request (cookies automatically updated by server)
         const retryRes = await fetch(url, {
           ...fetchOptions,
@@ -211,17 +237,10 @@ export function uploadWithProgress(
 
     xhr.onload = () => {
       if (xhr.status === 401) {
-        // Try refresh token
-        fetch('/api/auth/refresh', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
-          },
-          credentials: 'include',
-        })
-          .then((refreshRes) => {
-            if (refreshRes.ok) {
+        // P0.3: refresh via singleton (compartilhado com apiRequest)
+        getRefreshPromise()
+          .then((refreshOk) => {
+            if (refreshOk) {
               // Retry upload
               const retryXhr = new XMLHttpRequest();
               retryXhr.open('POST', url);

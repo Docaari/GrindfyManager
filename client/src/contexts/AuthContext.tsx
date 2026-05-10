@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { apiRequest, initCsrf, getCsrfToken } from '@/lib/queryClient';
+import { apiRequest, initCsrf, getCsrfToken, queryClient } from '@/lib/queryClient';
 import { hasFullAccess, isSuperAdmin } from '../../../shared/permissions';
 
 interface User {
@@ -47,13 +47,46 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const USER_DATA_KEY = 'grindfy_user_data';
 
 // Token refresh interval (5 minutes before expiration)
-const REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes (token lifetime)
-const REFRESH_BEFORE_EXPIRY = 5 * 60 * 1000; // 5 minutes before expiry
+const REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes (token lifetime - default fallback)
+const REFRESH_BEFORE_EXPIRY = 5 * 60 * 1000; // 5 minutes before expiry (default fallback)
+
+// FIX (auth-launch P1.10): JWT-aware refresh scheduling.
+// Antes usava intervalo fixo de 10min. Quando server muda lifetime do
+// access_token (ex: 5min em prod) ou usuario fica idle, schedule pode
+// disparar tarde demais e cair em 401 spam. Decoda exp do cookie via
+// /api/auth/me roundtrip nao eh viavel (httpOnly), entao usa fetch /me
+// para detectar o exp ou fallback fixed window.
+const REFRESH_SAFETY_MARGIN_MS = 60 * 1000; // refresh 60s antes de expirar
+const MIN_REFRESH_DELAY_MS = 30 * 1000;     // nunca menos de 30s
+const MAX_REFRESH_DELAY_MS = 30 * 60 * 1000; // nunca mais de 30min
+
+/**
+ * Decoda payload de um JWT (sem validar assinatura — apenas extrai claims).
+ * Retorna null se nao for JWT valido.
+ */
+function decodeJwtPayload(token: string): { exp?: number; iat?: number } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    // base64url decode
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = payload + '==='.slice((payload.length + 3) % 4);
+    const decoded = atob(padded);
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshTimer, setRefreshTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // P1.10: Last known access token exp timestamp (ms epoch). Atualizado quando
+  // login/refresh retornam tokens no body (back-compat ainda inclui mesmo com
+  // httpOnly cookies). null = fallback para REFRESH_INTERVAL.
+  const [accessTokenExpiresAt, setAccessTokenExpiresAt] = useState<number | null>(null);
 
   useEffect(() => {
     initializeAuth();
@@ -139,6 +172,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
       }
 
+      // P1.10: tentar extrair exp do accessToken retornado no body (back-compat)
+      try {
+        const data = await response.clone().json();
+        if (data?.accessToken) {
+          const payload = decodeJwtPayload(data.accessToken);
+          if (payload?.exp) {
+            setAccessTokenExpiresAt(payload.exp * 1000);
+          }
+        }
+      } catch {
+        // Resposta sem body JSON ou sem accessToken — usa fallback.
+      }
+
       // Schedule next refresh
       scheduleTokenRefresh();
 
@@ -161,10 +207,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       clearTimeout(refreshTimer);
     }
 
-    // Schedule refresh 5 minutes before expiration
+    // FIX (auth-launch P1.10): JWT-aware schedule.
+    // Se sabemos accessTokenExpiresAt, schedula refresh em (exp - now - safety).
+    // Senao, fallback para janela fixa antiga (REFRESH_INTERVAL - REFRESH_BEFORE_EXPIRY).
+    let delayMs: number;
+    if (accessTokenExpiresAt) {
+      const remaining = accessTokenExpiresAt - Date.now() - REFRESH_SAFETY_MARGIN_MS;
+      delayMs = Math.max(MIN_REFRESH_DELAY_MS, Math.min(remaining, MAX_REFRESH_DELAY_MS));
+      // Se ja expirou ou esta a <30s, refresh imediatamente.
+      if (remaining <= 0) {
+        delayMs = MIN_REFRESH_DELAY_MS;
+      }
+    } else {
+      delayMs = REFRESH_INTERVAL - REFRESH_BEFORE_EXPIRY;
+    }
+
     const timer = setTimeout(() => {
       refreshAccessToken();
-    }, REFRESH_INTERVAL - REFRESH_BEFORE_EXPIRY);
+    }, delayMs);
 
     setRefreshTimer(timer);
   };
@@ -177,6 +237,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const clearStoredAuth = () => {
     localStorage.removeItem(USER_DATA_KEY);
+
+    // FIX (auth-launch P0.4): limpar cache do TanStack Query no logout.
+    // Sem isso, dados sensíveis do user anterior (saldos, sessoes, KPIs)
+    // ficam acessiveis ate gcTime expirar (10min) — vazamento entre sessoes
+    // se outro user logar no mesmo browser.
+    try {
+      queryClient.clear();
+    } catch {
+      // queryClient pode nao estar inicializado em alguns testes — ignorar.
+    }
 
     if (refreshTimer) {
       clearTimeout(refreshTimer);
@@ -205,6 +275,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem(USER_DATA_KEY, JSON.stringify(data.user));
 
         setUser(data.user);
+
+        // P1.10: extrair exp do JWT pra schedule de refresh JWT-aware.
+        if (data.accessToken) {
+          const payload = decodeJwtPayload(data.accessToken);
+          if (payload?.exp) {
+            setAccessTokenExpiresAt(payload.exp * 1000);
+          }
+        }
 
         // Initialize CSRF token after login
         await initCsrf();

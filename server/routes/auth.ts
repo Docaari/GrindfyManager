@@ -180,20 +180,14 @@ export function registerAuthRoutes(app: Express): void {
         .where(eq(users.email, loginData.email));
 
       if (!user) {
-        // Handle failed login even for non-existent users (security)
-        const failResult = await AuthService.handleFailedLogin(loginData.email);
+        // FIX (auth-launch P1.9): mensagem generica sem contador para users
+        // inexistentes — antes vazava informacao de que email NAO esta
+        // registrado (contador zerado / repete) vs email registrado
+        // (contador decrementa). Email enumeration leak.
         await AuthService.logAccess(null, 'login_failed', undefined, req);
 
-        if (failResult.locked) {
-          return res.status(423).json({
-            message: `Conta temporariamente bloqueada. Tente novamente em ${failResult.lockTime} minutos.`,
-            locked: true,
-            remainingTime: failResult.lockTime
-          });
-        }
-
         return res.status(401).json({
-          message: `Credenciais inválidas. Restam ${failResult.attemptsRemaining} tentativas.`
+          message: 'Credenciais inválidas. Verifique e tente novamente.'
         });
       }
 
@@ -477,7 +471,9 @@ export function registerAuthRoutes(app: Express): void {
   });
 
   // Password reset routes
-  app.post('/api/auth/forgot-password', async (req, res) => {
+  // FIX (auth-launch P1.7): aplicar authRateLimit. Sem isso, atacante pode
+  // enumerar emails e/ou inundar mailbox de vitimas com reset emails.
+  app.post('/api/auth/forgot-password', authRateLimit, async (req, res) => {
     try {
       const { email } = forgotPasswordSchema.parse(req.body);
 
@@ -511,11 +507,20 @@ export function registerAuthRoutes(app: Express): void {
 
   app.post('/api/auth/reset-password', async (req, res) => {
     try {
-      const { token, password } = req.body;
-
-      if (!token || !password) {
-        return res.status(400).json({ success: false, message: 'Token e senha são obrigatórios' });
+      // FIX (auth-launch P0.2): validar com resetPasswordSchema (importado mas
+      // nao usado). Antes aceitava senha vazia, qualquer length, sem confirm.
+      let parsed;
+      try {
+        parsed = resetPasswordSchema.parse(req.body);
+      } catch (zodErr: any) {
+        return res.status(400).json({
+          success: false,
+          message: zodErr?.issues?.[0]?.message ?? 'Dados invalidos',
+          errors: zodErr?.issues,
+        });
       }
+
+      const { token, password } = parsed;
 
       // Verify reset token
       const tokenData = await EmailService.verifyPasswordResetToken(token);
@@ -611,8 +616,38 @@ export function registerAuthRoutes(app: Express): void {
       // Get user info
       const userInfo = await OAuthService.getUserInfo('google', tokenData.accessToken);
 
+      // FIX (auth-launch P1.11): pre-check account takeover via email.
+      // Se ja existe user com mesmo email + senha local + sem googleId,
+      // bloqueamos o link automatico — senao um attacker que registrou Google
+      // com o email da vitima poderia tomar conta.
+      // O usuario tem que fazer login com senha primeiro pra linkar Google
+      // (link sera implementado em fluxo de Settings em sprint futura).
+      const [conflictUser] = await db.select()
+        .from(users)
+        .where(eq(users.email, userInfo.email));
+
+      if (conflictUser && conflictUser.password && !conflictUser.googleId) {
+        await AuthService.logAccess(conflictUser.userPlatformId, 'oauth_account_conflict', undefined, req);
+        return res.redirect('/login?error=oauth_account_conflict');
+      }
+
       // Create or update user
       const user = await OAuthService.createOrUpdateOAuthUser('google', userInfo);
+
+      // FIX (auth-launch P1.12): replicar checks status do login local.
+      // Se user.status !== 'active' (blocked/pending_verification/inactive),
+      // OAuth NAO deve emitir tokens — antes deixava qualquer status entrar.
+      if (user.status === 'blocked') {
+        await AuthService.logAccess(user.userPlatformId, 'oauth_login_blocked', undefined, req);
+        return res.redirect('/login?error=oauth_account_blocked');
+      }
+
+      if (user.status === 'pending_verification' || !user.emailVerified) {
+        // OAuth do Google deveria vir com emailVerified=true (oauthData.verified).
+        // Se mesmo assim cair aqui, bloqueamos pra forcar fluxo de verificacao.
+        await AuthService.logAccess(user.userPlatformId, 'oauth_login_unverified', undefined, req);
+        return res.redirect('/login?error=oauth_account_unverified');
+      }
 
       // Generate JWT tokens
       const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);

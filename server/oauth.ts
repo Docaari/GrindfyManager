@@ -58,6 +58,8 @@ export class OAuthService {
   }
 
   // Validate OAuth state
+  // FIX (auth-launch P0.6): consume state on validation. Sem isso, mesmo state
+  // pode ser reutilizado por 10min — janela de replay attack.
   static validateState(state: string): boolean {
     const stateData = oauthStateStore.get(state);
     if (!stateData) return false;
@@ -68,6 +70,8 @@ export class OAuthService {
       return false;
     }
 
+    // Consume state on successful validation (one-shot use).
+    oauthStateStore.delete(state);
     return true;
   }
 
@@ -188,18 +192,36 @@ export class OAuthService {
         return updatedUser;
       } else {
         // Create new user with OAuth data
+        // FIX (auth-launch P0.1): adicionar userPlatformId + defaults trial/role/status.
+        // Sem userPlatformId, requireAuth nao consegue resolver req.user (login OAuth quebrado).
+        const userPlatformId = await AuthService.generateNextUserPlatformId();
+        const now = new Date();
+        const trialEndsAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000); // 14d
+
+        // Username unico: derivado do nome + sufixo nanoid (evita colisao em
+        // emails com mesmo nome humano "Joao Silva" registrando 2x).
+        const baseUsername = (oauthData.name || oauthData.email.split('@')[0])
+          .toLowerCase()
+          .replace(/\s+/g, '_')
+          .replace(/[^a-z0-9_]/g, '');
+
         const [newUser] = await db.insert(users).values({
           id: nanoid(),
+          userPlatformId,
           email: oauthData.email,
-          username: oauthData.name.toLowerCase().replace(/\s+/g, '_'),
+          name: oauthData.name,
+          username: `${baseUsername}_${nanoid(4)}`,
           firstName: oauthData.firstName,
           lastName: oauthData.lastName,
           googleId: oauthData.id,
           profileImageUrl: oauthData.picture,
           emailVerified: oauthData.verified || false,
           status: 'active',
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          role: 'user',
+          subscriptionPlan: 'trial',
+          trialEndsAt,
+          createdAt: now,
+          updatedAt: now,
         } as any).returning();
 
         return newUser;
