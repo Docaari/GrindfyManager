@@ -348,21 +348,19 @@ export async function buildTechnicalContext(userId: string): Promise<any> {
       storage.getAnalyticsBySite(userId, 'all'),
     ]);
 
-    // Load study cards, study sessions, coaching insights
-    let cards: any[] = [];
-    let sessions: any[] = [];
-    let insights: any[] = [];
+    // Load study cards, study sessions, coaching insights.
+    // Wave B (Fase 3 perf): Promise.all paralelo (3 selects independentes).
+    // Cada select wrapeado em catch isolado para preservar graceful degradation
+    // por-query — se 1 explode, os outros 2 ainda voltam.
     let bigHits: any[] = [];
-
-    try {
-      cards = await db.select().from(studyCards).where(eq(studyCards.userId, userId));
-    } catch { /* graceful */ }
-    try {
-      sessions = await db.select().from(studySessions).where(eq(studySessions.userId, userId));
-    } catch { /* graceful */ }
-    try {
-      insights = await db.select().from(coachingInsights).where(eq(coachingInsights.userId, userId));
-    } catch { /* graceful */ }
+    const [cards, sessions, insights] = await Promise.all([
+      (db.select().from(studyCards).where(eq(studyCards.userId, userId)) as Promise<any[]>)
+        .catch(() => [] as any[]),
+      (db.select().from(studySessions).where(eq(studySessions.userId, userId)) as Promise<any[]>)
+        .catch(() => [] as any[]),
+      (db.select().from(coachingInsights).where(eq(coachingInsights.userId, userId)) as Promise<any[]>)
+        .catch(() => [] as any[]),
+    ]);
 
     // Compute early/late finish rates from dashboard stats if available
     const earlyFinishRate = (dashboardStats as any)?.earlyFinishRate || 0;

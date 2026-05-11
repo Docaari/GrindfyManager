@@ -493,7 +493,8 @@ export interface IStorage {
   deleteWeeklyPlan(id: string): Promise<void>;
 
   // Grind session operations
-  getGrindSessions(userId: string): Promise<GrindSession[]>;
+  // Wave B (Fase 3 perf): optional limit pra paginar — heavy users com 1000s/yr.
+  getGrindSessions(userId: string, opts?: { limit?: number; offset?: number }): Promise<GrindSession[]>;
   getGrindSession(id: string): Promise<GrindSession | undefined>;
   createGrindSession(session: InsertGrindSession): Promise<GrindSession>;
   updateGrindSession(id: string, session: Partial<InsertGrindSession>): Promise<GrindSession>;
@@ -1701,12 +1702,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Grind session operations
-  async getGrindSessions(userId: string): Promise<GrindSession[]> {
-    return await db
+  async getGrindSessions(
+    userId: string,
+    opts: { limit?: number; offset?: number } = {},
+  ): Promise<GrindSession[]> {
+    // Wave B (Fase 3 perf): aceita limit/offset opcionais. Default mantem
+    // back-compat (unbounded) — caller passa limit explicitamente quando
+    // pagina (rotas /api/grind-sessions). Para heavy user com 1000s/yr,
+    // routes podem passar limit:50.
+    let q = (db as any)
       .select()
       .from(grindSessions)
       .where(eq(grindSessions.userId, userId))
       .orderBy(desc(grindSessions.date));
+    if (typeof opts.limit === 'number' && opts.limit > 0) {
+      q = q.limit(opts.limit);
+    }
+    if (typeof opts.offset === 'number' && opts.offset > 0) {
+      q = q.offset(opts.offset);
+    }
+    return await q;
   }
 
   async getGrindSession(id: string): Promise<GrindSession | undefined> {
@@ -2990,33 +3005,21 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const bigHitsRate = count > 0 ? (firstPlaceCount / count) * 100 : 0;
 
     // 11. Média de participantes: MEDIANA para todos os sites (exceto CoinPoker)
-
-    // Buscar todos os valores de fieldSize válidos para calcular mediana
-    const fieldSizeValues = await db
-      .select({ fieldSize: tournaments.fieldSize })
+    // Wave B (Fase 3 perf): trocou pull-all + JS sort por percentile_cont SQL.
+    // Para usuario heavy (18k+ tournaments) economiza ~700kB de payload + CPU
+    // de sort no Node. percentile_cont(0.5) === media interpolada dos 2 do meio
+    // em count par, ou valor exato em count impar; Math.round preserva o
+    // comportamento anterior (JS fazia round so em count par).
+    const medianRows: any[] = await db
+      .select({ median: sql<number>`percentile_cont(0.5) WITHIN GROUP (ORDER BY ${tournaments.fieldSize})` })
       .from(tournaments)
       .where(and(
         whereCondition,
         gte(tournaments.fieldSize, 15),
-        isNotNull(tournaments.fieldSize)
-      ))
-      .orderBy(tournaments.fieldSize);
-
-    let avgFieldSize = 0;
-
-    // Calcular mediana do field size (método mais preciso para todos os sites)
-    const fieldSizes = fieldSizeValues.map(row => Number(row.fieldSize));
-
-    if (fieldSizes.length > 0) {
-      const sortedFieldSizes = fieldSizes.sort((a, b) => a - b);
-      const middleIndex = Math.floor(sortedFieldSizes.length / 2);
-
-      if (sortedFieldSizes.length % 2 === 0) {
-        avgFieldSize = Math.round((sortedFieldSizes[middleIndex - 1] + sortedFieldSizes[middleIndex]) / 2);
-      } else {
-        avgFieldSize = sortedFieldSizes[middleIndex];
-      }
-    }
+        isNotNull(tournaments.fieldSize),
+      ));
+    const rawMedian = medianRows[0]?.median;
+    const avgFieldSize = rawMedian == null ? 0 : Math.round(Number(rawMedian));
 
 
     // 16. Dias Jogados: Quantidade de dias únicos com registros
@@ -11161,23 +11164,30 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   async getQuickStats(userId: string): Promise<any> {
     // Reusa formato do endpoint /api/dashboard/quick-stats.
+    // Wave B (Fase 3 perf): 3 RTTs sequenciais -> 2 paralelos via Promise.all;
+    // tournaments stats colapsadas em 1 query agregada. + CLAUDE.md §6.1:
+    // dashboard/analytics filtram grind_session_id IS NULL (Agent A audit flag).
     try {
-      const tStats: any[] = await (db as any).select({
-        totalTournaments: sql<number>`COUNT(*)::int`,
-        totalProfit: sql<number>`COALESCE(SUM(prize::numeric), 0)`,
-      }).from(tournaments).where(eq(tournaments.userId, userId));
-      const sCount: any[] = await (db as any).select({
-        count: sql<number>`COUNT(*)::int`,
-      })
-        .from(grindSessions)
-        .where(and(eq(grindSessions.userId, userId), eq(grindSessions.status, 'completed')));
-      const activeDaysRows: any[] = await (db as any).select({
-        days: sql<number>`COUNT(DISTINCT DATE(date_played))::int`,
-      }).from(tournaments).where(eq(tournaments.userId, userId));
+      const [tStatsRows, sCountRows]: any[] = await Promise.all([
+        (db as any).select({
+          totalTournaments: sql<number>`COUNT(*)::int`,
+          activeDays: sql<number>`COUNT(DISTINCT DATE(date_played))::int`,
+        })
+          .from(tournaments)
+          .where(and(
+            eq(tournaments.userId, userId),
+            isNull(tournaments.grindSessionId),
+          )),
+        (db as any).select({
+          count: sql<number>`COUNT(*)::int`,
+        })
+          .from(grindSessions)
+          .where(and(eq(grindSessions.userId, userId), eq(grindSessions.status, 'completed'))),
+      ]);
       return {
-        totalTournaments: tStats[0]?.totalTournaments ?? 0,
-        totalSessions: sCount[0]?.count ?? 0,
-        activeDays: activeDaysRows[0]?.days ?? 0,
+        totalTournaments: tStatsRows[0]?.totalTournaments ?? 0,
+        totalSessions: sCountRows[0]?.count ?? 0,
+        activeDays: tStatsRows[0]?.activeDays ?? 0,
         currentStreakDays: 0, // Onda 1: simplificado.
       };
     } catch (err) {

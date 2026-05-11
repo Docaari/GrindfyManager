@@ -273,8 +273,9 @@ export function registerTournamentLibraryRoutes(app: Express): void {
         return res.status(400).json({ message: "Nenhum torneio selecionado para importar" });
       }
 
-      const imported = [];
-      for (const t of tournamentsToImport) {
+      // Wave B (Fase 3 perf): batch insert. Antes: for-await issued N RTTs;
+      // agora valida cada item via Zod + single INSERT VALUES (..) RETURNING.
+      const rowsToInsert = tournamentsToImport.map((t: any) => {
         const data = insertTournamentLibrarySchema.parse({
           userId,
           name: t.name,
@@ -286,13 +287,13 @@ export function registerTournamentLibraryRoutes(app: Express): void {
           speed: t.speed || null,
           source: 'grind-live',
         });
+        return { ...data, id: nanoid() };
+      });
 
-        const [created] = await db
-          .insert(tournamentLibrary)
-          .values({ ...data, id: nanoid() })
-          .returning();
-        imported.push(created);
-      }
+      const imported = await db
+        .insert(tournamentLibrary)
+        .values(rowsToInsert)
+        .returning();
 
       res.json({ imported: imported.length, tournaments: imported });
     } catch (error) {

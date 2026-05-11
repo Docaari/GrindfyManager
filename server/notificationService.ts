@@ -42,12 +42,16 @@ export class NotificationService {
     return notification as unknown as NotificationData;
   }
 
-  static async getUserNotifications(userId: string): Promise<NotificationData[]> {
+  static async getUserNotifications(userId: string, limit: number = 100): Promise<NotificationData[]> {
+    // Wave B (Fase 3 perf): LIMIT 100 default — bell dropdown mostra top N
+    // (UI nao precisa mais que isso). Sem LIMIT, tabela crescia per-user
+    // sem cap + select-all em todo polled `/api/notifications`.
     const userNotifications = await db
       .select()
       .from(notifications)
       .where(eq(notifications.userId, userId))
-      .orderBy(sql`${notifications.createdAt} DESC`);
+      .orderBy(sql`${notifications.createdAt} DESC`)
+      .limit(limit);
 
     return userNotifications as unknown as NotificationData[];
   }
