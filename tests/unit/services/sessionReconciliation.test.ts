@@ -41,7 +41,15 @@ vi.mock('../../../server/services/walletService', () => ({
 vi.mock('../../../server/storage', () => ({
   storage: {
     findReconciliationMarker: vi.fn(),
+    findSessionWalletSnapshot: vi.fn().mockResolvedValue(null),
     getGrindSession: vi.fn(),
+    listWalletsByUser: vi.fn().mockResolvedValue([]),
+    transaction: vi.fn(async (fn: any) =>
+      fn({
+        findSessionWalletSnapshot: vi.fn().mockResolvedValue(null),
+        createSessionWalletSnapshot: vi.fn().mockResolvedValue({ id: 'snap_x' }),
+      }),
+    ),
   },
 }));
 
@@ -54,6 +62,16 @@ import { storage } from '../../../server/storage';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Re-instate default behaviors that vi.clearAllMocks() wipes (preserve
+  // mock fns themselves but reset their return values).
+  (storage.findSessionWalletSnapshot as any).mockResolvedValue(null);
+  (storage.listWalletsByUser as any).mockResolvedValue([]);
+  (storage.transaction as any).mockImplementation(async (fn: any) =>
+    fn({
+      findSessionWalletSnapshot: vi.fn().mockResolvedValue(null),
+      createSessionWalletSnapshot: vi.fn().mockResolvedValue({ id: 'snap_x' }),
+    }),
+  );
 });
 
 // =============================================================================
@@ -215,7 +233,11 @@ describe('runReconciliation - fail-fast mid-batch (RF-04, US-04, US-06)', () => 
       { walletId: 'wC', reportedBalance: 50, expectedPreviousBalance: 60 },
     ]);
 
-    expect(r.created).toHaveLength(2);
+    // CRITICAL-01: contrato mudou para atomico. Quando qualquer ajuste falha,
+    // tx eh revertida COMPLETAMENTE — created.length = 0 e failure descreve
+    // a wallet que estourou. created NAO contem tx1/tx2 mesmo que tenham
+    // chegado a ser inseridas no DB (foram rolled back).
+    expect(r.created).toHaveLength(0);
     expect(r.failed).toBeDefined();
     expect(r.failed!.walletId).toBe('wC');
     expect(r.failed!.code).toBe('balance_mismatch');
@@ -242,7 +264,7 @@ describe('runReconciliation - fail-fast mid-batch (RF-04, US-04, US-06)', () => 
     expect(walletService.recordWalletTransaction).toHaveBeenCalledTimes(1);
   });
 
-  it('tx anteriores NAO sao revertidas (fail-fast nao implica rollback)', async () => {
+  it('tx anteriores SAO revertidas (CRITICAL-01: fail-fast atomico)', async () => {
     (storage.findReconciliationMarker as any).mockResolvedValue({ count: 0 });
     const mismatchErr: any = new Error('balance_mismatch');
     mismatchErr.statusCode = 409;
@@ -257,9 +279,11 @@ describe('runReconciliation - fail-fast mid-batch (RF-04, US-04, US-06)', () => 
       { walletId: 'wB', reportedBalance: 165, expectedPreviousBalance: 200 },
     ]);
 
-    // tx1 permanece em created (nao foi removida apos a falha do 2o)
-    expect(r.created).toHaveLength(1);
-    expect((r.created as any[])[0].id).toBe('tx1');
+    // CRITICAL-01: contrato atomico. Falha em wB faz rollback de tx1 tambem.
+    // Resultado: created = [] + failed.walletId = wB.
+    expect(r.created).toHaveLength(0);
+    expect(r.failed).toBeDefined();
+    expect(r.failed!.walletId).toBe('wB');
   });
 });
 
