@@ -451,10 +451,10 @@ Cada wave = 1 PR, commit/push apos OK. TDD onde muda comportamento; pure infra/c
 ### 3.1 Database (Wave A + B)
 
 - [x] EXPLAIN ANALYZE nas queries mais usadas (Agent A — Q1/Q3/Q4/Q6/Q7/Q8/Q11/Q15/Q16 + median + latest-upload)
-- [ ] **Wave A** migration 0064_perf_indexes.sql (5 P0 + 6 P1 + 3 P2 indexes + ANALYZE)
-- [ ] **Wave A** sync `shared/schema.ts` index declarations (drizzle-kit drift detector pode dropar)
-- [ ] **Wave B** N+1 fixes: tournament-library import batch, getQuickStats 3→1 + §6.1 fix, getDashboardStats median percentile_cont, coachContext 4 sequential→Promise.all
-- [ ] **Wave B** LIMIT/pagination: getUserNotifications LIMIT 100, getGrindSessions server-side paginate
+- [x] **Wave A** migration 0064_perf_indexes.sql (5 P0 + 6 P1 + 3 P2 indexes + ANALYZE) — commit `0facc24` + reviewer round `8452e9d`
+- [x] **Wave A** sync `shared/schema.ts` index declarations + `.desc()` corrigido pos-reviewer P1 — drizzle-kit drift-proof
+- [x] **Wave B** N+1 fixes: tournament-library batch INSERT, getQuickStats 3→2 Promise.all + **§6.1 fix (isNull grindSessionId)**, getDashboardStats median percentile_cont SQL, coachContext Promise.all + .catch per-query — commit `99a54b7`
+- [x] **Wave B** LIMIT/pagination: getUserNotifications LIMIT 100 default, getGrindSessions opts {limit?, offset?} opcionais (back-compat)
 - [ ] **Wave C** Pool tuning: `max: 25-30`, `connectionTimeoutMillis: 2000`, `statement_timeout` via options, expor `DB_POOL_MAX` env, confirmar prod usa `-pooler` Neon endpoint
 - [ ] Habilitar `pg_stat_statements` no dev + prod (Fase 4: toggle no Neon dashboard)
 - [ ] Backup automatico + test restore (Fase 4 — Neon ja faz PITR, validar)
