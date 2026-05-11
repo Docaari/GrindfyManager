@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import compression from "compression";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { startSupremaAutoSync, stopSupremaAutoSync } from "./supremaAutoSync";
@@ -14,6 +15,10 @@ const app = express();
 app.set('trust proxy', 1);
 // Stripe webhook needs raw body for signature verification — must be BEFORE express.json()
 app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
+// Wave C (Fase 3 perf): gzip compression. /api/home/overview + /api/dashboard/*
+// retornam JSON 20-80KB; gzip reduz ~60-70%. Apos express.raw (Stripe webhook
+// nao deve ser comprimido — assinatura quebraria) e antes de express.json.
+app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
