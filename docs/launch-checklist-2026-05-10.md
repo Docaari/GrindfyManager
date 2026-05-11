@@ -289,11 +289,26 @@ Cobrindo: JWT sem `iss/aud/jti` claims, JWT sem verify `type` claim, logout em t
 
 Resultado: `npm run check` zero erros novos nos arquivos tocados (baseline 45 erros pre-existentes em test files + FxRatesPanel). `npx vitest run` 11229 verde / 144 red (baseline ~11227 / ~146 — zero regressao). Server precisa restart para pegar mudancas de helmet/index.ts.
 
-#### Wave 2 — IDOR sweep (2 dias, paralelo 2 implementers)
+#### Wave 2 — IDOR sweep (7 P0) — CONCLUIDA 2026-05-11
+
+Padrao aplicado: pre-check de ownership no handler (`get*(id)` ou `get*(id, userId)`) → 404 em mismatch; `userId`/`id` (e `parentEventId` no calendar) stripados do request body; storage WHERE id-only mantido mas guardado.
+
+- [x] PUT/PATCH/DELETE `/api/tournaments/:id` — `storage.getTournament(id)` ownership check
+- [x] PUT `/api/planned-tournaments/:id` — `storage.getPlannedTournament(id)` check (DELETE ja fazia)
+- [x] PATCH/DELETE `/api/study-cards/:id` — `storage.getStudyCard(id, userId)` scoped check (+ bonus: GET/POST `/:id/{materials,notes}` ganharam ownership do card-pai — fora do escopo do audit, mesma classe)
+- [x] DELETE `/api/study-notes/:id` + `/api/study-materials/:id` — JOIN via `study_cards.userId` pra verificar dono
+- [x] PUT/DELETE `/api/calendar-categories/:id` — `getCalendarCategories(userId)` membership
+- [x] PUT/DELETE `/api/calendar-events/:id` — `getCalendarEvents(userId)` membership (ambas branches single+series); `updateRecurringEventSeries`/`deleteRecurringEventSeries` ganharam `userId` no WHERE (defense in depth, IDOR residual via `parentEventId` injetavel — reviewer round)
+- [x] PUT `/api/coaching-insights/:id` — novo `storage.getCoachingInsight(id)` + ownership check
+- [x] POST `/api/notifications/:id/mark-read` — `NotificationService.markAsRead(id, userId)` scoped, retorna `false` → 404
+
+Reviewer round 2026-05-11: APPROVED. 1 P1 (calendar series `parentEventId` injection) fixado no mesmo wave (commit 732f547). 2 NITs fixados (strip `id`). 1 P2 deferido (getter id-scoped pra calendar event/category — pos-launch, evita carregar lista inteira pra check de membership).
+
+Tests: `tests/integration/routes/idor-ownership.smoke.test.ts` (25 casos, owner 2xx / attacker 404 + strip assertions + parentEventId-ignored, Express+supertest+mocks). Commits ef2fb67 + 732f547. Resultado: `npx vitest run` 11254 verde / 144 red (baseline ~11229 / ~144 — zero regressao). `npm run check` sem erros novos.
+
+#### Wave 2 (original — split de referencia)
 - Implementer A: tournaments, planned-tournaments, calendar (categories+events), coaching-insights
 - Implementer B: study-cards, study-notes, study-materials, notifications
-
-Padrao: mudar storage methods `update*(id, data)` → `update*(id, userId, data)` injetando `and(eq(id), eq(userId))` no WHERE. Pre-check `get*(id, userId)` no handler retorna 404.
 
 #### Wave 3 — Auth hardening P0 (1.5 dias, sequencial)
 1. VerifyEmailPage: server-side handler retornar Set-Cookie httpOnly + remover `localStorage.setItem` no frontend + `clearStoredAuth` retroativo
@@ -330,7 +345,7 @@ JWT claims, audit trail super-admin, CSP nonces, listagem admin com projection, 
 
 ### 2.2 OWASP Top 10 — checklist final
 
-- [ ] A01 Broken Access Control — 7 IDOR P0 fix (Wave 2)
+- [x] A01 Broken Access Control — 7 IDOR P0 fix (Wave 2, commits ef2fb67 + 732f547)
 - [ ] A02 Cryptographic Failures — refresh rotation + hash tokens DB (Wave 5)
 - [ ] A03 Injection — Zod completo + Drizzle params confirmados zero raw SQL (Wave 5)
 - [ ] A04 Insecure Design — rate limit OAuth + bulk-delete + upload (Wave 1+5)
