@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'wouter';
+import { Link } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, AlertCircle, Loader2, Mail, UserPlus } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
 import HeaderLogo from '@/components/branding/HeaderLogo';
 
 export function VerifyEmailPage() {
-  const [, setLocation] = useLocation();
-  const { login } = useAuth();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
+  // When verification succeeds but auto-login isn't available, fall back to a
+  // "go to login" CTA instead of promising a redirect that never happens.
+  const [autoLoginPending, setAutoLoginPending] = useState(false);
 
   useEffect(() => {
     const verifyEmail = async () => {
@@ -45,6 +45,7 @@ export function VerifyEmailPage() {
           // localStorage. Full page reload so AuthProvider re-initializes and
           // hydrates the session from /api/auth/me.
           if (data.autoLogin) {
+            setAutoLoginPending(true);
             setTimeout(() => {
               window.location.href = '/home';
             }, 2000);
@@ -64,7 +65,7 @@ export function VerifyEmailPage() {
     };
 
     verifyEmail();
-  }, [setLocation]);
+  }, []);
 
   // Loading state
   if (status === 'loading') {
@@ -173,11 +174,21 @@ export function VerifyEmailPage() {
               </CardHeader>
 
               <CardContent className="space-y-6">
-                <div className="p-3 bg-[#00ff88]/10 border border-[#00ff88]/20 rounded-lg">
-                  <p className="text-sm text-[#00ff88] text-center">
-                    Redirecionando para a página inicial...
-                  </p>
-                </div>
+                {autoLoginPending ? (
+                  <div className="p-3 bg-[#00ff88]/10 border border-[#00ff88]/20 rounded-lg">
+                    <p className="text-sm text-[#00ff88] text-center">
+                      Redirecionando para a página inicial...
+                    </p>
+                  </div>
+                ) : (
+                  <Link href="/login">
+                    <Button className="w-full bg-[#00ff88] hover:bg-[#00ff88]/90 text-black font-semibold h-12
+                                       transition-all duration-200 shadow-lg hover:shadow-[#00ff88]/25">
+                      <Mail className="w-4 h-4 mr-2" />
+                      Ir para Login
+                    </Button>
+                  </Link>
+                )}
 
                 {/* Footer Info */}
                 <div className="text-center text-xs text-gray-500 pt-4 border-t border-gray-700/50">
