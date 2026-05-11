@@ -579,14 +579,61 @@ export function registerGrindSessionRoutes(app: Express): void {
         if (e?.type === "session" && e?.id) sessionMetaById.set(e.id, e);
       }
 
-      // Get statistics for each completed session (back-compat: shape antigo).
-      const sessionsWithStats = !includeSessions ? [] : await Promise.all(
-        completedSessions.map(async (session) => {
+      // launch-fix P1: batch fetch para evitar N+1 (3 queries por sessao
+      // -> 3 queries totais). Map por sessionId pra lookup O(1) dentro do
+      // loop de stats. Slice limit upfront pra reduzir trabalho desnecessario
+      // quando user tem >200 sessoes (so processa as `limit` mais recentes).
+      const sessionsToProcess = !includeSessions
+        ? []
+        : [...completedSessions]
+            .sort((a, b) => {
+              const ta = new Date(a.endTime ?? a.date).getTime();
+              const tb = new Date(b.endTime ?? b.date).getTime();
+              return tb - ta;
+            })
+            .slice(0, limit);
+      const idsToProcess = sessionsToProcess.map(s => s.id);
 
-          const sessionTournaments = await storage.getSessionTournaments(userId, session.id);
+      const [batchSessionTournaments, batchPlannedTournaments, batchBreakFeedbacks] = !includeSessions
+        ? [[], [], []]
+        : await Promise.all([
+            storage.getSessionTournamentsBySessionIds(userId, idsToProcess),
+            storage.getPlannedTournamentsBySessionIds(userId, idsToProcess),
+            storage.getBreakFeedbacksBySessionIds(userId, idsToProcess),
+          ]);
+
+      const sessionTournamentsBySessionId = new Map<string, any[]>();
+      for (const st of batchSessionTournaments as any[]) {
+        const sid = (st as any).sessionId;
+        if (!sid) continue;
+        const arr = sessionTournamentsBySessionId.get(sid) ?? [];
+        arr.push(st);
+        sessionTournamentsBySessionId.set(sid, arr);
+      }
+      const plannedTournamentsBySessionId = new Map<string, any[]>();
+      for (const pt of batchPlannedTournaments as any[]) {
+        const sid = (pt as any).sessionId;
+        if (!sid) continue;
+        const arr = plannedTournamentsBySessionId.get(sid) ?? [];
+        arr.push(pt);
+        plannedTournamentsBySessionId.set(sid, arr);
+      }
+      const breakFeedbacksBySessionId = new Map<string, any[]>();
+      for (const bf of batchBreakFeedbacks as any[]) {
+        const sid = (bf as any).sessionId;
+        if (!sid) continue;
+        const arr = breakFeedbacksBySessionId.get(sid) ?? [];
+        arr.push(bf);
+        breakFeedbacksBySessionId.set(sid, arr);
+      }
+
+      // Get statistics for each completed session (back-compat: shape antigo).
+      const sessionsWithStats = !includeSessions ? [] : sessionsToProcess.map((session) => {
+
+          const sessionTournaments = sessionTournamentsBySessionId.get(session.id) ?? [];
 
           // ALSO get tournaments from planned tournaments linked to this session
-          const plannedTournaments = await storage.getPlannedTournamentsBySession(userId, session.id);
+          const plannedTournaments = plannedTournamentsBySessionId.get(session.id) ?? [];
 
 
           // FILTER OUT tournaments that don't actually belong to this session
@@ -607,7 +654,7 @@ export function registerGrindSessionRoutes(app: Express): void {
           const allTournaments = [...sessionTournaments, ...validPlannedTournaments];
 
 
-          const sessionBreaks = await storage.getBreakFeedbacks(userId, session.id);
+          const sessionBreaks = breakFeedbacksBySessionId.get(session.id) ?? [];
 
           // Use session data directly instead of recalculating
           const volume = session.volume || 0;
@@ -757,8 +804,7 @@ export function registerGrindSessionRoutes(app: Express): void {
             platformsAffected: Array.isArray(meta.platformsAffected) ? meta.platformsAffected : [],
             detailsAvailable: typeof meta.detailsAvailable === "boolean" ? meta.detailsAvailable : false,
           };
-        })
-      );
+        });
 
       // Manual_report entries vem do helper unificado.
       const manualReportEntries = !includeReports
