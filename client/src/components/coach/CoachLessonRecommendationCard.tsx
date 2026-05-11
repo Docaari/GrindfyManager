@@ -16,6 +16,7 @@
 
 import React, { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
+import { safeHref } from "@/lib/safeUrl";
 
 export interface CoachLessonRecommendation {
   id: string;
@@ -92,7 +93,7 @@ function LessonCard({ lesson }: { lesson: CoachLessonRecommendation }) {
     cta = (
       <a
         data-testid={ctaTestId}
-        href={lesson.url}
+        href={safeHref(lesson.url)}
         target="_blank"
         rel="noreferrer noopener"
         className="inline-block px-3 py-1.5 rounded bg-green-600 text-white text-sm font-medium hover:bg-green-500"

@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Video, FileText, Download, ExternalLink, CheckCircle, Clock, Circle, Trash2 } from "lucide-react";
+import { safeHref } from "@/lib/safeUrl";
 
 interface MaterialCardProps {
   material: any;
@@ -46,9 +47,9 @@ export function MaterialCard({ material, onDelete }: MaterialCardProps) {
               {material.description && (
                 <p className="text-sm text-gray-400 mt-1">{material.description}</p>
               )}
-              {material.url && (
+              {safeHref(material.url) && (
                 <a
-                  href={material.url}
+                  href={safeHref(material.url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-poker-accent hover:text-poker-accent/80 mt-1 inline-flex items-center gap-1"

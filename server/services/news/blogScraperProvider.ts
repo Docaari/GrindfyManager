@@ -15,6 +15,7 @@
 import RssParser from "rss-parser";
 import { truncateSummary } from "./htmlAdapters/_shared";
 import { getHtmlAdapter } from "./htmlAdapters/registry";
+import { safeFetch } from "../../lib/safeFetch";
 
 export interface NewsSourceLike {
   id: string;
@@ -47,17 +48,19 @@ const HTML_DIRECT_STRATEGIES = new Set(["html", "html_and_x"]);
 type FetchResult = { ok: boolean; status: number; text: string };
 
 async function fetchText(url: string): Promise<FetchResult> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
+    // safeFetch enforces the SSRF allowlist + manual redirect re-validation.
+    const res = await safeFetch(url, {
       headers: { "User-Agent": USER_AGENT },
-      signal: ctrl.signal,
-    } as any);
+      timeoutMs: TIMEOUT_MS,
+    });
     const text = await res.text();
     return { ok: res.ok, status: res.status, text };
-  } finally {
-    clearTimeout(t);
+  } catch (err: any) {
+    // A blocked destination (or network error) is treated like an unreachable
+    // source — the orchestrator already tolerates ok:false / empty results.
+    console.error("news.blogScraper.fetch_blocked_or_failed", { url, err: err?.message ?? String(err) });
+    return { ok: false, status: 0, text: "" };
   }
 }
 
@@ -244,13 +247,11 @@ interface ArticleMeta {
  * > schema.org "image". URL relativa resolvida contra articleUrl.
  */
 async function fetchArticleMeta(articleUrl: string): Promise<ArticleMeta> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ENRICH_TIMEOUT_MS);
   try {
-    const res = await fetch(articleUrl, {
+    const res = await safeFetch(articleUrl, {
       headers: { "User-Agent": USER_AGENT },
-      signal: ctrl.signal,
-    } as any);
+      timeoutMs: ENRICH_TIMEOUT_MS,
+    });
     if (!res.ok) return { date: null, image: null };
     const text = await res.text();
     let date: string | null = null;
@@ -279,8 +280,6 @@ async function fetchArticleMeta(articleUrl: string): Promise<ArticleMeta> {
     return { date, image };
   } catch {
     return { date: null, image: null };
-  } finally {
-    clearTimeout(t);
   }
 }
 

@@ -26,6 +26,7 @@ import type { NewsCategory, NewsItem } from '@shared/types/news';
 import { useNewsReadState } from '@/hooks/useNewsReadState';
 import { NewsPreferencesDialog } from './NewsPreferencesDialog';
 import { getNewsTab, NEWS_TABS, NEWS_TAB_LABELS, type NewsTab } from '@/lib/newsTabs';
+import { safeHref } from '@/lib/safeUrl';
 
 interface FeedResponse {
   enabled: boolean;
@@ -81,7 +82,7 @@ function Slide({ item, isRead, onClick }: SlideProps): JSX.Element {
   const categoryLabel = CATEGORY_LABELS[item.source] ?? item.source;
   return (
     <a
-      href={item.url}
+      href={safeHref(item.url)}
       target="_blank"
       rel="noopener noreferrer"
       onClick={onClick}
@@ -175,7 +176,7 @@ function CompactItem({ item, rank, isRead, onClick }: CompactItemProps): JSX.Ele
   const opacityCls = isRead ? 'opacity-60' : '';
   return (
     <a
-      href={item.url}
+      href={safeHref(item.url)}
       target="_blank"
       rel="noopener noreferrer"
       referrerPolicy="no-referrer"
