@@ -155,7 +155,10 @@ export const subscriptions = pgTable("subscriptions", {
   stripeSubscriptionId: varchar("stripe_subscription_id"), // Para futuro (Stripe)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // Migration 0064 (Fase 3 perf): NotificationService cron + subscription routes.
+  index("idx_subscriptions_user_status").on(table.userId, table.status),
+]);
 
 // Engagement metrics table for personalized messaging
 export const engagementMetrics = pgTable("engagement_metrics", {
@@ -196,7 +199,11 @@ export const userActivity = pgTable("user_activity", {
   ipAddress: varchar("ip_address"),
   userAgent: varchar("user_agent"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // Migration 0064 (Fase 3 perf): /api/user-activity feed (Onda 2).
+  // PK eh varchar nanoid; sem index composto, backward PK scan filtrava por user_id.
+  index("idx_user_activity_user_id").on(table.userId, table.id),
+]);
 
 // Analytics summary for faster queries
 export const analyticsDaily = pgTable("analytics_daily", {
@@ -226,7 +233,12 @@ export const notifications = pgTable("notifications", {
   read: boolean("read").default(false),
   scheduledFor: timestamp("scheduled_for").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // Migration 0064 (Fase 3 perf): polled em todo page load (/api/notifications/unread-count).
+  index("idx_notifications_user_created").on(table.userId, table.createdAt),
+  // Partial — alinhado com query da bell dropdown (read=false). Pequena vs composta.
+  index("idx_notifications_user_unread").on(table.userId).where(sql`read = false`),
+]);
 
 export const tournaments = pgTable("tournaments", {
   id: varchar("id").primaryKey().notNull(),
@@ -308,6 +320,11 @@ export const tournaments = pgTable("tournaments", {
   // Sprint Flight-1 H6 (ADR-090): tournaments_flight_parent_idx REMOVIDO — coluna
   // flight_parent_id dropada em Migration 0030. Use index series_id quando criar.
   index("tournaments_live_idx").on(table.isLive),
+  // Migration 0064 (Fase 3 perf): Home "latest upload" timestamp toda load.
+  // Partial WHERE grind_session_id IS NULL alinha com CLAUDE.md §6.1.
+  index("idx_tournaments_user_created_history")
+    .on(table.userId, table.createdAt)
+    .where(sql`grind_session_id IS NULL`),
 ]);
 
 // =============================================================================
@@ -450,7 +467,10 @@ export const weeklyPlans = pgTable("weekly_plans", {
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // Migration 0064 (Fase 3 perf): /grade-planner weekly list.
+  index("idx_weekly_plans_user_week").on(table.userId, table.weekStart),
+]);
 
 export const plannedTournaments = pgTable("planned_tournaments", {
   id: varchar("id").primaryKey().notNull(),
@@ -505,7 +525,11 @@ export const plannedTournaments = pgTable("planned_tournaments", {
   satelliteTargetName: varchar("satellite_target_name"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // Migration 0064 (Fase 3 perf): Home subqueries + coach context + grade-planner.
+  // storage.getPlannedTournaments(userId, dayOfWeek) filtra (user, day, is_active).
+  index("idx_planned_tournaments_user_day").on(table.userId, table.dayOfWeek, table.isActive),
+]);
 
 export const grindSessions = pgTable("grind_sessions", {
   id: varchar("id").primaryKey().notNull(),
@@ -557,6 +581,9 @@ export const grindSessions = pgTable("grind_sessions", {
 }, (table) => [
   index("idx_grind_sessions_user_status").on(table.userId, table.status),
   index("idx_grind_sessions_user_date").on(table.userId, table.date),
+  // Migration 0064 (Fase 3 perf): getRecentSessions ORDER BY created_at DESC.
+  // (user_id, date) nao casa com ordering por created_at quando date != created_at.
+  index("idx_grind_sessions_user_created").on(table.userId, table.createdAt),
 ]);
 
 // Break feedback registros durante os breaks
@@ -630,6 +657,9 @@ export const sessionTournaments = pgTable("session_tournaments", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_session_tournaments_session_user").on(table.sessionId, table.userId),
+  // Migration 0064 (Fase 3 perf): getSessionTournaments(userId) sem sessionId
+  // (/api/session-tournaments, ROI/sessionsRegistered).
+  index("idx_session_tournaments_user_created").on(table.userId, table.createdAt),
 ]);
 
 export const preparationLogs = pgTable("preparation_logs", {
@@ -929,7 +959,10 @@ export const profileStates = pgTable("profile_states", {
   activeProfile: varchar("active_profile"), // 'A', 'B', 'C' ou null (para todos inativos)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // Migration 0064 (Fase 3 perf): getProfileStateForDay + getSessionTournamentsByDay.
+  index("idx_profile_states_user_day").on(table.userId, table.dayOfWeek),
+]);
 
 // Bug Reports - sistema de reportar bugs
 export const bugReports = pgTable("bug_reports", {
@@ -957,7 +990,10 @@ export const uploadHistory = pgTable("upload_history", {
   duplicatesFound: integer("duplicates_found").default(0),
   duplicateAction: varchar("duplicate_action"), // import_new_only, import_all, skip_upload
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // Migration 0064 (Fase 3 perf): /api/upload-history list.
+  index("idx_upload_history_user_created").on(table.userId, table.createdAt),
+]);
 
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
@@ -2023,7 +2059,10 @@ export const userSubscriptions = pgTable("user_subscriptions", {
   metadata: jsonb("metadata"), // Additional data for payment gateway
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // Migration 0064 (Fase 3 perf): subscription routes + admin lookups.
+  index("idx_user_subscriptions_user_status").on(table.userId, table.status),
+]);
 
 // Insert schemas for subscription tables
 export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({
@@ -2418,7 +2457,12 @@ export const tournamentLibrary = pgTable("tournament_library", {
   registrationTime: varchar("registration_time"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // Migration 0064 (Fase 3 perf): getTournamentLibrary filtra (user, deleted_at IS NULL).
+  index("idx_tournament_library_user_active")
+    .on(table.userId)
+    .where(sql`deleted_at IS NULL`),
+]);
 
 // Tournament Library Settings - per-user settings for library/suprema integration
 export const tournamentLibrarySettings = pgTable("tournament_library_settings", {

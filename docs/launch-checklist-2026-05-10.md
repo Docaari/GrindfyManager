@@ -373,45 +373,134 @@ JWT claims (`iss`/`aud`/`jti`), audit trail super-admin, CSP nonces (remover `un
 ## FASE 3 — Analise de Escalabilidade
 
 **Pre-requisito:** Fase 2 completa.
+**Target:** plataforma escala ~100 usuarios concorrentes (1 replica) sem degradar; pronta pra escalar pra N replicas em Fase 4.
 
-### 3.1 Database
+### 3.0 Audit consolidado (2026-05-11)
 
-- [ ] EXPLAIN ANALYZE nas queries mais usadas (dashboard, library, sessions)
-- [ ] Indexes faltando (ver `pg_stat_statements`)
-- [ ] N+1 queries auditadas (lesson learned do grind audit)
-- [ ] Connection pool tuning (Neon serverless)
-- [ ] Backup automatico + test restore
+4 agents paralelos rodaram audit:
+- **Agent A — DB perf** — leu storage.ts/routes/schema, conectou no DB local (PG18 :5433, USER-0001 com 18.6k tournaments), rodou EXPLAIN ANALYZE em ~20 hot queries. `pg_stat_statements` nao esta habilitado no dev (TODO: ligar pra ter dados na proxima auditoria).
+- **Agent B — Backend hot paths** — auditou server/index.ts, jobs/, cronRunner, supremaAutoSync, libraryCleanup, db.ts, focusStats cache, ~20 rate-limit sites.
+- **Agent C — Frontend bundle** — rodou `vite build`, capturou chunk-size table, leu App.tsx (routing), queryClient.ts, MiniChat, LogoLoader, HeaderLogo, ui/chart.tsx.
+- **Agent D — Observability** — leu logger atual, ErrorBoundary, /api/health, package.json pra confirmar zero pino/winston/sentry/prom-client.
 
-### 3.2 Backend
+### 3.0.1 Findings P0 (bloqueia launch escalavel)
 
-- [ ] Rate limiting por user em todos endpoints
-- [ ] Cache server-side (focusStats pattern) em queries pesadas
-- [ ] Cron jobs (FX, news) com lock para single-instance
-- [ ] Graceful shutdown
-- [ ] Health check endpoint
+**DB (A):**
+- `idx_session_tournaments_session_user` declarado em `shared/schema.ts:625` mas **nunca migrado** — `getSessionTournaments`, `listSessionTournaments` fazem seq scan em prod. Critico /grind-live.
+- Indexes faltando em tabelas per-user growing: `notifications` (polled em todo page load), `planned_tournaments` (Home + coach context + grade-planner), `tournaments(user_id, created_at)` (Home "latest upload"). Hoje pequenos, viram seq-scan repetido em fanout do Home a ~100 users.
+- Pool `max:10` insuficiente: Home dispara ~20 subqueries paralelas (`Promise.allSettled` em `server/routes/home.ts:383`) → 100 users × 20 = 2000 queries enfileiradas em 10 conexoes.
 
-### 3.3 Frontend
+**Backend (B):**
+- **Zero graceful shutdown** — SIGTERM mata in-flight requests + leak pool conns. Cada redeploy Coolify cascateia 5xx.
+- **Zero cron single-instance guards** — 10+ crons (FX/news/study-plan/drill/spot-purge/study-freezes/coach×3/suprema/library/refresh-token) rodam N× em multi-replica. FX rate-limit BCB explode, drill daily-cap racy, custo Anthropic N×.
 
-- [ ] Code splitting por rota
-- [ ] Lazy load de componentes pesados (Recharts, MuxPlayer)
-- [ ] Image optimization (logos redes, Mux thumbs)
-- [ ] TanStack Query cache config (staleTime + gcTime)
-- [ ] Prefetch nas rotas mais visitadas
+**Frontend (C):**
+- Brand PNGs 2.4 MB **eager no first paint**: `grindfy-logo-full.png` (1.15 MB) + `grindfy-logo-mark.png` (1.29 MB). Renderizam @32-200px. Existe `.webp` 17 KB nao utilizado.
+- Chunk shared `index.js` 795 KB (249 KB gz) sem `manualChunks` vendor split — React+ReactDOM+Wouter+Query+Radix tudo num bundle sem cache estavel cross-deploy.
 
-### 3.4 Load test
+### 3.0.2 Findings P1 (deve fazer antes de escalar)
 
-- [ ] k6 / artillery: 100 users concorrentes no dashboard
-- [ ] Stress upload: 50 CSVs simultaneos
-- [ ] Coach: 20 conversas paralelas
-- [ ] Identificar bottleneck (DB? CPU? memoria?)
+**DB:**
+- N+1: tournament-library import (`server/routes/tournament-library.ts:277`) faz `for await insert returning` — 50 RTTs viram 1 com batch insert.
+- `getDashboardStats` median pull-all (`server/storage.ts:2997`) puxa 18k integers pro Node pra ordenar — trocar por `percentile_cont(0.5)` em SQL.
+- `getQuickStats` (`server/storage.ts:11162`) faz 3 RTTs sequenciais — colapsar em 1 query. **BONUS:** falta `isNull(grindSessionId)` (viola CLAUDE.md §6.1).
+- Sem LIMIT: `getUserNotifications`, `getGrindSessions(no limit)`, `getSessionTournaments(no sessionId)`.
+- 6 indexes P1 (session_tournaments user/created, weekly_plans, tournament_library partial, upload_history, user_activity, profile_states).
 
-### 3.5 Observability
+**Backend:**
+- `/api/health` nao verifica DB. Pool wedged = LB ainda roteia trafego. Falta `/api/ready` com `pool.query('SELECT 1')`.
+- `/api/home/overview` recomputa ~20 queries por request, zero cache. Endpoint landing pos-login = bottleneck #1.
+- `compression` middleware ausente (overlap C).
 
-- [ ] Logs estruturados (pino / winston)
-- [ ] Metrics (Prometheus / Datadog / Grafana)
-- [ ] APM (Sentry para errors + traces)
-- [ ] Uptime monitoring (UptimeRobot / Better Stack)
-- [ ] Alertas: CPU >80%, error rate >1%, latency p95 >2s
+**Frontend:**
+- `MiniChat` eager em `App.tsx:13` arrasta `react-markdown` + `micromark` pro `index.js` (~80-120 KB raw).
+- Recharts (389 KB / 107 KB gz) carrega na landing porque `home/Sparkline.tsx` usa recharts.
+- `index.css` 302 KB raw — Tailwind `content` glob possivelmente largo demais.
+
+**Observability:**
+- `server/vite.ts` `log()` tem **corpo vazio** — request logger nao emite NADA. Real bug, nao gap.
+- Cron telemetry 2 shapes inconsistentes (`[cron/x] registrado` vs `coach.cron.started`).
+
+### 3.0.3 Findings P2 (deferivel Fase 4)
+
+- 3 indexes P2 (subscriptions, user_subscriptions, grind_sessions user_created).
+- Rate-limit in-memory store reset per replica (aceitavel launch, documentar).
+- Spot screenshots em disco local quebram multi-replica (ADR-057 ja flagga; S3/R2 pra Fase 4).
+- `express.json` sem limit explicito (default 100kb OK).
+- `keepAliveTimeout` vs proxy tuning.
+- Mux thumbs com size params.
+- Prefetch hot routes (Sidebar hover).
+- pino + Sentry + uptime monitor + Coolify/Neon alerts — Fase 4.
+
+### 3.0.4 Plano de waves
+
+Cada wave = 1 PR, commit/push apos OK. TDD onde muda comportamento; pure infra/config direto + reviewer no fim. ADRs novos: 1 (advisory lock pattern).
+
+| Wave | Foco | Tipo | Effort | Deps novas? |
+|------|------|------|--------|-------------|
+| A | DB indexes (migration 0064 + ANALYZE + sync schema.ts) | infra/SQL | S | nao |
+| B | DB query fixes (getQuickStats 3→1 + §6.1 fix, median percentile_cont, batch import, LIMITs) | TDD | M | nao |
+| C | Backend infra (graceful shutdown, /api/ready, pool max 25-30 + statement_timeout, keepAliveTimeout, fix log() vite.ts) | direto + reviewer | S | `compression` (precisa OK) |
+| D | Cron single-instance locks (server/lib/advisoryLock.ts + wrap ~10 crons + ADR-144) | TDD | M | nao |
+| E | Server cache /api/home/overview Map+TTL 30s + invalidators | TDD | M | nao |
+| F | Frontend bundle (PNGs→WebP, manualChunks vendor, lazy MiniChat, Sparkline SVG inline, Tailwind content audit) | direto + reviewer | S/M | nao |
+| G | Load test (k6 ou artillery — 100 users dashboard, 50 CSVs, 20 coach) | script | S/M | k6 binario OU artillery npm (precisa OK) |
+
+**Fase 4 (post-launch):** pino + Sentry + uptime + Coolify/Neon alerts + S3 spots + Postgres rate-limit store.
+
+### 3.1 Database (Wave A + B)
+
+- [x] EXPLAIN ANALYZE nas queries mais usadas (Agent A — Q1/Q3/Q4/Q6/Q7/Q8/Q11/Q15/Q16 + median + latest-upload)
+- [ ] **Wave A** migration 0064_perf_indexes.sql (5 P0 + 6 P1 + 3 P2 indexes + ANALYZE)
+- [ ] **Wave A** sync `shared/schema.ts` index declarations (drizzle-kit drift detector pode dropar)
+- [ ] **Wave B** N+1 fixes: tournament-library import batch, getQuickStats 3→1 + §6.1 fix, getDashboardStats median percentile_cont, coachContext 4 sequential→Promise.all
+- [ ] **Wave B** LIMIT/pagination: getUserNotifications LIMIT 100, getGrindSessions server-side paginate
+- [ ] **Wave C** Pool tuning: `max: 25-30`, `connectionTimeoutMillis: 2000`, `statement_timeout` via options, expor `DB_POOL_MAX` env, confirmar prod usa `-pooler` Neon endpoint
+- [ ] Habilitar `pg_stat_statements` no dev + prod (Fase 4: toggle no Neon dashboard)
+- [ ] Backup automatico + test restore (Fase 4 — Neon ja faz PITR, validar)
+
+### 3.2 Backend (Wave C + D + E)
+
+- [ ] **Wave C** Graceful shutdown SIGTERM/SIGINT — `server.close()` + `pool.end()` + cron stops + 10s force-exit
+- [ ] **Wave C** `/api/ready` com `pool.query('SELECT 1')` (timeout 2s); manter `/api/health` liveness-only
+- [ ] **Wave C** `compression` middleware (precisa OK founder na dep)
+- [ ] **Wave C** Fix `log()` no-op em `server/vite.ts` (atualmente nao emite)
+- [ ] **Wave D** `server/lib/advisoryLock.ts` helper (`pg_try_advisory_lock`) + wrap todos crons + ADR-144
+- [ ] **Wave E** `/api/home/overview` Map+TTL 30s + invalidateHomeOverviewCache em upload/grind-finalize/bankroll-mutation/planned-tourn/spot-review + `_resetForTests()`
+- [ ] (Opcional) Cache em `/api/dashboard/quick-stats` se Wave E nao cobrir
+- [ ] Rate limit per-user key (Fase 4 — hoje IP, aceitavel launch)
+- [ ] Postgres rate-limit store (Fase 4)
+
+### 3.3 Frontend (Wave F)
+
+- [x] Code splitting por rota (ja em vigor — `React.lazy()` + `<Suspense>` em App.tsx; LessonHeroPage intencionalmente eager)
+- [x] TanStack Query cache config (ja OK — staleTime 5min, refetchOnWindowFocus false, retry false)
+- [ ] **Wave F** Brand PNGs → WebP otimizado (~50 KB total vs 2.4 MB atuais)
+- [ ] **Wave F** `manualChunks` vendor split (react/react-dom/wouter + @tanstack/react-query)
+- [ ] **Wave F** Lazy load `MiniChat` em App.tsx (tira react-markdown do entry)
+- [ ] **Wave F** Replace `home/Sparkline.tsx` recharts → SVG inline (tira 107 KB gz da landing)
+- [ ] **Wave F** Audit Tailwind `content` glob (302 KB index.css)
+- [ ] Mux thumbs com `width`/`height`/`fit_mode=smartcrop` (Fase 4)
+- [ ] Prefetch hot routes via `queryClient.prefetchQuery` (Fase 4 — marginal)
+- [ ] Image cleanup attached_assets (remover .ico/.original.png; `loading="lazy"` em network logos)
+
+### 3.4 Load test (Wave G)
+
+- [ ] **Wave G** Scolha tool: k6 (binario Go, mais robusto p/ HTTP) OU artillery (npm, mais facil instalar) — **precisa OK founder na dep**
+- [ ] **Wave G** Script `scripts/load/dashboard-100-users.js` — 100 users concorrentes no `/api/home/overview` + `/api/dashboard/quick-stats`
+- [ ] **Wave G** Stress upload: 50 CSVs simultaneos (`/api/upload`)
+- [ ] **Wave G** Coach: 20 conversas paralelas (sem chamar Anthropic real — mock ou modo dry-run)
+- [ ] **Wave G** Identificar bottleneck residual (DB pool? CPU? mem?) → fix + re-run
+
+### 3.5 Observability (NOW + Fase 4)
+
+- [ ] **Wave C** Fix `log()` em vite.ts + standardize cron telemetry (`event-name + structured-payload`)
+- [ ] **Fase 4** pino + pino-http + pino-pretty (precisa OK founder na dep) — migrar request logger + error handler + crons + auth events (NAO sweep dos 682 sites)
+- [ ] **Fase 4** Sentry (`@sentry/node` + `@sentry/react`, free tier OU GlitchTip self-hosted) — precisa OK founder na dep + scrub headers/cookies/body em `/api/auth/*`
+- [ ] **Fase 4** Uptime monitor (UptimeRobot/Better Stack free) apontando `/api/ready`
+- [ ] **Fase 4** Coolify alerts CPU/disk/mem + Neon connection alerts
+- [ ] **Defer** prom-client `/metrics` + Grafana Cloud (Sentry Perf + Coolify + Neon dashboards cobrem ~80%)
+- [ ] **Defer** Exato error-rate% SLO alerting (Sentry "N events / M min" suficiente launch)
 
 ---
 
