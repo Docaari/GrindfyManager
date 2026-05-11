@@ -511,6 +511,7 @@ export interface IStorage {
 
   // Coaching insight operations
   getCoachingInsights(userId: string): Promise<CoachingInsight[]>;
+  getCoachingInsight(id: string): Promise<CoachingInsight | undefined>;
   createCoachingInsight(insight: InsertCoachingInsight): Promise<CoachingInsight>;
   updateCoachingInsight(id: string, insight: Partial<InsertCoachingInsight>): Promise<CoachingInsight>;
 
@@ -1818,6 +1819,14 @@ export class DatabaseStorage implements IStorage {
       .values({ ...insight, id: nanoid() })
       .returning();
     return newInsight;
+  }
+
+  async getCoachingInsight(id: string): Promise<CoachingInsight | undefined> {
+    const [insight] = await db
+      .select()
+      .from(coachingInsights)
+      .where(eq(coachingInsights.id, id));
+    return insight;
   }
 
   async updateCoachingInsight(id: string, insight: Partial<InsertCoachingInsight>): Promise<CoachingInsight> {

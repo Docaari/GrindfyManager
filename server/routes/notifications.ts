@@ -26,7 +26,12 @@ export function registerNotificationRoutes(app: Express): void {
   app.post('/api/notifications/:id/mark-read', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
-      await NotificationService.markAsRead(id);
+      const userId = req.user.userPlatformId;
+      // IDOR fix (Wave 2): markAsRead now scopes by userId; false = not found / not owned.
+      const ok = await NotificationService.markAsRead(id, userId);
+      if (!ok) {
+        return res.status(404).json({ message: 'Notificação não encontrada' });
+      }
       res.json({ message: 'Notificação marcada como lida' });
     } catch (error) {
       res.status(500).json({ message: 'Erro ao marcar notificação como lida' });

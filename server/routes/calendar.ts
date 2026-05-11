@@ -502,10 +502,22 @@ export function registerCalendarRoutes(app: Express): void {
     }
   });
 
+  // IDOR guard (Wave 2): the calendar category/event storage mutators do WHERE id-only,
+  // so every handler that mutates one by :id must first prove it belongs to the user.
+  async function ownsCalendarCategory(userId: string, id: string): Promise<boolean> {
+    const cats = await storage.getCalendarCategories(userId);
+    return cats.some((c: any) => c.id === id);
+  }
+
   app.put('/api/calendar-categories/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const categoryData = insertCalendarCategorySchema.partial().parse(req.body);
+      const userId = req.user.userPlatformId;
+      if (!(await ownsCalendarCategory(userId, id))) {
+        return res.status(404).json({ message: 'Calendar category not found' });
+      }
+      const { userId: _ignoreUserId, id: _ignoreId, ...body } = req.body ?? {};
+      const categoryData = insertCalendarCategorySchema.partial().parse(body);
 
       const category = await storage.updateCalendarCategory(id, categoryData);
       res.json(category);
@@ -517,6 +529,10 @@ export function registerCalendarRoutes(app: Express): void {
   app.delete('/api/calendar-categories/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const userId = req.user.userPlatformId;
+      if (!(await ownsCalendarCategory(userId, id))) {
+        return res.status(404).json({ message: 'Calendar category not found' });
+      }
       await storage.deleteCalendarCategory(id);
       res.json({ message: 'Calendar category deleted successfully' });
     } catch (error) {
@@ -611,19 +627,25 @@ export function registerCalendarRoutes(app: Express): void {
   app.put('/api/calendar-events/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const userId = req.user.userPlatformId;
       const { editType } = req.body; // 'single' or 'series'
+
+      // IDOR fix (Wave 2): both branches mutate by id without an ownership filter.
+      const events = await storage.getCalendarEvents(userId);
+      const currentEvent = events.find(e => e.id === id);
+      if (!currentEvent) {
+        return res.status(404).json({ message: 'Calendar event not found' });
+      }
+
+      const { userId: _ignoreUserId, id: _ignoreId, ...rawBody } = req.body ?? {};
       const eventData = insertCalendarEventSchema.partial().parse({
-        ...req.body,
+        ...rawBody,
         startTime: req.body.startTime ? new Date(req.body.startTime) : undefined,
         endTime: req.body.endTime ? new Date(req.body.endTime) : undefined
       });
 
       if (editType === 'series') {
-        // Find the parent event ID
-        const event = await storage.getCalendarEvents(req.user.userPlatformId);
-        const currentEvent = event.find(e => e.id === id);
-        const parentId = currentEvent?.parentEventId || id;
-
+        const parentId = currentEvent.parentEventId || id;
         await storage.updateRecurringEventSeries(parentId, eventData);
         res.json({ message: 'Recurring series updated successfully' });
       } else {
@@ -638,14 +660,18 @@ export function registerCalendarRoutes(app: Express): void {
   app.delete('/api/calendar-events/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const userId = req.user.userPlatformId;
       const { deleteType } = req.query; // 'single' or 'series'
 
-      if (deleteType === 'series') {
-        // Find the parent event ID
-        const events = await storage.getCalendarEvents(req.user.userPlatformId);
-        const currentEvent = events.find(e => e.id === id);
-        const parentId = currentEvent?.parentEventId || id;
+      // IDOR fix (Wave 2): verify ownership before either delete branch.
+      const events = await storage.getCalendarEvents(userId);
+      const currentEvent = events.find(e => e.id === id);
+      if (!currentEvent) {
+        return res.status(404).json({ message: 'Calendar event not found' });
+      }
 
+      if (deleteType === 'series') {
+        const parentId = currentEvent.parentEventId || id;
         await storage.deleteRecurringEventSeries(parentId);
         res.json({ message: 'Recurring series deleted successfully' });
       } else {

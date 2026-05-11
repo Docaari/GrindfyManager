@@ -183,10 +183,21 @@ export function registerGradePlannerRoutes(app: Express): void {
   app.put('/api/planned-tournaments/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
+      const userPlatformId = req.user.userPlatformId;
 
-      // Parse the request body manually to handle all field types correctly
+      // IDOR fix (Wave 2): verify ownership before update — storage.updatePlannedTournament
+      // does WHERE id-only. DELETE on the same route already does this check.
+      const existingOwned = await storage.getPlannedTournament(id);
+      if (!existingOwned || existingOwned.userId !== userPlatformId) {
+        return res.status(404).json({ message: "Tournament not found" });
+      }
+
+      // Parse the request body manually to handle all field types correctly.
+      // 'userId' is intentionally NOT one of the handled keys, so it can't be
+      // reassigned via the request body.
       const updates: any = {};
       for (const [key, value] of Object.entries(req.body)) {
+        if (key === 'userId' || key === 'id') continue;
         if (key === 'dayOfWeek') {
           updates[key] = typeof value === 'number' ? value : parseInt(String(value)) || 0;
         } else if (key === 'position') {

@@ -52,11 +52,18 @@ export class NotificationService {
     return userNotifications as unknown as NotificationData[];
   }
 
-  static async markAsRead(notificationId: string): Promise<void> {
-    await db
+  // IDOR fix (Wave 2): scope the update to the owning user. Returns false when no
+  // row matched (not found OR not owned) so callers can answer 404.
+  static async markAsRead(notificationId: string, userId: string): Promise<boolean> {
+    const updated = await db
       .update(notifications)
       .set({ read: true })
-      .where(eq(notifications.id, notificationId));
+      .where(and(
+        eq(notifications.id, notificationId),
+        eq(notifications.userId, userId),
+      ))
+      .returning({ id: notifications.id });
+    return updated.length > 0;
   }
 
   static async getUnreadCount(userId: string): Promise<number> {

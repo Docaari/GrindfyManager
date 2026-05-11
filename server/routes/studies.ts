@@ -8,10 +8,19 @@ import {
   insertStudyNoteSchema,
   insertStudySessionSchema,
   insertStudyScheduleSchema,
+  studyCards,
   studyNotes,
   studyMaterials,
 } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+
+// Studies routes resolve the owning user the same way the rest of this module does
+// (legacy Replit-auth shape fallback to the JWT user id). Keep consistent so the
+// ownership checks below match how getStudyCards / createStudyCard store the id.
+function studiesUserId(req: any): string | null {
+  const u = req?.user as any;
+  return u?.claims?.sub || u?.id || null;
+}
 
 export function registerStudiesRoutes(app: Express): void {
   // Study Cards API routes
@@ -73,7 +82,13 @@ export function registerStudiesRoutes(app: Express): void {
 
   app.patch('/api/study-cards/:id', requireAuth, async (req: any, res) => {
     try {
-      const studyCard = await storage.updateStudyCard(req.params.id, req.body);
+      const userId = studiesUserId(req);
+      if (!userId) return res.status(401).json({ message: "User not authenticated" });
+      // IDOR fix (Wave 2): verify ownership — storage.updateStudyCard does WHERE id-only.
+      const owned = await storage.getStudyCard(req.params.id, userId);
+      if (!owned) return res.status(404).json({ message: "Study card not found" });
+      const { userId: _ignoreUserId, id: _ignoreId, ...body } = req.body ?? {};
+      const studyCard = await storage.updateStudyCard(req.params.id, body);
       res.json(studyCard);
     } catch (error) {
       res.status(400).json({ message: "Failed to update study card" });
@@ -82,6 +97,10 @@ export function registerStudiesRoutes(app: Express): void {
 
   app.delete('/api/study-cards/:id', requireAuth, async (req: any, res) => {
     try {
+      const userId = studiesUserId(req);
+      if (!userId) return res.status(401).json({ message: "User not authenticated" });
+      const owned = await storage.getStudyCard(req.params.id, userId);
+      if (!owned) return res.status(404).json({ message: "Study card not found" });
       await storage.deleteStudyCard(req.params.id);
       res.json({ message: "Study card deleted successfully" });
     } catch (error) {
@@ -89,9 +108,49 @@ export function registerStudiesRoutes(app: Express): void {
     }
   });
 
+  // Ownership guard for card-scoped sub-resources (materials/notes). Returns true
+  // when `cardId` belongs to `userId`; otherwise responds 404 and returns false.
+  async function ensureOwnsCard(req: any, res: any, cardId: string): Promise<boolean> {
+    const userId = studiesUserId(req);
+    if (!userId) {
+      res.status(401).json({ message: "User not authenticated" });
+      return false;
+    }
+    const owned = await storage.getStudyCard(cardId, userId);
+    if (!owned) {
+      res.status(404).json({ message: "Study card not found" });
+      return false;
+    }
+    return true;
+  }
+
+  // Verifies a note/material belongs to the requesting user by joining through its
+  // parent study card. Responds 404 when not found / not owned; returns true on hit.
+  async function ownsNote(req: any, res: any, noteId: string): Promise<boolean> {
+    const userId = studiesUserId(req);
+    if (!userId) { res.status(401).json({ message: "User not authenticated" }); return false; }
+    const [row] = await db.select({ id: studyNotes.id })
+      .from(studyNotes)
+      .innerJoin(studyCards, eq(studyNotes.studyCardId, studyCards.id))
+      .where(and(eq(studyNotes.id, noteId), eq(studyCards.userId, userId)));
+    if (!row) { res.status(404).json({ message: "Note not found" }); return false; }
+    return true;
+  }
+  async function ownsMaterial(req: any, res: any, materialId: string): Promise<boolean> {
+    const userId = studiesUserId(req);
+    if (!userId) { res.status(401).json({ message: "User not authenticated" }); return false; }
+    const [row] = await db.select({ id: studyMaterials.id })
+      .from(studyMaterials)
+      .innerJoin(studyCards, eq(studyMaterials.studyCardId, studyCards.id))
+      .where(and(eq(studyMaterials.id, materialId), eq(studyCards.userId, userId)));
+    if (!row) { res.status(404).json({ message: "Material not found" }); return false; }
+    return true;
+  }
+
   // Study Materials API routes
   app.get('/api/study-cards/:id/materials', requireAuth, async (req: any, res) => {
     try {
+      if (!(await ensureOwnsCard(req, res, req.params.id))) return;
       const materials = await storage.getStudyMaterials(req.params.id);
       res.json(materials);
     } catch (error) {
@@ -101,6 +160,7 @@ export function registerStudiesRoutes(app: Express): void {
 
   app.post('/api/study-cards/:id/materials', requireAuth, async (req: any, res) => {
     try {
+      if (!(await ensureOwnsCard(req, res, req.params.id))) return;
       const materialData = insertStudyMaterialSchema.parse({
         ...req.body,
         studyCardId: req.params.id
@@ -115,6 +175,7 @@ export function registerStudiesRoutes(app: Express): void {
   // Study Notes API routes
   app.get('/api/study-cards/:id/notes', requireAuth, async (req: any, res) => {
     try {
+      if (!(await ensureOwnsCard(req, res, req.params.id))) return;
       const notes = await storage.getStudyNotes(req.params.id);
       res.json(notes);
     } catch (error) {
@@ -124,6 +185,7 @@ export function registerStudiesRoutes(app: Express): void {
 
   app.post('/api/study-cards/:id/notes', requireAuth, async (req: any, res) => {
     try {
+      if (!(await ensureOwnsCard(req, res, req.params.id))) return;
       const noteData = insertStudyNoteSchema.parse({
         ...req.body,
         studyCardId: req.params.id
@@ -139,6 +201,7 @@ export function registerStudiesRoutes(app: Express): void {
 
   app.delete('/api/study-notes/:id', requireAuth, async (req: any, res) => {
     try {
+      if (!(await ownsNote(req, res, req.params.id))) return;
       await db.delete(studyNotes).where(eq(studyNotes.id, req.params.id));
       res.json({ message: "Note deleted" });
     } catch (error) {
@@ -148,6 +211,7 @@ export function registerStudiesRoutes(app: Express): void {
 
   app.delete('/api/study-materials/:id', requireAuth, async (req: any, res) => {
     try {
+      if (!(await ownsMaterial(req, res, req.params.id))) return;
       await db.delete(studyMaterials).where(eq(studyMaterials.id, req.params.id));
       res.json({ message: "Material deleted" });
     } catch (error) {

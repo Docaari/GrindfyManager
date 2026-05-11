@@ -89,7 +89,15 @@ export function registerMiscRoutes(app: Express): void {
   app.put('/api/coaching-insights/:id', requireAuth, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const insightData = insertCoachingInsightSchema.partial().parse(req.body);
+      const userId = req.user.userPlatformId;
+      // IDOR fix (Wave 2): verify ownership — storage.updateCoachingInsight does
+      // WHERE id-only. Strip caller-supplied userId so it can't be reassigned.
+      const existing = await storage.getCoachingInsight(id);
+      if (!existing || existing.userId !== userId) {
+        return res.status(404).json({ message: "Coaching insight not found" });
+      }
+      const { userId: _ignoreUserId, ...body } = req.body ?? {};
+      const insightData = insertCoachingInsightSchema.partial().parse(body);
       const insight = await storage.updateCoachingInsight(id, insightData);
       res.json(insight);
     } catch (error) {

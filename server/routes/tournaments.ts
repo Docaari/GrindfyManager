@@ -149,7 +149,15 @@ export function registerTournamentRoutes(app: Express): void {
     try {
       const userId = req.user.userPlatformId;
       const { id } = req.params;
-      const tournamentData = insertTournamentSchemaBase.partial().parse(req.body);
+      // IDOR fix (Wave 2): verify ownership before mutating — storage.updateTournament
+      // does WHERE id-only. Also drop any caller-supplied userId so the row can't be
+      // reassigned to another account.
+      const existing = await storage.getTournament(id);
+      if (!existing || existing.userId !== userId) {
+        return res.status(404).json({ message: "Tournament not found" });
+      }
+      const { userId: _ignoreUserId, ...body } = req.body ?? {};
+      const tournamentData = insertTournamentSchemaBase.partial().parse(body);
       const tournament = await storage.updateTournament(id, tournamentData);
       invalidateUserTournamentCaches(userId);
       res.json(tournament);
@@ -169,6 +177,11 @@ export function registerTournamentRoutes(app: Express): void {
     try {
       const userId = req.user.userPlatformId;
       const { id } = req.params;
+      // IDOR fix (Wave 2): verify ownership before delete.
+      const existing = await storage.getTournament(id);
+      if (!existing || existing.userId !== userId) {
+        return res.status(404).json({ message: "Tournament not found" });
+      }
       await storage.deleteTournament(id);
       invalidateUserTournamentCaches(userId);
       res.json({ message: "Tournament deleted successfully" });
