@@ -71,7 +71,7 @@ No mesmo espírito: `EmailService.generatePasswordResetToken` / `generateEmailVe
 - Logout e reset-password ganham 1 UPDATE em massa por usuário. Trivial.
 - Janela de migração: tokens emitidos antes do deploy não têm linha → tratados como legado (caminho 3). Auto-resolvido no primeiro refresh de cada um.
 - Tokens de reset/verify em trânsito no deploy ficam inválidos (usuário pede outro).
-- Pequena janela TOCTOU no caminho de reuse (dois refreshes concorrentes com o mesmo token velho): o segundo verá `revoked_at` já preenchido → trata como reuse e mata a família. Falso positivo possível em multi-tab agressivo; aceitável (usuário só re-loga).
+- Pequena janela TOCTOU no caminho de reuse (dois refreshes concorrentes com o mesmo token velho): o segundo verá `revoked_at` já preenchido → trata como reuse e mata a família. Falso positivo possível em multi-tab agressivo; aceitável (usuário só re-loga). **Caso colateral:** se `markRotated` tem sucesso mas `recordRefreshToken` falha (hiccup de DB), `/api/auth/refresh` retorna 500 sem cookies novos → o cliente re-apresenta o token velho (agora `revoked_reason='rotated'`) no próximo refresh → tratado como reuse → desloga de todos os dispositivos. Mitigação possível (sprint futuro): distinguir `revoked_reason === 'rotated'` de `logout`/`password_change`/`reuse_detected` em `checkRefreshToken` e só matar a família quando o motivo for um destes (ou quando o sucessor via `replaced_by_hash` também já estiver revogado — sinal real de cadeia comprometida). O comportamento estrito atual é *seguro* (detecta replay de token vazado), só gera fricção de UX; o trade-off pende a favor do permissivo num SPA com refresh agendado + multi-tab.
 
 ## Migration
 

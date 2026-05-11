@@ -4,6 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { startSupremaAutoSync } from "./supremaAutoSync";
 import { startLibraryCleanup } from "./libraryCleanup";
 import { startCoachCrons } from "./coach/cronRunner";
+import { cleanupExpiredRefreshTokens } from "./refreshTokenStore";
 
 const app = express();
 // Trust the first proxy hop (Coolify / Cloudflare / nginx in front). Without this,
@@ -93,5 +94,12 @@ app.use((req, res, next) => {
     startSupremaAutoSync();
     startLibraryCleanup();
     startCoachCrons();
+    // ADR-143: prune refresh-token rows that have been expired for >30d.
+    const refreshTokenCleanup = () => {
+      cleanupExpiredRefreshTokens().catch((err) =>
+        console.error("auth.refresh_token.cleanup_failed", { err: err?.message ?? String(err) }));
+    };
+    refreshTokenCleanup();
+    setInterval(refreshTokenCleanup, 6 * 60 * 60 * 1000).unref?.();
   });
 })();

@@ -91,9 +91,11 @@ async function assertSafeUrl(rawUrl: string): Promise<URL> {
   if (BLOCKED_HOSTNAMES.has(host) || host.endsWith(".localhost")) {
     throw new Error(`safeFetch: blocked hostname ${host}`);
   }
-  // If the host is already an IP literal, validate it directly.
-  if (net.isIP(host) || net.isIP(host.replace(/^\[|\]$/g, ""))) {
-    if (isBlockedIp(host)) throw new Error(`safeFetch: blocked IP ${host}`);
+  // If the host is already an IP literal, validate it directly (URL.hostname
+  // keeps IPv6 in brackets — strip them before the range check).
+  const hostIpLiteral = host.replace(/^\[|\]$/g, "");
+  if (net.isIP(host) || net.isIP(hostIpLiteral)) {
+    if (isBlockedIp(hostIpLiteral)) throw new Error(`safeFetch: blocked IP ${host}`);
     return u;
   }
   // Otherwise resolve and reject if any resolved address is internal.
