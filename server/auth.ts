@@ -23,6 +23,7 @@ export interface AuthUser {
   firstName?: string;
   lastName?: string;
   status: string;
+  role?: string;
   subscriptionPlan: string;
   trialEndsAt?: string | null;
   subscriptionEndsAt?: string | null;
@@ -169,6 +170,7 @@ export class AuthService {
         firstName: foundUser.firstName || undefined,
         lastName: foundUser.lastName || undefined,
         status: foundUser.status || 'active',
+        role: (foundUser as any).role || 'user',
         subscriptionPlan: foundUser.subscriptionPlan || 'trial',
         trialEndsAt: foundUser.trialEndsAt ? foundUser.trialEndsAt.toISOString() : null,
         subscriptionEndsAt: foundUser.subscriptionEndsAt ? foundUser.subscriptionEndsAt.toISOString() : null,

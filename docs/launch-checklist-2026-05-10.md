@@ -175,50 +175,176 @@ Cobrir **golden path** + edge cases nas paginas principais:
 
 ## FASE 2 — Analise de Seguranca
 
-**Pre-requisito:** Fase 1 completa.
+**Pre-requisito:** Fase 1 completa. **Status:** AUDIT COMPLETO 2026-05-11.
 
-### 2.1 OWASP Top 10
+### 2.0 Resultado dos Audits — 2026-05-11
 
-- [ ] A01 Broken Access Control — verificar requirePermission em todos endpoints
-- [ ] A02 Cryptographic Failures — JWT secrets rotation, bcrypt rounds, HTTPS only
-- [ ] A03 Injection — Drizzle params, sanitizar HTML coach, escape no DOMPurify
-- [ ] A04 Insecure Design — rate limit em todos endpoints sensiveis
-- [ ] A05 Security Misconfiguration — helmet, CORS, headers prod
-- [ ] A06 Vulnerable Components — `npm audit` zero high/critical
-- [ ] A07 Identification & Auth Failures — password policy, session timeout, MFA roadmap
-- [ ] A08 Software & Data Integrity — verificar SRI nos assets, signed cookies
-- [ ] A09 Logging Failures — logs sem PII, sem secrets, retention
-- [ ] A10 SSRF — fetch externos validados (xAI, Mux, Stripe)
+**Pipeline:** 4 reviewer agents paralelos + npm audit + secrets check.
 
-### 2.2 Auth especifico
+**Cobertura:**
+- Agent A (OWASP server-side): 173 endpoints / 17 modulos. 31 findings.
+- Agent B (Frontend XSS/CSRF/bundle): ~25 files client/. 13 findings.
+- Agent C (Auth pen-test): auth.ts + oauth.ts + routes/auth.ts + emailService.ts + AuthContext.tsx. 23 findings.
+- Agent D (SSRF/IDOR/path traversal): 17 routes + 4 services + storage backends. 17 findings.
 
-- [ ] Password reset token expiry + single-use
-- [ ] Refresh token rotation
-- [ ] OAuth state CSRF
-- [ ] Brute force: rate limit login + account lockout
-- [ ] Email verification obrigatorio antes de pagamento
+**Total raw:** 84 findings (overlap IDOR Agent A x D). **Deduplicado:** ~14 P0, ~25 P1, ~30 P2.
 
-### 2.3 Secrets + env
+#### npm audit (A06 Vulnerable Components)
 
-- [ ] Zero secret commitado no repo (`git log -p | grep -i "secret\|password\|key"`)
-- [ ] `.env.example` atualizado sem valores reais
-- [ ] Producao: secrets em vault (Coolify env / Doppler)
-- [ ] Rotacao plano: JWT_SECRET, DB password, API keys
+| Pkg | Versao | Severidade | Fix |
+|-----|--------|------------|-----|
+| drizzle-orm | 0.39.3 | **HIGH** (CVE: SQLi via SQL identifiers <0.45.2) | upgrade 0.45.2 (semver major) |
+| xlsx | 0.18.5 | **HIGH** (Prototype Pollution + ReDoS) | sem fix — substituir por exceljs |
+| vite | 5.4.21 | MODERATE (path traversal /.map) | upgrade 8.0.12 (major) |
+| nodemailer | 7.0.13 | MODERATE (SMTP CRLF injection) | upgrade 8.0.7 (major) |
+| @anthropic-ai/sdk | 0.86.1 | MODERATE (filesystem perms Memory tool — nao usamos) | upgrade 0.95.2 (major) — opcional |
+| drizzle-kit | 0.30.6 | MODERATE chain (esbuild) | upgrade 0.31.10 (major) |
 
-### 2.4 Pen test basico
+#### Secrets scan
 
-- [ ] Tentativa de SQL injection em todos forms
-- [ ] XSS em textareas (bug reports, coach messages, study notes)
-- [ ] CSRF em mutations sem token
-- [ ] IDOR: tentar acessar recurso de outro user via ID
-- [ ] Path traversal em upload de imagens (spots)
-- [ ] SSRF em coach tools que fazem fetch
+- `.env*` files NUNCA commitados (git log full-history clean).
+- `.env.example` sem valores reais (so placeholders).
+- Git log grep secret/password/key/token — nenhum match de leak (so feature commits).
 
-### 2.5 Compliance
+#### P0 — bloqueia launch (14 totais)
 
-- [ ] LGPD: consentimento, data export, data deletion
-- [ ] Termos de uso + politica de privacidade
-- [ ] Cookie banner (se necessario)
+**IDOR sweep (7 — Agent A + D overlap):**
+1. `server/routes/tournaments.ts:148-178` — PUT/DELETE `/api/tournaments/:id` sem ownership check. `storage.updateTournament(id)` / `deleteTournament(id)` fazem WHERE id-only.
+2. `server/routes/grade-planner.ts:183-281` — PUT `/api/planned-tournaments/:id` sem ownership (DELETE da mesma rota faz check correto — copiar pattern).
+3. `server/routes/studies.ts:74-90` — PATCH/DELETE `/api/study-cards/:id` sem ownership + nao stripa `req.body.userId`.
+4. `server/routes/studies.ts:140-156` — DELETE `/api/study-notes/:id` + DELETE `/api/study-materials/:id` raw `db.delete().where(eq(id))` sem JOIN ownership.
+5. `server/routes/calendar.ts:505-660` — PUT/DELETE `/api/calendar-categories/:id` + PUT `/api/calendar-events/:id` (branch single-edit) sem ownership.
+6. `server/routes/misc.ts:89-98` — PUT `/api/coaching-insights/:id` sem ownership.
+7. `server/routes/notifications.ts:26-34` — POST `/api/notifications/:id/mark-read` sem ownership.
+
+**Auth (3 — Agent C):**
+8. `server/routes/auth.ts:526-548` — Reset password token NAO marca `usedAt` apos consumido. Replay 1h window: atacante intercepta link, espera vitima resetar, faz POST reset-password de novo com mesma senha — sobrescreve. Padrao `emailService.ts:222-225` (verify email) faz correto.
+9. `server/routes/auth.ts:48-61` — `authRateLimit` keyGen `${req.ip}:${email}` permite flood via plus-addressing (`victim+1@`, `victim+2@`). Sem `app.set('trust proxy')` quebra completamente atras de Coolify/Cloudflare (req.ip vira IP do proxy = compartilhado global).
+10. `server/oauth.ts:148-218` — Cria user com `emailVerified: oauthData.verified || false`. Login bloqueia, mas conta criada permite atacante chamar forgot-password do email da vitima (account takeover via OAuth provisioning).
+
+**Frontend (3 — Agent B):**
+11. `client/src/pages/VerifyEmailPage.tsx:46-47` — Grava access+refresh token em `localStorage` no auto-login pos-verify. Anula modelo httpOnly do resto da app. Qualquer XSS exfila refresh 30d.
+12. `client/index.html:14` — `<script src="https://replit.com/public/js/replit-dev-banner.js">` legado migracao Replit, carrega em PROD. Sem SRI.
+13. `server/routes/index.ts:82-103` — CSP `scriptSrc 'unsafe-inline'` em prod (XSS via injection trivial). CSP `connectSrc` sem Mux/Anthropic/xAI/Google (vai quebrar streams quando endurecer policy).
+
+**Logging (1 — Agent A):**
+14. `server/index.ts:14-42` — Middleware stringifica `res.json()` body em logLine. Login/refresh/verify-email retornam tokens no body. Truncate 80 chars eh client-facing mas `capturedJsonResponse` em memoria pode vazar em log aggregator.
+
+#### P1 — quebra fluxo (resumo, ~25 totais)
+
+**Server (Agent A — 11):**
+- `app.set('trust proxy')` ausente quebra rate limit + req.ip
+- Zod validation ausente em POST `/api/notifications`, admin extend-subscription, update-subscription-plan
+- `err.message` ecoado ao cliente em prod (schema leak)
+- CORS nao configurado (vira problema quando frontend mudar de origem)
+- `console.error(err)` cru em ~50 sites loga query SQL/conn string
+- Multer upload-history sem `fileFilter`
+- Refresh token TTL 30d sem rotation/denylist server-side
+- Account lockout 5min curto + sem CAPTCHA + sem email warning vitima
+- Email verification token cleanup em hot path (DoS via flood)
+- POST `/api/notifications/:id/mark-read` IDOR (overlap)
+
+**Frontend (Agent B — 6):**
+- `<a href={lesson.url}>` sem `isSafeUrl()` em CoachLessonRecommendationCard, MaterialCard, NewsFeed — `javascript:` scheme XSS
+- `<style dangerouslySetInnerHTML>` em chart.tsx config CSS injection latente
+- CSRF cookie sem `__Host-` prefix (subdominio comprometido = cookie tossing)
+- `process.env.APP_VERSION` em HomeFooter pattern fragil (anti-pattern bundle)
+- ReactMarkdown SEM `rehypeSanitize` explicito em Coach/MiniChat/CoachAI
+- EmailPreviewCard dangerouslySetInnerHTML XSS latente se template virar dynamic
+
+**Auth (Agent C — 8):**
+- Refresh token sem rotation real + sem family detection
+- Cookie `sameSite: 'strict'` quebra OAuth callback em Safari/Brave
+- OAuth state store in-memory (perde em restart, nao escala multi-instance)
+- OAuth `/api/auth/google` + `/callback` sem rate limit
+- Auth tokens em DB em plaintext (DB leak = todos tokens validos)
+- Subscription endpoints sem `requireVerifiedEmail` gate
+- MFA ausencia total (ADR roadmap)
+- `/api/auth/refresh` fallback body sem CSRF + sem rate limit
+
+**SSRF/Files (Agent D — 4):**
+- News blogScraperProvider segue redirects sem allowlist (AWS metadata / localhost / interna)
+- urlValidator + per-article enrichment idem
+- CSV upload aceita ANY MIME ate 10MB (xlsx CVE chain via SheetJS)
+- Spot screenshot allowlist tem `image/jpg` MIME nao-oficial (cosmetico)
+
+#### P2 — polish (~30 totais)
+
+Cobrindo: JWT sem `iss/aud/jti` claims, JWT sem verify `type` claim, logout em todos dispositivos, bcrypt cost 12 OK (considerar 13), lockout sem progressive backoff, lockout sem reset por janela deslizante, reset token TTL 1h longo (15-30min OWASP), verify-email auto-login 30d sessao, authTokens index unico (`user_id, type, used_at IS NULL`), trust proxy, OAuth state nanoid 126 bits ok mas inconsistente com randomBytes(32), JWT decode no client fragil, super-admin bypass sem audit trail dedicado, CSP `unsafe-inline` styles + scripts, CSP `connectSrc ws:` em prod, bulk-delete sem MFA confirmation, admin extend-subscription bug funcional (nao atualiza `subscriptionEndsAt`), listagem admin retorna password hash sem projection, accessLogs.metadata.url com query strings sensitivos, `parseInt(limit)` sem clamp em alguns handlers, library asset sem `X-Content-Type-Options: nosniff`, JWT_SECRET sem validacao de entropia, OAuth callback `req.protocol`+`req.get('host')` permite proxy injection, etc.
+
+### 2.1 Recomendacao + Plano Waves
+
+**BLOQUEAR launch** ate fixar 14 P0 + minimo 15 P1 prioritarios + 2 HIGH npm vulns.
+
+**Plano implementer (5 waves, paralelizadas onde possivel):**
+
+#### Wave 1 — Quick wins infra (1 dia, sequencial)
+1. `app.set('trust proxy', 1)` em server/index.ts
+2. Token leak request logger — whitelist skip body log em `/api/auth/*`
+3. Generic error responses em prod (`NODE_ENV==='production'` gate em global handler + try/catch routes)
+4. Multer `fileFilter` em upload-history (CSV/XLSX whitelist + magic byte check)
+5. Remove `<script src="https://replit.com/...">` de client/index.html
+6. CSP fix: `connectSrc` adicionar Mux + Anthropic + xAI + Google OAuth; `ws:` so em dev
+7. Reset token mark `usedAt` apos consume (1-linha UPDATE)
+
+#### Wave 2 — IDOR sweep (2 dias, paralelo 2 implementers)
+- Implementer A: tournaments, planned-tournaments, calendar (categories+events), coaching-insights
+- Implementer B: study-cards, study-notes, study-materials, notifications
+
+Padrao: mudar storage methods `update*(id, data)` → `update*(id, userId, data)` injetando `and(eq(id), eq(userId))` no WHERE. Pre-check `get*(id, userId)` no handler retorna 404.
+
+#### Wave 3 — Auth hardening P0 (1.5 dias, sequencial)
+1. VerifyEmailPage: server-side handler retornar Set-Cookie httpOnly + remover `localStorage.setItem` no frontend + `clearStoredAuth` retroativo
+2. OAuth `verified !== true` block: throw em `createOrUpdateOAuthUser` se vier `false`; decodificar `id_token` JWT + checar `email_verified` claim
+3. Rate-limit `forgot-password` dedicado: keyed APENAS no email normalizado (strip plus-addressing) + max 3/hora; combinar com IP-based atual
+
+#### Wave 4 — npm vulns (0.5 dia, sequencial)
+1. `drizzle-orm` 0.39.3 → 0.45.2 (SQLi fix HIGH) — semver major, testar migrations + queries
+2. `xlsx` 0.18.5 → substituir por `exceljs` (sem fix disponivel, prototype pollution + ReDoS HIGH) — afeta upload-history WPN xlsx parser
+3. `vite` 5.4.21 → 6.x (path traversal moderate, semver major)
+4. `nodemailer` 7.0.13 → 8.0.7 (SMTP injection moderate, semver major)
+5. `drizzle-kit` 0.30.6 → 0.31.10 (chain via esbuild)
+6. Opcional: `@anthropic-ai/sdk` 0.86.1 → 0.95.2 (filesystem perms — nao usamos Memory tool, low risk)
+
+#### Wave 5 — P1 hardening (3-4 dias, paralelo)
+- Refresh token rotation com DB table + family detection + revogacao server-side (logout, password change, force-logout)
+- Hash de reset/verify tokens no DB (sha256 storage; raw so no email)
+- `isSafeUrl()` helper FE bloqueando javascript:/data:/vbscript:/file: + apply em href user-input
+- ReactMarkdown `rehypeSanitize` explicito em Coach/MiniChat
+- SSRF allowlist `safeFetch()` helper centralizado para news services (block 127.0.0.1, 169.254.169.254, RFC1918, IPv6 link-local)
+- CORS allowlist explicita em `server/index.ts`
+- CSRF cookie `__Host-` prefix em prod
+- Cookie `sameSite: 'lax'` (`strict` quebra OAuth callback)
+- Generic error responses em todas routes (em vez de `err.message`)
+- Constant-time forgot-password (async SMTP dispatch + dummy bcrypt em login com user inexistente)
+- Lockout progressivo (5min → 30min → 24h)
+- `requireVerifiedEmail` middleware em subscription endpoints
+- Zod schemas completos em POST notifications + admin extend-subscription + update-subscription-plan
+
+#### Wave 6 — P2 polish (deferivel pos-launch)
+JWT claims, audit trail super-admin, CSP nonces, listagem admin com projection, bulk-delete MFA, etc.
+
+**Estimativa total:** Wave 1+2+3+4 = ~5 dias dev focado. Wave 5 = ~4 dias. Total bloqueante launch = ~9 dias.
+
+### 2.2 OWASP Top 10 — checklist final
+
+- [ ] A01 Broken Access Control — 7 IDOR P0 fix (Wave 2)
+- [ ] A02 Cryptographic Failures — refresh rotation + hash tokens DB (Wave 5)
+- [ ] A03 Injection — Zod completo + Drizzle params confirmados zero raw SQL (Wave 5)
+- [ ] A04 Insecure Design — rate limit OAuth + bulk-delete + upload (Wave 1+5)
+- [ ] A05 Security Misconfiguration — CSP + CORS + trust proxy + generic errors (Wave 1+5)
+- [ ] A06 Vulnerable Components — drizzle-orm + xlsx + vite + nodemailer (Wave 4)
+- [ ] A07 ID & Auth Failures — VerifyEmailPage + OAuth verified + lockout progressive (Wave 3+5)
+- [ ] A08 Software & Data Integrity — SRI assets prod build (Wave 5)
+- [ ] A09 Logging Failures — token leak logger + console.error sanitization (Wave 1+5)
+- [ ] A10 SSRF — safeFetch helper news + urlValidator (Wave 5)
+
+### 2.3 Compliance (deferida pos-launch tecnico)
+
+- [ ] LGPD: consentimento, data export endpoint, data deletion endpoint
+- [ ] Termos de uso + politica de privacidade docs
+- [ ] Cookie banner (apenas se necessario apos audit cookie)
+- [ ] MFA roadmap ADR (out-of-scope launch tecnico)
 
 ---
 
