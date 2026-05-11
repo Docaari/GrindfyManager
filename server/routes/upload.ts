@@ -1007,17 +1007,22 @@ export async function handleUploadCsv(req: any, res: any): Promise<void> {
       const externalId = tournament.tournamentId ?? tournament.id;
       const linkedSeriesId = autoLinkMap.get(externalId) ?? null;
       const enriched = enrichTournamentTypeFields({ name: tournament.name, category: tournament.category });
+      // launch-fix P1#2 + P1#3: stake-only addOnCost (sem rake) + preservar
+      // category original do parser quando ja for SSoT-valido (PKO/Mystery/etc).
+      const buyInNum = parseFloat(tournament.buyIn?.toString() ?? '0');
+      const rakeNum = parseFloat((tournament as any).rake?.toString() ?? '0');
+      const stakeOnly = Math.max(0, buyInNum - rakeNum);
       const payload: any = {
         ...tournament,
         userId,
         seriesId: linkedSeriesId,
         type: enriched.type,
-        category: enriched.type,
+        category: tournament.category || enriched.type,
         // detection.isFlightCandidate ja eh trustworthy do flightDetector;
         // OU caia pro pattern detector quando flightDetector nao matcha
         isFlight: detection.isFlightCandidate || enriched.isFlight,
         allowsAddOn: enriched.allowsAddOn,
-        addOnCost: enriched.allowsAddOn ? String(tournament.buyIn ?? '0') : null,
+        addOnCost: enriched.allowsAddOn ? stakeOnly.toString() : null,
         allowsReentry: enriched.allowsReentry,
       };
       const persisted = insertFn ? await insertFn(payload) : payload;

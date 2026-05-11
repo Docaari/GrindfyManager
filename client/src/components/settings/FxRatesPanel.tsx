@@ -20,19 +20,19 @@ import { apiRequest } from "@/lib/queryClient";
 
 const h = React.createElement;
 
-function formatRate(v: number | null | undefined): string {
+// NAO adicionar TS type annotations aqui — quebra require() sincrono dos
+// testes (lesson #14 + #26 CLAUDE.md). Tudo untyped por design.
+function formatRate(v) {
   if (v == null || !Number.isFinite(v)) return "-";
   return Number(v).toFixed(4);
 }
 
-function badgeLabel(source: string | null | undefined): string {
+function badgeLabel(source) {
   if (source === "user" || source === "mixed") return "manual";
   if (source === "system") return "sistema";
   if (source === "wallets") return "wallets";
   return "fallback";
 }
-
-type FxRatesPayload = { exchangeRates: { BRL?: number; EUR?: number } };
 
 export function FxRatesPanel() {
   const queryClient = useQueryClient();
@@ -53,8 +53,8 @@ export function FxRatesPanel() {
     }
   }, [query.data?.rates?.BRL, query.data?.rates?.EUR]);
 
-  const saveMutation = useMutation<unknown, unknown, FxRatesPayload>({
-    mutationFn: async (payload: FxRatesPayload) => {
+  const saveMutation = useMutation({
+    mutationFn: async (payload) => {
       return await apiRequest("PUT", "/api/user-settings", payload);
     },
     onSuccess: () => {
@@ -146,7 +146,7 @@ export function FxRatesPanel() {
               type: "button",
               "data-testid": "fx-save-btn",
               onClick: () => {
-                const payload: { BRL?: number; EUR?: number } = {};
+                const payload = {};
                 const brlNum = Number(brlInput);
                 const eurNum = Number(eurInput);
                 if (Number.isFinite(brlNum) && brlNum > 0) payload.BRL = brlNum;

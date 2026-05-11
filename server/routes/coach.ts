@@ -16,7 +16,6 @@ import { eq, and, desc, ne, asc, gte, sql } from "drizzle-orm";
 import { getCoachProfile } from "../coachMemory";
 
 const VALID_COACH_TYPES = ['mental', 'tournament', 'technical'];
-const RATE_LIMIT_PER_HOUR = 30;
 
 // Sprint coach-launch-fix (P0 #4): modelo Anthropic configuravel via env
 // COACH_CHAT_MODEL. Default = claude-sonnet-4-6 (modelo atual em CLAUDE.md).

@@ -211,6 +211,7 @@ describe('POST /api/starred-hands/screenshot — happy path', () => {
     (storage.getGrindSession as any).mockResolvedValue({
       id: 'ses_1',
       userId: 'USER-0001',
+      status: 'active',
     });
     (storage.countSpotsBySession as any).mockResolvedValue(0);
     (storage.resolveTournamentInSession as any).mockResolvedValue('st_resolved');
@@ -316,6 +317,7 @@ describe('POST /api/starred-hands/screenshot — sessionTournamentId resolution 
     (storage.getGrindSession as any).mockResolvedValue({
       id: 'ses_1',
       userId: 'USER-0001',
+      status: 'active',
     });
     (storage.countSpotsBySession as any).mockResolvedValue(0);
     (storage.createStarredHand as any).mockResolvedValue({
@@ -445,6 +447,7 @@ describe('POST /api/starred-hands/screenshot — ownership da sessao', () => {
     (storage.getGrindSession as any).mockResolvedValue({
       id: 'ses_1',
       userId: 'USER-OTHER',
+      status: 'active',
     });
     const file = makeMulterFile();
     const res = makeRes();
@@ -465,6 +468,7 @@ describe('POST /api/starred-hands/screenshot — ownership da sessao', () => {
     (storage.getGrindSession as any).mockResolvedValue({
       id: 'ses_1',
       userId: 'USER-OTHER',
+      status: 'active',
     });
     const file = makeMulterFile();
     const res = makeRes();
@@ -487,6 +491,7 @@ describe('POST /api/starred-hands/screenshot — limite 10 por sessao (RF-02)', 
     (storage.getGrindSession as any).mockResolvedValue({
       id: 'ses_1',
       userId: 'USER-0001',
+      status: 'active',
     });
     (storage.resolveTournamentInSession as any).mockResolvedValue('st_1');
   });
@@ -584,6 +589,7 @@ describe('POST /api/starred-hands/screenshot — MIME / size validation', () => 
     (storage.getGrindSession as any).mockResolvedValue({
       id: 'ses_1',
       userId: 'USER-0001',
+      status: 'active',
     });
     (storage.countSpotsBySession as any).mockResolvedValue(0);
     (storage.resolveTournamentInSession as any).mockResolvedValue('st_1');
@@ -626,6 +632,7 @@ describe('POST /api/starred-hands/screenshot — MIME / size validation', () => 
       vi.clearAllMocks();
       (storage.getGrindSession as any).mockResolvedValue({
         id: 'ses_1', userId: 'USER-0001',
+      status: 'active',
       });
       (storage.countSpotsBySession as any).mockResolvedValue(0);
       (storage.resolveTournamentInSession as any).mockResolvedValue('st_1');
