@@ -1,6 +1,8 @@
 import { Readable } from "stream";
 import csv from "csv-parser";
-import * as XLSX from 'xlsx';
+// xlsx (SheetJS) was replaced with exceljs to drop the unpatched
+// prototype-pollution + ReDoS advisories. exceljs is lazy-loaded in parseBodogXLSX
+// (the only .xlsx path) to keep it out of the hot import graph.
 import { detectAddonReaFromName } from "../shared/addon-rea-detector";
 import { detectSatelliteFromName, detectIsFlightFromName } from "../shared/tournament-type-detector";
 
@@ -236,15 +238,34 @@ export class PokerCSVParser {
     const tournaments: ParsedTournament[] = [];
 
     try {
-      // Read Excel file
-      const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-      const sheetName = workbook.SheetNames[0]; // Use first sheet
-      const worksheet = workbook.Sheets[sheetName];
+      // Read Excel file with exceljs (replaces xlsx/SheetJS — see import note).
+      const ExcelJS = (await import('exceljs')).default;
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(fileBuffer as any);
+      const worksheet = workbook.worksheets[0]; // Use first sheet
+      if (!worksheet) throw new Error('No worksheet in workbook');
 
-      // Convert to JSON starting from row 5 (skip irrelevant headers)
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-        range: 4, // Start from row 5 (0-indexed)
-        header: ['date', 'description', 'referenceId', 'cashAmount']
+      // Bodog statements have 4 header rows; the ledger starts at row 5.
+      // Columns A..D map to date / description / referenceId / cashAmount
+      // (mirrors the previous `sheet_to_json({ range: 4, header: [...] })`).
+      const cellValue = (raw: unknown): any => {
+        if (raw && typeof raw === 'object') {
+          const o = raw as any;
+          if ('result' in o) return o.result;       // formula cell -> computed value
+          if ('text' in o) return o.text;           // hyperlink / rich text -> plain text
+          if ('richText' in o && Array.isArray(o.richText)) return o.richText.map((p: any) => p.text).join('');
+        }
+        return raw;
+      };
+      const jsonData: Array<{ date: any; description: any; referenceId: any; cashAmount: any }> = [];
+      worksheet.eachRow({ includeEmpty: false }, (row: any, rowNumber: number) => {
+        if (rowNumber <= 4) return; // skip the 4 header rows
+        jsonData.push({
+          date: cellValue(row.getCell(1).value),
+          description: cellValue(row.getCell(2).value),
+          referenceId: cellValue(row.getCell(3).value),
+          cashAmount: cellValue(row.getCell(4).value),
+        });
       });
 
       // Maps to store Buy-ins and Payouts by Reference ID (ensuring uniqueness)
@@ -348,6 +369,11 @@ export class PokerCSVParser {
     if (!dateValue) return null;
 
     try {
+      // exceljs hands back a real Date object for date-formatted cells.
+      if (dateValue instanceof Date) {
+        return isNaN(dateValue.getTime()) ? null : dateValue;
+      }
+
       // Handle Excel serial date numbers
       if (typeof dateValue === 'number') {
         // Excel date serial number to JavaScript Date

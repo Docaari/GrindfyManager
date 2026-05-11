@@ -806,25 +806,25 @@ describe('PokerCSVParser — parseCoinTXT', () => {
 
 describe('PokerCSVParser — parseBodogXLSX', () => {
   // Note: Testing Bodog parser requires creating actual Excel buffers.
-  // We test it with a minimal valid workbook.
+  // We build them with exceljs (the parser's own backend after the xlsx removal).
+  // Real Bodog statements carry 4 header rows; the ledger starts at row 5.
+  async function buildBodogBuffer(dataRows: any[][]): Promise<Buffer> {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Sheet1');
+    ws.addRow(['Bodog Statement']);                          // row 1
+    ws.addRow(['Account: USER-0001']);                       // row 2
+    ws.addRow(['Period: 2025']);                             // row 3
+    ws.addRow(['Date', 'Description', 'Reference', 'Amount']); // row 4 (column headers)
+    for (const r of dataRows) ws.addRow(r);                  // rows 5..n (ledger)
+    return Buffer.from(await wb.xlsx.writeBuffer());
+  }
 
   it('deve definir site como Bodog e category como Vanilla para formato Bodog', async () => {
-    // Create a minimal XLSX buffer with Bodog format
-    const XLSX = await import('xlsx');
-    const data = [
-      [], // row 1 - irrelevant header
-      [], // row 2
-      [], // row 3
-      [], // row 4
-      // row 5 onwards = data (Bodog format starts at row 5)
+    const buffer = await buildBodogBuffer([
       ['2025-01-15 10:00:00', 'Poker Multi Table Tournament Buy-In', 'REF-001', -22],
       ['2025-01-15 12:00:00', 'Poker Multi Table Tournament Cashout/Payout', 'REF-001', 150],
-    ];
-
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    ]);
 
     const result = await PokerCSVParser.parseBodogXLSX(buffer, 'USER-0001');
     expect(result.length).toBe(1);
@@ -836,17 +836,10 @@ describe('PokerCSVParser — parseBodogXLSX', () => {
   });
 
   it('deve retornar prize 0 quando nao ha Cashout/Payout correspondente', async () => {
-    const XLSX = await import('xlsx');
-    const data = [
-      [], [], [], [],
+    const buffer = await buildBodogBuffer([
       ['2025-01-15 10:00:00', 'Poker Multi Table Tournament Buy-In', 'REF-002', -33],
       // No matching payout for REF-002
-    ];
-
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    ]);
 
     const result = await PokerCSVParser.parseBodogXLSX(buffer, 'USER-0001');
     expect(result.length).toBe(1);
@@ -855,19 +848,12 @@ describe('PokerCSVParser — parseBodogXLSX', () => {
   });
 
   it('deve deduplicar por Reference ID', async () => {
-    const XLSX = await import('xlsx');
-    const data = [
-      [], [], [], [],
+    const buffer = await buildBodogBuffer([
       // Two buy-ins with same ref ID should only produce one tournament
       ['2025-01-15 10:00:00', 'Poker Multi Table Tournament Buy-In', 'REF-DUP', -10],
       ['2025-01-15 10:05:00', 'Poker Multi Table Tournament Buy-In', 'REF-DUP', -10],
       ['2025-01-15 12:00:00', 'Poker Multi Table Tournament Cashout/Payout', 'REF-DUP', 50],
-    ];
-
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    ]);
 
     const result = await PokerCSVParser.parseBodogXLSX(buffer, 'USER-0001');
     // Only the first buy-in for REF-DUP should be processed
