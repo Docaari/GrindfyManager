@@ -202,7 +202,7 @@ export const userActivity = pgTable("user_activity", {
 }, (table) => [
   // Migration 0064 (Fase 3 perf): /api/user-activity feed (Onda 2).
   // PK eh varchar nanoid; sem index composto, backward PK scan filtrava por user_id.
-  index("idx_user_activity_user_id").on(table.userId, table.id),
+  index("idx_user_activity_user_id").on(table.userId, table.id.desc()),
 ]);
 
 // Analytics summary for faster queries
@@ -235,7 +235,7 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   // Migration 0064 (Fase 3 perf): polled em todo page load (/api/notifications/unread-count).
-  index("idx_notifications_user_created").on(table.userId, table.createdAt),
+  index("idx_notifications_user_created").on(table.userId, table.createdAt.desc()),
   // Partial — alinhado com query da bell dropdown (read=false). Pequena vs composta.
   index("idx_notifications_user_unread").on(table.userId).where(sql`read = false`),
 ]);
@@ -323,7 +323,7 @@ export const tournaments = pgTable("tournaments", {
   // Migration 0064 (Fase 3 perf): Home "latest upload" timestamp toda load.
   // Partial WHERE grind_session_id IS NULL alinha com CLAUDE.md §6.1.
   index("idx_tournaments_user_created_history")
-    .on(table.userId, table.createdAt)
+    .on(table.userId, table.createdAt.desc())
     .where(sql`grind_session_id IS NULL`),
 ]);
 
@@ -469,7 +469,7 @@ export const weeklyPlans = pgTable("weekly_plans", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   // Migration 0064 (Fase 3 perf): /grade-planner weekly list.
-  index("idx_weekly_plans_user_week").on(table.userId, table.weekStart),
+  index("idx_weekly_plans_user_week").on(table.userId, table.weekStart.desc()),
 ]);
 
 export const plannedTournaments = pgTable("planned_tournaments", {
@@ -583,7 +583,7 @@ export const grindSessions = pgTable("grind_sessions", {
   index("idx_grind_sessions_user_date").on(table.userId, table.date),
   // Migration 0064 (Fase 3 perf): getRecentSessions ORDER BY created_at DESC.
   // (user_id, date) nao casa com ordering por created_at quando date != created_at.
-  index("idx_grind_sessions_user_created").on(table.userId, table.createdAt),
+  index("idx_grind_sessions_user_created").on(table.userId, table.createdAt.desc()),
 ]);
 
 // Break feedback registros durante os breaks
@@ -659,7 +659,7 @@ export const sessionTournaments = pgTable("session_tournaments", {
   index("idx_session_tournaments_session_user").on(table.sessionId, table.userId),
   // Migration 0064 (Fase 3 perf): getSessionTournaments(userId) sem sessionId
   // (/api/session-tournaments, ROI/sessionsRegistered).
-  index("idx_session_tournaments_user_created").on(table.userId, table.createdAt),
+  index("idx_session_tournaments_user_created").on(table.userId, table.createdAt.desc()),
 ]);
 
 export const preparationLogs = pgTable("preparation_logs", {
@@ -992,7 +992,7 @@ export const uploadHistory = pgTable("upload_history", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   // Migration 0064 (Fase 3 perf): /api/upload-history list.
-  index("idx_upload_history_user_created").on(table.userId, table.createdAt),
+  index("idx_upload_history_user_created").on(table.userId, table.createdAt.desc()),
 ]);
 
 // Relations

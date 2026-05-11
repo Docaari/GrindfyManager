@@ -352,7 +352,6 @@ export async function buildTechnicalContext(userId: string): Promise<any> {
     // Wave B (Fase 3 perf): Promise.all paralelo (3 selects independentes).
     // Cada select wrapeado em catch isolado para preservar graceful degradation
     // por-query — se 1 explode, os outros 2 ainda voltam.
-    let bigHits: any[] = [];
     const [cards, sessions, insights] = await Promise.all([
       (db.select().from(studyCards).where(eq(studyCards.userId, userId)) as Promise<any[]>)
         .catch(() => [] as any[]),
@@ -361,6 +360,8 @@ export async function buildTechnicalContext(userId: string): Promise<any> {
       (db.select().from(coachingInsights).where(eq(coachingInsights.userId, userId)) as Promise<any[]>)
         .catch(() => [] as any[]),
     ]);
+    // bigHits eh populado por bloco posterior (preserve TS hoisting + escopo).
+    let bigHits: any[] = [];
 
     // Compute early/late finish rates from dashboard stats if available
     const earlyFinishRate = (dashboardStats as any)?.earlyFinishRate || 0;

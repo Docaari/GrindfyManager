@@ -1710,6 +1710,10 @@ export class DatabaseStorage implements IStorage {
     // back-compat (unbounded) — caller passa limit explicitamente quando
     // pagina (rotas /api/grind-sessions). Para heavy user com 1000s/yr,
     // routes podem passar limit:50.
+    // NOTA (Wave A+B P2): ordena por `date` (planned date), nao `created_at`.
+    // Usa idx_grind_sessions_user_date. Helpers getRecentSessions* ordenam
+    // por created_at e usam o novo idx_grind_sessions_user_created — duas
+    // ordering keys distintas a proposito (date eh editavel retroativo).
     let q = (db as any)
       .select()
       .from(grindSessions)
@@ -11168,7 +11172,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // tournaments stats colapsadas em 1 query agregada. + CLAUDE.md §6.1:
     // dashboard/analytics filtram grind_session_id IS NULL (Agent A audit flag).
     try {
-      const [tStatsRows, sCountRows]: any[] = await Promise.all([
+      const [tStatsRows, sCountRows] = await Promise.all([
         (db as any).select({
           totalTournaments: sql<number>`COUNT(*)::int`,
           activeDays: sql<number>`COUNT(DISTINCT DATE(date_played))::int`,
