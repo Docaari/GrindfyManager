@@ -9,13 +9,18 @@ import { nanoid } from "nanoid";
 const viteLogger = createLogger();
 
 export function log(message: string, source = "express") {
+  // Wave C (Fase 3 obs): corpo vazio antes — request logger em server/index.ts
+  // chamava esta funcao mas nada saia em stdout, tanto dev quanto prod.
+  // Agent D audit observability flaggou como real bug. Fix: emitir stdout
+  // com timestamp + source. Mantem formato simples — Fase 4 substitui por
+  // pino-http estruturado.
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     second: "2-digit",
     hour12: true,
   });
-
+  console.log(`${formattedTime} [${source}] ${message}`);
 }
 
 export async function setupVite(app: Express, server: Server) {

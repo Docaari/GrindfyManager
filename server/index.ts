@@ -1,10 +1,11 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { startSupremaAutoSync } from "./supremaAutoSync";
-import { startLibraryCleanup } from "./libraryCleanup";
+import { startSupremaAutoSync, stopSupremaAutoSync } from "./supremaAutoSync";
+import { startLibraryCleanup, stopLibraryCleanup } from "./libraryCleanup";
 import { startCoachCrons } from "./coach/cronRunner";
 import { cleanupExpiredRefreshTokens } from "./refreshTokenStore";
+import { pool } from "./db";
 
 const app = express();
 // Trust the first proxy hop (Coolify / Cloudflare / nginx in front). Without this,
@@ -84,8 +85,15 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
+  // Wave C (Fase 3 infra): keepAliveTimeout > proxy idle (Cloudflare ~100s)
+  // evita 502 esporadico quando Node fecha socket keep-alive antes do proxy.
+  // headersTimeout sempre > keepAliveTimeout (regra Node).
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 66_000;
+
   // Serve both the API and the client on a single port.
   const port = parseInt(process.env.PORT || "3000", 10);
+  let refreshTokenInterval: NodeJS.Timeout | undefined;
   server.listen({
     port,
     host: "0.0.0.0",
@@ -100,6 +108,52 @@ app.use((req, res, next) => {
         console.error("auth.refresh_token.cleanup_failed", { err: err?.message ?? String(err) }));
     };
     refreshTokenCleanup();
-    setInterval(refreshTokenCleanup, 6 * 60 * 60 * 1000).unref?.();
+    refreshTokenInterval = setInterval(refreshTokenCleanup, 6 * 60 * 60 * 1000);
+    refreshTokenInterval.unref?.();
   });
+
+  // Wave C (Fase 3 infra): graceful shutdown — SIGTERM/SIGINT.
+  // Coolify/k8s enviam SIGTERM em todo redeploy. Sem handler:
+  //   - in-flight requests morrem mid-response (5xx em rolling deploy)
+  //   - pool conns vazam (Neon pool segura ate server-side timeout)
+  //   - crons mid-tick perdem state
+  // Handler:
+  //   1. server.close() para de aceitar new conns + drena in-flight
+  //   2. clearInterval(refresh-token cleanup)
+  //   3. stopSupremaAutoSync + stopLibraryCleanup (clearInterval intervals deles)
+  //   4. pool.end() fecha conexoes pg limpo
+  //   5. force-exit 10s se algo travar (timer.unref nao bloqueia exit normal)
+  let shuttingDown = false;
+  const shutdown = (sig: string) => {
+    if (shuttingDown) return; // idempotente em re-trigger
+    shuttingDown = true;
+    log(`${sig} received — draining`, "shutdown");
+    const force = setTimeout(() => {
+      console.error("[shutdown] forced exit after 10s — server.close stuck");
+      process.exit(1);
+    }, 10_000);
+    force.unref?.();
+
+    server.close(async (err?: Error) => {
+      if (err) console.error("[shutdown] server.close error", err);
+      try {
+        if (refreshTokenInterval) clearInterval(refreshTokenInterval);
+        stopSupremaAutoSync();
+        stopLibraryCleanup();
+        // node-cron jobs (server/jobs/*) registram via cron.schedule mas nao
+        // expoem stop() global — Wave D adicionara advisory locks + stop hooks.
+      } catch (e) {
+        console.error("[shutdown] cron stop error", e);
+      }
+      try {
+        await pool.end();
+      } catch (e) {
+        console.error("[shutdown] pool.end error", e);
+      }
+      log("clean exit", "shutdown");
+      process.exit(0);
+    });
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 })();

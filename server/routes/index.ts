@@ -4,6 +4,7 @@ import { setupSubscriptionProcessing } from "../subscriptionMiddleware";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+import { pool } from "../db";
 
 import { registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./admin";
@@ -69,9 +70,35 @@ import { registerSpotReentryRoutes } from "./spot-reentry";
 import { registerReentryRoutes } from "./reentry";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Health check — before all middleware (no auth, no CSRF, no rate limit)
+  // Wave C (Fase 3 obs): split liveness vs readiness.
+  // /api/health = liveness probe (processo up — sem DB). Dockerfile HEALTHCHECK
+  // + render.yaml continuam apontando aqui. Sempre 200 enquanto processo vivo.
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // /api/ready = readiness probe (DB reachable). LoadBalancer / UptimeRobot
+  // devem apontar aqui em prod. 503 quando pool wedged ou DB inalcancavel.
+  // Race com timeout 2s — pool hung nao prende a probe.
+  app.get('/api/ready', async (_req, res) => {
+    const timeoutMs = 2000;
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      const ping = pool.query('SELECT 1');
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('ready check timeout')), timeoutMs);
+      });
+      await Promise.race([ping, timeout]);
+      res.json({ status: 'ready', timestamp: new Date().toISOString() });
+    } catch (err: any) {
+      res.status(503).json({
+        status: 'unready',
+        error: err?.message ?? String(err),
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   });
 
   // Cookie parser middleware (must be before routes)
