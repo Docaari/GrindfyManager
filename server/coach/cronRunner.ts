@@ -14,6 +14,7 @@ import { storage } from "../storage";
 import { processBSnapshotTick } from "./jobs/processBSnapshot";
 import { processBStudyTick } from "./jobs/processBStudy";
 import { generateCoachRecommendationsTick } from "./jobs/generateCoachRecommendations";
+import { withAdvisoryLock } from "../lib/advisoryLock";
 
 let started = false;
 
@@ -39,12 +40,16 @@ export function startCoachCrons(): void {
     return;
   }
 
+  // Wave D (ADR-144): cada tick envolvido em withAdvisoryLock. Cleanup pending
+  // (1min) eh especialmente sensivel — 60×N replicas/dia = waste massivo.
   cron.schedule("* * * * *", async () => {
     try {
-      const expired = await (storage as any).markPendingExpired?.();
-      if (typeof expired === "number" && expired > 0) {
-        console.info("coach.cron.cleanup_pending", { expired });
-      }
+      await withAdvisoryLock("cron:coach-cleanup", async () => {
+        const expired = await (storage as any).markPendingExpired?.();
+        if (typeof expired === "number" && expired > 0) {
+          console.info("coach.cron.cleanup_pending", { expired });
+        }
+      });
     } catch (err) {
       console.error("coach.cron.cleanup.error", { err });
     }
@@ -52,7 +57,7 @@ export function startCoachCrons(): void {
 
   cron.schedule("0 * 28 * *", async () => {
     try {
-      await processBSnapshotTick({});
+      await withAdvisoryLock("cron:coach-b-snapshot", () => processBSnapshotTick({}));
     } catch (err) {
       console.error("coach.cron.b_snapshot.tick.error", { err });
     }
@@ -60,7 +65,7 @@ export function startCoachCrons(): void {
 
   cron.schedule("0 * * * *", async () => {
     try {
-      await processBStudyTick({});
+      await withAdvisoryLock("cron:coach-b-study", () => processBStudyTick({}));
     } catch (err) {
       console.error("coach.cron.b_study.tick.error", { err });
     }
@@ -71,7 +76,9 @@ export function startCoachCrons(): void {
     "0 6 * * 1",
     async () => {
       try {
-        await generateCoachRecommendationsTick({});
+        await withAdvisoryLock("cron:coach-weekly-rec", () =>
+          generateCoachRecommendationsTick({}),
+        );
       } catch (err) {
         console.error("coach.cron.weekly_rec.tick.error", { err });
       }

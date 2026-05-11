@@ -120,9 +120,15 @@ export async function registerSpotScreenshotsCron(): Promise<void> {
     const cronModule: any = await import(/* @vite-ignore */ moduleName);
     const cron = cronModule.default ?? cronModule;
     cron.schedule(schedule, async () => {
+      // Wave D (ADR-144): advisory lock — SQL idempotente mas N replicas
+      // hammering eh waste. Lazy import advisoryLock pra preservar lazy-load
+      // pattern desta funcao (ambientes sem node-cron + sem pool).
       try {
-        const summary = await purgeSpotScreenshots();
-        console.info("spot.purge.summary", summary);
+        const { withAdvisoryLock } = await import("../lib/advisoryLock");
+        await withAdvisoryLock("cron:spot-purge", async () => {
+          const summary = await purgeSpotScreenshots();
+          console.info("spot.purge.summary", summary);
+        });
       } catch (err: any) {
         console.error("spot.purge.cron.tick.error", { err: err?.message ?? err });
       }

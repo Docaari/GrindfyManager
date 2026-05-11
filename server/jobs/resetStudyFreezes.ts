@@ -12,6 +12,7 @@
 
 import cron from "node-cron";
 import { db } from "../db";
+import { withAdvisoryLock } from "../lib/advisoryLock";
 import { users } from "@shared/schema";
 import { sql, or, isNull, ne } from "drizzle-orm";
 
@@ -58,9 +59,14 @@ export async function registerStudyFreezesCron(): Promise<void> {
   cron.schedule(
     CRON_EXPR,
     () => {
-      runResetStudyFreezesMonthly().catch((err) => {
-        console.error("[cron/resetStudyFreezes] erro top-level", err);
-      });
+      // Wave D (ADR-144): advisory lock — defesa em profundidade ja existe
+      // (lazy reset em bumpStudyStreak), mas cross-replica race em UPDATE
+      // mass eh evitavel.
+      withAdvisoryLock("cron:reset-study-freezes", runResetStudyFreezesMonthly).catch(
+        (err) => {
+          console.error("[cron/resetStudyFreezes] erro top-level", err);
+        },
+      );
     },
     { timezone: "UTC" },
   );

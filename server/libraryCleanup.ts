@@ -37,7 +37,16 @@ let intervalId: ReturnType<typeof setInterval> | null = null;
 export function startLibraryCleanup(): void {
   if (intervalId) return;
   console.log("[LibraryCleanup] Job started (interval: 1 hour)");
-  intervalId = setInterval(runLibraryCleanup, CLEANUP_INTERVAL_MS);
+  // Wave D (ADR-144): advisory lock — DELETE idempotente mas N replicas
+  // hammering com escaneamento da mesma tabela eh waste.
+  intervalId = setInterval(async () => {
+    try {
+      const { withAdvisoryLock } = await import("./lib/advisoryLock");
+      await withAdvisoryLock("cron:library-cleanup", runLibraryCleanup);
+    } catch (err: any) {
+      console.error("[LibraryCleanup] tick error", err?.message ?? err);
+    }
+  }, CLEANUP_INTERVAL_MS);
 }
 
 export function stopLibraryCleanup(): void {

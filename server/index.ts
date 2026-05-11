@@ -108,9 +108,16 @@ app.use((req, res, next) => {
     startLibraryCleanup();
     startCoachCrons();
     // ADR-143: prune refresh-token rows that have been expired for >30d.
-    const refreshTokenCleanup = () => {
-      cleanupExpiredRefreshTokens().catch((err) =>
-        console.error("auth.refresh_token.cleanup_failed", { err: err?.message ?? String(err) }));
+    // Wave D (ADR-144): advisory lock cross-replica.
+    const refreshTokenCleanup = async () => {
+      try {
+        const { withAdvisoryLock } = await import("./lib/advisoryLock");
+        await withAdvisoryLock("cron:refresh-token-cleanup", cleanupExpiredRefreshTokens);
+      } catch (err) {
+        console.error("auth.refresh_token.cleanup_failed", {
+          err: (err as any)?.message ?? String(err),
+        });
+      }
     };
     refreshTokenCleanup();
     refreshTokenInterval = setInterval(refreshTokenCleanup, 6 * 60 * 60 * 1000);

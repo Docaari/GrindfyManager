@@ -18,6 +18,7 @@
 
 import cron from "node-cron";
 import { storage } from "../storage";
+import { withAdvisoryLock } from "../lib/advisoryLock";
 import {
   generateWeeklyStudyPlan,
   hasCoachAccess,
@@ -114,7 +115,9 @@ export async function runWeeklyStudyPlan(): Promise<void> {
 
 export async function registerWeeklyStudyPlanCron(): Promise<void> {
   cron.schedule(CRON_EXPR, () => {
-    runWeeklyStudyPlan().catch((err) => {
+    // Wave D (ADR-144): advisory lock — Anthropic cost N× sem guard. UPSERT
+    // dedupe mas chamada Claude ja queimou tokens.
+    withAdvisoryLock("cron:weekly-study-plan", runWeeklyStudyPlan).catch((err) => {
       console.error("[cron/weeklyStudyPlan] erro top-level", err);
     });
   });

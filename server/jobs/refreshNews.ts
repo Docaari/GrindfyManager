@@ -16,6 +16,7 @@
 
 import cron from "node-cron";
 import { runOrchestration } from "../services/news/orchestrator";
+import { withAdvisoryLock } from "../lib/advisoryLock";
 
 const CRON_EXPR = "0 15 * * 1"; // Segunda 15:00 UTC = 12:00 America/Sao_Paulo (UTC-3, sem DST).
 
@@ -52,7 +53,10 @@ export async function runNewsRefresh(): Promise<any> {
  */
 export async function registerNewsRefreshCron(): Promise<void> {
   cron.schedule(CRON_EXPR, () => {
-    runNewsRefresh().catch((err) => {
+    // Wave D (ADR-144): advisory lock single-instance. Anthropic/xAI cost N×
+    // sem guard; orquestracao tambem grava news_items que tem content_hash
+    // unique — duplicacao soft-fail mas desperdiça.
+    withAdvisoryLock("cron:news", runNewsRefresh).catch((err) => {
       console.error("[news/cron] runNewsRefresh erro top-level", err);
     });
   });

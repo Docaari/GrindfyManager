@@ -17,6 +17,7 @@
  */
 
 import cron from "node-cron";
+import { withAdvisoryLock } from "../lib/advisoryLock";
 import { nanoid } from "nanoid";
 
 import { fetchLatestBrl } from "../services/fx/adapters/bcbPtaxAdapter";
@@ -233,7 +234,9 @@ export function registerFxRatesCron(): void {
   cron.schedule(
     CRON_EXPR,
     () => {
-      runFxRatesRefresh().catch((err) => {
+      // Wave D (ADR-144): advisory lock single-instance. BCB PTAX rate-limita;
+      // N replicas chamando o mesmo tick explodiria 429.
+      withAdvisoryLock("cron:fx-rates", runFxRatesRefresh).catch((err) => {
         console.error("[fx/cron] runFxRatesRefresh erro top-level", err);
       });
     },

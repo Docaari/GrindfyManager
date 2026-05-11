@@ -14,6 +14,7 @@
 
 import cron from "node-cron";
 import { createHash } from "crypto";
+import { withAdvisoryLock } from "../lib/advisoryLock";
 import { storage } from "../storage";
 import { computeInitialState } from "../services/spotReentry/srsAlgorithm";
 
@@ -195,7 +196,12 @@ export async function registerMaterializeDrillDifficultSpotsCron(): Promise<void
   cron.schedule(
     CRON_EXPR,
     () => {
-      runMaterializeDrillDifficultSpots().catch((err) => {
+      // Wave D (ADR-144): advisory lock — cap diario de 5 spots/user eh racy
+      // cross-replica sem guard (cada replica le contagem antes do insert).
+      withAdvisoryLock(
+        "cron:drill-materialize",
+        runMaterializeDrillDifficultSpots,
+      ).catch((err) => {
         console.error(
           "[cron/drill_materialize] top-level fail",
           err?.message ?? err,

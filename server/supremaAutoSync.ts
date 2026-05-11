@@ -100,7 +100,16 @@ let intervalId: ReturnType<typeof setInterval> | null = null;
 export function startSupremaAutoSync(): void {
   if (intervalId) return;
   console.log("[SupremaAutoSync] Job started (interval: 1 hour)");
-  intervalId = setInterval(runSupremaAutoSync, SYNC_INTERVAL_MS);
+  // Wave D (ADR-144): advisory lock — Suprema scraping cross-replica eh
+  // waste e potencialmente trigger anti-bot.
+  intervalId = setInterval(async () => {
+    try {
+      const { withAdvisoryLock } = await import("./lib/advisoryLock");
+      await withAdvisoryLock("cron:suprema-autosync", runSupremaAutoSync);
+    } catch (err: any) {
+      console.error("[SupremaAutoSync] tick error", err?.message ?? err);
+    }
+  }, SYNC_INTERVAL_MS);
 }
 
 export function stopSupremaAutoSync(): void {
