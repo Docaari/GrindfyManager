@@ -802,6 +802,50 @@ async function createAutoSnapshot(
       ? `Snapshot pos-manual-report ${sourceRefId}`
       : `Auto-snapshot pos-cooldown ${sourceRefId}`;
 
+  // Bankroll-Launch-Fix P1 #4: dedup por dia+origin. Antes do INSERT, verifica
+  // se ja existe snapshot do mesmo userId+origin no mesmo dia (UTC) do
+  // occurredAt. Se sim, retorna o existente sem gravar duplicata. Evita
+  // multiplos snapshots auto-cooldown/manual-report no mesmo dia inflando
+  // o ledger e enganando series temporais.
+  try {
+    const dayStart = new Date(Date.UTC(
+      occurred.getUTCFullYear(),
+      occurred.getUTCMonth(),
+      occurred.getUTCDate(),
+      0, 0, 0, 0,
+    ));
+    const dayEnd = new Date(Date.UTC(
+      occurred.getUTCFullYear(),
+      occurred.getUTCMonth(),
+      occurred.getUTCDate(),
+      23, 59, 59, 999,
+    ));
+    const sameDay = await storage.getBankrollSnapshots(userId, {
+      from: dayStart,
+      to: dayEnd,
+      limit: 50,
+    } as any);
+    if (Array.isArray(sameDay) && sameDay.length > 0) {
+      const existing = sameDay.find(
+        (s: any) => s?.origin === origin,
+      );
+      if (existing) {
+        console.warn(
+          "[bankrollService.createAutoSnapshot] dedup: snapshot ja existe para userId+origin+dia",
+          { userId, origin, date: dayStart.toISOString().slice(0, 10), existingId: (existing as any).id },
+        );
+        return existing;
+      }
+    }
+  } catch (err) {
+    // Falha na dedup nao bloqueia: prossegue para INSERT (unique index pega
+    // duplicatas idempotentes via sourceRefId).
+    console.warn(
+      "[bankrollService.createAutoSnapshot] dedup check falhou; prosseguindo com INSERT:",
+      (err as any)?.message,
+    );
+  }
+
   try {
     const snapshot = await storage.insertBankrollSnapshot({
       userId,

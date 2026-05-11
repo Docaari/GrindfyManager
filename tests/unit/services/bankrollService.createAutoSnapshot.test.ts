@@ -306,6 +306,10 @@ describe('bankrollService.createAutoSnapshot — RF-2 payload contract', () => {
   it('chama walletService.getConsolidatedBalance(userId)', async () => {
     const svc = await loadService();
     await (svc as any).createAutoSnapshot({ userId: 'USER-0001', cooldownLogId: 'cd_1' });
-    expect(getConsolidatedBalanceMock).toHaveBeenCalledWith('USER-0001');
+    // Sprint FX-1 RF-09: agora getConsolidatedBalance recebe (userId, { rates, date })
+    // para snapshots novos. Validamos apenas o userId — opts e implementation detail.
+    expect(getConsolidatedBalanceMock).toHaveBeenCalled();
+    const call = getConsolidatedBalanceMock.mock.calls[0];
+    expect(call[0]).toBe('USER-0001');
   });
 });
