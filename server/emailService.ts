@@ -12,6 +12,13 @@ export class EmailService {
   private static readonly RESET_TOKEN_EXPIRY = 1 * 60 * 60 * 1000; // 1 hour
   private static transporter: Transporter | null = null;
 
+  // ADR-143: email-verification / password-reset tokens are stored hashed in
+  // auth_tokens.token (the raw token only ever goes out in the email). A DB leak
+  // therefore can't be used to verify emails / reset passwords.
+  private static hashToken(rawToken: string): string {
+    return crypto.createHash('sha256').update(rawToken).digest('hex');
+  }
+
   // SMTP Configuration via environment variables
   private static getTransporter(): Transporter {
     if (!this.transporter) {
@@ -53,12 +60,12 @@ export class EmailService {
       )
     );
 
-    // Insert new token
+    // Insert new token (hashed — see hashToken)
     await db.insert(authTokens).values({
       id: nanoid(),
       userId,
       email,
-      token,
+      token: this.hashToken(token),
       type: 'email_verification',
       expiresAt,
     });
@@ -70,7 +77,7 @@ export class EmailService {
   static async verifyEmailToken(token: string): Promise<{ userId: string; email: string } | null> {
     const results = await db.select().from(authTokens).where(
       and(
-        eq(authTokens.token, token),
+        eq(authTokens.token, this.hashToken(token)),
         eq(authTokens.type, 'email_verification'),
         isNull(authTokens.usedAt)
       )
@@ -100,12 +107,12 @@ export class EmailService {
       )
     );
 
-    // Insert new token
+    // Insert new token (hashed — see hashToken)
     await db.insert(authTokens).values({
       id: nanoid(),
       userId,
       email,
-      token,
+      token: this.hashToken(token),
       type: 'password_reset',
       expiresAt,
     });
@@ -117,7 +124,7 @@ export class EmailService {
   static async verifyPasswordResetToken(token: string): Promise<{ userId: string; email: string } | null> {
     const results = await db.select().from(authTokens).where(
       and(
-        eq(authTokens.token, token),
+        eq(authTokens.token, this.hashToken(token)),
         eq(authTokens.type, 'password_reset'),
         isNull(authTokens.usedAt)
       )
@@ -141,7 +148,7 @@ export class EmailService {
       .set({ usedAt: new Date() })
       .where(
         and(
-          eq(authTokens.token, token),
+          eq(authTokens.token, this.hashToken(token)),
           eq(authTokens.type, 'password_reset'),
         )
       );
@@ -235,7 +242,7 @@ export class EmailService {
       // Mark token as used
       await db.update(authTokens)
         .set({ usedAt: new Date() })
-        .where(eq(authTokens.token, token));
+        .where(eq(authTokens.token, this.hashToken(token)));
 
       // Send welcome email
       await this.sendWelcomeEmail(user.email!, user.firstName ?? undefined);
@@ -271,7 +278,7 @@ export class EmailService {
       // Mark token as used
       await db.update(authTokens)
         .set({ usedAt: new Date() })
-        .where(eq(authTokens.token, token));
+        .where(eq(authTokens.token, this.hashToken(token)));
 
       // Send welcome email
       await this.sendWelcomeEmail(user.email!, user.firstName ?? undefined);

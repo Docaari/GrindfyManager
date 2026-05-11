@@ -96,6 +96,28 @@ export const authTokens = pgTable("auth_tokens", {
   index("idx_auth_tokens_expires").on(table.expiresAt),
 ]);
 
+// Refresh token rotation state (ADR-143). The refresh token itself stays a JWT;
+// this table is the authoritative server-side record that makes it rotatable and
+// revocable. token_hash = sha256(rawRefreshJwt) — the raw JWT is never stored.
+export const authRefreshTokens = pgTable("auth_refresh_tokens", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
+  tokenHash: varchar("token_hash").notNull().unique(),
+  familyId: varchar("family_id").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  revokedAt: timestamp("revoked_at"),
+  revokedReason: varchar("revoked_reason"), // rotated | logout | password_change | reuse_detected | expired
+  replacedByHash: varchar("replaced_by_hash"),
+  userAgent: varchar("user_agent"),
+  ip: varchar("ip"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_auth_refresh_tokens_hash").on(table.tokenHash),
+  index("idx_auth_refresh_tokens_user").on(table.userId),
+  index("idx_auth_refresh_tokens_family").on(table.familyId),
+  index("idx_auth_refresh_tokens_expires").on(table.expiresAt),
+]);
+
 // Permissions table - all controllable functionalities
 export const permissions = pgTable("permissions", {
   id: varchar("id").primaryKey().notNull(),
@@ -2109,6 +2131,9 @@ export const insertAuthTokenSchema = createInsertSchema(authTokens).omit({
 });
 export type AuthToken = typeof authTokens.$inferSelect;
 export type InsertAuthToken = z.infer<typeof insertAuthTokenSchema>;
+
+export type AuthRefreshToken = typeof authRefreshTokens.$inferSelect;
+export type InsertAuthRefreshToken = typeof authRefreshTokens.$inferInsert;
 
 // Study Themes - organized knowledge by poker topic
 // Sprint Estudos-Habito-1 (ADR-127) — extensao com curated taxonomy:

@@ -19,6 +19,21 @@ import { eq, and } from "drizzle-orm";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
+import { recordRefreshToken, rotateRefreshToken, revokeAllForUser } from "../refreshTokenStore";
+
+// Best-effort metadata for refresh-token audit rows.
+function reqMeta(req: any): { userAgent: string | null; ip: string | null } {
+  return { userAgent: (req?.headers?.["user-agent"] as string) ?? null, ip: req?.ip ?? null };
+}
+// Record a freshly issued refresh token; a DB hiccup here must not block auth
+// (the worst case is the next /refresh taking the "unrecorded legacy" path).
+async function recordRefreshTokenSafe(userId: string, rawToken: string, req: any): Promise<void> {
+  try {
+    await recordRefreshToken({ userId, rawToken, ...reqMeta(req) });
+  } catch (e: any) {
+    console.error("auth.refresh_token.record_failed", { userId, err: e?.message ?? String(e) });
+  }
+}
 
 // Constant-time dummy hash: when login is attempted against a non-existent email
 // we still run one bcrypt.compare so the response time doesn't reveal whether the
@@ -303,8 +318,9 @@ export function registerAuthRoutes(app: Express): void {
       // Generate tokens
       const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
 
-      // Set httpOnly cookies
+      // Set httpOnly cookies + record the refresh token for rotation (ADR-143).
       setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+      await recordRefreshTokenSafe(user.userPlatformId, tokens.refreshToken, req);
 
       // Log successful login
       await AuthService.logAccess(user.userPlatformId, 'login_success', undefined, req);
@@ -367,14 +383,24 @@ export function registerAuthRoutes(app: Express): void {
         }
       }
 
-      // Generate new tokens
-      const tokens = AuthService.generateTokens(payload.userId, payload.userPlatformId, payload.email);
+      // Rotate the refresh token (ADR-143): consumes the presented token, issues a
+      // new pair, and revokes the whole family if a consumed token is replayed.
+      const rotated = await rotateRefreshToken(
+        refreshToken,
+        payload.userPlatformId,
+        () => AuthService.generateTokens(payload.userId, payload.userPlatformId, payload.email),
+        reqMeta(req),
+      );
+      if (!rotated) {
+        clearAuthCookies(res);
+        return res.status(401).json({ message: 'Sessão expirada. Faça login novamente.' });
+      }
 
       // Set new httpOnly cookies
-      setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+      setAuthCookies(res, rotated.accessToken, rotated.refreshToken);
 
       // Still include tokens in response body for backward compatibility
-      res.json(tokens);
+      res.json(rotated);
     } catch (error) {
       res.status(500).json({ message: 'Erro interno do servidor' });
     }
@@ -385,7 +411,9 @@ export function registerAuthRoutes(app: Express): void {
       // Log logout
       await AuthService.logAccess(req.user!.userPlatformId, 'logout', undefined, req);
 
-      // Clear auth cookies
+      // Revoke this user's refresh tokens server-side (ADR-143) then clear cookies.
+      try { await revokeAllForUser(req.user!.userPlatformId, 'logout'); }
+      catch (e: any) { console.error('auth.refresh_token.revoke_logout_failed', { err: e?.message ?? String(e) }); }
       clearAuthCookies(res);
 
       res.json({ message: 'Logout realizado com sucesso' });
@@ -463,6 +491,7 @@ export function registerAuthRoutes(app: Express): void {
           // model and exposing the 30d refresh token to any XSS.
           const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
           setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+          await recordRefreshTokenSafe(user.userPlatformId, tokens.refreshToken, req);
 
           // Log successful verification and auto-login
           await AuthService.logAccess(user.userPlatformId, 'email_verified_auto_login', undefined, req);
@@ -573,16 +602,23 @@ export function registerAuthRoutes(app: Express): void {
       const hashedPassword = await AuthService.hashPassword(password);
 
       // Update user password
-      await db.update(users)
+      const [updatedUserRow] = await db.update(users)
         .set({
           password: hashedPassword,
           updatedAt: new Date(),
         })
-        .where(eq(users.id, tokenData.userId));
+        .where(eq(users.id, tokenData.userId))
+        .returning({ userPlatformId: users.userPlatformId });
 
       // Wave-1 launch-fix #7: mark the reset token consumed (single-use). Without
       // this the link is replayable for the rest of its 1h TTL.
       await EmailService.markPasswordResetTokenUsed(token);
+
+      // ADR-143: a password change must invalidate every existing session.
+      if (updatedUserRow?.userPlatformId) {
+        try { await revokeAllForUser(updatedUserRow.userPlatformId, 'password_change'); }
+        catch (e: any) { console.error('auth.refresh_token.revoke_pwdchange_failed', { err: e?.message ?? String(e) }); }
+      }
 
       // Clean up old expired tokens
       EmailService.cleanupExpiredTokens();
@@ -712,8 +748,9 @@ export function registerAuthRoutes(app: Express): void {
       // Generate JWT tokens
       const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
 
-      // Set httpOnly cookies
+      // Set httpOnly cookies + record the refresh token for rotation (ADR-143).
       setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+      await recordRefreshTokenSafe(user.userPlatformId, tokens.refreshToken, req);
 
       // Log successful OAuth login
       await AuthService.logAccess(user.userPlatformId, 'oauth_login_success', undefined, req);
