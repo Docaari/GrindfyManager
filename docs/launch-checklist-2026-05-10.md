@@ -329,20 +329,20 @@ Tests: `tests/integration/auth/wave3-auth-hardening.test.ts` (11 casos — verif
 
 **`npm audit` final: 0 high, 0 critical** (era 2 high). Restam **4 moderate** — todas o advisory esbuild-dev-server (GHSA-67mh-4wv8-2f99) alcancado transitivamente via `drizzle-kit → @esbuild-kit/esm-loader → esbuild ≤0.24.2`. Dev-only (drizzle-kit eh CLI, nao vai pro bundle), sem fix upstream — aceitavel pro launch. Reviewer pendente.
 
-#### Wave 5 — P1 hardening (3-4 dias, paralelo)
-- Refresh token rotation com DB table + family detection + revogacao server-side (logout, password change, force-logout)
-- Hash de reset/verify tokens no DB (sha256 storage; raw so no email)
-- `isSafeUrl()` helper FE bloqueando javascript:/data:/vbscript:/file: + apply em href user-input
-- ReactMarkdown `rehypeSanitize` explicito em Coach/MiniChat
-- SSRF allowlist `safeFetch()` helper centralizado para news services (block 127.0.0.1, 169.254.169.254, RFC1918, IPv6 link-local)
-- CORS allowlist explicita em `server/index.ts`
-- CSRF cookie `__Host-` prefix em prod
-- Cookie `sameSite: 'lax'` (`strict` quebra OAuth callback)
-- Generic error responses em todas routes (em vez de `err.message`)
-- Constant-time forgot-password (async SMTP dispatch + dummy bcrypt em login com user inexistente)
-- Lockout progressivo (5min → 30min → 24h)
-- `requireVerifiedEmail` middleware em subscription endpoints
-- Zod schemas completos em POST notifications + admin extend-subscription + update-subscription-plan
+#### Wave 5 — P1 hardening (3-4 dias) — EM ANDAMENTO
+- [x] `isSafeUrl()`/`safeHref()` FE (`client/src/lib/safeUrl.ts`) bloqueando javascript:/data:/vbscript:/file: + control chars + apply em `<a href>` user/scraped-input (NewsFeed, MaterialCard, CoachLessonRecommendationCard). Commit 0665c92
+- [x] SSRF allowlist `safeFetch()` (`server/lib/safeFetch.ts`) — block non-http(s), loopback/RFC1918/link-local/CGNAT/cloud-metadata por hostname literal + IP resolvido (dns.lookup), redirect manual re-validado por hop. Wired em blogScraperProvider (feed fetch + per-article enrichment). Test `tests/unit/security/safe-url-fetch.test.ts` (8 casos). Commit 0665c92
+- [x] Cookie `sameSite: 'lax'` (era `strict` — quebrava OAuth callback Safari/Brave). Commit 2b89202
+- [x] Constant-time login — dummy `bcrypt.compare` quando email inexistente (complementa msg generica do P1.9). Commit 2b89202
+- [ ] Refresh token rotation com DB table + family detection + revogacao server-side (logout, password change, force-logout) — **precisa ADR + migration** (founder autorizou; pendente sessao dedicada com TDD)
+- [ ] Hash de reset/verify tokens no DB (sha256 storage; raw so no email)
+- [ ] ReactMarkdown `rehypeSanitize` explicito — DEPRIORIZADO: react-markdown v10 ja dropa raw HTML + sanitiza URLs por default; defense-in-depth
+- [ ] CORS allowlist explicita em `server/index.ts`
+- [ ] CSRF cookie `__Host-` prefix em prod (complica nome env-dependent FE+BE — avaliar)
+- [ ] Generic error responses em todas routes (em vez de `err.message`) — global handler ja cobre uncaught (Wave 1); long tail de ~50 `res.status(500).json({error: err.message})` pendente
+- [ ] Lockout progressivo (5min → 30min → 24h)
+- [ ] `requireVerifiedEmail` middleware em subscription endpoints
+- [ ] Zod schemas completos em POST notifications + admin extend-subscription + update-subscription-plan
 
 #### Wave 6 — P2 polish (deferivel pos-launch)
 JWT claims, audit trail super-admin, CSP nonces, listagem admin com projection, bulk-delete MFA, etc.
@@ -353,14 +353,14 @@ JWT claims, audit trail super-admin, CSP nonces, listagem admin com projection, 
 
 - [x] A01 Broken Access Control — 7 IDOR P0 fix (Wave 2, commits ef2fb67 + 732f547)
 - [ ] A02 Cryptographic Failures — refresh rotation + hash tokens DB (Wave 5)
-- [ ] A03 Injection — Zod completo + Drizzle params confirmados zero raw SQL (Wave 5)
+- [~] A03 Injection — drizzle-orm 0.45.2 (SQLi identifier fix) ✓ (Wave 4); Zod completo em POST notifications/admin endpoints pendente (Wave 5); Drizzle params confirmados zero raw SQL
 - [ ] A04 Insecure Design — rate limit OAuth + bulk-delete + upload (Wave 1+5)
 - [ ] A05 Security Misconfiguration — CSP + CORS + trust proxy + generic errors (Wave 1+5)
 - [x] A06 Vulnerable Components — drizzle-orm 0.45.2 + xlsx→exceljs + vite 6.4.2 + nodemailer 8 + drizzle-kit 0.31 + anthropic-sdk 0.95 (Wave 4: 0 high/critical; 4 moderate dev-only residuais)
 - [~] A07 ID & Auth Failures — VerifyEmailPage httpOnly + OAuth verified-email guard ✓ (Wave 3); lockout progressive pendente (Wave 5)
 - [ ] A08 Software & Data Integrity — SRI assets prod build (Wave 5)
 - [ ] A09 Logging Failures — token leak logger + console.error sanitization (Wave 1+5)
-- [ ] A10 SSRF — safeFetch helper news + urlValidator (Wave 5)
+- [~] A10 SSRF — `safeFetch()` (IP-range + redirect-revalidation) wired em blogScraperProvider ✓ (Wave 5a); xSearchProvider so fala com api.x.ai fixo (n/a)
 
 ### 2.3 Compliance (deferida pos-launch tecnico)
 
