@@ -7,6 +7,7 @@
  */
 
 import React, { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -46,6 +47,7 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
   defaultToWalletId,
 }) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [fromId, setFromId] = useState(defaultFromWalletId ?? wallets[0]?.id ?? "");
   const [toId, setToId] = useState(defaultToWalletId ?? wallets[1]?.id ?? "");
   const [amountFrom, setAmountFrom] = useState("");
@@ -103,6 +105,23 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
       // Note: needsConfirm both passes ?confirmFxDiff=true (server query gate) and
       // body.confirmFxDiff=true (route flag) to satisfy both Sprint Bankroll-3 codepaths.
       await apiRequest("POST", url, body);
+      // Bankroll-Launch-Fix P1 #5: invalida queries de bankroll/wallets/transfers
+      // apos sucesso. Sem isso, BankrollWidget + listas de wallets continuam
+      // mostrando saldos antigos ate o user navegar manualmente / TanStack
+      // refetch background. Inclui queries por wallet (from/to) para detalhe.
+      try {
+        queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/bankroll/consolidated"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/wallets/transfers"] });
+        if (fromId) {
+          queryClient.invalidateQueries({ queryKey: ["/api/wallets", fromId] });
+        }
+        if (toId) {
+          queryClient.invalidateQueries({ queryKey: ["/api/wallets", toId] });
+        }
+      } catch {
+        // QueryClient ausente em testes que nao envelopam Provider — silencia.
+      }
       toast({ title: "Transferencia criada", description: "A movimentacao foi registrada." });
       onOpenChange(false);
     } catch (err: any) {
