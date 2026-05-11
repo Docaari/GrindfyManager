@@ -18,21 +18,31 @@ import { nanoid } from "nanoid";
 import { eq, and } from "drizzle-orm";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 
-// Auth cookie helpers
+// Constant-time dummy hash: when login is attempted against a non-existent email
+// we still run one bcrypt.compare so the response time doesn't reveal whether the
+// account exists. Computed once at module load (cost 12, matching real hashes).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("grindfy-login-timing-equalizer", 12);
+
+// Auth cookie helpers.
+// sameSite is 'lax' (not 'strict'): 'strict' drops the cookie on the
+// cross-site-initiated navigation back from the Google OAuth callback in some
+// browsers (Safari/Brave), breaking OAuth login. 'lax' still blocks CSRF on
+// state-changing POSTs (which the double-submit CSRF token also covers).
 function setAuthCookies(res: any, accessToken: string, refreshToken: string) {
   const isProduction = process.env.NODE_ENV === 'production';
   res.cookie('grindfy_access_token', accessToken, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict',
+    sameSite: 'lax',
     path: '/',
     maxAge: 15 * 60 * 1000, // 15 minutes
   });
   res.cookie('grindfy_refresh_token', refreshToken, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict',
+    sameSite: 'lax',
     path: '/',
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
   });
@@ -207,10 +217,10 @@ export function registerAuthRoutes(app: Express): void {
         .where(eq(users.email, loginData.email));
 
       if (!user) {
-        // FIX (auth-launch P1.9): mensagem generica sem contador para users
-        // inexistentes — antes vazava informacao de que email NAO esta
-        // registrado (contador zerado / repete) vs email registrado
-        // (contador decrementa). Email enumeration leak.
+        // FIX (auth-launch P1.9 + Wave 5): generic message AND a dummy bcrypt
+        // compare so neither the response body nor the timing reveals whether
+        // the email is registered (email enumeration leak).
+        await bcrypt.compare(loginData.password, DUMMY_PASSWORD_HASH);
         await AuthService.logAccess(null, 'login_failed', undefined, req);
 
         return res.status(401).json({
