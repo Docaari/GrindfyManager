@@ -776,13 +776,16 @@ export class PokerCSVParser {
   }
 
   // P1 fix (2026-05-10): normalize currency codes coming from CSV (whitespace + case + alias).
-  // Returns null when the input isn't a known fiat/crypto code, so callers can decide:
-  //  - if !== 'USD' AND no rate AND not in known list, fall back to original (will error downstream)
-  // Known list mirrors common Sharkscope/native exports: USD, BRL, EUR, CNY, GBP, CAD, AUD, USDT.
-  private static readonly KNOWN_CURRENCIES = new Set([
+  // Known list mirrors common Sharkscope/native exports: USD, BRL, EUR, CNY, GBP, CAD, AUD, USDT,
+  // JPY, CHF. Falls back to USD when input is null/empty. Returns the upper-cased + trimmed
+  // string when the input doesn't match any known alias — callers handle missing rates downstream.
+  //
+  // Made public (P1 2026-05-11) so the helper is reachable from the route-level dispatcher and
+  // unit tests; also re-exported through normalizeCsvCurrency below.
+  public static readonly KNOWN_CURRENCIES = new Set([
     'USD', 'BRL', 'EUR', 'CNY', 'GBP', 'CAD', 'AUD', 'USDT', 'JPY', 'CHF',
   ]);
-  private static normalizeCurrency(value: any): string {
+  public static normalizeCurrency(value: any): string {
     if (value === null || value === undefined) return 'USD';
     const cleaned = String(value).trim().toUpperCase();
     if (cleaned === '') return 'USD';
@@ -794,6 +797,21 @@ export class PokerCSVParser {
     if (cleaned === '¥') return 'CNY';
     if (cleaned === 'TETHER') return 'USDT';
     return cleaned;
+  }
+
+  /**
+   * Strict normalizer for callers that need to reject invalid currency codes.
+   * Returns null if value can't be mapped to any known fiat/crypto code.
+   *
+   * P1 fix (2026-05-11): used by dispatcher to defensive-validate the exchange-rate
+   * map before passing to parser. Empty/null inputs are NOT errors — defaults to USD.
+   */
+  public static normalizeCurrencyStrict(value: any): string | null {
+    if (value === null || value === undefined) return 'USD';
+    const cleaned = String(value).trim().toUpperCase();
+    if (cleaned === '') return 'USD';
+    const normalized = PokerCSVParser.normalizeCurrency(cleaned);
+    return PokerCSVParser.KNOWN_CURRENCIES.has(normalized) ? normalized : null;
   }
 
   // Helper to safely parse int, returning 0 for errors or empty strings
@@ -1036,7 +1054,8 @@ export class PokerCSVParser {
     const gameId = g('Game ID') || g('ID do Jogo');
     const site = g('Network') || g('Rede') || 'Unknown';
 
-    let originalCurrency = g('Currency') || g('Moeda') || 'USD';
+    // P1 fix (2026-05-11): normalize currency before lookup (SharkScope path).
+    let originalCurrency = PokerCSVParser.normalizeCurrency(g('Currency') || g('Moeda') || 'USD');
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -1127,7 +1146,8 @@ export class PokerCSVParser {
       const reentries = this.parseIntSafe(row['ReEntries/Rebuys'] || row[' ReEntries/Rebuys'] || row['  ReEntries/Rebuys']) || 0;
       const tournamentName = row['Name'] || row[' Name'] || row['  Name'] || '';
       const flags = row['Flags'] || row[' Flags'] || row['  Flags'] || '';
-      const currency = row['Currency'] || row[' Currency'] || row['  Currency'] || 'USD';
+      // P1 fix (2026-05-11): normalize currency before lookup.
+      const currency = PokerCSVParser.normalizeCurrency(row['Currency'] || row[' Currency'] || row['  Currency'] || 'USD');
       const speed = row['Speed'] || row[' Speed'] || row['  Speed'] || 'Normal';
       const dateStr = row['Date'] || row[' Date'] || row['  Date'] || '';
       
@@ -1198,9 +1218,12 @@ export class PokerCSVParser {
     
     // Fallback para formato brasileiro antigo
     const name = row['Nome'] || row['Game'] || row['Tournament'] || '';
-    
-    // Currency conversion for 888poker
-    let originalCurrency = row['Moeda'] || this.detectCurrency(row['Stake'] || row['Buy-in'] || 'USD');
+
+    // Currency conversion for 888poker (BR-old fallback)
+    // P1 fix (2026-05-11): normalize currency before lookup.
+    let originalCurrency = PokerCSVParser.normalizeCurrency(
+      row['Moeda'] || this.detectCurrency(row['Stake'] || row['Buy-in'] || 'USD')
+    );
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -1267,7 +1290,8 @@ export class PokerCSVParser {
 
 
     // Currency conversion for Chico Network
-    let originalCurrency = row[' Currency'] || 'USD';
+    // P1 fix (2026-05-11): normalize currency before lookup.
+    let originalCurrency = PokerCSVParser.normalizeCurrency(row[' Currency'] || 'USD');
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -1341,7 +1365,8 @@ export class PokerCSVParser {
     }
 
     // Currency conversion for PokerStars(FR-ES-PT) (EUR to USD)
-    let originalCurrency = (row[' Currency'] || row['Currency'] || 'EUR').toString().toUpperCase();
+    // P1 fix (2026-05-11): normalize currency before lookup.
+    let originalCurrency = PokerCSVParser.normalizeCurrency(row[' Currency'] || row['Currency'] || 'EUR');
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -1438,7 +1463,8 @@ export class PokerCSVParser {
     }
 
     // Currency conversion for iPoker (EUR to USD)
-    let originalCurrency = (row[' Currency'] || row['Currency'] || 'EUR').toString().toUpperCase();
+    // P1 fix (2026-05-11): normalize currency before lookup.
+    let originalCurrency = PokerCSVParser.normalizeCurrency(row[' Currency'] || row['Currency'] || 'EUR');
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -1541,7 +1567,8 @@ export class PokerCSVParser {
 
 
     // Currency conversion for Generic Network
-    let originalCurrency = row[' Currency'] || row['Currency'] || 'USD';
+    // P1 fix (2026-05-11): normalize currency before lookup.
+    let originalCurrency = PokerCSVParser.normalizeCurrency(row[' Currency'] || row['Currency'] || 'USD');
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -1624,7 +1651,8 @@ export class PokerCSVParser {
 
 
     // Currency conversion for WPN Network
-    let originalCurrency = row[' Currency'] || row['Currency'] || 'USD';
+    // P1 fix (2026-05-11): normalize currency before lookup.
+    let originalCurrency = PokerCSVParser.normalizeCurrency(row[' Currency'] || row['Currency'] || 'USD');
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -1682,7 +1710,8 @@ export class PokerCSVParser {
 
 
     // Currency conversion for PartyPoker
-    let originalCurrency = row[' Currency'] || row['Currency'] || 'USD';
+    // P1 fix (2026-05-11): normalize currency before lookup.
+    let originalCurrency = PokerCSVParser.normalizeCurrency(row[' Currency'] || row['Currency'] || 'USD');
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -1907,9 +1936,11 @@ export class PokerCSVParser {
       );
 
       // Batch check for tournaments WITHOUT tournamentId (by fields)
+      // P1 fix (2026-05-11): include `site` in lookup payload so the same name+date+buyIn
+      // played on different networks (cross-platform tracking) is NOT collapsed as duplicate.
       const existingByFields = await storage.findExistingTournamentsByFields(
         userId,
-        withoutId.map(t => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn }))
+        withoutId.map(t => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn, site: t.site }))
       );
 
       const validTournaments: ParsedTournament[] = [];
@@ -1927,9 +1958,11 @@ export class PokerCSVParser {
       }
 
       // Filter tournaments without tournamentId (by fields)
+      // P1 fix (2026-05-11): site-aware key. Storage emits BOTH site-aware AND legacy
+      // (siteless) keys for backward compat, so callers using either format match.
       for (const t of withoutId) {
         if (t.datePlayed) {
-          const key = `${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+          const key = `${t.site}|${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
           if (existingByFields.has(key)) {
             duplicateTournaments.push(t);
             duplicateIds.push(`${t.name} (${t.datePlayed.toISOString().split('T')[0]})`);
@@ -1953,5 +1986,58 @@ export class PokerCSVParser {
     } catch (error) {
       throw error;
     }
+  }
+
+  // P1 fix (2026-05-11): central dispatcher used by ALL upload endpoints
+  // (POST /api/upload-history, /api/check-duplicates, /api/upload-with-duplicates,
+  // /api/upload). Previously each endpoint duplicated the same isBodog/isCoin/
+  // isCoinPoker chain — drift between them silently bypassed format detection in
+  // /api/upload. Single source of truth here.
+  //
+  // Detection precedence:
+  //   1. .xlsx/.xls (Bodog) — by filename extension
+  //   2. CoinTXT — content sniff (Withdrawal+Deposit+USDT+AccountAction)
+  //   3. CoinPoker CSV — content sniff (header has type/description/amount/date + USDT NL Hold'em)
+  //   4. Generic CSV via parseCSV (PartyPoker, WPN, PokerStars, GG, iPoker, Chico, ...)
+  //
+  // Returns ParsedTournament[] always; never throws — caller decides validity.
+  static async dispatchCSVParser(
+    file: { buffer: Buffer; originalname: string },
+    userId: string,
+    exchangeRates: Record<string, number> = {},
+  ): Promise<ParsedTournament[]> {
+    const filename = (file.originalname ?? '').toLowerCase();
+    const isXlsx = filename.endsWith('.xlsx') || filename.endsWith('.xls');
+
+    if (isXlsx) {
+      return PokerCSVParser.parseBodogXLSX(file.buffer, userId, exchangeRates);
+    }
+
+    // Text-based payloads. Decode as UTF-8 (no BOM stripping here — leaving the
+    // text intact lets each parser handle encoding quirks). Future P2: try
+    // UTF-8 then Latin-1 fallback for legacy Western European exports.
+    const fileContent = file.buffer.toString('utf-8');
+
+    if (PokerCSVParser.isCoinTXTFormat(fileContent)) {
+      return PokerCSVParser.parseCoinTXT(fileContent, userId, exchangeRates);
+    }
+    if (PokerCSVParser.isCoinPokerFormat(fileContent)) {
+      return PokerCSVParser.parseCoinPokerCSV(fileContent, userId, exchangeRates);
+    }
+
+    return PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
+  }
+
+  /**
+   * P1 fix (2026-05-11): public sibling of the route-level isCoinFormat helper
+   * (kept duplicated in upload.ts pre-dispatcher). Lives on the parser so all
+   * call-sites stay in sync.
+   */
+  static isCoinTXTFormat(fileContent: string): boolean {
+    return fileContent.includes('Withdrawal') &&
+           fileContent.includes('Deposit') &&
+           fileContent.includes('USDT') &&
+           fileContent.includes('AccountAction') &&
+           fileContent.includes("NL Hold'em");
   }
 }
