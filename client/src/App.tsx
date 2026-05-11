@@ -10,7 +10,9 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import AnalyticsTracker from "@/components/AnalyticsTracker";
-import MiniChat from "@/components/MiniChat";
+// Wave F (Fase 3 perf): MiniChat eager arrastava react-markdown + micromark
+// (~80-120 KB raw) pro entry chunk. Lazy-loaded — abre so quando user clica.
+const MiniChat = lazy(() => import("@/components/MiniChat"));
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { NotificationModals } from "@/components/NotificationModals";
 import Sidebar from "@/components/Sidebar";
@@ -164,7 +166,9 @@ function Router() {
               </Suspense>
             </div>
           </div>
-          <MiniChat />
+          <Suspense fallback={null}>
+            <MiniChat />
+          </Suspense>
         </AnalyticsTracker>
       </NotificationProvider>
     </SidebarProvider>
