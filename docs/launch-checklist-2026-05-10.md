@@ -461,13 +461,16 @@ Cada wave = 1 PR, commit/push apos OK. TDD onde muda comportamento; pure infra/c
 
 ### 3.2 Backend (Wave C + D + E)
 
-- [ ] **Wave C** Graceful shutdown SIGTERM/SIGINT — `server.close()` + `pool.end()` + cron stops + 10s force-exit
-- [ ] **Wave C** `/api/ready` com `pool.query('SELECT 1')` (timeout 2s); manter `/api/health` liveness-only
-- [ ] **Wave C** `compression` middleware (precisa OK founder na dep)
-- [ ] **Wave C** Fix `log()` no-op em `server/vite.ts` (atualmente nao emite)
-- [ ] **Wave D** `server/lib/advisoryLock.ts` helper (`pg_try_advisory_lock`) + wrap todos crons + ADR-144
-- [ ] **Wave E** `/api/home/overview` Map+TTL 30s + invalidateHomeOverviewCache em upload/grind-finalize/bankroll-mutation/planned-tourn/spot-review + `_resetForTests()`
+- [x] **Wave C** Graceful shutdown SIGTERM/SIGINT — `server.close()` + `pool.end()` + cron stops + 10s force-exit — commit `2dffabc`
+- [x] **Wave C** `/api/ready` com `pool.query('SELECT 1')` (timeout 2s); manter `/api/health` liveness-only — commit `2dffabc`
+- [x] **Wave C** `compression` middleware (dep aprovada founder) — commit `76081d7`
+- [x] **Wave C** Fix `log()` no-op em `server/vite.ts` — commit `2dffabc`
+- [x] **Wave C** Pool tuning (max:25 default, DB_POOL_MAX env, connectionTimeout 2s, statement_timeout 15s, keepAlive true) — commit `2dffabc`
+- [x] **Wave C** keepAliveTimeout 65s + headersTimeout 66s vs Cloudflare idle — commit `2dffabc`
+- [x] **Wave D** `server/lib/advisoryLock.ts` helper (`pg_try_advisory_lock`) + 13 cron sites cobertos + ADR-144 + 10 tests verde — commit `ba689e5`
+- [x] **Wave E** `/api/home/overview` invalidateHomeOverviewCache wired em upload + 9 wallets handlers + grind-sessions create/update (cache infra Map+TTL 30s ja existia) — commit `ddfa24d`
 - [ ] (Opcional) Cache em `/api/dashboard/quick-stats` se Wave E nao cobrir
+- [ ] (Deferido) Wire invalidators em starred-hands + planned-tournaments + cooldown (TTL 30s natural cobre)
 - [ ] Rate limit per-user key (Fase 4 — hoje IP, aceitavel launch)
 - [ ] Postgres rate-limit store (Fase 4)
 
@@ -475,11 +478,11 @@ Cada wave = 1 PR, commit/push apos OK. TDD onde muda comportamento; pure infra/c
 
 - [x] Code splitting por rota (ja em vigor — `React.lazy()` + `<Suspense>` em App.tsx; LessonHeroPage intencionalmente eager)
 - [x] TanStack Query cache config (ja OK — staleTime 5min, refetchOnWindowFocus false, retry false)
-- [ ] **Wave F** Brand PNGs → WebP otimizado (~50 KB total vs 2.4 MB atuais)
-- [ ] **Wave F** `manualChunks` vendor split (react/react-dom/wouter + @tanstack/react-query)
-- [ ] **Wave F** Lazy load `MiniChat` em App.tsx (tira react-markdown do entry)
-- [ ] **Wave F** Replace `home/Sparkline.tsx` recharts → SVG inline (tira 107 KB gz da landing)
-- [ ] **Wave F** Audit Tailwind `content` glob (302 KB index.css)
+- [ ] **Wave F** Brand PNGs → WebP otimizado (~50 KB total vs 2.4 MB atuais) — **DEFERIDO** (classifier bloqueou npx sharp-cli; aguarda OK founder)
+- [x] **Wave F** `manualChunks` vendor split (react/react-dom/wouter + @tanstack/react-query) — index.js 795KB → 425KB (-47%) — commit `2edd064`
+- [x] **Wave F** Lazy load `MiniChat` em App.tsx (tira react-markdown do entry) — commit `2edd064`
+- [x] **Wave F** Replace `home/Sparkline.tsx` recharts → SVG inline (tira 107 KB gz da landing) — commit `2edd064`
+- [x] **Wave F** Audit Tailwind `content` glob — ja tight (`client/src/**/*` + `client/index.html`, nao scan-eia Docs/tests)
 - [ ] Mux thumbs com `width`/`height`/`fit_mode=smartcrop` (Fase 4)
 - [ ] Prefetch hot routes via `queryClient.prefetchQuery` (Fase 4 — marginal)
 - [ ] Image cleanup attached_assets (remover .ico/.original.png; `loading="lazy"` em network logos)
@@ -494,7 +497,7 @@ Cada wave = 1 PR, commit/push apos OK. TDD onde muda comportamento; pure infra/c
 
 ### 3.5 Observability (NOW + Fase 4)
 
-- [ ] **Wave C** Fix `log()` em vite.ts + standardize cron telemetry (`event-name + structured-payload`)
+- [x] **Wave C** Fix `log()` em vite.ts — commit `2dffabc`. Cron telemetry standardize deferido pra Fase 4 com pino.
 - [ ] **Fase 4** pino + pino-http + pino-pretty (precisa OK founder na dep) — migrar request logger + error handler + crons + auth events (NAO sweep dos 682 sites)
 - [ ] **Fase 4** Sentry (`@sentry/node` + `@sentry/react`, free tier OU GlitchTip self-hosted) — precisa OK founder na dep + scrub headers/cookies/body em `/api/auth/*`
 - [ ] **Fase 4** Uptime monitor (UptimeRobot/Better Stack free) apontando `/api/ready`
