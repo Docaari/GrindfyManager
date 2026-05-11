@@ -41,7 +41,21 @@ Mecanica:
 - **Sem dep nova.** Postgres ja eh dep core. Redis adicionaria infra-cost + complexity sem ganho proporcional (~10 crons globais, nao milhares).
 - **Sem latencia extra.** Locks resolvem na mesma conexao pg que o cron ja vai usar pra trabalhar.
 - **Lock libera com a sessao.** Se o processo crashar mid-tick, PG libera o lock automaticamente quando a conexao fecha — sem zombie locks. (Redis SETNX precisa TTL artificial.)
-- **Cross-replica trivial.** Mesma chave + mesmo PG = mutex distribuido nativo. PgBouncer transaction-pooling NAO afeta (advisory locks no PG sao session-scoped — usamos session pooling implicito via `pool.connect` + release dentro do mesmo tick).
+- **Cross-replica trivial.** Mesma chave + mesmo PG = mutex distribuido nativo.
+
+### ⚠ Caveat PgBouncer transaction-pooling (Fase 4)
+
+Reviewer round (2026-05-11) levantou que advisory locks **session-scoped** (`pg_try_advisory_lock`) podem comportar inesperadamente em PgBouncer `transaction` mode (default do endpoint Neon `-pooler.neon.tech`). Cada statement pode rotear para um backend diferente — `lock` em um, `unlock` em outro. Lock fica orfao ate PG detectar session-end.
+
+**Estado atual (single-replica launch):** `-pooler` endpoint nao eh usado em dev local; producao single-replica nao expoe o problema.
+
+**Fase 4 (multi-replica):** decidir entre:
+1. **Pool da app no endpoint direto** (sem `-pooler`); usar `-pooler` so para queries da request path (route handlers). Crons ficam no direto.
+2. **Migrar para `pg_try_advisory_xact_lock`** + envolver `fn` em `BEGIN ... COMMIT` na conexao. Transaction-scoped lock libera no commit + funciona em PgBouncer transaction mode.
+
+Trade-off: opcao 1 eh estrutural (2 pools), opcao 2 muda escopo do lock (commit/rollback automatico vs explicit unlock).
+
+Decisao postergada ate Fase 4 quando deploy multi-replica entrar em jogo. Documentado aqui pra evitar surpresa no leitor de Fase 4.
 - **node-cron `withLock` builtin existe** mas eh in-process apenas. Nao funciona multi-replica.
 
 ## Alternativas consideradas
