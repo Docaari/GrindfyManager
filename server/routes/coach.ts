@@ -74,45 +74,87 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
 
   // Sprint coach-launch-fix (P0 #1): tier gate. Resolve tier do usuario e
   // bloqueia coach restritos por plano ANTES de qualquer trabalho pesado.
+  // Storage pode injetar resolveUserTier (testes integrados); fallback para
+  // helper coachAccess em producao.
   let tier: string = 'free';
   try {
-    const { resolveUserTier, canAccessCoach, getUpgradeTarget } = await import('../coachAccess');
-    tier = await resolveUserTier(req.user);
+    if (typeof (coachStorage as any).resolveUserTier === 'function') {
+      tier = await (coachStorage as any).resolveUserTier(req.user);
+    } else {
+      const { resolveUserTier } = await import('../coachAccess');
+      tier = await resolveUserTier(req.user);
+    }
+  } catch (err) {
+    console.error('[coach.chat] resolveUserTier failed', err);
+  }
+
+  try {
+    const { canAccessCoach, getUpgradeTarget, getAccessibleCoaches } = await import('../coachAccess');
     if (!canAccessCoach(tier as any, coachType as any)) {
       res.status(403).json({
         code: 'tier_locked',
         upgradeTo: getUpgradeTarget(tier as any, coachType as any),
+        currentPlan: tier,
+        accessibleCoaches: getAccessibleCoaches(tier as any),
         message: 'Acesso restrito. Faca upgrade para usar este coach.',
       });
       return;
     }
   } catch (err) {
-    // Falha ao resolver tier nao bloqueia free coaches (tier permanece 'free').
-    console.error('[coach.chat] resolveUserTier failed', err);
+    console.error('[coach.chat] gate check failed', err);
   }
 
-  // Sprint coach-launch-fix (P1 #14): rate limit por tier (10/50/200/Infinity).
-  // Mantem RATE_LIMIT_PER_HOUR=30 como cap legado para compat com testes
-  // existentes que esperam 30 limit, MAS quando o tier resolvido der um valor
-  // mais permissivo, usa o do tier (premium 200, admin Infinity).
-  let limit = RATE_LIMIT_PER_HOUR;
+  // Sprint coach-launch-fix RF-04 — rate limit por tier (10/50/200/Infinity).
+  // Conta msgs nas ultimas 24h (rolling window). countUserMessagesInLastHour
+  // permanece como fallback p/ compat (legacy storages).
+  let limit: number = 10;
   try {
     const { getRateLimitForPlan } = await import('../coachAccess');
-    const tierLimit = getRateLimitForPlan(tier);
-    if (Number.isFinite(tierLimit) && tierLimit > limit) {
-      limit = tierLimit;
-    } else if (tierLimit === Infinity) {
-      limit = Infinity;
-    }
-  } catch { /* mantem 30 */ }
+    limit = getRateLimitForPlan(tier);
+  } catch { /* fallback 10 */ }
 
-  const msgCount = await coachStorage.countUserMessagesInLastHour(userId);
-  if (msgCount >= limit) {
+  let msgCount = 0;
+  if (typeof (coachStorage as any).countUserMessagesInLastDay === 'function') {
+    msgCount = await (coachStorage as any).countUserMessagesInLastDay(userId);
+  } else if (typeof (coachStorage as any).countUserMessagesInLastHour === 'function') {
+    msgCount = await (coachStorage as any).countUserMessagesInLastHour(userId);
+  }
+
+  if (Number.isFinite(limit) && msgCount >= limit) {
+    // Rate limit headers + body com upgradeTo p/ UI.
+    let upgradeTo: string | null = null;
+    try {
+      if (tier === 'free') upgradeTo = 'pro';
+      else if (tier === 'pro') upgradeTo = 'premium';
+    } catch { /* noop */ }
+
+    let resetAtIso: string | null = null;
+    try {
+      if (typeof (coachStorage as any).getOldestUserMessageInWindow === 'function') {
+        const oldest = await (coachStorage as any).getOldestUserMessageInWindow(userId);
+        if (oldest?.createdAt) {
+          const ms = typeof oldest.createdAt === 'string'
+            ? new Date(oldest.createdAt).getTime()
+            : oldest.createdAt instanceof Date
+              ? oldest.createdAt.getTime()
+              : Date.now();
+          resetAtIso = new Date(ms + 24 * 3600 * 1000).toISOString();
+        }
+      }
+    } catch { /* noop */ }
+    if (!resetAtIso) resetAtIso = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+
+    try { res.setHeader('X-RateLimit-Limit', String(limit)); } catch { /* noop */ }
+    try { res.setHeader('X-RateLimit-Remaining', '0'); } catch { /* noop */ }
+    try { res.setHeader('X-RateLimit-Reset', resetAtIso); } catch { /* noop */ }
     res.status(429).json({
       code: 'rate_limited',
       limit,
       used: msgCount,
-      message: `Limite de ${RATE_LIMIT_PER_HOUR} mensagens por hora atingido. Tente novamente mais tarde.`,
+      currentPlan: tier,
+      upgradeTo,
+      resetAt: resetAtIso,
+      message: `Limite de ${limit} mensagens em 24h atingido. Tente novamente mais tarde.`,
     });
     return;
   }
@@ -147,12 +189,48 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
 
   // Save user message
   const userTokenCount = Math.ceil(message.length / 4);
-  await coachStorage.saveMessage({
-    sessionId: activeSessionId,
-    role: 'user',
-    content: message,
-    tokenCount: userTokenCount,
-  });
+  // Sprint coach-launch-fix RF-04 (TOCTOU): se storage expoe
+  // reserveMessageSlotAndSaveUserMessage (insert + count atomico), usa-o e
+  // captura erro de concorrencia para devolver 429. Fallback: saveMessage.
+  if (typeof (coachStorage as any).reserveMessageSlotAndSaveUserMessage === 'function') {
+    try {
+      await (coachStorage as any).reserveMessageSlotAndSaveUserMessage({
+        userId,
+        sessionId: activeSessionId,
+        role: 'user',
+        content: message,
+        tokenCount: userTokenCount,
+        limit,
+      });
+    } catch (err: any) {
+      if (err?.code === 'RATE_LIMIT') {
+        try { res.setHeader('X-RateLimit-Limit', String(limit)); } catch { /* noop */ }
+        try { res.setHeader('X-RateLimit-Remaining', '0'); } catch { /* noop */ }
+        let resetAtIso2 = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+        try { res.setHeader('X-RateLimit-Reset', resetAtIso2); } catch { /* noop */ }
+        let upgradeTo: string | null = null;
+        if (tier === 'free') upgradeTo = 'pro';
+        else if (tier === 'pro') upgradeTo = 'premium';
+        res.status(429).json({
+          code: 'rate_limited',
+          limit,
+          currentPlan: tier,
+          upgradeTo,
+          resetAt: resetAtIso2,
+          message: `Limite de ${limit} mensagens em 24h atingido (TOCTOU race).`,
+        });
+        return;
+      }
+      throw err;
+    }
+  } else {
+    await coachStorage.saveMessage({
+      sessionId: activeSessionId,
+      role: 'user',
+      content: message,
+      tokenCount: userTokenCount,
+    });
+  }
 
   // Auto-generate title from first message if new session
   const existingMessages = await coachStorage.getSessionMessages(activeSessionId);
