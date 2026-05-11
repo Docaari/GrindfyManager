@@ -209,7 +209,10 @@ describe('walletService.archiveWallet', () => {
     expect(r.warning).toBeUndefined();
   });
 
-  it('arquiva wallet com balance != 0 retorna warning wallet_archived_with_balance', async () => {
+  it('arquiva wallet com balance != 0 + confirmArchiveWithBalance retorna warning wallet_archived_with_balance', async () => {
+    // Bankroll-Launch-Fix P1 #2 (P1#7): contrato mudou — archive de wallet com
+    // saldo > 0.01 agora exige confirmArchiveWithBalance:true. Sem o flag,
+    // service rejeita 422 WALLET_HAS_BALANCE (ver test seguinte).
     txMock.getWalletById.mockResolvedValue({
       id: 'wlt_arch', userId: 'USER-0001', balance: '500.00', status: 'active',
     });
@@ -217,10 +220,28 @@ describe('walletService.archiveWallet', () => {
       id: 'wlt_arch', balance: '500.00', status: 'archived',
     });
 
-    const r = await walletService.archiveWallet('USER-0001', 'wlt_arch');
+    const r = await walletService.archiveWallet('USER-0001', 'wlt_arch', {
+      confirmArchiveWithBalance: true,
+    });
 
     expect(r.wallet.status).toBe('archived');
     expect(r.warning).toBe('wallet_archived_with_balance');
+  });
+
+  it('arquiva wallet com balance != 0 SEM confirmArchiveWithBalance rejeita 422 WALLET_HAS_BALANCE', async () => {
+    // Bankroll-Launch-Fix P1 #2: defesa — saldo > 0 sem confirmacao do user
+    // dispara erro estruturado em vez de silenciosamente arquivar.
+    txMock.getWalletById.mockResolvedValue({
+      id: 'wlt_arch', userId: 'USER-0001', balance: '500.00', status: 'active',
+      nativeCurrency: 'USD',
+    });
+
+    await expect(
+      walletService.archiveWallet('USER-0001', 'wlt_arch'),
+    ).rejects.toMatchObject({
+      statusCode: 422,
+      code: 'WALLET_HAS_BALANCE',
+    });
   });
 
   it('archiveWallet em wallet ja archived: idempotente (sem warning)', async () => {
