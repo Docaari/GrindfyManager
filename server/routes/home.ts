@@ -71,6 +71,16 @@ export function clearHomeOverviewCache(userId?: string): void {
   }
 }
 
+// Wave E (Fase 3 perf) — alias por naming convention (focusStats usa
+// `invalidateFocusStatsCache`). Mutations chamam este nome em handlers
+// novos pra clareza.
+export const invalidateHomeOverviewCache = clearHomeOverviewCache;
+
+/** Test-only: reset completo. Mesma semantica de clearHomeOverviewCache(undefined). */
+export function _resetHomeOverviewCacheForTests(): void {
+  cache.clear();
+}
+
 // =============================================================================
 // Schema da resposta — RF-01
 // =============================================================================

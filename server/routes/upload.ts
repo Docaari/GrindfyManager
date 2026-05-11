@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import { db } from "../db";
+import { invalidateHomeOverviewCache } from "./home";
 import {
   tournaments,
   uploadHistory,
@@ -1125,6 +1126,10 @@ export async function handleUploadCsv(req: any, res: any): Promise<void> {
         });
       }
     }
+
+    // Wave E (Fase 3 perf): invalidar cache /api/home/overview pos-upload —
+    // quickStats/performance/dashboardAllTime/lastTournamentUploadAt mudam.
+    try { invalidateHomeOverviewCache(req.user?.userPlatformId); } catch {}
 
     res.status(200).json({
       imported: inserted.length,

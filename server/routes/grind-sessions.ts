@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import { db } from "../db";
+import { invalidateHomeOverviewCache } from "./home";
 import {
   insertGrindSessionSchema,
   insertPreparationLogSchema,
@@ -1033,6 +1034,10 @@ export function registerGrindSessionRoutes(app: Express): void {
       let session;
       try {
         session = await storage.createGrindSession(sessionData);
+        // Wave E (Fase 3 perf): invalidar Home overview pos-criacao —
+        // hasActiveGrindSession/recentSessions/sessionsRegistered/quickStats
+        // mudam. Tolerante a falhas.
+        try { invalidateHomeOverviewCache(userId); } catch {}
       } catch (createErr: any) {
         // launch-fix P1: capturar unique_violation do indice partial
         // uq_grind_sessions_one_active_per_user (migration 0061). Race entre
@@ -1212,6 +1217,10 @@ export function registerGrindSessionRoutes(app: Express): void {
           console.error("[PUT /api/grind-sessions/:id] evaluateStops failed:", err?.message);
         }
       }
+
+      // Wave E (Fase 3 perf): invalidar Home overview cache — recentSessions/
+      // hasActiveGrindSession/sessionsRegistered/quickStats mudam pos-update.
+      try { invalidateHomeOverviewCache(userId); } catch {}
 
       res.json({ ...(session as any), ...extra });
     } catch (error) {

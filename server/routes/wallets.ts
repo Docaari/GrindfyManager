@@ -24,6 +24,25 @@ import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { requireAuth } from "../auth";
 import { walletService } from "../services/walletService";
+import { invalidateHomeOverviewCache } from "./home";
+
+// Wave E (Fase 3 perf): wrapper que invalida cache /api/home/overview
+// para o user-owner do request quando a mutation termina 2xx/3xx.
+// Aplicado em todos os handlers de mutation wallet (POST/PUT/PATCH/DELETE).
+function invalidateAfterMutation(
+  handler: (req: Request, res: Response) => Promise<unknown> | unknown,
+) {
+  return async (req: Request, res: Response) => {
+    await handler(req, res);
+    if (res.statusCode < 400) {
+      try {
+        invalidateHomeOverviewCache((req as any).user?.userPlatformId);
+      } catch {
+        /* nao deve quebrar response */
+      }
+    }
+  };
+}
 import { WALLET_PLATFORMS, WALLET_NATIVE_CURRENCIES } from "../../shared/wallet-platforms";
 import {
   WALLET_TX_DIRECTIONS,
@@ -604,9 +623,7 @@ export function registerWalletRoutes(app: Express): void {
   app.get("/api/wallets", requireAuth, (req: Request, res: Response) =>
     handleGetWallets(req, res),
   );
-  app.post("/api/wallets", requireAuth, walletLimiter, (req: Request, res: Response) =>
-    handlePostWallet(req, res),
-  );
+  app.post("/api/wallets", requireAuth, walletLimiter, invalidateAfterMutation(handlePostWallet));
 
   // HIGH-1 fix (round 2): rotas com path estatico devem vir ANTES das rotas com
   // `:id`/`:walletId` para evitar collision de routing. Express aplica primeira
@@ -614,9 +631,7 @@ export function registerWalletRoutes(app: Express): void {
   // seria interpretado como id="transfers".
 
   // Sprint Bankroll-3 RF-4 — Transfers (path-estatico antes do :id)
-  app.post("/api/wallets/transfers", requireAuth, walletLimiter, (req: Request, res: Response) =>
-    handlePostWalletTransfer(req, res),
-  );
+  app.post("/api/wallets/transfers", requireAuth, walletLimiter, invalidateAfterMutation(handlePostWalletTransfer));
   app.get("/api/wallets/transfers", requireAuth, (req: Request, res: Response) =>
     handleGetWalletTransfers(req, res),
   );
@@ -625,12 +640,8 @@ export function registerWalletRoutes(app: Express): void {
   );
 
   // Sprint Bankroll-3 RF-5 — Pending (path-estatico antes do :id)
-  app.delete("/api/wallets/pending/:id", requireAuth, walletLimiter, (req: Request, res: Response) =>
-    handleDeleteWalletPending(req, res),
-  );
-  app.post("/api/wallets/pending/:id/settle", requireAuth, walletLimiter, (req: Request, res: Response) =>
-    handlePostWalletPendingSettle(req, res),
-  );
+  app.delete("/api/wallets/pending/:id", requireAuth, walletLimiter, invalidateAfterMutation(handleDeleteWalletPending));
+  app.post("/api/wallets/pending/:id/settle", requireAuth, walletLimiter, invalidateAfterMutation(handlePostWalletPendingSettle));
 
   app.get("/api/bankroll/consolidated", requireAuth, (req: Request, res: Response) =>
     handleGetBankrollConsolidated(req, res),
@@ -642,28 +653,18 @@ export function registerWalletRoutes(app: Express): void {
   );
 
   // Rotas com :walletId/:id depois das estaticas.
-  app.post("/api/wallets/:walletId/pending", requireAuth, walletLimiter, (req: Request, res: Response) =>
-    handlePostWalletPending(req, res),
-  );
+  app.post("/api/wallets/:walletId/pending", requireAuth, walletLimiter, invalidateAfterMutation(handlePostWalletPending));
   app.get("/api/wallets/:walletId/pending", requireAuth, (req: Request, res: Response) =>
     handleGetWalletPending(req, res),
   );
   app.get("/api/wallets/:id", requireAuth, (req: Request, res: Response) =>
     handleGetWallet(req, res),
   );
-  app.put("/api/wallets/:id", requireAuth, walletLimiter, (req: Request, res: Response) =>
-    handlePutWallet(req, res),
-  );
-  app.patch("/api/wallets/:id/archive", requireAuth, walletLimiter, (req: Request, res: Response) =>
-    handlePatchArchiveWallet(req, res),
-  );
-  app.delete("/api/wallets/:id", requireAuth, (req: Request, res: Response) =>
-    handleDeleteWallet(req, res),
-  );
+  app.put("/api/wallets/:id", requireAuth, walletLimiter, invalidateAfterMutation(handlePutWallet));
+  app.patch("/api/wallets/:id/archive", requireAuth, walletLimiter, invalidateAfterMutation(handlePatchArchiveWallet));
+  app.delete("/api/wallets/:id", requireAuth, invalidateAfterMutation(handleDeleteWallet));
   app.get("/api/wallets/:id/transactions", requireAuth, (req: Request, res: Response) =>
     handleGetWalletTransactions(req, res),
   );
-  app.post("/api/wallets/:id/transactions", requireAuth, walletLimiter, (req: Request, res: Response) =>
-    handlePostWalletTransaction(req, res),
-  );
+  app.post("/api/wallets/:id/transactions", requireAuth, walletLimiter, invalidateAfterMutation(handlePostWalletTransaction));
 }
