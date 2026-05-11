@@ -194,7 +194,15 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
 
   try {
     const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    // Lesson #5: vi.fn() nao eh constructor em strict mode — testes que mockam
+    // SDK via mockImplementation(() => ({...})) quebram com `new`. Try/catch
+    // com fallback para chamada direta (factory) cobre ambos producao + tests.
+    let anthropicClient: any;
+    try {
+      anthropicClient = new (Anthropic as any)({ apiKey: process.env.ANTHROPIC_API_KEY });
+    } catch {
+      anthropicClient = (Anthropic as any)({ apiKey: process.env.ANTHROPIC_API_KEY });
+    }
 
     // Build context for the coach
     const { assembleContext } = await import('../coachContext');
@@ -1071,6 +1079,366 @@ export async function handlePostCoachAuditExport(req: any, res: any): Promise<vo
     res.status(200).json(result);
   } catch (err: any) {
     console.error('coach.audit.export.error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+// =============================================================================
+// Sprint coach-launch-fix RF-04.4 — GET /api/coach/limits
+//
+// Retorna estado atual de rate limit + acessibilidade de coaches por tier,
+// para alimentar UI (LimitCounter + UpgradeCoachModal).
+// =============================================================================
+
+const COACH_LIMITS_BY_TIER: Record<string, number | 'unlimited'> = {
+  free: 10,
+  pro: 50,
+  premium: 200,
+  admin: 'unlimited',
+};
+
+const COACH_ACCESS_BY_TIER: Record<string, string[]> = {
+  free: ['mental'],
+  pro: ['mental', 'tournament'],
+  premium: ['mental', 'tournament', 'technical'],
+  admin: ['mental', 'tournament', 'technical'],
+};
+
+export async function handleGetCoachLimits(
+  req: any,
+  res: any,
+  injectedStorage?: any,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: 'Nao autenticado' });
+    return;
+  }
+
+  // Permitir injecao de storage para testabilidade. Em producao, importa lazy.
+  let store: any = injectedStorage;
+  if (!store) {
+    try {
+      const { resolveUserTier } = await import('../coachAccess');
+      const { storage: realStorage } = await import('../storage');
+      store = {
+        resolveUserTier: async (u: any) => await resolveUserTier(u),
+        countUserMessagesInLastDay: async (uid: string) =>
+          await (realStorage as any).countCoachMessagesInLastDay?.(uid) ?? 0,
+        getOldestUserMessageInWindow: async (uid: string) =>
+          await (realStorage as any).getOldestCoachMessageInWindow?.(uid) ?? null,
+      };
+    } catch (err) {
+      console.error('[coach.limits] storage init failed', err);
+      res.status(500).json({ message: 'Erro interno' });
+      return;
+    }
+  }
+
+  try {
+    const tier = await store.resolveUserTier(req.user);
+    const used = (await store.countUserMessagesInLastDay(req.user.userPlatformId)) ?? 0;
+    const oldest = await store.getOldestUserMessageInWindow(req.user.userPlatformId);
+
+    const dailyLimit = COACH_LIMITS_BY_TIER[tier] ?? 10;
+    const accessibleCoaches = COACH_ACCESS_BY_TIER[tier] ?? ['mental'];
+
+    let remaining: number | 'unlimited';
+    let resetAt: string | null;
+    if (dailyLimit === 'unlimited') {
+      remaining = 'unlimited';
+      resetAt = null;
+    } else {
+      remaining = Math.max(0, dailyLimit - used);
+      // Reset = createdAt do mais antigo + 24h. Se nenhuma msg, agora + 24h.
+      if (oldest?.createdAt) {
+        const oldestMs =
+          typeof oldest.createdAt === 'string'
+            ? new Date(oldest.createdAt).getTime()
+            : oldest.createdAt instanceof Date
+              ? oldest.createdAt.getTime()
+              : Date.now();
+        resetAt = new Date(oldestMs + 24 * 3600 * 1000).toISOString();
+      } else {
+        resetAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+      }
+    }
+
+    res.status(200).json({
+      plan: tier,
+      dailyLimit,
+      used,
+      remaining,
+      resetAt,
+      accessibleCoaches,
+    });
+  } catch (err: any) {
+    console.error('[coach.limits] error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+// =============================================================================
+// Sprint coach-launch-fix RF-02 — Message feedback (thumbs up/down + admin stats)
+// =============================================================================
+
+const FEEDBACK_VALUES = new Set(['up', 'down']);
+
+export async function handlePostMessageFeedback(
+  req: any,
+  res: any,
+  injectedStorage?: any,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: 'Nao autenticado' });
+    return;
+  }
+  const userId = req.user.userPlatformId;
+  const messageId = req.params?.id;
+  if (!messageId) {
+    res.status(400).json({ message: 'message id obrigatorio' });
+    return;
+  }
+
+  let store: any = injectedStorage;
+  if (!store) {
+    try {
+      const { storage: realStorage } = await import('../storage');
+      store = realStorage;
+    } catch {
+      res.status(500).json({ message: 'Erro interno' });
+      return;
+    }
+  }
+
+  try {
+    // 1) Carregar message + session.
+    const message = await store.getMessage(messageId);
+    if (!message) {
+      res.status(404).json({ message: 'Mensagem nao encontrada' });
+      return;
+    }
+    const session = await store.getSession(message.sessionId);
+    if (!session) {
+      res.status(404).json({ message: 'Sessao nao encontrada' });
+      return;
+    }
+
+    // 2) Ownership ANTES de role check (information disclosure prevention).
+    if (session.userId !== userId) {
+      res.status(403).json({ message: 'Acesso negado' });
+      return;
+    }
+
+    // 3) Role check (apenas messages do assistant).
+    if (message.role !== 'assistant') {
+      res.status(400).json({ message: 'Apenas mensagens do coach (nao do usuario) aceitam feedback' });
+      return;
+    }
+
+    // 4) Validate body.
+    const { feedback, comment } = req.body || {};
+    if (!FEEDBACK_VALUES.has(feedback)) {
+      res.status(400).json({ message: 'feedback deve ser "up" ou "down"' });
+      return;
+    }
+    if (comment !== undefined && comment !== null) {
+      if (typeof comment !== 'string') {
+        res.status(400).json({ message: 'comment deve ser string' });
+        return;
+      }
+      if (comment.length > 500) {
+        res.status(400).json({ message: 'comment deve ter no maximo 500 caracteres' });
+        return;
+      }
+    }
+
+    // 5) Insert feedback (storage detecta duplicatas via UNIQUE).
+    const result = await store.insertFeedback({
+      messageId,
+      userId,
+      feedback,
+      comment: comment ?? null,
+    });
+
+    if (result?.alreadyExists) {
+      res.status(409).json({
+        message: 'Feedback ja existe para esta mensagem. Use DELETE + POST para alterar.',
+      });
+      return;
+    }
+
+    res.status(201).json(result);
+  } catch (err: any) {
+    console.error('[coach.feedback.post] error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+export async function handleDeleteMessageFeedback(
+  req: any,
+  res: any,
+  injectedStorage?: any,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: 'Nao autenticado' });
+    return;
+  }
+  const userId = req.user.userPlatformId;
+  const messageId = req.params?.id;
+  if (!messageId) {
+    res.status(400).json({ message: 'message id obrigatorio' });
+    return;
+  }
+
+  let store: any = injectedStorage;
+  if (!store) {
+    try {
+      const { storage: realStorage } = await import('../storage');
+      store = realStorage;
+    } catch {
+      res.status(500).json({ message: 'Erro interno' });
+      return;
+    }
+  }
+
+  try {
+    const message = await store.getMessage(messageId);
+    if (!message) {
+      res.status(404).json({ message: 'Mensagem nao encontrada' });
+      return;
+    }
+    const session = await store.getSession(message.sessionId);
+    if (!session) {
+      res.status(404).json({ message: 'Sessao nao encontrada' });
+      return;
+    }
+    if (session.userId !== userId) {
+      res.status(403).json({ message: 'Acesso negado' });
+      return;
+    }
+
+    const result = await store.deleteFeedback({ messageId, userId });
+    if (!result?.deleted) {
+      res.status(404).json({ message: 'Feedback nao encontrado' });
+      return;
+    }
+    res.status(200).json({ deleted: true });
+  } catch (err: any) {
+    console.error('[coach.feedback.delete] error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+export async function handleGetFeedbackStats(
+  req: any,
+  res: any,
+  injectedStorage?: any,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: 'Nao autenticado' });
+    return;
+  }
+  if (!isAdminUser(req.user)) {
+    res.status(403).json({ message: 'Acesso negado' });
+    return;
+  }
+
+  let store: any = injectedStorage;
+  if (!store) {
+    try {
+      const { storage: realStorage } = await import('../storage');
+      store = realStorage;
+    } catch {
+      res.status(500).json({ message: 'Erro interno' });
+      return;
+    }
+  }
+
+  try {
+    const opts: any = { topDownLimit: 10 };
+    const ct = req.query?.coachType;
+    if (ct && typeof ct === 'string') opts.coachType = ct;
+
+    const data = await store.getFeedbackStats(opts);
+    res.status(200).json(data);
+  } catch (err: any) {
+    console.error('[coach.feedback.stats] error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+// =============================================================================
+// Sprint coach-launch-fix RF-14 — GET /api/admin/coach/cost-metrics (admin)
+// =============================================================================
+
+function isAdminUser(user: any): boolean {
+  if (!user) return false;
+  return user.role === 'admin' || user.subscriptionPlan === 'admin';
+}
+
+export async function handleGetCostMetrics(
+  req: any,
+  res: any,
+  injectedStorage?: any,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: 'Nao autenticado' });
+    return;
+  }
+  if (!isAdminUser(req.user)) {
+    res.status(403).json({ message: 'Acesso negado' });
+    return;
+  }
+
+  // Parse + validate days param.
+  const rawDays = req.query?.days;
+  let days = 7;
+  if (rawDays !== undefined && rawDays !== '') {
+    const n = Number(rawDays);
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1 || n > 90) {
+      res.status(400).json({ message: 'days deve ser inteiro entre 1 e 90' });
+      return;
+    }
+    days = n;
+  }
+
+  let store: any = injectedStorage;
+  if (!store) {
+    try {
+      const { storage: realStorage } = await import('../storage');
+      store = realStorage;
+    } catch (err) {
+      console.error('[coach.cost-metrics] storage init failed', err);
+      res.status(500).json({ message: 'Erro interno' });
+      return;
+    }
+  }
+
+  try {
+    const now = new Date();
+    const from = new Date(now.getTime() - days * 24 * 3600 * 1000);
+    const data = await store.getCostMetrics({ days });
+
+    const totalMessages = data?.totalMessages ?? 0;
+    const totalCost = data?.totalCost ?? 0;
+    const avgCostPerMessage = totalMessages > 0 ? totalCost / totalMessages : 0;
+
+    res.status(200).json({
+      period: {
+        from: from.toISOString(),
+        to: now.toISOString(),
+        days,
+      },
+      totalMessages,
+      totalCost,
+      avgCostPerMessage,
+      cacheHitRate: data?.cacheHitRate ?? 0,
+      byCoachType: data?.byCoachType ?? {},
+      byModel: data?.byModel ?? {},
+      byDay: data?.byDay ?? [],
+    });
+  } catch (err: any) {
+    console.error('[coach.cost-metrics] error', { err });
     res.status(500).json({ message: 'Erro interno' });
   }
 }

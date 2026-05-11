@@ -175,7 +175,10 @@ function scrubString(s: string): string {
   return out;
 }
 
-function scrubInjectionTokens(input: any): any {
+// Exposta para reuso por handlers de tool que devolvem texto ao LLM
+// (ex: read_theme_with_linked_stats_and_spots — preview de content do tab).
+// Sprint coach-launch-fix (P1 #5).
+export function scrubInjectionTokens(input: any): any {
   if (input === null || input === undefined) return input;
   if (typeof input === 'string') return scrubString(input);
   if (typeof input !== 'object') return input;

@@ -23,6 +23,7 @@ import {
   type HudGroupId,
 } from "@shared/hud-stat-catalog";
 import { READ_THEME_TOOL_DESCRIPTION } from "./readThemeWithLinkedStatsAndSpots.prompts";
+import { scrubInjectionTokens } from "../coachPageContext";
 
 const MAX_TABS = 5;
 const MAX_SPOTS = 10;
@@ -152,7 +153,11 @@ export async function readThemeWithLinkedStatsAndSpots(
   if (!theme) {
     throw new Error("Tema nao encontrado");
   }
-  if (theme.userId && theme.userId !== userId) {
+  // Sprint coach-launch-fix (P1 #3): ownership fail-closed. Antes a comparacao
+  // `theme.userId && theme.userId !== userId` permitia passar quando
+  // theme.userId vinha null (legado, drift, edge case). Agora exigimos que
+  // theme.userId seja exatamente igual ao userId solicitante.
+  if (!theme.userId || theme.userId !== userId) {
     throw new Error("Acesso negado: tema de outro usuario");
   }
 
@@ -166,14 +171,22 @@ export async function readThemeWithLinkedStatsAndSpots(
     .map((t: any) => ({
       id: t.id,
       name: t.name,
-      content_preview: previewFromContent(t.content),
+      // Sprint coach-launch-fix (P1 #5): scrub injection tokens do preview.
+      // Tab content e user-generated; preview vai direto pro LLM.
+      content_preview: scrubInjectionTokens(previewFromContent(t.content)),
     }));
 
+  // Sprint coach-launch-fix (P1 #4): filtrar linked spots cujo userId nao
+  // corresponde ao usuario corrente. getLinkedSpots faz JOIN via theme_id e
+  // pode retornar spots que ficaram orfaos OU foram linkados antes de algum
+  // refactor de ownership; defensa em profundidade contra cross-user leak.
   const linkedSpots = (Array.isArray(linkedSpotsRaw) ? linkedSpotsRaw : [])
+    .filter((s: any) => s.userId === userId)
     .slice(0, MAX_SPOTS)
     .map((s: any) => ({
       id: s.id,
-      conclusion: s.conclusion ?? "",
+      // P1 #5: conclusion eh user-generated; scrub.
+      conclusion: scrubInjectionTokens(s.conclusion ?? ""),
       type: s.type ?? null,
       spot: s.spot ?? null,
       screenshotUrl: s.screenshotUrl ?? s.imageUrl ?? null,

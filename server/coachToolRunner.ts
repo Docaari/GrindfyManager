@@ -82,6 +82,22 @@ export async function confirmCoachAction(
     return { ok: false, status: 422, code: "tool_not_registered" };
   }
 
+  // Sprint coach-launch-fix (P1 #2): re-validar input via Zod ANTES de
+  // executar. action.input pode ter sido persistido com shape valido na
+  // criacao mas mudancas de schema ou tampering ao DB nao foram detectados.
+  // Falhar fechado evita executeConfirmed receber payload invalido.
+  if (tool.inputSchema && typeof tool.inputSchema.safeParse === "function") {
+    const parsed = tool.inputSchema.safeParse(action.input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        status: 422,
+        code: "input_invalid",
+        details: parsed.error.issues,
+      };
+    }
+  }
+
   const ctx: CoachActionToolContext = {
     userId: user.userPlatformId,
     chatSessionId: action.chatSessionId,
