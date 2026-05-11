@@ -310,10 +310,14 @@ Tests: `tests/integration/routes/idor-ownership.smoke.test.ts` (25 casos, owner 
 - Implementer A: tournaments, planned-tournaments, calendar (categories+events), coaching-insights
 - Implementer B: study-cards, study-notes, study-materials, notifications
 
-#### Wave 3 — Auth hardening P0 (1.5 dias, sequencial)
-1. VerifyEmailPage: server-side handler retornar Set-Cookie httpOnly + remover `localStorage.setItem` no frontend + `clearStoredAuth` retroativo
-2. OAuth `verified !== true` block: throw em `createOrUpdateOAuthUser` se vier `false`; decodificar `id_token` JWT + checar `email_verified` claim
-3. Rate-limit `forgot-password` dedicado: keyed APENAS no email normalizado (strip plus-addressing) + max 3/hora; combinar com IP-based atual
+#### Wave 3 — Auth hardening P0 (3 P0) — CONCLUIDA 2026-05-11
+- [x] 1. VerifyEmailPage: `/api/auth/verify-email` auto-login seta sessao via `setAuthCookies` (httpOnly) em vez de retornar JWTs no body JSON; FE parou de gravar `grindfy_access_token`/`grindfy_refresh_token` em localStorage + full-reload pra `/home`; `AuthContext.initializeAuth` purga retroativamente esses keys do localStorage no boot
+- [x] 2. OAuth `verified !== true` block: `OAuthService.createOrUpdateOAuthUser` lanca `OAUTH_EMAIL_NOT_VERIFIED` antes de qualquer op DB; callback decodifica `id_token` (`OAuthService.decodeIdToken`) + cross-checa `email_verified` + email match contra userinfo; `exchangeCodeForToken` retorna `idToken`
+- [x] 3. Rate-limit `forgot-password` dedicado: `forgotPasswordRateLimit` 3/hora keyed no email normalizado (`emailRateLimitKey`: lowercase + collapse plus-addressing `victim+1@→victim@`; fallback `fp-ip:` quando email inutilizavel) empilhado com `authRateLimit` (IP+email)
+
+Reviewer round 2026-05-11: APPROVED. P2 (success card prometia redirect que nao acontecia no edge case sem autoLogin) + NIT (imports mortos) fixados no commit 27d7dd7. NITs deferidos: Gmail dot-normalization no rate-limit key (gap conhecido, +tag era o vetor principal e ta fechado), check `pending_verification` redundante (pre-existente, conservador).
+
+Tests: `tests/integration/auth/wave3-auth-hardening.test.ts` (11 casos — verify-email cookies/no-body-tokens/400, `decodeIdToken`, OAuth verified guard, forgot-password rate limit incl plus-addressing evasion + mailbox isolado, `vi.hoisted` mocks). Commits 6b0a6e7 + 27d7dd7. Resultado: `npx vitest run` 11264 verde / 145 red (baseline ~11254 / ~144 — +11 novos testes, delta flaky timeout suites). `npm run check` sem erros novos. 133/133 unit auth verde.
 
 #### Wave 4 — npm vulns (0.5 dia, sequencial)
 1. `drizzle-orm` 0.39.3 → 0.45.2 (SQLi fix HIGH) — semver major, testar migrations + queries
