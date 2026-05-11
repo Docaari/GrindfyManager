@@ -40,16 +40,13 @@ export function VerifyEmailPage() {
           setStatus('success');
           setMessage('Email verificado com sucesso! Bem-vindo ao Grindfy.');
 
-          // Check if auto-login data is provided
-          if (data.autoLogin && data.accessToken) {
-            // Store tokens for auto-login
-            localStorage.setItem('grindfy_access_token', data.accessToken);
-            localStorage.setItem('grindfy_refresh_token', data.refreshToken);
-            localStorage.setItem('grindfy_user_data', JSON.stringify(data.user));
-
-            // Redirect to home after a short delay
+          // SECURITY (auth-launch Wave 3): the server set the session via httpOnly
+          // cookies — there are no tokens in the body and nothing to persist in
+          // localStorage. Full page reload so AuthProvider re-initializes and
+          // hydrates the session from /api/auth/me.
+          if (data.autoLogin) {
             setTimeout(() => {
-              setLocation('/home');
+              window.location.href = '/home';
             }, 2000);
           }
         } else {

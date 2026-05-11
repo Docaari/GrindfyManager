@@ -60,6 +60,33 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
+  // Normalize an email for rate-limit bucketing: lowercase, trim, and collapse
+  // plus-addressing (victim+1@x.com / victim+anything@x.com → victim@x.com) so an
+  // attacker can't sidestep the per-email cap by varying the +tag.
+  const emailRateLimitKey = (raw: unknown): string => {
+    const email = String(raw ?? '').trim().toLowerCase();
+    const at = email.lastIndexOf('@');
+    if (at <= 0) return ''; // no usable email — caller falls back to IP key
+    const local = email.slice(0, at).split('+')[0];
+    const domain = email.slice(at + 1);
+    return `${local}@${domain}`;
+  };
+
+  // Dedicated, email-scoped limiter for password-reset requests. Combine with
+  // authRateLimit (IP+email): this one caps how many resets a *victim's mailbox*
+  // can receive regardless of the attacker's IP rotation. 3 per rolling hour.
+  const forgotPasswordRateLimit = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 3,
+    message: { message: 'Muitas solicitações de recuperação para este email. Tente novamente em 1 hora.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => {
+      const k = emailRateLimitKey(req.body?.email);
+      return k ? `fp:${k}` : `fp-ip:${req.ip}`;
+    },
+  });
+
   // Generate CSRF token endpoint
   app.get('/api/csrf-token', (_req: any, res: any) => {
     const token = crypto.randomBytes(32).toString('hex');
@@ -420,8 +447,12 @@ export function registerAuthRoutes(app: Express): void {
           .where(eq(users.email, userEmail));
 
         if (user) {
-          // Generate tokens for auto-login
+          // Auto-login: set the session via httpOnly cookies only. SECURITY
+          // (auth-launch Wave 3): do NOT return the JWTs in the JSON body — the
+          // frontend used to persist them in localStorage, defeating the httpOnly
+          // model and exposing the 30d refresh token to any XSS.
           const tokens = AuthService.generateTokens(user.userPlatformId, user.userPlatformId!, user.email!);
+          setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
           // Log successful verification and auto-login
           await AuthService.logAccess(user.userPlatformId, 'email_verified_auto_login', undefined, req);
@@ -440,8 +471,7 @@ export function registerAuthRoutes(app: Express): void {
               subscriptionPlan: user.subscriptionPlan || 'trial',
               trialEndsAt: user.trialEndsAt ? user.trialEndsAt.toISOString() : null,
               subscriptionEndsAt: user.subscriptionEndsAt ? user.subscriptionEndsAt.toISOString() : null
-            },
-            ...tokens
+            }
           });
         } else {
           res.json({ message: 'Email verificado com sucesso' });
@@ -471,9 +501,10 @@ export function registerAuthRoutes(app: Express): void {
   });
 
   // Password reset routes
-  // FIX (auth-launch P1.7): aplicar authRateLimit. Sem isso, atacante pode
-  // enumerar emails e/ou inundar mailbox de vitimas com reset emails.
-  app.post('/api/auth/forgot-password', authRateLimit, async (req, res) => {
+  // FIX (auth-launch P1.7 + Wave 3): authRateLimit (IP+email, 5/15min) caps the
+  // attacker's IP; forgotPasswordRateLimit (normalized email, 3/hour) caps how
+  // many reset emails a victim's mailbox can be flooded with regardless of IP.
+  app.post('/api/auth/forgot-password', authRateLimit, forgotPasswordRateLimit, async (req, res) => {
     try {
       const { email } = forgotPasswordSchema.parse(req.body);
 
@@ -620,6 +651,20 @@ export function registerAuthRoutes(app: Express): void {
       // Get user info
       const userInfo = await OAuthService.getUserInfo('google', tokenData.accessToken);
 
+      // SECURITY (auth-launch Wave 3): require provider-verified email. Cross-check
+      // the OIDC id_token's `email_verified` claim (authoritative) against the
+      // userinfo `verified_email` flag, and ensure the email matches. Any mismatch
+      // ⇒ refuse to provision/login. createOrUpdateOAuthUser throws as a backstop.
+      const idClaims = OAuthService.decodeIdToken(tokenData.idToken);
+      const idTokenEmailOk = !idClaims || !idClaims.email || idClaims.email.toLowerCase() === String(userInfo.email).toLowerCase();
+      const emailVerified =
+        userInfo.verified === true &&
+        (idClaims ? idClaims.email_verified === true : true) &&
+        idTokenEmailOk;
+      if (!emailVerified) {
+        return res.redirect('/login?error=oauth_account_unverified');
+      }
+
       // FIX (auth-launch P1.11): pre-check account takeover via email.
       // Se ja existe user com mesmo email + senha local + sem googleId,
       // bloqueamos o link automatico — senao um attacker que registrou Google
@@ -635,8 +680,9 @@ export function registerAuthRoutes(app: Express): void {
         return res.redirect('/login?error=oauth_account_conflict');
       }
 
-      // Create or update user
-      const user = await OAuthService.createOrUpdateOAuthUser('google', userInfo);
+      // Create or update user (pass the cross-checked verified flag — the storage
+      // layer refuses to provision when it isn't strictly true).
+      const user = await OAuthService.createOrUpdateOAuthUser('google', { ...userInfo, verified: emailVerified });
 
       // FIX (auth-launch P1.12): replicar checks status do login local.
       // Se user.status !== 'active' (blocked/pending_verification/inactive),

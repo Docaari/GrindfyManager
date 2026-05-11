@@ -75,12 +75,35 @@ export class OAuthService {
     return true;
   }
 
+  // Decode a Google id_token (JWT) payload WITHOUT verifying the signature. The
+  // token arrives over a direct server-to-server TLS response from Google's token
+  // endpoint, so signature verification is belt-and-suspenders — we only read the
+  // `email` / `email_verified` claims as a second source of truth alongside userinfo.
+  static decodeIdToken(idToken: string | undefined | null): { email?: string; email_verified?: boolean } | null {
+    if (!idToken || typeof idToken !== 'string') return null;
+    try {
+      const parts = idToken.split('.');
+      if (parts.length !== 3) return null;
+      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '==='.slice((b64.length + 3) % 4);
+      const json = Buffer.from(padded, 'base64').toString('utf-8');
+      const claims = JSON.parse(json);
+      return {
+        email: typeof claims.email === 'string' ? claims.email : undefined,
+        // Google sends email_verified as boolean true/false or string "true"/"false".
+        email_verified: claims.email_verified === true || claims.email_verified === 'true',
+      };
+    } catch {
+      return null;
+    }
+  }
+
   // Exchange authorization code for access token
   static async exchangeCodeForToken(
     provider: keyof typeof OAUTH_PROVIDERS,
     code: string,
     redirectUri: string
-  ): Promise<{ accessToken: string; refreshToken?: string; expiresIn?: number }> {
+  ): Promise<{ accessToken: string; refreshToken?: string; expiresIn?: number; idToken?: string }> {
     const config = OAUTH_PROVIDERS[provider];
     if (!config) {
       throw new Error(`Unsupported OAuth provider: ${provider}`);
@@ -106,11 +129,12 @@ export class OAuthService {
     }
 
     const data = await response.json();
-    
+
     return {
       accessToken: data.access_token,
       refreshToken: data.refresh_token,
       expiresIn: data.expires_in,
+      idToken: data.id_token,
     };
   }
 
@@ -169,6 +193,16 @@ export class OAuthService {
       verified?: boolean;
     }
   ) {
+    // SECURITY (auth-launch Wave 3): never provision / link an account from an
+    // OAuth identity whose email is not verified by the provider. Without this an
+    // attacker controlling an unverified-email Google account could create a row
+    // for someone else's address (account pre-provisioning / takeover surface).
+    // Callers must surface this as an auth error — do NOT fall through to a row.
+    if (oauthData.verified !== true) {
+      const err: any = new Error('OAUTH_EMAIL_NOT_VERIFIED');
+      err.code = 'OAUTH_EMAIL_NOT_VERIFIED';
+      throw err;
+    }
     try {
       // Check if user exists by email
       const [existingUser] = await db.select()
@@ -183,7 +217,7 @@ export class OAuthService {
             lastName: oauthData.lastName || existingUser.lastName,
             googleId: oauthData.id,
             profileImageUrl: oauthData.picture || existingUser.profileImageUrl,
-            emailVerified: oauthData.verified || existingUser.emailVerified,
+            emailVerified: true, // reached here ⇒ provider-verified
             updatedAt: new Date(),
           })
           .where(eq(users.id, existingUser.id))
@@ -215,7 +249,7 @@ export class OAuthService {
           lastName: oauthData.lastName,
           googleId: oauthData.id,
           profileImageUrl: oauthData.picture,
-          emailVerified: oauthData.verified || false,
+          emailVerified: true, // reached here ⇒ provider-verified (see guard above)
           status: 'active',
           role: 'user',
           subscriptionPlan: 'trial',

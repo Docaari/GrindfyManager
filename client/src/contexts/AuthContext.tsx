@@ -101,6 +101,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const initializeAuth = async () => {
     try {
+      // SECURITY (auth-launch Wave 3): retroactively purge JWTs that older app
+      // builds (and the old verify-email auto-login) persisted in localStorage.
+      // The session lives in httpOnly cookies; these keys must never be present.
+      try {
+        localStorage.removeItem('grindfy_access_token');
+        localStorage.removeItem('grindfy_refresh_token');
+      } catch { /* localStorage unavailable (SSR/incognito edge) — ignore */ }
+
       // Initialize CSRF token
       await initCsrf();
 
