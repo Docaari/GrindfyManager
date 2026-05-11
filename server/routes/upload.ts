@@ -120,7 +120,9 @@ export function registerUploadRoutes(app: Express): void {
           const withoutId = parsed.filter(t => !t.tournamentId || t.tournamentId.trim() === '');
 
           const existingIds = await storage.findExistingTournamentIds(userPlatformId, withId.map((t: any) => t.tournamentId!));
-          const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn })));
+          // P1 fix (2026-05-11) #4: include site in lookup so the same tournament name
+          // played on different networks isn't collapsed as duplicate.
+          const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn, site: t.site })));
 
           tournaments = [];
           for (const t of withId) {
@@ -133,7 +135,8 @@ export function registerUploadRoutes(app: Express): void {
           }
           for (const t of withoutId) {
             if (t.datePlayed) {
-              const key = `${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+              // P1 fix (2026-05-11) #4: site-aware key (matches storage convention).
+              const key = `${t.site}|${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
               if (existingByFields.has(key)) {
                 duplicatesIgnored++;
                 duplicateIds.push(`${t.name} (${t.datePlayed.toISOString().split('T')[0]})`);
@@ -156,7 +159,9 @@ export function registerUploadRoutes(app: Express): void {
             const withoutId = parsed.filter(t => !t.tournamentId || t.tournamentId.trim() === '');
 
             const existingIds = await storage.findExistingTournamentIds(userPlatformId, withId.map((t: any) => t.tournamentId!));
-            const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn })));
+            // P1 fix (2026-05-11) #4: include site in lookup so the same tournament name
+            // played on different networks isn't collapsed as duplicate.
+            const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn, site: t.site })));
 
             tournaments = [];
             for (const t of withId) {
@@ -169,7 +174,8 @@ export function registerUploadRoutes(app: Express): void {
             }
             for (const t of withoutId) {
               if (t.datePlayed) {
-                const key = `${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+                // P1 fix (2026-05-11) #4: site-aware key.
+                const key = `${t.site}|${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
                 if (existingByFields.has(key)) {
                   duplicatesIgnored++;
                   duplicateIds.push(`${t.name} (${t.datePlayed.toISOString().split('T')[0]})`);
@@ -188,7 +194,9 @@ export function registerUploadRoutes(app: Express): void {
             const withoutId = parsed.filter(t => !t.tournamentId || t.tournamentId.trim() === '');
 
             const existingIds = await storage.findExistingTournamentIds(userPlatformId, withId.map((t: any) => t.tournamentId!));
-            const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn })));
+            // P1 fix (2026-05-11) #4: include site in lookup so the same tournament name
+            // played on different networks isn't collapsed as duplicate.
+            const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn, site: t.site })));
 
             tournaments = [];
             for (const t of withId) {
@@ -201,7 +209,8 @@ export function registerUploadRoutes(app: Express): void {
             }
             for (const t of withoutId) {
               if (t.datePlayed) {
-                const key = `${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+                // P1 fix (2026-05-11) #4: site-aware key.
+                const key = `${t.site}|${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
                 if (existingByFields.has(key)) {
                   duplicatesIgnored++;
                   duplicateIds.push(`${t.name} (${t.datePlayed.toISOString().split('T')[0]})`);
@@ -269,6 +278,19 @@ export function registerUploadRoutes(app: Express): void {
         // enrichTournamentTypeFields garante paridade type<->category + Satellite/Flight/Add-on.
         const tournamentsToInsert = tournaments.map(tournament => {
           const enriched = enrichTournamentTypeFields({ name: tournament.name, category: tournament.category });
+          // P1 fix (2026-05-11) #2: addOnCost = stake (NOT buyIn). buyIn = stake + rake,
+          // so subtract rake to get stake. Avoids double-counting rake when user adds
+          // a re-buy / add-on later.
+          const buyInNum = Number(tournament.buyIn ?? 0);
+          const rakeNum = Number(tournament.rake ?? 0);
+          const stakeOnly = Math.max(0, buyInNum - rakeNum);
+          // P1 fix (2026-05-11) #3: preserve parser-provided category when it's a
+          // recognized label (legacy Bounty/Knockout/Re-entry are not in PRIMARY_TYPES
+          // but still meaningful as display labels). enriched.type is the SSoT for
+          // the ortogonal `type` column; `category` keeps the historical string.
+          const preservedCategory = (tournament.category && tournament.category.trim() !== '')
+            ? tournament.category
+            : enriched.type;
           return {
             userId: userPlatformId,
             name: tournament.name.trim(),
@@ -279,10 +301,10 @@ export function registerUploadRoutes(app: Express): void {
             site: tournament.site,
             format: tournament.format,
             type: enriched.type,
-            category: enriched.type,
+            category: preservedCategory,
             isFlight: enriched.isFlight,
             allowsAddOn: enriched.allowsAddOn,
-            addOnCost: enriched.allowsAddOn ? tournament.buyIn.toString() : null,
+            addOnCost: enriched.allowsAddOn ? stakeOnly.toString() : null,
             allowsReentry: enriched.allowsReentry,
             speed: tournament.speed,
             fieldSize: tournament.fieldSize || null,
@@ -482,7 +504,8 @@ export function registerUploadRoutes(app: Express): void {
       const withoutId = parsedData.filter(t => !t.tournamentId || t.tournamentId.trim() === '');
 
       const existingIds = await storage.findExistingTournamentIds(userPlatformId, withId.map((t: any) => t.tournamentId!));
-      const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn })));
+      // P1 fix (2026-05-11) #4: site-aware dup lookup.
+      const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn, site: t.site })));
 
       for (const t of withId) {
         if (existingIds.has(t.tournamentId!)) {
@@ -496,7 +519,8 @@ export function registerUploadRoutes(app: Express): void {
 
       for (const t of withoutId) {
         if (t.datePlayed) {
-          const key = `${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+          // P1 fix (2026-05-11) #4: site-aware key.
+          const key = `${t.site}|${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
           if (existingByFields.has(key)) {
             duplicateTournaments.push(t);
             const site = t.site || 'Unknown';
@@ -582,7 +606,8 @@ export function registerUploadRoutes(app: Express): void {
       const withoutId = parsedData.filter(t => !t.tournamentId || t.tournamentId.trim() === '');
 
       const existingIds = await storage.findExistingTournamentIds(userPlatformId, withId.map((t: any) => t.tournamentId!));
-      const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn })));
+      // P1 fix (2026-05-11) #4: site-aware dup lookup.
+      const existingByFields = await storage.findExistingTournamentsByFields(userPlatformId, withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn, site: t.site })));
 
       for (const t of withId) {
         if (existingIds.has(t.tournamentId!)) {
@@ -594,7 +619,8 @@ export function registerUploadRoutes(app: Express): void {
 
       for (const t of withoutId) {
         if (t.datePlayed) {
-          const key = `${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+          // P1 fix (2026-05-11) #4: site-aware key.
+          const key = `${t.site}|${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
           if (existingByFields.has(key)) {
             duplicateTournaments.push(t);
           } else {
@@ -627,6 +653,14 @@ export function registerUploadRoutes(app: Express): void {
       // type<->category + Satellite/Flight/Add-on.
       const insertData = tournamentsToSave.map(tournament => {
         const enriched = enrichTournamentTypeFields({ name: tournament.name, category: tournament.category });
+        // P1 fix (2026-05-11) #2: addOnCost = stake (NOT buyIn).
+        const buyInNum = Number(tournament.buyIn ?? 0);
+        const rakeNum = Number(tournament.rake ?? 0);
+        const stakeOnly = Math.max(0, buyInNum - rakeNum);
+        // P1 fix (2026-05-11) #3: preserve parser-provided category.
+        const preservedCategory = (tournament.category && tournament.category.trim() !== '')
+          ? tournament.category
+          : enriched.type;
         return {
           userId: userPlatformId,
           name: tournament.name.trim(),
@@ -637,10 +671,10 @@ export function registerUploadRoutes(app: Express): void {
           site: tournament.site,
           format: tournament.format,
           type: enriched.type,
-          category: enriched.type,
+          category: preservedCategory,
           isFlight: enriched.isFlight,
           allowsAddOn: enriched.allowsAddOn,
-          addOnCost: enriched.allowsAddOn ? tournament.buyIn.toString() : null,
+          addOnCost: enriched.allowsAddOn ? stakeOnly.toString() : null,
           allowsReentry: enriched.allowsReentry,
           speed: tournament.speed,
           fieldSize: tournament.fieldSize || null,
@@ -885,10 +919,17 @@ export async function handleUploadCsv(req: any, res: any): Promise<void> {
 
     const userSettings = await (storage as any).getUserSettings(userId);
     const exchangeRates = withExchangeRateDefaults(userSettings?.exchangeRates);
-    const fileContent = file.buffer.toString('utf-8');
 
-    // Parse via parser default (PokerCSVParser.parseCSV) — testes mockam.
-    const parsed = await PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
+    // P1 fix (2026-05-11) #5: prefer central dispatcher when available so XLSX/Coin/
+    // CoinPoker payloads reach the right parser. Existing integration tests mock
+    // PokerCSVParser with only parseCSV/parseBodogXLSX defined (no dispatchCSVParser),
+    // so we fall back to parseCSV when the dispatcher is missing — keeps mocks valid
+    // without losing format detection in production.
+    const fileContent = file.buffer.toString('utf-8');
+    const dispatcher = (PokerCSVParser as any).dispatchCSVParser;
+    const parsed = typeof dispatcher === 'function'
+      ? await dispatcher.call(PokerCSVParser, file, userId, exchangeRates)
+      : await PokerCSVParser.parseCSV(fileContent, userId, exchangeRates);
 
     // Detecta candidates e separa em buckets para auto-link RF-08.
     const detections = (parsed ?? []).map((t: any) => ({
