@@ -204,6 +204,12 @@ export default function GrindSessionLive() {
   const [sessionSummaryData, setSessionSummaryData] = useState<any>(null);
   const [finalNotes, setFinalNotes] = useState('');
 
+  // P0/P1 launch-fix: guards de double-click para acoes que disparam fluxo
+  // sequencial sem react-query mutation. Evita finalizar sessao 2x ou processar
+  // pendentes em loop duplicado quando founder clica rapido (ou rede atrasa).
+  const isEndingRef = useRef(false);
+  const finishingPendingRef = useRef(false);
+
   // ADR-040 legacy state REMOVIDO em 2026-05-05 (HIGH-4 audit). Reconcile
   // inline em SessionSummaryModal cobre o fluxo. WalletReconciliationDialog
   // import mantido apenas pra back-compat de testes; nao renderizado.
@@ -694,6 +700,11 @@ export default function GrindSessionLive() {
   };
 
   const handleConfirmEndSession = async () => {
+    // P1 launch-fix: guard double-click no botao "Finalizar" do confirm modal.
+    // Sem isto, dois cliques rapidos disparavam dois loops sequenciais sobre
+    // o pendingList — cada PUT de torneio rodava 2x.
+    if (finishingPendingRef.current) return;
+    finishingPendingRef.current = true;
     try {
       // Auto-finish ALL pending tournaments (RF-02)
       const allTournaments = [
@@ -737,12 +748,21 @@ export default function GrindSessionLive() {
       generateSessionSummary();
     } catch (error) {
       toast({ title: "Erro ao Finalizar Torneios", description: "Nao foi possivel finalizar os torneios pendentes.", variant: "destructive" });
+    } finally {
+      finishingPendingRef.current = false;
     }
   };
 
   const handleEndSession = async () => {
     const sessionId = activeSession?.id;
     if (!sessionId) return;
+    // P0 launch-fix: guard double-click. Sem isto, dois cliques rapidos no
+    // botao "Finalizar Sessao" disparavam dois PUTs concorrentes, geravam
+    // dois evaluateStops e podiam dar race em wallet snapshots.
+    if (isEndingRef.current) return;
+    isEndingRef.current = true;
+    // Fechar UI ja antes do await para feedback imediato e evitar re-click.
+    setShowSessionSummary(false);
     const sessionData = sessionSummaryData || {
       volume: stats.registros,
       invested: stats.totalInvestidoUSD ?? stats.totalInvestido,
@@ -790,6 +810,9 @@ export default function GrindSessionLive() {
         description: "Nao foi possivel salvar os dados da sessao. Tente novamente.",
         variant: "destructive",
       });
+      // Reabre o summary pra o user poder tentar novamente.
+      setShowSessionSummary(true);
+      isEndingRef.current = false;
       return;
     }
 
@@ -797,6 +820,7 @@ export default function GrindSessionLive() {
     localStorage.removeItem('grindfy_session_backup');
     // MEDIUM-5: limpa rascunho final notes apos persist OK.
     if (sessionId) localStorage.removeItem(`grindfy_finalNotes_${sessionId}`);
+    isEndingRef.current = false;
     setLocation('/grind');
   };
 
@@ -3053,6 +3077,11 @@ export default function GrindSessionLive() {
           );
           let importedCount = 0;
           let skippedCount = 0;
+          let errorCount = 0;
+          // P1 launch-fix: usar mutateAsync + await em loop. Antes usava
+          // mutate() fire-and-forget — importedCount era contado mesmo quando
+          // o backend rejeitava (status_not_active, dedupe server-side, etc.)
+          // e o toast mentia "X importados" enquanto a sessao tinha menos.
           for (const t of tournaments) {
             const matchKey = buildSupremaMatchKey({
               site: t.site,
@@ -3065,7 +3094,7 @@ export default function GrindSessionLive() {
               continue;
             }
             try {
-              addTournamentMutation.mutate({
+              await addTournamentMutation.mutateAsync({
                 site: t.site, name: t.name, buyIn: t.buyIn, type: t.type, speed: t.speed,
                 guaranteed: t.guaranteed, scheduledTime: t.time, status: "upcoming",
                 syncWithGrade: false, fromPlannedTournament: false,
@@ -3075,15 +3104,19 @@ export default function GrindSessionLive() {
               });
               importedCount++;
               if (matchKey) existingKeys.add(matchKey);
-            } catch {}
+            } catch {
+              errorCount++;
+            }
           }
-          if (importedCount > 0 || skippedCount > 0) {
+          if (importedCount > 0 || skippedCount > 0 || errorCount > 0) {
             const parts: string[] = [];
             if (importedCount > 0) parts.push(`${importedCount} novos importados`);
             if (skippedCount > 0) parts.push(`${skippedCount} ja estavam na sessao`);
+            if (errorCount > 0) parts.push(`${errorCount} falharam`);
             toast({
               title: "Importacao Concluida",
               description: parts.join(", "),
+              variant: errorCount > 0 && importedCount === 0 ? "destructive" : undefined,
             });
           }
         }}

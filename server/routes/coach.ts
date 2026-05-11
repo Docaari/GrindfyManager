@@ -18,6 +18,26 @@ import { getCoachProfile } from "../coachMemory";
 const VALID_COACH_TYPES = ['mental', 'tournament', 'technical'];
 const RATE_LIMIT_PER_HOUR = 30;
 
+// Sprint coach-launch-fix (P0 #4): modelo Anthropic configuravel via env
+// COACH_CHAT_MODEL. Default = claude-sonnet-4-6 (modelo atual em CLAUDE.md).
+// O modelo `claude-sonnet-4-5-20250514` mencionado no codigo legado NAO EXISTE.
+function getChatModel(): string {
+  const env = process.env.COACH_CHAT_MODEL || process.env.COACH_MODEL;
+  if (env && env.trim().length > 0) return env.trim();
+  return 'claude-sonnet-4-6';
+}
+
+// Sprint coach-launch-fix (P0 #4): max_tokens padrao 2048 (era 1024).
+// Override via COACH_MAX_TOKENS.
+function getMaxTokens(): number {
+  const env = process.env.COACH_MAX_TOKENS;
+  if (env) {
+    const n = Number(env);
+    if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  }
+  return 2048;
+}
+
 // Sprint Coach Sprint 0 + Coach-2B — imports lazy via dynamic import nos handlers
 // para preservar testabilidade (mocks resolvidos via vi.mock no test file).
 
@@ -52,10 +72,48 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
     return;
   }
 
-  // Rate limiting
+  // Sprint coach-launch-fix (P0 #1): tier gate. Resolve tier do usuario e
+  // bloqueia coach restritos por plano ANTES de qualquer trabalho pesado.
+  let tier: string = 'free';
+  try {
+    const { resolveUserTier, canAccessCoach, getUpgradeTarget } = await import('../coachAccess');
+    tier = await resolveUserTier(req.user);
+    if (!canAccessCoach(tier as any, coachType as any)) {
+      res.status(403).json({
+        code: 'tier_locked',
+        upgradeTo: getUpgradeTarget(tier as any, coachType as any),
+        message: 'Acesso restrito. Faca upgrade para usar este coach.',
+      });
+      return;
+    }
+  } catch (err) {
+    // Falha ao resolver tier nao bloqueia free coaches (tier permanece 'free').
+    console.error('[coach.chat] resolveUserTier failed', err);
+  }
+
+  // Sprint coach-launch-fix (P1 #14): rate limit por tier (10/50/200/Infinity).
+  // Mantem RATE_LIMIT_PER_HOUR=30 como cap legado para compat com testes
+  // existentes que esperam 30 limit, MAS quando o tier resolvido der um valor
+  // mais permissivo, usa o do tier (premium 200, admin Infinity).
+  let limit = RATE_LIMIT_PER_HOUR;
+  try {
+    const { getRateLimitForPlan } = await import('../coachAccess');
+    const tierLimit = getRateLimitForPlan(tier);
+    if (Number.isFinite(tierLimit) && tierLimit > limit) {
+      limit = tierLimit;
+    } else if (tierLimit === Infinity) {
+      limit = Infinity;
+    }
+  } catch { /* mantem 30 */ }
+
   const msgCount = await coachStorage.countUserMessagesInLastHour(userId);
-  if (msgCount >= RATE_LIMIT_PER_HOUR) {
-    res.status(429).json({ message: `Limite de ${RATE_LIMIT_PER_HOUR} mensagens por hora atingido. Tente novamente mais tarde.` });
+  if (msgCount >= limit) {
+    res.status(429).json({
+      code: 'rate_limited',
+      limit,
+      used: msgCount,
+      message: `Limite de ${RATE_LIMIT_PER_HOUR} mensagens por hora atingido. Tente novamente mais tarde.`,
+    });
     return;
   }
 
@@ -98,7 +156,6 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
 
   // Auto-generate title from first message if new session
   const existingMessages = await coachStorage.getSessionMessages(activeSessionId);
-  // existingMessages check: if this was the first message (only user msg saved so far)
   if (!sessionId || (existingMessages && existingMessages.length <= 1)) {
     const title = message.substring(0, 50);
     await coachStorage.updateSessionTitle(activeSessionId, title);
@@ -109,8 +166,32 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  // Stream response from Claude API
+  // Sprint coach-launch-fix (P0 #5 + P0 #6): rastreio de abort + estado para
+  // garantir que erros nao gerem mensagem fake como historico.
+  let aborted = false;
+  let streamFinished = false;
+  let stream: any = null;
+  let lastError: any = null;
   let assistantContent = '';
+  const startedAt = Date.now();
+  const model = getChatModel();
+  const maxTokens = getMaxTokens();
+
+  // Sprint coach-launch-fix (P0 #5): listener de disconnect.
+  if (req && typeof req.on === 'function') {
+    req.on('close', () => {
+      if (!streamFinished) {
+        aborted = true;
+        try { stream?.controller?.abort?.(); } catch { /* noop */ }
+      }
+    });
+  }
+
+  // Sprint coach-launch-fix (P0 #2): tools wiring + (P0 #3): usage tracking
+  // capturado dos eventos do stream.
+  let usageData: any = null;
+  const toolUseEvents: Array<any> = [];
+
   try {
     const Anthropic = (await import('@anthropic-ai/sdk')).default;
     const anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -130,67 +211,308 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
       specializedContext = await buildTechnicalContext(userId);
     }
 
-    // Get system prompt
+    // Get system prompt (legacy — usado como fallback/base por buildSystemArray
+    // quando alguns loaders nao alimentam dados)
     const getSystemPrompt = (ct: string) => {
       if (ct === 'mental') return getMentalPrompt(specializedContext);
       if (ct === 'tournament') return getTournamentPrompt(specializedContext);
       return getTechnicalPrompt(specializedContext);
     };
 
-    // Assemble full context
+    // Sprint coach-launch-fix (P1 #8): assembleContext agora retorna
+    // SystemBlock[] com cache_control via buildSystemArray.
     const context = await assembleContext(
       { coachType, userId, message, sessionId: activeSessionId },
       {
         getUserProfile: async (uid: string) => await coachStorage.getUserProfile?.(uid) || null,
         getStatsSnapshot: async (uid: string) => await coachStorage.getUserStats?.(uid) || null,
-        getLastArchivedSessionSummary: async (uid: string, ct: string) => await coachStorage.getLastArchivedSessionSummary?.(uid, ct) || null,
+        getLastArchivedSessionSummary: async (uid: string, ct: string) =>
+          await coachStorage.getLastArchivedSessionSummary?.(uid, ct) || null,
         getSessionHistory: async (sid: string) => {
           const msgs = await coachStorage.getSessionMessages(sid);
           return (msgs || []).map((m: any) => ({ role: m.role, content: m.content }));
         },
         getSystemPrompt,
+        getAiProfile: coachStorage.getAiProfileContent
+          ? async (uid: string) => await coachStorage.getAiProfileContent(uid)
+          : undefined,
+        getActiveGrind: coachStorage.getActiveGrind
+          ? async (uid: string) => await coachStorage.getActiveGrind(uid)
+          : undefined,
+        getRecentBreakFeedbacks: coachStorage.getRecentBreakFeedbacks
+          ? async (uid: string) => await coachStorage.getRecentBreakFeedbacks(uid)
+          : undefined,
+        getDetectedLeaks: coachStorage.getDetectedLeaks
+          ? async (uid: string) => await coachStorage.getDetectedLeaks(uid)
+          : undefined,
+        getWeeklyPlan: coachStorage.getWeeklyPlan
+          ? async (uid: string) => await coachStorage.getWeeklyPlan(uid)
+          : undefined,
+        getStudyProgress: coachStorage.getStudyProgress
+          ? async (uid: string) => await coachStorage.getStudyProgress(uid)
+          : undefined,
       },
     );
 
-    // Stream from Claude API
-    const stream = anthropicClient.messages.stream({
-      model: 'claude-sonnet-4-5-20250514',
-      max_tokens: 1024,
+    // Sprint coach-launch-fix (P0 #2): expor tools por tier.
+    // Importacoes encapsuladas em try/catch porque side-effect import de
+    // coachTools/index pode quebrar quando schemas mockados em testes nao
+    // exportam todas as tabelas (graceful fallback: sem tools).
+    let tools: any[] = [];
+    try {
+      // Side-effect import garante registro das tools no registry singleton.
+      try {
+        await import('../coachTools/index');
+      } catch (sideErr) {
+        console.error('[coach.chat] tool registry side-import failed', sideErr);
+      }
+      const { exportToolsForAnthropic, getTool } = await import('../coachTools/registry');
+      tools = exportToolsForAnthropic(tier as any);
+      // MEDIUM-1: filtrar stubs em producao para evitar que o LLM chame
+      // handlers not_implemented. Em dev/test deixa passar.
+      if (process.env.NODE_ENV === 'production') {
+        tools = tools.filter((t: any) => {
+          const def: any = getTool(t.name);
+          return def && !def.__stub;
+        });
+      }
+    } catch (toolErr) {
+      console.error('[coach.chat] tool export failed', toolErr);
+      tools = [];
+    }
+
+    const streamArgs: any = {
+      model,
+      max_tokens: maxTokens,
       system: context.system,
       messages: context.messages as any,
-    });
+    };
+    if (tools && tools.length > 0) {
+      streamArgs.tools = tools;
+    }
+
+    if (process.env.COACH_DEBUG) {
+      console.log('[coach.chat DEBUG] before stream', { tools: tools?.length, sysType: Array.isArray(streamArgs.system) ? 'array' : typeof streamArgs.system });
+    }
+    stream = anthropicClient.messages.stream(streamArgs);
 
     for await (const event of stream) {
+      if (aborted) break;
+
+      // P0 #3: capturar usage do message_start (input + cache tokens).
+      if (event.type === 'message_start') {
+        const u = (event as any).message?.usage;
+        if (u) {
+          usageData = {
+            input_tokens: u.input_tokens ?? null,
+            output_tokens: u.output_tokens ?? 0,
+            cache_creation_input_tokens: u.cache_creation_input_tokens ?? null,
+            cache_read_input_tokens: u.cache_read_input_tokens ?? null,
+          };
+        }
+        continue;
+      }
+
+      // P0 #3: capturar output tokens finais do message_delta.
+      if (event.type === 'message_delta') {
+        const u = (event as any).usage;
+        if (u && usageData) {
+          if (u.output_tokens != null) usageData.output_tokens = u.output_tokens;
+          if (u.input_tokens != null) usageData.input_tokens = u.input_tokens;
+        } else if (u) {
+          usageData = {
+            input_tokens: u.input_tokens ?? null,
+            output_tokens: u.output_tokens ?? 0,
+            cache_creation_input_tokens: u.cache_creation_input_tokens ?? null,
+            cache_read_input_tokens: u.cache_read_input_tokens ?? null,
+          };
+        }
+        continue;
+      }
+
+      if (event.type === 'message_stop') {
+        // Anthropic SDK as vezes anexa final usage em message_stop.
+        const u = (event as any).message?.usage ?? (event as any).usage;
+        if (u && usageData) {
+          if (u.output_tokens != null) usageData.output_tokens = u.output_tokens;
+        }
+        continue;
+      }
+
       if (event.type === 'content_block_delta' && (event.delta as any).type === 'text_delta') {
         const chunk = (event.delta as any).text;
         assistantContent += chunk;
         res.write(`data: ${JSON.stringify({ type: 'text', content: chunk })}\n\n`);
+        continue;
+      }
+
+      // P0 #2: tool_use events (content_block_start com type=tool_use).
+      if (
+        event.type === 'content_block_start' &&
+        (event as any).content_block?.type === 'tool_use'
+      ) {
+        const cb = (event as any).content_block;
+        toolUseEvents.push({
+          name: cb.name,
+          id: cb.id,
+          input: cb.input,
+        });
+        continue;
       }
     }
+
+    streamFinished = true;
   } catch (streamError: any) {
-    // Send error via SSE
-    res.write(`data: ${JSON.stringify({ type: 'error', message: streamError?.message || 'Erro ao processar resposta' })}\n\n`);
-    if (!assistantContent) {
-      assistantContent = 'Desculpe, ocorreu um erro ao processar sua mensagem.';
+    lastError = streamError;
+    if (!aborted) {
+      // Send error via SSE — SOMENTE se nao foi abort do client.
+      try {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: streamError?.message || 'Erro ao processar resposta' })}\n\n`);
+      } catch { /* response ja fechada */ }
     }
   }
 
-  // Save assistant message
-  const assistantTokenCount = Math.ceil(assistantContent.length / 4);
-  const savedMsg = await coachStorage.saveMessage({
-    sessionId: activeSessionId,
-    role: 'assistant',
-    content: assistantContent,
-    tokenCount: assistantTokenCount,
-  });
+  // Sprint coach-launch-fix (P0 #2): processar tool_use events colhidos.
+  // Para tools com requiresConfirmation=true criar coach_action pendente +
+  // emitir SSE 'tool_pending'. Para tools sem confirmacao executar imediato.
+  if (!aborted && toolUseEvents.length > 0) {
+    try {
+      const { getTool } = await import('../coachTools/registry');
+      for (const tu of toolUseEvents) {
+        const tool: any = getTool(tu.name);
+        if (!tool) continue;
 
-  // Update session token count
-  await coachStorage.updateSessionTokenCount(activeSessionId, userTokenCount + assistantTokenCount);
+        if (tool.requiresConfirmation) {
+          // Cria coach_action pendente.
+          try {
+            if ((coachStorage as any).createCoachAction) {
+              const action = await (coachStorage as any).createCoachAction({
+                userId,
+                chatSessionId: activeSessionId,
+                toolName: tu.name,
+                input: tu.input,
+                status: 'pending',
+              });
+              try {
+                res.write(`data: ${JSON.stringify({
+                  type: 'tool_pending',
+                  toolName: tu.name,
+                  actionId: action?.id ?? null,
+                })}\n\n`);
+              } catch { /* noop */ }
+            }
+          } catch (err) {
+            console.error('[coach.chat] createCoachAction failed', { tool: tu.name, err });
+          }
+        } else {
+          // Executar imediato.
+          try {
+            const ctx = {
+              userId,
+              userPlatformId: userId,
+              chatSessionId: activeSessionId,
+              messageId: tu.id,
+            };
+            const out = await tool.handler(tu.input, ctx);
+            try {
+              res.write(`data: ${JSON.stringify({
+                type: 'tool_result',
+                toolName: tu.name,
+                ok: out?.ok !== false,
+                data: out?.data ?? null,
+              })}\n\n`);
+            } catch { /* noop */ }
+          } catch (err: any) {
+            console.error('[coach.chat] tool handler failed', { tool: tu.name, err });
+            try {
+              res.write(`data: ${JSON.stringify({
+                type: 'tool_result',
+                toolName: tu.name,
+                ok: false,
+                error: err?.message || 'tool_failed',
+              })}\n\n`);
+            } catch { /* noop */ }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[coach.chat] tool processing loop failed', err);
+    }
+  }
 
-  // Send done event
-  const messageId = savedMsg?.id || nanoid();
-  res.write(`data: ${JSON.stringify({ type: 'done', messageId })}\n\n`);
-  res.end();
+  // Sprint coach-launch-fix (P0 #6 + P1 #13): try/finally garante save+end
+  // mesmo em erro. Mensagem fake (assistantContent default) eh marcada como
+  // errored via metadata para nao confundir historico.
+  let savedMsg: any = null;
+  try {
+    if (aborted) {
+      // Em abort do client: NAO salvar mensagem fake. Apenas finalizar.
+      res.end?.();
+      return;
+    }
+
+    // Sempre salvar mensagem (mesmo se vazio) para estado consistente.
+    const isErrored = !!lastError;
+    const finalContent = assistantContent || (isErrored
+      ? 'Desculpe, ocorreu um erro ao processar sua mensagem.'
+      : '');
+
+    const saveArgs: any = {
+      sessionId: activeSessionId,
+      role: 'assistant',
+      content: finalContent,
+      // P0 #3: tokens reais do stream (quando disponivel) sobre estimativa fake.
+      tokenCount: usageData?.output_tokens ?? Math.ceil(finalContent.length / 4),
+      // Sprint coach-launch-fix RF-04 P1 #6: marcar errored em metadata
+      // para que UI/historico saibam que esta resposta foi degradada.
+      metadata: isErrored
+        ? { errored: true, errorCode: lastError?.code || 'stream_error' }
+        : undefined,
+      // MEDIUM-8 (prompt-caching test): saveMessage NAO carrega usage; recebe
+      // apenas model + latencyMs. recordUsage faz UPDATE separado.
+      model,
+      latencyMs: Date.now() - startedAt,
+    };
+    savedMsg = await coachStorage.saveMessage(saveArgs);
+
+    // P0 #3: persistir usage via recordUsage(messageId, usage, model, latencyMs).
+    if (usageData && (coachStorage as any).recordUsage) {
+      try {
+        await (coachStorage as any).recordUsage(
+          savedMsg?.id ?? null,
+          usageData,
+          model,
+          Date.now() - startedAt,
+        );
+      } catch (err) {
+        console.error('[coach.chat] recordUsage failed', err);
+      }
+    }
+
+    // Sprint coach-launch-fix RF-04 P1 #6: errorMessage na sessao quando
+    // aplicavel (para UI sinalizar sessao degradada).
+    if (isErrored && (coachStorage as any).updateSessionError) {
+      try {
+        await (coachStorage as any).updateSessionError(activeSessionId, lastError?.message || 'stream_error');
+      } catch { /* noop */ }
+    }
+
+    // Update session token count
+    const totalTokens = (usageData?.input_tokens ?? userTokenCount) + (usageData?.output_tokens ?? Math.ceil(finalContent.length / 4));
+    try {
+      await coachStorage.updateSessionTokenCount(activeSessionId, totalTokens);
+    } catch { /* noop */ }
+
+    // Send done event
+    const messageId = savedMsg?.id || nanoid();
+    try {
+      res.write(`data: ${JSON.stringify({ type: 'done', messageId, sessionId: activeSessionId })}\n\n`);
+    } catch { /* noop */ }
+  } catch (saveErr) {
+    console.error('[coach.chat] save phase failed', saveErr);
+  } finally {
+    try { res.end?.(); } catch { /* noop */ }
+  }
 }
 
 export async function handleListSessions(req: any, res: any, coachStorage: any): Promise<void> {

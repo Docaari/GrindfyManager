@@ -386,6 +386,29 @@ async function recordSnapshot(
     }
   }
 
+  // Bankroll-Launch-Fix P0 #2: rejeitar gravacao em user_settings.bankroll_amount
+  // (v1 escalar) quando ha wallets active. Em multi-wallet, transacoes precisam
+  // ir via POST /api/wallets/:id/transactions (atualiza ledger consistente +
+  // mirror snapshot consolidado). Caller deve usar endpoints de wallet em vez
+  // de POST /api/bankroll/snapshot.
+  let walletCountSafe = 0;
+  try {
+    walletCountSafe = await storage.countActiveWalletsByUser(userId);
+  } catch (err) {
+    console.warn(
+      "[bankrollService.recordSnapshot] countActiveWalletsByUser falhou; assume 0:",
+      (err as any)?.message,
+    );
+  }
+  if (walletCountSafe > 0) {
+    const e: any = new Error(
+      "Use endpoints de wallet (POST /api/wallets/:id/transactions) para registrar transacoes em multi-wallet",
+    );
+    e.statusCode = 409;
+    e.code = "multi_wallet_active";
+    throw e;
+  }
+
   const { snapshot, newAmount, previousAmount } = await storage.transaction(async (tx: any) => {
     const current = await tx.getUserBankrollForUpdate(userId);
     if (!current || current.bankrollAmount == null) {

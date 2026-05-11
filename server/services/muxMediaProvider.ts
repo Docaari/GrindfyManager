@@ -106,11 +106,20 @@ export function createMuxProvider(): MuxProvider {
         throw new Error("mux_not_configured: MUX_SIGNING_KEY or MUX_SIGNING_KEY_ID missing");
       }
       const expiresInSec = FOUR_HOURS_SECONDS;
+      // P1 (biblioteca-launch-fix): incluir `user_id` claim no JWT signed.
+      // SDK Mux propaga `config.params` para o body claims do JWT — visivel
+      // na verificacao do token (logs Mux + audit trail). Watermark CSS no
+      // frontend continua sendo deterrent VISUAL, nao defesa criptografica
+      // (token soh impede playback nao-autorizado; pirata legitimado pode
+      // gravar tela). Audit pode correlacionar leak <-> user_id via Mux logs.
       const tokenArgs = {
         keyId: process.env.MUX_SIGNING_KEY_ID,
         keySecret: process.env.MUX_SIGNING_KEY,
         expiration: `${expiresInSec}s`,
         type: "video",
+        params: {
+          user_id: userPlatformId,
+        },
       };
       // SDK 14.x: client.jwt.signPlaybackId(playbackId, options)
       const c = await client();

@@ -136,6 +136,36 @@ export function registerMiscRoutes(app: Express): void {
       const merged = { ...existingSafe, ...req.body, userId };
       const settingsData = insertUserSettingsSchema.parse(merged);
       const settings = await storage.upsertUserSettings(settingsData);
+
+      // Bankroll-Launch-Fix P1 #4: invalidar caches dependentes de exchangeRates
+      // (fxResolver, walletCache, bankrollCache, selectorCache). Sem isso,
+      // saldos USD consolidados ficam stale ate TTL expirar (5min fxResolver,
+      // 30s walletCache). Best-effort: failures de invalidate nao bloqueiam.
+      try {
+        const fxMod = await import("../services/fxResolver");
+        fxMod.invalidateCache(userId);
+      } catch (err) {
+        console.warn("[PUT /api/user-settings] fxResolver invalidate falhou:", (err as any)?.message);
+      }
+      try {
+        const walletCacheMod = await import("../services/walletCache");
+        walletCacheMod.walletCache.invalidateAllForUser(userId);
+      } catch (err) {
+        console.warn("[PUT /api/user-settings] walletCache invalidate falhou:", (err as any)?.message);
+      }
+      try {
+        const bankrollCacheMod = await import("../services/bankrollCache");
+        bankrollCacheMod.bankrollCache.invalidateAllForUser(userId);
+      } catch (err) {
+        console.warn("[PUT /api/user-settings] bankrollCache invalidate falhou:", (err as any)?.message);
+      }
+      try {
+        const selectorCacheMod = await import("../services/selectorCache");
+        selectorCacheMod.selectorCache?.invalidateAllForUser?.(userId);
+      } catch (err) {
+        console.warn("[PUT /api/user-settings] selectorCache invalidate falhou:", (err as any)?.message);
+      }
+
       res.json(settings);
     } catch (error) {
       if (error instanceof z.ZodError) {

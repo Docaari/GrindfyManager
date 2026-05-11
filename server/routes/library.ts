@@ -254,12 +254,16 @@ export async function handleCreateLibraryEvent(req: Request, res: Response) {
     // gravado. Skip access check para esse evento especifico; rate limit
     // continua aplicado para evitar flood. Outros eventos seguem com
     // access check normal.
+    //
+    // P1 (biblioteca-launch-fix): para `access_blocked`, validar que o
+    // lessonId EXISTE em library_lessons antes de gravar. Sem isso, attacker
+    // podia floodar storage com lessonIds aleatorios via spoofing.
     const isAccessBlockedEvent = eventType === "access_blocked";
 
     // F16: parallelize independent reads (access lookup + rate counter).
     const [access, recent] = await Promise.all([
       isAccessBlockedEvent
-        ? Promise.resolve(true)
+        ? storage.getLibraryLesson(lessonId).then((l) => !!l)
         : storage.findLessonAccess({ userId, lessonId }),
       storage.countLibraryEventsForUserInWindow({ userId, windowSeconds: 60 }),
     ]);

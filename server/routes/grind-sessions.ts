@@ -516,7 +516,14 @@ export function registerGrindSessionRoutes(app: Express): void {
 
           for (const session of activeSessions) {
             if (session.id !== mostRecentActive.id) {
-              await storage.updateGrindSession(session.id, { status: "completed" });
+              // P1 launch-fix: marcar endTime junto com status. Sem isto, sessoes
+              // duplicadas viravam completed mas com endTime NULL — quebrava
+              // duration computation (sessionsWithStats so calcula quando ambos
+              // startTime+endTime presentes) e atrapalhava reconcile downstream.
+              await storage.updateGrindSession(session.id, {
+                status: "completed",
+                endTime: new Date(),
+              });
             }
           }
           cleanedUpUsers.add(userId);
@@ -977,7 +984,42 @@ export function registerGrindSessionRoutes(app: Express): void {
       }
 
       const sessionData = insertGrindSessionSchema.parse({ ...sessionDataRaw, userId });
-      const session = await storage.createGrindSession(sessionData);
+      let session;
+      try {
+        session = await storage.createGrindSession(sessionData);
+      } catch (createErr: any) {
+        // launch-fix P1: capturar unique_violation do indice partial
+        // uq_grind_sessions_one_active_per_user (migration 0061). Race entre
+        // dois POSTs simultaneos passa pelo gate de SELECT mas falha aqui.
+        // Codigo Postgres 23505 = unique_violation.
+        const pgCode = createErr?.code ?? createErr?.cause?.code;
+        const constraintName =
+          createErr?.constraint ?? createErr?.cause?.constraint ?? "";
+        const isUniqueActive =
+          pgCode === "23505" &&
+          (constraintName === "uq_grind_sessions_one_active_per_user" ||
+            String(createErr?.message ?? "").includes(
+              "uq_grind_sessions_one_active_per_user",
+            ));
+        if (isUniqueActive) {
+          // Devolver a sessao active existente para o cliente continuar onde
+          // parou (UX igual ao caminho `if (activeSession && !replaceExisting)`).
+          const fresh = await storage.getGrindSessions(userId);
+          const stillActive = fresh.find(s => s.status === "active");
+          if (stillActive) {
+            return res.status(409).json({
+              code: "another_session_active",
+              message: "Ja existe uma sessao ativa. Finalize-a antes de criar outra.",
+              session: stillActive,
+            });
+          }
+          return res.status(409).json({
+            code: "another_session_active",
+            message: "Ja existe uma sessao ativa.",
+          });
+        }
+        throw createErr;
+      }
 
       // Integração completa com Grade Planner
       const currentDayOfWeek = dayOfWeek || new Date().getDay() || 7; // Use provided day or current day
@@ -1327,6 +1369,13 @@ export function registerGrindSessionRoutes(app: Express): void {
         const session = await storage.getGrindSession(req.body.sessionId);
         if (!session || session.userId !== userId) {
           return res.status(404).json({ message: "Grind session not found" });
+        }
+        // P0 launch-fix: nao aceitar criar torneio em sessao finalizada.
+        if (session.status !== "active") {
+          return res.status(409).json({
+            code: "session_not_active",
+            message: "Sessao ja finalizada. Reabra ou inicie nova.",
+          });
         }
       }
 

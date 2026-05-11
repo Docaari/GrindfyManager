@@ -188,7 +188,8 @@ export class PokerCSVParser {
       const dateMatch = line.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/);
       if (!dateMatch) return null;
 
-      const date = new Date(`${dateMatch[1]}T${dateMatch[2]}`);
+      // P0 fix (2026-05-10): force UTC parsing when CSV has no TZ marker.
+      const date = new Date(`${dateMatch[1]}T${dateMatch[2]}Z`);
 
       return {
         amount,
@@ -448,7 +449,9 @@ export class PokerCSVParser {
       if (!dateMatch) continue;
 
       const dateOnlyStr = dateMatch[1];
-      const date = new Date(dateOnlyStr);
+      // P0 fix (2026-05-10): force UTC parsing for date-only strings to keep
+      // re-imports stable across TZs.
+      const date = new Date(`${dateOnlyStr}T00:00:00Z`);
       if (isNaN(date.getTime())) continue;
 
       transactions.push({
@@ -772,6 +775,27 @@ export class PokerCSVParser {
     return isNaN(parsed) ? defaultValue : parsed;
   }
 
+  // P1 fix (2026-05-10): normalize currency codes coming from CSV (whitespace + case + alias).
+  // Returns null when the input isn't a known fiat/crypto code, so callers can decide:
+  //  - if !== 'USD' AND no rate AND not in known list, fall back to original (will error downstream)
+  // Known list mirrors common Sharkscope/native exports: USD, BRL, EUR, CNY, GBP, CAD, AUD, USDT.
+  private static readonly KNOWN_CURRENCIES = new Set([
+    'USD', 'BRL', 'EUR', 'CNY', 'GBP', 'CAD', 'AUD', 'USDT', 'JPY', 'CHF',
+  ]);
+  private static normalizeCurrency(value: any): string {
+    if (value === null || value === undefined) return 'USD';
+    const cleaned = String(value).trim().toUpperCase();
+    if (cleaned === '') return 'USD';
+    // Common aliases.
+    if (cleaned === 'US$' || cleaned === 'USDOLLAR') return 'USD';
+    if (cleaned === 'R$') return 'BRL';
+    if (cleaned === '€') return 'EUR';
+    if (cleaned === '£') return 'GBP';
+    if (cleaned === '¥') return 'CNY';
+    if (cleaned === 'TETHER') return 'USDT';
+    return cleaned;
+  }
+
   // Helper to safely parse int, returning 0 for errors or empty strings
   private static parseIntSafe(value: any, defaultValue = 0): number {
     if (value === null || value === undefined || String(value).trim() === '') {
@@ -807,7 +831,8 @@ export class PokerCSVParser {
     }
 
     // Currency conversion for PokerStars
-    let originalCurrency = (row[' Currency'] || row['Currency'] || 'USD').toString().toUpperCase();
+    // P1 fix (2026-05-10): normalize currency before lookup.
+    let originalCurrency = PokerCSVParser.normalizeCurrency(row[' Currency'] || row['Currency'] || 'USD');
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -880,18 +905,19 @@ export class PokerCSVParser {
     // 💱 CORREÇÃO CNY - Currency conversion for GGPoker with Portuguese 'Moeda' column priority
     const stakeValue = row['Stake'] || row[' Stake'] || 0;
     let originalCurrency = 'USD'; // default
-    
+
     // 1. PRIORIDADE: Coluna 'Moeda' (CSV em português)
+    // P1 fix (2026-05-10): normalize via shared helper.
     if (row['Moeda'] || row[' Moeda']) {
-      originalCurrency = (row['Moeda'] || row[' Moeda']).toString().trim().toUpperCase();
+      originalCurrency = PokerCSVParser.normalizeCurrency(row['Moeda'] || row[' Moeda']);
     }
     // 2. FALLBACK: Colunas em inglês
     else if (row['Currency'] || row[' Currency']) {
-      originalCurrency = (row['Currency'] || row[' Currency']).toString().trim().toUpperCase();
+      originalCurrency = PokerCSVParser.normalizeCurrency(row['Currency'] || row[' Currency']);
     }
     // 3. ÚLTIMO RECURSO: Detectar pelo valor do stake
     else {
-      originalCurrency = this.detectCurrency(stakeValue);
+      originalCurrency = PokerCSVParser.normalizeCurrency(this.detectCurrency(stakeValue));
     }
     
     let conversionRate = 1.0;
@@ -939,7 +965,8 @@ export class PokerCSVParser {
     const name = row['Nome'] || row[' Nome'] || row['Game'] || row['Tournament'] || '';
 
     // Currency conversion (handle leading spaces)
-    let originalCurrency = row['Moeda'] || row[' Moeda'] || this.detectCurrency(row['Stake'] || row[' Stake'] || row['Buy-in'] || 'USD');
+    // P1 fix (2026-05-10): normalize currency before lookup.
+    let originalCurrency = PokerCSVParser.normalizeCurrency(row['Moeda'] || row[' Moeda'] || this.detectCurrency(row['Stake'] || row[' Stake'] || row['Buy-in'] || 'USD'));
     let conversionRate = 1.0;
     let convertedToUSD = false;
 
@@ -950,7 +977,7 @@ export class PokerCSVParser {
 
     // Apply universal profit calculation: Resultado - Rake (handle leading spaces)
     const resultado = this.parseFloatSafe(row['Resultado'] || row[' Resultado']) / conversionRate;
-    const rake = this.parseFloatSafe(row['Rake'] || row[' Rake']) / conversionRate;
+    const rake = this.parseFloatSafe(row['Rake'] || row [' Rake']) / conversionRate;
     const profit = resultado - rake;
 
     // Buy-in calculation: Stake + Rake (total tournament cost)
@@ -1123,22 +1150,12 @@ export class PokerCSVParser {
       const profit = convertedResult;
       
       // Parse date - formato 888poker: "2025-06-09 13:32"
-      let datePlayed: Date;
-      try {
-        if (dateStr.includes(' ')) {
-          // Formato: "2025-06-09 13:32"
-          datePlayed = new Date(dateStr);
-        } else {
-          datePlayed = new Date(dateStr);
-        }
-        
-        // Validar data
-        if (isNaN(datePlayed.getTime())) {
-          return null;
-        }
-      } catch (error) {
+      // P0 fix (2026-05-10): use parseDate helper to force UTC when CSV has no TZ marker.
+      const datePlayedNullable = this.parseDate(dateStr);
+      if (!datePlayedNullable) {
         return null;
       }
+      const datePlayed: Date = datePlayedNullable;
       
       // Validações básicas
       if (convertedBuyIn <= 0) {
@@ -1713,9 +1730,42 @@ export class PokerCSVParser {
     return parsedTournament;
   }
 
-  private static parseDate(dateStr: string): Date | null {
-    if (!dateStr) return null;
-    const date = new Date(dateStr);
+  // P0 fix (2026-05-10): Force UTC parsing when the input has no explicit TZ marker.
+  // Mixed local-time vs UTC parsing across networks desaligns dashboard aggregates
+  // and breaks duplicate detection on re-imports.
+  // Strategy: if the string has Z, +HH, +HH:MM, or 'GMT' marker, trust the input.
+  // Otherwise, append "Z" so JS Date treats it as UTC.
+  private static parseDate(dateStr: any): Date | null {
+    if (dateStr === null || dateStr === undefined) return null;
+    const raw = String(dateStr).trim();
+    if (raw === '') return null;
+
+    // Detect explicit TZ marker (Z, +HH, +HHMM, +HH:MM, -HH..., or 'GMT'/'UTC' word).
+    const hasExplicitTz = /(?:Z|[+-]\d{2}:?\d{2}|GMT|UTC)\b/i.test(raw);
+    let normalized = raw;
+
+    if (!hasExplicitTz) {
+      // Common formats coming from poker network exports:
+      //   "2025-01-15 18:00"        -> "2025-01-15T18:00:00Z"
+      //   "2025-01-15 18:00:00"     -> "2025-01-15T18:00:00Z"
+      //   "2025-01-15"              -> "2025-01-15T00:00:00Z"
+      //   "2025-01-15T18:00:00"     -> "2025-01-15T18:00:00Z"
+      const isoLike = /^(\d{4}-\d{2}-\d{2})([T\s](\d{2}:\d{2}(:\d{2})?))?$/;
+      const m = raw.match(isoLike);
+      if (m) {
+        const datePart = m[1];
+        const timePart = m[3] ? (m[3].length === 5 ? `${m[3]}:00` : m[3]) : '00:00:00';
+        normalized = `${datePart}T${timePart}Z`;
+      } else {
+        // Fallback: try to append Z if it looks ISO-ish; otherwise leave as-is and
+        // let Date constructor try (will return null below if invalid).
+        if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+          normalized = `${raw.replace(' ', 'T')}Z`;
+        }
+      }
+    }
+
+    const date = new Date(normalized);
     return isNaN(date.getTime()) ? null : date;
   }
 

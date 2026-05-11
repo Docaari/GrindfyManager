@@ -324,7 +324,14 @@ export async function runReconciliation(
 
     // Apos commit do outer tx: invalida cache uma vez (CRITICAL-01:
     // walletService.recordWalletTransaction recebeu externalTx e nao invalidou).
-    if (!skipReconciliation && result.created.length > 0) {
+    // Bankroll-Launch-Fix P1 #5: invalidar tambem quando ha snapshots criados
+    // (caso "skipReconciliation" cria snapshots sem tx + caso onde todas
+    // adjustments tem |delta| < 0.01 mas snapshots foram gravados). Sem isso,
+    // /api/wallets cache fica stale apos finish + UX mostra saldos antigos.
+    const shouldInvalidate =
+      (result as any).created.length > 0 ||
+      ((result as any).snapshotsCreated ?? 0) > 0;
+    if (shouldInvalidate) {
       try {
         const { selectorCache } = await import("./selectorCache");
         const { bankrollCache } = await import("./bankrollCache");

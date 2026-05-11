@@ -18,19 +18,25 @@
 // Caller principal trusted: manifestImporter (RF-09) -> 'admin-trusted'.
 // Outros callers (notas usuario, bug reports) -> 'user-content' (default).
 //
-// F10 IMPORTANT: Os hooks instalados via `installHooks()` afetam o singleton
-// global da `isomorphic-dompurify`. Outros call sites que usem o mesmo
-// modulo (Coach AI vision, bug-reports rich text, notes da Spec 2) DEVEM:
-//   1. Importar uma instancia separada via JSDOM window (createDOMPurify),
-//      evitando contaminacao do singleton; OU
-//   2. Chamar `DOMPurify.removeAllHooks()` ANTES do proprio `sanitize()`
-//      para isolar regras de cada call site.
-// Sem isso, hooks deste arquivo (img src startsWith /api/library/assets/...)
-// vao filtrar atributos em sanitizes nao relacionados a artigos da Biblioteca.
+// P1 (biblioteca-launch-fix): use uma INSTANCIA DEDICADA do DOMPurify (criada
+// via factory em cima de JSDOM window proprio) em vez do singleton importado.
+// Hooks (uponSanitizeAttribute / uponSanitizeElement) instalados aqui ficam
+// isolados. Outros callers que usem `import DOMPurify from "isomorphic-dompurify"`
+// continuam vendo o singleton intocado — Coach AI vision, bug-reports e notas
+// nao precisam mais de `removeAllHooks()` defensivo.
 // =============================================================================
 
-import DOMPurify from "isomorphic-dompurify";
+import createDOMPurify from "dompurify";
+// @ts-expect-error jsdom sem @types/jsdom instalado; runtime OK, types not critical aqui.
+import { JSDOM } from "jsdom";
 import { LIBRARY_ASSETS_URL_PREFIX } from "../../shared/library-format-helpers";
+
+// Instancia dedicada — NAO compartilhada com singleton isomorphic-dompurify.
+// JSDOM window leve criada uma unica vez no boot (cache estatico).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _localWindow = new JSDOM("<!DOCTYPE html>").window as any;
+// `createDOMPurify(window)` retorna nova instance independente da global.
+const DOMPurify = createDOMPurify(_localWindow);
 
 export type SanitizePolicy = "admin-trusted" | "user-content";
 

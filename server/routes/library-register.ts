@@ -140,6 +140,24 @@ export function registerLibraryRoutes(app: Express) {
       message: "rate_limit_exceeded",
     },
   });
+
+  // P1 (biblioteca-launch-fix): rate limit dedicado para playback-token.
+  // Token TTL 4h; refresh esperado a cada ~3h45min por sessao montada (1
+  // refresh/lesson). Cap em 10 req/min/user previne abuso (scrape de tokens
+  // pra varios lessonIds em paralelo).
+  const playbackTokenRateLimit = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req: Request) => {
+      const user = (req as any).user;
+      return `user:${user?.userPlatformId ?? "anonymous"}`;
+    },
+    message: {
+      message: "rate_limit_exceeded",
+    },
+  });
   app.post(
     "/api/library/access-requests",
     requireAuth,
@@ -247,10 +265,11 @@ export function registerLibraryRoutes(app: Express) {
     },
   );
 
-  // Mux signed URL (RF-03)
+  // Mux signed URL (RF-03). P1 (biblioteca-launch-fix): rate limit dedicado.
   app.get(
     "/api/library/lessons/:id/playback-token",
     requireAuth,
+    playbackTokenRateLimit,
     async (req: Request, res: Response) => {
       try {
         const lessonId = req.params.id;

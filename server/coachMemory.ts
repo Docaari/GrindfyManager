@@ -7,7 +7,18 @@ import { chatSessions, chatMessages, userAiProfile, monthlyCoachSummaries } from
 import { eq, and, desc, gte, lt, inArray, isNotNull, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
-const HAIKU_MODEL = 'claude-3-5-haiku-20241022';
+const HAIKU_MODEL_DEFAULT = 'claude-haiku-4-5-20251001';
+
+/**
+ * Sprint coach-launch-fix RF-04: modelo de memoria configuravel via env
+ * COACH_MEMORY_MODEL. Default para 'claude-haiku-4-5-20251001' (modelo atual).
+ * Resolvido a cada chamada para refletir mudancas em runtime durante testes.
+ */
+export function getMemoryModel(): string {
+  const env = process.env.COACH_MEMORY_MODEL;
+  if (env && env.trim().length > 0) return env.trim();
+  return HAIKU_MODEL_DEFAULT;
+}
 
 async function getAnthropicClient(): Promise<any> {
   const Anthropic = (await import('@anthropic-ai/sdk')).default;
@@ -39,7 +50,7 @@ export async function compactSession(sessionId: string): Promise<void> {
     let summaryText: string;
     try {
       const summaryResponse = await client.messages.create({
-        model: HAIKU_MODEL,
+        model: getMemoryModel(),
         max_tokens: 300,
         system: 'Voce e um assistente que gera resumos concisos de conversas de coaching de poker. Gere um resumo em bullet points com no maximo 150 palavras. Foque nos pontos-chave discutidos, decisoes tomadas e compromissos do jogador.',
         messages: [
@@ -99,7 +110,7 @@ export async function compactSession(sessionId: string): Promise<void> {
       profilePromptParts.push('Atualize o perfil incorporando novas informacoes sem perder as anteriores:');
 
       const profileResponse = await client.messages.create({
-        model: HAIKU_MODEL,
+        model: getMemoryModel(),
         max_tokens: 500,
         system: 'Voce atualiza o perfil de um jogador de poker com base no resumo de uma sessao de coaching. Mantenha o perfil conciso (max 500 tokens). Incorpore novos insights sem perder informacoes anteriores importantes.',
         messages: [
@@ -209,7 +220,7 @@ export async function checkMonthlyCompaction(
     let monthlySummary: string;
     try {
       const response = await client.messages.create({
-        model: HAIKU_MODEL,
+        model: getMemoryModel(),
         max_tokens: 500,
         system: 'Voce gera resumos mensais de sessoes de coaching de poker. Consolide os resumos individuais em um unico resumo mensal com no maximo 300 palavras. Identifique tendencias, evolucao e areas de foco.',
         messages: [

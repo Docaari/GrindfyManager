@@ -543,14 +543,29 @@ export interface IStorage {
   updatePlannedTournament(id: string, tournament: Partial<InsertPlannedTournament>): Promise<PlannedTournament>;
   deletePlannedTournament(id: string): Promise<void>;
   getPlannedTournamentsBySession(userId: string, sessionId: string): Promise<PlannedTournament[]>;
+  // launch-fix P1: batch helper para evitar N+1 em GET /api/grind-sessions/history.
+  getPlannedTournamentsBySessionIds(
+    userId: string,
+    sessionIds: string[],
+  ): Promise<PlannedTournament[]>;
 
   // Break feedback operations
   getBreakFeedbacks(userId: string, sessionId?: string): Promise<BreakFeedback[]>;
+  // launch-fix P1: batch helper para evitar N+1 em GET /api/grind-sessions/history.
+  getBreakFeedbacksBySessionIds(
+    userId: string,
+    sessionIds: string[],
+  ): Promise<BreakFeedback[]>;
   createBreakFeedback(feedback: InsertBreakFeedback): Promise<BreakFeedback>;
   deleteBreakFeedback(id: string): Promise<void>;
 
   // Session tournament operations
   getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]>;
+  // launch-fix P1: batch helper para evitar N+1 em GET /api/grind-sessions/history.
+  getSessionTournamentsBySessionIds(
+    userId: string,
+    sessionIds: string[],
+  ): Promise<SessionTournament[]>;
   createSessionTournament(tournament: InsertSessionTournament): Promise<SessionTournament>;
   getSessionTournamentById(id: string): Promise<SessionTournament | null>;
   updateSessionTournament(id: string, tournament: Partial<InsertSessionTournament>): Promise<SessionTournament>;
@@ -1380,7 +1395,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // RF-01: Batch duplicate check by fields (name + datePlayed + buyIn) for tournaments without tournamentId
-  async findExistingTournamentsByFields(userId: string, tournamentsToCheck: Array<{ name: string; datePlayed: Date | null; buyIn: number }>): Promise<Set<string>> {
+  // P0 fix (2026-05-10): TZ tolerance ±60s to avoid phantom duplicates from re-imports
+  // when CSV uses local time vs DB stored UTC. Also includes `site` in the returned key
+  // so callers building lookup keys with ${site}|${name}|${date}|${buyIn} match correctly.
+  async findExistingTournamentsByFields(userId: string, tournamentsToCheck: Array<{ name: string; datePlayed: Date | null; buyIn: number; site?: string }>): Promise<Set<string>> {
     if (tournamentsToCheck.length === 0) return new Set();
 
     const BATCH_SIZE = 500;
@@ -1388,16 +1406,23 @@ export class DatabaseStorage implements IStorage {
 
     for (let i = 0; i < tournamentsToCheck.length; i += BATCH_SIZE) {
       const batch = tournamentsToCheck.slice(i, i + BATCH_SIZE);
-      // Build OR conditions for each tournament in the batch
+      // Build OR conditions for each tournament in the batch.
+      // Date match uses ABS(EPOCH(...)) < 60 to tolerate small TZ shifts between
+      // re-imports of the same source (CSV often has local time without TZ marker).
       const conditions = batch
         .filter(t => t.datePlayed !== null)
-        .map(t =>
-          and(
+        .map(t => {
+          const dateIso = t.datePlayed!.toISOString();
+          const baseConditions = [
             eq(tournaments.name, t.name.trim()),
-            eq(tournaments.datePlayed, t.datePlayed!),
-            sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${t.buyIn}) < 0.01`
-          )
-        );
+            sql`ABS(EXTRACT(EPOCH FROM (${tournaments.datePlayed} - ${dateIso}::timestamp))) < 60`,
+            sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${t.buyIn}) < 0.01`,
+          ];
+          if (t.site) {
+            baseConditions.push(eq(tournaments.site, t.site));
+          }
+          return and(...baseConditions);
+        });
 
       if (conditions.length === 0) continue;
 
@@ -1406,6 +1431,7 @@ export class DatabaseStorage implements IStorage {
           name: tournaments.name,
           datePlayed: tournaments.datePlayed,
           buyIn: tournaments.buyIn,
+          site: tournaments.site,
         })
         .from(tournaments)
         .where(
@@ -1416,8 +1442,13 @@ export class DatabaseStorage implements IStorage {
         );
 
       for (const row of rows) {
-        const key = `${row.name}|${row.datePlayed?.toISOString()}|${row.buyIn}`;
+        // Always include site in the key. Callers must build keys with the same shape.
+        const key = `${row.site}|${row.name}|${row.datePlayed?.toISOString()}|${row.buyIn}`;
         existingKeys.add(key);
+        // Backward-compat: also include the legacy site-less key so existing callers
+        // that haven't been updated still match. Safe to remove once all callers migrated.
+        const legacyKey = `${row.name}|${row.datePlayed?.toISOString()}|${row.buyIn}`;
+        existingKeys.add(legacyKey);
       }
     }
 
@@ -1813,15 +1844,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertUserSettings(settings: InsertUserSettings): Promise<UserSettings> {
+    // Bankroll-Launch-Fix #11: cast warmupSetupItems para narrow tipo jsonb
+    // (string[] | null) consistente entre Insert e Update. drizzle-zod gera
+    // Insert tipado como `Json` mas o schema declara `string[] | null`.
+    const valuesPayload: any = { ...settings, id: nanoid() };
+    if (valuesPayload.warmupSetupItems !== undefined) {
+      valuesPayload.warmupSetupItems =
+        valuesPayload.warmupSetupItems as string[] | null;
+    }
+    const updateSet: any = { ...settings, updatedAt: new Date() };
+    if (updateSet.warmupSetupItems !== undefined) {
+      updateSet.warmupSetupItems = updateSet.warmupSetupItems as string[] | null;
+    }
     const [upsertedSettings] = await db
       .insert(userSettings)
-      .values({ ...settings, id: nanoid() })
+      .values(valuesPayload)
       .onConflictDoUpdate({
         target: userSettings.userId,
-        set: {
-          ...settings,
-          updatedAt: new Date(),
-        },
+        set: updateSet,
       })
       .returning();
     return upsertedSettings;
@@ -3531,6 +3571,22 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return result;
   }
 
+  // launch-fix P1: batch fetch para GET /api/grind-sessions/history.
+  // 1 query agrupada via inArray vs N queries (N+1) no handler.
+  async getPlannedTournamentsBySessionIds(
+    userId: string,
+    sessionIds: string[],
+  ): Promise<PlannedTournament[]> {
+    if (!sessionIds || sessionIds.length === 0) return [];
+    return await db
+      .select()
+      .from(plannedTournaments)
+      .where(and(
+        eq(plannedTournaments.userId, userId),
+        inArray(plannedTournaments.sessionId, sessionIds),
+      ));
+  }
+
   // Break feedback operations
   async getBreakFeedbacks(userId: string, sessionId?: string): Promise<BreakFeedback[]> {
     const baseConditions = [eq(breakFeedbacks.userId, userId)];
@@ -3543,6 +3599,22 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .select()
       .from(breakFeedbacks)
       .where(and(...baseConditions))
+      .orderBy(desc(breakFeedbacks.breakTime));
+  }
+
+  // launch-fix P1: batch fetch para GET /api/grind-sessions/history.
+  async getBreakFeedbacksBySessionIds(
+    userId: string,
+    sessionIds: string[],
+  ): Promise<BreakFeedback[]> {
+    if (!sessionIds || sessionIds.length === 0) return [];
+    return await db
+      .select()
+      .from(breakFeedbacks)
+      .where(and(
+        eq(breakFeedbacks.userId, userId),
+        inArray(breakFeedbacks.sessionId, sessionIds),
+      ))
       .orderBy(desc(breakFeedbacks.breakTime));
   }
 
@@ -3561,28 +3633,45 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // Session tournament operations
   async getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]> {
-    
+
     const baseConditions = [eq(sessionTournaments.userId, userId)];
 
     if (sessionId) {
       baseConditions.push(eq(sessionTournaments.sessionId, sessionId));
     }
 
-    
+
     // Build the query
     const query = db
       .select()
       .from(sessionTournaments)
       .where(and(...baseConditions))
       .orderBy(desc(sessionTournaments.createdAt));
-    
-    
+
+
     // Execute the query
     const rawResults = await query;
-    
-    
+
+
     // Return the complete results - the query is working correctly
     return rawResults;
+  }
+
+  async getSessionTournamentsBySessionIds(
+    userId: string,
+    sessionIds: string[],
+  ): Promise<SessionTournament[]> {
+    if (sessionIds.length === 0) return [];
+    return await db
+      .select()
+      .from(sessionTournaments)
+      .where(
+        and(
+          eq(sessionTournaments.userId, userId),
+          inArray(sessionTournaments.sessionId, sessionIds),
+        ),
+      )
+      .orderBy(desc(sessionTournaments.createdAt));
   }
 
   async createSessionTournament(tournament: InsertSessionTournament): Promise<SessionTournament> {
@@ -3722,6 +3811,14 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         // Sprint Tickets-1: novos campos com defaults
         enteredViaSatellite: false,
         consumedTicketId: null,
+        // launch-fix typecheck: shape Tournament evoluiu (Sprint Flight-1 +
+        // satellites). Defaults seguros para session-tournaments derivados de
+        // planned (que nao carregam esses campos no schema atual).
+        isFlight: false,
+        isLive: false,
+        satelliteRewardType: null,
+        satelliteTicketValue: null,
+        satelliteTargetName: null,
       };
 
       return tournament;
@@ -8724,6 +8821,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
                 audioKey: libraryLessons.audioKey,
                 audioDurationSeconds: libraryLessons.audioDurationSeconds,
                 audioMimeType: libraryLessons.audioMimeType,
+                // Typecheck fix: include articleHtml (nullable) so that the
+                // mapped row shape matches `LibraryLesson` (used by
+                // deriveLessonFormats which inspects articleHtml).
+                articleHtml: libraryLessons.articleHtml,
                 articleWordCount: libraryLessons.articleWordCount,
                 hasArticle: sql<boolean>`${libraryLessons.articleHtml} IS NOT NULL`.as("has_article"),
                 learningObjectives: libraryLessons.learningObjectives,
@@ -9049,6 +9150,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
    * 8. lessonAccessLookup — bulk Map<lessonId, boolean>.
    * userId undefined -> Map com todos false (curto-circuito sem query).
    * Pre-populates map com todos lessonIds=false; query promove para true se grant.
+   *
+   * P0 (biblioteca-launch-fix): filtra grants expirados via
+   * `(expiresAt IS NULL OR expiresAt > now)`. Sem esse filtro, grant
+   * expirado liberava acesso permanente.
    */
   async lessonAccessLookup(
     userId: string | undefined,
@@ -9060,6 +9165,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     if (!userId) return map;
     if (lessonIds.length === 0) return map;
     try {
+      const now = new Date();
       const rows = await db
         .select({ lessonId: userLessonAccess.lessonId })
         .from(userLessonAccess)
@@ -9067,6 +9173,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           and(
             eq(userLessonAccess.userId, userId),
             inArray(userLessonAccess.lessonId, lessonIds),
+            or(
+              isNull(userLessonAccess.expiresAt),
+              gt(userLessonAccess.expiresAt, now),
+            ),
           ),
         );
       for (const r of rows ?? []) map.set(r.lessonId, true);
@@ -9078,6 +9188,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   /**
    * 9. findLessonAccess — single row lookup; null sem userId.
+   *
+   * P0 (biblioteca-launch-fix): filtra grants expirados via
+   * `(expiresAt IS NULL OR expiresAt > now)`.
    */
   async findLessonAccess(args: {
     userId?: string;
@@ -9085,6 +9198,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }): Promise<UserLessonAccess | null> {
     if (!args.userId || !args.lessonId) return null;
     try {
+      const now = new Date();
       const rows = await db
         .select()
         .from(userLessonAccess)
@@ -9092,6 +9206,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           and(
             eq(userLessonAccess.userId, args.userId),
             eq(userLessonAccess.lessonId, args.lessonId),
+            or(
+              isNull(userLessonAccess.expiresAt),
+              gt(userLessonAccess.expiresAt, now),
+            ),
           ),
         )
         .limit(1);
@@ -11456,14 +11574,40 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
   // ===========================================================================
   // Sprint home-reform-1-5 — RF-28 / hasLibraryAccess
-  // Onda 1.5 minimo: retorna true sempre (acesso liberal). Onda 2 real:
-  // verificar entitlements (user_lesson_access) por curso/lesson.
+  // P0 (biblioteca-launch-fix): substitui stub `return true` por check real.
+  // Logica:
+  //   1. Se lessonId fornecido -> findLessonAccess (1 grant valido = acesso).
+  //   2. Fallback: subscriptionPlan === 'active' OU role === 'admin'
+  //      libera acesso global.
+  //   3. Caso contrario, false.
+  // Mantem assinatura backwards-compatible: lessonId opcional. Sem lessonId,
+  // pula ao fallback (usado pra layout flag em Home).
   // ===========================================================================
-  async hasLibraryAccess(_userId: string): Promise<boolean> {
-    // TODO(home-reform-2): substituir por check real de user_lesson_access
-    // (ADR-100 Biblioteca + ADR Onda 2). Onda 1.5 deliberadamente liberal
-    // para nao bloquear QA do bloco LibraryResume.
-    return true;
+  async hasLibraryAccess(userId: string, lessonId?: string): Promise<boolean> {
+    if (!userId) return false;
+    if (lessonId) {
+      const access = await this.findLessonAccess({ userId, lessonId });
+      if (access) return true;
+    }
+    try {
+      // getUser usa users.id; lookup por userPlatformId para alinhar com auth.
+      const rows = await db
+        .select({
+          role: users.role,
+          subscriptionPlan: users.subscriptionPlan,
+        })
+        .from(users)
+        .where(eq(users.userPlatformId, userId))
+        .limit(1);
+      const u = rows?.[0];
+      if (!u) return false;
+      if (u.role === "admin") return true;
+      if (u.subscriptionPlan === "active") return true;
+      return false;
+    } catch (err) {
+      console.error("[hasLibraryAccess] query failed", err);
+      return false;
+    }
   }
 
   // ===========================================================================
@@ -12328,10 +12472,12 @@ export async function upsertUserNewsPreference(
 /** Plataformas detectadas via CSV imports do user (interesse implicito). */
 export async function detectUserPlatforms(userId: string): Promise<string[]> {
   try {
+    // tournaments table column is `site` (varchar), not `platform`.
+    // Schema confirmed in shared/schema.ts:219.
     const rows = await db
-      .selectDistinct({ platform: tournaments.platform })
+      .selectDistinct({ platform: tournaments.site })
       .from(tournaments)
-      .where(and(eq(tournaments.userId, userId), isNotNull(tournaments.platform)));
+      .where(and(eq(tournaments.userId, userId), isNotNull(tournaments.site)));
     return rows.map((r) => String(r.platform ?? "").toLowerCase()).filter(Boolean);
   } catch (err) {
     console.warn("[detectUserPlatforms] falhou", err);

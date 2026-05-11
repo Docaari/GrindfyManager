@@ -19,6 +19,7 @@ import {
   userAiProfile,
 } from '@shared/schema';
 import { eq, desc, and } from 'drizzle-orm';
+import { buildSystemArray, type SystemBlock } from './coachSystemBuilder';
 
 // =============================================================================
 // assembleContext — builds the full Claude API messages array
@@ -37,23 +38,54 @@ interface DataLoaders {
   getLastArchivedSessionSummary: (userId: string, coachType: string) => Promise<string | null>;
   getSessionHistory: (sessionId: string) => Promise<Array<{ role: string; content: string }>>;
   getSystemPrompt: (coachType: string) => string;
+  // Sprint coach-launch-fix RF-08 (P1 #8): novos loaders alimentando
+  // buildSystemArray. Todos opcionais — quando ausentes, valor null/[] eh
+  // assumido (graceful fallback p/ callers legados).
+  getAiProfile?: (userId: string) => Promise<string | null>;
+  getActiveGrind?: (userId: string) => Promise<any | null>;
+  getRecentBreakFeedbacks?: (userId: string) => Promise<any[]>;
+  getDetectedLeaks?: (userId: string) => Promise<any[]>;
+  getWeeklyPlan?: (userId: string) => Promise<any | null>;
+  getStudyProgress?: (userId: string) => Promise<any[]>;
+  getPageContext?: (userId: string, sessionId: string) => Promise<any>;
 }
 
 export async function assembleContext(
   input: ContextInput,
   dataLoaders: DataLoaders,
-): Promise<{ system: string; messages: Array<{ role: string; content: string }> }> {
+): Promise<{ system: SystemBlock[] | string; messages: Array<{ role: string; content: string }> }> {
   const { coachType, userId, message, sessionId } = input;
 
-  // 1. Get system prompt
+  // 1. Get system prompt (legacy — usado quando RF-08 buildSystemArray
+  // estiver desligado via flag — porem o builder novo ja inclui base prompt).
   const baseSystemPrompt = dataLoaders.getSystemPrompt(coachType);
 
-  // 2. Load user profile and stats
+  // 2. Load user profile and stats (existente)
   const [userProfile, stats, lastSummary, sessionHistory] = await Promise.all([
     dataLoaders.getUserProfile(userId),
     dataLoaders.getStatsSnapshot(userId),
     dataLoaders.getLastArchivedSessionSummary(userId, coachType),
     dataLoaders.getSessionHistory(sessionId),
+  ]);
+
+  // 2b. Sprint coach-launch-fix RF-08 — Load extras p/ buildSystemArray.
+  // Todos opcionais; ausentes viram null/[].
+  const [
+    aiProfileText,
+    activeGrindData,
+    breakFeedbacksData,
+    detectedLeaksData,
+    weeklyPlanData,
+    studyProgressData,
+    pageContextData,
+  ] = await Promise.all([
+    dataLoaders.getAiProfile ? dataLoaders.getAiProfile(userId).catch(() => null) : Promise.resolve(null),
+    dataLoaders.getActiveGrind ? dataLoaders.getActiveGrind(userId).catch(() => null) : Promise.resolve(null),
+    dataLoaders.getRecentBreakFeedbacks ? dataLoaders.getRecentBreakFeedbacks(userId).catch(() => []) : Promise.resolve([]),
+    dataLoaders.getDetectedLeaks ? dataLoaders.getDetectedLeaks(userId).catch(() => []) : Promise.resolve([]),
+    dataLoaders.getWeeklyPlan ? dataLoaders.getWeeklyPlan(userId).catch(() => null) : Promise.resolve(null),
+    dataLoaders.getStudyProgress ? dataLoaders.getStudyProgress(userId).catch(() => []) : Promise.resolve([]),
+    dataLoaders.getPageContext ? dataLoaders.getPageContext(userId, sessionId).catch(() => null) : Promise.resolve(null),
   ]);
 
   // 3. Build system prompt with profile and stats
@@ -156,7 +188,29 @@ export async function assembleContext(
     } catch { /* graceful degradation */ }
   }
 
-  const system = systemParts.join('\n');
+  // Sprint coach-launch-fix RF-08 (P1 #8): usa buildSystemArray que retorna
+  // SystemBlock[] com cache_control ephemeral no bloco STATIC (cache hit ratio
+  // melhora drasticamente entre mensagens da mesma sessao). Quando feature flag
+  // COACH_PROMPT_CACHE_ENABLED=false, builder retorna string legacy.
+  // PRIORIDADE: usar dados dos novos loaders quando providos; cair para legado
+  // (systemParts.join) somente se buildSystemArray nao for desejado.
+  // ADR-019.
+  const system = buildSystemArray(
+    coachType,
+    {
+      aiProfile: aiProfileText ?? null,
+      statsSnapshot: stats ?? null,
+      lastSummary: lastSummary ?? null,
+    },
+    {
+      activeGrind: activeGrindData ?? null,
+      breakFeedbacks: Array.isArray(breakFeedbacksData) ? breakFeedbacksData : [],
+      leaks: Array.isArray(detectedLeaksData) ? detectedLeaksData : [],
+      weeklyPlan: weeklyPlanData ?? null,
+      studyProgress: Array.isArray(studyProgressData) ? studyProgressData : [],
+      pageContext: pageContextData ?? undefined,
+    },
+  );
 
   // 4. Build messages array: history + current message
   const messages: Array<{ role: string; content: string }> = [];

@@ -204,6 +204,18 @@ export async function handleCreateSpotScreenshot(req: any, res: Response): Promi
       return;
     }
 
+    // P0 launch-fix: bloquear upload de spot em sessao ja finalizada/etc.
+    // Sem este gate, prints podiam ser anexados a sessao completed (UI ainda
+    // pode estar aberta em outra aba enquanto outro fluxo ja deu PUT status).
+    if ((session as any).status !== "active") {
+      await rollbackMulterUpload(req);
+      res.status(409).json({
+        code: "session_not_active",
+        message: "Sessao ja finalizada. Reabra ou inicie nova.",
+      });
+      return;
+    }
+
     // Counter de spots na sessao (com SELECT FOR UPDATE no storage layer)
     const count = await storage.countSpotsBySession(sessionId);
     if (typeof count === "number" && count >= SPOT_LIMIT_PER_SESSION) {

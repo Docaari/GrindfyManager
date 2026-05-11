@@ -407,6 +407,9 @@ export function LessonViewer({
   }, [progress]);
 
   // Sprint Bloco-A-Polish / RF-07 + D4: resolve "proxima aula" do mesmo curso.
+  // P1 (biblioteca-launch-fix): pula lessons sem hasAccess. Auto-advance NAO
+  // pode levar user para uma lesson trancada (CTA fica preso em paywall).
+  // Quando NENHUMA proxima esta liberada, retorna null -> CTA nao aparece.
   const nextLessonRef = useMemo(() => {
     const course = courseQuery.data;
     if (!course || !lesson) return null;
@@ -416,8 +419,14 @@ export function LessonViewer({
     }
     const idx = flat.findIndex((l) => l.id === lesson.id);
     if (idx < 0) return null;
-    const next = flat[idx + 1];
-    return next ?? null;
+    // Procura a primeira proxima lesson com hasAccess === true.
+    // hasAccess nao definido (undefined) trata como false (defesa: backend
+    // antigo sem o campo nao deve liberar implicitamente).
+    for (let i = idx + 1; i < flat.length; i++) {
+      const candidate = flat[i];
+      if (candidate?.hasAccess === true) return candidate;
+    }
+    return null;
   }, [courseQuery.data, lesson]);
 
   useEffect(() => {
@@ -579,7 +588,12 @@ export function LessonViewer({
   // em cima, artigo full-width abaixo). Founder feedback 2026-05-03.
   const stackedFormats = availableFormats.length > 1 && availableFormats.includes("article");
   const renderFormats: FormatTab[] = stackedFormats
-    ? (availableFormats.filter((f) => f !== "article").concat("article") as FormatTab[])
+    ? (() => {
+        // Typecheck fix: explicit FormatTab[] before concat. `.concat("article")`
+        // on `("video"|"podcast")[]` widens to `string[]` without the cast.
+        const filtered = availableFormats.filter((f) => f !== "article") as FormatTab[];
+        return [...filtered, "article" as FormatTab];
+      })()
     : ([activeTab].filter(Boolean) as FormatTab[]);
 
   // Sprint Bloco-A-Polish / RF-08: breadcrumb sticky no topo.
@@ -714,7 +728,15 @@ export function LessonViewer({
                   aria-labelledby="lesson-format-tab-video"
                   className="relative w-full aspect-video bg-black rounded-lg overflow-hidden"
                 >
-                  <VideoPanel playbackId={lesson.formats.video.mux.playbackId} />
+                  {/* P0 (biblioteca-launch-fix): Mux signed URL.
+                      VideoPanel busca o playback token via
+                      /api/library/lessons/:id/playback-token e injeta como
+                      `playbackToken` no MuxPlayer. Sem token, asset com
+                      playback_policy='signed' retorna 403. */}
+                  <VideoPanel
+                    lessonId={lesson.id}
+                    playbackId={lesson.formats.video.mux.playbackId}
+                  />
                   {/* F15: watermark 6x diagonal */}
                   <div
                     data-testid="lesson-video-watermark"
@@ -919,12 +941,49 @@ function progressLabelColorClass(pct: number): string {
 
 const VIDEO_PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
-function VideoPanel({ playbackId }: { playbackId: string }) {
+// P0 (biblioteca-launch-fix): Mux signed URL.
+// Token TTL 4h (backend FOUR_HOURS_SECONDS). Refresh em 3h45min para evitar
+// gap. React Query staleTime 3h45min + refetchInterval 3h45min faz a rotacao
+// automatica enquanto o componente esta montado.
+const PLAYBACK_TOKEN_REFRESH_MS = 3 * 60 * 60 * 1000 + 45 * 60 * 1000; // 3h45min
+
+interface PlaybackTokenResponse {
+  url: string;
+  expiresAt: string; // ISO8601
+  watermarkText: string;
+}
+
+function VideoPanel({
+  lessonId,
+  playbackId,
+}: {
+  lessonId: string;
+  playbackId: string;
+}) {
   const initialSpeed = useMemo(() => readVideoSpeed(), []);
+
+  // Busca o playback token signed. Loading -> mostra skeleton; erro -> CTA
+  // contato suporte. Re-fetch automatico em ~3h45min preserva playback.
+  const tokenQuery = useQuery<PlaybackTokenResponse>({
+    queryKey: ["library-playback-token", lessonId],
+    queryFn: async () => {
+      return await apiRequest(
+        "GET",
+        `/api/library/lessons/${lessonId}/playback-token`,
+      );
+    },
+    enabled: !!lessonId,
+    retry: 1,
+    staleTime: PLAYBACK_TOKEN_REFRESH_MS,
+    refetchInterval: PLAYBACK_TOKEN_REFRESH_MS,
+    refetchIntervalInBackground: false,
+  });
+
   if (!MuxPlayer) {
     return <div data-testid="mux-player-fallback">Player indisponivel</div>;
   }
   const Cmp = MuxPlayer as any;
+
   function handleRateChange(ev: any) {
     const target = ev?.target ?? ev?.detail;
     const rate =
@@ -934,9 +993,55 @@ function VideoPanel({ playbackId }: { playbackId: string }) {
       writeVideoSpeed(rate);
     }
   }
+
+  // Extracao do token signed da URL retornada pelo backend.
+  // Backend retorna `url = https://stream.mux.com/<id>.m3u8?token=<jwt>`.
+  // MuxPlayer aceita `playbackToken` (string JWT) que ele anexa ao request.
+  const signedToken = useMemo<string | undefined>(() => {
+    const url = tokenQuery.data?.url;
+    if (!url) return undefined;
+    try {
+      const u = new URL(url);
+      return u.searchParams.get("token") ?? undefined;
+    } catch {
+      // URL malformada — fallback regex.
+      const m = /[?&]token=([^&]+)/.exec(url);
+      return m?.[1];
+    }
+  }, [tokenQuery.data?.url]);
+
+  if (tokenQuery.isLoading) {
+    return (
+      <div
+        data-testid="mux-player-token-loading"
+        className="w-full h-full flex items-center justify-center bg-gray-900 text-gray-400 text-sm"
+      >
+        Carregando video...
+      </div>
+    );
+  }
+
+  if (tokenQuery.isError || !signedToken) {
+    return (
+      <div
+        data-testid="mux-player-token-error"
+        className="w-full h-full flex flex-col items-center justify-center bg-gray-900 text-gray-300 text-sm gap-3 p-4 text-center"
+      >
+        <p>Nao foi possivel carregar o video.</p>
+        <a
+          href="mailto:suporte@grindfy.com"
+          className="px-3 py-1.5 rounded border border-gray-600 hover:bg-gray-800 text-xs"
+        >
+          Falar com suporte
+        </a>
+      </div>
+    );
+  }
+
   return (
     <Cmp
       playbackId={playbackId}
+      playbackToken={signedToken}
       playbackRates={VIDEO_PLAYBACK_RATES}
       defaultPlaybackRate={initialSpeed}
       onRateChange={handleRateChange}

@@ -136,7 +136,7 @@ export default function LoginPage() {
   // Timer countdown para reenvio de email
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    
+
     if (resendTimer > 0) {
       interval = setInterval(() => {
         setResendTimer((prev) => prev - 1);
@@ -149,6 +149,38 @@ export default function LoginPage() {
       }
     };
   }, [resendTimer]);
+
+  // FIX (auth-launch P1.8): mostrar erro de OAuth callback via toast PT-BR.
+  // OAuth callback redireciona pra /login?error=oauth_failed mas a pagina
+  // ignorava o param — usuario via tela de login normal e nao entendia o que
+  // aconteceu. Limpa o query param apos exibir pra nao re-disparar em refresh.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const oauthError = params.get('error');
+    if (!oauthError) return;
+
+    const errorMessages: Record<string, string> = {
+      oauth_failed: 'Falha no login com Google. Tente novamente.',
+      missing_params: 'Falha no login com Google. Tente novamente.',
+      oauth_account_conflict: 'Email ja registrado com senha. Faca login com senha primeiro pra linkar Google.',
+      oauth_account_blocked: 'Conta bloqueada. Entre em contato com o suporte.',
+      oauth_account_unverified: 'Sua conta ainda nao foi confirmada. Verifique seu email para ativar.',
+    };
+
+    toast({
+      title: 'Erro no login',
+      description: errorMessages[oauthError] ?? 'Falha no login com Google. Tente novamente.',
+      variant: 'destructive',
+    });
+
+    // Limpar query param para nao reaparecer em refresh
+    params.delete('error');
+    const newSearch = params.toString();
+    const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '');
+    window.history.replaceState({}, '', newUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1a1a1a] via-[#2a2a2a] to-[#1a1a1a] flex items-center justify-center p-4">

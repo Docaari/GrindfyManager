@@ -20,17 +20,19 @@ import { apiRequest } from "@/lib/queryClient";
 
 const h = React.createElement;
 
-function formatRate(v) {
+function formatRate(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "-";
   return Number(v).toFixed(4);
 }
 
-function badgeLabel(source) {
+function badgeLabel(source: string | null | undefined): string {
   if (source === "user" || source === "mixed") return "manual";
   if (source === "system") return "sistema";
   if (source === "wallets") return "wallets";
   return "fallback";
 }
+
+type FxRatesPayload = { exchangeRates: { BRL?: number; EUR?: number } };
 
 export function FxRatesPanel() {
   const queryClient = useQueryClient();
@@ -51,13 +53,17 @@ export function FxRatesPanel() {
     }
   }, [query.data?.rates?.BRL, query.data?.rates?.EUR]);
 
-  const saveMutation = useMutation({
-    mutationFn: async (payload) => {
+  const saveMutation = useMutation<unknown, unknown, FxRatesPayload>({
+    mutationFn: async (payload: FxRatesPayload) => {
       return await apiRequest("PUT", "/api/user-settings", payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fx-current"] });
       queryClient.invalidateQueries({ queryKey: ["user-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bankroll"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bankroll/consolidated"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       setEditOpen(false);
     },
   });
@@ -140,7 +146,7 @@ export function FxRatesPanel() {
               type: "button",
               "data-testid": "fx-save-btn",
               onClick: () => {
-                const payload = {};
+                const payload: { BRL?: number; EUR?: number } = {};
                 const brlNum = Number(brlInput);
                 const eurNum = Number(eurInput);
                 if (Number.isFinite(brlNum) && brlNum > 0) payload.BRL = brlNum;

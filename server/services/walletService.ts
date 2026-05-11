@@ -187,8 +187,23 @@ async function createWallet(
     let transaction: any = null;
     if (input.initialDeposit && input.initialDeposit.amount > 0) {
       // Initial deposit cria 1 wallet_transaction + atualiza balance.
-      const settings = await tx.getUserSettings(userId);
-      const exchangeRates = (settings?.exchangeRates ?? {}) as Record<string, number>;
+      // Bankroll-Launch-Fix P0 #1 + #3: usar fxResolver (cascata) e
+      // sumar consolidated USD das outras wallets active antes de gravar
+      // snapshot mirror — caso contrario, criar 2a wallet com depot inicial
+      // sobrescreve o ultimo snapshot ignorando saldo das outras (v1 escalar).
+      let exchangeRates: Record<string, number> = {};
+      try {
+        const fxMod = await import("./fxResolver");
+        const fx = await fxMod.fxResolver.resolveExchangeRates(userId);
+        exchangeRates = fx.rates;
+      } catch (err) {
+        console.warn(
+          "[walletService.createWallet] fxResolver falhou; fallback para getUserSettings:",
+          (err as any)?.message,
+        );
+        const settings = await tx.getUserSettings(userId);
+        exchangeRates = (settings?.exchangeRates ?? {}) as Record<string, number>;
+      }
       const { usdAmount, fxRate } = nativeToUSD(
         input.initialDeposit.amount,
         input.nativeCurrency,
@@ -215,15 +230,38 @@ async function createWallet(
 
       await tx.updateWalletBalance(walletRow.id, input.initialDeposit.amount);
 
-      // Espelho em bankroll_snapshots para compat v1.
+      // Bankroll-Launch-Fix P0 #3: snapshot mirror reflete banca CONSOLIDADA
+      // (todas wallets ativas em USD), nao apenas USD desta wallet nova.
+      // previousAmount = soma USD das outras wallets active; newAmount = otherUSD + usdAmount.
+      // Mantem invariante ADR-017 valida em multi-wallet (igual recordWalletTransaction:475-488).
+      let otherUSD = 0;
+      if (typeof tx.getActiveWalletsByUser === "function") {
+        const allActive = (await tx.getActiveWalletsByUser(userId)) ?? [];
+        for (const w of allActive) {
+          if (w.id === walletRow.id) continue;
+          const wRate = w.nativeCurrency === "USD"
+            ? 1
+            : (exchangeRates as any)[w.nativeCurrency] ?? 1;
+          otherUSD += parseDecimal(w.balance) / (wRate || 1);
+        }
+      }
+      const prevConsolidatedUSD = otherUSD;
+      const newConsolidatedUSD = otherUSD + usdAmount;
+
       await tx.insertBankrollSnapshot({
         userId,
         delta: usdAmount,
-        previousAmount: 0,
-        newAmount: usdAmount,
+        previousAmount: prevConsolidatedUSD,
+        newAmount: newConsolidatedUSD,
         reason: "deposit",
         note: input.initialDeposit.note ?? null,
         source: "manual",
+        walletId: walletRow.id,
+        nativeAmount: String(input.initialDeposit.amount),
+        nativeCurrency: input.nativeCurrency,
+        fxRateUSDPerNative: String(fxRate),
+        origin: "manual",
+        sourceRefId: null,
       });
     }
 
@@ -316,14 +354,34 @@ async function updateWallet(
 async function archiveWallet(
   userId: string,
   walletId: string,
+  opts: { confirmArchiveWithBalance?: boolean } = {},
 ): Promise<{ wallet: any; warning?: string }> {
   const result = await storage.transaction(async (tx: any) => {
     const existing = await tx.getWalletById(walletId, userId);
     if (!existing) {
       throw makeError("Wallet nao encontrada", 404, "wallet_not_found");
     }
-    const wasActiveWithBalance =
-      existing.status === "active" && parseDecimal(existing.balance) !== 0;
+    const balanceNative = parseDecimal(existing.balance);
+    const isActive = existing.status === "active";
+    const hasBalance = Math.abs(balanceNative) > 0;
+
+    // Bankroll-Launch-Fix P1 #7: rejeitar archive de wallet active com saldo
+    // > 0.01 nativo (ou < -0.01 — saldo negativo tambem precisa de confirmacao).
+    // UI deve coletar `confirmArchiveWithBalance: true` em dialog para
+    // force-archive (ex: "Tenho certeza que quero arquivar com R$ 1.247
+    // remanescentes — esse saldo desaparece do consolidated").
+    if (isActive && hasBalance && opts.confirmArchiveWithBalance !== true) {
+      const e: any = new Error(
+        `Wallet possui saldo ${balanceNative.toFixed(2)} ${existing.nativeCurrency ?? ""}. Confirme via confirmArchiveWithBalance=true para arquivar mesmo assim.`,
+      );
+      e.statusCode = 422;
+      e.code = "WALLET_HAS_BALANCE";
+      e.balance = balanceNative;
+      e.currency = existing.nativeCurrency;
+      throw e;
+    }
+
+    const wasActiveWithBalance = isActive && balanceNative !== 0;
     const updated = await tx.archiveWallet(walletId, userId);
     return { wallet: updated, warning: wasActiveWithBalance ? "wallet_archived_with_balance" : undefined };
   });
@@ -437,8 +495,23 @@ async function recordWalletTransaction(
       }
     }
 
-    const settings = await tx.getUserSettings(userId);
-    const exchangeRates = (settings?.exchangeRates ?? {}) as Record<string, number>;
+    // Bankroll-Launch-Fix P0 #1: usar fxResolver.resolveExchangeRates (cascata
+    // user > system > wallets > fallback) em vez de raw exchangeRates de
+    // user_settings. Garante que o snapshot mirror espelhe o mesmo USD que
+    // getConsolidatedBalance usa em paths fora-do-tx (consistencia ADR-033).
+    let exchangeRates: Record<string, number> = {};
+    try {
+      const fxMod = await import("./fxResolver");
+      const fx = await fxMod.fxResolver.resolveExchangeRates(userId);
+      exchangeRates = fx.rates;
+    } catch (err) {
+      console.warn(
+        "[walletService.recordWalletTransaction] fxResolver falhou; fallback para getUserSettings:",
+        (err as any)?.message,
+      );
+      const settings = await tx.getUserSettings(userId);
+      exchangeRates = (settings?.exchangeRates ?? {}) as Record<string, number>;
+    }
     const { usdAmount, fxRate } = nativeToUSD(
       input.nativeAmount,
       wallet.nativeCurrency,
@@ -1284,24 +1357,39 @@ async function settlePending(
     // CRIT-8 fix: fxRate fallback via fxResolver quando body nao informa.
     // Convencao QW-1 (ADR-033): rates[ccy] = unidades de ccy por 1 USD.
     // fxRateUSDPerNative = native/usd. Para BRL com rate 5.0 -> usdPerNative = 5.0.
+    //
+    // Bankroll-Launch-Fix P1 #6: quando moeda nao-USD e fxResolver nao tem
+    // rate para essa moeda (null/undefined/<=0), throw 422 explicito em vez de
+    // silenciosamente atalhar para fxRate=1 (que gera audit incorreto + saldo
+    // USD divergente).
     let fxRate: number;
     if (body.fxRateUSDPerNative != null) {
       fxRate = parseDecimal(body.fxRateUSDPerNative);
     } else if (txPending.nativeCurrency === "USD") {
       fxRate = 1;
     } else {
+      let resolvedRate: number | null = null;
       try {
         const fxMod = await import("./fxResolver");
         const fx = await fxMod.fxResolver.resolveExchangeRates(userId);
-        const nativeRate = fx.rates[txPending.nativeCurrency] ?? 1;
-        fxRate = nativeRate > 0 ? nativeRate : 1;
+        const r = fx.rates[txPending.nativeCurrency];
+        if (typeof r === "number" && Number.isFinite(r) && r > 0) {
+          resolvedRate = r;
+        }
       } catch (err) {
         console.warn(
-          "[walletService.settlePending] fxResolver failed; using rate=1:",
+          "[walletService.settlePending] fxResolver failed:",
           (err as any)?.message,
         );
-        fxRate = 1;
       }
+      if (resolvedRate == null) {
+        throw makeError(
+          `Taxa de cambio indisponivel para ${txPending.nativeCurrency}. Informe fxRateUSDPerNative explicitamente ou configure taxas em /settings.`,
+          422,
+          "FX_RATE_UNAVAILABLE",
+        );
+      }
+      fxRate = resolvedRate;
     }
 
     const transaction = await tx.createWalletTransaction({

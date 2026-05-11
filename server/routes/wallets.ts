@@ -222,12 +222,23 @@ export async function handlePatchArchiveWallet(req: any, res: Response): Promise
   const id = req.params?.id;
   if (!id) { res.status(400).json({ message: "id obrigatorio" }); return; }
   try {
-    const result = await walletService.archiveWallet(userId, id);
+    // Bankroll-Launch-Fix P1 #7: passar confirmArchiveWithBalance pelo body
+    // para suportar force-archive de wallet com saldo (UI coleta confirmacao).
+    const confirmArchiveWithBalance =
+      req.body?.confirmArchiveWithBalance === true ||
+      req.query?.confirmArchiveWithBalance === "true";
+    const result = await walletService.archiveWallet(userId, id, {
+      confirmArchiveWithBalance,
+    });
     res.status(200).json(result);
   } catch (err: any) {
     const status = mapErrorToStatus(err);
     if (status === 500) console.error("PATCH /api/wallets/:id/archive failed:", err);
-    res.status(status).json({ message: err?.message ?? "Erro ao arquivar carteira" });
+    const payload: any = { message: err?.message ?? "Erro ao arquivar carteira" };
+    if (err?.code) payload.code = err.code;
+    if (err?.balance != null) payload.balance = err.balance;
+    if (err?.currency != null) payload.currency = err.currency;
+    res.status(status).json(payload);
   }
 }
 
