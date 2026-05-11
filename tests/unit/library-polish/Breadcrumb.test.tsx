@@ -57,10 +57,13 @@ vi.mock('@/lib/queryClient', () => ({
 
 // Sprint UX-Biblioteca-1 / RF-05B: LessonViewer agora usa useLocation pra
 // auto-nav do NextLessonCTA. Adicionamos mock no-op aqui.
+// biblioteca-launch-fix wave 2: useSearch adicionado ao mock pra cobrir
+// useCoachRecommendationConsume (transitive via LessonViewer wave Item 4 RF-07).
 vi.mock('wouter', () => ({
   Link: ({ href, children, ...rest }: any) =>
     React.createElement('a', { href, ...rest }, children),
   useLocation: () => ['/biblioteca/curso/x/y', vi.fn()],
+  useSearch: () => '',
 }));
 
 import { LessonViewer } from '../../../client/src/pages/biblioteca/LessonViewer';
