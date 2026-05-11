@@ -32,6 +32,9 @@ export default function Sparkline({
   height = 20,
 }: SparklineProps): JSX.Element | null {
   if (!Array.isArray(data) || data.length <= 1) return null;
+  // Defesa contra NaN/Infinity em alguma snapshot stale — Recharts ignorava
+  // silenciosamente; SVG renderiza "NaN,NaN" string que vira render vazio.
+  if (data.some((v) => !Number.isFinite(v))) return null;
 
   const stroke =
     delta == null

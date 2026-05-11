@@ -1282,6 +1282,11 @@ export function registerGrindSessionRoutes(app: Express): void {
       // Finally delete the session
       await storage.deleteGrindSession(id);
 
+      // Wave E follow-up (reviewer P2): invalidar Home overview cache.
+      // DELETE muda recentSessions/sessionsRegistered/hasActiveGrindSession;
+      // sem isto, UI mostrava sessao deletada ate 30s (TTL natural).
+      try { invalidateHomeOverviewCache(userId); } catch {}
+
       res.json({ message: "Grind session deleted successfully" });
     } catch (error) {
       console.error("Failed to delete grind session:", error);
