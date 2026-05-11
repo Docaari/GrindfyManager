@@ -319,13 +319,15 @@ Reviewer round 2026-05-11: APPROVED. P2 (success card prometia redirect que nao 
 
 Tests: `tests/integration/auth/wave3-auth-hardening.test.ts` (11 casos — verify-email cookies/no-body-tokens/400, `decodeIdToken`, OAuth verified guard, forgot-password rate limit incl plus-addressing evasion + mailbox isolado, `vi.hoisted` mocks). Commits 6b0a6e7 + 27d7dd7. Resultado: `npx vitest run` 11264 verde / 145 red (baseline ~11254 / ~144 — +11 novos testes, delta flaky timeout suites). `npm run check` sem erros novos. 133/133 unit auth verde.
 
-#### Wave 4 — npm vulns (0.5 dia, sequencial)
-1. `drizzle-orm` 0.39.3 → 0.45.2 (SQLi fix HIGH) — semver major, testar migrations + queries
-2. `xlsx` 0.18.5 → substituir por `exceljs` (sem fix disponivel, prototype pollution + ReDoS HIGH) — afeta upload-history WPN xlsx parser
-3. `vite` 5.4.21 → 6.x (path traversal moderate, semver major)
-4. `nodemailer` 7.0.13 → 8.0.7 (SMTP injection moderate, semver major)
-5. `drizzle-kit` 0.30.6 → 0.31.10 (chain via esbuild)
-6. Opcional: `@anthropic-ai/sdk` 0.86.1 → 0.95.2 (filesystem perms — nao usamos Memory tool, low risk)
+#### Wave 4 — npm vulns — CONCLUIDA 2026-05-11
+- [x] 1. `drizzle-orm` 0.39.3 → 0.45.2 (SQLi via SQL identifiers, **HIGH**) — drizzle-zod 0.7.0 mantido (compat); `npm run check` ok, vitest sem regressao. Commit 88b38d9
+- [x] 2. `xlsx` 0.18.5 → **removido**, substituido por `exceljs` 4.4.0 (Prototype Pollution + ReDoS, **HIGH**, sem fix upstream) — `PokerCSVParser.parseBodogXLSX` reescrito (lazy `import('exceljs')`, `workbook.xlsx.load` → `eachRow` pulando 4 header rows, cols A..D); `parseBodogDate` aceita `Date` objects; csv-parser unit tests usam exceljs pra montar fixtures. Commit 142e719
+- [x] 3. `vite` 5.4.19 → 6.4.2 (esbuild dev-server SSRF chain — vite 6.4.2 = primeira versao limpa) — vite 7+ exigiria bump vitest 4→5 + plugin-react (fora escopo). `npx vite build` ok (8.8s) + esbuild server bundle ok. Commit f821a60
+- [x] 4. `nodemailer` 7.x → 8.0.7 (SMTP CRLF injection, moderate). Commit 88b38d9
+- [x] 5. `drizzle-kit` 0.30.6 → 0.31.10 (pair com drizzle-orm 0.45). Commit 88b38d9
+- [x] 6. `@anthropic-ai/sdk` 0.86.1 → 0.95.2 (Memory-tool file perms, moderate — nao usamos a tool). Commit 503b246
+
+**`npm audit` final: 0 high, 0 critical** (era 2 high). Restam **4 moderate** — todas o advisory esbuild-dev-server (GHSA-67mh-4wv8-2f99) alcancado transitivamente via `drizzle-kit → @esbuild-kit/esm-loader → esbuild ≤0.24.2`. Dev-only (drizzle-kit eh CLI, nao vai pro bundle), sem fix upstream — aceitavel pro launch. Reviewer pendente.
 
 #### Wave 5 — P1 hardening (3-4 dias, paralelo)
 - Refresh token rotation com DB table + family detection + revogacao server-side (logout, password change, force-logout)
@@ -354,8 +356,8 @@ JWT claims, audit trail super-admin, CSP nonces, listagem admin com projection, 
 - [ ] A03 Injection — Zod completo + Drizzle params confirmados zero raw SQL (Wave 5)
 - [ ] A04 Insecure Design — rate limit OAuth + bulk-delete + upload (Wave 1+5)
 - [ ] A05 Security Misconfiguration — CSP + CORS + trust proxy + generic errors (Wave 1+5)
-- [ ] A06 Vulnerable Components — drizzle-orm + xlsx + vite + nodemailer (Wave 4)
-- [ ] A07 ID & Auth Failures — VerifyEmailPage + OAuth verified + lockout progressive (Wave 3+5)
+- [x] A06 Vulnerable Components — drizzle-orm 0.45.2 + xlsx→exceljs + vite 6.4.2 + nodemailer 8 + drizzle-kit 0.31 + anthropic-sdk 0.95 (Wave 4: 0 high/critical; 4 moderate dev-only residuais)
+- [~] A07 ID & Auth Failures — VerifyEmailPage httpOnly + OAuth verified-email guard ✓ (Wave 3); lockout progressive pendente (Wave 5)
 - [ ] A08 Software & Data Integrity — SRI assets prod build (Wave 5)
 - [ ] A09 Logging Failures — token leak logger + console.error sanitization (Wave 1+5)
 - [ ] A10 SSRF — safeFetch helper news + urlValidator (Wave 5)
