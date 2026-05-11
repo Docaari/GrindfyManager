@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { requireAuth } from "../auth";
+import { requireAuth, requireVerifiedEmail } from "../auth";
 import { db } from "../db";
 import {
   users,
@@ -43,7 +43,7 @@ export function registerSubscriptionRoutes(app: Express): void {
   });
 
   // Register subscription intent (manual fallback — user wants to subscribe without Stripe)
-  app.post('/api/subscription/subscribe', requireAuth, async (req, res) => {
+  app.post('/api/subscription/subscribe', requireAuth, requireVerifiedEmail, async (req, res) => {
     try {
       const schema = z.object({
         billingCycle: z.enum(['monthly', 'annual']),
@@ -96,7 +96,7 @@ export function registerSubscriptionRoutes(app: Express): void {
   // =========================================================================
   // Stripe Checkout — create a checkout session
   // =========================================================================
-  app.post('/api/subscription/checkout', requireAuth, async (req, res) => {
+  app.post('/api/subscription/checkout', requireAuth, requireVerifiedEmail, async (req, res) => {
     try {
       if (!isStripeEnabled() || !stripe) {
         return stripeUnavailable(res);
@@ -164,7 +164,7 @@ export function registerSubscriptionRoutes(app: Express): void {
   // =========================================================================
   // Stripe Billing Portal
   // =========================================================================
-  app.post('/api/subscription/portal', requireAuth, async (req, res) => {
+  app.post('/api/subscription/portal', requireAuth, requireVerifiedEmail, async (req, res) => {
     try {
       if (!isStripeEnabled() || !stripe) {
         return stripeUnavailable(res);
@@ -194,7 +194,7 @@ export function registerSubscriptionRoutes(app: Express): void {
   // =========================================================================
   // Cancel subscription (cancel at period end)
   // =========================================================================
-  app.post('/api/subscription/cancel', requireAuth, async (req, res) => {
+  app.post('/api/subscription/cancel', requireAuth, requireVerifiedEmail, async (req, res) => {
     try {
       if (!isStripeEnabled() || !stripe) {
         return stripeUnavailable(res);

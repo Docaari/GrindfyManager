@@ -24,6 +24,7 @@ export interface AuthUser {
   lastName?: string;
   status: string;
   role?: string;
+  emailVerified?: boolean;
   subscriptionPlan: string;
   trialEndsAt?: string | null;
   subscriptionEndsAt?: string | null;
@@ -171,6 +172,7 @@ export class AuthService {
         lastName: foundUser.lastName || undefined,
         status: foundUser.status || 'active',
         role: (foundUser as any).role || 'user',
+        emailVerified: foundUser.emailVerified === true,
         subscriptionPlan: foundUser.subscriptionPlan || 'trial',
         trialEndsAt: foundUser.trialEndsAt ? foundUser.trialEndsAt.toISOString() : null,
         subscriptionEndsAt: foundUser.subscriptionEndsAt ? foundUser.subscriptionEndsAt.toISOString() : null,
@@ -258,9 +260,15 @@ export class AuthService {
 
       const currentAttempts = (user.failedLoginAttempts || 0) + 1;
       const maxAttempts = 5;
-      const lockDurationMinutes = 5;
 
       if (currentAttempts >= maxAttempts) {
+        // Progressive backoff (failedLoginAttempts only resets on a successful
+        // login): the first block of failures locks 5min, the next block 30min,
+        // and from the third block on, 24h. A persistent attacker escalates.
+        const lockDurationMinutes =
+          currentAttempts >= maxAttempts * 3 ? 24 * 60 :
+          currentAttempts >= maxAttempts * 2 ? 30 :
+          5;
         // Lock the account
         const lockUntil = new Date();
         lockUntil.setMinutes(lockUntil.getMinutes() + lockDurationMinutes);
@@ -343,6 +351,20 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       AuthService.logAccess(payload.userPlatformId, 'access_denied', undefined, req);
       res.status(500).json({ message: 'Erro interno do servidor' });
     });
+}
+
+// Require a verified email on top of requireAuth. Use it AFTER requireAuth on
+// endpoints that should never be reachable by an unverified account (e.g.
+// subscription state changes). Login/OAuth already block unverified users, so
+// this is defence-in-depth against any future path that issues a token early.
+export function requireVerifiedEmail(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Usuário não autenticado' });
+  }
+  if (req.user.emailVerified === false) {
+    return res.status(403).json({ message: 'Confirme seu email para acessar este recurso.' });
+  }
+  next();
 }
 
 // Permission check middleware

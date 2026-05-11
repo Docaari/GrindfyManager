@@ -826,11 +826,14 @@ export function registerAdminRoutes(app: Express): void {
   // Extend user subscription
   app.post('/api/admin/extend-subscription', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
-      const { userId, days } = req.body;
-
-      if (!userId || !days) {
-        return res.status(400).json({ message: 'ID do usuário e número de dias são obrigatórios' });
+      const parsed = z.object({
+        userId: z.string().min(1),
+        days: z.coerce.number().int().min(1).max(3650),
+      }).safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Dados inválidos: userId (string) e days (1..3650) são obrigatórios.' });
       }
+      const { userId, days } = parsed.data;
 
       await db.update(users)
         .set({
@@ -859,11 +862,14 @@ export function registerAdminRoutes(app: Express): void {
   // Update user subscription plan
   app.post('/api/admin/update-subscription-plan', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
-      const { userId, planId } = req.body;
-
-      if (!userId || !planId) {
-        return res.status(400).json({ message: 'ID do usuário e plano são obrigatórios' });
+      const parsed = z.object({
+        userId: z.string().min(1),
+        planId: z.string().min(1).max(64),
+      }).safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Dados inválidos: userId e planId (strings) são obrigatórios.' });
       }
+      const { userId, planId } = parsed.data;
 
       // Apply new plan permissions
       await applyPlanPermissions(userId, planId);
