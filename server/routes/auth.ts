@@ -539,7 +539,11 @@ export function registerAuthRoutes(app: Express): void {
         })
         .where(eq(users.id, tokenData.userId));
 
-      // Clean up used token
+      // Wave-1 launch-fix #7: mark the reset token consumed (single-use). Without
+      // this the link is replayable for the rest of its 1h TTL.
+      await EmailService.markPasswordResetTokenUsed(token);
+
+      // Clean up old expired tokens
       EmailService.cleanupExpiredTokens();
 
       // Log password reset

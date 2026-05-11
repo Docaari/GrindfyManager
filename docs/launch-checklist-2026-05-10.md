@@ -278,14 +278,16 @@ Cobrindo: JWT sem `iss/aud/jti` claims, JWT sem verify `type` claim, logout em t
 
 **Plano implementer (5 waves, paralelizadas onde possivel):**
 
-#### Wave 1 — Quick wins infra (1 dia, sequencial)
-1. `app.set('trust proxy', 1)` em server/index.ts
-2. Token leak request logger — whitelist skip body log em `/api/auth/*`
-3. Generic error responses em prod (`NODE_ENV==='production'` gate em global handler + try/catch routes)
-4. Multer `fileFilter` em upload-history (CSV/XLSX whitelist + magic byte check)
-5. Remove `<script src="https://replit.com/...">` de client/index.html
-6. CSP fix: `connectSrc` adicionar Mux + Anthropic + xAI + Google OAuth; `ws:` so em dev
-7. Reset token mark `usedAt` apos consume (1-linha UPDATE)
+#### Wave 1 — Quick wins infra (1 dia, sequencial) — CONCLUIDA 2026-05-11
+- [x] 1. `app.set('trust proxy', 1)` em server/index.ts
+- [x] 2. Token leak request logger — skip body log em `/api/auth/*` (`SENSITIVE_BODY_LOG_PREFIXES`)
+- [x] 3. Generic error responses em prod — global handler (`NODE_ENV==='production' && status>=500` → "Internal Server Error") + upload.ts routes (`clientErrorDetail()` esconde message/stack em prod; removeu `error.stack` do response)
+- [x] 4. Multer `fileFilter` em upload (`ALLOWED_UPLOAD_EXTENSIONS` + MIME whitelist, rejeita com status 400) + `validateUploadMagicBytes()` (XLSX=ZIP `PK\x03\x04`, XLS=OLE2, CSV/TXT=sem NUL bytes) aplicado em `/api/upload-history`, `/api/check-duplicates`, `/api/upload-with-duplicates`, `/api/upload`
+- [x] 5. Remove `<script src="https://replit.com/...">` de client/index.html
+- [x] 6. CSP fix: `connectSrc` += Mux (`stream.mux.com`, `*.mux.com`, `*.litix.io`) + Anthropic + xAI + Google OAuth (`accounts.google.com`, `oauth2.googleapis.com`, `www.googleapis.com`); `ws:`/`wss:` so em dev; `frameSrc`/`mediaSrc` += `stream.mux.com`; `workerSrc` + `blob:` para Mux Player
+- [x] 7. Reset token mark `usedAt` apos consume — `EmailService.markPasswordResetTokenUsed(token)` chamado em `/api/auth/reset-password`
+
+Resultado: `npm run check` zero erros novos nos arquivos tocados (baseline 45 erros pre-existentes em test files + FxRatesPanel). `npx vitest run` 11229 verde / 144 red (baseline ~11227 / ~146 — zero regressao). Server precisa restart para pegar mudancas de helmet/index.ts.
 
 #### Wave 2 — IDOR sweep (2 dias, paralelo 2 implementers)
 - Implementer A: tournaments, planned-tournaments, calendar (categories+events), coaching-insights

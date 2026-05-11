@@ -6,21 +6,32 @@ import { startLibraryCleanup } from "./libraryCleanup";
 import { startCoachCrons } from "./coach/cronRunner";
 
 const app = express();
+// Trust the first proxy hop (Coolify / Cloudflare / nginx in front). Without this,
+// req.ip resolves to the proxy's address — collapsing every client into one rate-limit
+// bucket — and X-Forwarded-* headers are ignored. Single hop only (no chained proxies).
+app.set('trust proxy', 1);
 // Stripe webhook needs raw body for signature verification — must be BEFORE express.json()
 app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Auth endpoints return JWTs (access + refresh) in the response body. Capturing them
+// into the request logger risks leaking long-lived tokens into log aggregators.
+const SENSITIVE_BODY_LOG_PREFIXES = ['/api/auth/'];
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
+  const skipBodyLog = SENSITIVE_BODY_LOG_PREFIXES.some((p) => path.startsWith(p));
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
+  if (!skipBodyLog) {
+    const originalResJson = res.json;
+    res.json = function (bodyJson, ...args) {
+      capturedJsonResponse = bodyJson;
+      return originalResJson.apply(res, [bodyJson, ...args]);
+    };
+  }
 
   res.on("finish", () => {
     const duration = Date.now() - start;
@@ -44,9 +55,14 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
+  const isProd = process.env.NODE_ENV === 'production';
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    const rawMessage = err.message || "Internal Server Error";
+    // In production, only echo intentional client-facing errors (4xx). 5xx errors
+    // may carry stack traces, SQL fragments, or connection strings — return a generic
+    // message and keep the detail in the server log only.
+    const message = isProd && status >= 500 ? "Internal Server Error" : rawMessage;
 
     // Log mas NAO re-throw: re-throw apos res.json crashava o processo,
     // derrubando o dev server (Vite middleware) a cada 500 — cascateava em

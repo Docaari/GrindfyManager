@@ -16,7 +16,78 @@ import { z } from "zod";
 import { playerBundleCache } from "../services/playerBundle";
 import { selectorCache } from "../services/selectorCache";
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+// Wave-1 launch-fix #4: restrict CSV/XLSX/TXT uploads to whitelisted extensions +
+// MIME types. Magic-byte sniffing happens downstream in the parser (XLSX = PK zip
+// header, CSV/TXT = text); here we reject obviously-wrong files before buffering 10MB.
+const ALLOWED_UPLOAD_EXTENSIONS = new Set(['.csv', '.txt', '.xlsx', '.xls']);
+const ALLOWED_UPLOAD_MIMES = new Set([
+  'text/csv',
+  'text/plain',
+  'application/csv',
+  'application/vnd.ms-excel',
+  'application/octet-stream', // many browsers send this for .csv/.xlsx
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+
+function rejectUpload(message: string): Error {
+  const err: any = new Error(message);
+  err.status = 400;
+  return err;
+}
+
+function uploadFileFilter(_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) {
+  const name = (file.originalname || '').toLowerCase();
+  const dot = name.lastIndexOf('.');
+  const ext = dot >= 0 ? name.slice(dot) : '';
+  if (!ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
+    return cb(rejectUpload('Unsupported file type. Use a .csv, .txt, .xls or .xlsx export.'));
+  }
+  if (file.mimetype && !ALLOWED_UPLOAD_MIMES.has(file.mimetype)) {
+    return cb(rejectUpload('Unsupported file MIME type.'));
+  }
+  cb(null, true);
+}
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: uploadFileFilter,
+});
+
+// In production, never echo raw error messages / stack traces to the client.
+const isProdEnv = () => process.env.NODE_ENV === 'production';
+function clientErrorDetail(err: unknown): string | undefined {
+  if (isProdEnv()) return undefined;
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+// Magic-byte validation: XLSX/XLS must be a real ZIP (modern .xlsx) or OLE2 (legacy
+// .xls) container; CSV/TXT must look like text (reject binary that snuck past the
+// extension check). Returns an error message string when the file is rejected.
+function validateUploadMagicBytes(file: { originalname: string; buffer: Buffer }): string | null {
+  const name = (file.originalname || '').toLowerCase();
+  const buf = file.buffer;
+  if (!buf || buf.length === 0) return 'Empty file.';
+  if (name.endsWith('.xlsx')) {
+    // ZIP local file header: 50 4B 03 04
+    if (!(buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04)) {
+      return 'File is not a valid .xlsx workbook.';
+    }
+    return null;
+  }
+  if (name.endsWith('.xls')) {
+    // OLE2 compound file: D0 CF 11 E0 A1 B1 1A E1  (also accept ZIP for misnamed .xlsx)
+    const ole2 = buf[0] === 0xd0 && buf[1] === 0xcf && buf[2] === 0x11 && buf[3] === 0xe0;
+    const zip = buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04;
+    if (!ole2 && !zip) return 'File is not a valid Excel workbook.';
+    return null;
+  }
+  // .csv / .txt — sample the first 8KB; reject if it contains NUL bytes (binary).
+  const sample = buf.subarray(0, Math.min(buf.length, 8192));
+  if (sample.includes(0x00)) return 'File appears to be binary, not a text export.';
+  return null;
+}
 
 // Backfill default FX rates (CNY/EUR/BRL) when user settings missing/invalid.
 // Mirrors GET /api/settings/exchange-rates defaults so SharkScope/CSV multi-currency
@@ -97,8 +168,9 @@ export function registerUploadRoutes(app: Express): void {
         return res.status(400).json({ message: "No file uploaded" });
       }
 
-      if (!file) {
-        return res.status(400).json({ message: "No file uploaded" });
+      const magicErr = validateUploadMagicBytes(file);
+      if (magicErr) {
+        return res.status(400).json({ message: magicErr });
       }
 
       // Fetch user settings to get exchange rates
@@ -435,14 +507,14 @@ export function registerUploadRoutes(app: Express): void {
 
         res.status(400).json({
           message: "Failed to parse CSV file. Please ensure it is a valid CSV and the format is supported.",
-          error: parseError instanceof Error ? parseError.message : "Unknown parsing error.",
+          error: clientErrorDetail(parseError) ?? "Unknown parsing error.",
           suggestion: "Verify encoding (UTF-8 preferred), delimiter (comma expected), and that all necessary columns are present."
         });
       }
     } catch (error: any) {
       res.status(500).json({
         message: "Failed to upload file due to a server error.",
-        error: error.message
+        error: clientErrorDetail(error)
       });
     }
   });
@@ -460,6 +532,10 @@ export function registerUploadRoutes(app: Express): void {
       const file = req.file;
       if (!file) {
         return res.status(400).json({ message: 'No file uploaded' });
+      }
+      {
+        const magicErr = validateUploadMagicBytes(file);
+        if (magicErr) return res.status(400).json({ message: magicErr });
       }
 
 
@@ -486,8 +562,7 @@ export function registerUploadRoutes(app: Express): void {
       } catch (parseError) {
         return res.status(400).json({
           message: 'Erro ao processar arquivo',
-          error: parseError instanceof Error ? parseError.message : 'Erro desconhecido',
-          details: parseError instanceof Error ? parseError.stack : String(parseError)
+          error: clientErrorDetail(parseError) ?? 'Erro desconhecido',
         });
       }
 
@@ -546,8 +621,7 @@ export function registerUploadRoutes(app: Express): void {
     } catch (error: any) {
       res.status(500).json({
         message: "Failed to check for duplicates",
-        error: error.message,
-        details: error.stack
+        error: clientErrorDetail(error),
       });
     }
   });
@@ -567,6 +641,10 @@ export function registerUploadRoutes(app: Express): void {
 
       if (!file) {
         return res.status(400).json({ message: 'No file provided' });
+      }
+      {
+        const magicErr = validateUploadMagicBytes(file);
+        if (magicErr) return res.status(400).json({ message: magicErr });
       }
 
 
@@ -594,7 +672,7 @@ export function registerUploadRoutes(app: Express): void {
       } catch (parseError) {
         return res.status(400).json({
           message: 'Erro ao processar arquivo',
-          error: (parseError as Error).message
+          error: clientErrorDetail(parseError),
         });
       }
 
@@ -914,6 +992,11 @@ export async function handleUploadCsv(req: any, res: any): Promise<void> {
     const file = req.file;
     if (!file) {
       res.status(400).json({ message: "No file uploaded" });
+      return;
+    }
+    const magicErr = validateUploadMagicBytes(file);
+    if (magicErr) {
+      res.status(400).json({ message: magicErr });
       return;
     }
 

@@ -134,6 +134,19 @@ export class EmailService {
     };
   }
 
+  // Mark a password-reset token as consumed so it cannot be replayed within its
+  // 1h validity window. Mirrors the verify-email flow (verifyUserEmail* set usedAt).
+  static async markPasswordResetTokenUsed(token: string): Promise<void> {
+    await db.update(authTokens)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(authTokens.token, token),
+          eq(authTokens.type, 'password_reset'),
+        )
+      );
+  }
+
   // Send email verification with Gmail SMTP
   static async sendEmailVerification(email: string, token: string): Promise<boolean> {
     try {

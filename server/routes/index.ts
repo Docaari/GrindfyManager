@@ -79,6 +79,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // 1. Security headers with Helmet
   const isProduction = process.env.NODE_ENV === 'production';
+  // Outbound origins the SPA legitimately talks to (XHR/fetch/EventSource/WebSocket).
+  // Vite HMR needs ws:/wss: in dev only — production must not advertise it.
+  const connectSrc = [
+    "'self'",
+    "https://api.stripe.com",
+    // Mux video playback + Mux Data beacons
+    "https://stream.mux.com",
+    "https://*.mux.com",
+    "https://*.litix.io",
+    // Coach / news LLM providers (defensive — calls are proxied server-side today,
+    // but keep the allowlist ready so client-side streaming wouldn't be CSP-blocked)
+    "https://api.anthropic.com",
+    "https://api.x.ai",
+    // Google OAuth token/userinfo endpoints
+    "https://accounts.google.com",
+    "https://oauth2.googleapis.com",
+    "https://www.googleapis.com",
+  ];
+  if (!isProduction) {
+    connectSrc.push("ws:", "wss:");
+  }
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
@@ -87,12 +108,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         scriptSrc: isProduction
           ? ["'self'", "'unsafe-inline'"]
           : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-        imgSrc: ["'self'", "data:", "https:"],
+        imgSrc: ["'self'", "data:", "https:", "blob:"],
         fontSrc: ["'self'", "data:"],
-        connectSrc: ["'self'", "ws:", "wss:", "https://api.stripe.com"],
-        frameSrc: ["'self'", "https://js.stripe.com", "https://hooks.stripe.com"],
+        connectSrc,
+        frameSrc: [
+          "'self'",
+          "https://js.stripe.com",
+          "https://hooks.stripe.com",
+          // Mux Player renders the video element inside its own iframe
+          "https://stream.mux.com",
+        ],
         objectSrc: ["'none'"],
-        mediaSrc: ["'self'"]
+        mediaSrc: ["'self'", "blob:", "https://stream.mux.com", "https://*.mux.com"],
+        workerSrc: ["'self'", "blob:"],
       }
     },
     hsts: {
