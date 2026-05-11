@@ -4180,23 +4180,25 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     );
   }
 
-  // Delete all events in a recurring series
-  async deleteRecurringEventSeries(parentEventId: string): Promise<void> {
-    await db.delete(calendarEvents).where(eq(calendarEvents.parentEventId, parentEventId));
-    await db.delete(calendarEvents).where(eq(calendarEvents.id, parentEventId));
+  // Delete all events in a recurring series. Scoped by userId (IDOR defense in
+  // depth — see Wave 2 review): parentEventId is derived from a request-controlled
+  // field, so never trust it without the owner filter.
+  async deleteRecurringEventSeries(parentEventId: string, userId: string): Promise<void> {
+    await db.delete(calendarEvents).where(and(eq(calendarEvents.parentEventId, parentEventId), eq(calendarEvents.userId, userId)));
+    await db.delete(calendarEvents).where(and(eq(calendarEvents.id, parentEventId), eq(calendarEvents.userId, userId)));
   }
 
-  // Update all events in a recurring series
-  async updateRecurringEventSeries(parentEventId: string, event: Partial<InsertCalendarEvent>): Promise<void> {
+  // Update all events in a recurring series. Scoped by userId (see above).
+  async updateRecurringEventSeries(parentEventId: string, event: Partial<InsertCalendarEvent>, userId: string): Promise<void> {
     await db
       .update(calendarEvents)
       .set({ ...event, updatedAt: new Date() })
-      .where(eq(calendarEvents.parentEventId, parentEventId));
+      .where(and(eq(calendarEvents.parentEventId, parentEventId), eq(calendarEvents.userId, userId)));
 
     await db
       .update(calendarEvents)
       .set({ ...event, updatedAt: new Date() })
-      .where(eq(calendarEvents.id, parentEventId));
+      .where(and(eq(calendarEvents.id, parentEventId), eq(calendarEvents.userId, userId)));
   }
 
 

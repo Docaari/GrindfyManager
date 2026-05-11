@@ -104,9 +104,11 @@ const storageMock = {
   createStudyNote: vi.fn(async (data: any) => ({ id: 'note_new', ...data })),
   // calendar
   getCalendarCategories: vi.fn(async () => []),
+  createCalendarCategory: vi.fn(async (data: any) => ({ id: 'cat_new', ...data })),
   updateCalendarCategory: vi.fn(async (id: string, data: any) => ({ id, ...data })),
   deleteCalendarCategory: vi.fn(async () => undefined),
   getCalendarEvents: vi.fn(async () => []),
+  createCalendarEvent: vi.fn(async (data: any) => ({ id: 'ev_new', ...data })),
   updateCalendarEvent: vi.fn(async (id: string, data: any) => ({ id, ...data })),
   deleteCalendarEvent: vi.fn(async () => undefined),
   updateRecurringEventSeries: vi.fn(async () => undefined),
@@ -203,6 +205,14 @@ describe('Wave 2 — IDOR ownership enforcement', () => {
       expect(res.status).toBe(404);
       expect(storageMock.updatePlannedTournament).not.toHaveBeenCalled();
     });
+    it('caller-supplied userId/id in body are not forwarded to storage', async () => {
+      storageMock.getPlannedTournament.mockResolvedValue({ id: 'p1', userId: OWNER } as any);
+      const app = await buildApp();
+      await asOwner(request(app).put('/api/planned-tournaments/p1')).send({ name: 'x', userId: ATTACKER, id: 'other' });
+      const [, payload] = storageMock.updatePlannedTournament.mock.calls[0] as any[];
+      expect(payload).not.toHaveProperty('userId');
+      expect(payload).not.toHaveProperty('id');
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -294,6 +304,46 @@ describe('Wave 2 — IDOR ownership enforcement', () => {
       const res = await asAttacker(request(app).delete('/api/calendar-events/ev1'));
       expect(res.status).toBe(404);
       expect(storageMock.deleteCalendarEvent).not.toHaveBeenCalled();
+    });
+    it('body parentEventId is ignored — series mutator gets the server-side parent, not the victim id', async () => {
+      // Attacker owns ev1 (parentEventId null). They try to graft it onto victim-series via body.
+      storageMock.getCalendarEvents.mockResolvedValue([{ id: 'ev1', parentEventId: null }] as any);
+      const app = await buildApp();
+      const res = await asAttacker(request(app).put('/api/calendar-events/ev1'))
+        .send({ editType: 'series', parentEventId: 'victim-series', title: 'pwn' });
+      expect(res.status).toBe(200);
+      const [parentId, , userId] = storageMock.updateRecurringEventSeries.mock.calls[0] as any[];
+      expect(parentId).toBe('ev1');           // own event id, NOT 'victim-series'
+      expect(parentId).not.toBe('victim-series');
+      expect(userId).toBe(ATTACKER);          // scoped to caller
+    });
+    it('series delete is scoped to the caller (userId passed to deleteRecurringEventSeries)', async () => {
+      storageMock.getCalendarEvents.mockResolvedValue([{ id: 'ev1', parentEventId: 'series-1' }] as any);
+      const app = await buildApp();
+      const res = await asOwner(request(app).delete('/api/calendar-events/ev1?deleteType=series'));
+      expect(res.status).toBe(200);
+      const [parentId, userId] = storageMock.deleteRecurringEventSeries.mock.calls[0] as any[];
+      expect(parentId).toBe('series-1');
+      expect(userId).toBe(OWNER);
+    });
+    it('POST event with a categoryId the user does not own → 404, no create', async () => {
+      storageMock.getCalendarCategories.mockResolvedValue([{ id: 'mine' }] as any);
+      const app = await buildApp();
+      const res = await asOwner(request(app).post('/api/calendar-events'))
+        .send({ title: 'x', categoryId: 'someone-else', startTime: new Date().toISOString(), endTime: new Date().toISOString() });
+      expect(res.status).toBe(404);
+      expect(storageMock.createCalendarEvent).not.toHaveBeenCalled();
+    });
+    it('POST event: body parentEventId is stripped before insert', async () => {
+      storageMock.getCalendarCategories.mockResolvedValue([{ id: 'cat1' }] as any);
+      const app = await buildApp();
+      const res = await asOwner(request(app).post('/api/calendar-events')).send({
+        title: 'x', categoryId: 'cat1', dayOfWeek: 1, parentEventId: 'victim-series',
+        startTime: new Date().toISOString(), endTime: new Date().toISOString(),
+      });
+      expect(res.status).toBe(200);
+      const [payload] = storageMock.createCalendarEvent.mock.calls[0] as any[];
+      expect(payload).not.toHaveProperty('parentEventId');
     });
   });
 

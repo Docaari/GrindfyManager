@@ -156,7 +156,7 @@ export function registerTournamentRoutes(app: Express): void {
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: "Tournament not found" });
       }
-      const { userId: _ignoreUserId, ...body } = req.body ?? {};
+      const { userId: _ignoreUserId, id: _ignoreId, ...body } = req.body ?? {};
       const tournamentData = insertTournamentSchemaBase.partial().parse(body);
       const tournament = await storage.updateTournament(id, tournamentData);
       invalidateUserTournamentCaches(userId);

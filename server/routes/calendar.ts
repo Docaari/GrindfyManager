@@ -508,6 +508,12 @@ export function registerCalendarRoutes(app: Express): void {
     const cats = await storage.getCalendarCategories(userId);
     return cats.some((c: any) => c.id === id);
   }
+  // Returns true when the (optional) categoryId reference is empty or owned by the
+  // user — prevents pointing an event at someone else's category.
+  async function categoryRefIsAcceptable(userId: string, categoryId: unknown): Promise<boolean> {
+    if (categoryId == null || categoryId === '') return true;
+    return ownsCalendarCategory(userId, String(categoryId));
+  }
 
   app.put('/api/calendar-categories/:id', requireAuth, async (req: any, res) => {
     try {
@@ -560,8 +566,15 @@ export function registerCalendarRoutes(app: Express): void {
   app.post('/api/calendar-events', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
+      // IDOR guard (Wave 2 review): parentEventId is assigned server-side for
+      // recurring children — never accept it from the client (would let an attacker
+      // graft their event onto another user's series). categoryId must be owned.
+      const { parentEventId: _ignoreParentId, ...rawBody } = req.body ?? {};
+      if (!(await categoryRefIsAcceptable(userId, rawBody.categoryId))) {
+        return res.status(404).json({ message: 'Calendar category not found' });
+      }
       const eventData = insertCalendarEventSchema.parse({
-        ...req.body,
+        ...rawBody,
         userId,
         startTime: new Date(req.body.startTime),
         endTime: new Date(req.body.endTime)
@@ -637,7 +650,12 @@ export function registerCalendarRoutes(app: Express): void {
         return res.status(404).json({ message: 'Calendar event not found' });
       }
 
-      const { userId: _ignoreUserId, id: _ignoreId, ...rawBody } = req.body ?? {};
+      // Strip identity + relationship fields the client must not control:
+      // userId/id (ownership), parentEventId (series grafting — see Wave 2 review).
+      const { userId: _ignoreUserId, id: _ignoreId, parentEventId: _ignoreParentId, ...rawBody } = req.body ?? {};
+      if (!(await categoryRefIsAcceptable(userId, rawBody.categoryId))) {
+        return res.status(404).json({ message: 'Calendar category not found' });
+      }
       const eventData = insertCalendarEventSchema.partial().parse({
         ...rawBody,
         startTime: req.body.startTime ? new Date(req.body.startTime) : undefined,
@@ -645,8 +663,9 @@ export function registerCalendarRoutes(app: Express): void {
       });
 
       if (editType === 'series') {
+        // parentId comes from the server-side row, never the request body.
         const parentId = currentEvent.parentEventId || id;
-        await storage.updateRecurringEventSeries(parentId, eventData);
+        await storage.updateRecurringEventSeries(parentId, eventData, userId);
         res.json({ message: 'Recurring series updated successfully' });
       } else {
         const event = await storage.updateCalendarEvent(id, eventData);
@@ -672,7 +691,7 @@ export function registerCalendarRoutes(app: Express): void {
 
       if (deleteType === 'series') {
         const parentId = currentEvent.parentEventId || id;
-        await storage.deleteRecurringEventSeries(parentId);
+        await storage.deleteRecurringEventSeries(parentId, userId);
         res.json({ message: 'Recurring series deleted successfully' });
       } else {
         await storage.deleteCalendarEvent(id);

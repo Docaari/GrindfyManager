@@ -96,7 +96,7 @@ export function registerMiscRoutes(app: Express): void {
       if (!existing || existing.userId !== userId) {
         return res.status(404).json({ message: "Coaching insight not found" });
       }
-      const { userId: _ignoreUserId, ...body } = req.body ?? {};
+      const { userId: _ignoreUserId, id: _ignoreId, ...body } = req.body ?? {};
       const insightData = insertCoachingInsightSchema.partial().parse(body);
       const insight = await storage.updateCoachingInsight(id, insightData);
       res.json(insight);
