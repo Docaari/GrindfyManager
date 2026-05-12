@@ -6,8 +6,9 @@ import { describe, it, expect } from 'vitest';
 // Funcao pura que normaliza buyIn (em qualquer moeda) para USD usando
 // user_settings.exchange_rates (jsonb com chaves tipo "BRL", "EUR", etc.).
 //
-// Decisoes Q2:
-//   - Chave "BRL" no exchange_rates significa multiplier BRL->USD (ex: 0.20)
+// Convencao oficial (ADR-033 — units per 1 USD):
+//   - Chave "BRL" no exchange_rates = quantas unidades de BRL valem 1 USD (ex: 5.0)
+//   - Conversao native -> USD: usd = native / rate
 //   - Fallback DEFAULT_EXCHANGE_RATES quando user_settings nao tem a chave
 //   - Historico TAMBEM e normalizado (validado em playerBundle test)
 // =============================================================================
@@ -27,31 +28,31 @@ describe('normalizeBuyInToUSD - moedas conhecidas', () => {
     expect(normalizeBuyInToUSD(11, 'USD', {})).toBe(11);
   });
 
-  it('BRL com taxa 0.25 do user: 100 BRL -> 25 USD', () => {
-    expect(normalizeBuyInToUSD(100, 'BRL', { BRL: 0.25 })).toBe(25);
+  it('BRL com taxa 4 do user (1 USD = 4 BRL): 100 BRL -> 25 USD', () => {
+    expect(normalizeBuyInToUSD(100, 'BRL', { BRL: 4 })).toBe(25);
   });
 
-  it('BRL com taxa 0.20 do user: 22 BRL -> 4.4 USD', () => {
-    expect(normalizeBuyInToUSD(22, 'BRL', { BRL: 0.2 })).toBeCloseTo(4.4, 5);
+  it('BRL com taxa 5 do user (1 USD = 5 BRL): 22 BRL -> 4.4 USD', () => {
+    expect(normalizeBuyInToUSD(22, 'BRL', { BRL: 5 })).toBeCloseTo(4.4, 5);
   });
 
-  it('EUR com taxa 1.10: 10 EUR -> 11 USD', () => {
-    expect(normalizeBuyInToUSD(10, 'EUR', { EUR: 1.1 })).toBeCloseTo(11, 5);
+  it('EUR com taxa 1.10 (1 USD = 1.10 EUR): 11 EUR -> 10 USD', () => {
+    expect(normalizeBuyInToUSD(11, 'EUR', { EUR: 1.1 })).toBeCloseTo(10, 5);
   });
 });
 
-describe('normalizeBuyInToUSD - fallback (Q2)', () => {
-  it('user nao tem chave BRL -> usa DEFAULT_EXCHANGE_RATES.BRL (0.20)', () => {
-    expect(normalizeBuyInToUSD(100, 'BRL', {})).toBe(100 * DEFAULT_EXCHANGE_RATES.BRL);
+describe('normalizeBuyInToUSD - fallback (ADR-033)', () => {
+  it('user nao tem chave BRL -> usa DEFAULT_EXCHANGE_RATES.BRL (5.0)', () => {
+    expect(normalizeBuyInToUSD(100, 'BRL', {})).toBe(100 / DEFAULT_EXCHANGE_RATES.BRL);
   });
 
   it('user tem outras chaves mas nao BRL -> usa fallback', () => {
-    expect(normalizeBuyInToUSD(100, 'BRL', { EUR: 1.1, USD: 1 })).toBe(100 * DEFAULT_EXCHANGE_RATES.BRL);
+    expect(normalizeBuyInToUSD(100, 'BRL', { EUR: 1.1, USD: 1 })).toBe(100 / DEFAULT_EXCHANGE_RATES.BRL);
   });
 
   it('user_settings null/undefined -> usa fallback', () => {
-    expect(normalizeBuyInToUSD(100, 'BRL', null as any)).toBe(100 * DEFAULT_EXCHANGE_RATES.BRL);
-    expect(normalizeBuyInToUSD(100, 'BRL', undefined as any)).toBe(100 * DEFAULT_EXCHANGE_RATES.BRL);
+    expect(normalizeBuyInToUSD(100, 'BRL', null as any)).toBe(100 / DEFAULT_EXCHANGE_RATES.BRL);
+    expect(normalizeBuyInToUSD(100, 'BRL', undefined as any)).toBe(100 / DEFAULT_EXCHANGE_RATES.BRL);
   });
 });
 
@@ -123,17 +124,17 @@ describe('normalizeBucketRange - integracao com BUYIN_BUCKETS', () => {
 // Cenario Q2: BRL e USD coexistindo no historico
 // ===========================================================================
 
-describe('Q2 — historico misto BRL+USD normalizado', () => {
-  it('22 BRL e 4.4 USD apos normalizacao com taxa 0.20 ficam no MESMO bucket', () => {
-    const usdFromBRL = normalizeBuyInToUSD(22, 'BRL', { BRL: 0.2 });
+describe('historico misto BRL+USD normalizado (ADR-033)', () => {
+  it('22 BRL e 4.4 USD apos normalizacao com taxa 5 ficam no MESMO bucket', () => {
+    const usdFromBRL = normalizeBuyInToUSD(22, 'BRL', { BRL: 5 });
     expect(usdFromBRL).toBeCloseTo(4.4, 5);
     const bucketBRL = normalizeBucketRange(usdFromBRL); // ~4.4 USD
     const bucketUSD = normalizeBucketRange(4.4);
     expect(bucketBRL).toBe(bucketUSD);
   });
 
-  it('110 BRL com taxa 0.20 = 22 USD; mesmo bucket que 22 USD direto', () => {
-    const usdFromBRL = normalizeBuyInToUSD(110, 'BRL', { BRL: 0.2 });
+  it('110 BRL com taxa 5 = 22 USD; mesmo bucket que 22 USD direto', () => {
+    const usdFromBRL = normalizeBuyInToUSD(110, 'BRL', { BRL: 5 });
     expect(usdFromBRL).toBeCloseTo(22, 5);
     expect(normalizeBucketRange(usdFromBRL)).toBe(normalizeBucketRange(22));
   });

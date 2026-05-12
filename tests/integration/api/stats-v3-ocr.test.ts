@@ -200,17 +200,26 @@ describe('POST /api/stats-analyzer/ocr-extract — auth/permission', () => {
     expect(messagesCreateMock).not.toHaveBeenCalled();
   });
 
-  it('403 quando usuario nao eh tier pro+', async () => {
-    const res = makeRes();
-    await handleOcrExtract(
-      makeReq({
-        user: { userPlatformId: 'USER-0001', subscriptionPlan: 'free' },
-        file: multerFile(pngBuffer()),
-        body: { layoutId: 'lyt-1' },
-      }) as any,
-      res,
-    );
-    expect(res.statusCode).toBe(403);
+  it('403 quando usuario nao eh tier pro+ e OCR_REQUIRE_PRO=true', async () => {
+    // Por padrao o gate de tier mora no route middleware (requirePermission("studies"));
+    // o handler so re-checa quando OCR_REQUIRE_PRO=true (HIGH-5 — opt-in extra).
+    const prev = process.env.OCR_REQUIRE_PRO;
+    process.env.OCR_REQUIRE_PRO = 'true';
+    try {
+      const res = makeRes();
+      await handleOcrExtract(
+        makeReq({
+          user: { userPlatformId: 'USER-0001', subscriptionPlan: 'free' },
+          file: multerFile(pngBuffer()),
+          body: { layoutId: 'lyt-1' },
+        }) as any,
+        res,
+      );
+      expect(res.statusCode).toBe(403);
+    } finally {
+      if (prev === undefined) delete process.env.OCR_REQUIRE_PRO;
+      else process.env.OCR_REQUIRE_PRO = prev;
+    }
   });
 });
 

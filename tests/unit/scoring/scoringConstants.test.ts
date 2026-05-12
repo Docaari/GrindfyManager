@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 //   - COLD_START_PARTIAL_THRESHOLD = 50
 //   - COLD_START_BONUSES (Speed, Field, TimeOfDay) - tabela Q5
 //   - SUPREMA_CATEGORY_MAP (Q6: "Bounty Hunter" -> "PKO" etc.)
-//   - DEFAULT_EXCHANGE_RATES (Q2: BRL -> 0.20)
+//   - DEFAULT_EXCHANGE_RATES (ADR-033: units per 1 USD; BRL -> 5.0)
 // =============================================================================
 
 import {
@@ -326,8 +326,8 @@ describe('scoringConstants - SUPREMA_CATEGORY_MAP (Q6)', () => {
 // ===========================================================================
 
 describe('scoringConstants - DEFAULT_EXCHANGE_RATES (Q2)', () => {
-  it('BRL fallback = 0.20 (1 BRL = 0.20 USD)', () => {
-    expect(DEFAULT_EXCHANGE_RATES.BRL).toBe(0.2);
+  it('BRL fallback = 5.0 (1 USD = 5 BRL — ADR-033 units-per-USD)', () => {
+    expect(DEFAULT_EXCHANGE_RATES.BRL).toBe(5.0);
   });
 
   it('USD = 1.0 (no-op)', () => {

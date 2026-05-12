@@ -9,7 +9,9 @@
  *   - data-testid="summary-modal-cta-quick" -> 0 matches
  *   - data-testid="summary-modal-cta-full" -> 0 matches
  *   - data-testid="summary-modal-cta-skip" -> 0 matches
- *   - data-testid="cta-start-cooldown" -> >=1 match
+ *   - data-testid="cta-start-cooldown" -> 0 matches (removido em 2363509 — "finalize
+ *       session reform: cooldown removal"; cool-down agora roda via /cooldown standalone,
+ *       nao mais como CTA do summary modal)
  *   - data-testid="cta-finalize-session" -> >=1 match
  *
  * Implementer deve substituir os legacy pelos novos.
@@ -77,14 +79,14 @@ describe('RF-10: cleanup dual CTAs do summary', () => {
     expect(matches).toEqual([]);
   });
 
-  it('cta-start-cooldown ainda existe (>= 1 match)', () => {
+  it('cta-start-cooldown foi removido do summary (0 matches — cooldown removal 2363509)', () => {
     const files = listClientFiles(clientRoot);
-    let total = 0;
+    const matches: string[] = [];
     for (const f of files) {
       const content = fs.readFileSync(f, 'utf-8');
-      if (content.includes('cta-start-cooldown')) total++;
+      if (content.includes('cta-start-cooldown')) matches.push(f);
     }
-    expect(total).toBeGreaterThanOrEqual(1);
+    expect(matches).toEqual([]);
   });
 
   it('cta-finalize-session ainda existe (>= 1 match)', () => {

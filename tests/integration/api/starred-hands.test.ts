@@ -27,6 +27,7 @@ vi.mock('../../../server/storage', () => ({
     listStarredHands: vi.fn(),
     deleteStarredHand: vi.fn(),
     countStarredHandsByTournament: vi.fn(),
+    countStarredHandsBySession: vi.fn(),
   },
 }));
 
@@ -39,6 +40,12 @@ import { storage } from '../../../server/storage';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Sprint Spot-Screenshots (RF-08): handleCreateStarredHand passou a checar
+  // ownership + status da grind_session ANTES do session_tournament. Default:
+  // sessao 'ses_1' existe, ativa, do mesmo user. Testes especificos sobrescrevem.
+  (storage.getGrindSession as any).mockResolvedValue({ id: 'ses_1', userId: 'USER-0001', status: 'active' });
+  // Cap 10 spots/sessao (Spot-Screenshots) — default sob o limite.
+  (storage.countStarredHandsBySession as any).mockResolvedValue(0);
 });
 
 function makeReq(overrides: any = {}) {

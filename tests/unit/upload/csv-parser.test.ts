@@ -406,11 +406,12 @@ describe('PokerCSVParser — PokerStars format', () => {
       ' ReEntries/Rebuys': '0',
     }]);
 
-    const exchangeRates = { CNY: 0.14 };
+    // ADR-033: rates[ccy] = unidades de ccy por 1 USD; native -> USD = native / rate.
+    const exchangeRates = { CNY: 7.2 };
     const result = await PokerCSVParser.parseCSV(csv, 'USER-0001', exchangeRates);
     expect(result.length).toBe(1);
-    // 388 * 0.14 + 38 * 0.14 = 54.32 + 5.32 = 59.64
-    expect(result[0].buyIn).toBeCloseTo(59.64, 1);
+    // (388 + 38) / 7.2 = 59.17 USD
+    expect(result[0].buyIn).toBeCloseTo(59.17, 1);
     expect(result[0].convertedToUSD).toBe(true);
   });
 

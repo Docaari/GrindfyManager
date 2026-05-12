@@ -7,6 +7,7 @@ import { startLibraryCleanup, stopLibraryCleanup } from "./libraryCleanup";
 import { startCoachCrons } from "./coach/cronRunner";
 import { cleanupExpiredRefreshTokens } from "./refreshTokenStore";
 import { pool } from "./db";
+import cron from "node-cron";
 
 const app = express();
 // Trust the first proxy hop (Coolify / Cloudflare / nginx in front). Without this,
@@ -133,8 +134,11 @@ app.use((req, res, next) => {
   //   1. server.close() para de aceitar new conns + drena in-flight
   //   2. clearInterval(refresh-token cleanup)
   //   3. stopSupremaAutoSync + stopLibraryCleanup (clearInterval intervals deles)
-  //   4. pool.end() fecha conexoes pg limpo
-  //   5. force-exit 10s se algo travar (timer.unref nao bloqueia exit normal)
+  //   4. cron.getTasks().stop() — para todos node-cron jobs (server/jobs/* +
+  //      coach/cronRunner) sem precisar handle por job; getTasks() (node-cron 3.x)
+  //      retorna o registry global de ScheduledTask
+  //   5. pool.end() fecha conexoes pg limpo
+  //   6. force-exit 10s se algo travar (timer.unref nao bloqueia exit normal)
   let shuttingDown = false;
   const shutdown = (sig: string) => {
     if (shuttingDown) return; // idempotente em re-trigger
@@ -152,8 +156,14 @@ app.use((req, res, next) => {
         if (refreshTokenInterval) clearInterval(refreshTokenInterval);
         stopSupremaAutoSync();
         stopLibraryCleanup();
-        // node-cron jobs (server/jobs/*) registram via cron.schedule mas nao
-        // expoem stop() global — Wave D adicionara advisory locks + stop hooks.
+        // node-cron jobs (server/jobs/* + coach/cronRunner): para todos via
+        // o registry global. getTasks() existe no node-cron 3.x.
+        try {
+          const tasks = cron.getTasks?.();
+          if (tasks) for (const t of tasks.values()) (t as any)?.stop?.();
+        } catch (e2) {
+          console.error("[shutdown] cron.getTasks().stop error", e2);
+        }
       } catch (e) {
         console.error("[shutdown] cron stop error", e);
       }

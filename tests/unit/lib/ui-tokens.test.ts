@@ -136,9 +136,13 @@ describe('RF-01 — tokens.font (D3)', () => {
 // color (D4 + R8 — objeto {text, bg, border})
 // ============================================================================
 describe('RF-01 — tokens.color (D4 + R8 resolved)', () => {
-  it('tem 7 namespaces semanticos: success, danger, warn, info, action, neutral, accent', () => {
+  it('tem 8 namespaces: 7 swatches {text,bg,border} + delta {positive,negative,neutral} (LOW-18)', () => {
     const keys = Object.keys(tokens.color).sort();
-    expect(keys).toEqual(['accent', 'action', 'danger', 'info', 'neutral', 'success', 'warn']);
+    expect(keys).toEqual(['accent', 'action', 'danger', 'delta', 'info', 'neutral', 'success', 'warn']);
+  });
+
+  it('tokens.color.delta tem shape {positive, negative, neutral} (distinto dos swatches)', () => {
+    expect(Object.keys(tokens.color.delta).sort()).toEqual(['negative', 'neutral', 'positive']);
   });
 
   describe.each([
