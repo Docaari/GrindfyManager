@@ -96,6 +96,11 @@ vi.mock('@/hooks/useWarmupTelemetry', () => ({
 const setLocationMock = vi.fn();
 vi.mock('wouter', () => ({
   useLocation: () => ['/grind', setLocationMock],
+  // coach-page-reform-1 passou a usar useSearch (query params na URL).
+  useSearch: () => '',
+  useRoute: () => [false, {}],
+  Link: ({ children }: any) => children,
+  Redirect: () => null,
 }));
 
 // Sub-paginas pesadas viram no-op

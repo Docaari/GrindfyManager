@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // =============================================================================
@@ -14,11 +14,14 @@ import userEvent from '@testing-library/user-event';
 
 import { MessageCopyButton } from '../MessageCopyButton';
 
-const writeTextMock = vi.fn();
+const writeTextMock = vi.fn().mockResolvedValue(undefined);
 beforeEach(() => {
   writeTextMock.mockClear();
-  Object.assign(navigator, {
-    clipboard: { writeText: writeTextMock },
+  // navigator.clipboard e getter-only em jsdom recente — usar defineProperty.
+  Object.defineProperty(navigator, 'clipboard', {
+    value: { writeText: writeTextMock },
+    configurable: true,
+    writable: true,
   });
 });
 
@@ -50,13 +53,14 @@ describe('<MessageCopyButton>', () => {
 
   it('click chama navigator.clipboard.writeText com cleanText (sem tags internas)', async () => {
     const raw = 'Seu ROI e alto [confianca: alta, N=145]. Veja [Fonte: Dashboard > Por Speed].';
-    const user = userEvent.setup();
+    // fireEvent (nao userEvent.setup) — userEvent v14 instala o proprio stub de
+    // clipboard em setup(), o que sobrescreveria writeTextMock.
     render(<MessageCopyButton content={raw} />);
 
     const btn = document.querySelector('button[aria-label*="Copiar"]') as HTMLButtonElement;
-    await user.click(btn);
+    fireEvent.click(btn);
 
-    expect(writeTextMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(writeTextMock).toHaveBeenCalledTimes(1));
     const copied = writeTextMock.mock.calls[0][0];
     // Tags internas nao aparecem no texto copiado
     expect(copied).not.toMatch(/\[confianca:/);

@@ -110,6 +110,8 @@ describe("<StatsAnalyzerTab>", () => {
   });
 
   it("renderiza snapshots da query", async () => {
+    // Pos Stats-V3: snapshots viraram um <Select> (data-testid=stats-active-snapshot
+    // na view "grouped", default) em vez de uma lista com data-testid=snapshot-:id.
     fetchMock.mockImplementation(async (url: string) => {
       if (url.startsWith("/api/hud-layouts")) return jsonRes(layoutsResp);
       if (url.startsWith("/api/hud-stat-snapshots")) return jsonRes(snapshotsResp);
@@ -117,8 +119,12 @@ describe("<StatsAnalyzerTab>", () => {
     });
     renderWith(<StatsAnalyzerTab />);
     await waitFor(() => {
-      expect(screen.getByTestId("snapshot-snap-a")).toBeTruthy();
+      expect(screen.getByTestId("stats-active-snapshot")).toBeTruthy();
     });
+    // O fetch dos snapshots aconteceu.
+    expect(
+      fetchMock.mock.calls.some((c: any[]) => String(c[0]).startsWith("/api/hud-stat-snapshots")),
+    ).toBe(true);
   });
 
   it("botao Novo desabilitado se nao ha layouts", async () => {

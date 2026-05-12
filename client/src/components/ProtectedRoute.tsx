@@ -20,10 +20,19 @@ export default function ProtectedRoute({
     return fallback || null;
   }
 
-  // Admin-only routes
-  const adminRoutes = ['/analytics', '/admin/users', '/admin/bugs', '/admin-users', '/admin-bugs'];
+  // Admin-only routes — gate por PREFIXO (alem da whitelist legada): qualquer
+  // rota sob `/admin`, `/admin/...` ou `/admin-...` exige isAdmin. Garante que
+  // rotas admin futuras (ex.: /admin/dashboard, /admin/coach-analytics) nao
+  // escapam do gate sem precisar atualizar uma whitelist hardcoded. `/analytics`
+  // segue na whitelist (admin-only legado, sem prefixo /admin).
+  const adminWhitelist = ['/analytics'];
   const cleanRoute = location.split('?')[0];
-  if (adminRoutes.includes(cleanRoute)) {
+  const isAdminRoute =
+    adminWhitelist.includes(cleanRoute) ||
+    cleanRoute === '/admin' ||
+    cleanRoute.startsWith('/admin/') ||
+    cleanRoute.startsWith('/admin-');
+  if (isAdminRoute) {
     if (!isAdmin) {
       return <AccessDenied reason="trial_expired" />;
     }
