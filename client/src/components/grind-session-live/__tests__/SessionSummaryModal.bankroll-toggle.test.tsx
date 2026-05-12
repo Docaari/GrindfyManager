@@ -153,37 +153,8 @@ describe('SessionSummaryModal Sprint B2 (M2) — bankrollManagementEnabled=false
 // =============================================================================
 
 describe('SessionSummaryModal Sprint B2 (M2) — setting=false NAO chama /reconcile-wallets', () => {
-  it('click cta-start-cooldown vai direto para POST /api/cooldown-logs sem reconcile', async () => {
-    apiRequestMock.mockResolvedValueOnce({ id: 'cd_1' });
-
-    render(
-      wrap(
-        <SessionSummaryModal
-          {...baseProps}
-          onStartFullCooldown={vi.fn()}
-          onStartQuickCooldown={vi.fn()}
-        />,
-      ),
-    );
-
-    fireEvent.click(screen.getByTestId('cta-start-cooldown'));
-
-    await waitFor(() => {
-      expect(apiRequestMock).toHaveBeenCalled();
-    });
-
-    // Apenas 1 call (cooldown-logs) — sem reconcile.
-    const reconcileCalls = apiRequestMock.mock.calls.filter((c: any[]) =>
-      typeof c[1] === 'string' && c[1].includes('/reconcile-wallets'),
-    );
-    expect(reconcileCalls.length).toBe(0);
-
-    // CTA action acontece.
-    const cooldownCalls = apiRequestMock.mock.calls.filter((c: any[]) =>
-      typeof c[1] === 'string' && c[1].includes('/api/cooldown-logs'),
-    );
-    expect(cooldownCalls.length).toBeGreaterThan(0);
-  });
+  // cta-start-cooldown removido (cooldown removal 2363509) — cool-down roda via
+  // /cooldown standalone. O CTA terminal do modal agora e cta-finalize-session.
 
   it('click cta-finalize-session vai direto para onEndSession sem reconcile', async () => {
     const onEndSession = vi.fn();
@@ -217,20 +188,10 @@ describe('SessionSummaryModal Sprint B2 (M2) — setting=false NAO chama /reconc
 // =============================================================================
 
 describe('SessionSummaryModal Sprint B2 (M2) — telemetria reconcile_skipped_setting_off', () => {
-  it('emite reconcile_skipped_setting_off quando CTA terminal eh clicado com setting=false', async () => {
-    apiRequestMock.mockResolvedValueOnce({ id: 'cd_1' });
+  it('emite reconcile_skipped_setting_off quando o CTA terminal eh clicado com setting=false', async () => {
+    render(wrap(<SessionSummaryModal {...baseProps} onEndSession={vi.fn()} />));
 
-    render(
-      wrap(
-        <SessionSummaryModal
-          {...baseProps}
-          onStartFullCooldown={vi.fn()}
-          onStartQuickCooldown={vi.fn()}
-        />,
-      ),
-    );
-
-    fireEvent.click(screen.getByTestId('cta-start-cooldown'));
+    fireEvent.click(screen.getByTestId('cta-finalize-session'));
 
     await waitFor(() => {
       const skipEvent = trackMock.mock.calls.find(

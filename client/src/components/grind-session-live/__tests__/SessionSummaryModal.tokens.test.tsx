@@ -191,16 +191,8 @@ describe('SessionSummaryModal Sprint B2 (M6) — bankroll-reconcile-section usa 
 // =============================================================================
 
 describe('SessionSummaryModal Sprint B2 (M6) — CTAs com tokens primarios', () => {
-  it('cta-start-cooldown usa bg-primary OU classe poker-cta semantica', () => {
-    render(wrap(<SessionSummaryModal {...baseProps} />));
-    const cta = screen.getByTestId('cta-start-cooldown');
-    const cn = (cta as HTMLElement).className;
-    const hasPrimaryToken =
-      /\bbg-primary\b|cooldown-cta-warning|cooldown-cta-neutral|\bbg-gold\b|\bbg-poker-green\b/.test(
-        cn,
-      );
-    expect(hasPrimaryToken).toBe(true);
-  });
+  // cta-start-cooldown removido do modal (cooldown removal 2363509 — cool-down
+  // roda via /cooldown standalone). O unico CTA de acao agora e cta-finalize-session.
 
   it('cta-finalize-session usa token semantico (NAO bg-white nem bg-gray-50)', () => {
     render(wrap(<SessionSummaryModal {...baseProps} />));

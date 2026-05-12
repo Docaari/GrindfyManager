@@ -12,9 +12,9 @@
  *      bankrollManagementEnabled=true e ha matched wallets
  *   2. Inputs [data-testid='wallet-balance-input-:walletId'] pre-preenchidos com expectedClosingBalance
  *   3. Edicao de input mostra preview [data-testid='wallet-adjustment-preview-:walletId'] +/- com cor
- *   4. Click cta-start-cooldown com adjustments != 0 dispara POST /reconcile-wallets
- *      ANTES do POST /api/cooldown-logs
- *   5. Click cta-finalize-session reconcile primeiro, depois finalize
+ *   4. Click cta-finalize-session com adjustments != 0 dispara POST /reconcile-wallets
+ *      ANTES de onEndSession (cta-start-cooldown removido — cooldown removal 2363509)
+ *   5. payload do POST /reconcile-wallets so inclui wallets com manualAdjustment != 0
  *   6. adjustments == 0: pula POST /reconcile-wallets, telemetria reconcile_skipped_no_changes
  *   7. WalletReconciliationDialog separado NAO eh renderizado (deprecated)
  *
@@ -228,79 +228,29 @@ describe('SessionSummaryModal Sprint B2 (M1) — preview manualAdjustment', () =
 // 3. Submit: CTA cooldown chama reconcile ANTES de cooldown create
 // =============================================================================
 
-describe('SessionSummaryModal Sprint B2 (M1) — submit cooldown encadeia reconcile + cooldown', () => {
-  it('click cta-start-cooldown com adjustments != 0 dispara POST /reconcile-wallets ANTES do POST /api/cooldown-logs', async () => {
-    // 1a chamada: POST /reconcile-wallets (response 200)
-    // 2a chamada: POST /api/cooldown-logs (response com id)
-    apiRequestMock
-      .mockResolvedValueOnce({ snapshotsCreated: 1, txCreated: [{ id: 'tx_1' }] })
-      .mockResolvedValueOnce({ id: 'cd_1' });
-
-    render(
-      wrap(
-        <SessionSummaryModal
-          {...baseProps}
-          onStartFullCooldown={vi.fn()}
-          onStartQuickCooldown={vi.fn()}
-        />,
-      ),
-    );
-
-    // Edita saldo da Suprema para gerar adjustment != 0
-    const supremaInput = screen.getByTestId('wallet-balance-input-w_suprema') as HTMLInputElement;
-    fireEvent.change(supremaInput, { target: { value: '440' } });
-
-    // Click no CTA "Iniciar cool-down" (mode default - full ou primeiro CTA visivel)
-    const cta = screen.getByTestId('cta-start-cooldown');
-    fireEvent.click(cta);
-
-    await waitFor(() => {
-      expect(apiRequestMock).toHaveBeenCalled();
-    });
-
-    // Primeira chamada deve ser reconcile-wallets
-    const firstCall = apiRequestMock.mock.calls[0];
-    expect(firstCall[0]).toBe('POST');
-    expect(firstCall[1]).toMatch(/\/api\/grind-sessions\/ses_1\/reconcile-wallets/);
-
-    // Segunda chamada deve ser cooldown-logs
-    await waitFor(() => {
-      expect(apiRequestMock.mock.calls.length).toBeGreaterThanOrEqual(2);
-    });
-    const secondCall = apiRequestMock.mock.calls[1];
-    expect(secondCall[0]).toBe('POST');
-    expect(secondCall[1]).toMatch(/\/api\/cooldown-logs/);
-  });
-
+describe('SessionSummaryModal Sprint B2 (M1) — payload do reconcile filtra adjustments=0', () => {
   it('payload do POST /reconcile-wallets contem apenas wallets com manualAdjustment != 0', async () => {
-    apiRequestMock
-      .mockResolvedValueOnce({ snapshotsCreated: 1, txCreated: [] })
-      .mockResolvedValueOnce({ id: 'cd_1' });
+    apiRequestMock.mockResolvedValue({ snapshotsCreated: 1, txCreated: [] });
 
-    render(
-      wrap(
-        <SessionSummaryModal
-          {...baseProps}
-          onStartFullCooldown={vi.fn()}
-          onStartQuickCooldown={vi.fn()}
-        />,
-      ),
-    );
+    render(wrap(<SessionSummaryModal {...baseProps} onEndSession={vi.fn()} />));
 
     // Edita SO suprema (gg fica com adjustment 0)
     fireEvent.change(screen.getByTestId('wallet-balance-input-w_suprema'), {
       target: { value: '440' },
     });
 
-    fireEvent.click(screen.getByTestId('cta-start-cooldown'));
+    fireEvent.click(screen.getByTestId('cta-finalize-session'));
 
+    let reconcileCall: any[] | undefined;
     await waitFor(() => {
-      expect(apiRequestMock).toHaveBeenCalled();
+      reconcileCall = apiRequestMock.mock.calls.find(
+        (c: any[]) => c[0] === 'POST' && typeof c[1] === 'string' && c[1].includes('/reconcile-wallets'),
+      );
+      expect(reconcileCall).toBeDefined();
     });
 
     // Body do POST /reconcile-wallets eh args[2]
-    const reconcileCall = apiRequestMock.mock.calls[0];
-    const body = reconcileCall[2];
+    const body = reconcileCall![2];
     // Deve incluir array adjustments — apenas suprema (manualAdjustment != 0)
     expect(body.adjustments).toBeDefined();
     expect(Array.isArray(body.adjustments)).toBe(true);
@@ -313,7 +263,9 @@ describe('SessionSummaryModal Sprint B2 (M1) — submit cooldown encadeia reconc
 
 describe('SessionSummaryModal Sprint B2 (M1) — submit finalize encadeia reconcile + finalize', () => {
   it('click cta-finalize-session com adjustments != 0 dispara POST /reconcile-wallets ANTES de onEndSession', async () => {
-    apiRequestMock.mockResolvedValueOnce({
+    // mockResolvedValue (nao Once): o modal pode fazer um GET (lazy load
+    // session-insights) antes do POST /reconcile-wallets — nao assumir ordem.
+    apiRequestMock.mockResolvedValue({
       snapshotsCreated: 1,
       txCreated: [{ id: 'tx_1' }],
     });
@@ -335,12 +287,11 @@ describe('SessionSummaryModal Sprint B2 (M1) — submit finalize encadeia reconc
     fireEvent.click(screen.getByTestId('cta-finalize-session'));
 
     await waitFor(() => {
-      expect(apiRequestMock).toHaveBeenCalled();
+      const reconcileCall = apiRequestMock.mock.calls.find(
+        (c: any[]) => c[0] === 'POST' && typeof c[1] === 'string' && /\/api\/grind-sessions\/ses_1\/reconcile-wallets/.test(c[1]),
+      );
+      expect(reconcileCall).toBeDefined();
     });
-
-    const firstCall = apiRequestMock.mock.calls[0];
-    expect(firstCall[0]).toBe('POST');
-    expect(firstCall[1]).toMatch(/\/api\/grind-sessions\/ses_1\/reconcile-wallets/);
 
     await waitFor(() => {
       expect(onEndSession).toHaveBeenCalled();
@@ -354,29 +305,15 @@ describe('SessionSummaryModal Sprint B2 (M1) — submit finalize encadeia reconc
 
 describe('SessionSummaryModal Sprint B2 (M1) — pula reconcile quando todos adjustments=0', () => {
   it('NAO dispara POST /reconcile-wallets quando todos inputs == expectedClosingBalance', async () => {
-    apiRequestMock.mockResolvedValueOnce({ id: 'cd_1' });
-
-    render(
-      wrap(
-        <SessionSummaryModal
-          {...baseProps}
-          onStartFullCooldown={vi.fn()}
-          onStartQuickCooldown={vi.fn()}
-        />,
-      ),
-    );
+    const onEndSession = vi.fn();
+    render(wrap(<SessionSummaryModal {...baseProps} onEndSession={onEndSession} />));
 
     // Sem editar nenhum input — adjustments == 0 para todas
-    fireEvent.click(screen.getByTestId('cta-start-cooldown'));
+    fireEvent.click(screen.getByTestId('cta-finalize-session'));
 
     await waitFor(() => {
-      expect(apiRequestMock).toHaveBeenCalled();
+      expect(onEndSession).toHaveBeenCalled();
     });
-
-    // Primeira (e unica esperada) chamada deve ser cooldown-logs DIRETO,
-    // sem POST /reconcile-wallets antes.
-    const firstCall = apiRequestMock.mock.calls[0];
-    expect(firstCall[1]).toMatch(/\/api\/cooldown-logs/);
 
     // NENHUMA chamada para /reconcile-wallets
     const reconcileCalls = apiRequestMock.mock.calls.filter((c: any[]) =>
@@ -386,19 +323,9 @@ describe('SessionSummaryModal Sprint B2 (M1) — pula reconcile quando todos adj
   });
 
   it('emite telemetria summary_inline_reconcile_skipped_no_changes quando todos adjustments=0', async () => {
-    apiRequestMock.mockResolvedValueOnce({ id: 'cd_1' });
+    render(wrap(<SessionSummaryModal {...baseProps} onEndSession={vi.fn()} />));
 
-    render(
-      wrap(
-        <SessionSummaryModal
-          {...baseProps}
-          onStartFullCooldown={vi.fn()}
-          onStartQuickCooldown={vi.fn()}
-        />,
-      ),
-    );
-
-    fireEvent.click(screen.getByTestId('cta-start-cooldown'));
+    fireEvent.click(screen.getByTestId('cta-finalize-session'));
 
     await waitFor(() => {
       const skipEvent = trackMock.mock.calls.find(

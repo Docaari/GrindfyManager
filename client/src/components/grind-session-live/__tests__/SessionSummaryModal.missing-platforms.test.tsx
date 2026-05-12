@@ -10,11 +10,11 @@
  * Cenarios cobertos:
  *   1. missingPlatforms=['Suprema','GG']: banner amber [data-testid=missing-platforms-banner]
  *      renderiza com lista
- *   2. CTAs cta-start-cooldown e cta-finalize-session ficam disabled
- *      quando missingPlatforms.length > 0
+ *   2. CTA cta-finalize-session fica disabled quando missingPlatforms.length > 0
+ *      (cta-start-cooldown removido — cooldown removal 2363509)
  *   3. Click [data-testid=register-wallet-cta] abre WalletCreateDialog inline
  *      com prefill={ platform, nativeCurrency }
- *   4. Apos criar wallet (POST /api/wallets 201): banner some, CTAs habilitam
+ *   4. Apos criar wallet (POST /api/wallets 201): banner some, CTA habilita
  *   5. Mapping platform->currency: Suprema=BRL, GGNetwork=USD, PokerStars=USD,
  *      CoinPoker=USDT, Chico=USD, etc (ADR-048)
  *   6. Truncamento "+N mais" quando >3 plataformas faltando
@@ -167,11 +167,7 @@ describe('SessionSummaryModal Sprint B2 (M3) — banner missing-platforms-banner
 // =============================================================================
 
 describe('SessionSummaryModal Sprint B2 (M3) — CTAs disabled com missingPlatforms', () => {
-  it('cta-start-cooldown fica disabled quando missingPlatforms.length > 0', () => {
-    render(wrap(<SessionSummaryModal {...baseProps} />));
-    const cta = screen.getByTestId('cta-start-cooldown') as HTMLButtonElement;
-    expect(cta.disabled).toBe(true);
-  });
+  // cta-start-cooldown removido (cooldown removal 2363509) — so cta-finalize-session.
 
   it('cta-finalize-session fica disabled quando missingPlatforms.length > 0', () => {
     render(wrap(<SessionSummaryModal {...baseProps} />));
@@ -179,7 +175,7 @@ describe('SessionSummaryModal Sprint B2 (M3) — CTAs disabled com missingPlatfo
     expect(cta.disabled).toBe(true);
   });
 
-  it('CTAs habilitam quando missingPlatforms vazio', () => {
+  it('CTA habilita quando missingPlatforms vazio', () => {
     render(
       wrap(
         <SessionSummaryModal
@@ -188,15 +184,13 @@ describe('SessionSummaryModal Sprint B2 (M3) — CTAs disabled com missingPlatfo
         />,
       ),
     );
-    const cooldown = screen.getByTestId('cta-start-cooldown') as HTMLButtonElement;
     const finalize = screen.getByTestId('cta-finalize-session') as HTMLButtonElement;
-    expect(cooldown.disabled).toBe(false);
     expect(finalize.disabled).toBe(false);
   });
 
   it('click em CTA disabled NAO dispara apiRequest (defesa)', async () => {
     render(wrap(<SessionSummaryModal {...baseProps} />));
-    const cta = screen.getByTestId('cta-start-cooldown');
+    const cta = screen.getByTestId('cta-finalize-session');
     fireEvent.click(cta);
     // Wait nada — defensive: garante que nada foi chamado.
     await new Promise((r) => setTimeout(r, 30));
@@ -245,9 +239,9 @@ describe('SessionSummaryModal Sprint B2 (M3) — register-wallet-cta abre dialog
 describe('SessionSummaryModal Sprint B2 (M3) — apos criar wallet refetch desbloqueia', () => {
   it('quando missingPlatforms passa a vazio (refetch atualizou), banner some e CTAs habilitam', () => {
     const { rerender } = render(wrap(<SessionSummaryModal {...baseProps} />));
-    // Inicialmente: banner visivel, CTAs disabled
+    // Inicialmente: banner visivel, CTA disabled
     expect(screen.getByTestId('missing-platforms-banner')).toBeInTheDocument();
-    expect((screen.getByTestId('cta-start-cooldown') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('cta-finalize-session') as HTMLButtonElement).disabled).toBe(true);
 
     // Simula refetch: missingPlatforms vazio
     rerender(
@@ -277,7 +271,6 @@ describe('SessionSummaryModal Sprint B2 (M3) — apos criar wallet refetch desbl
     );
 
     expect(screen.queryByTestId('missing-platforms-banner')).toBeNull();
-    expect((screen.getByTestId('cta-start-cooldown') as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByTestId('cta-finalize-session') as HTMLButtonElement).disabled).toBe(false);
   });
 });
