@@ -3,6 +3,7 @@ import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import { db } from "../db";
 import { invalidateHomeOverviewCache } from "./home";
+import { invalidateDashboardQuickStatsCache } from "./dashboard";
 import {
   tournaments,
   uploadHistory,
@@ -1127,9 +1128,11 @@ export async function handleUploadCsv(req: any, res: any): Promise<void> {
       }
     }
 
-    // Wave E (Fase 3 perf): invalidar cache /api/home/overview pos-upload —
-    // quickStats/performance/dashboardAllTime/lastTournamentUploadAt mudam.
+    // Wave E + G (Fase 3 perf): invalidar caches /api/home/overview e
+    // /api/dashboard/quick-stats pos-upload — quickStats/performance/
+    // dashboardAllTime/lastTournamentUploadAt mudam.
     try { invalidateHomeOverviewCache(req.user?.userPlatformId); } catch {}
+    try { invalidateDashboardQuickStatsCache(req.user?.userPlatformId); } catch {}
 
     res.status(200).json({
       imported: inserted.length,

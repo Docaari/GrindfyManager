@@ -13,6 +13,46 @@ import { dashboardService } from "../services/dashboardService";
 const VALID_PERIODS = new Set(["7d", "30d", "90d", "180d", "all"]);
 
 // =============================================================================
+// Wave G (Fase 3 perf) — cache server-side de /api/dashboard/quick-stats.
+//
+// Load test 2026-05-11 revelou esse endpoint como bottleneck: 4 queries DB/req
+// (2 delas full scan da tabela tournaments p/ usuario heavy 18k+ rows),
+// p95 ~2000ms @ 100 conexoes concorrentes vs ~83ms do /api/home/overview que
+// ja eh cacheado. Mesmo pattern do focusStats/home: Map<userId, {data,expiresAt}>
+// + TTL 30s. Invalidator chamado por upload + grind-session mutations.
+// =============================================================================
+interface QuickStatsCacheEntry { data: any; expiresAt: number; }
+const QUICK_STATS_TTL_MS = 30_000;
+const QUICK_STATS_CACHE_MAX = 5000;
+const _quickStatsCache = new Map<string, QuickStatsCacheEntry>();
+
+function _evictQuickStatsExpired(now: number): void {
+  for (const [k, v] of _quickStatsCache) {
+    if (v.expiresAt <= now) _quickStatsCache.delete(k);
+  }
+  if (_quickStatsCache.size > QUICK_STATS_CACHE_MAX) {
+    let removed = 0;
+    const overflow = _quickStatsCache.size - QUICK_STATS_CACHE_MAX;
+    for (const k of _quickStatsCache.keys()) {
+      if (removed >= overflow) break;
+      _quickStatsCache.delete(k);
+      removed++;
+    }
+  }
+}
+
+/** Invalidator publico — chamado por mutations que afetam quick-stats. */
+export function invalidateDashboardQuickStatsCache(userId?: string): void {
+  if (userId) _quickStatsCache.delete(userId);
+  else _quickStatsCache.clear();
+}
+
+/** Test-only reset. */
+export function _resetDashboardQuickStatsCacheForTests(): void {
+  _quickStatsCache.clear();
+}
+
+// =============================================================================
 // Sprint Flight-1 RF-16: handleGetDashboard exposto para passar param
 // `expandFlightSeries` para storage.getDashboardStats. Default: setting do user.
 // =============================================================================
@@ -116,6 +156,15 @@ export function registerDashboardRoutes(app: Express): void {
     try {
       const userPlatformId = req.user.userPlatformId;
 
+      // Wave G perf: cache hit (TTL 30s). 4 queries DB evitadas; bottleneck no load test.
+      const nowTs = Date.now();
+      _evictQuickStatsExpired(nowTs);
+      const cached = _quickStatsCache.get(userPlatformId);
+      if (cached && cached.expiresAt > nowTs) {
+        res.setHeader('Cache-Control', 'private, max-age=30');
+        return res.json(cached.data);
+      }
+
       // Get basic tournament stats (prize = net profit, não subtrair buyIn).
       // totalTournaments conta eventos distintos (series colapsadas como 1).
       // Exclui baggedAt (Day 1 placeholders sem resultado final).
@@ -171,14 +220,17 @@ export function registerDashboardRoutes(app: Express): void {
 
       const stats = tournamentStats[0];
 
-      res.json({
+      const payload = {
         totalTournaments: stats.totalTournaments || 0,
         totalProfit: stats.totalProfit || 0,
         lastSessionDate: stats.lastSessionDate || null,
         currentStreak,
         totalSessions: sessionCount[0]?.count || 0,
         totalGradeDays: gradeCount[0]?.count || 0,
-      });
+      };
+      _quickStatsCache.set(userPlatformId, { data: payload, expiresAt: Date.now() + QUICK_STATS_TTL_MS });
+      res.setHeader('Cache-Control', 'private, max-age=30');
+      res.json(payload);
     } catch (error) {
       console.error("[GET /api/dashboard/quick-stats] failed:", error);
       res.status(500).json({ message: 'Erro ao buscar estatísticas rápidas' });

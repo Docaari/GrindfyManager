@@ -3,6 +3,7 @@ import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import { db } from "../db";
 import { invalidateHomeOverviewCache } from "./home";
+import { invalidateDashboardQuickStatsCache } from "./dashboard";
 import {
   insertGrindSessionSchema,
   insertPreparationLogSchema,
@@ -1038,6 +1039,7 @@ export function registerGrindSessionRoutes(app: Express): void {
         // hasActiveGrindSession/recentSessions/sessionsRegistered/quickStats
         // mudam. Tolerante a falhas.
         try { invalidateHomeOverviewCache(userId); } catch {}
+        try { invalidateDashboardQuickStatsCache(userId); } catch {}
       } catch (createErr: any) {
         // launch-fix P1: capturar unique_violation do indice partial
         // uq_grind_sessions_one_active_per_user (migration 0061). Race entre
@@ -1221,6 +1223,7 @@ export function registerGrindSessionRoutes(app: Express): void {
       // Wave E (Fase 3 perf): invalidar Home overview cache — recentSessions/
       // hasActiveGrindSession/sessionsRegistered/quickStats mudam pos-update.
       try { invalidateHomeOverviewCache(userId); } catch {}
+      try { invalidateDashboardQuickStatsCache(userId); } catch {}
 
       res.json({ ...(session as any), ...extra });
     } catch (error) {
@@ -1286,6 +1289,7 @@ export function registerGrindSessionRoutes(app: Express): void {
       // DELETE muda recentSessions/sessionsRegistered/hasActiveGrindSession;
       // sem isto, UI mostrava sessao deletada ate 30s (TTL natural).
       try { invalidateHomeOverviewCache(userId); } catch {}
+      try { invalidateDashboardQuickStatsCache(userId); } catch {}
 
       res.json({ message: "Grind session deleted successfully" });
     } catch (error) {
