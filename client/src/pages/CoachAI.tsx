@@ -57,6 +57,8 @@ import {
   CoachLessonRecommendationCard,
   type CoachLessonRecommendation,
 } from '@/components/coach/CoachLessonRecommendationCard';
+// Sprint AI-1A follow-up (RF-07): banner de onboarding no topo da aba Chat.
+import OnboardingBanner from '@/components/coach/OnboardingBanner';
 
 const HUB_TABS = ['chat', 'reports', 'audit', 'prefs'] as const;
 type HubTab = (typeof HUB_TABS)[number];
@@ -321,7 +323,10 @@ function ChatPanel() {
   }, [handleSend]);
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col h-full">
+      {/* Sprint AI-1A follow-up: onboarding do Grindfy AI (some quando completo / dispensado). */}
+      <OnboardingBanner />
+      <div className="flex flex-1 min-h-0">
       {/* Sidebar de conversas (md+; em mobile fica acima do chat). */}
       <div className="hidden md:flex w-60 border-r border-gray-700 bg-gray-800/50 flex-col shrink-0">
         <SessionSidebar
@@ -436,6 +441,7 @@ function ChatPanel() {
             Enter para enviar, Shift+Enter para nova linha
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

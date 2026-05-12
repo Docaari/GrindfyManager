@@ -120,6 +120,45 @@ describe('OnboardingWizard — modo full (6 steps)', () => {
   });
 });
 
+describe('OnboardingWizard — step 3 com levelEstimate (AI-1A follow-up)', () => {
+  const estimate = {
+    nivel: 'mid_consistente',
+    confidence: 'high' as const,
+    humanLabel: 'mid-stakes consistente',
+    evidence: { abiUSD: 55, volumeAllTime: 1200, volumeLast90d: 180, roiAllTime: 8.5, distinctNetworks: 2, accountAgeMonths: 18 },
+  };
+
+  it('quando levelEstimate existe e !== sem_dados, mostra a frase + botao "Confere" no step 3', async () => {
+    const Wizard = await loadWizard();
+    render(wrap(<Wizard mode="full" initialStep={3} levelEstimate={estimate} />));
+    await waitFor(() => expect(screen.getByTestId('onboarding-step-3')).toBeTruthy());
+    const block = screen.getByTestId('onboarding-level-estimate');
+    expect(block.textContent || '').toMatch(/mid-stakes consistente/i);
+    expect(screen.getByTestId('onboarding-level-confirm')).toBeTruthy();
+    // <select> pre-populado com o nivel estimado
+    const select = screen.getByTestId('onboarding-nivel-select') as HTMLSelectElement;
+    expect(select.value).toBe('mid_consistente');
+  });
+
+  it('clicar "Confere" marca nivelConfirmado e mantem o nivel estimado', async () => {
+    const Wizard = await loadWizard();
+    render(wrap(<Wizard mode="full" initialStep={3} levelEstimate={estimate} />));
+    await waitFor(() => expect(screen.getByTestId('onboarding-level-confirm')).toBeTruthy());
+    await userEvent.click(screen.getByTestId('onboarding-level-confirm'));
+    const checkbox = screen.getByTestId('onboarding-nivel-confirmar') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    const select = screen.getByTestId('onboarding-nivel-select') as HTMLSelectElement;
+    expect(select.value).toBe('mid_consistente');
+  });
+
+  it('com levelEstimate sem_dados (ou ausente) o step 3 nao mostra a frase', async () => {
+    const Wizard = await loadWizard();
+    render(wrap(<Wizard mode="full" initialStep={3} levelEstimate={{ nivel: 'sem_dados', humanLabel: 'ainda sem dados suficientes' }} />));
+    await waitFor(() => expect(screen.getByTestId('onboarding-step-3')).toBeTruthy());
+    expect(screen.queryByTestId('onboarding-level-estimate')).toBeNull();
+  });
+});
+
 describe('OnboardingWizard — modo light (3 steps)', () => {
   it('renderiza 3 steps no modo light', async () => {
     const Wizard = await loadWizard();

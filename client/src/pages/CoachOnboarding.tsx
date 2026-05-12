@@ -42,6 +42,7 @@ export function CoachOnboarding(): JSX.Element {
           <OnboardingWizard
             mode={mode}
             draft={data?.draft ?? null}
+            levelEstimate={data?.levelEstimate ?? null}
             onCompleted={() => navigate('/coach-ai')}
           />
         </div>

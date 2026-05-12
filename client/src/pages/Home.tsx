@@ -55,6 +55,8 @@ import HeuristicsCard from '@/components/home/HeuristicsCard';
 import GradeTodayCard from '@/components/home/GradeTodayCard';
 import HomeHeader from '@/components/home/HomeHeader';
 import EmptyPerformanceCluster from '@/components/home/EmptyPerformanceCluster';
+// Sprint AI-1A follow-up (RF-07): banner de onboarding do Grindfy AI no topo da Home.
+import OnboardingBanner from '@/components/coach/OnboardingBanner';
 import NewsFeed from '@/components/home/NewsFeed';
 import DashboardAllTimeCard from '@/components/home/DashboardAllTimeCard';
 import AllTimeEvolutionChart from '@/components/home/AllTimeEvolutionChart';
@@ -372,6 +374,9 @@ const Home: React.FC = () => {
           timezone={userTimezone}
           streakDays={data.lifetime?.currentStreakDays ?? 0}
         />
+
+        {/* Sprint AI-1A follow-up: onboarding do Grindfy AI (some quando completo / dispensado). */}
+        <OnboardingBanner />
 
         {isEmpty ? (
           <EmptyHomeOnboarding

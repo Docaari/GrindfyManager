@@ -26,11 +26,47 @@ interface OnboardingDraft {
   startedAt: string;
 }
 
+// Espelha LevelEstimate de server/coach/playerLevel.ts (campos usados aqui;
+// shape tolerante a evolucao via [k: string]: any).
+interface LevelEstimate {
+  nivel: string;
+  confidence?: 'low' | 'medium' | 'high';
+  humanLabel: string;
+  evidence?: Record<string, any> | string | string[];
+  note?: string;
+  [k: string]: any;
+}
+
 interface OnboardingWizardProps {
   mode?: Mode;
   initialStep?: number;
   draft?: OnboardingDraft | null;
+  levelEstimate?: LevelEstimate | null;
   onCompleted?: () => void;
+}
+
+const NIVEL_HUMAN_LABEL: Record<string, string> = {
+  iniciando: 'comecando a jornada',
+  micro_ascensao: 'micro grinder em ascensao',
+  mid_consistente: 'mid-stakes consistente',
+  high_stakes: 'high-stakes',
+  recreativo_serio: 'recreativo serio',
+};
+
+/** Linhas de evidencia legiveis a partir do `evidence` do LevelEstimate. */
+function evidenceLines(evidence: LevelEstimate['evidence']): string[] {
+  if (!evidence) return [];
+  if (typeof evidence === 'string') return evidence.trim() ? [evidence.trim()] : [];
+  if (Array.isArray(evidence)) return evidence.map((e) => String(e)).filter(Boolean);
+  const out: string[] = [];
+  const ev = evidence as Record<string, any>;
+  if (ev.abiUSD != null) out.push(`ABI ~ $${Number(ev.abiUSD).toFixed(2)}`);
+  if (ev.volumeAllTime != null) out.push(`${ev.volumeAllTime} torneios no total`);
+  if (ev.volumeLast90d != null) out.push(`${ev.volumeLast90d} torneios nos ultimos 90 dias`);
+  if (ev.roiAllTime != null) out.push(`ROI ${Number(ev.roiAllTime).toFixed(1)}%`);
+  if (ev.distinctNetworks != null && ev.distinctNetworks > 0) out.push(`${ev.distinctNetworks} rede(s)`);
+  if (ev.accountAgeMonths != null) out.push(`conta ha ~${Math.round(Number(ev.accountAgeMonths))} mes(es)`);
+  return out;
 }
 
 const TOM_OPTIONS: Array<{ value: 'gentle' | 'balanced' | 'direct'; label: string }> = [
@@ -102,8 +138,10 @@ export function OnboardingWizard(props: OnboardingWizardProps): JSX.Element {
   const [stakesTipico, setStakesTipico] = useState('');
   const [volumeTipicoMes, setVolumeTipicoMes] = useState<string>('');
   const [redesPrincipais, setRedesPrincipais] = useState<string[]>([]);
+  const estimate = props.levelEstimate ?? null;
+  const hasEstimate = !!estimate && estimate.nivel !== 'sem_dados' && estimate.nivel !== '';
   const [nivelConfirmado, setNivelConfirmado] = useState<boolean>(false);
-  const [nivel, setNivel] = useState<string | null>(null);
+  const [nivel, setNivel] = useState<string | null>(hasEstimate ? (estimate as LevelEstimate).nivel : null);
   const [metasTexto, setMetasTexto] = useState<string[]>(['', '', '']);
   const [focoDoMes, setFocoDoMes] = useState('');
   const [tomPreferido, setTomPreferido] = useState<'gentle' | 'balanced' | 'direct'>('balanced');
@@ -120,6 +158,15 @@ export function OnboardingWizard(props: OnboardingWizardProps): JSX.Element {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.draft]);
+
+  useEffect(() => {
+    // levelEstimate pode chegar depois do mount (vem de um useQuery no parent).
+    // Pre-popula o <select> com o nivel estimado se o user ainda nao mexeu nem confirmou.
+    if (hasEstimate && nivel === null && !nivelConfirmado) {
+      setNivel((estimate as LevelEstimate).nivel);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estimate?.nivel]);
 
   const patchStep = useCallback(
     async (extra: Record<string, any>, nextStep: number) => {
@@ -325,8 +372,37 @@ export function OnboardingWizard(props: OnboardingWizardProps): JSX.Element {
       return <p className="text-sm text-gray-400">Se voce ja importou seu historico, posso usar isso. Se nao, voce pode importar depois — nao bloqueia nada.</p>;
     }
     if (step === 3) {
+      const estLabel = hasEstimate
+        ? ((estimate as LevelEstimate).humanLabel || NIVEL_HUMAN_LABEL[(estimate as LevelEstimate).nivel] || (estimate as LevelEstimate).nivel)
+        : null;
+      const estLines = hasEstimate ? evidenceLines((estimate as LevelEstimate).evidence) : [];
       return (
         <div data-testid="onboarding-field-nivel" className="space-y-2">
+          {hasEstimate ? (
+            <div data-testid="onboarding-level-estimate" className="space-y-2 rounded border border-green-700/40 bg-green-900/10 p-3">
+              <p className="text-sm text-gray-200">
+                Pelos seus dados, voce parece <strong>{estLabel}</strong> — confere?
+              </p>
+              {estLines.length > 0 && (
+                <ul data-testid="onboarding-level-evidence" className="list-disc list-inside text-xs text-gray-400 space-y-0.5">
+                  {estLines.map((line, i) => (
+                    <li key={i}>{line}</li>
+                  ))}
+                </ul>
+              )}
+              <button
+                type="button"
+                data-testid="onboarding-level-confirm"
+                onClick={() => {
+                  setNivelConfirmado(true);
+                  setNivel((estimate as LevelEstimate).nivel);
+                }}
+                className={`px-3 py-1 rounded border text-sm ${nivelConfirmado ? 'bg-green-600/20 border-green-500 text-green-300' : 'border-gray-700 text-gray-300 hover:bg-gray-800'}`}
+              >
+                Confere
+              </button>
+            </div>
+          ) : null}
           <label className="flex items-center gap-2 text-sm text-gray-300">
             <input
               type="checkbox"
