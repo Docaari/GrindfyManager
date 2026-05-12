@@ -6,17 +6,20 @@ Ferramenta: [`autocannon`](https://github.com/mcollina/autocannon) (devDep, ligh
 
 ## Pre-requisito CRITICO
 
-O servidor precisa estar rodando o **codigo novo** (Waves A-F merged). O dev server padrao (`npm run dev`) na porta 3000 pode estar rodando codigo velho — restart antes:
+1. **Codigo novo** — o servidor precisa estar rodando Waves A-F merged. O dev server padrao (`npm run dev`) na porta 3000 pode estar rodando codigo velho — restart antes.
+2. **Bypass do rate limit** — o `apiRateLimit` global eh 1000 req / 15 min por IP. Um load test de 30s a ~8000 req/s = 240k reqs, estoura na hora. Setar `LOADTEST_BYPASS_RATELIMIT=true` ao subir o server (gated por env, nunca ativo em prod).
 
 ```bash
 # Opcao 1 — dev server (Vite HMR, mais pesado, OK pra smoke)
-npm run dev                    # porta 3000
+LOADTEST_BYPASS_RATELIMIT=true npm run dev          # porta 3000
 
 # Opcao 2 — prod build (recomendado pra numero confiavel)
 npx vite build
 npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
-NODE_ENV=production node dist/index.js
+LOADTEST_BYPASS_RATELIMIT=true NODE_ENV=production node dist/index.js
 ```
+
+Sem o bypass, os cenarios autenticados vao mostrar ~263 respostas 2xx + resto 429 — nao eh degradacao real, eh o rate limiter funcionando.
 
 ## Rodar
 

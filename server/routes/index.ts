@@ -168,7 +168,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     legacyHeaders: false,
     skip: (req) => {
       // Skip rate limiting for static assets
-      return req.url.includes('/assets/') || req.url.includes('/favicon.ico');
+      if (req.url.includes('/assets/') || req.url.includes('/favicon.ico')) return true;
+      // Wave G (Fase 3 load test): bypass quando LOADTEST_BYPASS_RATELIMIT=true.
+      // NUNCA setado em prod — so pra rodar scripts/load/run-loadtest.mjs sem
+      // bater no teto de 1000 req/15min de um unico IP.
+      if (process.env.LOADTEST_BYPASS_RATELIMIT === 'true') return true;
+      return false;
     }
   });
 
