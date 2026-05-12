@@ -171,6 +171,8 @@ describe('Sidebar — item "Flight" (RF-10, D14)', () => {
     if (!Sidebar) throw new Error('Sidebar component not exported');
 
     render(withClient(<Sidebar />));
-    expect(screen.getByTestId('sidebar-link-flight')).toBeTruthy();
+    // O item Flight aponta pra /coach?tab=flights (coach-page-reform-1), entao o
+    // testid derivado do path mudou. Validamos pelo label, que e estavel.
+    expect(screen.getByText('Flight')).toBeTruthy();
   });
 });

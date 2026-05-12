@@ -33,8 +33,11 @@ describe('Home reform — F9 MiniChat global preservado (D2 / RNF-07)', () => {
     expect(/<MiniChat\s*\/?>/.test(src)).toBe(true);
   });
 
-  it('App.tsx ainda importa MiniChat', () => {
+  it('App.tsx ainda importa MiniChat (estatico ou lazy)', () => {
     const src = fs.readFileSync(APP_TSX, 'utf8');
-    expect(/import\s+MiniChat\s+from|import\s+\{[^}]*MiniChat[^}]*\}\s+from/.test(src)).toBe(true);
+    // Wave F (Fase 3 perf): MiniChat virou lazy import — aceitar as duas formas.
+    const staticImport = /import\s+MiniChat\s+from|import\s+\{[^}]*MiniChat[^}]*\}\s+from/.test(src);
+    const lazyImport = /const\s+MiniChat\s*=\s*lazy\(\s*\(\)\s*=>\s*import\(/.test(src);
+    expect(staticImport || lazyImport).toBe(true);
   });
 });

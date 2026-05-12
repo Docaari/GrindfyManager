@@ -54,7 +54,9 @@ describe('Wouter Redirect /flight → /coach?tab=flights (RF-02 / RF-07.1)', () 
   });
 
   it('memoryLocation history mostra /coach apos redirect', () => {
-    const { hook, navigate } = memoryLocation({ path: '/flight', record: true });
+    // record:true expoe `history` (array de strings) — usar isso em vez de
+    // chamar `hook()` direto (e um hook React, so roda dentro de componente).
+    const { hook, history } = memoryLocation({ path: '/flight', record: true });
 
     const TestApp = () => (
       <Router hook={hook}>
@@ -69,9 +71,9 @@ describe('Wouter Redirect /flight → /coach?tab=flights (RF-02 / RF-07.1)', () 
 
     render(<TestApp />);
 
-    // Verifica que o redirect mudou a location interna do hook.
-    const [path] = hook();
-    expect(path).toMatch(/^\/coach/);
+    // Verifica que o redirect registrou /coach... no historico.
+    expect(history.length).toBeGreaterThan(0);
+    expect(history[history.length - 1]).toMatch(/^\/coach/);
   });
 });
 
