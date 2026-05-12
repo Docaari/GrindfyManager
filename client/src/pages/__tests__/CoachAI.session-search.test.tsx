@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { getQueryFn } from '@/lib/queryClient';
 
 // =============================================================================
 // Sprint Coach-1 Frontend UX / RF-16 — Busca + filtro status no sidebar
@@ -98,7 +99,7 @@ function setupFetch(sessions = SESSIONS) {
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    defaultOptions: { queries: { retry: false, queryFn: getQueryFn({ on401: 'returnNull' }) }, mutations: { retry: false } },
   });
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
 }

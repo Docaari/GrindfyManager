@@ -81,10 +81,11 @@ vi.mock('wouter', () => ({
 }));
 
 import CoachAI from '../CoachAI';
+import { getQueryFn } from '@/lib/queryClient';
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    defaultOptions: { queries: { retry: false, queryFn: getQueryFn({ on401: 'returnNull' }) }, mutations: { retry: false } },
   });
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
 }
