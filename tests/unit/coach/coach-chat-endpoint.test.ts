@@ -446,11 +446,15 @@ describe('POST /api/coach/chat', () => {
   });
 
   describe('rate limiting', () => {
-    it('deve retornar 429 quando usuario excede 30 mensagens por hora', async () => {
-      mockCoachStorage.countUserMessagesInLastHour.mockResolvedValue(30); // Ja atingiu o limite
+    // Sprint coach-launch-fix RF-04: limite virou per-tier em janela 24h
+    // (free=10, pro=50, premium=200, admin=Infinity), nao mais 30/hora flat.
+    // O tier vem do subscriptionPlan; 'free'/'trial'/'active'/desconhecido => 10.
+    it('deve retornar 429 (code rate_limited) quando msgCount >= limite do tier', async () => {
+      mockCoachStorage.countUserMessagesInLastHour.mockResolvedValue(999); // acima de qualquer limite finito
 
       const req = createMockReq({
-        body: { coachType: 'mental', message: '31a mensagem' },
+        user: { userPlatformId: 'USER-0001', subscriptionPlan: 'free' },
+        body: { coachType: 'mental', message: 'mensagem alem do limite' },
       });
       const res = createMockRes();
 
@@ -458,15 +462,16 @@ describe('POST /api/coach/chat', () => {
 
       expect(res.status).toHaveBeenCalledWith(429);
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ message: expect.stringContaining('30') })
+        expect.objectContaining({ code: 'rate_limited' })
       );
     });
 
-    it('deve permitir quando usuario tem 29 mensagens na hora (abaixo do limite)', async () => {
-      mockCoachStorage.countUserMessagesInLastHour.mockResolvedValue(29);
+    it('deve permitir quando msgCount esta abaixo do limite do tier', async () => {
+      mockCoachStorage.countUserMessagesInLastHour.mockResolvedValue(3); // < 10 (free)
 
       const req = createMockReq({
-        body: { coachType: 'mental', message: '30a mensagem' },
+        user: { userPlatformId: 'USER-0001', subscriptionPlan: 'free' },
+        body: { coachType: 'mental', message: 'mensagem dentro do limite' },
       });
       const res = createMockRes();
 

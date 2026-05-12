@@ -96,6 +96,16 @@ const defaultHistory = [
   { role: 'assistant' as const, content: 'Resposta anterior do coach' },
 ];
 
+// O system prompt agora pode vir como SystemBlock[] (Anthropic prompt caching —
+// cache_control ephemeral nos blocos estaticos) ou como string legada. Normaliza
+// pra string concatenada pros asserts de conteudo.
+function systemText(system: any): string {
+  if (Array.isArray(system)) {
+    return system.map((b: any) => (typeof b === 'string' ? b : b?.text ?? '')).join('');
+  }
+  return typeof system === 'string' ? system : '';
+}
+
 // =============================================================================
 // TESTES
 // =============================================================================
@@ -163,13 +173,16 @@ describe('assembleContext — pipeline de montagem de contexto', () => {
       );
 
       expect(result.system).toBeDefined();
-      expect(typeof result.system).toBe('string');
-      expect(result.system.length).toBeGreaterThan(0);
+      // Pode ser SystemBlock[] (prompt caching) ou string — em ambos os casos o
+      // conteudo concatenado deve ser nao-vazio.
+      expect(systemText(result.system).length).toBeGreaterThan(0);
     });
 
     it('deve usar o system prompt do coachType fornecido', async () => {
-      mockDataLoaders.getSystemPrompt.mockReturnValue('Prompt para coach tecnico');
-
+      // RF-08: buildSystemArray monta o base prompt internamente a partir dos
+      // arquivos reais por coachType (o legacy getSystemPrompt continua sendo
+      // chamado, mas o builder novo ignora o retorno). Validamos que o prompt
+      // resultante reflete o coachType pedido.
       const result = await assembleContext(
         {
           coachType: 'technical',
@@ -181,12 +194,16 @@ describe('assembleContext — pipeline de montagem de contexto', () => {
       );
 
       expect(mockDataLoaders.getSystemPrompt).toHaveBeenCalledWith('technical');
-      expect(result.system).toContain('Prompt para coach tecnico');
+      expect(systemText(result.system)).toMatch(/coach\s*t[eé]cnico/i);
     });
   });
 
   describe('perfil do usuario', () => {
-    it('deve incluir dados do perfil do usuario no system prompt', async () => {
+    it('carrega o perfil do usuario (getUserProfile chamado com o userId)', async () => {
+      // RF-08: a montagem do system prompt passou a usar aiProfile (memoria de
+      // longo prazo) + statsSnapshot em vez dos campos crus do perfil; o loader
+      // getUserProfile continua sendo chamado. (Nome literal "Test Player" nao
+      // aparece mais no prompt — buildSystemArray nao recebe userProfile.)
       const result = await assembleContext(
         {
           coachType: 'mental',
@@ -198,9 +215,8 @@ describe('assembleContext — pipeline de montagem de contexto', () => {
       );
 
       expect(mockDataLoaders.getUserProfile).toHaveBeenCalledWith('USER-0001');
-      // O perfil deve estar no system prompt ou como mensagem de contexto
-      const fullContext = result.system + result.messages.map((m: any) => m.content).join(' ');
-      expect(fullContext).toContain('Test Player');
+      expect(result.system).toBeDefined();
+      expect(systemText(result.system).length).toBeGreaterThan(0);
     });
   });
 
@@ -217,7 +233,7 @@ describe('assembleContext — pipeline de montagem de contexto', () => {
       );
 
       expect(mockDataLoaders.getStatsSnapshot).toHaveBeenCalledWith('USER-0001');
-      const fullContext = result.system + result.messages.map((m: any) => m.content).join(' ');
+      const fullContext = systemText(result.system) + result.messages.map((m: any) => m.content).join(" ");
       // Deve conter pelo menos um dos stats
       expect(fullContext).toMatch(/ROI|roi|18\.5/);
     });
@@ -267,7 +283,7 @@ describe('assembleContext — pipeline de montagem de contexto', () => {
         'USER-0001',
         'mental'
       );
-      const fullContext = result.system + result.messages.map((m: any) => m.content).join(' ');
+      const fullContext = systemText(result.system) + result.messages.map((m: any) => m.content).join(" ");
       expect(fullContext).toContain('respiracao');
     });
 
