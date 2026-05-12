@@ -51,7 +51,7 @@ vi.mock('nanoid', () => ({
   nanoid: vi.fn(() => 'mock-nanoid-id'),
 }));
 
-import { AuthService } from '../../../server/auth';
+import { AuthService, _resetAuthUserCacheForTests } from '../../../server/auth';
 import { db } from '../../../server/db';
 
 const JWT_SECRET = 'test-jwt-secret-for-vitest';
@@ -60,6 +60,7 @@ const JWT_REFRESH_SECRET = 'test-jwt-refresh-secret-for-vitest';
 describe('AuthService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _resetAuthUserCacheForTests();
   });
 
   describe('hashPassword', () => {

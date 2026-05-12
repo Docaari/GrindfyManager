@@ -53,7 +53,7 @@ vi.mock('nanoid', () => ({
 // Note: @shared/permissions is NOT mocked - we use the real implementation
 // since hasFullAccess is a pure function with no I/O
 
-import { AuthService, requireAuth, requirePermission } from '../../../server/auth';
+import { AuthService, requireAuth, requirePermission, _resetAuthUserCacheForTests } from '../../../server/auth';
 import { db } from '../../../server/db';
 
 const JWT_SECRET = 'test-jwt-secret-for-vitest';
@@ -89,6 +89,7 @@ function createMockRes() {
 describe('requireAuth middleware', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _resetAuthUserCacheForTests();
   });
 
   it('deve retornar 401 quando nao ha header Authorization', () => {

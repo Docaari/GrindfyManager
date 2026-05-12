@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { AuthService, requireAuth, requirePermission } from "../auth";
+import { AuthService, requireAuth, requirePermission, invalidateAuthUserCache } from "../auth";
 import { storage } from "../storage";
 import { db } from "../db";
 import {
@@ -232,6 +232,8 @@ export function registerAdminRoutes(app: Express): void {
         });
       }
 
+      // Invalida o cache de auth do alvo — permissions/role/status mudaram.
+      invalidateAuthUserCache(userId);
 
       res.json({
         message: 'Usuário atualizado com sucesso',
@@ -329,6 +331,10 @@ export function registerAdminRoutes(app: Express): void {
           .where(eq(users.userPlatformId, targetUser.userPlatformId));
       });
 
+      // Usuario deletado: derruba qualquer entrada de cache de auth dele.
+      invalidateAuthUserCache(targetUser.userPlatformId);
+      if (targetUser.id) invalidateAuthUserCache(targetUser.id);
+
       // AUDIT LOG - Log the deletion
       await AuthService.logAccess(
         currentUserPlatformId,
@@ -375,6 +381,10 @@ export function registerAdminRoutes(app: Express): void {
         .set({ status })
         .where(eq(users.userPlatformId, userId))
         .returning();
+
+      // Efeito imediato: usuario desativado/banido para de passar no proximo
+      // requireAuth sem esperar o TTL do cache de auth.
+      invalidateAuthUserCache(userId);
 
       res.json({
         message: 'Status do usuário atualizado',
@@ -600,6 +610,9 @@ export function registerAdminRoutes(app: Express): void {
         }
       }
 
+
+      // Invalida o cache de auth de cada alvo — permissions foram reescritas.
+      for (const userId of userIds) invalidateAuthUserCache(userId);
 
       // ETAPA 6: Log da ação
       await db.insert(accessLogs).values({
@@ -1268,6 +1281,7 @@ async function applyPlanPermissions(userId: string, planId: string) {
       await db.insert(userPermissions).values(permissionsToInsert);
     }
 
+    invalidateAuthUserCache(userId);
   } catch (error) {
     throw error;
   }

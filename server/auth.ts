@@ -46,6 +46,84 @@ declare global {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Auth user cache (Fase 3 perf — load test residual)
+//
+// `requireAuth` chama getUserWithPermissions em TODA request autenticada: 1-2
+// SELECTs em `users` + 1 JOIN em `user_permissions`. Sob carga isso era o piso
+// de latencia (~44ms) mesmo com os caches de payload upstream. Cache in-memory
+// por userId com TTL curto resolve sem precisar invalidacao perfeita: o TTL
+// (default 30s) ja e a janela maxima de staleness.
+//
+// Invalidacao explicita (`invalidateAuthUserCache`) e wired nos pontos
+// security-relevant (ban / status change / permission grant-revoke em admin.ts)
+// para efeito imediato; mudancas menos criticas (ex.: subscriptionPlan ->
+// 'expired') se resolvem no proximo TTL.
+//
+// Cache vive no processo — multi-replica (Fase 4) cada replica tem o seu, com
+// a mesma janela de 30s. Aceitavel; revisar com Redis se virar problema.
+// ---------------------------------------------------------------------------
+const AUTH_CACHE_TTL_MS = Math.max(
+  0,
+  parseInt(process.env.AUTH_CACHE_TTL_MS || "30000", 10) || 30000,
+);
+const AUTH_CACHE_MAX_ENTRIES = 5000;
+type AuthCacheEntry = { user: AuthUser; expiresAt: number };
+const _authUserCache = new Map<string, AuthCacheEntry>();
+
+function _authCacheGet(key: string): AuthUser | null {
+  if (AUTH_CACHE_TTL_MS === 0) return null;
+  const hit = _authUserCache.get(key);
+  if (!hit) return null;
+  if (hit.expiresAt <= Date.now()) {
+    _authUserCache.delete(key);
+    return null;
+  }
+  return hit.user;
+}
+
+function _authCacheSet(user: AuthUser): void {
+  if (AUTH_CACHE_TTL_MS === 0) return;
+  const expiresAt = Date.now() + AUTH_CACHE_TTL_MS;
+  const entry: AuthCacheEntry = { user, expiresAt };
+  // Indexa pelas duas chaves que getUserWithPermissions aceita (id e
+  // userPlatformId) para que um cache hit funcione independente de qual veio no
+  // JWT payload.
+  if (user.id) _authUserCache.set(user.id, entry);
+  if (user.userPlatformId) _authUserCache.set(user.userPlatformId, entry);
+  // Eviction simples: quando estoura, dropa o batch mais antigo (insertion order
+  // do Map). Nao e LRU verdadeiro mas o TTL curto mantem o churn baixo.
+  if (_authUserCache.size > AUTH_CACHE_MAX_ENTRIES) {
+    const overflow = _authUserCache.size - AUTH_CACHE_MAX_ENTRIES;
+    let i = 0;
+    for (const k of _authUserCache.keys()) {
+      _authUserCache.delete(k);
+      if (++i >= overflow) break;
+    }
+  }
+}
+
+/**
+ * Remove um usuario do cache de auth. Chamar apos qualquer mutacao que afete
+ * permissions / role / status / subscription de um usuario para que o efeito
+ * seja imediato (em vez de esperar o TTL). Aceita id OU userPlatformId — limpa
+ * ambas as chaves se a entrada for encontrada por qualquer uma.
+ */
+export function invalidateAuthUserCache(userIdOrPlatformId: string): void {
+  if (!userIdOrPlatformId) return;
+  const entry = _authUserCache.get(userIdOrPlatformId);
+  _authUserCache.delete(userIdOrPlatformId);
+  if (entry?.user) {
+    if (entry.user.id) _authUserCache.delete(entry.user.id);
+    if (entry.user.userPlatformId) _authUserCache.delete(entry.user.userPlatformId);
+  }
+}
+
+/** Test-only — limpa todo o cache de auth entre testes (lesson #21). */
+export function _resetAuthUserCacheForTests(): void {
+  _authUserCache.clear();
+}
+
 export class AuthService {
   // Hash password
   static async hashPassword(password: string): Promise<string> {
@@ -128,7 +206,9 @@ export class AuthService {
   // Get user with permissions
   static async getUserWithPermissions(userId: string): Promise<AuthUser | null> {
     try {
-      
+      const cached = _authCacheGet(userId);
+      if (cached) return cached;
+
       // Try to find user by id first, then by userPlatformId
       let user = await db
         .select()
@@ -179,6 +259,7 @@ export class AuthService {
         permissions: userPermissionsList.map(p => p.permissionName),
       };
 
+      _authCacheSet(result);
       return result;
     } catch (error) {
       return null;
