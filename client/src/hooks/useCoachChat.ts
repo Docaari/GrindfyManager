@@ -31,7 +31,18 @@ interface MessagesResponse {
   offset: number;
 }
 
-export function useCoachChat(coachType: CoachType) {
+export interface UseCoachChatOptions {
+  /** Sprint AI-0B / RF-04 — page context da rota onde o chat esta montado.
+   *  Quando fornecido, vai no body do POST /api/coach/chat. Omitido quando
+   *  undefined (nao manda a chave). */
+  pageContext?: Record<string, any>;
+}
+
+export interface SendMessageOptions {
+  pageContext?: Record<string, any>;
+}
+
+export function useCoachChat(coachType: CoachType, options?: UseCoachChatOptions) {
   const queryClient = useQueryClient();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -82,7 +93,7 @@ export function useCoachChat(coachType: CoachType) {
   });
 
   // Send message with SSE streaming
-  const sendMessage = useCallback(async (message: string) => {
+  const sendMessage = useCallback(async (message: string, sendOpts?: SendMessageOptions) => {
     if (isStreaming) return;
 
     setIsStreaming(true);
@@ -101,12 +112,19 @@ export function useCoachChat(coachType: CoachType) {
         headers['X-CSRF-Token'] = csrf;
       }
 
-      const body: Record<string, string> = {
+      const body: Record<string, any> = {
         coachType,
         message,
       };
       if (activeSessionId) {
         body.sessionId = activeSessionId;
+      }
+      // Sprint AI-0B / RF-04 — page context: prioridade ao opts do sendMessage,
+      // fallback para o pageContext passado ao hook. Omitido (sem a chave) quando
+      // ambos undefined.
+      const pageContext = sendOpts?.pageContext ?? options?.pageContext;
+      if (pageContext !== undefined) {
+        body.pageContext = pageContext;
       }
 
       const response = await fetch('/api/coach/chat', {
@@ -200,7 +218,8 @@ export function useCoachChat(coachType: CoachType) {
       }
       setIsStreaming(false);
     }
-  }, [coachType, activeSessionId, isStreaming, queryClient]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachType, activeSessionId, isStreaming, queryClient, options?.pageContext]);
 
   // Cancel streaming
   const cancelStream = useCallback(() => {

@@ -1,13 +1,23 @@
 // =============================================================================
-// Coach System Builder — Sprint Coach-1 / RF-01
-// Separa o system prompt em dois blocos:
-//   - Estatico (cacheado via Anthropic prompt caching): base prompt + safety
-//     rules + perfil do usuario + stats snapshot + ultimo resumo arquivado.
-//   - Dinamico (sem cache): sessao ativa, break feedbacks, leaks, weekly plan,
-//     study progress. Reescrito a cada mensagem.
+// Coach System Builder — Sprint Coach-1 / RF-01 + Sprint AI-0B / RF-01..RF-03
 //
-// Fontes: docs/specs/coach-sprint-1-fundacao-economica.md (RF-01)
+// Separa o system prompt em dois blocos:
+//   - Estatico (cacheado via Anthropic prompt caching): base prompt unico
+//     "Grindfy AI" + safety rules + competitor block + citations + confidence +
+//     perfil do usuario + stats snapshot + ultimo resumo arquivado.
+//   - Dinamico (sem cache): linha de "lente inicial" (conforme coachType),
+//     sessao ativa, break feedbacks, leaks, weekly plan, study progress,
+//     page context. Reescrito a cada mensagem.
+//
+// Sprint AI-0B (ADR-148): os 3 base prompts por coach (MENTAL_BASE /
+// TOURNAMENT_BASE / TECHNICAL_BASE) e o getBasePrompt(coachType) foram
+// consolidados num unico GRINDFY_AI_BASE. O coachType so muda UMA linha (a
+// "lente inicial") no bloco DINAMICO — fora do cache.
+//
+// Fontes: Docs/specs/sprint-ai-0b.md (RF-01, RF-02, RF-03)
+//         Docs/architecture/decisions/148-grindfy-ai-consolidation-single-agent-with-lens.md
 //         Docs/architecture/decisions/019-coach-prompt-cache-strategy.md
+//         Docs/architecture/decisions/147 (citations/confidence — fonte unica)
 // =============================================================================
 
 import {
@@ -45,25 +55,46 @@ export interface SystemBlock {
 }
 
 // =============================================================================
-// Base prompts dos 3 coaches.
+// GRINDFY_AI_BASE — base prompt unico do agente (Sprint AI-0B / RF-01).
+//
+// Fonte UNICA (lesson #10). NAO ha mais variantes por coach. Mudar este texto
+// quebra o cache key do bloco STATIC da Anthropic UMA vez (planejado, aceitavel).
 // =============================================================================
 
-const MENTAL_BASE = `Voce e o Coach Mental do Grindfy, especializado em mental game para jogadores profissionais de poker MTT.
+export const GRINDFY_AI_BASE = `Voce e o Grindfy AI, o copiloto de carreira dos jogadores profissionais de poker MTT do Grindfy. Voce e um par/companheiro de grind: direto, pragmatico, baseado em dados — nunca um guru distante.
 
-Seu papel e ajudar o jogador a melhorar foco, controle emocional, tilt management, preparacao mental e rotina de grind.`;
+Voce cobre, de forma integrada, as cinco areas da carreira do jogador:
+1. Analise de dados — performance, ROI por dimensao (site, buy-in, formato, dia), ITM, mesa final, leaks tecnicos.
+2. Assistente de grind — grade semanal, warm-up, sessao em tempo real, energia/foco/confianca.
+3. Coach (mental + tecnico) — tilt, rotina, disciplina, ICM, ranges, conceitos, areas de estudo.
+4. Bankroll — banca multi-wallet, snapshots, rakeback, regras de gestao, simulacoes de variancia.
+5. Tournament Selector — selecao de torneios (scoring), planejamento de grade, otimizacao de volume.
 
-const TOURNAMENT_BASE = `Voce e o Coach de Torneios do Grindfy, especializado em game selection e otimizacao de grade para jogadores profissionais de poker MTT.
+Voce tem ferramentas (tools) que buscam o detalhe sob demanda: ROI por dimensao, leaks, sugestoes de torneio, simulacao de banca, stats de HUD, biblioteca de aulas, etc. Use as tools sempre que precisar de um numero exato ou de detalhe — nao chute. Quando nao tiver uma tool ou um dado, diga "[nao sei: <motivo>]" em vez de inventar.
 
-Seu papel e ajudar o jogador a otimizar sua selecao de torneios, analisar performance por site/formato/buy-in e planejar grades semanais.`;
+Toda metrica quantitativa que vier de uma tool ou do contexto da pagina precisa de citacao inline da fonte no formato [fonte: ...] (regras detalhadas abaixo).`;
 
-const TECHNICAL_BASE = `Voce e o Coach Tecnico do Grindfy, especializado em analise tecnica e leak detection para jogadores profissionais de poker MTT.
+export function getGrindfyAiBasePrompt(): string {
+  return GRINDFY_AI_BASE;
+}
 
-Seu papel e ajudar o jogador a identificar e corrigir leaks no jogo, analisar performance tecnica e sugerir areas de estudo.`;
+// =============================================================================
+// Linha de "lente inicial" por coachType (Sprint AI-0B / RF-03).
+// Esta linha eh A UNICA COISA que varia com coachType no system prompt — e fica
+// no bloco DINAMICO (fora do cache), entao trocar de aba nao invalida o cache.
+// =============================================================================
 
-function getBasePrompt(coachType: CoachType): string {
-  if (coachType === 'mental') return MENTAL_BASE;
-  if (coachType === 'tournament') return TOURNAMENT_BASE;
-  return TECHNICAL_BASE;
+function getInitialLensLine(coachType: CoachType): string {
+  switch (coachType) {
+    case 'mental':
+      return 'Lente inicial: o usuario abriu o chat com foco no mental game (foco, tilt, preparo, rotina) — comece por ai, mas voce pode e deve falar de qualquer assunto se a conversa pedir.';
+    case 'tournament':
+      return 'Lente inicial: o usuario abriu o chat com foco em selecao de torneios e planejamento de grade — comece por ai, mas voce pode e deve falar de qualquer assunto se a conversa pedir.';
+    case 'technical':
+      return 'Lente inicial: o usuario abriu o chat com foco em analise tecnica e leaks no jogo — comece por ai, mas voce pode e deve falar de qualquer assunto se a conversa pedir.';
+    default:
+      return 'Lente inicial: o usuario abriu o chat para falar com o Grindfy AI — voce pode falar de qualquer assunto.';
+  }
 }
 
 // =============================================================================
@@ -83,14 +114,18 @@ function formatStats(stats: any): string {
 
 // =============================================================================
 // buildStaticSystemBlock — cacheado (TTL ~5 min)
+//
+// O parametro `coachType` eh preservado na assinatura (back-compat) mas NAO eh
+// usado no corpo do bloco: o bloco STATIC eh IDENTICO entre os 3 coachType (so
+// 1 cache key). A "lente inicial" vai pro DINAMICO (buildDynamicSystemBlock).
 // =============================================================================
 
 export function buildStaticSystemBlock(
-  coachType: CoachType,
+  _coachType: CoachType,
   inputs: StaticInputs = {},
 ): SystemBlock {
   const parts: string[] = [];
-  parts.push(getBasePrompt(coachType));
+  parts.push(GRINDFY_AI_BASE);
   parts.push(SAFETY_RULES);
   // Sprint Biblioteca-1 / RF-09 (ADR-075): hard-block concorrentes em STATIC
   // block para preservar cache hit (atualizar lista quebra cache UMA vez).
@@ -130,6 +165,10 @@ export function buildStaticSystemBlock(
 
 // =============================================================================
 // buildDynamicSystemBlock — nao cacheado (reescrito a cada request)
+//
+// Sprint AI-0B / RF-02: o contexto deixa de ser gateado por coachType. Weekly
+// plan e study progress entram SEMPRE (quando ha dado), independente do
+// coachType. A unica coisa que varia com coachType eh a primeira linha (lente).
 // =============================================================================
 
 export function buildDynamicSystemBlock(
@@ -137,6 +176,9 @@ export function buildDynamicSystemBlock(
   inputs: DynamicInputs = {},
 ): SystemBlock {
   const parts: string[] = [];
+
+  // 1. Linha de lente inicial (RF-03) — primeira linha, sempre.
+  parts.push(getInitialLensLine(coachType));
 
   if (inputs.activeGrind) {
     const g = inputs.activeGrind as any;
@@ -159,16 +201,16 @@ export function buildDynamicSystemBlock(
     parts.push(`\n## Leaks Detectados em tempo real:\n${lines.join('\n')}`);
   }
 
-  // Weekly plan — relevante principalmente para tournament coach
-  if (coachType === 'tournament' && inputs.weeklyPlan) {
+  // Weekly plan — Sprint AI-0B / RF-02: entra sempre (nao mais gated por coachType).
+  if (inputs.weeklyPlan) {
     const w = inputs.weeklyPlan as any;
     parts.push(
       `\n## Plano Semanal Atual:\n- Target buy-ins: ${w.targetBuyins ?? 'N/A'}\n- Target profit: ${w.targetProfit ?? 'N/A'}\n- Target volume: ${w.targetVolume ?? 'N/A'}`,
     );
   }
 
-  // Study progress — relevante principalmente para technical coach
-  if (coachType === 'technical' && inputs.studyProgress && Array.isArray(inputs.studyProgress) && inputs.studyProgress.length > 0) {
+  // Study progress — Sprint AI-0B / RF-02: entra sempre (nao mais gated por coachType).
+  if (inputs.studyProgress && Array.isArray(inputs.studyProgress) && inputs.studyProgress.length > 0) {
     const lines = inputs.studyProgress.map((s: any) =>
       `- ${s.category || s.title || 'N/A'}: knowledge ${s.knowledgeScore ?? 0}% (${s.status || 'N/A'})`,
     );

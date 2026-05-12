@@ -1,39 +1,81 @@
-import { useState, useRef, useEffect, useCallback, KeyboardEvent } from 'react';
-import { useLocation } from 'wouter';
+// =============================================================================
+// CoachAI — Hub do Grindfy AI (Sprint AI-0B / RF-07, ADR-148 + ADR-150).
+//
+// Layout em 4 tabs URL-persisted (?tab=chat|reports|audit|prefs, default chat):
+//   - Chat            — chat unificado (agente unico) + chips de "lente/foco".
+//   - Relatorios e avisos — esqueleto/EmptyState (relatorios automaticos = Fase 1).
+//   - Historico de acoes  — consome GET /api/coach/audit.
+//   - Preferencias    — consome GET / PUT /api/coach/preferences (toggles de nudge).
+//
+// Lessons aplicaveis: #13 (apiRequest retorna JSON parseado), #27 (Radix Tabs
+// reage a onMouseDown — TabsTrigger controlado tem onClick redundante), #29
+// (useQuery dentro de QueryClientProvider — paineis), #30 (hook test jsdom).
+// =============================================================================
+
+import { useState, useRef, useEffect, useCallback, useMemo, KeyboardEvent } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
+import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Brain,
   Trophy,
   GraduationCap,
   Send,
   Plus,
-  Menu,
   Archive,
   Trash2,
+  Search,
   Loader2,
   MessageSquare,
+  FileText,
+  History,
+  Settings,
+  Sparkles,
 } from 'lucide-react';
 import { useCoachChat, type CoachType, type ChatMessage } from '@/hooks/useCoachChat';
+import { useCoachPageContext } from '@/hooks/useCoachPageContext';
+import { useTabFromUrl } from '@/hooks/useTabFromUrl';
 import {
   CoachLessonRecommendationCard,
   type CoachLessonRecommendation,
 } from '@/components/coach/CoachLessonRecommendationCard';
 
-// F3: extract lesson recommendations from message metadata. We accept several
-// shapes so the UI is forward-compatible with however backend persists them:
-//   metadata.recommendedLessons       -> CoachLessonRecommendation[]
-//   metadata.toolResults[].tool === 'recommend_lesson' -> { data: { lessons } }
-function extractLessonRecommendations(
-  message: ChatMessage,
-): CoachLessonRecommendation[] {
+const HUB_TABS = ['chat', 'reports', 'audit', 'prefs'] as const;
+type HubTab = (typeof HUB_TABS)[number];
+
+const TAB_META: ReadonlyArray<{ value: HubTab; label: string; icon: any }> = [
+  { value: 'chat', label: 'Chat', icon: MessageSquare },
+  { value: 'reports', label: 'Relatorios e avisos', icon: FileText },
+  { value: 'audit', label: 'Historico de acoes', icon: History },
+  { value: 'prefs', label: 'Preferencias', icon: Settings },
+];
+
+const LENS_OPTIONS = [
+  { value: 'mental' as CoachType, icon: Brain, label: 'Mental' },
+  { value: 'tournament' as CoachType, icon: Trophy, label: 'Selecao' },
+  { value: 'technical' as CoachType, icon: GraduationCap, label: 'Tecnico' },
+] as const;
+
+// F3: extract lesson recommendations from message metadata.
+function extractLessonRecommendations(message: ChatMessage): CoachLessonRecommendation[] {
   const meta: any = message.metadata;
   if (!meta || typeof meta !== 'object') return [];
   if (Array.isArray(meta.recommendedLessons)) {
@@ -49,25 +91,9 @@ function extractLessonRecommendations(
   return out;
 }
 
-const COACH_TABS = [
-  { value: 'mental' as CoachType, label: 'Mental', icon: Brain },
-  { value: 'tournament' as CoachType, label: 'Torneios', icon: Trophy },
-  { value: 'technical' as CoachType, label: 'Tecnico', icon: GraduationCap },
-] as const;
-
-function coachLabel(type: CoachType): string {
-  switch (type) {
-    case 'mental': return 'Mental';
-    case 'tournament': return 'Torneios';
-    case 'technical': return 'Tecnico';
-  }
-}
-
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
-  // F3: surface recommend_lesson cards inline below assistant messages.
   const recommendations = !isUser ? extractLessonRecommendations(message) : [];
-
   return (
     <div className={cn('flex w-full mb-4', isUser ? 'justify-end' : 'justify-start')}>
       <div
@@ -82,9 +108,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           <p className="whitespace-pre-wrap">{message.content}</p>
         ) : (
           <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-code:text-green-400 prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-700">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {message.content}
-            </ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
           </div>
         )}
         {recommendations.length > 0 && (
@@ -100,23 +124,12 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   );
 }
 
-function StreamingBubble({ text }: { text: string }) {
-  return (
-    <div className="flex w-full mb-4 justify-start">
-      <div className="max-w-[80%] rounded-lg px-4 py-3 text-sm bg-gray-800 border border-gray-700 text-gray-200">
-        <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-code:text-green-400 prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-700">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {text}
-          </ReactMarkdown>
-        </div>
-        <div className="flex items-center gap-1 mt-1">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-xs text-gray-500">digitando...</span>
-        </div>
-      </div>
-    </div>
-  );
-}
+// -----------------------------------------------------------------------------
+// SessionSidebar — lista de conversas anteriores (selecionar/retomar, arquivar,
+// deletar com confirmacao, busca). Reaproveitado da CoachAI antiga (Sprint AI-0B
+// fix HIGH do reviewer: o hub nao pode perder o registro de sessoes).
+// -----------------------------------------------------------------------------
+type SessionLike = ReturnType<typeof useCoachChat>['sessions'][number];
 
 function SessionSidebar({
   sessions,
@@ -126,50 +139,69 @@ function SessionSidebar({
   onArchiveSession,
   onDeleteSession,
   isLoading,
-  coachType,
 }: {
-  sessions: ReturnType<typeof useCoachChat>['sessions'];
+  sessions: SessionLike[];
   activeSessionId: string | null;
   onSelectSession: (id: string) => void;
   onNewConversation: () => void;
   onArchiveSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
   isLoading: boolean;
-  coachType: CoachType;
 }) {
+  const [search, setSearch] = useState('');
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter((s) => (s.title || 'Nova conversa').toLowerCase().includes(q));
+  }, [sessions, search]);
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-gray-700">
+    <div className="flex flex-col h-full" data-testid="coach-session-sidebar">
+      <div className="p-3 border-b border-gray-700 space-y-2">
         <Button
+          data-testid="coach-new-conversation"
           onClick={onNewConversation}
           className="w-full bg-green-600 hover:bg-green-500 text-white"
           size="sm"
         >
           <Plus size={16} className="mr-2" />
-          Nova Conversa
+          Nova conversa
         </Button>
+        <div className="relative">
+          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500" />
+          <Input
+            data-testid="coach-session-search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar conversa..."
+            className="pl-7 h-8 bg-gray-800 border-gray-700 text-gray-100 placeholder:text-gray-500 text-xs"
+          />
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-8" data-testid="coach-sessions-loading">
               <Loader2 size={20} className="animate-spin text-gray-400" />
             </div>
-          ) : sessions.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <div className="text-center py-8 px-3">
               <MessageSquare size={32} className="mx-auto text-gray-600 mb-2" />
               <p className="text-sm text-gray-500">
-                Nenhuma conversa ainda
+                {search.trim() ? 'Nenhuma conversa encontrada' : 'Nenhuma conversa ainda'}
               </p>
-              <p className="text-xs text-gray-600 mt-1">
-                Inicie uma conversa com o Coach {coachLabel(coachType)}
-              </p>
+              {!search.trim() && (
+                <p className="text-xs text-gray-600 mt-1">Inicie uma conversa com o Grindfy AI</p>
+              )}
             </div>
           ) : (
-            sessions.map((session) => (
+            filtered.map((session) => (
               <div
                 key={session.id}
+                data-testid="coach-session-item"
                 className={cn(
                   'group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors',
                   activeSessionId === session.id
@@ -179,23 +211,20 @@ function SessionSidebar({
                 onClick={() => onSelectSession(session.id)}
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-200 truncate">
-                    {session.title || 'Nova conversa'}
-                  </p>
+                  <p className="text-sm text-gray-200 truncate">{session.title || 'Nova conversa'}</p>
                   <div className="flex items-center gap-2 mt-0.5">
                     {session.status === 'archived' && (
                       <Badge variant="outline" className="text-[10px] px-1 py-0 border-gray-600 text-gray-500">
                         Arquivada
                       </Badge>
                     )}
-                    <span className="text-[10px] text-gray-500">
-                      {session.messageCount} msgs
-                    </span>
+                    <span className="text-[10px] text-gray-500">{session.messageCount} msgs</span>
                   </div>
                 </div>
                 <div className="hidden group-hover:flex items-center gap-1">
                   {session.status === 'active' && (
                     <button
+                      data-testid="coach-session-archive"
                       onClick={(e) => { e.stopPropagation(); onArchiveSession(session.id); }}
                       className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
                       title="Arquivar"
@@ -204,7 +233,8 @@ function SessionSidebar({
                     </button>
                   )}
                   <button
-                    onClick={(e) => { e.stopPropagation(); onDeleteSession(session.id); }}
+                    data-testid="coach-session-delete"
+                    onClick={(e) => { e.stopPropagation(); setPendingDeleteId(session.id); }}
                     className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-red-400"
                     title="Excluir"
                   >
@@ -216,16 +246,46 @@ function SessionSidebar({
           )}
         </div>
       </ScrollArea>
+
+      <AlertDialog open={pendingDeleteId !== null} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
+        <AlertDialogContent data-testid="coach-session-delete-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar conversa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta conversa sera removida permanentemente. Esta acao nao pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="coach-session-delete-cancel">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="coach-session-delete-confirm"
+              onClick={() => {
+                if (pendingDeleteId) onDeleteSession(pendingDeleteId);
+                setPendingDeleteId(null);
+              }}
+            >
+              Apagar conversa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
-export default function CoachAI() {
-  const [coachType, setCoachType] = useState<CoachType>('mental');
+// -----------------------------------------------------------------------------
+// Chat panel — agente unico + chips de lente + sidebar de sessoes
+// -----------------------------------------------------------------------------
+function ChatPanel() {
+  // Sprint AI-0B / RF-03+RF-07: coachType vira "lente inicial". Default
+  // 'technical' (consistente com o padrao do /coach — ADR-125).
+  const [coachType, setCoachType] = useState<CoachType>('technical');
   const [inputValue, setInputValue] = useState('');
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sprint AI-0B / RF-04+RF-07: page context da rota /coach-ai = { route, activeCoachType }.
+  const pageContext = useCoachPageContext('coach-ai', { activeCoachType: coachType });
 
   const {
     sessions,
@@ -233,7 +293,6 @@ export default function CoachAI() {
     activeSessionId,
     setActiveSessionId,
     isLoadingSessions,
-    isLoadingMessages,
     isStreaming,
     streamedText,
     streamError,
@@ -241,9 +300,8 @@ export default function CoachAI() {
     startNewConversation,
     archiveSession,
     deleteSession,
-  } = useCoachChat(coachType);
+  } = useCoachChat(coachType, { pageContext });
 
-  // Auto-scroll to bottom when messages change or during streaming
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamedText]);
@@ -262,154 +320,421 @@ export default function CoachAI() {
     }
   }, [handleSend]);
 
-  const handleTabChange = useCallback((value: string) => {
-    setCoachType(value as CoachType);
-    setInputValue('');
-  }, []);
-
-  const sidebarContent = (
-    <SessionSidebar
-      sessions={sessions}
-      activeSessionId={activeSessionId}
-      onSelectSession={(id) => {
-        setActiveSessionId(id);
-        setMobileSidebarOpen(false);
-      }}
-      onNewConversation={() => {
-        startNewConversation();
-        setMobileSidebarOpen(false);
-      }}
-      onArchiveSession={archiveSession}
-      onDeleteSession={deleteSession}
-      isLoading={isLoadingSessions}
-      coachType={coachType}
-    />
-  );
-
   return (
-    <div className="flex flex-col h-full bg-gray-900">
-      {/* Coach Tabs */}
-      <div className="border-b border-gray-700 px-4 pt-4 pb-0 flex items-center gap-3">
-        {/* Mobile sidebar toggle */}
-        <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="md:hidden text-gray-400 hover:text-white">
-              <Menu size={20} />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-72 bg-gray-800 border-gray-700 p-0">
-            {sidebarContent}
-          </SheetContent>
-        </Sheet>
-
-        <Tabs value={coachType} onValueChange={handleTabChange} className="flex-1">
-          <TabsList className="bg-gray-800 border border-gray-700">
-            {COACH_TABS.map((tab) => (
-              <TabsTrigger
-                key={tab.value}
-                value={tab.value}
-                className="data-[state=active]:bg-green-600/20 data-[state=active]:text-green-400 text-gray-400"
-              >
-                <tab.icon size={16} className="mr-2" />
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+    <div className="flex h-full">
+      {/* Sidebar de conversas (md+; em mobile fica acima do chat). */}
+      <div className="hidden md:flex w-60 border-r border-gray-700 bg-gray-800/50 flex-col shrink-0">
+        <SessionSidebar
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSelectSession={setActiveSessionId}
+          onNewConversation={startNewConversation}
+          onArchiveSession={archiveSession}
+          onDeleteSession={deleteSession}
+          isLoading={isLoadingSessions}
+        />
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Desktop Sidebar */}
-        <div className="hidden md:flex w-64 border-r border-gray-700 bg-gray-800 flex-col">
-          {sidebarContent}
+      <div className="flex flex-col flex-1 min-w-0">
+        {/* Chips de lente/foco — NAO 3 coaches; so ajustam o coachType (lente inicial). */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800">
+          <span className="text-xs text-gray-500">Foco:</span>
+          {LENS_OPTIONS.map((lens) => (
+            <button
+              key={lens.value}
+              type="button"
+              data-testid={`coach-lens-chip-${lens.value}`}
+              onClick={() => { setCoachType(lens.value); setInputValue(''); }}
+              aria-pressed={coachType === lens.value}
+              className={cn(
+                'flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors',
+                coachType === lens.value
+                  ? 'bg-green-600/20 text-green-400 border border-green-600/30'
+                  : 'text-gray-400 hover:text-gray-200 border border-gray-700 hover:bg-gray-800'
+              )}
+            >
+              <lens.icon size={14} />
+              {lens.label}
+            </button>
+          ))}
         </div>
 
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col">
-          {/* Messages */}
-          <ScrollArea className="flex-1 p-4">
-            {isLoadingMessages && activeSessionId ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 size={24} className="animate-spin text-gray-400" />
-              </div>
-            ) : messages.length === 0 && !streamedText && !activeSessionId ? (
-              <div className="flex flex-col items-center justify-center h-full py-20 text-center">
-                {COACH_TABS.map((tab) =>
-                  tab.value === coachType ? (
-                    <tab.icon key={tab.value} size={48} className="text-green-600/40 mb-4" />
-                  ) : null
-                )}
-                <h3 className="text-lg font-medium text-gray-300 mb-2">
-                  Coach {coachLabel(coachType)}
-                </h3>
-                <p className="text-sm text-gray-500 max-w-md">
-                  Inicie uma conversa com o Coach {coachLabel(coachType)}.
-                  {coachType === 'mental' && ' Receba suporte sobre foco, tilt, disciplina e preparo mental.'}
-                  {coachType === 'tournament' && ' Analise sua grade, selecao de torneios e decisoes de volume.'}
-                  {coachType === 'technical' && ' Discuta estrategia, ICM, ranges e conceitos tecnicos.'}
-                </p>
-              </div>
-            ) : (
-              <div className="max-w-3xl mx-auto">
-                {messages.map((msg) => (
-                  <MessageBubble key={msg.id} message={msg} />
-                ))}
-                {isStreaming && streamedText && (
-                  <StreamingBubble text={streamedText} />
-                )}
-                {isStreaming && !streamedText && (
-                  <div className="flex items-center gap-2 mb-4 ml-2">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 rounded-full bg-green-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-2 h-2 rounded-full bg-green-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-2 h-2 rounded-full bg-green-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                    <span className="text-xs text-gray-500">Coach digitando...</span>
-                  </div>
-                )}
-                {streamError && (
-                  <div className="mb-4 px-4 py-3 rounded-lg bg-red-900/20 border border-red-800/30 text-red-400 text-sm">
-                    {streamError}
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-            )}
-          </ScrollArea>
+        {/* Sidebar de conversas (mobile — colapsa em barra horizontal de acesso). */}
+        <div className="md:hidden border-b border-gray-800 max-h-40 overflow-auto">
+          <SessionSidebar
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSelectSession={setActiveSessionId}
+            onNewConversation={startNewConversation}
+            onArchiveSession={archiveSession}
+            onDeleteSession={deleteSession}
+            isLoading={isLoadingSessions}
+          />
+        </div>
 
-          {/* Input Area */}
-          <div className="border-t border-gray-700 p-4">
-            <div className="max-w-3xl mx-auto flex gap-2">
-              <Textarea
-                ref={textareaRef}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={`Mensagem para o Coach ${coachLabel(coachType)}...`}
-                className="flex-1 bg-gray-800 border-gray-700 text-gray-100 placeholder:text-gray-500 resize-none min-h-[44px] max-h-[120px]"
-                rows={1}
-                disabled={isStreaming}
-                maxLength={2000}
-              />
-              <Button
-                onClick={handleSend}
-                disabled={!inputValue.trim() || isStreaming}
-                className="bg-green-600 hover:bg-green-500 text-white self-end"
-                size="icon"
-              >
-                {isStreaming ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <Send size={18} />
-                )}
-              </Button>
+        <ScrollArea className="flex-1 p-4">
+          {messages.length === 0 && !streamedText ? (
+            <div className="flex flex-col items-center justify-center h-full py-20 text-center">
+              <Sparkles size={48} className="text-green-600/40 mb-4" />
+              <h3 className="text-lg font-medium text-gray-300 mb-2">Grindfy AI</h3>
+              <p className="text-sm text-gray-500 max-w-md">
+                Pergunte qualquer coisa sobre seu jogo, sua banca, sua grade ou seu mental.
+                O Grindfy AI ve seus dados e usa ferramentas para o detalhe.
+              </p>
             </div>
-            <p className="text-[10px] text-gray-600 mt-1 text-center">
-              Enter para enviar, Shift+Enter para nova linha
-            </p>
+          ) : (
+            <div className="max-w-3xl mx-auto">
+              {messages.map((msg) => (
+                <MessageBubble key={msg.id} message={msg} />
+              ))}
+              {isStreaming && streamedText && (
+                <div className="flex w-full mb-4 justify-start">
+                  <div className="max-w-[80%] rounded-lg px-4 py-3 text-sm bg-gray-800 border border-gray-700 text-gray-200">
+                    <div className="prose prose-invert prose-sm max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamedText}</ReactMarkdown>
+                    </div>
+                    <div className="flex items-center gap-1 mt-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                      <span className="text-xs text-gray-500">digitando...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {streamError && (
+                <div className="mb-4 px-4 py-3 rounded-lg bg-red-900/20 border border-red-800/30 text-red-400 text-sm">
+                  {streamError}
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </ScrollArea>
+
+        <div className="border-t border-gray-700 p-4">
+          <div className="max-w-3xl mx-auto flex gap-2">
+            <Textarea
+              ref={textareaRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Mensagem para o Grindfy AI..."
+              className="flex-1 bg-gray-800 border-gray-700 text-gray-100 placeholder:text-gray-500 resize-none min-h-[44px] max-h-[120px]"
+              rows={1}
+              disabled={isStreaming}
+              maxLength={2000}
+            />
+            <Button
+              onClick={handleSend}
+              disabled={!inputValue.trim() || isStreaming}
+              className="bg-green-600 hover:bg-green-500 text-white self-end"
+              size="icon"
+            >
+              {isStreaming ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+            </Button>
           </div>
+          <p className="text-[10px] text-gray-600 mt-1 text-center">
+            Enter para enviar, Shift+Enter para nova linha
+          </p>
         </div>
       </div>
     </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Relatorios e avisos — esqueleto (EmptyState, sem fetch)
+// -----------------------------------------------------------------------------
+function ReportsPanel() {
+  return (
+    <div
+      data-testid="coach-ai-reports-empty"
+      className="flex flex-col items-center justify-center h-full py-20 text-center"
+    >
+      <FileText size={48} className="text-gray-600 mb-4" />
+      <h3 className="text-lg font-medium text-gray-300 mb-2">Relatorios e avisos</h3>
+      <p className="text-sm text-gray-500 max-w-md">
+        Seus relatorios semanais e mensais do Grindfy AI aparecerao aqui em breve.
+      </p>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Historico de acoes — consome GET /api/coach/audit
+// -----------------------------------------------------------------------------
+type AuditItem = {
+  id: string;
+  type?: string;
+  description?: string;
+  status?: string;
+  createdAt?: string;
+};
+
+// Aceita tanto array direto quanto { items: [...] } / { data: [...] }.
+function extractAuditItems(data: any): AuditItem[] {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+}
+
+function CoachAuditPanel() {
+  const { data, isLoading, isError } = useQuery<any>({
+    queryKey: ['/api/coach/audit'],
+    queryFn: () => apiRequest('GET', '/api/coach/audit'),
+  });
+
+  const items = extractAuditItems(data);
+
+  return (
+    <div data-testid="coach-audit-panel" className="p-4">
+      <h3 className="text-base font-medium text-gray-300 mb-3">Historico de acoes</h3>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={20} className="animate-spin text-gray-400" />
+        </div>
+      ) : isError ? (
+        <p className="text-sm text-red-400">Nao foi possivel carregar o historico de acoes.</p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-gray-500">Nenhuma acao registrada ainda.</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((it) => (
+            <li
+              key={it.id}
+              data-testid="coach-audit-item"
+              className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700"
+            >
+              <span className="text-sm text-gray-200 truncate">{it.description || it.type || it.id}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                {it.status && (
+                  <span className="text-[10px] uppercase text-gray-400 border border-gray-600 rounded px-1">
+                    {it.status}
+                  </span>
+                )}
+                {it.createdAt && (
+                  <span className="text-[10px] text-gray-500">
+                    {new Date(it.createdAt).toLocaleDateString('pt-BR')}
+                  </span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Preferencias de nudge — consome GET / PUT /api/coach/preferences
+// -----------------------------------------------------------------------------
+const NUDGE_KEYS = ['bSnapshot', 'bLeak', 'bStudy', 'bVolume', 'bGrade', 'bDownswing', 'bLife', 'bMental'] as const;
+type NudgeKey = (typeof NUDGE_KEYS)[number];
+
+const NUDGE_LABELS: Record<NudgeKey, string> = {
+  bSnapshot: 'Lembrete de snapshot',
+  bLeak: 'Avisos de leak',
+  bStudy: 'Lembrete de estudo',
+  bVolume: 'Acompanhamento de volume',
+  bGrade: 'Sugestoes de grade',
+  bDownswing: 'Alerta de downswing',
+  bLife: 'Vida fora do poker',
+  bMental: 'Cuidado mental',
+};
+
+type PrefsResponse = {
+  nudges?: Partial<Record<NudgeKey, boolean>>;
+  quietHours?: { startHour?: number; endHour?: number; timezone?: string };
+  frequencyCap?: { perDay?: number; perHour?: number };
+};
+
+function CoachPreferencesPanel() {
+  const { data, isLoading, isError } = useQuery<PrefsResponse>({
+    queryKey: ['/api/coach/preferences'],
+    queryFn: () => apiRequest('GET', '/api/coach/preferences'),
+  });
+
+  const [nudges, setNudges] = useState<Record<NudgeKey, boolean>>(() =>
+    Object.fromEntries(NUDGE_KEYS.map((k) => [k, true])) as Record<NudgeKey, boolean>,
+  );
+  const [quietStart, setQuietStart] = useState<number>(21);
+  const [quietEnd, setQuietEnd] = useState<number>(9);
+  const [perDay, setPerDay] = useState<number>(3);
+  const [perHour, setPerHour] = useState<number>(1);
+
+  useEffect(() => {
+    if (!data) return;
+    if (data.nudges) {
+      setNudges((prev) => {
+        const next = { ...prev };
+        for (const k of NUDGE_KEYS) {
+          if (typeof data.nudges?.[k] === 'boolean') next[k] = data.nudges[k] as boolean;
+        }
+        return next;
+      });
+    }
+    if (data.quietHours) {
+      if (typeof data.quietHours.startHour === 'number') setQuietStart(data.quietHours.startHour);
+      if (typeof data.quietHours.endHour === 'number') setQuietEnd(data.quietHours.endHour);
+    }
+    if (data.frequencyCap) {
+      if (typeof data.frequencyCap.perDay === 'number') setPerDay(data.frequencyCap.perDay);
+      if (typeof data.frequencyCap.perHour === 'number') setPerHour(data.frequencyCap.perHour);
+    }
+  }, [data]);
+
+  const saveMutation = useMutation({
+    mutationFn: (payload: any) => apiRequest('PUT', '/api/coach/preferences', payload),
+  });
+
+  const handleSave = useCallback(() => {
+    saveMutation.mutate({
+      nudgeBSnapshot: nudges.bSnapshot,
+      nudgeBLeak: nudges.bLeak,
+      nudgeBStudy: nudges.bStudy,
+      nudgeBVolume: nudges.bVolume,
+      nudgeBGrade: nudges.bGrade,
+      nudgeBDownswing: nudges.bDownswing,
+      nudgeBLife: nudges.bLife,
+      nudgeBMental: nudges.bMental,
+      quietHoursStart: quietStart,
+      quietHoursEnd: quietEnd,
+      maxNudgesPerDay: perDay,
+      maxNudgesPerHour: perHour,
+    });
+  }, [nudges, quietStart, quietEnd, perDay, perHour, saveMutation]);
+
+  return (
+    <div data-testid="coach-prefs-panel" className="p-4 space-y-5 max-w-xl">
+      <div className="flex items-center gap-2">
+        <h3 className="text-base font-medium text-gray-300">Preferencias</h3>
+        {isLoading && <Loader2 size={14} className="animate-spin text-gray-500" />}
+      </div>
+      {isError && (
+        <p className="text-xs text-red-400">Falha ao carregar — mostrando valores padrao.</p>
+      )}
+
+      <div className="space-y-2">
+        {NUDGE_KEYS.map((k) => (
+          <label key={k} className="flex items-center justify-between gap-3 text-sm text-gray-300">
+            <span>{NUDGE_LABELS[k]}</span>
+            <input
+              type="checkbox"
+              data-testid={`coach-prefs-toggle-${k}`}
+              checked={nudges[k]}
+              onChange={(e) => setNudges((prev) => ({ ...prev, [k]: e.target.checked }))}
+              className="h-4 w-4"
+            />
+          </label>
+        ))}
+      </div>
+
+      <div data-testid="coach-prefs-quiet-hours" className="flex items-center gap-3 text-sm text-gray-300">
+        <span>Horario silencioso:</span>
+        <input
+          type="number"
+          min={0}
+          max={23}
+          aria-label="Inicio do horario silencioso"
+          value={quietStart}
+          onChange={(e) => setQuietStart(Number(e.target.value))}
+          className="w-16 bg-gray-800 border border-gray-700 rounded px-1 text-gray-100"
+        />
+        <span>ate</span>
+        <input
+          type="number"
+          min={0}
+          max={23}
+          aria-label="Fim do horario silencioso"
+          value={quietEnd}
+          onChange={(e) => setQuietEnd(Number(e.target.value))}
+          className="w-16 bg-gray-800 border border-gray-700 rounded px-1 text-gray-100"
+        />
+      </div>
+
+      <div data-testid="coach-prefs-caps" className="flex items-center gap-3 text-sm text-gray-300">
+        <span>Maximo por dia:</span>
+        <input
+          type="number"
+          min={0}
+          max={50}
+          aria-label="Maximo de avisos por dia"
+          value={perDay}
+          onChange={(e) => setPerDay(Number(e.target.value))}
+          className="w-16 bg-gray-800 border border-gray-700 rounded px-1 text-gray-100"
+        />
+        <span>por hora:</span>
+        <input
+          type="number"
+          min={0}
+          max={10}
+          aria-label="Maximo de avisos por hora"
+          value={perHour}
+          onChange={(e) => setPerHour(Number(e.target.value))}
+          className="w-16 bg-gray-800 border border-gray-700 rounded px-1 text-gray-100"
+        />
+      </div>
+
+      <Button
+        data-testid="coach-prefs-save"
+        onClick={handleSave}
+        disabled={saveMutation.isPending}
+        className="bg-green-600 hover:bg-green-500 text-white"
+        size="sm"
+      >
+        {saveMutation.isPending ? 'Salvando...' : 'Salvar preferencias'}
+      </Button>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Hub
+// -----------------------------------------------------------------------------
+export default function CoachAI() {
+  const [activeTab, setActiveTab] = useTabFromUrl(HUB_TABS as unknown as string[], 'chat');
+  const tab = (HUB_TABS as readonly string[]).includes(activeTab) ? (activeTab as HubTab) : 'chat';
+
+  return (
+    <Tabs value={tab} onValueChange={(v) => setActiveTab(v)} className="flex flex-col h-full bg-gray-900">
+      <div className="border-b border-gray-700 px-4 pt-4 pb-0 flex flex-col gap-3">
+        <h1 data-testid="coach-ai-hub-title" className="text-xl font-semibold text-gray-100 flex items-center gap-2">
+          <Sparkles size={20} className="text-green-400" />
+          Grindfy AI
+        </h1>
+        <TabsList className="bg-gray-800 border border-gray-700">
+          {TAB_META.map((t) => (
+            <TabsTrigger
+              key={t.value}
+              value={t.value}
+              data-testid={`coach-ai-tab-${t.value}`}
+              // Lesson #27: Radix Tabs reage a onMouseDown — onClick redundante
+              // garante que fireEvent.click (RTL) tambem alterne a aba.
+              onClick={() => setActiveTab(t.value)}
+              className="data-[state=active]:bg-green-600/20 data-[state=active]:text-green-400 text-gray-400"
+            >
+              <t.icon size={16} className="mr-2" />
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
+
+      <div className="flex-1 overflow-hidden">
+        <TabsContent value="chat" data-testid="coach-ai-tabpanel-chat" className="h-full m-0">
+          <ChatPanel />
+        </TabsContent>
+        <TabsContent value="reports" data-testid="coach-ai-tabpanel-reports" className="h-full m-0">
+          <ReportsPanel />
+        </TabsContent>
+        <TabsContent value="audit" data-testid="coach-ai-tabpanel-audit" className="h-full m-0 overflow-auto">
+          <CoachAuditPanel />
+        </TabsContent>
+        <TabsContent value="prefs" data-testid="coach-ai-tabpanel-prefs" className="h-full m-0 overflow-auto">
+          <CoachPreferencesPanel />
+        </TabsContent>
+      </div>
+    </Tabs>
   );
 }

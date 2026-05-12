@@ -3,10 +3,14 @@
 //
 // Sprint Coach-2A / RF-01 — ADR-025 (whitelist Zod, anti prompt injection).
 // Sprint Cooldown-3 / RF-07 — ADR-043 (variante cooldown-log).
+// Sprint AI-0B / RF-05 — ADR-149 (5 variantes novas: bankroll, estudos, stats,
+//   biblioteca, upload). Page context = inspecao LEVE da tela (rota, aba/filtro
+//   ativo, IDs de contexto) — NUNCA dados sensiveis (saldo consolidado, valores
+//   de transacao, notas, conteudo de lesson). O agente, ao ver "esta em /X com
+//   Y selecionado", chama a tool apropriada para o detalhe.
 //
 // Cada variante eh strict (rejeita campos extras) para evitar que atacantes
-// injetem payloads textuais. PII (notes, cGame, action, aGame[], bGame[],
-// lesson texto livre, triggers[]) e bloqueado em todas as variantes.
+// injetem payloads textuais. PII bloqueado em todas as variantes.
 // =============================================================================
 
 import { z } from 'zod';
@@ -129,7 +133,80 @@ const cooldownLogSchema = z
   .strict();
 
 // -----------------------------------------------------------------------------
-// Discriminated union
+// Sprint AI-0B / RF-05 — 5 variantes novas (ADR-149).
+// Enums alinhados aos nomes reais no frontend (primeira aproximacao da spec).
+// -----------------------------------------------------------------------------
+
+// /bankroll — RF-05.1
+// activeTab alinhado aos keys REAIS do WalletActivityPanel.tsx
+// (`useState<"results" | "movements">`). A pagina /bankroll nao tem tabs de
+// topo — o estado de "aba aberta" eh o do painel de atividade da wallet.
+const bankrollSchema = z
+  .object({
+    route: z.literal('bankroll'),
+    walletsCount: z.number().int().min(0).max(50).optional(),
+    selectedWalletId: z.string().max(50).optional(),
+    activeTab: z.enum(['results', 'movements']).optional(),
+    dateRange: dateRangeEnum.optional(),
+  })
+  .strict();
+
+// /estudos — RF-05.2
+// activeTab alinhado ao ViewKey REAL de Studies.tsx (`viewFromPath`):
+// 'dashboard' | 'temas' | 'tema-detail' | 'stats' | 'spots' | 'recomendacoes'
+// | 'reentry' (omite 'unknown' — fallback sem significado).
+const estudosSchema = z
+  .object({
+    route: z.literal('estudos'),
+    activeTab: z.enum(['dashboard', 'temas', 'tema-detail', 'stats', 'spots', 'recomendacoes', 'reentry']).optional(),
+    activeThemesCount: z.number().int().min(0).max(100).optional(),
+    spotsDueCount: z.number().int().min(0).max(500).optional(),
+    studyStreakDays: z.number().int().min(0).max(3650).optional(),
+    focusedThemeId: z.string().max(50).optional(),
+  })
+  .strict();
+
+// /stats — RF-05.3
+// selectedStatGroup eh um `HudGroupId` do catalogo Stats-V2 (shared/hud-stat-catalog.ts):
+// 'basics' | 'rfi' | 'threebet' | 'resteal' | 'pos_flop_pfr_ip' | ... — string
+// livre (max 50) e nao enum fechado porque o catalogo evolui (Stats-V2 -> V3).
+const statsSchema = z
+  .object({
+    route: z.literal('stats'),
+    hasSnapshot: z.boolean().optional(),
+    latestSnapshotId: z.string().max(50).optional(),
+    latestSnapshotStatsCount: z.number().int().min(0).max(500).optional(),
+    compareMode: z.boolean().optional(),
+    selectedStatGroup: z.string().max(50).optional(),
+  })
+  .strict();
+
+// /biblioteca — RF-05.4
+const bibliotecaSchema = z
+  .object({
+    route: z.literal('biblioteca'),
+    view: z.enum(['catalogo', 'curso', 'lesson']).optional(),
+    courseSlug: z.string().max(100).optional(),
+    lessonSlug: z.string().max(100).optional(),
+    filterSites: z.array(z.string().max(50)).max(20).optional(),
+    filterDaysOfWeek: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+  })
+  .strict();
+
+// /upload — RF-05.5
+const uploadSchema = z
+  .object({
+    route: z.literal('upload'),
+    lastImportAt: z.union([z.string().max(50), z.null()]).optional(),
+    lastImportNetwork: z.string().max(50).optional(),
+    lastImportTournamentsCount: z.number().int().min(0).max(100000).optional(),
+    daysSinceLastImport: z.number().int().min(0).max(3650).optional(),
+    pendingFile: z.boolean().optional(),
+  })
+  .strict();
+
+// -----------------------------------------------------------------------------
+// Discriminated union — 10 variantes (5 originais + 5 novas)
 // -----------------------------------------------------------------------------
 
 export const pageContextSchema = z.discriminatedUnion('route', [
@@ -138,6 +215,11 @@ export const pageContextSchema = z.discriminatedUnion('route', [
   dashboardSchema,
   coachAiSchema,
   cooldownLogSchema,
+  bankrollSchema,
+  estudosSchema,
+  statsSchema,
+  bibliotecaSchema,
+  uploadSchema,
 ]);
 
 export type PageContext = z.infer<typeof pageContextSchema>;
@@ -193,6 +275,7 @@ export function scrubInjectionTokens(input: any): any {
 // -----------------------------------------------------------------------------
 // buildPageContextSection — formata page context para injecao no prompt
 // dinamico (sem cache_control, ADR-019). Retorna string com cabecalho fixo.
+// O `switch` eh exhaustivo sobre as 10 variantes (tsc forca cobertura).
 // -----------------------------------------------------------------------------
 
 export function buildPageContextSection(input: unknown): string {
@@ -226,6 +309,40 @@ export function buildPageContextSection(input: unknown): string {
       lines.push(`Cool-down: ${ctx.cooldownLogId} (modo ${ctx.mode})`);
       lines.push(`Sessao: ${ctx.sessionId}`);
       lines.push(`Maos destacadas: ${ctx.starredHandsCount}`);
+      break;
+    case 'bankroll':
+      if (ctx.walletsCount !== undefined) lines.push(`Wallets: ${ctx.walletsCount}`);
+      if (ctx.selectedWalletId) lines.push(`Wallet em foco: ${ctx.selectedWalletId}`);
+      if (ctx.activeTab) lines.push(`Aba: ${ctx.activeTab}`);
+      if (ctx.dateRange) lines.push(`Periodo: ${ctx.dateRange}`);
+      break;
+    case 'estudos':
+      if (ctx.activeTab) lines.push(`Aba: ${ctx.activeTab}`);
+      if (ctx.activeThemesCount !== undefined) lines.push(`Temas ativos: ${ctx.activeThemesCount}`);
+      if (ctx.spotsDueCount !== undefined) lines.push(`Spots due: ${ctx.spotsDueCount}`);
+      if (ctx.studyStreakDays !== undefined) lines.push(`Streak: ${ctx.studyStreakDays} dias`);
+      if (ctx.focusedThemeId) lines.push(`Tema em foco: ${ctx.focusedThemeId}`);
+      break;
+    case 'stats':
+      if (ctx.hasSnapshot !== undefined) lines.push(`Snapshot: ${ctx.hasSnapshot ? 'sim' : 'nao'}`);
+      if (ctx.latestSnapshotId) lines.push(`Snapshot recente: ${ctx.latestSnapshotId}`);
+      if (ctx.latestSnapshotStatsCount !== undefined) lines.push(`Stats no snapshot recente: ${ctx.latestSnapshotStatsCount}`);
+      if (ctx.compareMode !== undefined) lines.push(`Modo comparacao: ${ctx.compareMode ? 'sim' : 'nao'}`);
+      if (ctx.selectedStatGroup) lines.push(`Grupo: ${ctx.selectedStatGroup}`);
+      break;
+    case 'biblioteca':
+      if (ctx.view) lines.push(`View: ${ctx.view}`);
+      if (ctx.courseSlug) lines.push(`Curso: ${ctx.courseSlug}`);
+      if (ctx.lessonSlug) lines.push(`Lesson: ${ctx.lessonSlug}`);
+      if (ctx.filterSites && ctx.filterSites.length > 0) lines.push(`Filtros plataforma: ${ctx.filterSites.join(', ')}`);
+      if (ctx.filterDaysOfWeek && ctx.filterDaysOfWeek.length > 0) lines.push(`Filtros dia: ${ctx.filterDaysOfWeek.join(', ')}`);
+      break;
+    case 'upload':
+      if (ctx.lastImportNetwork) lines.push(`Ultimo import (rede): ${ctx.lastImportNetwork}`);
+      if (ctx.lastImportAt) lines.push(`Ultimo import (data): ${ctx.lastImportAt}`);
+      if (ctx.lastImportTournamentsCount !== undefined) lines.push(`Torneios no ultimo import: ${ctx.lastImportTournamentsCount}`);
+      if (ctx.daysSinceLastImport !== undefined) lines.push(`Dias desde o ultimo import: ${ctx.daysSinceLastImport}`);
+      if (ctx.pendingFile !== undefined) lines.push(`Arquivo pendente: ${ctx.pendingFile ? 'sim' : 'nao'}`);
       break;
   }
 

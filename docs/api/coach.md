@@ -23,28 +23,32 @@ Para a documentacao detalhada de cada tool (input schema, output, exemplos), ver
 > - **Hub `/coach-ai` (ADR-150)** — vira tabs URL-persisted `?tab=chat|reports|audit|prefs` (default `chat`): Chat (agente unico + chips de lente + page context `{ route: 'coach-ai', activeCoachType }`), Relatorios e avisos (EmptyState — esqueleto; `GET /api/coach/reports` e Fase 1), Historico de acoes (consome `GET /api/coach/audit` — endpoint existente), Preferencias (consome `GET/PUT /api/coach/preferences` — endpoint existente; 8 toggles de nudge + quiet hours + caps).
 > - **Zero endpoint novo. Zero migracao de schema.** Endpoints futuros so anotados: `GET /api/coach/reports`, `GET /api/coach/reports/:id` (Fase 1 AI-1B).
 >
-> **TODO (implementer, conforme ADR-148/149/150):** quando este sprint for entregue, atualizar os trechos abaixo desta linha que ainda dizem "5 read tools" (sao 17 pos-AI-0A), "403 quando coach nao acessivel" (some), "shapes validos de pageContext" (sao 10 variantes — adicionar as 5 novas com campos), e os enums `category`/`speed` (ADR-145: `['Vanilla','PKO','Mystery','Satellite']` / `['Normal','Turbo','Hyper']` — `'Regular'` esta errado). O bloco "## Sprint AI-0B" acima eh a fonte canonica ate la.
+> **Status: ENTREGUE (Sprint AI-0B).** As secoes detalhadas abaixo foram atualizadas: nao ha mais `403 tier_locked` em `POST /api/coach/chat` (RF-06); `pageContext` tem 10 variantes (5 originais + `bankroll`/`estudos`/`stats`/`biblioteca`/`upload`); o agente eh unico (`GRINDFY_AI_BASE`) com `coachType` como lente inicial; Pro+ recebe 17 tools (pos-AI-0A). O bloco "## Sprint AI-0B" acima continua sendo o resumo canonico.
 
 ---
 
 ## POST /api/coach/chat
 
-**Descricao:** Envia mensagem ao Coach e recebe resposta via SSE streaming. Sprint Coach-1: passa a aplicar prompt caching (ADR-019), rate limit tiered por plano (ADR-020) e gate de acesso a cada coach.
+**Descricao:** Envia mensagem ao Grindfy AI (agente unico) e recebe resposta via SSE streaming. Aplica prompt caching (ADR-019), rate limit tiered por plano (ADR-020) e (Sprint AI-0B) page context plugado de fato + tools (17, Pro+).
 
 **Auth:** JWT obrigatorio.
 
 **Modificacoes Sprint Coach-1:**
 - Novos headers de resposta `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` (em 200 e 429).
-- Resposta 403 quando coach nao acessivel para o plano do usuario.
 - Resposta 429 tiered (10/50/200 msg/dia conforme plano).
 - Grava `usage` (cache_read/creation/input/output tokens) em `chat_messages`.
 
-**Modificacoes Sprint Coach-2A:**
-- Novo campo opcional `pageContext` no body (validado por Zod discriminated union — ADR-025).
-- Stream SSE passa a emitir 6 novos event types relacionados a tool use (ver "Stream SSE format" abaixo).
-- Tier `'free'` continua sem tools (`tools: []` na chamada Anthropic). Pro/premium/admin recebem 5 read tools.
-- Tool calls sao auditadas em `coach_actions` (nova tabela — ADR-023).
+**Modificacoes Sprint Coach-2A / AI-0A:**
+- Campo opcional `pageContext` no body (validado por Zod discriminated union — ADR-025).
+- Stream SSE emite 6 event types relacionados a tool use (ver "Stream SSE format" abaixo).
+- Tier `'free'` sem tools (`tools: []` na chamada Anthropic). Pro/premium/admin recebem 17 tools (pos-AI-0A).
+- Tool calls auditadas em `coach_actions` / `coach_nudge_log` (ADR-023).
 - Limite hard de 5 tool calls por turn de usuario (ADR-026).
+
+**Modificacoes Sprint AI-0B (ADR-148/149/150):**
+- `coachType` deixa de selecionar 1 de 3 system prompts — base unico `GRINDFY_AI_BASE`; contexto completo (sem gate por `coachType`). `coachType` continua no body (validado contra `VALID_COACH_TYPES` — `400` se invalido/ausente) mas vira **"lente inicial"** (uma linha no bloco DINAMICO do system prompt).
+- **Nao ha mais `403 tier_locked` por coach** — todo tier autenticado acessa o Grindfy AI; o tier so afeta rate limit (429) + tools (`free` → `[]`).
+- `pageContext` ganha 5 variantes novas (`bankroll`, `estudos`, `stats`, `biblioteca`, `upload`) — total 10. Validado/sanitizado por `sanitizePageContext`; invalido → `400 { error: 'validation_failed', field: 'pageContext' }`.
 
 **Request:**
 | Param | Tipo | Onde | Obrigatorio | Notas |
@@ -54,31 +58,60 @@ Para a documentacao detalhada de cada tool (input schema, output, exemplos), ver
 | sessionId | string | body | Nao | Se omitido, cria nova sessao (arquiva anterior) |
 | pageContext | object | body | Nao | Sprint Coach-2A. Validado por discriminated union em `route`. Ver shapes abaixo. |
 
-**Shapes validos de `pageContext` (RF-01 #8 + ADR-025):**
+**Shapes validos de `pageContext` (ADR-025 + ADR-149) — 10 variantes (discriminated union por `route`, todas `.strict()`):**
 
 ```ts
+// --- 5 originais (Coach-2A + Cooldown-3) ---
 // /grade-planner
 { route: 'grade-planner', day?: 0..6, profile?: 'A'|'B'|'C',
-  activeFilters?: { site?: string, category?: 'Vanilla'|'PKO'|'Mystery', speed?: 'Regular'|'Turbo'|'Hyper' },
+  activeFilters?: { site?: string, category?: string, speed?: string },
   focusedTournamentId?: string }
 
 // /grind-live
 { route: 'grind-live', activeSessionId?: string,
-  sessionStatus?: 'planned'|'active'|'paused'|'completed',
+  sessionStatus?: 'active'|'paused'|'completed'|'archived',
   registeredTournamentsCount?: number, currentProfit?: number }
 
 // /dashboard
 { route: 'dashboard',
-  dateRange?: '7d'|'30d'|'90d'|'ytd'|'all'|'custom',
-  activeFilters?: { site?: string, category?, speed?, buyinRange? } }
+  dateRange?: '7d'|'30d'|'60d'|'90d'|'all',
+  activeFilters?: { site?: string, category?: string, speed?: string } }
 
 // /coach-ai
 { route: 'coach-ai', activeCoachType?: 'mental'|'tournament'|'technical' }
+
+// /cooldown-log (ADR-043) — ver schema completo em server/coachPageContext.ts
+
+// --- 5 novas (Sprint AI-0B / ADR-149) — inspecao leve, NUNCA valores monetarios/notas/conteudo ---
+// /bankroll  (activeTab = keys reais do WalletActivityPanel)
+{ route: 'bankroll', walletsCount?: number(0..50), selectedWalletId?: string(<=50),
+  activeTab?: 'results'|'movements',
+  dateRange?: '7d'|'30d'|'60d'|'90d'|'all' }
+
+// /estudos  (activeTab = ViewKey real de Studies.tsx)
+{ route: 'estudos', activeTab?: 'dashboard'|'temas'|'tema-detail'|'stats'|'spots'|'recomendacoes'|'reentry',
+  activeThemesCount?: number(0..100), spotsDueCount?: number(0..500),
+  studyStreakDays?: number(0..3650), focusedThemeId?: string(<=50) }
+
+// /stats
+{ route: 'stats', hasSnapshot?: boolean, latestSnapshotId?: string(<=50),
+  latestSnapshotStatsCount?: number(0..500), compareMode?: boolean,
+  selectedStatGroup?: string(<=50) }
+
+// /biblioteca
+{ route: 'biblioteca', view?: 'catalogo'|'curso'|'lesson',
+  courseSlug?: string(<=100), lessonSlug?: string(<=100),
+  filterSites?: string[](<=20, each <=50), filterDaysOfWeek?: number[](<=7, each 0..6) }
+
+// /upload
+{ route: 'upload', lastImportAt?: string(<=50)|null, lastImportNetwork?: string(<=50),
+  lastImportTournamentsCount?: number(0..100000), daysSinceLastImport?: number(0..3650),
+  pendingFile?: boolean }
 ```
 
 `pageContext` ausente => request prossegue sem secao "Contexto da pagina atual" no system prompt.
-`pageContext` com `route` desconhecido OU campo extra OU tipo invalido => HTTP 400 `validation_failed`.
-`pageContext` com strings contendo tokens de injection (`<|im_start|>`, `[INST]`, etc.) => sanitize remove ANTES da injecao no prompt; request prossegue.
+`pageContext` com `route` desconhecido OU campo extra (`.strict()`) OU tipo/range invalido => HTTP 400 `{ error: 'validation_failed', field: 'pageContext' }`.
+`pageContext` com strings contendo tokens de injection (`ignore previous instructions`, `<|im_start|>`, etc.) => `sanitizePageContext` substitui por `[redacted]` ANTES da injecao no prompt; request prossegue.
 
 **Body exemplo (Sprint Coach-2A):**
 ```json
@@ -107,22 +140,15 @@ Para a documentacao detalhada de cada tool (input schema, output, exemplos), ver
 | Status | Quando | Body exemplo |
 |---|---|---|
 | 200 | Stream SSE iniciado | `text/event-stream` chunks |
-| 400 | Input invalido | `{"message": "coachType invalido"}` |
+| 400 | Input invalido (`coachType` invalido/ausente, `message` invalida, `pageContext` invalido) | `{"message": "coachType invalido"}` ou `{"error": "validation_failed", "field": "pageContext"}` |
 | 401 | Sem auth | `{"message": "Nao autenticado"}` |
-| 403 | Coach nao acessivel no plano | `{"message": "Este coach nao esta disponivel no seu plano", "upgradeTo": "pro", "currentPlan": "free"}` |
 | 404 | sessionId nao existe | `{"message": "Sessao nao encontrada"}` |
 | 409 | N/A nesta rota | — |
-| 429 | Limite diario atingido | `{"message": "Limite de 10 mensagens por dia atingido.", "limit": 10, "resetAt": "2026-04-25T14:30:00Z"}` |
+| 429 | Limite diario atingido (rate limit por tier) | `{"code": "rate_limited", "limit": 10, "used": 10, "currentPlan": "free", "upgradeTo": "pro", "resetAt": "2026-04-25T14:30:00Z"}` |
 
-**403 response detalhado (gate por plano):**
+**Sprint AI-0B (ADR-148 / RF-06):** **nao ha mais `403 tier_locked` por `coachType`.** A consolidacao no agente unico "Grindfy AI" elimina o gate por coach — todo tier autenticado tem acesso. O unico bloqueio de uso eh o `429` (rate limit por tier: 10/50/200/∞ msg/24h) — o body do `429` traz `upgradeTo` (`free`→`pro`, `pro`→`premium`) para a UI sugerir upgrade (mais mensagens + tools).
 
-| Cenario | upgradeTo | currentPlan |
-|---|---|---|
-| Free + `tournament` | `pro` | `free` |
-| Free + `technical` | `premium` | `free` |
-| Pro + `technical` | `premium` | `pro` |
-
-**Bypass admin:** `req.user.role === 'admin'` OU `req.user.subscriptionPlan === 'admin'` pula rate limit e coach gate. Headers retornam `X-RateLimit-Limit: unlimited`.
+**Bypass admin:** `req.user.role === 'admin'` OU `req.user.subscriptionPlan === 'admin'` resolve tier `admin` → rate limit `unlimited`. Headers retornam `X-RateLimit-Limit: unlimited`.
 
 **Stream SSE format (200) — Sprint Coach-1 baseline:**
 ```
@@ -271,6 +297,8 @@ data: {"type":"done","messageId":"msg_xyz",...}
   messagesUsedToday: number,
   messagesRemaining: number | 'unlimited',
   resetAt: string | null,  // ISO 8601; null para admin ou se nao ha msgs na janela
+  // Sprint AI-0B (RF-06): nao ha mais gate por coach — as 3 "lentes" estao
+  // sempre todas disponiveis para todo tier (campo mantido por back-compat de UI).
   accessibleCoaches: Array<'mental' | 'tournament' | 'technical'>
 }
 ```
@@ -283,7 +311,7 @@ data: {"type":"done","messageId":"msg_xyz",...}
   "messagesUsedToday": 3,
   "messagesRemaining": 7,
   "resetAt": "2026-04-25T14:30:00Z",
-  "accessibleCoaches": ["mental"]
+  "accessibleCoaches": ["mental", "tournament", "technical"]
 }
 ```
 
@@ -295,7 +323,7 @@ data: {"type":"done","messageId":"msg_xyz",...}
   "messagesUsedToday": 0,
   "messagesRemaining": 50,
   "resetAt": null,
-  "accessibleCoaches": ["mental", "tournament"]
+  "accessibleCoaches": ["mental", "tournament", "technical"]
 }
 ```
 

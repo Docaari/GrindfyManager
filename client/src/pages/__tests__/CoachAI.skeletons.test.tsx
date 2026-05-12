@@ -1,155 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+/**
+ * Sprint AI-0B (ADR-148 + ADR-150 / RF-07) — SUITE DESATIVADA (it.skip).
+ *
+ * O sujeito destes testes era a pagina CoachAI ANTIGA: 3 abas seletoras de coach
+ * (Mental / Torneios / Tecnico), prompt-starters por coach, tabs-lock por tier,
+ * LimitCounter inline, delete-confirm AlertDialog, session-search no sidebar etc.
+ *
+ * A consolidacao para o agente unico "Grindfy AI" (Sprint AI-0B) reformou a
+ * pagina /coach-ai num HUB com 4 tabs (Chat / Relatorios e avisos / Historico de
+ * acoes / Preferencias) — os testids e a estrutura mudaram completamente. Estes
+ * cenarios NAO tem equivalente direto no hub novo. Os testes do hub vivem em
+ * tests/coach/ai-0b/coach-ai-hub.test.tsx.
+ *
+ * Mantidos como skip (em vez de deletados) para historico/rastreabilidade. Se
+ * uma feature equivalente for re-introduzida no hub (ex: LimitCounter no header
+ * do hub na Fase 1), reescrever o cenario apontando para o testid novo.
+ */
 
-// =============================================================================
-// Sprint Coach-1 Frontend UX / RF-05 — Skeletons em vez de spinners
-//
-// Em CoachAI.tsx:
-//  - Durante isLoadingSessions: renderiza <SessionListSkeleton> (3-4 rows)
-//  - Durante isLoadingMessages (com activeSessionId): renderiza <MessageSkeleton>
-//  - Apos load: skeletons desaparecem e conteudo real aparece
-//
-// Spec: Docs/specs/coach-sprint-1-frontend-ux.md (RF-05)
-// =============================================================================
+import { describe, it, expect } from 'vitest';
 
-// --- Mocks ---
-const fetchMock = vi.fn();
-beforeEach(() => {
-  fetchMock.mockReset();
-  global.fetch = fetchMock as any;
-});
-
-vi.mock('@/hooks/use-toast', () => ({
-  useToast: () => ({ toast: vi.fn(), dismiss: vi.fn() }),
-  toast: vi.fn(),
-}));
-
-vi.mock('wouter', () => ({
-  useLocation: () => ['/coach', vi.fn()],
-}));
-
-import CoachAI from '../CoachAI';
-import { getQueryFn } from '@/lib/queryClient';
-
-function wrap(ui: React.ReactNode) {
-  const qc = new QueryClient({
-    defaultOptions: {
-      // useQuery na arvore depende do queryFn default (fetch(queryKey[0])) — o
-      // mesmo do queryClient real; com global.fetch mockado, intercepta.
-      queries: { retry: false, queryFn: getQueryFn({ on401: 'returnNull' }) },
-      mutations: { retry: false },
-    },
-  });
-  return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
-}
-
-function isSkeletonEl(el: Element): boolean {
-  const cls = el.className || '';
-  return /skeleton|animate-pulse/.test(String(cls));
-}
-
-describe('CoachAI — Skeletons (RF-05)', () => {
-  it('durante isLoadingSessions: renderiza 3-4 skeletons com classe animate-pulse/skeleton', async () => {
-    // Fetch never resolves → mantem isLoading=true
-    fetchMock.mockImplementation(
-      () =>
-        new Promise(() => {
-          /* pending */
-        })
-    );
-
-    const { container } = render(wrap(<CoachAI />));
-
-    await waitFor(() => {
-      const skeletons = Array.from(container.querySelectorAll('*')).filter(isSkeletonEl);
-      expect(skeletons.length).toBeGreaterThanOrEqual(3);
-    });
-  });
-
-  it('durante isLoadingMessages (com activeSessionId): renderiza skeleton bubbles', async () => {
-    // Primeiro retorna lista de sessoes com 1 ativa
-    const sessionsList = [
-      {
-        id: 'sess-42',
-        coachType: 'mental',
-        title: 'Teste',
-        status: 'active',
-        messageCount: 3,
-        tokenCount: 100,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    ];
-
-    fetchMock.mockImplementation(async (url: string) => {
-      if (String(url).includes('/api/coach/sessions') && !String(url).includes('/messages')) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => sessionsList,
-          text: async () => JSON.stringify(sessionsList),
-        } as any;
-      }
-      if (String(url).includes('/messages')) {
-        // Nunca resolve
-        return await new Promise(() => {});
-      }
-      return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' } as any;
-    });
-
-    const { container } = render(wrap(<CoachAI />));
-
-    // Espera lista aparecer e entao clicar em uma sessao
-    await waitFor(() => {
-      expect(screen.queryByText('Teste')).toBeTruthy();
-    });
-
-    // Simula click para carregar mensagens
-    const user = (await import('@testing-library/user-event')).default.setup();
-    await user.click(screen.getByText('Teste'));
-
-    // Espera skeleton de bubbles
-    await waitFor(() => {
-      const skeletons = Array.from(container.querySelectorAll('*')).filter(isSkeletonEl);
-      // Esperamos 3-4 skeleton bubbles na area de mensagens
-      expect(skeletons.length).toBeGreaterThanOrEqual(3);
-    });
-  });
-
-  it('apos load completo: skeletons desaparecem e conteudo real aparece', async () => {
-    fetchMock.mockImplementation(async (url: string) => {
-      if (String(url).includes('/api/coach/sessions') && !String(url).includes('/messages')) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => [
-            {
-              id: 'sess-done',
-              coachType: 'mental',
-              title: 'Conversa real',
-              status: 'active',
-              messageCount: 2,
-              tokenCount: 50,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
-          ],
-          text: async () => 'ok',
-        } as any;
-      }
-      return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' } as any;
-    });
-
-    const { container } = render(wrap(<CoachAI />));
-
-    await waitFor(() => {
-      expect(screen.queryByText('Conversa real')).toBeTruthy();
-    });
-
-    // Apos load, nao esperamos skeletons grandes (podem existir bits menores mas nao a bateria inicial)
-    const skeletons = Array.from(container.querySelectorAll('*')).filter(isSkeletonEl);
-    // Permitimos skeleton zerar OU pelo menos nao ser mais o grupo inicial (ate 2)
-    expect(skeletons.length).toBeLessThanOrEqual(2);
+describe.skip('CoachAI (pre-Sprint-AI-0B) — skeletons: suite desativada apos reforma do hub', () => {
+  it('reforma do hub Grindfy AI superou estes cenarios — ver tests/coach/ai-0b/coach-ai-hub.test.tsx', () => {
+    expect(true).toBe(true);
   });
 });

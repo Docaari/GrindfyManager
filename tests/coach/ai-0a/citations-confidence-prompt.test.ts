@@ -156,15 +156,23 @@ describe('AI-0A · variante backticked removida; fonte unica (ADR-147 §3)', () 
     expect(src).not.toMatch(/BACKTICKED/);
   });
 
-  it('coachPrompts e coachSystemBuilder usam a MESMA fonte (CITATIONS_RULES + CONFIDENCE_RULES)', async () => {
+  // REESCRITO no Sprint AI-0B — apos a consolidacao (ADR-148) o coachPrompts.ts
+  // legacy nao tem mais os 3 prompts por coach; pode nem referenciar mais as
+  // constantes. A fonte unica de CITATIONS_RULES/CONFIDENCE_RULES eh
+  // coachSafetyPrompts.ts, consumida pelo coachSystemBuilder.ts. Validamos que o
+  // builder (caminho real) referencia as constantes e NAO copia o texto literal.
+  it('coachSystemBuilder usa as constantes de fonte unica (CITATIONS_RULES + CONFIDENCE_RULES) — sem copia literal', async () => {
     const fsMod = await import('node:fs');
     const pathMod = await import('node:path');
     const builderSrc = fsMod.readFileSync(pathMod.resolve(process.cwd(), 'server/coachSystemBuilder.ts'), 'utf8');
+    expect(builderSrc).toMatch(/CITATIONS_RULES/);
+    expect(builderSrc).toMatch(/CONFIDENCE_RULES/);
+    // coachPrompts.ts NAO deve conter copia literal das constantes (se ainda
+    // referenciar, deve ser por import — nao por re-declaracao de `const
+    // CITATIONS_RULES = ...`).
     const promptsSrc = fsMod.readFileSync(pathMod.resolve(process.cwd(), 'server/coachPrompts.ts'), 'utf8');
-    for (const src of [builderSrc, promptsSrc]) {
-      expect(src).toMatch(/CITATIONS_RULES/);
-      expect(src).toMatch(/CONFIDENCE_RULES/);
-    }
+    expect(promptsSrc).not.toMatch(/const\s+CITATIONS_RULES\s*=/);
+    expect(promptsSrc).not.toMatch(/const\s+CONFIDENCE_RULES\s*=/);
   });
 });
 
@@ -179,15 +187,15 @@ describe('AI-0A · system prompt continua sendo array com cache_control ephemera
     expect(block.text).toContain(CONFIDENCE_RULES);
   });
 
-  it('legacy getTournamentPrompt inclui o texto literal de CITATIONS_RULES (DRY — sem copy-paste)', async () => {
-    const { getTournamentPrompt } = await import('../../../server/coachPrompts');
+  // REESCRITO no Sprint AI-0B — getTournamentPrompt removido (consolidacao
+  // agente unico, ADR-148). O base unico GRINDFY_AI_BASE / buildStaticSystemBlock
+  // continua consumindo CITATIONS_RULES de fonte unica (coachSafetyPrompts.ts).
+  it('Grindfy AI base unico inclui o texto literal de CITATIONS_RULES (DRY — sem copy-paste)', async () => {
+    const { buildStaticSystemBlock, GRINDFY_AI_BASE } = await import('../../../server/coachSystemBuilder') as any;
     const { CITATIONS_RULES } = await import('../../../server/coachSafetyPrompts') as any;
-    const text = getTournamentPrompt({
-      dashboardStats: { totalTournaments: 0, roi: 0, profit: '0', abi: 0, itmPercent: 0 },
-      roiBySite: [], roiByBuyin: [], roiByCategory: [], roiBySpeed: [], roiByDay: [],
-      topTemplates: [], worstTemplates: [],
-    } as any);
-    expect(text).toContain(CITATIONS_RULES);
+    const block: any = buildStaticSystemBlock('tournament', {});
+    expect(block.text).toContain(CITATIONS_RULES);
+    expect(GRINDFY_AI_BASE).not.toMatch(/Coach\s+de\s+Torneios/i);
   });
 });
 

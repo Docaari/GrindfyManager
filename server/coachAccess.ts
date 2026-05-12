@@ -35,48 +35,20 @@ export function getRateLimitForPlan(plan: string): number {
 }
 
 // =============================================================================
-// canAccessCoach — gate por plano
+// Sprint AI-0B / RF-06 (ADR-148): consolidacao dos 3 coaches num agente unico
+// "Grindfy AI" elimina o gate por coachType. canAccessCoach /
+// getAccessibleCoaches / getUpgradeTarget / COACH_ACCESS foram REMOVIDOS — o
+// tier gate agora eh APENAS rate limit (getRateLimitForPlan, acima) + tools
+// (exportToolsForAnthropic em coachTools/registry — free => []). Todo usuario
+// autenticado de qualquer tier tem acesso ao agente unico.
+//
+// getUpgradeForRateLimit substitui o antigo getUpgradeTarget: dado o tier
+// atual, qual o proximo tier que aumenta o rate limit (usado no body do 429).
 // =============================================================================
 
-const COACH_ACCESS: Record<CoachTier, CoachType[]> = {
-  free: ['mental'],
-  pro: ['mental', 'tournament'],
-  premium: ['mental', 'tournament', 'technical'],
-  admin: ['mental', 'tournament', 'technical'],
-};
-
-export function canAccessCoach(tier: CoachTier | string, coachType: CoachType | string): boolean {
-  const list = COACH_ACCESS[tier as CoachTier];
-  if (!list) return false;
-  return list.includes(coachType as CoachType);
-}
-
-export function getAccessibleCoaches(tier: CoachTier | string): CoachType[] {
-  const list = COACH_ACCESS[tier as CoachTier];
-  return list ? [...list] : ['mental'];
-}
-
-// =============================================================================
-// getUpgradeTarget — sugere tier alvo para desbloquear um coach
-// =============================================================================
-
-export function getUpgradeTarget(
-  currentTier: CoachTier | string,
-  requestedCoach: CoachType | string,
-): 'pro' | 'premium' | null {
-  // Se ja pode acessar, nao ha upgrade
-  if (canAccessCoach(currentTier, requestedCoach)) return null;
-
-  // admin ja pode tudo (protegido acima)
-  if (currentTier === 'admin') return null;
-
-  // tournament so exige pro no minimo
-  if (requestedCoach === 'tournament') return 'pro';
-
-  // technical exige premium
-  if (requestedCoach === 'technical') return 'premium';
-
-  // mental e universal — ja coberto no canAccessCoach
+export function getUpgradeForRateLimit(currentTier: CoachTier | string): 'pro' | 'premium' | null {
+  if (currentTier === 'free') return 'pro';
+  if (currentTier === 'pro') return 'premium';
   return null;
 }
 

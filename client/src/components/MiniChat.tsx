@@ -17,6 +17,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useCoachChat, type CoachType, type ChatMessage } from '@/hooks/useCoachChat';
+import { useCoachPageContext } from '@/hooks/useCoachPageContext';
 import { emit } from '@/lib/tracker';
 
 // Sprint home-reform-1-5 RF-27 (B6): Coach FAB hint badge.
@@ -35,11 +36,38 @@ const HIDDEN_PATHS = [
   '/registration-confirmation',
 ];
 
-const COACH_OPTIONS = [
+// Sprint AI-0B / RF-07 (ADR-148): agente unico "Grindfy AI". Os 3 botoes
+// deixam de ser "qual coach" — sao 3 chips de "lente/foco" que so ajustam o
+// coachType enviado (= lente inicial, RF-03).
+const LENS_OPTIONS = [
   { value: 'mental' as CoachType, icon: Brain, label: 'Mental' },
-  { value: 'tournament' as CoachType, icon: Trophy, label: 'Torneios' },
+  { value: 'tournament' as CoachType, icon: Trophy, label: 'Selecao' },
   { value: 'technical' as CoachType, icon: GraduationCap, label: 'Tecnico' },
 ] as const;
+
+// Prefixos de rota -> route literal do pageContextSchema (rotas que o MiniChat
+// instrumenta de forma generica — so a `route`, sem campos extras).
+const ROUTE_PREFIXES: ReadonlyArray<readonly [string, string]> = [
+  ['/grade-planner', 'grade-planner'],
+  ['/grind-live', 'grind-live'],
+  ['/coach-ai', 'coach-ai'],
+  ['/bankroll', 'bankroll'],
+  ['/estudos', 'estudos'],
+  ['/stats', 'stats'],
+  ['/biblioteca', 'biblioteca'],
+  ['/upload', 'upload'],
+];
+
+// Mapeia pathname Wouter -> route literal do pageContextSchema.
+// Sprint AI-0B (reviewer LOW): `/` e `/inicio` sao a home (Operations Cockpit),
+// NAO o dashboard de performance (`/dashboard`) — nao mapear pra evitar dica
+// imprecisa ao agente; ficam nao-instrumentados (undefined => sem pageContext).
+function routeFromLocation(pathname: string): string | undefined {
+  const p = (pathname || '').split('?')[0];
+  if (p === '/dashboard') return 'dashboard';
+  const match = ROUTE_PREFIXES.find(([prefix]) => p.startsWith(prefix));
+  return match?.[1];
+}
 
 function MiniMessage({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
@@ -70,10 +98,15 @@ function MiniMessage({ message }: { message: ChatMessage }) {
 export default function MiniChat({ hintCount = 0 }: MiniChatProps = {}) {
   const [location, setLocation] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  // Sprint AI-0B / RF-03+RF-07: coachType vira "lente inicial" do agente unico.
   const [coachType, setCoachType] = useState<CoachType>('mental');
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hintShownEmittedRef = useRef(false);
+
+  // Sprint AI-0B / RF-04: page context da rota onde o MiniChat esta montado.
+  // Rota nao instrumentada -> undefined (nao manda pageContext no body).
+  const pageContext = useCoachPageContext(routeFromLocation(location) ?? '');
 
   const {
     messages,
@@ -81,7 +114,7 @@ export default function MiniChat({ hintCount = 0 }: MiniChatProps = {}) {
     streamedText,
     streamError,
     sendMessage,
-  } = useCoachChat(coachType);
+  } = useCoachChat(coachType, { pageContext });
 
   // Don't render on hidden paths
   const shouldHide = HIDDEN_PATHS.some((path) =>
@@ -132,9 +165,10 @@ export default function MiniChat({ hintCount = 0 }: MiniChatProps = {}) {
   if (!isOpen) {
     return (
       <button
+        data-testid="mini-chat-fab"
         onClick={() => setIsOpen(true)}
         className="fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-green-600 hover:bg-green-500 text-white shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105"
-        title="Coach IA"
+        title="Grindfy AI"
       >
         <MessageSquare size={22} />
         {hintCount > 0 && (
@@ -160,23 +194,30 @@ export default function MiniChat({ hintCount = 0 }: MiniChatProps = {}) {
     <div className="fixed bottom-4 right-4 z-50 w-[350px] h-[500px] bg-gray-900 border border-gray-700 rounded-xl shadow-2xl flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700 bg-gray-800/50">
-        {/* Coach selector */}
-        <div className="flex items-center gap-1">
-          {COACH_OPTIONS.map((coach) => (
-            <button
-              key={coach.value}
-              onClick={() => setCoachType(coach.value)}
-              className={cn(
-                'p-1.5 rounded-md transition-colors',
-                coachType === coach.value
-                  ? 'bg-green-600/20 text-green-400'
-                  : 'text-gray-500 hover:text-gray-300 hover:bg-gray-700'
-              )}
-              title={coach.label}
-            >
-              <coach.icon size={16} />
-            </button>
-          ))}
+        <div className="flex items-center gap-2 min-w-0">
+          <span data-testid="mini-chat-title" className="text-xs font-semibold text-gray-200 shrink-0">
+            Grindfy AI
+          </span>
+          {/* Lente/foco — NAO 3 coaches; so ajusta o coachType (= lente inicial). */}
+          <div className="flex items-center gap-1">
+            {LENS_OPTIONS.map((lens) => (
+              <button
+                key={lens.value}
+                data-testid={`mini-chat-lens-${lens.value}`}
+                onClick={() => setCoachType(lens.value)}
+                aria-pressed={coachType === lens.value}
+                className={cn(
+                  'p-1.5 rounded-md transition-colors',
+                  coachType === lens.value
+                    ? 'bg-green-600/20 text-green-400'
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-700'
+                )}
+                title={`Foco: ${lens.label}`}
+              >
+                <lens.icon size={16} />
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex items-center gap-1">
@@ -203,7 +244,7 @@ export default function MiniChat({ hintCount = 0 }: MiniChatProps = {}) {
           <div className="flex flex-col items-center justify-center h-full py-12 text-center">
             <MessageSquare size={28} className="text-green-600/30 mb-2" />
             <p className="text-xs text-gray-500">
-              Envie uma mensagem para o Coach
+              Envie uma mensagem para o Grindfy AI
             </p>
           </div>
         ) : (
@@ -250,7 +291,7 @@ export default function MiniChat({ hintCount = 0 }: MiniChatProps = {}) {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Mensagem..."
+            placeholder="Mensagem para o Grindfy AI..."
             className="flex-1 bg-gray-800 border-gray-700 text-gray-100 placeholder:text-gray-500 resize-none min-h-[36px] max-h-[80px] text-xs py-2"
             rows={1}
             disabled={isStreaming}

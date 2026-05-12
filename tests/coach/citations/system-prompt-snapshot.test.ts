@@ -85,45 +85,44 @@ describe('buildStaticSystemBlock — DRY guard (lesson #10)', () => {
   });
 });
 
-describe('coachPrompts legacy consume das mesmas constants (DRY)', () => {
-  it('getTournamentPrompt inclui texto de CITATIONS_RULES', async () => {
-    const { getTournamentPrompt } = await import('../../../server/coachPrompts');
+// REESCRITO no Sprint AI-0B — getMentalPrompt/getTournamentPrompt removidos
+// (consolidacao agente unico, ADR-148). O caminho legacy nao tem mais 3 prompts
+// por coach; o base unico GRINDFY_AI_BASE concatena as MESMAS constantes de
+// fonte unica (coachSafetyPrompts.ts). Mudanca intencional, nao regressao.
+describe('Grindfy AI base unico consome das mesmas constants (DRY — lesson #10)', () => {
+  it('GRINDFY_AI_BASE / buildStaticSystemBlock incluem CITATIONS_RULES de fonte unica', async () => {
+    const { buildStaticSystemBlock } = await import('../../../server/coachSystemBuilder');
     const { CITATIONS_RULES } = await import('../../../server/coachSafetyPrompts') as any;
-
-    const text = getTournamentPrompt({
-      dashboardStats: { totalTournaments: 0, roi: 0, profit: '0', abi: 0, itmPercent: 0 },
-      roiBySite: [], roiByBuyin: [], roiByCategory: [], roiBySpeed: [],
-      roiByDay: [], topTemplates: [], worstTemplates: [],
-    } as any);
-    expect(text).toContain(CITATIONS_RULES);
+    const block = buildStaticSystemBlock('tournament' as any, {});
+    expect(block.text).toContain(CITATIONS_RULES);
   });
 
-  it('getMentalPrompt inclui texto de CONFIDENCE_RULES', async () => {
-    const { getMentalPrompt } = await import('../../../server/coachPrompts');
+  it('buildStaticSystemBlock inclui CONFIDENCE_RULES de fonte unica', async () => {
+    const { buildStaticSystemBlock } = await import('../../../server/coachSystemBuilder');
     const { CONFIDENCE_RULES } = await import('../../../server/coachSafetyPrompts') as any;
-    const text = getMentalPrompt({
-      breakFeedbacks: [], preparationLogs: [], grindSessions: [], mentalCorrelation: undefined,
-    } as any);
-    expect(text).toContain(CONFIDENCE_RULES);
+    const block = buildStaticSystemBlock('mental' as any, {});
+    expect(block.text).toContain(CONFIDENCE_RULES);
+  });
+
+  it('coachPrompts.ts NAO exporta mais getMentalPrompt/getTournamentPrompt/getTechnicalPrompt', async () => {
+    const mod: any = await import('../../../server/coachPrompts');
+    expect(mod.getMentalPrompt).toBeUndefined();
+    expect(mod.getTournamentPrompt).toBeUndefined();
+    expect(mod.getTechnicalPrompt).toBeUndefined();
   });
 });
 
-describe('Cache key invariance — texto bit-identical entre builders', () => {
-  it('staticBlock + legacy prompt usam EXATAMENTE a mesma string CITATIONS_RULES', async () => {
-    const { buildStaticSystemBlock } =
-      await import('../../../server/coachSystemBuilder');
-    const { getTournamentPrompt } = await import('../../../server/coachPrompts');
+describe('Cache key — corpo do bloco STATIC identico entre coachType (1 cache key)', () => {
+  it('buildStaticSystemBlock("mental") e ("technical") produzem o mesmo bloco STATIC', async () => {
+    const { buildStaticSystemBlock } = await import('../../../server/coachSystemBuilder');
+    const a = buildStaticSystemBlock('mental' as any, {});
+    const b = buildStaticSystemBlock('technical' as any, {});
+    expect(a.text).toBe(b.text);
+  });
+
+  it('buildStaticSystemBlock inclui a string literal CITATIONS_RULES (sem copy-paste com diff)', async () => {
+    const { buildStaticSystemBlock } = await import('../../../server/coachSystemBuilder');
     const { CITATIONS_RULES } = await import('../../../server/coachSafetyPrompts') as any;
-
-    const cached = buildStaticSystemBlock('tournament', {});
-    const legacy = getTournamentPrompt({
-      dashboardStats: { totalTournaments: 0, roi: 0, profit: '0', abi: 0, itmPercent: 0 },
-      roiBySite: [], roiByBuyin: [], roiByCategory: [], roiBySpeed: [],
-      roiByDay: [], topTemplates: [], worstTemplates: [],
-    } as any);
-
-    // Ambos contem a CONSTANTE literal — ninguem deve copy-paste com diff.
-    expect(cached.text.includes(CITATIONS_RULES)).toBe(true);
-    expect(legacy.includes(CITATIONS_RULES)).toBe(true);
+    expect(buildStaticSystemBlock('tournament' as any, {}).text.includes(CITATIONS_RULES)).toBe(true);
   });
 });

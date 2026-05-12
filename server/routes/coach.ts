@@ -71,10 +71,33 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
     return;
   }
 
-  // Sprint coach-launch-fix (P0 #1): tier gate. Resolve tier do usuario e
-  // bloqueia coach restritos por plano ANTES de qualquer trabalho pesado.
+  // Sprint AI-0B / RF-04 — page context (opcional). Se presente, valida via
+  // sanitizePageContext (discriminated union strict + scrub de injection); se
+  // invalido -> 400 validation_failed (field: pageContext); ausente -> segue.
+  let sanitizedPageContext: any = undefined;
+  const rawPageContext = (req.body || {}).pageContext;
+  if (rawPageContext !== undefined && rawPageContext !== null) {
+    try {
+      const { sanitizePageContext } = await import('../coachPageContext');
+      const sanitized = sanitizePageContext(rawPageContext);
+      if (!sanitized) {
+        res.status(400).json({ error: 'validation_failed', field: 'pageContext' });
+        return;
+      }
+      sanitizedPageContext = sanitized;
+    } catch (err) {
+      console.error('[coach.chat] pageContext sanitize failed', err);
+      res.status(400).json({ error: 'validation_failed', field: 'pageContext' });
+      return;
+    }
+  }
+
+  // Sprint coach-launch-fix (P0 #1): tier gate. Resolve tier do usuario.
   // Storage pode injetar resolveUserTier (testes integrados); fallback para
   // helper coachAccess em producao.
+  // Sprint AI-0B / RF-06 (ADR-148): NAO ha mais 403 tier_locked por coachType —
+  // o agente eh unico; todo tier autenticado tem acesso. O tier so afeta rate
+  // limit (abaixo) + tools (free => []).
   let tier: string = 'free';
   try {
     if (typeof (coachStorage as any).resolveUserTier === 'function') {
@@ -87,30 +110,19 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
     console.error('[coach.chat] resolveUserTier failed', err);
   }
 
-  try {
-    const { canAccessCoach, getUpgradeTarget, getAccessibleCoaches } = await import('../coachAccess');
-    if (!canAccessCoach(tier as any, coachType as any)) {
-      res.status(403).json({
-        code: 'tier_locked',
-        upgradeTo: getUpgradeTarget(tier as any, coachType as any),
-        currentPlan: tier,
-        accessibleCoaches: getAccessibleCoaches(tier as any),
-        message: 'Acesso restrito. Faca upgrade para usar este coach.',
-      });
-      return;
-    }
-  } catch (err) {
-    console.error('[coach.chat] gate check failed', err);
-  }
-
   // Sprint coach-launch-fix RF-04 — rate limit por tier (10/50/200/Infinity).
   // Conta msgs nas ultimas 24h (rolling window). countUserMessagesInLastHour
   // permanece como fallback p/ compat (legacy storages).
+  // Sprint AI-0B (reviewer LOW): upgradeTo do 429 vem de getUpgradeForRateLimit
+  // (fonte unica em coachAccess) — nao mais inline.
   let limit: number = 10;
+  let resolveUpgradeForRateLimit: (t: string) => 'pro' | 'premium' | null = (t) =>
+    t === 'free' ? 'pro' : t === 'pro' ? 'premium' : null;
   try {
-    const { getRateLimitForPlan } = await import('../coachAccess');
+    const { getRateLimitForPlan, getUpgradeForRateLimit } = await import('../coachAccess');
     limit = getRateLimitForPlan(tier);
-  } catch { /* fallback 10 */ }
+    if (typeof getUpgradeForRateLimit === 'function') resolveUpgradeForRateLimit = getUpgradeForRateLimit;
+  } catch { /* fallback 10 + inline upgrade */ }
 
   let msgCount = 0;
   if (typeof (coachStorage as any).countUserMessagesInLastDay === 'function') {
@@ -121,11 +133,7 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
 
   if (Number.isFinite(limit) && msgCount >= limit) {
     // Rate limit headers + body com upgradeTo p/ UI.
-    let upgradeTo: string | null = null;
-    try {
-      if (tier === 'free') upgradeTo = 'pro';
-      else if (tier === 'pro') upgradeTo = 'premium';
-    } catch { /* noop */ }
+    const upgradeTo: string | null = resolveUpgradeForRateLimit(tier);
 
     let resetAtIso: string | null = null;
     try {
@@ -207,9 +215,7 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
         try { res.setHeader('X-RateLimit-Remaining', '0'); } catch { /* noop */ }
         let resetAtIso2 = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
         try { res.setHeader('X-RateLimit-Reset', resetAtIso2); } catch { /* noop */ }
-        let upgradeTo: string | null = null;
-        if (tier === 'free') upgradeTo = 'pro';
-        else if (tier === 'pro') upgradeTo = 'premium';
+        const upgradeTo: string | null = resolveUpgradeForRateLimit(tier);
         res.status(429).json({
           code: 'rate_limited',
           limit,
@@ -283,29 +289,17 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
 
     // Build context for the coach
     const { assembleContext } = await import('../coachContext');
-    const { getMentalPrompt, getTournamentPrompt, getTechnicalPrompt } = await import('../coachPrompts');
-    const { buildMentalContext, buildTournamentContext, buildTechnicalContext } = await import('../coachContext');
-
-    // Load specialized context based on coach type
-    let specializedContext: any = {};
-    if (coachType === 'mental') {
-      specializedContext = await buildMentalContext(userId);
-    } else if (coachType === 'tournament') {
-      specializedContext = await buildTournamentContext(userId);
-    } else if (coachType === 'technical') {
-      specializedContext = await buildTechnicalContext(userId);
-    }
-
-    // Get system prompt (legacy — usado como fallback/base por buildSystemArray
-    // quando alguns loaders nao alimentam dados)
-    const getSystemPrompt = (ct: string) => {
-      if (ct === 'mental') return getMentalPrompt(specializedContext);
-      if (ct === 'tournament') return getTournamentPrompt(specializedContext);
-      return getTechnicalPrompt(specializedContext);
-    };
+    // Sprint AI-0B / RF-01+RF-03 (ADR-148): agente unico — o "system prompt
+    // legacy" deixa de ser por-coach. getSystemPrompt retorna o base unico
+    // (GRINDFY_AI_BASE) — usado apenas como fallback string pelo buildSystemArray
+    // quando COACH_PROMPT_CACHE_ENABLED=false; o caminho real eh o bloco STATIC.
+    const { getGrindfyAiBasePrompt } = await import('../coachSystemBuilder');
+    const getSystemPrompt = (_ct: string) => getGrindfyAiBasePrompt();
 
     // Sprint coach-launch-fix (P1 #8): assembleContext agora retorna
     // SystemBlock[] com cache_control via buildSystemArray.
+    // Sprint AI-0B / RF-02: getWeeklyPlan + getStudyProgress + getPageContext
+    // alimentados para todo coachType (contexto completo, sem gate por coach).
     const context = await assembleContext(
       { coachType, userId, message, sessionId: activeSessionId },
       {
@@ -335,6 +329,11 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
           : undefined,
         getStudyProgress: coachStorage.getStudyProgress
           ? async (uid: string) => await coachStorage.getStudyProgress(uid)
+          : undefined,
+        // Sprint AI-0B / RF-04: page context ja sanitizado (whitelist Zod +
+        // scrub). undefined quando o body nao trouxe pageContext.
+        getPageContext: sanitizedPageContext !== undefined
+          ? async () => sanitizedPageContext
           : undefined,
       },
     );
@@ -1174,11 +1173,15 @@ const COACH_LIMITS_BY_TIER: Record<string, number | 'unlimited'> = {
   admin: 'unlimited',
 };
 
+// Sprint AI-0B / RF-06 (ADR-148): nao ha mais gate por coachType — todo tier
+// tem acesso ao agente unico. accessibleCoaches mantido por back-compat de UI
+// (as 3 "lentes" estao todas disponiveis para todo tier).
+const ALL_LENSES = ['mental', 'tournament', 'technical'];
 const COACH_ACCESS_BY_TIER: Record<string, string[]> = {
-  free: ['mental'],
-  pro: ['mental', 'tournament'],
-  premium: ['mental', 'tournament', 'technical'],
-  admin: ['mental', 'tournament', 'technical'],
+  free: ALL_LENSES,
+  pro: ALL_LENSES,
+  premium: ALL_LENSES,
+  admin: ALL_LENSES,
 };
 
 export async function handleGetCoachLimits(

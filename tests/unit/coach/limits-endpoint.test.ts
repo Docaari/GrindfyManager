@@ -83,11 +83,13 @@ describe('GET /api/coach/limits', () => {
     expect(res.body.dailyLimit).toBe(10);
     expect(pickUsed(res.body)).toBe(3);
     expect(pickRemaining(res.body)).toBe(7);
-    expect(res.body.accessibleCoaches).toEqual(['mental']);
+    // Sprint AI-0B (ADR-148 / RF-06): nao ha mais gate por coachType — todo
+    // tier tem acesso ao agente unico (as 3 "lentes" estao todas disponiveis).
+    expect((res.body.accessibleCoaches as string[]).sort()).toEqual(['mental', 'technical', 'tournament']);
     expect(res.body.resetAt).toBeTruthy();
   });
 
-  it('pro: accessibleCoaches = [mental, tournament]', async () => {
+  it('pro: accessibleCoaches = todas as lentes (agente unico — sem gate por coachType)', async () => {
     storage.resolveUserTier.mockResolvedValue('pro');
     storage.countUserMessagesInLastDay.mockResolvedValue(0);
     storage.getOldestUserMessageInWindow.mockResolvedValue(null);
@@ -99,7 +101,8 @@ describe('GET /api/coach/limits', () => {
 
     expect(res.body.plan).toBe('pro');
     expect(res.body.dailyLimit).toBe(50);
-    expect((res.body.accessibleCoaches as string[]).sort()).toEqual(['mental', 'tournament']);
+    // Sprint AI-0B (ADR-148 / RF-06): consolidacao — todas as 3 lentes liberadas.
+    expect((res.body.accessibleCoaches as string[]).sort()).toEqual(['mental', 'technical', 'tournament']);
   });
 
   it('premium: accessibleCoaches = [mental, tournament, technical]', async () => {

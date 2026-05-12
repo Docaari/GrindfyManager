@@ -179,10 +179,10 @@ describe('assembleContext — pipeline de montagem de contexto', () => {
     });
 
     it('deve usar o system prompt do coachType fornecido', async () => {
-      // RF-08: buildSystemArray monta o base prompt internamente a partir dos
-      // arquivos reais por coachType (o legacy getSystemPrompt continua sendo
-      // chamado, mas o builder novo ignora o retorno). Validamos que o prompt
-      // resultante reflete o coachType pedido.
+      // Sprint AI-0B (ADR-148): agente unico — o system prompt NAO varia mais
+      // de estrutura por coachType (o base eh GRINDFY_AI_BASE, identico). O
+      // coachType so muda a linha de "lente inicial" no bloco DINAMICO.
+      // getSystemPrompt (legacy) ainda eh chamado mas o builder ignora o retorno.
       const result = await assembleContext(
         {
           coachType: 'technical',
@@ -194,7 +194,10 @@ describe('assembleContext — pipeline de montagem de contexto', () => {
       );
 
       expect(mockDataLoaders.getSystemPrompt).toHaveBeenCalledWith('technical');
-      expect(systemText(result.system)).toMatch(/coach\s*t[eé]cnico/i);
+      // Base unico "Grindfy AI" + linha de lente refletindo o coachType technical.
+      expect(systemText(result.system)).toMatch(/Grindfy\s*AI/i);
+      expect(systemText(result.system).toLowerCase()).toMatch(/lente inicial/);
+      expect(systemText(result.system).toLowerCase()).toMatch(/t[eé]cnic|leak/);
     });
   });
 

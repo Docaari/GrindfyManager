@@ -196,8 +196,12 @@ describe('Rate limit tiered', () => {
 // Gate de coach por plano
 // =============================================================================
 
-describe('Coach gate por plano', () => {
-  it('free + technical -> 403 com upgradeTo premium', async () => {
+// Sprint AI-0B / RF-06 (ADR-148): a consolidacao para o agente unico "Grindfy
+// AI" REMOVE o gate por coachType — nao ha mais `403 tier_locked`. Todo tier
+// autenticado tem acesso ao agente unico; o tier so afeta rate limit + tools.
+// Mudanca intencional — antes free+technical / pro+technical retornavam 403.
+describe('Coach — sem gate por coachType (agente unico, RF-06)', () => {
+  it('free + technical NAO recebe 403 (recebe SSE)', async () => {
     const storage = makeStorage({
       resolveUserTier: vi.fn().mockResolvedValue('free'),
     });
@@ -206,15 +210,11 @@ describe('Coach gate por plano', () => {
     const res = makeRes();
     await handleCoachChat(req, res, storage);
 
-    expect(res.statusCode).toBe(403);
-    expect(res.body).toMatchObject({
-      upgradeTo: 'premium',
-      currentPlan: 'free',
-    });
-    expect(res.body.accessibleCoaches).toContain('mental');
+    expect(res.statusCode).not.toBe(403);
+    expect(res.statusCode).not.toBe(429);
   });
 
-  it('free + tournament -> 403 com upgradeTo pro', async () => {
+  it('free + tournament NAO recebe 403', async () => {
     const storage = makeStorage({
       resolveUserTier: vi.fn().mockResolvedValue('free'),
     });
@@ -223,11 +223,11 @@ describe('Coach gate por plano', () => {
     const res = makeRes();
     await handleCoachChat(req, res, storage);
 
-    expect(res.statusCode).toBe(403);
-    expect(res.body).toMatchObject({ upgradeTo: 'pro', currentPlan: 'free' });
+    expect(res.statusCode).not.toBe(403);
+    expect(res.statusCode).not.toBe(429);
   });
 
-  it('pro + technical -> 403 com upgradeTo premium', async () => {
+  it('pro + technical NAO recebe 403', async () => {
     const storage = makeStorage({
       resolveUserTier: vi.fn().mockResolvedValue('pro'),
     });
@@ -236,8 +236,8 @@ describe('Coach gate por plano', () => {
     const res = makeRes();
     await handleCoachChat(req, res, storage);
 
-    expect(res.statusCode).toBe(403);
-    expect(res.body).toMatchObject({ upgradeTo: 'premium', currentPlan: 'pro' });
+    expect(res.statusCode).not.toBe(403);
+    expect(res.statusCode).not.toBe(429);
   });
 
   it('premium + technical -> 200', async () => {

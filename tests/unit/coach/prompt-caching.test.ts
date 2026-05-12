@@ -341,7 +341,11 @@ describe('assembleContext — system array with cache_control', () => {
     expect((result as any).system[1].cache_control).toBeUndefined();
   });
 
-  it('deve retornar system como array com 1 bloco (estatico apenas) quando nao ha dados dinamicos', async () => {
+  // Sprint AI-0B (ADR-148 / RF-03): o bloco DINAMICO sempre carrega a linha de
+  // "lente inicial" (conforme coachType), entao o array de system tem 2 blocos
+  // mesmo sem outros dados dinamicos. Cache_control continua so no STATIC.
+  // Mudanca intencional do comportamento — antes era 1 bloco quando sem dados.
+  it('deve retornar system como array com 2 blocos (STATIC + DYNAMIC com lente) mesmo sem dados dinamicos', async () => {
     const { assembleContext } = await import('../../../server/coachContext');
     const result = await assembleContext(
       { coachType: 'mental', userId: 'USER-0001', message: 'oi', sessionId: 'S1' },
@@ -360,8 +364,9 @@ describe('assembleContext — system array with cache_control', () => {
       } as any,
     );
     expect(Array.isArray((result as any).system)).toBe(true);
-    expect((result as any).system).toHaveLength(1);
+    expect((result as any).system).toHaveLength(2);
     expect((result as any).system[0].cache_control).toEqual({ type: 'ephemeral' });
+    expect((result as any).system[1].cache_control).toBeUndefined();
   });
 });
 
