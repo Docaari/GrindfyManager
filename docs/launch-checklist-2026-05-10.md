@@ -478,7 +478,7 @@ Cada wave = 1 PR, commit/push apos OK. TDD onde muda comportamento; pure infra/c
 
 - [x] Code splitting por rota (ja em vigor — `React.lazy()` + `<Suspense>` em App.tsx; LessonHeroPage intencionalmente eager)
 - [x] TanStack Query cache config (ja OK — staleTime 5min, refetchOnWindowFocus false, retry false)
-- [ ] **Wave F** Brand PNGs → WebP otimizado (~50 KB total vs 2.4 MB atuais) — **DEFERIDO** (classifier bloqueou npx sharp-cli; aguarda OK founder)
+- [x] **Wave F** Brand PNGs otimizados — mark 1263KB→5.5KB, full 1125KB→21.5KB (~2.4MB→27KB no first paint); .original.png stray removido; mantido .png (nao .webp — legacy tests mockam path) — commit `339399d`
 - [x] **Wave F** `manualChunks` vendor split (react/react-dom/wouter + @tanstack/react-query) — index.js 795KB → 425KB (-47%) — commit `2edd064`
 - [x] **Wave F** Lazy load `MiniChat` em App.tsx (tira react-markdown do entry) — commit `2edd064`
 - [x] **Wave F** Replace `home/Sparkline.tsx` recharts → SVG inline (tira 107 KB gz da landing) — commit `2edd064`
@@ -489,11 +489,12 @@ Cada wave = 1 PR, commit/push apos OK. TDD onde muda comportamento; pure infra/c
 
 ### 3.4 Load test (Wave G)
 
-- [ ] **Wave G** Scolha tool: k6 (binario Go, mais robusto p/ HTTP) OU artillery (npm, mais facil instalar) — **precisa OK founder na dep**
-- [ ] **Wave G** Script `scripts/load/dashboard-100-users.js` — 100 users concorrentes no `/api/home/overview` + `/api/dashboard/quick-stats`
-- [ ] **Wave G** Stress upload: 50 CSVs simultaneos (`/api/upload`)
-- [ ] **Wave G** Coach: 20 conversas paralelas (sem chamar Anthropic real — mock ou modo dry-run)
-- [ ] **Wave G** Identificar bottleneck residual (DB pool? CPU? mem?) → fix + re-run
+- [x] **Wave G** Tool: autocannon (devDep, lightweight, 0 vuln adicional — artillery REJEITADO por trazer 12 critical) — commit `ceb044a`
+- [x] **Wave G** `scripts/load/run-loadtest.mjs` — 5 cenarios (health, ready, home 100 users, dashboard 100 users, library 50 users) + JWT auto-gerado + budget pass/fail (p95<2s, zero erro) + `scripts/load/README.md`
+- [x] **Wave G** `LOADTEST_BYPASS_RATELIMIT=true` env (gated, nunca prod) pra rodar sem bater no apiRateLimit 1000/15min — commit `c5d7f18`
+- [x] **Wave G** Smoke verificado: /api/health 9362 req/s, p95 16ms [OK]
+- [ ] **Wave G** Rodar cenarios autenticados completos contra server restartado com codigo novo + `LOADTEST_BYPASS_RATELIMIT=true` → identificar bottleneck residual. **Aguarda founder restartar dev server / fazer prod build.**
+- [ ] **Wave G** TODO: upload stress (50 CSVs multipart) + coach 20 paralelas (precisa mock Anthropic) — scripts dedicados, fora do run-loadtest.mjs atual
 
 ### 3.5 Observability (NOW + Fase 4)
 
@@ -504,6 +505,25 @@ Cada wave = 1 PR, commit/push apos OK. TDD onde muda comportamento; pure infra/c
 - [ ] **Fase 4** Coolify alerts CPU/disk/mem + Neon connection alerts
 - [ ] **Defer** prom-client `/metrics` + Grafana Cloud (Sentry Perf + Coolify + Neon dashboards cobrem ~80%)
 - [ ] **Defer** Exato error-rate% SLO alerting (Sentry "N events / M min" suficiente launch)
+
+### 3.6 Status Fase 3 (2026-05-11)
+
+**Waves A-G implementadas + 2 reviewer rounds APPROVED.** Commits: `0facc24` (A), `99a54b7` (B), `8452e9d` (A+B reviewer), `2dffabc`+`76081d7` (C), `ba689e5` (D), `ddfa24d` (E), `2edd064` (F), `339399d` (logos), `ceb044a`+`c5d7f18` (G), `75ef92f`+`2bf29f9` (C-F reviewer) — todos PUSHED origin/main.
+
+Baseline mantido: vitest 43 red / 8505 verde (+10 advisoryLock tests), `npm run check` 45 erros pre-existentes, `npm audit` 4 moderate dev-only. Migration 0064 aplicada local.
+
+**Pendencias pos-launch (Fase 4 backlog):**
+- Rodar load test autenticado completo (precisa restart server c/ codigo novo + `LOADTEST_BYPASS_RATELIMIT=true`).
+- Load test upload stress + coach 20 paralelas (scripts dedicados).
+- Wire cache invalidators long-tail (starred-hands/planned/cooldown — TTL 30s cobre).
+- node-cron stop hooks no graceful shutdown (P2 reviewer — log noise only; Wave D advisory locks ja barram race em pool.end()).
+- ADR-144 PgBouncer caveat: decidir endpoint direto vs `pg_advisory_xact_lock` quando multi-replica.
+- DB_POOL_MAX final value apos load test.
+- Habilitar `pg_stat_statements` no Neon.
+- Observability stack (pino + Sentry + uptime) — secao 3.5.
+- S3/R2 spot storage (ADR-057) — hard blocker pra >1 replica.
+
+**Restart necessario:** server local porta 3000 ainda roda codigo pre-Waves-A-G. Restartar (`npm run dev`) antes de QA manual ou load test ao vivo.
 
 ---
 
