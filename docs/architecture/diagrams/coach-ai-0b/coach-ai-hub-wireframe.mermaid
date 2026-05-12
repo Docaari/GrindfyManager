@@ -1,0 +1,49 @@
+%% Sprint AI-0B — Wireframe do hub /coach-ai (ADR-150)
+%% Tabs URL-persisted ?tab=chat|reports|audit|prefs (default chat) — reusa useTabFromUrl como /coach (ADR-125)
+
+graph TB
+    subgraph page["Página /coach-ai — Hub do Grindfy AI"]
+        direction TB
+        title["TÍTULO: 'Grindfy AI'  (NÃO 'Coach Mental/Técnico/de Torneios')"]
+
+        subgraph tabsbar["TabsList (Radix — value controlado por useTabFromUrl) — lessons #27 onClick redundante"]
+            direction LR
+            tChat["[ Chat ]  ?tab=chat  (default)"]
+            tReports["[ Relatórios e avisos ]  ?tab=reports"]
+            tAudit["[ Histórico de ações ]  ?tab=audit"]
+            tPrefs["[ Preferências ]  ?tab=prefs"]
+        end
+
+        subgraph contentChat["TabsContent — Chat (FUNCIONAL — reforma do chat existente)"]
+            direction TB
+            sidebar["Sidebar de sessões<br/><i>lista de conversas — inalterado</i>"]
+            lensChips["Chips de LENTE/FOCO (NÃO 'qual coach'):<br/>( Foco: Mental ) ( Foco: Seleção ) ( Foco: Técnico )<br/><i>setam o coachType enviado — opcional ?focus= URL-persisted (followup)</i>"]
+            msgs["MessageList + streaming SSE<br/><i>react-markdown + citations + confidence — inalterado</i>"]
+            input["Textarea — placeholder fala do 'Grindfy AI'<br/>(opcional) quick suggestions fixas: 'Analisar meu ROI por site' · 'Quais meus leaks?' · 'Simular: perder 10 BIs' · 'Sugerir grade da semana'"]
+            pc["envia pageContext { route: 'coach-ai', activeCoachType } no body do POST"]
+            sidebar --> msgs --> input
+            lensChips --> input
+            input --> pc
+        end
+
+        subgraph contentReports["TabsContent — Relatórios e avisos (ESQUELETO — NÃO funcional)"]
+            empty["EmptyState: 'Os relatórios automáticos do Grindfy AI (semanal, mensal) vêm em breve.'<br/><i>SEM useQuery — não há GET /api/coach/reports (Fase 1 AI-1B). Não quebra. Layout pronto p/ trocar por timeline.</i>"]
+        end
+
+        subgraph contentAudit["TabsContent — Histórico de ações (FUNCIONAL — CoachAuditPanel novo)"]
+            audit["Lista cronológica de coach_actions<br/><i>GET /api/coach/audit — cada item: tipo, descrição, status, timestamp</i><br/>botão dismiss por item (POST /api/coach/audit/:id/dismiss)<br/>botão export JSON (POST /api/coach/audit/export)<br/><i>fetcher isolado por ErrorBoundary local — lesson #29</i>"]
+        end
+
+        subgraph contentPrefs["TabsContent — Preferências (FUNCIONAL — CoachPreferencesPanel novo)"]
+            prefs["8 toggles de nudge: bSnapshot · bLeak · bStudy · bVolume · bGrade · bDownswing · bLife · bMental<br/>quiet hours: [ start ] [ end ]   |   caps: [ N/dia ] [ N/semana ]<br/><i>GET /api/coach/preferences (inicial) · PUT /api/coach/preferences (save) — apiRequest retorna JSON parseado (lesson #13)</i>"]
+        end
+
+        title --> tabsbar
+        tChat -.-> contentChat
+        tReports -.-> contentReports
+        tAudit -.-> contentAudit
+        tPrefs -.-> contentPrefs
+    end
+
+    note["MiniChat.tsx (separado — chat compacto reusável): mesmo agente único + chips de lente +<br/>page context da ROTA onde está montado (useCoachPageContext lê useLocation; rota não instrumentada → sem pageContext).<br/>NÃO vira hub. UpgradeCoachModal: repropósito → 'ferramentas avançadas / mais mensagens no Pro' (sem 'coach X bloqueado')."]
+    note -.-> page

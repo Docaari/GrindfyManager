@@ -1,12 +1,29 @@
-# Coach IA — API Endpoints (Sprints Coach-1 + Coach-2A)
+# Coach IA — API Endpoints (Sprints Coach-1 + Coach-2A + AI-0A + AI-0B)
 
 Documentacao dos endpoints afetados pelos sprints:
 - **Coach-1** (`docs/specs/coach-sprint-1-fundacao-economica.md`) — fundacao economica + UX (entregue).
-- **Coach-2A** (`docs/specs/coach-sprint-2a-page-context-and-tools.md`) — page context + 5 read tools (este sprint).
+- **Coach-2A** (`docs/specs/coach-sprint-2a-page-context-and-tools.md`) — page context + read tools (entregue).
+- **AI-0A** (`Docs/specs/sprint-ai-0a.md`) — 17 tools religadas no registry + citations/confidence reforcados (entregue — ADR-145/146/147).
+- **AI-0B** (`Docs/specs/sprint-ai-0b.md`) — **consolidacao Grindfy AI (agente unico)** + page context plugado de fato + 5 rotas novas + hub `/coach-ai` + tier gate ajustado (ADR-148/149/150). Ver bloco "## Sprint AI-0B" abaixo.
 
-Endpoints nao listados aqui (`/api/coach/sessions`, `/api/coach/profile`, `/api/coach/monthly-summaries`, `/api/coach/sessions/:id/archive`, `/api/coach/sessions/:id` DELETE) permanecem inalterados.
+Endpoints nao listados aqui (`/api/coach/sessions`, `/api/coach/profile`, `/api/coach/monthly-summaries`, `/api/coach/sessions/:id/archive`, `/api/coach/sessions/:id` DELETE) permanecem inalterados (continuam aceitando `coachType` como parametro — back-compat, "lente inicial").
 
 Para a documentacao detalhada de cada tool (input schema, output, exemplos), ver: **[coach-tools.md](./coach-tools.md)**.
+
+---
+
+## Sprint AI-0B — o que muda (resumo; detalhe nos ADRs 148/149/150)
+
+> **Agente unico "Grindfy AI" — supersedes a separacao de personas Mental/Tournament/Technical (ADR-148).**
+> - `POST /api/coach/chat` deixa de selecionar 1 de 3 system prompts — ha **um base unico** (`GRINDFY_AI_BASE`); contexto **completo** (o agente ve tudo: dashboard stats, leaks, weekly plan, study progress, sessao ativa, break feedbacks, page context — sem gate por `coachType`); tools (17, Pro+) para o detalhe sob demanda.
+> - **`coachType` (mental | tournament | technical) continua no body** (validado contra `VALID_COACH_TYPES` — `400` se invalido/ausente), em `chat_sessions.coach_type` e `coach_conversations.coach_type` — **back-compat, zero migracao**. Papel novo: **"lente inicial"** — uma unica linha no bloco DINAMICO do system prompt ("o jogador abriu o chat com foco em X; comece por ai, mas pode falar de qualquer assunto"). Nao gateia contexto nem acesso.
+> - **`pageContext` passa a FUNCIONAR de fato** (ADR-149) — a infra existia (schema Zod + sanitizer + formatter em `coachPageContext.ts`) mas o route handler nunca lia `req.body.pageContext` e o frontend nunca enviava. Agora `handleCoachChat` le `req.body.pageContext`, valida via `sanitizePageContext` (`400 { error: 'validation_failed', field: 'pageContext' }` se invalido), e injeta no bloco DINAMICO. O frontend envia via o hook novo `useCoachPageContext`.
+> - **`pageContext` ganha 10 variantes** (5 originais + 5 novas): `grade-planner`, `grind-live`, `dashboard`, `coach-ai`, `cooldown-log` + **`bankroll`, `estudos`, `stats`, `biblioteca`, `upload`**. Todas `.strict()`, campos opcionais, max-length em strings, enums fechados, ranges plausiveis. Principio: **inspecao leve (counts/IDs/abas/filtros/datas) — NUNCA valores monetarios, notas livres, conteudo de lesson; os numeros vem das tools.**
+> - **Tier gate ajustado (ADR-148 §2.5)** — **acaba o `403 tier_locked` por coach.** Todos os tiers (`free`/`pro`/`premium`/`admin`) acessam o Grindfy AI. O gate vira **so rate limit** (10/50/200/∞ msg/24h — inalterado) + **tools** (`free` → sem tools / `exportToolsForAnthropic('free') === []`; Pro+ → 17 tools — inalterado). `canAccessCoach` removida/trivializada. `UpgradeCoachModal` reproposito → "ferramentas avancadas / mais mensagens no Pro" (sem "coach X bloqueado").
+> - **Hub `/coach-ai` (ADR-150)** — vira tabs URL-persisted `?tab=chat|reports|audit|prefs` (default `chat`): Chat (agente unico + chips de lente + page context `{ route: 'coach-ai', activeCoachType }`), Relatorios e avisos (EmptyState — esqueleto; `GET /api/coach/reports` e Fase 1), Historico de acoes (consome `GET /api/coach/audit` — endpoint existente), Preferencias (consome `GET/PUT /api/coach/preferences` — endpoint existente; 8 toggles de nudge + quiet hours + caps).
+> - **Zero endpoint novo. Zero migracao de schema.** Endpoints futuros so anotados: `GET /api/coach/reports`, `GET /api/coach/reports/:id` (Fase 1 AI-1B).
+>
+> **TODO (implementer, conforme ADR-148/149/150):** quando este sprint for entregue, atualizar os trechos abaixo desta linha que ainda dizem "5 read tools" (sao 17 pos-AI-0A), "403 quando coach nao acessivel" (some), "shapes validos de pageContext" (sao 10 variantes — adicionar as 5 novas com campos), e os enums `category`/`speed` (ADR-145: `['Vanilla','PKO','Mystery','Satellite']` / `['Normal','Turbo','Hyper']` — `'Regular'` esta errado). O bloco "## Sprint AI-0B" acima eh a fonte canonica ate la.
 
 ---
 

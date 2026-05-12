@@ -1,0 +1,69 @@
+%% Sprint AI-0B — Visão geral do Grindfy AI consolidado (substitui o C4 de 3 coaches do ai-coach/c4-component.md)
+%% ADR-148 (agente único + lente) + ADR-149 (page context) + ADR-150 (hub /coach-ai)
+
+graph TB
+    user["Jogador<br/><i>Browser — qualquer tier (free/pro/premium/admin)</i>"]
+
+    subgraph frontend["Frontend React (client/src/)"]
+        hub["Hub /coach-ai (CoachAI.tsx)<br/><i>tabs URL-persisted ?tab=chat|reports|audit|prefs</i>"]
+        miniChat["MiniChat.tsx<br/><i>chat compacto reusável — chips de lente, agente único</i>"]
+        chips["Chips de lente/foco<br/><i>Mental | Seleção | Técnico → setam coachType (back-compat)</i>"]
+        pcHook["useCoachPageContext(route, fields)<br/><i>NOVO — monta { route, ...fields } da página atual</i>"]
+        auditPanel["CoachAuditPanel<br/><i>NOVO — consome GET /api/coach/audit</i>"]
+        prefsPanel["CoachPreferencesPanel<br/><i>NOVO — GET/PUT /api/coach/preferences (8 toggles nudge)</i>"]
+        reportsEmpty["Reports tab — EmptyState<br/><i>esqueleto; Fase 1 (AI-1B) pluga GET /api/coach/reports</i>"]
+        chatHook["useCoachChat<br/><i>inclui pageContext no body se fornecido</i>"]
+        instrPages["Páginas instrumentadas<br/><i>/bankroll /estudos /stats /biblioteca /upload<br/>+ /dashboard /coach(grade-planner) /grind-live /coach-ai /cooldown-log</i>"]
+    end
+
+    subgraph backend["Backend Express (server/)"]
+        route["routes/coach.ts handleCoachChat<br/><i>lê req.body.pageContext; SEM 403 tier_locked por coach;<br/>coachType validado contra VALID_COACH_TYPES (400 se inválido)</i>"]
+        access["coachAccess.ts<br/><i>getRateLimitForPlan 10/50/200/∞ (inalterado)<br/>exportToolsForAnthropic — free [] / Pro+ 17 tools (inalterado)<br/>canAccessCoach — removida ou trivializada (true p/ tudo)</i>"]
+        pageCtx["coachPageContext.ts<br/><i>pageContextSchema — 10 variantes (.strict, scrub, max-len)<br/>sanitizePageContext + buildPageContextSection</i>"]
+        ctx["coachContext.ts assembleContext<br/><i>loaders genéricos: getActiveGrind, getRecentBreakFeedbacks,<br/>getDetectedLeaks, getWeeklyPlan, getStudyProgress, getPageContext (NOVO uso)<br/>— sem buildMental/Tournament/TechnicalContext (dead-code removível)</i>"]
+        builder["coachSystemBuilder.ts<br/><i>GRINDFY_AI_BASE (único) + SAFETY/CITATIONS/CONFIDENCE (fonte única)<br/>STATIC cacheado idêntico p/ todo coachType<br/>DYNAMIC: linha de lente + grind + feedbacks + leaks + weekly + study + pageCtx</i>"]
+        safety["coachSafetyPrompts.ts<br/><i>fonte única: SAFETY_RULES, SAFETY_RULES_COMPETITOR_BLOCK, CITATIONS_RULES, CONFIDENCE_RULES</i>"]
+        tools["coachTools/ (registry — ADR-145/146/147)<br/><i>17 tools (18 entradas c/ alias deprec.) — 11 read + 6 write — inalterado</i>"]
+        storage["storage.ts + walletService + scoring + services<br/><i>dados reais p/ as tools (fonte server confiável)</i>"]
+        auditEP["GET/POST /api/coach/audit*<br/><i>coach_actions — Sprint Coach-0 — inalterado</i>"]
+        prefsEP["GET/PUT /api/coach/preferences<br/><i>coach_preferences (8 toggles nudge) — Sprint Coach-0 — inalterado</i>"]
+    end
+
+    subgraph external["Externos"]
+        sonnet["Claude Sonnet 4.6 (COACH_CHAT_MODEL)<br/><i>chat streaming SSE — prompt caching 2 blocos<br/>cache key do STATIC quebra UMA vez (planejado)</i>"]
+        haiku["Claude Haiku 4.5 (COACH_MEMORY_MODEL)<br/><i>sumarização / auto-título — inalterado</i>"]
+        db[("PostgreSQL 16 / Neon<br/><i>chat_sessions.coach_type + coach_conversations.coach_type permanecem (back-compat)<br/>ZERO migração — nenhuma tabela nova</i>")]
+    end
+
+    user -->|HTTPS| hub
+    user -->|HTTPS| miniChat
+    hub --> chips
+    hub --> auditPanel
+    hub --> prefsPanel
+    hub --> reportsEmpty
+    hub --> chatHook
+    miniChat --> chatHook
+    instrPages --> pcHook
+    hub --> pcHook
+    miniChat --> pcHook
+    pcHook -->|"{ route, ...fields }"| chatHook
+    chatHook -->|"POST /api/coach/chat { coachType, message, sessionId?, pageContext? }<br/>SSE streaming"| route
+    auditPanel -->|"GET /api/coach/audit"| auditEP
+    prefsPanel -->|"GET/PUT /api/coach/preferences"| prefsEP
+
+    route --> access
+    route -->|"sanitizePageContext(req.body.pageContext) — 400 se inválido"| pageCtx
+    route -->|"getWeeklyPlan + getStudyProgress p/ TODO coachType + getPageContext"| ctx
+    ctx --> builder
+    builder --> safety
+    builder -->|"buildPageContextSection"| pageCtx
+    route -->|"tools (Pro+ apenas)"| tools
+    tools --> storage
+    storage -->|"SQL Drizzle"| db
+    ctx --> db
+    auditEP --> db
+    prefsEP --> db
+    route -->|"messages.stream({ system:[STATIC(cache),DYNAMIC], messages, tools })"| sonnet
+    route -.->|"ao arquivar sessão"| haiku
+    haiku --> db
+    sonnet -->|"SSE — agente ÚNICO; cruza ROI+leak+banca+estudo+mental no mesmo turn"| user

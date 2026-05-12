@@ -1,0 +1,49 @@
+%% Sprint AI-0B — Fluxo do page context: frontend → body → /api/coach/chat → builder → bloco DYNAMIC
+%% ADR-149 (plugado de fato + 5 rotas novas) estende ADR-025 (Zod whitelist por route).
+%% 10 variantes: 5 originais (grade-planner, grind-live, dashboard, coach-ai, cooldown-log)
+%%             + 5 novas   (bankroll, estudos, stats, biblioteca, upload)
+
+sequenceDiagram
+    actor User as Jogador
+    participant Page as Página instrumentada<br/>(/bankroll, /estudos, /stats,<br/>/biblioteca, /upload, /dashboard,<br/>/coach (grade-planner), /grind-live,<br/>/coach-ai, cooldown-log)
+    participant Hook as useCoachPageContext(route, fields)<br/><i>NOVO — lê estado da página (Wouter useLocation,<br/>query params, props) → { route, ...fields } | undefined</i>
+    participant Chat as useCoachChat / MiniChat<br/><i>inclui pageContext no body só se fornecido</i>
+    participant API as POST /api/coach/chat<br/>(server/routes/coach.ts handleCoachChat)
+    participant Sanitize as sanitizePageContext(input)<br/>(server/coachPageContext.ts)<br/><i>scrubInjectionTokens → pageContextSchema.safeParse</i>
+    participant Assemble as assembleContext(...)<br/>(server/coachContext.ts)<br/><i>getPageContext loader</i>
+    participant Builder as buildDynamicSystemBlock(coachType, inputs)<br/>+ buildPageContextSection(inputs.pageContext)
+    participant Anthropic as Claude Sonnet 4.6
+
+    User->>Page: abre o chat estando numa página instrumentada
+    Page->>Hook: useCoachPageContext('bankroll', { walletsCount, selectedWalletId, activeTab, dateRange })
+    Note over Hook: rota não instrumentada → retorna undefined<br/>(MinichAT em /grind, /calendar, /admin/* etc → sem pageContext)
+    Hook-->>Page: { route: 'bankroll', walletsCount: 3, activeTab: 'movimentacoes' }
+    Page->>Chat: sendMessage(text, { pageContext })
+    Chat->>API: body: { coachType, message, sessionId?, pageContext? }
+
+    API->>API: req.body.pageContext !== undefined ?
+    alt pageContext presente
+        API->>Sanitize: sanitizePageContext(req.body.pageContext)
+        Sanitize->>Sanitize: scrub tokens injection ('ignore previous instructions', etc → [redacted])
+        Sanitize->>Sanitize: pageContextSchema.safeParse (.strict() — rejeita campo extra; max-length; enums fechados; ranges)
+        alt safeParse falha (rota desconhecida / campo extra / tipo errado / string longa)
+            Sanitize-->>API: null
+            API-->>Chat: 400 { error: 'validation_failed', field: 'pageContext' }
+            Chat-->>User: erro (não quebra o chat — usuário reenvia)
+        else safeParse ok
+            Sanitize-->>API: PageContext sanitizado
+        end
+    else pageContext ausente
+        Note over API: segue sem page context — comportamento de hoje (não regredir)
+    end
+
+    API->>Assemble: assembleContext({coachType,userId,message,sessionId},<br/>{ ...loaders, getPageContext: async () => sanitizedPageContext })
+    Note over Assemble: getWeeklyPlan + getStudyProgress passados p/ TODO coachType (não condicionado)
+    Assemble->>Builder: buildSystemArray(coachType, staticInputs, dynamicInputs{ ..., pageContext })
+    Builder->>Builder: buildPageContextSection(pageContext)<br/>switch(ctx.route) exhaustivo — 10 cases<br/>'## Contexto da pagina atual' + 'Rota: bankroll' + linhas dos campos presentes
+    Builder-->>Assemble: bloco DYNAMIC com a seção "Contexto da pagina atual"
+    Assemble-->>API: { system: [STATIC(cache), DYNAMIC], messages }
+    API->>Anthropic: messages.stream({ system, messages, tools (Pro+) })
+    Anthropic-->>User: resposta via SSE — agente menciona "vi que você está olhando suas wallets" + oferece read_user_bankroll_history
+
+    Note over User,Anthropic: PRINCÍPIO: page context = inspeção leve (counts/IDs/abas/filtros/datas).<br/>NUNCA valor monetário, nota livre, conteúdo de lesson.<br/>Os NÚMEROS vêm das tools (read_user_bankroll_history, read_user_hud_stats,<br/>recommend_lesson, simulate_bankroll_scenario...) — fonte server confiável.

@@ -1,5 +1,7 @@
 # ADR-015: Estrategia de Memoria Persistente com Perfil + Resumos + Compactacao Mensal
 
+> ⚠️ **Nota (2026-05-12, Sprint AI-0B / ADR-148).** Este ADR fala de memoria "compartilhada entre os 3 coaches". Apos o Sprint AI-0B ha **um unico agente "Grindfy AI"** — `user_ai_profile` continua sendo a memoria de longo prazo, agora de um agente so (a transferencia "cross-coach" deixa de ser conceito: o agente unico ja ve tudo). O resto da estrategia (perfil + resumos arquivados + compactacao mensal Haiku) permanece valido. `monthly_coach_summaries.coach_type` permanece (back-compat). A "memoria estruturada" `{ nivel, metas, focoDoMes, ... }` e Fase 1 (AI-1A) — nao entra no AI-0B.
+
 ## Status
 Proposto
 

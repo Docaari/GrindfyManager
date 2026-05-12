@@ -1,5 +1,7 @@
 # AI Coach — C4 Component Diagram
 
+> ⚠️ **SUPERSEDED (2026-05-12, Sprint AI-0B / ADR-148).** Este diagrama mostra os **3 coaches separados** (Mental / Torneios / Técnico) com 3 system prompts e 3 context loaders (`buildMentalContext`/`buildTournamentContext`/`buildTechnicalContext`). Após o Sprint AI-0B há **um único agente "Grindfy AI"** com contexto completo (vê tudo, sem gate por `coachType`); `coachType` vira "lente inicial" (back-compat). Diagrama atual: **`Docs/architecture/diagrams/coach-ai-0b/coach-ai-overview.mermaid`**. Mantido aqui como registro histórico.
+
 Diagrama de componentes mostrando a arquitetura interna do AI Coach e como se integra ao sistema existente do Grindfy.
 
 ## Diagrama

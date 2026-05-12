@@ -1,0 +1,56 @@
+%% Sprint AI-0B — Estrutura do system prompt unificado "Grindfy AI"
+%% ADR-148 (consolidação) + ADR-019 (2 blocos, cache) + ADR-147 §3 (fonte única safety/citation)
+%% Bloco STATIC = cacheado (cache_control: ephemeral); IDÊNTICO para todo coachType.
+%% Bloco DYNAMIC = não cacheado; a linha de lente é a ÚNICA coisa que varia com coachType.
+
+graph TB
+    subgraph req["Request — POST /api/coach/chat"]
+        body["body: { coachType, message, sessionId?, pageContext? }<br/><i>coachType ∈ mental|tournament|technical — back-compat, lente inicial</i>"]
+    end
+
+    subgraph builder["coachSystemBuilder.ts — buildSystemArray(coachType, staticInputs, dynamicInputs)"]
+        direction TB
+
+        subgraph staticBlk["Bloco STATIC — array com cache_control: { type: 'ephemeral' } — IDÊNTICO p/ todo coachType"]
+            direction TB
+            s1["1. GRINDFY_AI_BASE<br/><i>NOVO — agente único; ~150-250 tok; tom de par/companheiro de grind;<br/>cobre mental + selection + técnico + bankroll + estudos;<br/>usa tools p/ detalhe; cita fonte. SEM 'você é o Coach X'.</i>"]
+            s2["2. SAFETY_RULES<br/><i>coachSafetyPrompts.ts — inalterado</i>"]
+            s3["3. SAFETY_RULES_COMPETITOR_BLOCK<br/><i>hard-block concorrentes — ADR-075 — inalterado</i>"]
+            s4["4. CITATIONS_RULES<br/><i>reforçado AI-0A/ADR-147 — fonte única; só ajusta exemplos few-shot que citem 'Coach X'</i>"]
+            s5["5. CONFIDENCE_RULES<br/><i>fonte única — inalterado</i>"]
+            s6["6. Perfil do jogador<br/><i>inputs.userProfile (nome, plano, criado em, total torneios) — se presente</i>"]
+            s7["7. Perfil — memória longo prazo<br/><i>inputs.aiProfile — se presente</i>"]
+            s8["8. Stats snapshot<br/><i>inputs.statsSnapshot (ROI, profit, volume, ABI) — se presente</i>"]
+            s9["9. Resumo da sessão anterior<br/><i>inputs.lastSummary — se presente</i>"]
+            s1 --> s2 --> s3 --> s4 --> s5 --> s6 --> s7 --> s8 --> s9
+        end
+
+        subgraph dynBlk["Bloco DYNAMIC — SEM cache_control — reescrito a cada request"]
+            direction TB
+            d0{"0. Linha de LENTE INICIAL<br/><b>ÚNICA coisa que varia com coachType</b><br/>mental → 'lente inicial: mental game...'<br/>tournament → 'lente inicial: seleção de torneios e grade...'<br/>technical → 'lente inicial: análise técnica e leaks...'<br/><i>+ 'pode e deve falar de qualquer assunto se a conversa pedir'</i>"}
+            d1["1. Sessão de Grind Ativa<br/><i>inputs.activeGrind — se há dado — inalterado</i>"]
+            d2["2. Break Feedbacks recentes<br/><i>inputs.breakFeedbacks — se há dado — inalterado</i>"]
+            d3["3. Leaks Detectados<br/><i>inputs.leaks — se há dado — inalterado</i>"]
+            d4["4. Plano Semanal Atual<br/><i>inputs.weeklyPlan — se há dado — <b>MUDANÇA: não mais gated por coachType==='tournament'</b></i>"]
+            d5["5. Progresso de Estudo<br/><i>inputs.studyProgress — se há dado — <b>MUDANÇA: não mais gated por coachType==='technical'</b></i>"]
+            d6["6. Contexto da página atual<br/><i>buildPageContextSection(inputs.pageContext) — <b>MUDANÇA: passa a ser de fato fornecido (ADR-149)</b></i>"]
+            d0 --> d1 --> d2 --> d3 --> d4 --> d5 --> d6
+        end
+    end
+
+    subgraph out["system: SystemBlock[] | string"]
+        arr["COACH_PROMPT_CACHE_ENABLED != 'false' → [ STATIC (cache_control), DYNAMIC ]<br/>=== 'false' → string concatenada STATIC+DYNAMIC (fallback legacy)"]
+    end
+
+    anthropic["Anthropic API — Claude Sonnet 4.6 (COACH_CHAT_MODEL)<br/><i>cache write na 1ª msg da sessão; cache read nas seguintes (5 min TTL)<br/>1 cache key estável p/ todo coachType (era 3)</i>"]
+
+    body --> builder
+    staticBlk --> arr
+    dynBlk --> arr
+    arr --> anthropic
+
+    note1["⚠️ A re-estruturação do STATIC (GRINDFY_AI_BASE substitui MENTAL/TOURNAMENT/TECHNICAL_BASE)<br/>quebra o cache key da Anthropic UMA vez quando for pra produção. Aceito — quebra única, planejada (lesson #10).<br/>O AI-0A já quebrou (RF-14); fazer tudo num PR."]
+    note2["REMOVIDOS: MENTAL_BASE / TOURNAMENT_BASE / TECHNICAL_BASE / getBasePrompt(coachType)<br/>+ getMentalPrompt / getTournamentPrompt / getTechnicalPrompt (coachPrompts.ts)<br/>+ (recomendado) dead-code systemParts em coachContext.ts"]
+
+    note1 -.-> staticBlk
+    note2 -.-> builder

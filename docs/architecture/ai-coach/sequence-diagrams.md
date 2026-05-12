@@ -1,5 +1,7 @@
 # AI Coach — Sequence Diagrams
 
+> ⚠️ **PARCIALMENTE SUPERSEDED (2026-05-12, Sprint AI-0B / ADR-148/149).** O diagrama "Envio de Mensagem" abaixo mostra `getXxxPrompt(coachType)` selecionado por coach + queries de stats "por coachType". Após o Sprint AI-0B: system prompt **único** (`GRINDFY_AI_BASE`), contexto **completo** (sem gate por `coachType`), `coachType` = lente inicial (uma linha no bloco DYNAMIC), page context **plugado de fato** no `/api/coach/chat`. Fluxos atuais: **`Docs/architecture/diagrams/coach-ai-0b/system-prompt-structure.mermaid`** + **`page-context-flow.mermaid`**. Os diagramas de compactação/memória abaixo permanecem válidos (memória compartilhada de um agente só). Mantido como registro histórico.
+
 Diagramas de sequencia dos 3 fluxos principais do sistema de AI Coach.
 
 ---
