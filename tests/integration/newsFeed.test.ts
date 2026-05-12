@@ -154,12 +154,15 @@ describe('GET /api/news/feed — happy path', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.enabled).toBe(true);
     expect(Array.isArray(res.body.items)).toBe(true);
-    expect(res.body.items.length).toBeLessThanOrEqual(10);
+    expect(res.body.items.length).toBeGreaterThan(0);
+    // Cap do feed virou 200 (ADR-110, era 10) — aqui so garantimos que ranqueou
+    // e que respeita o teto.
+    expect(res.body.items.length).toBeLessThanOrEqual(200);
     expect(res.body.cachedAt).toBeDefined();
     expect(res.body.nextRefreshAt).toBeDefined();
   });
 
-  it('truncates a 10 mesmo com 50+ items elegiveis', async () => {
+  it('respeita o cap do feed (200) — 50 items elegiveis passam todos', async () => {
     process.env.NEWS_FEED_ENABLED = 'true';
     storage.getUserNewsPreferencesPayload.mockResolvedValue({
       preferences: [
@@ -190,7 +193,8 @@ describe('GET /api/news/feed — happy path', () => {
     const res = makeRes();
     await (handleGetNewsFeed as any)(req, res);
 
-    expect(res.body.items.length).toBe(10);
+    expect(res.body.items.length).toBe(50);
+    expect(res.body.items.length).toBeLessThanOrEqual(200);
   });
 
   it('usuario sem prefs habilitadas => enabled:false items:[]', async () => {

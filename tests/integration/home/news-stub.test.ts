@@ -15,6 +15,17 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// /api/news evoluiu do stub Onda-1 para a implementacao real (News-3): quando a
+// flag esta ON ele consulta preferencias + items no storage. Os testes abaixo
+// continuam validando flag + shape da resposta; com prefs vazias o resultado e
+// `{ enabled: true, items: [] }`, igual ao stub.
+vi.mock('../../../server/storage', () => ({
+  storage: {
+    getUserNewsPreference: vi.fn().mockResolvedValue(null),
+    listNewsItems: vi.fn().mockResolvedValue([]),
+  },
+}));
+
 import {
   handleGetNews,
   fetchNewsItems,
@@ -87,13 +98,13 @@ describe('GET /api/news — flag NEWS_FEED_ENABLED', () => {
     expect(res.body.items).toEqual([]);
   });
 
-  it('flag NEWS_FEED_ENABLED=true => enabled=true, items=[] (Onda 1 stub)', async () => {
+  it('flag NEWS_FEED_ENABLED=true => enabled=true, items=[] (prefs vazias)', async () => {
     process.env.NEWS_FEED_ENABLED = 'true';
     const req = makeReq();
     const res = makeRes();
     await handleGetNews(req, res);
     expect(res.body.enabled).toBe(true);
-    expect(res.body.items).toEqual([]); // Onda 1 sem provider real
+    expect(res.body.items).toEqual([]); // sem prefs habilitadas => sem items
   });
 
   it('flag truthy somente "true" ou "1" — outros valores => false (defensivo)', async () => {
@@ -152,13 +163,14 @@ describe('fetchNewsItems — Onda 1 stub', () => {
 // =============================================================================
 
 describe('GET /api/news — Cache-Control headers', () => {
-  it('seta Cache-Control: private, max-age=300 (5min)', async () => {
+  it('seta Cache-Control: private, max-age=60', async () => {
+    process.env.NEWS_FEED_ENABLED = 'true';
     const req = makeReq();
     const res = makeRes();
     await handleGetNews(req, res);
     const header = res.headers['cache-control'];
     expect(header).toBeDefined();
     expect(String(header)).toMatch(/private/i);
-    expect(String(header)).toMatch(/max-age=300/);
+    expect(String(header)).toMatch(/max-age=60/);
   });
 });

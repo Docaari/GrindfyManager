@@ -49,13 +49,22 @@ afterEach(() => {
 });
 
 describe('rankNewsFeed — RF-B2 ranking puro', () => {
-  it('retorna no maximo 10 items mesmo com 100 elegiveis', async () => {
-    const { rankNewsFeed } = await import('../../server/services/newsRanking');
-    const items = Array.from({ length: 100 }).map((_, i) =>
+  it('trunca para MAX_FEED_ITEMS quando ha mais elegiveis (cap foi 10 -> 200, ADR-110)', async () => {
+    const mod = await import('../../server/services/newsRanking');
+    const cap = mod._internal.MAX_FEED_ITEMS;
+    const items = Array.from({ length: cap + 50 }).map((_, i) =>
       mkItem({ id: `it-${i}`, engagement: { likes: i, views: i * 10, comments: 0 } }),
     );
-    const out = rankNewsFeed(items);
-    expect(out.length).toBe(10);
+    const out = mod.rankNewsFeed(items);
+    expect(out.length).toBe(cap);
+  });
+
+  it('com poucos items (<=cap) retorna todos', async () => {
+    const { rankNewsFeed } = await import('../../server/services/newsRanking');
+    const items = Array.from({ length: 12 }).map((_, i) =>
+      mkItem({ id: `it-${i}`, engagement: { likes: i, views: i * 10, comments: 0 } }),
+    );
+    expect(rankNewsFeed(items).length).toBe(12);
   });
 
   it('items vazios retornam []', async () => {
@@ -119,10 +128,11 @@ describe('rankNewsFeed — RF-B2 ranking puro', () => {
     expect(out[0].id).toBe('ancient-but-viral');
   });
 
-  it('tiebreak por NEWS_CATEGORY_PRIORITY: tools > sites > studies > tournament-results > gossip', async () => {
+  it('tiebreak por NEWS_CATEGORY_PRIORITY: studies > tools > sites > tournament-results > gossip', async () => {
     const { rankNewsFeed } = await import('../../server/services/newsRanking');
     const sameTime = new Date(NOW - 3600 * 1000).toISOString();
-    // todos com mesmo engagement e mesma recencia -> mesmo score, tiebreak por categoria
+    // todos com mesmo engagement e mesma recencia -> mesmo score, tiebreak por categoria.
+    // studies vence sempre (pin explicito); o resto segue NEWS_CATEGORY_PRIORITY.
     const sources: NewsSource[] = ['gossip', 'tournament-results', 'studies', 'sites', 'tools'];
     const items: NewsItem[] = sources.map((s) =>
       mkItem({
@@ -134,9 +144,9 @@ describe('rankNewsFeed — RF-B2 ranking puro', () => {
     );
     const out = rankNewsFeed(items);
     expect(out.map((i) => i.source)).toEqual([
+      'studies',
       'tools',
       'sites',
-      'studies',
       'tournament-results',
       'gossip',
     ]);

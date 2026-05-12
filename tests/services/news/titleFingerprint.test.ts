@@ -96,13 +96,15 @@ describe('titleFingerprint (RF-03)', () => {
   it('top 10 tokens — ignora tokens 11+', async () => {
     // RF-03 AC: top 10 truncate
     const { titleFingerprint } = await import('../../../server/services/news/titleFingerprint');
-    // Construir titulo com >10 tokens uteis depois do sort. Vamos garantir
-    // que adicionar tokens APENAS depois do 10o nao mudam o hash.
-    // Tokens depois do sort + top10 = primeiros 10 alfabeticos.
+    // Pipeline ordena alfabeticamente (passo 6) e fica com top 10 (passo 7).
+    // Base sorted = [alfa, beta, delta, epsilon, eta, gamma, iota, kappa, theta, zeta]
+    // — o 10o (ultimo no top 10) e 'zeta'. Para o hash nao mudar, os tokens
+    // extras precisam sortar DEPOIS de 'zeta' (senao empurram theta/zeta pra fora
+    // do top 10). 'zoo' < 'zulu' < 'zzz' e todos > 'zeta'. (lesson #25 — a versao
+    // antiga usava lambda/mu/nu, que sortam entre kappa e theta.)
     const baseTokens = ['alfa', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa'];
     const a = titleFingerprint(baseTokens.join(' '));
-    // Adiciona tokens que vem DEPOIS de 'kappa' alfabeticamente: 'lambda', 'mu', 'nu'.
-    const b = titleFingerprint([...baseTokens, 'lambda', 'mu', 'nu'].join(' '));
+    const b = titleFingerprint([...baseTokens, 'zoo', 'zulu', 'zzz'].join(' '));
     expect(a).toBe(b);
   });
 

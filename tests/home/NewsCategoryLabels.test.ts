@@ -62,10 +62,12 @@ describe('shared/types/news — SECTION_LABELS NAO existe mais (RF-B7)', () => {
 describe('shared/types/news — NEWS_CATEGORY_PRIORITY (RF-B6)', () => {
   it('exporta NEWS_CATEGORY_PRIORITY na ordem correta', async () => {
     const { NEWS_CATEGORY_PRIORITY } = (await import('@shared/types/news')) as any;
+    // studies tem prioridade maxima (mudanca pos-ADR-110): conteudo de estudo
+    // aparece primeiro no feed.
     expect(NEWS_CATEGORY_PRIORITY).toEqual([
+      'studies',
       'tools',
       'sites',
-      'studies',
       'tournament-results',
       'gossip',
     ]);
