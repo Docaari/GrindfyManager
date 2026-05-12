@@ -69,11 +69,12 @@ function wrap(ui: React.ReactNode) {
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
 }
 
-// Lazy load via require()/import dentro de cada test pra tolerar red-phase
-// (sem o componente, vite-import-analysis no top-level mata o suite inteiro).
+// Lazy load via dynamic import dentro de cada test. NAO usar require() — o
+// runtime do Vitest 4 nao passa require() sincrono pelo Vite transform/alias
+// pipeline, entao `@/lib` etc. nao resolvem (lesson #14/#26). `await import()`
+// com o alias `@/` resolve normalmente.
 async function loadPanel() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const mod: any = require('../../../../client/src/components/settings/FxRatesPanel');
+  const mod: any = await import('@/components/settings/FxRatesPanel');
   return mod.FxRatesPanel ?? mod.default;
 }
 
