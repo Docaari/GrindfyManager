@@ -6,6 +6,7 @@ import type { Express } from "express";
 import { requireAuth } from "../auth";
 import { nanoid } from "nanoid";
 import { db } from "../db";
+import { registerCoachAi1bRoutes } from "./coachAi1b";
 import {
   chatSessions,
   chatMessages,
@@ -1059,6 +1060,8 @@ export function registerCoachRoutes(app: Express): void {
   app.post('/api/admin/coach/freeze-category', requireAuth, async (req: any, res: any) => {
     await handleAdminFreezeCategory(req, res);
   });
+  // Sprint AI-1B — timeline / reports / suggestions.
+  registerCoachAi1bRoutes(app, requireAuth);
 }
 
 // =============================================================================
@@ -1096,6 +1099,10 @@ function buildPrefsResponse(prefs: any, timezone: string) {
     frozenCategories: (prefs.frozenCategories && typeof prefs.frozenCategories === 'object')
       ? prefs.frozenCategories
       : {},
+    // Sprint AI-1B (ADR-155/157) — opt-in do Weekly Report + toggles novos.
+    reportWeeklyEnabled: prefs.reportWeeklyEnabled ?? false,
+    nudgeBGapcheck: prefs.nudgeBGapcheck ?? true,
+    nudgeBImport: prefs.nudgeBImport ?? true,
     updatedAt: prefs.updatedAt
       ? (prefs.updatedAt instanceof Date
           ? prefs.updatedAt.toISOString()

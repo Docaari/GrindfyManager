@@ -1,0 +1,50 @@
+%% Sprint AI-1B — gap-check D-3 (B-GAPCHECK) + B-IMPORT: cron tick -> check de estado REAL -> shouldSendNudge (anti-fadiga AI-1A) -> coach_nudge_log
+%% Ver ADR-157. Spec Docs/specs/sprint-ai-1b.md RF-10/11.
+
+flowchart TD
+    %% ===================== B-GAPCHECK (D-3 pre-Weekly) =====================
+    cronG["cron 0 * * * * (hourly)<br/>gapCheckTick({ now }) — filtra hora local util (ex 10h ou 18h)"] --> killG{"COACH_NUDGES_ENABLED === 'false'?"}
+    killG -->|"sim"| stopG["return cedo (ou o engine nega tudo no check 0)"]
+    killG -->|"nao"| lockG["withAdvisoryLock('cron:coach-gap-check', ...)"]
+    lockG --> listG["storage.listUsersForCron(\"subscription_plan IN ('pro','premium')\")<br/>(gap-check so pra quem VAI receber o Weekly Report)"]
+    listG --> loopG{"para cada user"}
+    loopG --> eligG{"isWeeklyReportEligible(user)?<br/>(Pro+ AND prefs.reportWeeklyEnabled)"}
+    eligG -->|"nao"| nextG["proximo user"]
+    eligG -->|"sim"| d3{"hoje e o dia D-3 no fuso do user<br/>(report = segunda 7h → D-3 = sexta dessa semana de jogo)<br/>E getLocalHour(now, tz) === hora util?"}
+    d3 -->|"nao"| nextG
+    d3 -->|"sim"| stateChk["CHECK DE ESTADO REAL (faz as queries AGORA — NUNCA flag stale, lesson #9 / risco R5):<br/>• nao importou historico essa semana E tem sessoes registradas? ('jogando no escuro')<br/>• sessoes grind_sessions da semana sem reconciliacao / sem report manual?<br/>• snapshot de bankroll pendente?<br/>• 0min de estudo registrado E tem foco ativo?<br/>• escolheu foco mas nao atualizou stats (HUD)?"]
+    stateChk --> anyGap{"ALGUM item faltante?"}
+    anyGap -->|"nao (tudo OK)"| noSend["NAO manda nada — nao cobra quem esta OK (risco R5)"]
+    noSend --> nextG
+    anyGap -->|"sim"| cycleG["cycleKey = YYYY-WW (ISO week da semana do report)"]
+    cycleG --> ssnG["shouldSendNudge(userId, { category: 'B-GAPCHECK', cycleKey, now })<br/>cadeia: kill switch → toggle nudgeBGapcheck → categoria congelada (auto-freeze cobre) → snooze → quiet hours → daily/hourly cap → one-shot per cycle"]
+    ssnG --> allowG{"decision.allow?"}
+    allowG -->|"nao (category_disabled / category_frozen / quiet_hours / already_sent_this_cycle / ...)"| nextG
+    allowG -->|"sim"| logG["createNudgeLog({ category:'B-GAPCHECK', status:'sent', triggeredByEvent:'gap_check_d3', cycleKey, bodyPreview, chatSessionId? })<br/>nudge gentil: 'Vi que talvez esteja faltando alguns dados pro seu relatorio de segunda: [...] — se voce ja fez por outro caminho, ignora.'<br/>links: /upload, /grind, /bankroll, /estudos, /stats"]
+    logG --> nextG
+    nextG --> loopG
+
+    %% ===================== B-IMPORT (cobranca de import standalone) =====================
+    cronI["cron 0 * * * * (hourly)<br/>bImportTick({ now }) — filtra hora local (padrao processBStudy: getLocalHour === targetLocalHour)"] --> killI{"COACH_NUDGES_ENABLED === 'false'?"}
+    killI -->|"sim"| stopI["return cedo (ou engine nega no check 0)"]
+    killI -->|"nao"| lockI["withAdvisoryLock('cron:coach-b-import', ...)"]
+    lockI --> listI["storage.listUsersForCron(\"subscription_plan IN ('pro','premium')\")<br/>(consistente com B-STUDY; founder pode incluir Free depois — criterio min Pro+)"]
+    listI --> loopI{"para cada user"}
+    loopI --> hourI{"getLocalHour(now, user.timezone) === targetLocalHour?"}
+    hourI -->|"nao"| nextI["proximo user"]
+    hourI -->|"sim"| lastImp["lastImportAt = storage.getLastUploadAt(userId) (max de upload_history)<br/>N = COACH_BIMPORT_DAYS env (default 5)"]
+    lastImp --> recentImp{"now - lastImportAt < N dias? (ou nunca importou E sem sessoes)"}
+    recentImp -->|"sim"| nextI
+    recentImp -->|"nao"| sessChk["sessionsInPeriod = storage.countGrindSessionsSince(userId, lastImportAt ?? now-Ndias)"]
+    sessChk --> hasSess{"sessionsInPeriod > 0? ('esta jogando')"}
+    hasSess -->|"nao (nao esta jogando)"| nextI["NAO manda nada"]
+    hasSess -->|"sim"| cycleI["cycleKey = YYYY-WW (ISO week)"]
+    cycleI --> ssnI["shouldSendNudge(userId, { category: 'B-IMPORT', cycleKey, now })<br/>mesma cadeia de checks; auto-freeze cobre B-IMPORT"]
+    ssnI --> allowI{"decision.allow?"}
+    allowI -->|"nao"| nextI
+    allowI -->|"sim"| logI["createNudgeLog({ category:'B-IMPORT', status:'sent', triggeredByEvent:'b_import_check', cycleKey, bodyPreview, chatSessionId? })<br/>nudge gentil: 'Voce registrou N sessoes nas ultimas semanas mas nao importou nenhum CSV — estou meio cego sobre seus resultados reais. Bora importar?'<br/>link: /upload — 1x/semana"]
+    logI --> nextI
+    nextI --> loopI
+
+    %% B-GAPCHECK e B-IMPORT sao categorias DISTINTAS — um user pode receber os dois na mesma semana
+    %% (sujeito aos caps diario/horario do anti-fadiga). Nenhuma logica que confunda os dois.

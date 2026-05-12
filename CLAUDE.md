@@ -81,7 +81,8 @@ Arquivo `.env` na raiz (no `.gitignore`).
 - `STRIPE_SECRET_KEY` — pagamentos
 - `ANTHROPIC_API_KEY` — Coach AI
 - `COACH_MODEL` — override do modelo Claude (ADR-021)
-- `COACH_NUDGES_ENABLED` — kill switch global da proatividade do Coach. Default `true`/ausente (proatividade ON — a infra de nudge ja roda em prod via cronRunner). `=false` desliga **toda** a proatividade: `shouldSendNudge` retorna `nudges_globally_disabled` (check 0, absoluto — nem `isCritical` bypassa) + o `cronRunner` nao registra os schedules de B-SNAPSHOT, B-STUDY e `generateCoachRecommendations` (o cleanup de pending coach_actions continua sempre). Ver ADR-152.
+- `COACH_NUDGES_ENABLED` — kill switch global da proatividade do Coach. Default `true`/ausente (proatividade ON — a infra de nudge ja roda em prod via cronRunner). `=false` desliga **toda** a proatividade: `shouldSendNudge` retorna `nudges_globally_disabled` (check 0, absoluto — nem `isCritical` bypassa) + o `cronRunner` nao registra os schedules de B-SNAPSHOT, B-STUDY (`generateCoachRecommendations` foi aposentado — ADR-156) + **tambem desliga o report job runner** (enqueuer hourly + processor 15min do Weekly Report) e os ticks de gap-check (`B-GAPCHECK`) / B-IMPORT (`B-IMPORT`) — relatorios contam como "proatividade" (sem flag nova; o user ja controla via o opt-in `report_weekly_enabled`). Jobs ja enfileirados ficam parados enquanto a flag esta off; quando volta, o processor pega os atrasados. O cleanup de pending coach_actions continua sempre. Ver ADR-152 + ADR-155/157.
+- `COACH_BIMPORT_DAYS` — (opcional) threshold de dias do nudge `B-IMPORT` ("nao importou ha N dias + tem sessoes registradas → cobra import"). Default `5`. Ver ADR-157.
 - `SPOT_IMAGE_STORAGE_BACKEND` — backend de armazenamento de spots (default `local`; `s3` reservado para deploy futuro). Ver ADR-057.
 - `NEWS_FEED_ENABLED` — master kill-switch do news feed (default `false`). Quando `true`, ativa endpoints `/api/news` e cron `refreshNews`. Ver ADR-100 + ADR-106.
 - `XAI_API_KEY` — chave xAI Grok (obtida em console.x.ai). Obrigatoria se `NEWS_FEED_ENABLED=true`. Ver ADR-106.
@@ -109,6 +110,8 @@ Schema em `shared/schema.ts`. **Indice completo de tabelas + convencoes:** `Docs
 
 **Tabelas core (memorize):** `users`, `tournaments`, `planned_tournaments`, `grind_sessions`, `session_tournaments`, `wallets`, `wallet_transactions`, `bankroll_snapshots`, `coach_conversations`, `coach_messages`.
 
+**Coach AI — relatorios automaticos (AI-1B, migracao 0067):** `report_jobs` (fila de jobs de relatorio — status `pending`→`running`→`done`/`failed`/`skipped`, retry exponencial via `next_attempt_at`, snapshot de `timezone`/plano, UNIQUE `(user_id, report_type, period_start)`) + `reports` (relatorios gerados — `content` JSONB `ReportContent` + `markdown` derivado + custo/tokens, status `ready`/`degraded`, UNIQUE `(user_id, report_type, period_start)`). Colunas novas em `user_coach_preferences`: `report_weekly_enabled` (opt-in Weekly Report, so Pro+), `nudge_b_gapcheck` + `nudge_b_import` (toggles das categorias de nudge novas). `coach_lesson_recommendations` e `study_weekly_plans` continuam preenchidas — agora pelo gerador do Weekly Report (chaves de semana mantidas — ADR-156). Ver `Docs/architecture/data-model-index.md` §"Schema Delta — Sprint AI-1B" + ADR-155/156/157.
+
 ### 6.1 Regra de fonte do historico (`tournaments` vs `session_tournaments`)
 
 **`tournaments` = historico do jogador (dashboard / analytics / library).**
@@ -134,6 +137,8 @@ Diagramas: `Docs/architecture/data-model.mermaid`, `bankroll-index.md`, `addon-r
 **Documentacao detalhada por endpoint:** `Docs/api/endpoints.md` + `coach.md`, `coach-tools.md`, `bankroll.md`, `wallets.md`.
 
 **Principais grupos:** auth, dashboard/analytics, tournaments, tournament-library, planned-tournaments + weekly-plans, grind-sessions, upload-history, study-*, calendar-*, admin/*, subscription/*, notifications, bankroll/wallets, tournament-selector, coach, bug-reports.
+
+**Coach AI — endpoints novos (AI-1B):** `GET /api/coach/timeline` (merge `reports` + `coach_nudge_log`, paginada), `GET /api/coach/reports/:id` (le um relatorio — `content` + `markdown`, marca `read_at`), `GET /api/coach/suggestions` (quick suggestions contextuais por rota — nao-LLM), `POST /api/coach/reports/:id/dismiss` (opcional). `GET/PUT /api/coach/preferences` estendidos (`reportWeeklyEnabled`, `nudgeBGapcheck`, `nudgeBImport`). Rota frontend nova `/coach-ai/relatorio/:id` (`WeeklyReportView`). Ver `Docs/api/coach.md` §"Sprint AI-1B".
 
 ---
 
@@ -236,10 +241,13 @@ Catalogo completo em `Docs/architecture/lessons-learned.md`. **Consultar antes d
 
 **Em foco (2026-04-24+):** Tournament Selector (Sprint 1+2) + Bankroll Management (Sprint 1, 2, 2.1, 3). Sprints 3 e 4 originais cancelados — ver `memory/roadmap_pivot_2026-04-24.md`.
 
+**Crons aposentados (AI-1B, ADR-156):** `generateCoachRecommendations` (segunda 6h BRT) e `generateWeeklyStudyPlan` (segunda 9h UTC) tiveram o **agendamento desligado** — absorvidos pelo Weekly Report. As tabelas `coach_lesson_recommendations` e `study_weekly_plans` continuam preenchidas pelo gerador do report (chaves de semana mantidas — BRT pra rec, UTC pro plano — back-compat com `/inicio` cards + `StudyWeeklyPlanCard`). Trade-off: Free perde a rec de lesson automatica semanal (rec via chat / tool `recommend_lesson` on-demand; follow-up "cron leve pra todos" documentado se inaceitavel).
+
 **Pendencias tecnicas conhecidas:**
 - `0.0.0.0` hardcoded no server (baixa prioridade).
 - Endpoints `/api/test/*` pendentes de remocao em producao.
 - Adicionar MSW para testes de integracao do Coach (CSRF, refresh, redirect 401).
+- AI-1C (futuro): Daily Debrief + Monthly Report + gap-check mensal → revisitar o opt-in (`report_weekly_enabled` vira multi-tipo) + a sumarizacao hierarquica Haiku→Sonnet completa.
 
 **Issues resolvidas:** ver git log + `Docs/specs/` (specs por sprint). Cleanup historico de Replit em commits de 2026-03-19/20.
 

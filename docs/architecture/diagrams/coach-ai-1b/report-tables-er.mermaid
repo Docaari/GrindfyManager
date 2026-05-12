@@ -1,0 +1,102 @@
+%% Sprint AI-1B — ER delta sobre o ER de coach: report_jobs (NOVA) + reports (NOVA) + colunas novas em user_coach_preferences
+%% Tabelas inalteradas (coach_nudge_log, coach_lesson_recommendations, study_weekly_plans, users) incluidas para contexto.
+%% Migracao 0067. Ver ADR-155/156/157. Spec Docs/specs/sprint-ai-1b.md RF-01/02/04/07.
+
+erDiagram
+    users {
+        varchar user_platform_id PK "USER-XXXX"
+        varchar timezone "IANA tz (fallback America/Sao_Paulo)"
+        varchar subscription_plan "free | pro | premium"
+        jsonb ai_structured_profile "AI-1A (ADR-151) — tomPreferido, nivel, focoDoMes, ..."
+    }
+
+    report_jobs {
+        varchar id PK "nanoid() — varchar(21)"
+        varchar user_id FK "→ users.user_platform_id ON DELETE CASCADE"
+        varchar report_type "weekly (monthly/daily/quarterly reservados)"
+        date period_start "segunda da semana coberta, no fuso do user"
+        date period_end "domingo dessa semana (= period_start + 6d)"
+        timestamptz scheduled_for "instante UTC do processamento (= segunda 07:00 no fuso do user)"
+        varchar status "pending → running → done | failed | skipped (default pending)"
+        integer attempts "default 0 — incrementado por tentativa"
+        integer max_attempts "default 3 — atingido → fail-soft, job vira done (nao failed)"
+        timestamptz next_attempt_at "nullable — backoff: now + 15min/1h/4h"
+        varchar timezone "nullable — snapshot de users.timezone no enfileiramento"
+        varchar subscription_plan_at_enqueue "nullable — snapshot do plano (auditoria; elegibilidade revalidada no processamento)"
+        varchar report_id FK "nullable → reports.id ON DELETE SET NULL"
+        text last_error "nullable — ultimo erro (truncado ~1000) — logar antes (lesson #9)"
+        varchar enqueued_by "nullable — cron_enqueuer | manual | backfill"
+        timestamptz created_at "default now"
+        timestamptz updated_at "default now"
+    }
+
+    reports {
+        varchar id PK "nanoid() — varchar(21)"
+        varchar user_id FK "→ users.user_platform_id ON DELETE CASCADE"
+        varchar report_type "weekly"
+        date period_start
+        date period_end
+        varchar status "ready (com prosa) | degraded (fail-soft — so numeros) — default ready"
+        jsonb content "ReportContent (RF-05.4) — schemaVersion, sections[5], insights[3], nextWeekPlan, cta[], generation — default '{}'"
+        text markdown "nullable — render markdown derivado de content (recomendado gerar e gravar)"
+        varchar model_used "nullable — ex claude-sonnet-4-6 (null quando degraded)"
+        varchar summarizer_model_used "nullable — ex claude-haiku-4-5 quando houve sumarizacao de contexto"
+        numeric cost_usd_estimate "nullable — ~$0.045/weekly; 0 quando degraded/low data"
+        integer input_tokens "nullable"
+        integer cache_creation_input_tokens "nullable"
+        integer cache_read_input_tokens "nullable"
+        integer output_tokens "nullable"
+        varchar degraded_reason "nullable — llm_failed_3x | no_anthropic_key | insufficient_data"
+        timestamptz read_at "nullable — quando o user abriu (GET /api/coach/reports/:id)"
+        timestamptz dismissed_at "nullable — quando arquivou o card na timeline"
+        timestamptz generated_at "default now"
+        timestamptz created_at "default now"
+    }
+
+    user_coach_preferences {
+        varchar id PK
+        varchar user_id FK "→ users.user_platform_id (UNIQUE)"
+        boolean report_weekly_enabled "NOVA — opt-in do Weekly Report — NOT NULL DEFAULT false"
+        boolean nudge_b_gapcheck "NOVA — toggle categoria B-GAPCHECK — NOT NULL DEFAULT true"
+        boolean nudge_b_import "NOVA — toggle categoria B-IMPORT — NOT NULL DEFAULT true"
+        boolean nudge_b_snapshot "existente"
+        boolean nudge_b_study "existente"
+        jsonb frozen_categories "AI-1A (ADR-152) — { [category]: { frozenAt, reason, ... } } — agora cobre B-GAPCHECK / B-IMPORT"
+        varchar coach_tone "existente — gentle | balanced | direct"
+    }
+
+    coach_nudge_log {
+        varchar id PK
+        varchar user_id FK "→ users.user_platform_id"
+        varchar category "AI-1A — agora aceita B-GAPCHECK / B-IMPORT (sem coluna nova)"
+        varchar status "sent | engaged | dismissed | snoozed | unsubscribed"
+        varchar cycle_key "YYYY-WW (ISO week) — one-shot per cycle"
+        varchar triggered_by_event "AI-1B — gap_check_d3 | b_import_check (alem dos existentes)"
+        varchar chat_session_id "nullable"
+        text body_preview
+        timestamptz snooze_until "nullable"
+        timestamptz sent_at
+    }
+
+    coach_lesson_recommendations {
+        varchar id PK
+        varchar user_id FK "→ users.user_platform_id"
+        date week_start_date "AI-1B: continua preenchida pelo gerador do Weekly Report — chave = getCurrentWeekStartBRT() (back-compat /inicio)"
+        varchar lesson_id
+        text reason
+    }
+
+    study_weekly_plans {
+        varchar id PK
+        varchar user_id FK "→ users.user_platform_id"
+        date week_start_date "AI-1B: continua preenchida pelo gerador do Weekly Report — chave = utcMondayOfWeek (back-compat StudyWeeklyPlanCard)"
+        varchar source "coach_auto"
+    }
+
+    users                       ||--o{ report_jobs : "tem jobs de relatorio"
+    users                       ||--o{ reports : "tem relatorios gerados"
+    users                       ||--o| user_coach_preferences : "tem 1 preferencia"
+    users                       ||--o{ coach_nudge_log : "tem nudges"
+    users                       ||--o{ coach_lesson_recommendations : "tem recs de lesson"
+    users                       ||--o{ study_weekly_plans : "tem planos semanais"
+    report_jobs                 ||--o| reports : "gera (report_id) — 1 job → 0..1 report"

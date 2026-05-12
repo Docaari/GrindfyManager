@@ -50,6 +50,7 @@ import {
   Settings,
   Sparkles,
 } from 'lucide-react';
+import { useLocation } from 'wouter';
 import { useCoachChat, type CoachType, type ChatMessage } from '@/hooks/useCoachChat';
 import { useCoachPageContext } from '@/hooks/useCoachPageContext';
 import { useTabFromUrl } from '@/hooks/useTabFromUrl';
@@ -59,6 +60,9 @@ import {
 } from '@/components/coach/CoachLessonRecommendationCard';
 // Sprint AI-1A follow-up (RF-07): banner de onboarding no topo da aba Chat.
 import OnboardingBanner from '@/components/coach/OnboardingBanner';
+// Sprint AI-1B — timeline (reports + nudges) + quick suggestions anti-blank-page.
+import NudgeCard from '@/components/coach/NudgeCard';
+import { getFallbackSuggestions } from '@/lib/quickSuggestionsFallback';
 
 const HUB_TABS = ['chat', 'reports', 'audit', 'prefs'] as const;
 type HubTab = (typeof HUB_TABS)[number];
@@ -276,6 +280,49 @@ function SessionSidebar({
 }
 
 // -----------------------------------------------------------------------------
+// Quick suggestions anti-blank-page (Sprint AI-1B / RF-12, ADR-158)
+// -----------------------------------------------------------------------------
+type QuickSuggestion = { id: string; text: string; sendOnClick?: boolean };
+
+function QuickSuggestionChips({ route, onPick }: { route: string; onPick: (text: string) => void }) {
+  const { data, isLoading } = useQuery<{ suggestions?: QuickSuggestion[] } | null>({
+    queryKey: ['/api/coach/suggestions', route],
+    queryFn: async () => {
+      try {
+        return await apiRequest('GET', `/api/coach/suggestions?route=${encodeURIComponent(route)}`);
+      } catch {
+        return null; // fallback estatico abaixo
+      }
+    },
+    retry: false,
+  });
+
+  if (isLoading) return null; // espera o endpoint settle antes de mostrar (evita flash de fallback)
+
+  const suggestions: QuickSuggestion[] =
+    (data && Array.isArray((data as any).suggestions) && (data as any).suggestions.length > 0)
+      ? (data as any).suggestions
+      : (getFallbackSuggestions(route) as any);
+
+  if (!suggestions || suggestions.length === 0) return null;
+  return (
+    <div data-testid="coach-quick-suggestions" className="flex flex-wrap justify-center gap-2 mt-4">
+      {suggestions.slice(0, 4).map((s) => (
+        <button
+          key={s.id}
+          type="button"
+          data-testid="coach-quick-suggestion-chip"
+          onClick={() => onPick(s.text)}
+          className="rounded-full border border-gray-700 px-3 py-1 text-xs text-gray-300 hover:bg-gray-800"
+        >
+          {s.text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
 // Chat panel — agente unico + chips de lente + sidebar de sessoes
 // -----------------------------------------------------------------------------
 function ChatPanel() {
@@ -386,6 +433,10 @@ function ChatPanel() {
                 Pergunte qualquer coisa sobre seu jogo, sua banca, sua grade ou seu mental.
                 O Grindfy AI ve seus dados e usa ferramentas para o detalhe.
               </p>
+              <QuickSuggestionChips
+                route="/coach-ai"
+                onPick={(text) => { setInputValue(text); textareaRef.current?.focus(); }}
+              />
             </div>
           ) : (
             <div className="max-w-3xl mx-auto">
@@ -448,19 +499,79 @@ function ChatPanel() {
 }
 
 // -----------------------------------------------------------------------------
-// Relatorios e avisos — esqueleto (EmptyState, sem fetch)
+// Relatorios e avisos — timeline (reports + nudges) — Sprint AI-1B / RF-08
 // -----------------------------------------------------------------------------
+type TimelineItem =
+  | { kind: 'report'; id: string; reportType: string; periodStart: string; periodEnd: string; status: string; summaryLine?: string; generatedAt?: string; readAt?: string | null; dismissedAt?: string | null }
+  | { kind: 'nudge'; id: string; category: string; status: string; title?: string | null; bodyPreview?: string | null; sentAt?: string | null; engagedAt?: string | null; dismissedAt?: string | null; snoozeUntil?: string | null; chatSessionId?: string | null; triggeredByEvent?: string | null };
+
 function ReportsPanel() {
+  const [, setLocation] = useLocation();
+  const { data, isLoading, isError } = useQuery<{ items?: TimelineItem[] } | null>({
+    queryKey: ['/api/coach/timeline'],
+    queryFn: () => apiRequest('GET', '/api/coach/timeline'),
+    retry: false,
+  });
+
+  const items: TimelineItem[] = Array.isArray(data?.items) ? data!.items! : [];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full py-20">
+        <Loader2 size={20} className="animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  if (!isError && items.length === 0) {
+    return (
+      <div
+        data-testid="coach-ai-reports-empty"
+        className="flex flex-col items-center justify-center h-full py-20 text-center"
+      >
+        <FileText size={48} className="text-gray-600 mb-4" />
+        <h3 className="text-lg font-medium text-gray-300 mb-2">Relatorios e avisos</h3>
+        <p className="text-sm text-gray-500 max-w-md">
+          Seus relatorios semanais e os avisos do Grindfy AI aparecerao aqui.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div
-      data-testid="coach-ai-reports-empty"
-      className="flex flex-col items-center justify-center h-full py-20 text-center"
-    >
-      <FileText size={48} className="text-gray-600 mb-4" />
-      <h3 className="text-lg font-medium text-gray-300 mb-2">Relatorios e avisos</h3>
-      <p className="text-sm text-gray-500 max-w-md">
-        Seus relatorios semanais e mensais do Grindfy AI aparecerao aqui em breve.
-      </p>
+    <div data-testid="coach-timeline-list" className="p-4 space-y-3 overflow-auto">
+      <h3 className="text-base font-medium text-gray-300">Relatorios e avisos</h3>
+      {isError ? (
+        <p className="text-sm text-red-400">Nao foi possivel carregar a timeline.</p>
+      ) : null}
+      {items.map((it) =>
+        it.kind === 'report' ? (
+          <button
+            key={`r-${it.id}`}
+            type="button"
+            data-testid="coach-timeline-item-report"
+            data-href={`/coach-ai/relatorio/${it.id}`}
+            onClick={() => setLocation(`/coach-ai/relatorio/${it.id}`)}
+            className="w-full text-left rounded-lg border border-gray-700 bg-gray-800/50 p-4 hover:bg-gray-800"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium text-gray-200">
+                Relatório semanal — {it.periodStart} a {it.periodEnd}
+              </span>
+              {it.status === 'degraded' ? (
+                <span className="shrink-0 rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] text-amber-300">
+                  modo simplificado
+                </span>
+              ) : null}
+            </div>
+            {it.summaryLine ? <p className="mt-1 text-xs text-gray-400">{it.summaryLine}</p> : null}
+          </button>
+        ) : (
+          <div key={`n-${it.id}`} data-testid="coach-timeline-item-nudge">
+            <NudgeCard nudge={it} />
+          </div>
+        ),
+      )}
     </div>
   );
 }

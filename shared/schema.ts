@@ -4518,6 +4518,12 @@ export const userCoachPreferences = pgTable("user_coach_preferences", {
   //   dismissRate?, windowDays? } }. NOT NULL DEFAULT '{}'. Migration 0066.
   frozenCategories: jsonb("frozen_categories").notNull().default(sql`'{}'::jsonb`),
 
+  // Sprint AI-1B (ADR-155/157) — opt-in do Weekly Report + toggles das 2 categorias novas.
+  // Migration 0067.
+  reportWeeklyEnabled: boolean("report_weekly_enabled").notNull().default(false),
+  nudgeBGapcheck: boolean("nudge_b_gapcheck").notNull().default(true),
+  nudgeBImport: boolean("nudge_b_import").notNull().default(true),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -4541,11 +4547,16 @@ export const updateCoachPreferencesSchema = z.object({
   channelEmail: z.boolean().optional(),
   channelPush: z.boolean().optional(),
   coachTone: z.enum(["gentle", "balanced", "direct"]).optional(),
+  // Sprint AI-1B (ADR-155/157) — opt-in do Weekly Report + toggles novos.
+  reportWeeklyEnabled: z.boolean().optional(),
+  nudgeBGapcheck: z.boolean().optional(),
+  nudgeBImport: z.boolean().optional(),
   // Sprint AI-1A / RF-02 — descongelar uma categoria via PUT. Congelamento NUNCA
   // eh setado via PUT (so auto-congelamento ou endpoint admin) — por isso so
   // `unfreezeCategory` (remover), nao `frozenCategories` (mapa cru).
   unfreezeCategory: z.enum([
     "B-SNAPSHOT", "B-LEAK", "B-STUDY", "B-VOLUME", "B-GRADE", "B-DOWNSWING", "B-LIFE", "B-MENTAL",
+    "B-GAPCHECK", "B-IMPORT",
   ]).optional(),
 }).strict().superRefine((val, ctx) => {
   if (val.maxNudgesPerHour !== undefined && val.maxNudgesPerDay !== undefined
@@ -5055,4 +5066,198 @@ export const insertCoachSessionInsightSchema = z.object({
   tokensIn: z.number().int().nullable().optional(),
   tokensOut: z.number().int().nullable().optional(),
 });
+
+// =============================================================================
+// Sprint AI-1B — report_jobs / reports (ADR-155/156/157)
+// Migration: migrations/0067_report_jobs_reports.sql
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// report_jobs — fila de jobs de relatorio (RF-01, ADR-155 §3.1)
+// -----------------------------------------------------------------------------
+export const reportJobs = pgTable("report_jobs", {
+  id: varchar("id", { length: 21 }).primaryKey().notNull(),
+  userId: varchar("user_id", { length: 21 }).notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  reportType: varchar("report_type", { length: 16 }).notNull(),
+  periodStart: date("period_start").notNull(),
+  periodEnd: date("period_end").notNull(),
+  scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(3),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+  timezone: varchar("timezone", { length: 64 }),
+  subscriptionPlanAtEnqueue: varchar("subscription_plan_at_enqueue", { length: 16 }),
+  reportId: varchar("report_id", { length: 21 }),
+  lastError: text("last_error"),
+  enqueuedBy: varchar("enqueued_by", { length: 32 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_report_jobs_due").on(table.status, table.scheduledFor),
+  uniqueIndex("uniq_report_jobs_user_type_period").on(table.userId, table.reportType, table.periodStart),
+  index("idx_report_jobs_user_status").on(table.userId, table.status),
+]);
+
+export type ReportJob = typeof reportJobs.$inferSelect;
+export type InsertReportJob = typeof reportJobs.$inferInsert;
+
+export const insertReportJobSchema = z.object({
+  id: z.string().max(21),
+  userId: z.string().max(21),
+  reportType: z.string().max(16).default("weekly"),
+  periodStart: z.string(),
+  periodEnd: z.string(),
+  scheduledFor: z.union([z.date(), z.string()]),
+  status: z.string().max(16).default("pending"),
+  attempts: z.number().int().default(0),
+  maxAttempts: z.number().int().default(3),
+  nextAttemptAt: z.union([z.date(), z.string()]).nullable().optional(),
+  timezone: z.string().max(64).nullable().optional(),
+  subscriptionPlanAtEnqueue: z.string().max(16).nullable().optional(),
+  reportId: z.string().max(21).nullable().optional(),
+  lastError: z.string().nullable().optional(),
+  enqueuedBy: z.string().max(32).nullable().optional(),
+});
+
+// -----------------------------------------------------------------------------
+// reports — relatorios gerados (RF-02, ADR-155 §3.1)
+// -----------------------------------------------------------------------------
+export const reports = pgTable("reports", {
+  id: varchar("id", { length: 21 }).primaryKey().notNull(),
+  userId: varchar("user_id", { length: 21 }).notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  reportType: varchar("report_type", { length: 16 }).notNull(),
+  periodStart: date("period_start").notNull(),
+  periodEnd: date("period_end").notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("ready"),
+  content: jsonb("content").notNull().default(sql`'{}'::jsonb`),
+  markdown: text("markdown"),
+  modelUsed: varchar("model_used", { length: 64 }),
+  summarizerModelUsed: varchar("summarizer_model_used", { length: 64 }),
+  costUsdEstimate: numeric("cost_usd_estimate", { precision: 10, scale: 4 }),
+  inputTokens: integer("input_tokens"),
+  cacheCreationInputTokens: integer("cache_creation_input_tokens"),
+  cacheReadInputTokens: integer("cache_read_input_tokens"),
+  outputTokens: integer("output_tokens"),
+  degradedReason: varchar("degraded_reason", { length: 64 }),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_reports_user_generated").on(table.userId, table.generatedAt),
+  uniqueIndex("uniq_reports_user_type_period").on(table.userId, table.reportType, table.periodStart),
+]);
+
+export type Report = typeof reports.$inferSelect;
+export type InsertReport = typeof reports.$inferInsert;
+
+export const insertReportSchema = z.object({
+  id: z.string().max(21),
+  userId: z.string().max(21),
+  reportType: z.string().max(16).default("weekly"),
+  periodStart: z.string(),
+  periodEnd: z.string(),
+  status: z.string().max(16).default("ready"),
+  content: z.any().default({}),
+  markdown: z.string().nullable().optional(),
+  modelUsed: z.string().max(64).nullable().optional(),
+  summarizerModelUsed: z.string().max(64).nullable().optional(),
+  costUsdEstimate: z.union([z.number(), z.string()]).nullable().optional(),
+  inputTokens: z.number().int().nullable().optional(),
+  cacheCreationInputTokens: z.number().int().nullable().optional(),
+  cacheReadInputTokens: z.number().int().nullable().optional(),
+  outputTokens: z.number().int().nullable().optional(),
+  degradedReason: z.string().max(64).nullable().optional(),
+  readAt: z.union([z.date(), z.string()]).nullable().optional(),
+  dismissedAt: z.union([z.date(), z.string()]).nullable().optional(),
+});
+
+// -----------------------------------------------------------------------------
+// ReportContent — shape do JSONB `reports.content` (RF-05.4). Interface TS pura.
+// -----------------------------------------------------------------------------
+export interface ReportContentInsight {
+  text: string;
+  citations: string[];
+  confidence?: "high" | "medium" | "low";
+}
+
+export interface ReportContentCta {
+  label: string;
+  kind: "tool" | "link";
+  toolName?: string;
+  href?: string;
+  payloadHint?: Record<string, unknown>;
+}
+
+export interface ReportContent {
+  schemaVersion: number;
+  reportType: "weekly";
+  periodStart: string;
+  periodEnd: string;
+  dataSufficiency: "ok" | "low";
+  level?: AiPlayerLevel | null;
+  tone?: "gentle" | "balanced" | "direct";
+  header: { title: string; summaryLine: string; comparison?: string };
+  sections: {
+    volumeResults: {
+      sessionsCompleted: number;
+      sessionsPlanned: number;
+      tournaments: number;
+      itmPct: number | null;
+      finalTables: number;
+      wins: number;
+      roiWeek: number | null;
+      roi30d: number | null;
+      narrative?: string;
+    };
+    bankroll: {
+      profitByCurrency: Array<{ currency: string; native: number; usd: number }>;
+      bankrollStart: number | null;
+      bankrollNow: number | null;
+      transfers: number;
+      withdrawals: number;
+      narrative?: string;
+    };
+    selection: {
+      ranThisWeek: boolean | null;
+      adherencePct: number | null;
+      topCategories: Array<{ label: string; roi: number; n: number }>;
+      bottomCategories: Array<{ label: string; roi: number; n: number; suggestBlock: boolean }>;
+      narrative?: string;
+    };
+    study: {
+      minutesLogged: number;
+      topicsCovered: string[];
+      focusOfMonth: string | null;
+      focusCoveragePct: number | null;
+      recommendedLesson?: { lessonId: string; title: string; reason: string; ctaHref: string } | null;
+      narrative?: string;
+    };
+    mentalOps?: {
+      hasWarmupData: boolean;
+      warmupSessions: number;
+      tiltSessions: number;
+      avgFocusRating?: number | null;
+      narrative?: string;
+    };
+  };
+  insights: ReportContentInsight[];
+  nextWeekPlan: {
+    gradeSuggestionHref: string | null;
+    studyFocus: string | null;
+    recommendedAction: string | null;
+    weeklyStudyPlanRef?: { weekStartDate: string } | null;
+  };
+  cta: ReportContentCta[];
+  generation: {
+    model: string | null;
+    summarizerModel: string | null;
+    degraded: boolean;
+    degradedReason: string | null;
+    costUsdEstimate?: number | null;
+  };
+}
 

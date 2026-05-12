@@ -19,6 +19,8 @@ import {
 import { useCoachChat, type CoachType, type ChatMessage } from '@/hooks/useCoachChat';
 import { useCoachPageContext } from '@/hooks/useCoachPageContext';
 import { emit } from '@/lib/tracker';
+// Sprint AI-1B / RF-12 — quick suggestions anti-blank-page (fallback estatico).
+import { getFallbackSuggestions } from '@/lib/quickSuggestionsFallback';
 
 // Sprint home-reform-1-5 RF-27 (B6): Coach FAB hint badge.
 interface MiniChatProps {
@@ -246,6 +248,19 @@ export default function MiniChat({ hintCount = 0 }: MiniChatProps = {}) {
             <p className="text-xs text-gray-500">
               Envie uma mensagem para o Grindfy AI
             </p>
+            <div data-testid="coach-quick-suggestions" className="mt-3 flex flex-wrap justify-center gap-1.5">
+              {getFallbackSuggestions(`/${routeFromLocation(location) ?? 'coach-ai'}`).slice(0, 4).map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  data-testid="coach-quick-suggestion-chip"
+                  onClick={() => setInputValue(s.text)}
+                  className="rounded-full border border-gray-700 px-2 py-0.5 text-[10px] text-gray-400 hover:bg-gray-800"
+                >
+                  {s.text}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <>

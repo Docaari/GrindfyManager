@@ -53,6 +53,8 @@ const CalculadoraPopup = lazy(() => import("@/pages/CalculadoraPopup"));
 const CoachAI = lazy(() => import("@/pages/CoachAI"));
 // Sprint AI-1A — wizard de onboarding do Grindfy AI (full-page)
 const CoachOnboarding = lazy(() => import("@/pages/CoachOnboarding"));
+// Sprint AI-1B — pagina de leitura do Weekly Report
+const WeeklyReportView = lazy(() => import("@/pages/WeeklyReportView"));
 const Bankroll = lazy(() => import("@/pages/Bankroll"));
 // Sprint Biblioteca-1 RF-12 — pagina /biblioteca + viewer + detalhe (F2)
 const BibliotecaPage = lazy(() => import("@/pages/biblioteca/BibliotecaPage").then(m => ({ default: m.BibliotecaPage })));
@@ -130,6 +132,7 @@ function Router() {
                   <Route path="/subscription-demo" component={() => (<ProtectedRoute><SubscriptionDemo /></ProtectedRoute>)} />
                   <Route path="/coach-ai" component={() => (<ProtectedRoute><CoachAI /></ProtectedRoute>)} />
                   <Route path="/coach-ai/onboarding" component={() => (<ProtectedRoute><CoachOnboarding /></ProtectedRoute>)} />
+                  <Route path="/coach-ai/relatorio/:id" component={() => (<ProtectedRoute><WeeklyReportView /></ProtectedRoute>)} />
                   <Route path="/bankroll" component={() => (<ProtectedRoute><Bankroll /></ProtectedRoute>)} />
                   {/* Sprint coach-page-reform-1 RF-02: redirect legado /flight -> /coach?tab=flights. */}
                   <Route path="/flight">{() => <Redirect to="/coach?tab=flights" />}</Route>

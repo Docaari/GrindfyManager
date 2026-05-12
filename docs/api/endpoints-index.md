@@ -222,6 +222,21 @@ Detalhes em `Docs/api/coach.md` e `Docs/api/coach-tools.md`.
 
 **Frontend (rota nova):** `/coach-ai/onboarding` (protegida) → `CoachOnboarding` (wizard full/light). Banner `OnboardingBanner` em `/coach-ai` (aba chat) e `/inicio` quando `!onboardingCompletedAt`.
 
+**Endpoints novos Sprint AI-1B (ADR-155/156/157/158):**
+
+| Metodo | Endpoint | Auth | Descricao |
+|--------|----------|------|-----------|
+| GET | `/api/coach/timeline` | JWT | Timeline do hub: merge de `reports` + `coach_nudge_log`, paginada (`?limit=` default 30 max 100, `?cursor=` por timestamp). Response `{ items: TimelineItem[], nextCursor? }` — `TimelineItem` union discriminada por `kind`: `{ kind:'report', id, reportType, periodStart, periodEnd, status, summaryLine, generatedAt, readAt, dismissedAt }` \| `{ kind:'nudge', id, category, status, title, bodyPreview, sentAt, engagedAt, dismissedAt, snoozeUntil, chatSessionId, triggeredByEvent }`. Ordenado timestamp desc. Só itens do user logado. Handler `injectedStorage?`. |
+| GET | `/api/coach/reports/:id` | JWT | Lê um relatorio: `{ id, reportType, periodStart, periodEnd, status, content, markdown, generatedAt, costUsdEstimate? }`. Marca `read_at = now` na 1a leitura (idempotente). `404` se nao existe; `403` se de outro user. Handler `injectedStorage?`. |
+| POST | `/api/coach/reports/:id/dismiss` | JWT | (Opcional, nice-to-have) arquiva o card do relatorio na timeline (`dismissed_at = now`). |
+| GET | `/api/coach/suggestions` | JWT | Quick suggestions contextuais: `?route=<route>&...` (opcionalmente campos de page context) → `{ suggestions: Array<{ id, text, sendOnClick: true }> }` 2-4 itens. Variantes de estado (downswing→"por que estou perdendo?"; sem dados→"como importo?"). Rota desconhecida ou `?route=` vazio → set generico, **200** (nao 400). Cache TTL ~30s por user (`_resetSuggestionsCacheForTests` em testes). Nao-LLM. Handler `injectedStorage?`. |
+| GET | `/api/coach/preferences` | JWT | **estendido** — response ganha `reportWeeklyEnabled: boolean`, `nudgeBGapcheck: boolean`, `nudgeBImport: boolean`. |
+| PUT | `/api/coach/preferences` | JWT | **estendido** — ganha `reportWeeklyEnabled?`, `nudgeBGapcheck?`, `nudgeBImport?` (zod `.strict()`); `unfreezeCategory` enum agora aceita `'B-GAPCHECK'`/`'B-IMPORT'`. |
+
+Endpoints internos (nao HTTP — ticks de cron): `enqueueWeeklyReportJobsTick` (`0 * * * *`), `processReportJobsTick` (`*/15 * * * *`) em `server/jobs/reportJobRunner.ts`; `gapCheckTick` (`0 * * * *`, D-3=sexta), `bImportTick` (`0 * * * *`, hora local) em `server/coach/jobs/`. Todos gated por `COACH_NUDGES_ENABLED`, envoltos em `withAdvisoryLock` (ADR-144). **Aposentados** (ADR-156): `generateCoachRecommendations` (segunda 6h BRT) e `generateWeeklyStudyPlan` (segunda 9h UTC) — agendamento desligado; `coach_lesson_recommendations`/`study_weekly_plans` continuam preenchidas pelo gerador do Weekly Report (chaves de semana mantidas).
+
+**Frontend (rota nova):** `/coach-ai/relatorio/:id` (protegida) → `WeeklyReportView` (ReactMarkdown + remarkGfm; CTAs `link`→navega rota Wouter registrada, `tool`→confirm ADR-146; `status='degraded'`→aviso "modo simplificado"). `ReportsPanel` (aba `?tab=reports` do hub) reescrito — `useQuery(['/api/coach/timeline'])`, EmptyState quando vazio (mantem `data-testid="coach-ai-reports-empty"`); `NudgeCard.tsx` novo (titulo/body/status + botoes snooze/dismiss/engage chamando endpoints AI-1A; `triggeredByEvent='auto_freeze_notice'`→aviso sem snooze). `ChatPanel`/`MiniChat` renderizam chips de quick suggestions quando `messages.length===0` (fallback estatico `client/src/lib/quickSuggestionsFallback.ts` se o endpoint falha).
+
 **Tools (registry, nao endpoints REST):**
 - `read_theme_with_linked_stats_and_spots` — **Sprint stats-themes-linking-1 (RF-03 / ADR-142)** — extensao da tool legada `read_theme_with_linked_spots` com payload `stats[]` (currentValue + sparkline30d 30d + targetMin/Max + direction + isCustom) + `summary.stats_count/_in_range/_alarm`. Tier `pro/premium/admin`. Audit `log`. Description em arquivo dedicado `server/coachTools/readThemeWithLinkedStatsAndSpots.prompts.ts` (lesson #10).
 - `read_theme_with_linked_spots` — **DEPRECATED alias** de `read_theme_with_linked_stats_and_spots`. Mesmo handler, emite `console.warn('[deprecation] ...')`. Sera removido em sprint stats-themes-linking-2.

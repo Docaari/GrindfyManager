@@ -1,5 +1,8 @@
 // =============================================================================
 // Coach Cron Runner — Sprint Coach-2B (ADR-087) + Sprint AI-1A / RF-04 (ADR-152)
+//   + Sprint AI-1B (ADR-156/157): `0 6 * * 1` (generateCoachRecommendations)
+//   APOSENTADO — absorvido pelo Weekly Report. Adicionados gap-check (B-GAPCHECK)
+//   e B-IMPORT como ticks horarios filtrando hora local.
 //
 // node-cron in-process. Ativacao via NODE_ENV=production OU
 // COACH_CRON_ENABLED=true.
@@ -8,14 +11,19 @@
 //   - * * * * *      cleanup pending coach_actions > 30min (ADR-077) — SEMPRE
 //   - 0 * 28 * *     B-SNAPSHOT (filtra local hour=9)            ┐ proatividade —
 //   - 0 * * * *      B-STUDY (filtra local hour=19, foco ativo)  ┤ NAO registrados
-//   - 0 6 * * 1      generateCoachRecommendations (segunda 6h)   ┘ se COACH_NUDGES_ENABLED=false
+//   - 0 * * * *      B-GAPCHECK (sexta D-3, hora util)           ┤ se COACH_NUDGES_ENABLED=false
+//   - 0 * * * *      B-IMPORT (cobranca de import, hora util)    ┘
 // =============================================================================
 
 import nodeCron from "node-cron";
 import { storage } from "../storage";
 import { processBSnapshotTick } from "./jobs/processBSnapshot";
 import { processBStudyTick } from "./jobs/processBStudy";
-import { generateCoachRecommendationsTick } from "./jobs/generateCoachRecommendations";
+// Sprint AI-1B: a logica de generateCoachRecommendations continua exportada
+// (reaproveitada pelo gerador do Weekly Report) — mas o agendamento `0 6 * * 1`
+// foi removido (ADR-156).
+import { gapCheckTick } from "./jobs/gapCheck";
+import { bImportTick } from "./jobs/bImport";
 import { withAdvisoryLock } from "../lib/advisoryLock";
 
 let started = false;
@@ -80,20 +88,24 @@ export function startCoachCrons(): void {
     }
   });
 
-  // Sprint home-reform-4 / Item 4 (ADR-112) — segunda 06:00 BRT
-  cron.schedule(
-    "0 6 * * 1",
-    async () => {
-      try {
-        await withAdvisoryLock("cron:coach-weekly-rec", () =>
-          generateCoachRecommendationsTick({}),
-        );
-      } catch (err) {
-        console.error("coach.cron.weekly_rec.tick.error", { err });
-      }
-    },
-    { timezone: "America/Sao_Paulo" },
-  );
+  // Sprint AI-1B (ADR-157) — gap-check D-3 (B-GAPCHECK) + B-IMPORT. Ticks
+  // horarios filtrando hora local. Antes deste sprint este slot era o
+  // `0 6 * * 1` do generateCoachRecommendations (aposentado, ADR-156).
+  cron.schedule("0 * * * *", async () => {
+    try {
+      await withAdvisoryLock("cron:coach-gap-check", () => gapCheckTick({}));
+    } catch (err) {
+      console.error("coach.cron.gap_check.tick.error", { err });
+    }
+  });
+
+  cron.schedule("0 * * * *", async () => {
+    try {
+      await withAdvisoryLock("cron:coach-b-import", () => bImportTick({}));
+    } catch (err) {
+      console.error("coach.cron.b_import.tick.error", { err });
+    }
+  });
 
   started = true;
   console.info("coach.cron.started");

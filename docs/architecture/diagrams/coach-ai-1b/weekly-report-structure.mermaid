@@ -1,0 +1,44 @@
+%% Sprint AI-1B — Weekly Report: as 8 secoes + de onde vem cada dado + o ReportContent JSONB + back-fills + fail-soft
+%% Ver ADR-155, ADR-156. Spec Docs/specs/sprint-ai-1b.md RF-05/07/09.
+
+flowchart TD
+    entry["generateWeeklyReport({ userId, periodStart, periodEnd, injectedStorage? })<br/>modelo: process.env.COACH_MODEL ?? &lt;constante canonica do projeto — ver coachSystemBuilder.ts / ADR-021&gt;"]
+
+    entry --> bundle["1. Monta o 'bundle de dados da semana'<br/>(TODA query de historico filtra grind_session_id IS NULL — CLAUDE.md §6.1)"]
+
+    subgraph sources["Fontes de dado por secao"]
+        s0["Sec 0 — Cabecalho (tom pessoal):<br/>getPerformanceByPeriod('7d') + media 6 semanas (agreg 42d) + aiStructuredProfile.tomPreferido (fallback coachTone)"]
+        s1["Sec 1 — Volume + Resultados:<br/>grind_sessions da semana (concluidas) vs planned_tournaments/weekly_plans<br/>+ getTournaments(period inline, IS NULL) p/ ITM/FT + getPerformanceByPeriod('7d'/'30d')"]
+        s2["Sec 2 — Bankroll delta:<br/>walletService/bankrollService (bankroll_snapshots) + wallet_transactions da semana<br/>NORMALIZAR p/ USD antes de comparar com thresholds/bankrollStart — lesson #6"]
+        s3["Sec 3 — Selection:<br/>getAnalyticsByModifier / ROI por dimensao + planned_tournaments vs tournaments<br/>(se nao houver telemetria 'rodou o selector' → omite a frase, nao inventa)"]
+        s4["Sec 4 — Estudos:<br/>study_sessions (v2) da semana + findActiveLeakFocusList / foco do mes<br/>+ recommendLessonForUser(...) chamado AQUI DENTRO"]
+        s5["Sec 5 — Mental + Operacional (so warm-up — Q6):<br/>warmupService (rituais/relatorios da semana) + grind_sessions com flag tilt<br/>(sem prompt invasivo; sem mark_off_day — e AI-2A; se sem dados → secao omitida)"]
+    end
+
+    bundle --> sources
+    sources --> bigCtx{"bundle grande demais?"}
+    bigCtx -->|"sim"| haiku["2. Sumariza contexto via Haiku<br/>(reusa coachMemory.ts / helper de sumarizacao)<br/>grava summarizer_model_used"]
+    bigCtx -->|"nao"| backfill
+    haiku --> backfill["3+4. BACK-FILLS (back-compat — ADR-156):<br/>storage.createCoachRecommendation(user, getCurrentWeekStartBRT(), ...) — idempotente por (userId, weekStartDate)<br/>generateWeeklyStudyPlan({ userId, source:'coach_auto', weekStartDate: utcMondayOfWeek }) — UPSERT idempotente<br/>=&gt; /inicio (CoachRecommendationCard etc) + StudyWeeklyPlanCard continuam funcionando sem mudanca"]
+
+    backfill --> llmTry{"5. new AnthropicCtor(...) em try/catch<br/>(lesson #5/#35 — fallback factory se mock; nunca propaga erro — lesson #9)"}
+    llmTry -->|"ok"| sonnet["sonnet recebe o bundle + perfil estruturado (nivel + tomPreferido) + CITATIONS_RULES (coachSystemBuilder.ts)<br/>+ prompt unico de 'como gerar o relatorio semanal' (server/coach/prompts/weeklyReport.ts — lesson #10)<br/>cache_control: ephemeral nos blocos estaveis (ADR-019)<br/>=&gt; gera: header.summaryLine + comparison + narratives das secoes 1-5 + EXATAMENTE 3 insights data-grounded (cada um citations.length>=1) + nextWeekPlan + recommendedAction"]
+    llmTry -->|"falha (exceção / timeout / resposta invalida / sem ANTHROPIC_API_KEY)"| det["FAIL-SOFT (RF-05.6/RF-09):<br/>ReportContent DETERMINISTICO — secoes 1-5 so com numeros (sem narrative)<br/>insights = [] (ou 1 insight deterministico generico)<br/>nextWeekPlan so com links/refs (a rec de lesson e o plano vem dos fallbacks proprios deles)<br/>cta so com links<br/>generation.degraded = true · degradedReason = 'llm_failed_3x' | 'no_anthropic_key'"]
+
+    sonnet --> assemble
+    det --> assemble["6. Monta ReportContent (JSONB) + markdown derivado"]
+
+    subgraph reportContent["ReportContent (shared/schema.ts — TS interface, schemaVersion=1)"]
+        rc["{<br/>  schemaVersion: 1, reportType: 'weekly', periodStart, periodEnd,<br/>  dataSufficiency: 'ok' | 'low',  level?, tone?,<br/>  header: { title, summaryLine, comparison? },<br/>  sections: { volumeResults, bankroll, selection, study, mentalOps? },<br/>  insights: Array&lt;{ text, citations: string[], confidence? }&gt;  (3 quando 'ok'),<br/>  nextWeekPlan: { gradeSuggestionHref, studyFocus, recommendedAction, weeklyStudyPlanRef? },<br/>  cta: Array&lt;{ label, kind: 'tool'|'link', toolName?, href?, payloadHint? }&gt;,<br/>  generation: { model, summarizerModel, degraded, degradedReason }<br/>}<br/><br/>CTA — toolName só ∈ tools AI-0A (register_tournament_in_grade, log_leak_focus,<br/>verify_leak_progress, record_wallet_transaction, log_study_session);<br/>href só rota Wouter REGISTRADA (/grade-planner, /upload, /estudos, /biblioteca/..., /coach-ai)<br/>— NUNCA bulk_propose_grade / schedule_study_block / define_career_goal / mark_off_day (AI-2A)"]
+    end
+
+    assemble --> reportContent
+    reportContent --> cost["7. Calcula cost_usd_estimate a partir do usage (tabela de precos do modelo, constante no gerador)<br/>loga coach.report.tokens { inputTokens, cacheCreation, cacheRead, outputTokens }<br/>fail-soft / dataSufficiency='low' → custo ≈ 0"]
+    cost --> ret["return { content, markdown, status: 'ready' | 'degraded', model, usage? }"]
+
+    %% ---- caminho dados insuficientes ----
+    bundle -.->|"volume=0, sem sessoes, sem snapshot, sem estudo"| lowData["RF-05.5 — DADOS INSUFICIENTES (≠ fail-soft):<br/>content.dataSufficiency='low' · status='ready' (NAO degraded — degraded e falha tecnica)<br/>header 'Semana tranquila — voce nao registrou torneios. Quer importar?'<br/>1 CTA link /upload + (se aplicavel) rec de lesson popular/recente (Tier 0 do recommendLessonForUser)<br/>NAO chama o LLM p/ 3 insights de prosa · custo ≈ 0"]
+    lowData --> ret
+
+    %% ---- nivel ----
+    rc -.->|"adaptacao leve por aiStructuredProfile.nivel"| nivelNote["iniciante → mais educacao/benchmark, menos variancia<br/>intermediario → leaks + selection + comparativo pool BR<br/>pro/high-stakes → variancia + carreira, menos hand-holding<br/>(o LLM adapta tom/foco — NAO templates separados por nivel neste sprint)"]

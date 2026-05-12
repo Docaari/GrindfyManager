@@ -83,7 +83,8 @@ describe('startCoachCrons — COACH_NUDGES_ENABLED gating', () => {
     expect(scheduled).toContain('* * * * *');
     expect(scheduled).toContain('0 * 28 * *');
     expect(scheduled).toContain('0 * * * *');
-    expect(scheduled).toContain('0 6 * * 1');
+    // AI-1B (ADR-156): generateCoachRecommendations (`0 6 * * 1`) aposentado — absorvido pelo Weekly Report.
+    expect(scheduled).not.toContain('0 6 * * 1');
     infoSpy.mockRestore();
   });
 });

@@ -42,6 +42,10 @@ export interface CoachPreferences {
   coachTone: "gentle" | "balanced" | "direct";
   // Sprint AI-1A / RF-02 — estado de auto-congelamento por categoria.
   frozenCategories: Record<string, FrozenCategoryEntry>;
+  // Sprint AI-1B (ADR-155/157) — opt-in do Weekly Report + toggles novos.
+  reportWeeklyEnabled: boolean;
+  nudgeBGapcheck: boolean;
+  nudgeBImport: boolean;
   updatedAt?: Date;
 }
 
@@ -63,6 +67,9 @@ export const COACH_PREFS_DEFAULTS: CoachPreferences = {
   channelPush: false,
   coachTone: "balanced",
   frozenCategories: {},
+  reportWeeklyEnabled: false,
+  nudgeBGapcheck: true,
+  nudgeBImport: true,
 };
 
 const CACHE_TTL_MS = 30_000;
@@ -96,6 +103,10 @@ export function normalizeCoachPreferences(row: any): CoachPreferences {
       (row?.frozenCategories && typeof row.frozenCategories === "object"
         ? row.frozenCategories
         : {}) as Record<string, FrozenCategoryEntry>,
+    reportWeeklyEnabled:
+      row?.reportWeeklyEnabled ?? COACH_PREFS_DEFAULTS.reportWeeklyEnabled,
+    nudgeBGapcheck: row?.nudgeBGapcheck ?? COACH_PREFS_DEFAULTS.nudgeBGapcheck,
+    nudgeBImport: row?.nudgeBImport ?? COACH_PREFS_DEFAULTS.nudgeBImport,
     updatedAt: row?.updatedAt,
   };
 }

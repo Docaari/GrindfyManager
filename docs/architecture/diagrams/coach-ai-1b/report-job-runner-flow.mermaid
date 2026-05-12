@@ -1,0 +1,46 @@
+%% Sprint AI-1B — Report job runner: enqueuer (hourly) -> report_jobs -> processor (15min) -> weeklyReportGenerator -> reports row + back-fills -> fail-soft path
+%% Ver ADR-155, ADR-156. Spec Docs/specs/sprint-ai-1b.md RF-03/05/09.
+
+flowchart TD
+    %% ---------- Enqueuer ----------
+    cronH["cron 0 * * * * (hourly)<br/>enqueueWeeklyReportJobsTick({ now })"] --> killE{"COACH_NUDGES_ENABLED === 'false'?"}
+    killE -->|"sim"| stopE["return cedo<br/>log reason: 'nudges_globally_disabled'"]
+    killE -->|"nao"| lockE["withAdvisoryLock('cron:report-job-enqueuer', ...)"]
+    lockE --> listE["storage.listUsersForCron(\"subscription_plan IN ('pro','premium')\")"]
+    listE --> loopE{"para cada user"}
+    loopE --> eligE{"isWeeklyReportEligible(user)?<br/>(plan Pro+ AND prefs.reportWeeklyEnabled === true)<br/>safe-deny em erro"}
+    eligE -->|"nao"| nextE["proximo user"]
+    eligE -->|"sim"| tzCheck{"getLocalHour(now, user.timezone) === 7<br/>AND e segunda no fuso do user?"}
+    tzCheck -->|"nao"| nextE
+    tzCheck -->|"sim"| computePeriod["periodStart = segunda da SEMANA QUE ACABOU no fuso do user (date)<br/>periodEnd = domingo dessa semana (= periodStart + 6d)<br/>scheduled_for = now (ja e a hora certa, em UTC)"]
+    computePeriod --> insertJob["INSERT INTO report_jobs (report_type='weekly', status='pending',<br/>period_start, period_end, scheduled_for, timezone=user.timezone,<br/>subscription_plan_at_enqueue=user.plan, enqueued_by='cron_enqueuer')<br/>ON CONFLICT (user_id, report_type, period_start) DO NOTHING"]
+    insertJob --> nextE
+    nextE --> loopE
+
+    %% ---------- Processor ----------
+    cronP["cron */15 * * * * (every 15min)<br/>processReportJobsTick({ now })"] --> killP{"COACH_NUDGES_ENABLED === 'false'?"}
+    killP -->|"sim"| stopP["return cedo<br/>log reason: 'nudges_globally_disabled'"]
+    killP -->|"nao"| lockP["withAdvisoryLock('cron:report-job-runner', ...)"]
+    lockP --> selJobs["SELECT * FROM report_jobs<br/>WHERE status='pending' AND scheduled_for <= now<br/>AND (next_attempt_at IS NULL OR next_attempt_at <= now)<br/>ORDER BY scheduled_for ASC LIMIT 25"]
+    selJobs --> loopP{"para cada job"}
+    loopP --> claim["UPDATE report_jobs SET status='running', attempts=attempts+1, updated_at=now<br/>WHERE id=? AND status='pending' RETURNING *"]
+    claim --> claimed{"retornou 1 row?<br/>(claim atomico — ADR-144)"}
+    claimed -->|"nao (outro runner pegou)"| nextP["proximo job + pacing 200ms"]
+    claimed -->|"sim"| reval{"user ainda Pro+ AND prefs.reportWeeklyEnabled?"}
+    reval -->|"nao"| skipJob["status='skipped'<br/>last_error='no_longer_eligible'"]
+    skipJob --> nextP
+    reval -->|"sim"| idemp{"ja existe reports row<br/>(user, 'weekly', period_start)?"}
+    idemp -->|"sim"| doneNoGen["status='done', report_id=<existente><br/>(NAO regera, NAO chama Anthropic)"]
+    doneNoGen --> nextP
+    idemp -->|"nao"| gen["generateWeeklyReport({ userId, periodStart, periodEnd })<br/>(RF-05 — ver diagrama weekly-report-structure)"]
+    gen --> genOk{"gerador retornou ok?"}
+    genOk -->|"sim (status ready ou degraded por dataSufficiency)"| upsertReport["UPSERT reports row (status='ready' | 'degraded')<br/>com content JSONB + markdown + model_used + cost + tokens<br/>UNIQUE (user_id, report_type, period_start)"]
+    upsertReport --> doneOk["job status='done', report_id=<novo>"]
+    doneOk --> nextP
+    genOk -->|"nao (exceção / LLM 3x / sem ANTHROPIC_API_KEY)"| logErr["console.error('report.job.error', { jobId, userId, attempts, err }) — lesson #9<br/>grava last_error (truncado ~1000)"]
+    logErr --> retryCheck{"attempts < max_attempts (3)?"}
+    retryCheck -->|"sim"| retry["status='pending'<br/>next_attempt_at = now + backoff(attempts)<br/>(attempts=1 → +15min · 2 → +1h · 3 → +4h)"]
+    retry --> nextP
+    retryCheck -->|"nao (3 falhas)"| failSoft["FAIL-SOFT (RF-09):<br/>gerador retorna ReportContent deterministico (so numeros)<br/>UPSERT reports row status='degraded'<br/>degraded_reason='llm_failed_3x' (ou 'no_anthropic_key' na 1a tentativa)<br/>job status='done' (NUNCA 'failed' permanente)"]
+    failSoft --> nextP
+    nextP --> loopP

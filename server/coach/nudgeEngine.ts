@@ -27,7 +27,10 @@ export type NudgeCategory =
   | "B-GRADE"
   | "B-DOWNSWING"
   | "B-LIFE"
-  | "B-MENTAL";
+  | "B-MENTAL"
+  // Sprint AI-1B (ADR-157) — gap-check D-3 pre-Weekly + cobranca de import standalone.
+  | "B-GAPCHECK"
+  | "B-IMPORT";
 
 export type NudgeDenyReason =
   | "nudges_globally_disabled"
@@ -60,6 +63,8 @@ const CATEGORY_TOGGLE_MAP: Record<NudgeCategory, keyof CoachPreferences> = {
   "B-DOWNSWING": "nudgeBDownswing",
   "B-LIFE": "nudgeBLife",
   "B-MENTAL": "nudgeBMental",
+  "B-GAPCHECK": "nudgeBGapcheck",
+  "B-IMPORT": "nudgeBImport",
 };
 
 export function categoryToToggle(category: NudgeCategory): keyof CoachPreferences {

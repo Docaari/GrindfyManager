@@ -14867,3 +14867,9 @@ async function updateStudyTheme(
 
 // Tests que dependiam dos IDs fixture (tkt-1, etc.) declaram seu proprio
 // vi.mock('../../../server/db', ...) com Drizzle-shape fake backed por Map.
+// Sprint AI-1B (ADR-155/157) — report_jobs / reports CRUD attach.
+import { attachReportStorage } from "./storage/reportStorage";
+attachReportStorage(storage as any);
+// Sprint AI-1B (ADR-157) — sinais de estado real do gap-check / B-IMPORT.
+import { attachCoachSignalsStorage } from "./storage/coachSignalsStorage";
+attachCoachSignalsStorage(storage as any);

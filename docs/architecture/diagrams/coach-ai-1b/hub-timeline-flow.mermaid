@@ -1,0 +1,56 @@
+%% Sprint AI-1B — Hub timeline (frontend): aba "Relatorios e avisos" -> GET /api/coach/timeline -> merge reports+nudges -> ReportsPanel/NudgeCard -> click no report -> WeeklyReportView
+%% Ver ADR-157 (timeline + render), ADR-150 (hub tabs). Spec Docs/specs/sprint-ai-1b.md RF-08.
+
+sequenceDiagram
+    actor User
+    participant Hub as CoachAI.tsx<br/>(/coach-ai?tab=reports)
+    participant Panel as ReportsPanel<br/>(reescrito)
+    participant API as server/routes/coach.ts<br/>(ou coachAi1b.ts)
+    participant Store as storage.ts
+    participant View as WeeklyReportView<br/>(/coach-ai/relatorio/:id)
+    participant Tool as coachToolRunner<br/>(chat — ADR-146)
+
+    User->>Hub: abre /coach-ai?tab=reports (URL-persisted — ADR-150/125)
+    Hub->>Panel: renderiza aba "Relatorios e avisos"
+    Panel->>API: GET /api/coach/timeline?limit=30 (apiRequest — retorna JSON parseado, lesson #13; useQuery dentro do QueryClientProvider do app, lesson #29)
+    API->>Store: merge reports (generated_at) + coach_nudge_log (sent_at), ordenado timestamp desc, paginado por cursor
+    Store-->>API: { reportsRows, nudgeRows }
+    API-->>Panel: { items: TimelineItem[], nextCursor? }<br/>TimelineItem = { kind:'report', id, reportType, periodStart, periodEnd, status, summaryLine, generatedAt, readAt, dismissedAt }<br/>| { kind:'nudge', id, category, status, title, bodyPreview, sentAt, engagedAt, dismissedAt, snoozeUntil, chatSessionId, triggeredByEvent }
+
+    alt items vazio
+        Panel-->>User: EmptyState (mantem/troca data-testid="coach-ai-reports-empty" — documentado)
+    else tem itens
+        loop cada item
+            alt kind === 'report'
+                Panel-->>User: card de relatorio clicavel (summaryLine, periodo, status badge; degraded → badge "modo simplificado")
+            else kind === 'nudge'
+                Panel-->>User: <NudgeCard> (titulo + bodyPreview + status badge)
+            end
+        end
+    end
+
+    %% --- nudge actions ---
+    User->>Panel: NudgeCard — "Nao agora" / "Nao por enquanto" / "Ver no chat" / "Dispensar"
+    Note over Panel,API: chama os endpoints do AI-1A:<br/>POST /api/coach/nudges/:id/{snooze(short|long), engage, dismiss}<br/>"Ver no chat" → navega /coach-ai?tab=chat com chatSessionId<br/>triggeredByEvent === 'auto_freeze_notice' → renderiza aviso de categoria pausada SEM botoes de snooze
+
+    %% --- abrir relatorio ---
+    User->>Panel: clica num card de relatorio
+    Panel->>View: navega /coach-ai/relatorio/:id (rota REGISTRADA em App.tsx — lesson #19; Wouter v3 — Link sem anchor child, lesson #23)
+    View->>API: GET /api/coach/reports/:id (requireAuth; injectedStorage? — lesson #34)
+    API->>Store: SELECT reports WHERE id=? ; marca read_at = now (idempotente)
+    Store-->>API: report row (404 se nao existe; 403 se de outro user)
+    API-->>View: { id, reportType, periodStart, periodEnd, status, content, markdown, generatedAt, costUsdEstimate? }
+    View-->>User: renderiza markdown via ReactMarkdown + remarkGfm (igual ao chat)<br/>8 secoes + 3 insights + plano da semana + CTAs<br/>status='degraded' → aviso "gerado em modo simplificado" (sem prosa dos insights)
+
+    %% --- CTAs do relatorio ---
+    User->>View: clica num CTA
+    alt cta.kind === 'link'
+        View-->>User: navega para cta.href (rota Wouter registrada — sem 404 silencioso, lesson #19)
+    else cta.kind === 'tool'
+        View->>Tool: abre o fluxo da tool com confirm (NAO auto-executa — ADR-146; confirm + undo)
+        Tool-->>User: chat com a tool pre-armada
+    end
+
+    %% --- opcional dismiss do card ---
+    User->>Panel: (opcional) arquiva o card do relatorio
+    Panel->>API: POST /api/coach/reports/:id/dismiss → seta dismissed_at (nice-to-have, nao obrigatorio)
