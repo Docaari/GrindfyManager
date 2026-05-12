@@ -36,7 +36,9 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-const NOW = new Date('2026-04-26T12:00:00Z').getTime();
+// Relativo ao relogio real (o componente usa Date.now() sem fake timers) — uma
+// data fixa hardcoded vira "Expirado" assim que o tempo passa dela.
+const NOW = Date.now();
 
 function fixedDate(offsetMs: number) {
   return new Date(NOW + offsetMs).toISOString();

@@ -115,6 +115,11 @@ beforeEach(() => {
   apiRequestMock.mockImplementation(async (method: string, url: string) => {
     if (url === '/api/library/lessons/lesson-1') return lessonData;
     if (url.startsWith('/api/library/lessons/lesson-1/progress')) return progressData;
+    // P0 (biblioteca-launch-fix): VideoPanel busca o playback token signed; sem
+    // ele o componente mostra mux-player-token-error em vez do <MuxPlayer>.
+    if (url.endsWith('/playback-token')) {
+      return { url: 'https://stream.mux.com/pb-123.m3u8?token=fake-signed-jwt' };
+    }
     if (url === '/api/library/courses/curso-x') return courseData;
     return null;
   });

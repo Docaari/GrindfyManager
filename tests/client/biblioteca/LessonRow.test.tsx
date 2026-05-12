@@ -50,7 +50,8 @@ describe('<LessonRow> (RF-07)', () => {
     const row = screen.getByTestId('library-lesson-row-a1-mentalidade');
     const link = screen.queryByTestId('library-lesson-row-a1-mentalidade-link');
     expect(link).toBeNull();
-    // Mostra "Em breve"
-    expect(row.textContent?.toLowerCase()).toMatch(/em breve/);
+    // Label de bloqueio (UX-Biblioteca: "Em breve" virou "Acesso restrito").
+    expect(screen.getByTestId('library-lesson-row-a1-mentalidade-locked-label')).toBeTruthy();
+    expect(row.textContent?.toLowerCase()).toMatch(/acesso restrito|em breve/);
   });
 });
