@@ -61,7 +61,7 @@ const MIN_SAMPLE = 30;
 export function detectLeaks(input: LeakDetectionInput): Leak[];
 export function detectLeaks(
   userId: string,
-  opts?: { minSeverity?: "low" | "medium" | "high" },
+  opts?: { minSeverity?: "low" | "medium" | "high"; period?: string },
 ): Promise<CoachLeakSummary[]>;
 export function detectLeaks(
   inputOrUserId: any,
@@ -202,6 +202,13 @@ function severityRank(level: "low" | "medium" | "high"): number {
 
 export interface DetectLeaksOpts {
   minSeverity?: "low" | "medium" | "high";
+  /**
+   * Sprint AI-0A (MEDIUM-4): janela de analise. Propagada aos getAnalyticsBy*
+   * + getDashboardStats. Default "all" (mantem o comportamento historico).
+   * NOTA: o leak "declining_trend" usa `analyticsByMonth` que e sempre por mes —
+   * a janela `period` limita os meses considerados, nao o agrupamento.
+   */
+  period?: string;
 }
 
 /**
@@ -213,6 +220,7 @@ async function detectLeaksForUser(
   opts: DetectLeaksOpts = {},
 ): Promise<CoachLeakSummary[]> {
   const minLevel = severityRank(opts.minSeverity ?? "low");
+  const period = opts.period ?? "all";
   // Lazy import para evitar ciclos
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const storageMod = require("./storage");
@@ -223,11 +231,11 @@ async function detectLeaksForUser(
   let analyticsBySite: any[] = [];
   let analyticsByMonth: any[] = [];
   try {
-    dashboardStats = (await storage.getDashboardStats?.(userId, "all")) ?? {};
+    dashboardStats = (await storage.getDashboardStats?.(userId, period)) ?? {};
     [analyticsByCategory, analyticsBySite, analyticsByMonth] = await Promise.all([
-      storage.getAnalyticsByCategory?.(userId, "all") ?? [],
-      storage.getAnalyticsBySite?.(userId, "all") ?? [],
-      storage.getAnalyticsByMonth?.(userId, "all") ?? [],
+      storage.getAnalyticsByCategory?.(userId, period) ?? [],
+      storage.getAnalyticsBySite?.(userId, period) ?? [],
+      storage.getAnalyticsByMonth?.(userId, period) ?? [],
     ]);
   } catch (err) {
     console.error("detectLeaksForUser.gather.error", { userId, err });

@@ -1,0 +1,114 @@
+%% Sequence Diagram — Write tool do Coach (AI-0A): LLM chama write tool -> coach_action pending + SSE tool_pending -> usuario confirma -> coachToolRunner.confirm (TX, payload_before, payload_after) -> SSE tool_result -> undo dentro de 5min
+%% Sprint AI-0A / RF-06..11. ATUALIZA o diagrama Coach-2B (Docs/architecture/diagrams/coach-2b/seq-write-tool-confirm-undo.mermaid)
+%%   refletindo: as 6 write tools agora REGISTRADAS no index.ts; confirm-strict como flag em memoria no descriptor (record_wallet_transaction); confirmacao SEMPRE (sem auto-aprovacao); sem delete_*.
+%% Referencias: ADR-077 (coach_actions), ADR-083 (confirm/undo + janela 5min), ADR-058 (wallet ledger imutavel — undo via reverse-row),
+%%              ADR-146 (write tools v1 — confirmacao obrigatoria), ADR-145 (estado canonico do registry)
+
+sequenceDiagram
+    autonumber
+    actor User as Jogador (Pro+)
+    participant FE as CoachActionConfirmCard / UndoBadge
+    participant API as POST /api/coach/chat (SSE)
+    participant LLM as Anthropic Claude
+    participant Reg as coachTools/registry
+    participant Run as coachToolRunner
+    participant Hnd as handler da write tool<br/>(registerTournamentInGrade / recordWalletTransaction / startGrindSession / logSessionCompleted / logLeakFocus / logStudySession)
+    participant DB as PostgreSQL<br/>coach_actions + entidade alvo
+    participant REST as POST /api/coach/actions/:id/{confirm,cancel,undo}
+
+    Note over User,REST: 1) LLM emite tool_use (write tool)
+    User->>API: "registra um deposito de R$500 na minha wallet PokerStars"
+    API->>Reg: import('coachTools/index') ; exportToolsForAnthropic(tier) — 17 tools (6 write incluidas)
+    API->>LLM: messages.stream() com tool list
+    LLM-->>API: stream chunks + tool_use {toolUseId, name='record_wallet_transaction', input}
+    API->>Reg: getTool('record_wallet_transaction')
+    Note over Reg: requiresConfirmation === true ; confirmationLevel === 'strict' (flag em memoria — NAO persistida em coach_actions)
+    API->>Run: dispatch(tool_use, ctx) — tool com confirmacao
+    Run->>DB: INSERT coach_actions {status='pending', tool_name, tool_use_id, input (Zod-validado), requires_confirmation=true, chat_session_id, message_id}
+    DB-->>Run: actionId
+    Run-->>API: pending decision
+    API-->>FE: SSE tool_pending {actionId, toolName='record_wallet_transaction', input}
+    Note over FE: toolName='record_wallet_transaction' => diff FINANCEIRO detalhado (confirm-strict):<br/>valor, moeda, wallet origem/destino, saldo ANTES/DEPOIS estimado + confirmacao explicita extra
+    FE-->>User: render CoachActionConfirmCard (diff Antes/Apos + botoes Confirmar/Cancelar)
+
+    alt 1) Happy path — Confirmar
+        User->>FE: clica "Confirmar"
+        FE->>REST: POST /api/coach/actions/:id/confirm
+        REST->>Run: confirmCoachAction(actionId, ctx, user)
+        Run->>DB: SELECT coach_actions WHERE id=$1 — checa ownership + status='pending'
+        alt status != pending (ja completed/cancelled/undone)
+            DB-->>Run: row com status outro
+            Run-->>REST: {ok:false, status:409, code:'already_confirmed' | 'expired' | 'already_undone'}
+            REST-->>FE: 409
+        else status == pending
+            Run->>DB: BEGIN TX
+            Note over Run,DB: producao: SELECT id,status FROM coach_actions WHERE id=$1 FOR UPDATE — serializa confirms paralelos
+            Run->>Run: re-valida tool.inputSchema.safeParse(action.input) — falha => 422 input_invalid (tampering / schema drift)
+            Run->>DB: UPDATE coach_actions SET status='executing'
+            Run->>Hnd: fetchPayloadBefore(input, ctx, tx)
+            Hnd->>DB: SELECT wallet + saldo ANTES da mutacao (ou null p/ tools sem before, ex register_tournament_in_grade)
+            DB-->>Hnd: payloadBefore
+            Run->>DB: UPDATE coach_actions SET payload_before=$1
+            Run->>Hnd: executeConfirmed(input, ctx, tx)
+            Hnd->>DB: walletService.recordWalletTransaction(tx, {walletId, amount, currency, type, reason, ...}) — mutacao real
+            DB-->>Hnd: {transactionId, delta, newBalanceNative, newBalanceUSD, fxRateUsed}
+            alt executeConfirmed lanca (ex: walletId de outro user, template_not_accessible, duplicate (user,leakCode,targetMonth))
+                Hnd-->>Run: throw
+                Run->>DB: ROLLBACK ; UPDATE coach_actions SET status='failed', error_message
+                Run-->>REST: {ok:false, status:4xx, code:'execution_failed'}
+                REST-->>FE: erro — Coach segue conversa
+            else sucesso
+                Run->>DB: UPDATE coach_actions SET payload_after=$1, affected_entity_type='wallet_transaction', affected_entity_id=$2, status='completed', confirmed_at=NOW(), undo_expires_at=NOW()+5min
+                Run->>DB: COMMIT
+                Run-->>REST: {ok:true, payloadAfter, affectedEntityType, affectedEntityId, undoExpiresAt}
+                REST-->>FE: 200 OK {payloadAfter, undoExpiresAt, diff}
+                REST-->>API: emit SSE tool_result {actionId, toolName, success:true, result} (via sessao SSE ativa)
+                API-->>FE: SSE tool_result
+                FE-->>User: troca CoachActionConfirmCard por UndoBadge (timer regressivo 5:00, lendo undoExpiresAt)
+            end
+        end
+
+        rect rgba(150, 230, 150, 0.15)
+        Note over User,REST: 1a) User clica "Desfazer" dentro da janela
+        User->>FE: clica "Desfazer" (3:42 restante)
+        FE->>REST: POST /api/coach/actions/:id/undo
+        REST->>Run: undoCoachAction(actionId, ctx, user)
+        Run->>DB: BEGIN TX ; SELECT FOR UPDATE WHERE id=$1 AND status='completed' AND undo_expires_at > NOW()
+        DB-->>Run: row OK
+        Run->>Hnd: tool.undo(payloadBefore, payloadAfter, tx)
+        Note over Hnd,DB: record_wallet_transaction: cria REVERSE-ROW (delta inverso, reason='manual_adjustment', reversedByActionId) — NUNCA hard-delete (ADR-058)<br/>register_tournament_in_grade: deleta a planned_tournament criada<br/>start_grind_session: deleta (instant) ou volta pra planned (from_planned)<br/>log_session_completed: restaura status='active' + valores anteriores integralmente<br/>log_leak_focus: UPDATE status='abandoned' (NAO deleta)<br/>log_study_session: deleta a study_session
+        Hnd->>DB: aplica o undo
+        Run->>DB: UPDATE coach_actions SET status='undone', undone_at=NOW() ; COMMIT
+        Run-->>REST: {ok:true}
+        REST-->>FE: 200 OK
+        FE-->>User: badge "Desfeito" cinza
+        end
+
+        rect rgba(255, 200, 100, 0.15)
+        Note over User,REST: 1b) Janela expira (5min)
+        Note over FE: timer atinge 0:00 — botao Desfazer disable
+        User->>FE: clica Desfazer (apos 5:01)
+        FE->>REST: POST /api/coach/actions/:id/undo
+        Run->>DB: SELECT WHERE id=$1 AND status='completed' — mas undo_expires_at <= NOW()
+        Run-->>REST: {ok:false, status:410, code:'undo_window_expired'}
+        REST-->>FE: 410 — alert "Janela de desfazer expirada"
+        end
+    end
+
+    alt 2) Cancelar pending (nunca confirmado)
+        User->>FE: clica "Cancelar"
+        FE->>REST: POST /api/coach/actions/:id/cancel
+        REST->>Run: cancelCoachAction(actionId, user)
+        Run->>DB: UPDATE coach_actions SET status='expired' WHERE id=$1 AND status='pending'
+        Run-->>REST: {ok:true}
+        REST-->>API: SSE tool_cancelled
+        FE-->>User: card removido — Coach segue conversa
+    end
+
+    alt 3) Cleanup automatico (cron 1x/min — ADR-087)
+        Note over Run,DB: pending sem confirm/cancel ha > 30min
+        Run->>DB: UPDATE coach_actions SET status='expired' WHERE status='pending' AND created_at < NOW()-30min
+        DB-->>Run: N rows
+    end
+
+    Note over User,REST: SEM auto-aprovacao (ADR-146 — confirmacao SEMPRE na v1). SEM delete_* tools.<br/>Auditoria em /settings/coach-actions: le coach_actions ; "Desfazer" disponivel se undo_expires_at > NOW.<br/>O nivel 'strict' NAO fica no coach_actions — o toolName ('record_wallet_transaction') ja diz tudo.

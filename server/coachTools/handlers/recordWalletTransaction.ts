@@ -155,6 +155,8 @@ export const recordWalletTransactionTool = {
     "Registra uma transacao financeira em uma das wallets do usuario. Sempre confirme antes.",
   inputSchema: recordWalletTransactionInputSchema,
   requiresConfirmation: true as const,
+  // ADR-146: confirm-strict — mexe em dinheiro; frontend renderiza diff detalhado.
+  confirmationLevel: "strict" as const,
   auditLevel: "persist" as const,
   gateByTier: ["pro", "premium", "admin"] as const,
   fetchPayloadBefore,

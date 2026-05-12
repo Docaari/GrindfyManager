@@ -13,7 +13,6 @@
 import {
   SAFETY_RULES,
   SAFETY_RULES_COMPETITOR_BLOCK,
-  CONFIDENCE_AND_CITATIONS_BACKTICKED as CITATION_AND_CONFIDENCE_INSTRUCTIONS,
   CITATIONS_RULES,
   CONFIDENCE_RULES,
 } from './coachSafetyPrompts';
@@ -96,8 +95,8 @@ export function buildStaticSystemBlock(
   // Sprint Biblioteca-1 / RF-09 (ADR-075): hard-block concorrentes em STATIC
   // block para preservar cache hit (atualizar lista quebra cache UMA vez).
   parts.push(SAFETY_RULES_COMPETITOR_BLOCK);
-  parts.push(CITATION_AND_CONFIDENCE_INSTRUCTIONS);
-  // Sprint Coach Sprint 0 — RF-04 + RF-05 (ADR-086)
+  // Sprint Coach Sprint 0 — RF-04 + RF-05 (ADR-086); reforcado em AI-0A / RF-14
+  // (ADR-147 §3 — citacoes/confianca passam a ter fonte unica em coachSafetyPrompts).
   parts.push(CITATIONS_RULES);
   parts.push(CONFIDENCE_RULES);
 

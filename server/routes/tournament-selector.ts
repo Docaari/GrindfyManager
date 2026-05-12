@@ -18,25 +18,23 @@ import { playerBundleCache } from "../services/playerBundle";
 import { selectorCache } from "../services/selectorCache";
 import { getSupremaTournaments } from "../supremaService";
 import { computeTournamentScore } from "../scoring/tournamentScorer";
-import { getTimeOfDayBucket } from "../scoring/timeOfDayBucket";
 import {
-  BUYIN_BUCKETS,
-  FIELD_BUCKETS,
-  SUPREMA_CATEGORY_MAP,
   COLD_START_PURE_THRESHOLD,
   COLD_START_PARTIAL_THRESHOLD,
 } from "../scoring/scoringConstants";
-import { normalizeBuyInToUSD } from "../scoring/currencyNormalizer";
 import { computeThresholds } from "../scoring/bankrollRules";
+// Sprint AI-0A (HIGH-1): builders de ScoringInputTournament extraidos para
+// modulo compartilhado (reusados pelo tournamentScoringService do Coach).
+import {
+  buildLibraryScoringInput,
+  buildSupremaScoringInput,
+  dayOfWeekFromDate,
+  type ScoringBuildResult,
+} from "../scoring/buildScoringInput";
 import type {
   ColdStartLevel,
   SelectorTournament,
   SelectorPlayerProfile,
-  ScoringInputTournament,
-  GradeLetter,
-  TimeOfDayBucket,
-  FieldBucket,
-  SpeedBucket,
 } from "../../shared/scoring";
 
 // =============================================================================
@@ -77,52 +75,6 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function dayOfWeekFromDate(date: string): number {
-  // Returns 0-6 (Sunday=0)
-  const d = new Date(`${date}T12:00:00Z`);
-  return d.getUTCDay();
-}
-
-function bucketBuyIn(amountUSD: number): string {
-  // BUYIN_BUCKETS estao em USD. Caller deve normalizar moeda antes via normalizeBuyInToUSD.
-  for (const b of BUYIN_BUCKETS) {
-    if (amountUSD >= b.min && amountUSD < b.max) {
-      return b.range;
-    }
-  }
-  return BUYIN_BUCKETS[BUYIN_BUCKETS.length - 1].range;
-}
-
-function bucketField(field: number | null | undefined): FieldBucket | null {
-  if (field == null) return null;
-  for (const b of FIELD_BUCKETS) {
-    if (field >= b.min && field < b.max) {
-      return b.bucket as FieldBucket;
-    }
-  }
-  return null;
-}
-
-function mapCategory(input: string | null | undefined): string | null {
-  if (!input) return null;
-  const mapped = SUPREMA_CATEGORY_MAP[input];
-  return mapped ?? null;
-}
-
-function mapSpeed(input: string | null | undefined): SpeedBucket {
-  if (!input) return "Normal";
-  if (input === "Normal" || input === "Turbo" || input === "Hyper") return input;
-  return "Normal";
-}
-
-function safeTimeOfDayBucket(time: string): TimeOfDayBucket | null {
-  try {
-    return getTimeOfDayBucket(time);
-  } catch {
-    return null;
-  }
-}
-
 function classifyColdStart(totalTournaments: number): ColdStartLevel {
   if (totalTournaments < COLD_START_PURE_THRESHOLD) return "pure";
   if (totalTournaments < COLD_START_PARTIAL_THRESHOLD) return "partial";
@@ -141,89 +93,20 @@ function filtersHashOf(req: TournamentSelectorRequest): string {
 // do server/scoring/bankrollRules.ts como fonte unica de verdade.
 
 // =============================================================================
-// Build ScoringInputTournament for each source
-//
-// HIGH #7: cada fonte declara sua moeda. Suprema -> BRL (raw buy-in). Library ->
-// currency armazenada na entry (default USD). buyInUSD e usado para bucketizacao
-// (BUYIN_BUCKETS estao em USD) e para o filtro de bankroll (que tambem e em USD).
-// O buyIn original (em moeda nativa) e devolvido na response para a UI exibir.
+// Build ScoringInputTournament for each source — extraido para
+// server/scoring/buildScoringInput.ts (Sprint AI-0A HIGH-1, reusado pelo
+// tournamentScoringService do Coach). Aqui so a regra de elegibilidade da
+// library para uma data (so torneios com dayOfWeek == dow do dia).
 // =============================================================================
 
-interface ScoringBuildResult {
-  sct: ScoringInputTournament;
-  raw: any;
-  buyInRaw: number;          // moeda nativa
-  buyInUSD: number;          // normalizado para USD
-  currency: string;
-}
-
-function supremaToScoringInput(
-  s: any,
-  date: string,
-  exchangeRates: Record<string, number>,
-): ScoringBuildResult {
-  const buyInNum = typeof s.buyIn === "number" ? s.buyIn : parseFloat(s.buyIn ?? "0");
-  // Suprema entrega buy-ins em BRL (real brasileiro).
-  const currency = s.currency ?? "BRL";
-  const buyInUSD = normalizeBuyInToUSD(buyInNum, currency, exchangeRates);
-  const fieldSize = s.maxPlayers ?? null;
-  const tobBucket = safeTimeOfDayBucket(s.time ?? "00:00");
-  const dow = typeof s.dayOfWeek === "number" ? s.dayOfWeek : dayOfWeekFromDate(date);
-  const category = mapCategory(s.type);
-
-  const sct: ScoringInputTournament = {
-    id: s.externalId ?? `suprema-${s.id ?? Math.random()}`,
-    source: "suprema",
-    name: s.name ?? "",
-    site: s.site ?? "Suprema",
-    buyIn: buyInNum,
-    buyInBucket: bucketBuyIn(buyInUSD),
-    category,
-    speed: mapSpeed(s.speed),
-    dayOfWeek: dow,
-    time: s.time ?? "00:00",
-    timeOfDayBucket: tobBucket,
-    fieldBucket: bucketField(fieldSize),
-    fieldSizeEstimate: fieldSize,
-  };
-
-  return { sct, raw: s, buyInRaw: buyInNum, buyInUSD, currency };
-}
-
-function libraryToScoringInput(
+function libraryToScoringInputForDate(
   l: any,
   date: string,
   exchangeRates: Record<string, number>,
 ): ScoringBuildResult | null {
-  // Only score templates with dayOfWeek defined
   if (l.dayOfWeek == null) return null;
-  const targetDow = dayOfWeekFromDate(date);
-  if (l.dayOfWeek !== targetDow) return null;
-
-  const buyInNum = typeof l.buyIn === "number" ? l.buyIn : parseFloat(l.buyIn ?? "0");
-  const currency = l.currency ?? "USD";
-  const buyInUSD = normalizeBuyInToUSD(buyInNum, currency, exchangeRates);
-  const fieldSize = l.fieldSize ?? null;
-  const tobBucket = safeTimeOfDayBucket(l.time ?? "00:00");
-  const category = mapCategory(l.type);
-
-  const sct: ScoringInputTournament = {
-    id: l.id,
-    source: "library",
-    name: l.name ?? "",
-    site: l.site ?? "",
-    buyIn: buyInNum,
-    buyInBucket: bucketBuyIn(buyInUSD),
-    category,
-    speed: mapSpeed(l.speed),
-    dayOfWeek: l.dayOfWeek,
-    time: l.time ?? "00:00",
-    timeOfDayBucket: tobBucket,
-    fieldBucket: bucketField(fieldSize),
-    fieldSizeEstimate: fieldSize,
-  };
-
-  return { sct, raw: l, buyInRaw: buyInNum, buyInUSD, currency };
+  if (l.dayOfWeek !== dayOfWeekFromDate(date)) return null;
+  return buildLibraryScoringInput(l, exchangeRates);
 }
 
 // =============================================================================
@@ -361,7 +244,7 @@ export async function handleTournamentSelector(
   }
 
   for (const s of (supremaList || []) as any[]) {
-    const built = supremaToScoringInput(s, date, exchangeRates);
+    const built = buildSupremaScoringInput(s, date, exchangeRates);
     const result = computeTournamentScore(built.sct, bundle, { lookbackDays });
     const band = bankrollBandOf(built.buyInUSD);
     const mergedWarnings = band.warning
@@ -398,7 +281,7 @@ export async function handleTournamentSelector(
   }
 
   for (const l of (libraryList || []) as any[]) {
-    const built = libraryToScoringInput(l, date, exchangeRates);
+    const built = libraryToScoringInputForDate(l, date, exchangeRates);
     if (!built) continue;
     const result = computeTournamentScore(built.sct, bundle, { lookbackDays });
     const band = bankrollBandOf(built.buyInUSD);

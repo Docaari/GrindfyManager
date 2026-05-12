@@ -1,6 +1,12 @@
 %% Sequence Diagram — Write tool com confirmation + undo (ADR-083)
 %% Sprint Coach-2B RF-01 + RF-02 (record_wallet_transaction como exemplo concreto)
 %%
+%% >>> ATUALIZADO POR Sprint AI-0A: ver Docs/architecture/diagrams/coach-ai-0a/seq-write-tool-confirm-undo.mermaid
+%% >>> As 6 write tools (register_tournament_in_grade, record_wallet_transaction, start_grind_session,
+%% >>>   log_session_completed, log_leak_focus, log_study_session) AGORA estao REGISTRADAS no index.ts (ADR-145).
+%% >>> 'confirm-strict' = flag em memoria no descriptor (confirmationLevel:'strict' em record_wallet_transaction), NAO persistida (ADR-146).
+%% >>> Confirmacao SEMPRE na v1 (sem auto-aprovacao). Sem delete_* tools. Este diagrama (Coach-2B) descreve a infra; o de AI-0A descreve o estado ligado.
+%%
 %% Cobre 4 outcomes:
 %%   1. Happy path (Confirmar → Desfazer dentro da janela)
 %%   2. Cancelar pending

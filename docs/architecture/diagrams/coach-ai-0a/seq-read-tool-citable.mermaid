@@ -1,0 +1,90 @@
+%% Sequence Diagram — Read tool do Coach (AI-0A): LLM chama read tool -> handler -> service/storage -> resposta citavel de volta ao stream
+%% Sprint AI-0A / RF-01..05, RF-12, RF-14
+%% Cobre: query_dimension (exemplo concreto), find_top_leaks, get_tournament_suggestions,
+%%        explain_tournament_score, simulate_bankroll_scenario, verify_leak_progress.
+%% Referencias: ADR-023 (registry), ADR-024 (wrapping), ADR-026 (limit 5), ADR-086 (citations),
+%%              ADR-145 (estado canonico), ADR-147 (service extraction + banca canonica)
+
+sequenceDiagram
+    autonumber
+    actor User as Jogador (Pro+)
+    participant FE as Frontend<br/>useCoachChat
+    participant BE as POST /api/coach/chat (SSE)
+    participant Reg as coachTools/registry
+    participant Run as coachToolRunner
+    participant Hnd as handler da tool<br/>(queryDimension / findTopLeaks / ...)
+    participant Svc as service / storage<br/>(getAnalyticsBy* / detectLeaks / tournamentScoringService / walletService)
+    participant DB as PostgreSQL
+    participant Anth as Anthropic API<br/>messages.stream
+
+    User->>FE: "olha meu ROI por site no ultimo mes"
+    FE->>BE: POST /api/coach/chat {coachType, message, sessionId, pageContext?}
+    Note over BE: requireAuth + resolveUserTier (ADR-020)<br/>tier in {pro, premium, admin}
+    BE->>Reg: import('coachTools/index') (side-effect: registra 17 tools)
+    BE->>Reg: exportToolsForAnthropic(tier)
+    Reg-->>BE: 17 tools como AnthropicToolSchema[] (filtro __stub vazio — nao ha mais stubs)
+    Note over BE: buildSystemBlocks (ADR-019/115):<br/>bloco ESTATICO cacheado = SAFETY + CITATIONS_RULES + CONFIDENCE_RULES (reforcados RF-14) + tool-result rule<br/>bloco DINAMICO = contexto + pageContext sanitizado
+    BE->>Anth: messages.stream({system[], tools, messages})
+    activate Anth
+
+    Anth-->>BE: content_block_start type=tool_use {toolUseId, name='query_dimension'}
+    BE->>FE: SSE tool_use_start
+    Anth-->>BE: input_json_delta (partial_json) -> content_block_stop
+    BE->>FE: SSE tool_use_input_done {input: {dimension:'roi', groupBy:'site', period:'30d'}}
+    Anth-->>BE: message_stop stop_reason=tool_use
+
+    alt toolCallsInTurn >= 5 (limite ADR-026)
+        BE->>FE: SSE tool_limit_reached {limit:5}
+        Note over BE: break — nao continua stream
+    else toolCallsInTurn < 5
+        BE->>FE: SSE tool_executing {toolUseId}
+        BE->>Run: executeTool(toolUseId, 'query_dimension', rawInput, ctx{userId,...})
+        activate Run
+        Run->>Reg: getTool('query_dimension')
+        alt inputSchema.safeParse(rawInput) falha (ex: dimension fora do enum)
+            Reg-->>Run: tool encontrada
+            Run-->>BE: {ok:false, error:'validation_failed', details} — SEM throw, SEM chamada ao storage
+        else input valido
+            Run->>Hnd: handler(input, ctx)
+            activate Hnd
+            Note over Hnd: userId vem do ctx — NUNCA do input<br/>regra §6.1: so toca tournaments WHERE grind_session_id IS NULL
+            Hnd->>Svc: storage.getAnalyticsBySite(userId, '30d', filters)
+            Svc->>DB: SELECT ... FROM tournaments WHERE user_id=$1 AND grind_session_id IS NULL ... GROUP BY site
+            alt sem dados
+                DB-->>Svc: []
+                Svc-->>Hnd: []
+                Hnd-->>Run: {dimension:'roi', groupBy:'site', rows:[], totalCount:0, period:'30d', note:'sem dados suficientes'} — ok
+            else com dados
+                DB-->>Svc: rows por site
+                Svc-->>Hnd: [{site:'PokerStars', roi:8.2, count:142}, ...]
+                Hnd-->>Run: {dimension:'roi', groupBy:'site', rows:[{key:'PokerStars',value:8.2,count:142},...], totalCount:265, period:'30d'}
+            end
+            deactivate Hnd
+            alt storage indisponivel (lesson #9)
+                Note over Hnd: console.error ANTES do fallback — nao engolir silenciosamente
+                Hnd-->>Run: rethrow
+                Run->>DB: INSERT coach_actions (status='failed', error_message, latency_ms)
+                Run-->>BE: {ok:false, error:'handler_error', message}
+            else sucesso
+                Run->>DB: INSERT coach_actions (status='completed', latency_ms; result so se auditLevel='persist' — read tools = 'log', sem result)
+                Run-->>BE: {ok:true, data}
+            end
+        end
+        deactivate Run
+        Note over BE: wrapResult -> {__type:'ToolResult', tool:'query_dimension', ok, data} (ADR-024)<br/>truncar a ~4000 tokens se necessario (__truncated:true)
+        BE->>FE: SSE tool_completed {toolUseId, success, result (UI ~2000 chars)}
+        FE->>User: card "ROI por site" inline
+        BE->>BE: toolCallsInTurn++ ; append assistant{tool_use} + user{tool_result}
+        BE->>Anth: messages.stream(continuation) — modelo "ve" o tool_result no mesmo turn
+        Note over BE,Anth: NOTA: segundo turn conversacional completo (re-invocar o modelo APOS a tool com tool_result e esperar nova resposta narrativa)<br/>NAO esta neste sprint — pendencia conhecida (AI-0B/AI-1B). Hoje o modelo gera a narrativa no mesmo turn, antes/depois do tool_use.
+    end
+
+    Anth-->>BE: content_block_delta (texto): "Seu ROI ultimo mes por site: PokerStars +8.2% [confianca: alta, N=142] ..."<br/>"... no agregado +X% [fonte: query_dimension:roi:30d] [confianca: alta, N=265]."
+    Note over Anth: RF-14 — TODO numero de tool carrega [fonte: query_dimension:roi:30d] inline<br/>+ [confianca: ...] usando totalCount como N (thresholds N<30 baixa / 30<=N<100 media / N>=100 alta)
+    BE->>FE: SSE chunks (texto)
+    FE->>User: render resposta com citacao + confidence tag
+    Anth-->>BE: message_stop stop_reason=end_turn
+    deactivate Anth
+    BE->>FE: SSE done {messageId, sessionId, usage}
+
+    Note over Hnd,Svc: Variantes por tool:<br/>find_top_leaks -> detectLeaks(userId,{period}) de coachLeakDetection.ts ; cita [fonte: find_top_leaks:<code>:90d], N = evidence.n<br/>get_tournament_suggestions -> tournamentScoringService.rankTournamentsForContext (reusa computeTournamentScore + playerBundleCache) ; cita [fonte: get_tournament_suggestions:<date>]<br/>explain_tournament_score -> tournamentScoringService.explainScoreForTournament (XOR de 3 IDs, valida ownership) ; cita [fonte: explain_tournament_score:<id>]<br/>simulate_bankroll_scenario -> walletService.getConsolidatedBalance(userId) [USD, FX-aware] + computeThresholds ; recommendation condicional + disclaimer financeiro ; cita [fonte: simulate_bankroll_scenario:<scenario>:atual]<br/>verify_leak_progress -> storage.findCoachLeakFocus + re-query baseline ; cita [fonte: verify_leak_progress:<leakCode>:atual]

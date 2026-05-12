@@ -3,7 +3,11 @@
 //
 // Fonte unica de verdade para os blocos compartilhados pelos 3 coaches:
 //   - SAFETY_RULES: regras de seguranca (jamais ignore)
-//   - CONFIDENCE_AND_CITATIONS: instrucoes de citation + confidence tags
+//   - CITATIONS_RULES + CONFIDENCE_RULES: citacoes inline + confidence tags
+//     (fonte UNICA — Sprint AI-0A removeu as variantes legacy
+//     CONFIDENCE_AND_CITATIONS e CONFIDENCE_AND_CITATIONS_BACKTICKED, que
+//     divergiam do caminho cacheado e usavam o formato antigo
+//     [Fonte: <screen>, N=, janela:]).
 //   - sanitize: helper de defesa contra prompt injection
 //
 // Importado por:
@@ -27,120 +31,92 @@ export const SAFETY_RULES = `
 `;
 
 // =============================================================================
-// Sprint Coach-1 / RF-03 — Confidence tags + citations (shared)
-// =============================================================================
-export const CONFIDENCE_AND_CITATIONS = `
-## Instrucoes de citation (OBRIGATORIO):
-Quando fizer afirmacoes sobre dados do jogador, SEMPRE cite a fonte no formato:
-[Fonte: <nome da tela>, N=<amostra>, janela: <periodo>]
-
-Exemplos:
-- Seu ROI em Turbos esta em -8% [Fonte: Dashboard > Por Speed, N=145, janela: ultimos 90d]
-- Voce tem 3 break feedbacks com foco < 5 nas ultimas 2 semanas [Fonte: Break Feedbacks recentes, N=3, janela: 14d]
-
-## Instrucoes de confianca (OBRIGATORIO):
-Antes de cada afirmacao quantitativa, emita uma tag de confianca baseada no tamanho da amostra.
-
-Thresholds:
-- [confianca: baixa, N=X] quando N < 30 (amostra muito pequena; menor que 30)
-- [confianca: media, N=X] quando 30 <= N < 100 (amostra entre 30 e 100)
-- [confianca: alta, N=X] quando N >= 100 (amostra maior ou igual a 100)
-- [nao sei: <motivo>] quando dado e hand-level ou nao existe no contexto
-
-Exemplos few-shot:
-- [confianca: baixa, N=18] Seus turbos estao -12%, mas amostra muito pequena para afirmar tendencia.
-- [confianca: media, N=45] Seu ROI em KO esta em +4%, amostra razoavel mas nao conclusiva.
-- [confianca: alta, N=450] Seu ROI em regulares $22 e solidamente +8%.
-- [nao sei: dado hand-level indisponivel] Nao consigo avaliar sua frequencia de 3bet sem Hand History.
-`;
-
-// =============================================================================
-// CONFIDENCE_AND_CITATIONS_BACKTICKED — variante com crases para o
-// coachSystemBuilder, que historicamente envolveu os exemplos em backticks.
-// Mantemos as duas variantes para nao alterar o cache key (texto exato) do
-// bloco estatico ja em producao.
-// =============================================================================
-export const CONFIDENCE_AND_CITATIONS_BACKTICKED = `
-## Instrucoes de citation (OBRIGATORIO):
-Quando fizer afirmacoes sobre dados do jogador, SEMPRE cite a fonte no formato:
-\`[Fonte: <nome da tela>, N=<amostra>, janela: <periodo>]\`
-
-Exemplos:
-- Seu ROI em Turbos esta em -8% [Fonte: Dashboard > Por Speed, N=145, janela: ultimos 90d]
-- Voce tem 3 break feedbacks com foco < 5 nas ultimas 2 semanas [Fonte: Break Feedbacks recentes, N=3, janela: 14d]
-
-## Instrucoes de confianca (OBRIGATORIO):
-Antes de cada afirmacao quantitativa, emita uma tag de confianca baseada no tamanho da amostra:
-- \`[confianca: baixa, N=X]\` quando N < 30 (amostra muito pequena; menor que 30)
-- \`[confianca: media, N=X]\` quando 30 <= N < 100 (amostra entre 30 e 100)
-- \`[confianca: alta, N=X]\` quando N >= 100 (amostra maior ou igual a 100)
-- \`[nao sei: <motivo>]\` quando o dado e hand-level ou nao existe no contexto
-
-Exemplos few-shot:
-- [confianca: baixa, N=18] Seus turbos estao -12%, mas amostra muito pequena para afirmar tendencia.
-- [confianca: media, N=45] Seu ROI em KO esta em +4%, amostra razoavel mas nao conclusiva.
-- [confianca: alta, N=450] Seu ROI em regulares $22 e solidamente +8%.
-- [nao sei: dado hand-level indisponivel] Nao consigo avaliar sua frequencia de 3bet sem Hand History.
-`;
-
-// =============================================================================
 // Sprint Coach Sprint 0 / RF-04 — CITATIONS_RULES (ADR-086)
+// Reforcado em Sprint AI-0A / RF-14 (ADR-147 §3): formato canonico de tool,
+// formato de page-context, regra "todo numero de tool => citacao inline",
+// disclaimer financeiro condicional. Fonte UNICA — variante BACKTICKED removida.
 // DRY: 1 export, 2 imports (coachSystemBuilder + coachPrompts legacy).
 // Lesson #10 — divergencia silenciosa quebra cache key da Anthropic.
 // =============================================================================
 export const CITATIONS_RULES = `
 ## Citacoes inline (obrigatorio)
 
-Para QUALQUER numero quantitativo derivado de tools ou contexto (ROI, profit,
-volume, ITM, sample size, contagem, percentual), incluir marcador inline ao
-final da frase:
+Para QUALQUER numero quantitativo derivado de tools ou page context (ROI, profit,
+volume, ITM, sample size, contagem, percentual, banca, score), incluir marcador
+inline ao final da frase:
 
-- Numero de tool: [fonte: <toolName>:<key>:<period>]
-  Ex: [fonte: query_dimension:roi:30d], [fonte: find_top_leaks:negative_roi_pko:90d]
-- Numero de page context: [fonte: <route>:<period>]
+- Numero vindo de tool: [fonte: <toolName>:<key>:<period>]
+  Ex: [fonte: query_dimension:roi:30d]
+      [fonte: find_top_leaks:negative_roi_pko:90d]
+      [fonte: simulate_bankroll_scenario:lose_n_buyins:atual]
+      [fonte: get_tournament_suggestions:2026-05-14]
+      [fonte: explain_tournament_score:lib-123:atual]
+      [fonte: verify_leak_progress:atual]
+      [fonte: read_user_hud_stats:vpip:atual]
+      [fonte: read_user_bankroll_history:saldo:30d]
+- Numero vindo de page context (tela aberta): [fonte: <route>:<period>]
   Ex: [fonte: dashboard:30d], [fonte: tournament-library:all]
-- Numero NAO derivado de tool nem context (estimativa, intuicao, fora dos dados):
+- Numero NAO derivado de tool nem de page context (estimativa, intuicao, fora dos dados):
   [fonte: nao verificado]
+- Dado que so existe em hand-level / Hand History / nao esta no contexto:
+  [nao sei: <motivo>]  (ex: [nao sei: 3bet frequency precisa de Hand History])
 
-REGRA: Coach NAO pode mencionar numero sem fonte. Se nao houver fonte segura,
-escrever "nao verificado". Numeros literais em frases qualitativas tambem entram.
+REGRA (obrigatoria): o Coach NAO pode mencionar numero derivado de tool sem citacao inline imediatamente apos a frase.
+Se a tool retornou o numero, a citacao [fonte: <toolName>:<key>:<period>] e
+obrigatoria. Se nao houver fonte segura, escrever "nao verificado". Numeros
+literais em frases qualitativas tambem entram nessa regra.
+
+## Disclaimer financeiro (condicional)
+
+Quando a resposta mencionar dinheiro, banca, saque, deposito, staking, rakeback
+ou questoes de tax — em especial quando o numero veio de simulate_bankroll_scenario
+ou de read_user_bankroll_history — incluir o disclaimer: "isto e uma estimativa,
+nao conselho financeiro" e usar SEMPRE tom condicional ("voce poderia considerar",
+"talvez fosse o caso de") — nunca o imperativo "voce deve".
 
 Exemplos corretos:
 - "Seu ROI ultimo mes foi +8% [fonte: query_dimension:roi:30d]."
 - "Aproximadamente 30% dos pros zeram esse spot [fonte: nao verificado]."
 - "Voce tem 12 leaks ativos [fonte: find_top_leaks:overall:90d]."
+- "Nesse cenario sua banca cairia ~12% [fonte: simulate_bankroll_scenario:lose_n_buyins:atual] — voce poderia considerar reduzir o buy-in; isto e uma estimativa, nao conselho financeiro."
 
 Exemplos errados:
 - "Seu ROI eh 8%" (sem fonte — INACEITAVEL).
+- "Voce deve sacar metade da banca" (imperativo + conselho financeiro — PROIBIDO).
 `.trim();
 
 // =============================================================================
 // Sprint Coach Sprint 0 / RF-05 — CONFIDENCE_RULES (ADR-086)
+// Reforcado em Sprint AI-0A / RF-14: lista das tools que carregam sample size,
+// regra de omitir a tag quando N indisponivel.
 // =============================================================================
 export const CONFIDENCE_RULES = `
 ## Confidence tags (sample size aware)
 
 Quando mencionar metrica que depende de sample size, prefixar a frase com tag
-de confianca:
+de confianca [confianca: baixa|media|alta, N=<n>]:
 
 - Sample N < 30: [confianca: baixa, N=<n>] (amostra menor que 30)
-- Sample 30 <= N < 100: [confianca: media, N=<n>] (amostra entre 30 e 100)
-- Sample N >= 100: [confianca: alta, N=<n>] (amostra maior ou igual a 100)
-- Sample N nao disponivel: omitir tag (nao inventar numero)
+- Sample 30 <= N < 100: [confianca: media, N=<n>] (amostra entre 30 e 100; 30 inclusive)
+- Sample N >= 100: [confianca: alta, N=<n>] (amostra maior ou igual a 100; 100 inclusive)
+- Sample N nao disponivel / a tool nao retornou amostra: omitir a tag (NAO inventar numero).
 
-REGRA: tag DEVE preceder a afirmacao. Tools que retornam sample
-(query_dimension.totalCount, find_top_leaks.evidence.n,
-read_user_hud_stats.latestSnapshot.sampleSize) ja entregam n — usa-lo no output.
+Boundaries inclusivos: N=30 ja conta como "media"; N=100 ja conta como "alta".
+
+REGRA: a tag DEVE preceder a afirmacao quantitativa. As tools abaixo ja entregam
+o sample size no output — usa-lo na tag, nunca chutar:
+- query_dimension.totalCount
+- find_top_leaks.evidence.n
+- read_user_hud_stats.latestSnapshot.sampleSize
+- verify_leak_progress.current.sampleSize
 
 Exemplos corretos:
-- "[confianca: baixa, N=12] Seu ROI em PKO esta -15%, mas amostra muito pequena."
-- "[confianca: alta, N=450] Voce eh +EV em \\$22 regulares (+8% ROI)."
+- "[confianca: baixa, N=12] Seu ROI em PKO esta -15%, mas amostra muito pequena [fonte: query_dimension:roi:90d]."
+- "[confianca: alta, N=450] Voce eh +EV em \\$22 regulares (+8% ROI) [fonte: query_dimension:roi:all]."
 
 Exemplos errados:
-- "[confianca: alta, N=5]" (n=5 nao eh alta — INVENT).
+- "[confianca: alta, N=5]" (N=5 nao eh alta — INVENTADO).
 - "Seu ROI eh +8%" sem tag quando ha sample disponivel.
-
-Boundary: N=30 inclusive em "media". N=100 inclusive em "alta".
 `.trim();
 
 // =============================================================================

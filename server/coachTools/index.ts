@@ -1,18 +1,35 @@
 // =============================================================================
 // Coach Tools — Side-effect entrypoint
 //
-// Importar este modulo registra todas as tools no registry singleton.
-// Sprint Cooldown-3: registra read_cooldown_history (RF-07).
+// Importar este modulo registra TODAS as tools canonicas do Coach no registry
+// singleton (ADR-145 — estado canonico pos-AI-0A).
 //
-// Tools de Sprint Coach 2A (find_top_leaks, simulate_bankroll_scenario,
-// query_dimension, get_tournament_suggestions, explain_tournament_score)
-// sao registradas como STUBS aqui apenas para satisfazer o teste de
-// regressao da tool-registry-cooldown.test.ts. Os handlers reais vivem em
-// arquivos baseline separados (parcialmente untracked / coach-baseline broken)
-// e podem ser religados quando o time consertar a baseline.
+// Read tools:
+//   - read_cooldown_history (Cooldown-3)
+//   - read_user_hud_stats v2 (Stats-V2)
+//   - read_user_bankroll_history (Bankroll-Reports-Detail)
+//   - read_theme_with_linked_stats_and_spots (+ alias read_theme_with_linked_spots)
+//   - recommend_lesson (Biblioteca-1)
+//   - query_dimension (AI-0A — religada)
+//   - find_top_leaks (AI-0A — religada, era stub)
+//   - get_tournament_suggestions (AI-0A — registrada do zero)
+//   - explain_tournament_score (AI-0A — registrada do zero)
+//   - simulate_bankroll_scenario (AI-0A — religada, era stub)
+//   - verify_leak_progress (Coach-2B handler, registrada em AI-0A)
+//
+// Write tools (Coach-2B handlers, registrados em AI-0A — confirmacao SEMPRE v1):
+//   - register_tournament_in_grade
+//   - record_wallet_transaction (confirmationLevel: 'strict')
+//   - start_grind_session
+//   - log_session_completed
+//   - log_leak_focus
+//   - log_study_session
+//
+// NAO ha mais nenhuma tool stub aqui (RF-13). O flag de tool incompleta
+// permanece definido na interface CoachTool e o filtro defensivo em
+// server/routes/coach.ts continua — custo zero, ADR-145 §6.
 // =============================================================================
 
-import { z } from 'zod';
 import { registerTool, type CoachTool } from './registry';
 import { readCooldownHistoryTool } from './handlers/readCooldownHistory';
 import { readUserHudStatsToolV2 } from '../coach/tools/readUserHudStatsV2';
@@ -23,53 +40,20 @@ import {
   readThemeWithLinkedSpotsToolAlias,
 } from './readThemeWithLinkedStatsAndSpots';
 import { recommendLessonTool } from './recommendLesson';
-
-// -----------------------------------------------------------------------------
-// Stubs de regressao Sprint Coach 2A — tools cujo handler real esta na
-// baseline broken (115 fails). Stubs minimos para que o registry exponha
-// o nome conforme expectativa do tool-registry-cooldown.test.ts.
-// -----------------------------------------------------------------------------
-
-const stubHandler = async (_input: any, _ctx: any) => ({
-  __type: 'ToolResult',
-  ok: false,
-  code: 'not_implemented',
-  message: 'tool stub — baseline handler pending',
-});
-
-// MEDIUM-1 reviewer: stubs marcados com __stub para que exportToolsForAnthropic
-// possa filtrar em producao quando wire-up no /api/coach/chat for ligado.
-// TODO(@coach-baseline 2026-Q2): remover stubs ao religar handlers reais.
-// NAO mergear refactor que ligue exportToolsForAnthropic com stubs ainda aqui
-// sem garantir filtragem em producao via __stub flag.
-const findTopLeaksStub: CoachTool = {
-  name: 'find_top_leaks',
-  description: 'Detecta principais leaks do usuario (categoria, site, ROI).',
-  inputSchema: z.object({
-    limit: z.number().int().min(1).max(20).default(5),
-    minSeverity: z.enum(['low', 'medium', 'high']).default('low'),
-  }),
-  handler: stubHandler,
-  requiresConfirmation: false,
-  auditLevel: 'log',
-  gateByTier: ['pro', 'premium', 'admin'],
-  __stub: true,
-};
-
-const simulateBankrollStub: CoachTool = {
-  name: 'simulate_bankroll_scenario',
-  description: 'Simula cenarios de bankroll (variancia, ROI alvo, ABI).',
-  inputSchema: z.object({
-    abi: z.number().positive(),
-    targetRoi: z.number(),
-    sampleSize: z.number().int().positive().default(1000),
-  }),
-  handler: stubHandler,
-  requiresConfirmation: false,
-  auditLevel: 'log',
-  gateByTier: ['pro', 'premium', 'admin'],
-  __stub: true,
-};
+// AI-0A — read tools religadas / registradas do zero.
+import { queryDimensionTool } from './handlers/queryDimension';
+import { findTopLeaksTool } from './handlers/findTopLeaks';
+import { getTournamentSuggestionsTool } from './handlers/getTournamentSuggestions';
+import { explainTournamentScoreTool } from './handlers/explainTournamentScore';
+import { simulateBankrollScenarioTool } from './handlers/simulateBankrollScenario';
+import { verifyLeakProgressTool } from './handlers/verifyLeakProgress';
+// AI-0A — write tools (handlers de Coach-2B), confirmacao SEMPRE v1.
+import { registerTournamentInGradeTool } from './handlers/registerTournamentInGrade';
+import { recordWalletTransactionTool } from './handlers/recordWalletTransaction';
+import { startGrindSessionTool } from './handlers/startGrindSession';
+import { logSessionCompletedTool } from './handlers/logSessionCompleted';
+import { logLeakFocusTool } from './handlers/logLeakFocus';
+import { logStudySessionTool } from './handlers/logStudySession';
 
 // -----------------------------------------------------------------------------
 // Registration (idempotent via try/catch — silencia "tool_already_registered"
@@ -80,7 +64,6 @@ function safeRegister(tool: CoachTool): void {
   try {
     registerTool(tool, { core: true });
   } catch (err) {
-    // Tool ja registrada (re-import) — no-op.
     if (err instanceof Error && err.message.includes('tool_already_registered')) {
       return;
     }
@@ -88,27 +71,29 @@ function safeRegister(tool: CoachTool): void {
   }
 }
 
-// Sprint Cooldown-3 (RF-07).
+// Read tools pre-existentes.
 safeRegister(readCooldownHistoryTool);
-
-// Sprint Stats-V2 (ADR-062) — substitui V1 (ADR-052).
 safeRegister(readUserHudStatsToolV2);
-
-// Sprint Coach 2A regression stubs (handlers reais na baseline broken).
-safeRegister(findTopLeaksStub);
-safeRegister(simulateBankrollStub);
-
-// Sprint Bankroll-Reports-Detail (RF-07): tool real (Pro+ tier ja gated em
-// readUserBankrollHistoryTool.gateByTier).
 safeRegister(readUserBankrollHistoryTool as unknown as CoachTool);
-
-// Sprint stats-themes-linking-1 (ADR-142) — substitui read_theme_with_linked_spots
-// pelo unificado read_theme_with_linked_stats_and_spots. Alias mantido por 1 sprint.
-safeRegister(readThemeWithLinkedStatsAndSpotsTool as any);
-safeRegister(readThemeWithLinkedSpotsToolAlias as any);
-
-// Sprint Biblioteca-1 RF-10 — recommend_lesson (ADR-075)
+safeRegister(readThemeWithLinkedStatsAndSpotsTool as unknown as CoachTool);
+safeRegister(readThemeWithLinkedSpotsToolAlias as unknown as CoachTool);
 safeRegister(recommendLessonTool as unknown as CoachTool);
+
+// AI-0A — read tools religadas / registradas do zero (RF-01..05, RF-12).
+safeRegister(queryDimensionTool);
+safeRegister(findTopLeaksTool);
+safeRegister(getTournamentSuggestionsTool);
+safeRegister(explainTournamentScoreTool);
+safeRegister(simulateBankrollScenarioTool);
+safeRegister(verifyLeakProgressTool as unknown as CoachTool);
+
+// AI-0A — write tools (RF-06..11), confirmacao SEMPRE v1 (ADR-146).
+safeRegister(registerTournamentInGradeTool as unknown as CoachTool);
+safeRegister(recordWalletTransactionTool as unknown as CoachTool);
+safeRegister(startGrindSessionTool as unknown as CoachTool);
+safeRegister(logSessionCompletedTool as unknown as CoachTool);
+safeRegister(logLeakFocusTool as unknown as CoachTool);
+safeRegister(logStudySessionTool as unknown as CoachTool);
 
 export {
   readCooldownHistoryTool,
@@ -118,19 +103,39 @@ export {
   readThemeWithLinkedStatsAndSpotsTool,
   readThemeWithLinkedSpotsToolAlias,
   recommendLessonTool,
+  queryDimensionTool,
+  findTopLeaksTool,
+  getTournamentSuggestionsTool,
+  explainTournamentScoreTool,
+  simulateBankrollScenarioTool,
+  verifyLeakProgressTool,
+  registerTournamentInGradeTool,
+  recordWalletTransactionTool,
+  startGrindSessionTool,
+  logSessionCompletedTool,
+  logLeakFocusTool,
+  logStudySessionTool,
 };
 
-// Sprint Studies-Reform RF-07 — agregado para introspeccao por testes.
-// Mantem compat com tests anteriores (que olhavam para listRegisteredTools).
-// Sprint stats-themes-linking-1: nova tool unificada + alias deprecated
-// substituem o readThemeWithLinkedSpotsTool legado no array exportado.
+// Agregado para introspeccao por testes (lesson #8 — testes validam presenca
+// individual, nunca length absoluta). Inclui as 17 tools canonicas + 1 alias.
 export const coachTools = [
   readCooldownHistoryTool,
   readUserHudStatsToolV2,
-  findTopLeaksStub,
-  simulateBankrollStub,
   readUserBankrollHistoryTool,
   readThemeWithLinkedStatsAndSpotsTool,
   readThemeWithLinkedSpotsToolAlias,
   recommendLessonTool,
+  queryDimensionTool,
+  findTopLeaksTool,
+  getTournamentSuggestionsTool,
+  explainTournamentScoreTool,
+  simulateBankrollScenarioTool,
+  verifyLeakProgressTool,
+  registerTournamentInGradeTool,
+  recordWalletTransactionTool,
+  startGrindSessionTool,
+  logSessionCompletedTool,
+  logLeakFocusTool,
+  logStudySessionTool,
 ];

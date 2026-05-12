@@ -36,9 +36,19 @@ export interface CoachTool<I = any, O = any> {
   requiresConfirmation?: boolean;
   auditLevel?: 'none' | 'log' | 'persist';
   gateByTier?: Array<'free' | 'pro' | 'premium' | 'admin'>;
-  // MEDIUM-1 reviewer Sprint Cooldown-3: tools marcadas como __stub sao
-  // filtradas de exportToolsForAnthropic em producao para evitar que LLM
-  // tente chamar handlers que retornam not_implemented.
+  // ADR-146: write tools que mexem em dinheiro marcam confirmationLevel='strict'
+  // (flag em memoria no descriptor — NAO persistida em coach_actions na v1).
+  // Tools sem a flag sao tratadas como 'standard'.
+  confirmationLevel?: 'standard' | 'strict';
+  // Write tool contract (Coach-2B / ADR-083): handlers de write tools expoem
+  // executeConfirmed/fetchPayloadBefore/undo em vez de (alem de) handler.
+  // Tipados como any aqui — o coachToolRunner faz o cast/dispatch.
+  executeConfirmed?: (input: any, ctx: any, tx: any) => Promise<any>;
+  fetchPayloadBefore?: (input: any, ctx: any, tx: any) => Promise<any>;
+  undo?: (payloadBefore: any, payloadAfter: any, ctx: any, tx: any) => Promise<any>;
+  // MEDIUM-1 reviewer Sprint Cooldown-3 / ADR-145 §3: o flag __stub permanece
+  // DEFINIDO na interface (custo zero) e o route mantem o filtro defensivo,
+  // mesmo que pos-AI-0A nao haja mais nenhuma tool stub registrada.
   __stub?: boolean;
 }
 

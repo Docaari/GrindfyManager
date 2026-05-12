@@ -7,14 +7,15 @@
 
 import {
   SAFETY_RULES as SHARED_SAFETY_RULES,
-  CONFIDENCE_AND_CITATIONS,
   CITATIONS_RULES,
   CONFIDENCE_RULES,
 } from './coachSafetyPrompts';
 
-// Sprint Coach Sprint 0 — concatenado preserva tags legacy ([nao sei: ...],
-// [Fonte: ...]) E inclui regras Sprint 0 ([fonte: ...], [confianca: ...]).
-const SAFETY_RULES = `${SHARED_SAFETY_RULES}\n\n${CONFIDENCE_AND_CITATIONS}\n\n${CITATIONS_RULES}\n\n${CONFIDENCE_RULES}`;
+// Sprint AI-0A (NIT-8): fonte UNICA — o caminho legacy (este arquivo) e o
+// caminho cacheado (coachSystemBuilder) concatenam EXATAMENTE as mesmas
+// constantes. A variante legacy CONFIDENCE_AND_CITATIONS (formato antigo
+// [Fonte: <screen>, N=, janela:]) foi removida — divergia do caminho cacheado.
+const SAFETY_RULES = `${SHARED_SAFETY_RULES}\n\n${CITATIONS_RULES}\n\n${CONFIDENCE_RULES}`;
 
 function formatValue(value: any): string {
   if (value === null || value === undefined) return '';

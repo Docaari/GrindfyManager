@@ -34,10 +34,13 @@ function classifyStatus(
   return "stable";
 }
 
-async function handler(
-  input: VerifyLeakProgressInput,
-  ctx: { userId: string },
-): Promise<any> {
+async function handler(rawInput: unknown, ctx: { userId: string }): Promise<any> {
+  // MEDIUM-2 reviewer: validar via Zod em runtime (padronizacao com as outras read tools).
+  const parsed = verifyLeakProgressInputSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { ok: false, error: "validation_failed", details: parsed.error.issues };
+  }
+  const input: VerifyLeakProgressInput = parsed.data;
   let focus: any;
   if (input.leakFocusId) {
     focus = await (storage as any).findCoachLeakFocus?.(
@@ -48,7 +51,7 @@ async function handler(
     );
   }
   if (!focus) {
-    focus = await (storage as any).findActiveLeakFocus(ctx.userId);
+    focus = await (storage as any).findActiveLeakFocus?.(ctx.userId);
   }
   if (!focus) {
     return {
