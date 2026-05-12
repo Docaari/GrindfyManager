@@ -26,7 +26,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AlertsPanel from '../../components/grind-session-live/AlertsPanel';
 import { TournamentAlertDialog } from '../../components/grind-session-live/TournamentAlertDialog';
@@ -34,6 +34,12 @@ import { TournamentAlertDialog } from '../../components/grind-session-live/Tourn
 beforeEach(() => {
   vi.clearAllMocks();
 });
+
+// AlertsPanel virou <Collapsible> colapsado por default (grind-reform) — o botao
+// "Novo alerta de torneio" so renderiza apos expandir (clicar no header "Alertas").
+function expandAlertsPanel() {
+  fireEvent.click(screen.getByText('Alertas'));
+}
 
 describe('AlertsPanel — botao "Novo alerta de torneio" (Fix 1)', () => {
   it('NAO renderiza botao quando hasUpcomingTournaments=false', () => {
@@ -88,6 +94,7 @@ describe('AlertsPanel — botao "Novo alerta de torneio" (Fix 1)', () => {
         hasUpcomingTournaments={true}
       />
     );
+    expandAlertsPanel();
     expect(screen.getByTestId('open-tournament-alert-btn')).toBeInTheDocument();
   });
 
@@ -108,6 +115,7 @@ describe('AlertsPanel — botao "Novo alerta de torneio" (Fix 1)', () => {
         hasUpcomingTournaments={true}
       />
     );
+    expandAlertsPanel();
     await user.click(screen.getByTestId('open-tournament-alert-btn'));
     expect(onOpen).toHaveBeenCalledTimes(1);
   });

@@ -60,10 +60,19 @@ beforeEach(() => {
   speakUtteranceMock.mockClear();
 });
 
+// O AlertsPanel virou um <Collapsible> colapsado por default (grind-reform) — o
+// conteudo (botoes, form, lista de alertas) so renderiza apos expandir. Helper
+// renderiza + clica no header "Alertas" pra abrir.
+function renderPanel(extra: Record<string, any> = {}) {
+  const r = render(<AlertsPanel {...baseProps} {...extra} />);
+  fireEvent.click(screen.getByText('Alertas'));
+  return r;
+}
+
 describe('AlertsPanel — preview por active alert (P1-9)', () => {
   it('renderiza botao Volume2 preview por alarme com data-testid estavel', () => {
     const alert = makeAlert({ id: 'alert-X', label: 'Verificar stack' });
-    render(<AlertsPanel {...baseProps} activeAlerts={[alert]} activeCount={1} />);
+    renderPanel({ activeAlerts: [alert], activeCount: 1 });
 
     const previewBtn = screen.getByTestId('preview-btn-alert-X');
     expect(previewBtn).toBeInTheDocument();
@@ -72,7 +81,7 @@ describe('AlertsPanel — preview por active alert (P1-9)', () => {
   it('click no preview chama speakUtterance 1x sem repeat', async () => {
     const alert = makeAlert({ id: 'alert-X', label: 'Verificar stack' });
     const user = userEvent.setup();
-    render(<AlertsPanel {...baseProps} activeAlerts={[alert]} activeCount={1} />);
+    renderPanel({ activeAlerts: [alert], activeCount: 1 });
 
     await user.click(screen.getByTestId('preview-btn-alert-X'));
 
@@ -93,7 +102,7 @@ describe('AlertsPanel — preview por active alert (P1-9)', () => {
       ...({ narrationText: 'Suprema, Sunday Plus, atencao' } as any),
     });
     const user = userEvent.setup();
-    render(<AlertsPanel {...baseProps} activeAlerts={[alert]} activeCount={1} />);
+    renderPanel({ activeAlerts: [alert], activeCount: 1 });
 
     await user.click(screen.getByTestId('preview-btn-tourn-1'));
 
@@ -106,28 +115,14 @@ describe('AlertsPanel — preview por active alert (P1-9)', () => {
 
   it('preview button hidden quando soundMode mute', () => {
     const alert = makeAlert({ id: 'alert-X' });
-    render(
-      <AlertsPanel
-        {...baseProps}
-        activeAlerts={[alert]}
-        activeCount={1}
-        soundMode="mute"
-      />
-    );
+    renderPanel({ activeAlerts: [alert], activeCount: 1, soundMode: 'mute' });
 
     expect(screen.queryByTestId('preview-btn-alert-X')).not.toBeInTheDocument();
   });
 
   it('preview button hidden quando ttsAvailable=false', () => {
     const alert = makeAlert({ id: 'alert-X' });
-    render(
-      <AlertsPanel
-        {...baseProps}
-        activeAlerts={[alert]}
-        activeCount={1}
-        ttsAvailable={false}
-      />
-    );
+    renderPanel({ activeAlerts: [alert], activeCount: 1, ttsAvailable: false });
 
     expect(screen.queryByTestId('preview-btn-alert-X')).not.toBeInTheDocument();
   });
@@ -136,18 +131,18 @@ describe('AlertsPanel — preview por active alert (P1-9)', () => {
 describe('AlertsPanel — preview no form custom (P1-10)', () => {
   it('renderiza botao "Ouvir como vai soar" no form custom com data-testid', async () => {
     const user = userEvent.setup();
-    render(<AlertsPanel {...baseProps} />);
+    renderPanel();
 
     // Abre form.
-    await user.click(screen.getByText('Novo Alerta'));
+    await user.click(screen.getByRole('button', { name: /novo alerta/i }));
 
     expect(screen.getByTestId('preview-form-custom-btn')).toBeInTheDocument();
   });
 
   it('botao disabled quando label vazio', async () => {
     const user = userEvent.setup();
-    render(<AlertsPanel {...baseProps} />);
-    await user.click(screen.getByText('Novo Alerta'));
+    renderPanel();
+    await user.click(screen.getByRole('button', { name: /novo alerta/i }));
 
     const btn = screen.getByTestId('preview-form-custom-btn');
     expect(btn).toBeDisabled();
@@ -155,8 +150,8 @@ describe('AlertsPanel — preview no form custom (P1-10)', () => {
 
   it('botao habilita apos digitar label e debounce 500ms', async () => {
     vi.useFakeTimers();
-    render(<AlertsPanel {...baseProps} />);
-    fireEvent.click(screen.getByText('Novo Alerta'));
+    renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: /novo alerta/i }));
 
     const labelInput = document.querySelector('input[placeholder*="Lembrete" i]') as HTMLInputElement;
     expect(labelInput).toBeDefined();
@@ -179,8 +174,8 @@ describe('AlertsPanel — preview no form custom (P1-10)', () => {
 
   it('click em preview form chama speakUtterance com label digitado', async () => {
     vi.useFakeTimers();
-    render(<AlertsPanel {...baseProps} />);
-    fireEvent.click(screen.getByText('Novo Alerta'));
+    renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: /novo alerta/i }));
 
     const labelInput = document.querySelector('input[placeholder*="Lembrete" i]') as HTMLInputElement;
     fireEvent.change(labelInput, { target: { value: 'Faltam 10min' } });
@@ -203,8 +198,8 @@ describe('AlertsPanel — preview no form custom (P1-10)', () => {
   });
 
   it('botao preview form hidden/disabled quando ttsAvailable=false', () => {
-    render(<AlertsPanel {...baseProps} ttsAvailable={false} />);
-    fireEvent.click(screen.getByText('Novo Alerta'));
+    renderPanel({ ttsAvailable: false });
+    fireEvent.click(screen.getByRole('button', { name: /novo alerta/i }));
 
     const btn = screen.queryByTestId('preview-form-custom-btn');
     if (btn) {
