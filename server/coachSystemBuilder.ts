@@ -21,6 +21,9 @@ import {
 export type CoachType = 'mental' | 'tournament' | 'technical';
 
 export interface StaticInputs {
+  /** Perfil basico do jogador (nome, plano, data de criacao, volume total).
+   *  Dado estavel dentro de uma sessao -> entra no bloco STATIC (cacheado). */
+  userProfile?: { name?: string | null; subscriptionPlan?: string | null; createdAt?: any; totalTournaments?: number | null } | null;
   aiProfile?: string | null;
   statsSnapshot?: any | null;
   lastSummary?: string | null;
@@ -97,6 +100,16 @@ export function buildStaticSystemBlock(
   // Sprint Coach Sprint 0 — RF-04 + RF-05 (ADR-086)
   parts.push(CITATIONS_RULES);
   parts.push(CONFIDENCE_RULES);
+
+  const up = inputs.userProfile;
+  if (up && (up.name || up.subscriptionPlan || up.totalTournaments != null)) {
+    const profileLines: string[] = [];
+    if (up.name) profileLines.push(`Nome: ${up.name}`);
+    if (up.subscriptionPlan) profileLines.push(`Plano: ${up.subscriptionPlan}`);
+    if (up.createdAt) profileLines.push(`Criado em: ${up.createdAt}`);
+    if (up.totalTournaments != null) profileLines.push(`Total de torneios: ${up.totalTournaments}`);
+    if (profileLines.length > 0) parts.push(`\n## Perfil do jogador:\n${profileLines.join('\n')}`);
+  }
 
   if (inputs.aiProfile && String(inputs.aiProfile).trim().length > 0) {
     parts.push(`\n## Perfil do Jogador (memoria de longo prazo):\n${inputs.aiProfile}`);

@@ -199,11 +199,7 @@ describe('assembleContext — pipeline de montagem de contexto', () => {
   });
 
   describe('perfil do usuario', () => {
-    it('carrega o perfil do usuario (getUserProfile chamado com o userId)', async () => {
-      // RF-08: a montagem do system prompt passou a usar aiProfile (memoria de
-      // longo prazo) + statsSnapshot em vez dos campos crus do perfil; o loader
-      // getUserProfile continua sendo chamado. (Nome literal "Test Player" nao
-      // aparece mais no prompt — buildSystemArray nao recebe userProfile.)
+    it('inclui o nome do jogador no system prompt (bloco STATIC)', async () => {
       const result = await assembleContext(
         {
           coachType: 'mental',
@@ -215,8 +211,7 @@ describe('assembleContext — pipeline de montagem de contexto', () => {
       );
 
       expect(mockDataLoaders.getUserProfile).toHaveBeenCalledWith('USER-0001');
-      expect(result.system).toBeDefined();
-      expect(systemText(result.system).length).toBeGreaterThan(0);
+      expect(systemText(result.system)).toContain('Test Player');
     });
   });
 

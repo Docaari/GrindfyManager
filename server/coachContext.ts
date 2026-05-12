@@ -88,7 +88,12 @@ export async function assembleContext(
     dataLoaders.getPageContext ? dataLoaders.getPageContext(userId, sessionId).catch(() => null) : Promise.resolve(null),
   ]);
 
-  // 3. Build system prompt with profile and stats
+  // 3. [DEAD CODE — TODO cleanup] O array `systemParts` abaixo (e as queries
+  // inline que o alimentam, ate ~linha 189) NAO sao mais usados: o system prompt
+  // final vem de `buildSystemArray(...)` (RF-08, ADR-019), que recebe os mesmos
+  // dados via os loaders `dataLoaders.get*` providos pelo /api/coach/chat. Mantido
+  // por enquanto pra reduzir risco; remover quando confirmado que todos os callers
+  // passam os loaders novos. (Custo: ~8 queries DB desperdicadas por chat.)
   let systemParts = [baseSystemPrompt];
 
   if (userProfile) {
@@ -198,6 +203,7 @@ export async function assembleContext(
   const system = buildSystemArray(
     coachType,
     {
+      userProfile: userProfile ?? null,
       aiProfile: aiProfileText ?? null,
       statsSnapshot: stats ?? null,
       lastSummary: lastSummary ?? null,
