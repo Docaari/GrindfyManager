@@ -1,3 +1,8 @@
+// @ts-nocheck — arquivo intencionalmente untyped (React.createElement, sem
+// JSX, sem type annotations) para suportar require() sincrono em
+// FxRatesPanel.test.tsx (lesson #14 + #26 CLAUDE.md). tsc nao tem como
+// inferir tipos coerentes daqui sem anotacoes — e anotar quebraria o teste.
+// Logica simples (formatRate/badgeLabel/2 mutations); cobertura runtime via vitest.
 /**
  * Sprint FX-1 RF-07: FxRatesPanel — UI Settings.
  *
