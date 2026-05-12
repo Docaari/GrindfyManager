@@ -1,0 +1,38 @@
+%% Sprint AI-1A — Estrutura do system prompt enriquecido (ADR-151 RF-06)
+%% Onde o bloco "## Perfil Estruturado do Jogador:" encaixa no STATIC cacheado.
+%% buildSystemArray = [STATIC (cache_control: ephemeral)] + [DYNAMIC].
+
+flowchart TD
+    chat(["POST /api/coach/chat (handleCoachChat)"]) --> assemble["coachContext.assembleContext(userId, coachType, pageContext?)<br/>loaders: getUserProfile, getAiProfile (prosa), getStatsSnapshot,<br/>getLastSummary, ...  + getStructuredProfile (NOVO loader → getAiStructuredProfile(userId))<br/>RF-12: array systemParts + ~8 queries inline mortas REMOVIDAS (cleanup oportunista)"]
+    assemble --> builder["coachSystemBuilder.buildSystemArray(coachType, StaticInputs, DynamicInputs)"]
+
+    builder --> staticBlock
+
+    subgraph staticBlock["BLOCO STATIC (array com cache_control: { type: 'ephemeral' } quando COACH_PROMPT_CACHE_ENABLED !== 'false'; string concatenada se === 'false') — buildStaticSystemBlock"]
+        s1["GRINDFY_AI_BASE (agente unico, ADR-148)"]
+        s2["SAFETY_RULES"]
+        s3["SAFETY_RULES_COMPETITOR_BLOCK"]
+        s4["CITATIONS_RULES"]
+        s5["CONFIDENCE_RULES"]
+        s6["## Perfil do jogador:<br/>nome / plano / criado em / total de torneios (inputs.userProfile)"]
+        s7["## Perfil Estruturado do Jogador:  ◄── NOVO (ADR-151 §7 — formatStructuredProfile(structuredProfile))<br/>se POPULADO (linhas curtas pt-BR, NAO JSON):<br/>- Nivel estimado: &lt;humanLabel&gt; (confirmado pelo jogador | estimativa — confirme antes de assumir)<br/>- Perfil declarado: recreativo serio | semi-pro | pro<br/>- Stakes tipico: ... / Volume tipico: ~N torneios/mes / Joga serio ha: N meses<br/>- Redes principais: GGPoker, Suprema, ...<br/>- Metas ativas: meta1 | meta2 | ...<br/>- Foco do mes: defesa de 3bet<br/>- Tom preferido: direct (+ instrucao curta de como aplicar)<br/>- Padroes conhecidos: ...; ... (so declarados, nunca inferidos)<br/><br/>se VAZIO (isStructuredProfileEmpty) E !reOnboardingDeclinedAt(&lt;30d):<br/>→ 1 linha: 'perfil estruturado nao preenchido — ofereca diagnostico rapido (3 perguntas: tom, 1 meta, 1 leak). Nao seja insistente.'<br/><br/>se VAZIO E reOnboardingDeclinedAt recente (&lt;30d): → bloco OMITIDO"]
+        s8["## Perfil do Jogador (memoria de longo prazo):<br/>inputs.aiProfile (a PROSA — user_ai_profile.content, via Haiku — inalterado)"]
+        s9["## Stats Snapshot:<br/>inputs.statsSnapshot"]
+        s10["## Resumo da sessao anterior:<br/>inputs.lastSummary"]
+        s1 --> s2 --> s3 --> s4 --> s5 --> s6 --> s7 --> s8 --> s9 --> s10
+    end
+
+    staticBlock --> dynamicBlock
+
+    subgraph dynamicBlock["BLOCO DYNAMIC (nao cacheado) — buildDynamicSystemBlock"]
+        d1["Lente inicial (coachType — ADR-148): 'o jogador abriu o chat com foco em X; comece por ai, mas pode falar de qualquer assunto'"]
+        d2["Page context (ADR-149 — 10 variantes; inspecao leve: counts/IDs/abas/filtros/datas — NAO valores)"]
+        d3["Active grind session / break feedbacks / weekly plan / study progress (contexto completo — agente ve tudo)"]
+        d1 --> d2 --> d3
+    end
+
+    dynamicBlock --> anthropic(["Anthropic Sonnet 4.6 — system = [STATIC array (cacheado)] + [DYNAMIC]<br/>+ tools (Pro+: 17) + messages<br/>Custo do bloco novo: ~100-300 tokens, cacheado — desprezivel<br/>Quebra UNICA do cache key ao introduzir o bloco (planejada, aceita — lesson #10 + ADR-019)"])
+
+    %% Sincronizacao do tom
+    note1["RF-09 sincronizacao: o builder usa SO structuredProfile.tomPreferido (uma fonte no prompt).<br/>Se ausente mas userCoachPreferences.coachTone presente (legado):<br/>handleCoachChat faz back-fill lazy → updateAiStructuredProfile({ tomPreferido: coachTone })"]
+    note1 -.-> s7

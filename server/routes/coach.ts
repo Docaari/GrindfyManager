@@ -14,6 +14,22 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, ne, asc, gte, sql } from "drizzle-orm";
 import { getCoachProfile } from "../coachMemory";
+// Sprint AI-1A — handlers de onboarding / level-estimate / anti-fadiga / admin.
+// Importados aqui para o registerCoachRoutes + re-exportados no final do arquivo
+// (os testes importam de '../routes/coach').
+import {
+  handleGetLevelEstimate,
+  handleGetOnboarding,
+  handlePatchOnboarding,
+  handleCompleteOnboarding,
+  handleGetNudges,
+  handleNudgeDismiss,
+  handleNudgeSnooze,
+  handleNudgeEngage,
+  handleNudgeUnsubscribe,
+  handleUnfreezeCategory,
+  handleAdminFreezeCategory,
+} from "./coachAi1a";
 
 const VALID_COACH_TYPES = ['mental', 'tournament', 'technical'];
 
@@ -335,6 +351,28 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
         getPageContext: sanitizedPageContext !== undefined
           ? async () => sanitizedPageContext
           : undefined,
+        // Sprint AI-1A / RF-06: perfil estruturado de IA (bloco STATIC).
+        // RF-09 back-fill lazy: se tomPreferido ausente mas coachTone presente,
+        // copia coachTone -> structuredProfile.tomPreferido na primeira leitura.
+        getStructuredProfile: async (uid: string) => {
+          try {
+            const { getAiStructuredProfile, updateAiStructuredProfile } = await import('../storage/aiStructuredProfile');
+            const profile = await getAiStructuredProfile(uid);
+            if (!profile?.tomPreferido) {
+              try {
+                const { getCoachPreferences } = await import('../storage/coachPreferences');
+                const prefs = await getCoachPreferences(uid);
+                if (prefs?.coachTone) {
+                  await updateAiStructuredProfile(uid, { tomPreferido: prefs.coachTone });
+                  return { ...profile, tomPreferido: prefs.coachTone };
+                }
+              } catch { /* graceful */ }
+            }
+            return profile;
+          } catch {
+            return null;
+          }
+        },
       },
     );
 
@@ -984,6 +1022,43 @@ export function registerCoachRoutes(app: Express): void {
   app.post('/api/coach/actions/:id/undo', requireAuth, async (req: any, res: any) => {
     await handlePostCoachActionUndo(req, res);
   });
+
+  // ---------------------------------------------------------------------------
+  // Sprint AI-1A — onboarding + level estimate + anti-fadiga telemetry + admin
+  // ---------------------------------------------------------------------------
+  app.get('/api/coach/onboarding', requireAuth, async (req: any, res: any) => {
+    await handleGetOnboarding(req, res);
+  });
+  app.patch('/api/coach/onboarding', requireAuth, async (req: any, res: any) => {
+    await handlePatchOnboarding(req, res);
+  });
+  app.post('/api/coach/onboarding/complete', requireAuth, async (req: any, res: any) => {
+    await handleCompleteOnboarding(req, res);
+  });
+  app.get('/api/coach/level-estimate', requireAuth, async (req: any, res: any) => {
+    await handleGetLevelEstimate(req, res);
+  });
+  app.get('/api/coach/nudges', requireAuth, async (req: any, res: any) => {
+    await handleGetNudges(req, res);
+  });
+  app.post('/api/coach/nudges/:id/dismiss', requireAuth, async (req: any, res: any) => {
+    await handleNudgeDismiss(req, res);
+  });
+  app.post('/api/coach/nudges/:id/snooze', requireAuth, async (req: any, res: any) => {
+    await handleNudgeSnooze(req, res);
+  });
+  app.post('/api/coach/nudges/:id/engage', requireAuth, async (req: any, res: any) => {
+    await handleNudgeEngage(req, res);
+  });
+  app.post('/api/coach/nudges/:id/unsubscribe', requireAuth, async (req: any, res: any) => {
+    await handleNudgeUnsubscribe(req, res);
+  });
+  app.post('/api/coach/preferences/unfreeze', requireAuth, async (req: any, res: any) => {
+    await handleUnfreezeCategory(req, res);
+  });
+  app.post('/api/admin/coach/freeze-category', requireAuth, async (req: any, res: any) => {
+    await handleAdminFreezeCategory(req, res);
+  });
 }
 
 // =============================================================================
@@ -1017,6 +1092,10 @@ function buildPrefsResponse(prefs: any, timezone: string) {
       push: prefs.channelPush,
     },
     coachTone: prefs.coachTone,
+    // Sprint AI-1A / RF-02 — estado de auto-congelamento por categoria.
+    frozenCategories: (prefs.frozenCategories && typeof prefs.frozenCategories === 'object')
+      ? prefs.frozenCategories
+      : {},
     updatedAt: prefs.updatedAt
       ? (prefs.updatedAt instanceof Date
           ? prefs.updatedAt.toISOString()
@@ -1059,9 +1138,34 @@ export async function handlePutCoachPreferences(req: any, res: any): Promise<voi
       });
       return;
     }
-    const { upsertCoachPreferences } = await import('../storage/coachPreferences');
+    const { upsertCoachPreferences, getCoachPreferences } = await import('../storage/coachPreferences');
     const { storage } = await import('../storage');
-    const prefs = await upsertCoachPreferences(userId, parsed.data as any);
+
+    const input: any = { ...parsed.data };
+    const unfreezeCategory: string | undefined = input.unfreezeCategory;
+    delete input.unfreezeCategory;
+
+    // Sprint AI-1A / RF-02 — descongelar uma categoria (unico jeito de mexer em
+    // frozenCategories via PUT).
+    if (unfreezeCategory) {
+      const cur = await getCoachPreferences(userId);
+      const frozenCategories: Record<string, any> = { ...((cur as any)?.frozenCategories || {}) };
+      delete frozenCategories[unfreezeCategory];
+      input.frozenCategories = frozenCategories;
+    }
+
+    const prefs = await upsertCoachPreferences(userId, input);
+
+    // Sprint AI-1A / RF-09 — espelha coachTone -> ai_structured_profile.tomPreferido.
+    if (input.coachTone) {
+      try {
+        const { updateAiStructuredProfile } = await import('../storage/aiStructuredProfile');
+        await updateAiStructuredProfile(userId, { tomPreferido: input.coachTone });
+      } catch (err) {
+        console.error('coach.preferences.put.mirror_tom.error', { err });
+      }
+    }
+
     const tz = await (storage as any).getUserTimezone?.(userId).catch(() => null) || 'America/Sao_Paulo';
     res.status(200).json(buildPrefsResponse(prefs, tz));
   } catch (err: any) {
@@ -1640,3 +1744,21 @@ export async function handlePostCoachActionUndo(req: any, res: any): Promise<voi
     res.status(500).json({ message: 'Erro interno' });
   }
 }
+
+// =============================================================================
+// Sprint AI-1A — re-export dos handlers de coachAi1a (onboarding, level-estimate,
+// anti-fadiga telemetry, admin freeze) para os testes que importam de this module.
+// =============================================================================
+export {
+  handleGetLevelEstimate,
+  handleGetOnboarding,
+  handlePatchOnboarding,
+  handleCompleteOnboarding,
+  handleGetNudges,
+  handleNudgeDismiss,
+  handleNudgeSnooze,
+  handleNudgeEngage,
+  handleNudgeUnsubscribe,
+  handleUnfreezeCategory,
+  handleAdminFreezeCategory,
+};

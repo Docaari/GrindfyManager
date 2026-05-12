@@ -202,6 +202,26 @@ Detalhes em `Docs/specs/tournament-selector.md`. Widget no `/coach` tab GradePla
 
 Detalhes em `Docs/api/coach.md` e `Docs/api/coach-tools.md`.
 
+**Endpoints novos Sprint AI-1A (ADR-151/152/153/154):**
+
+| Metodo | Endpoint | Auth | Descricao |
+|--------|----------|------|-----------|
+| GET | `/api/coach/onboarding` | JWT | Estado do onboarding: `{ completed, mode: 'full'\|'light'\|null, draft: {step,mode,startedAt}\|null, structuredProfile, levelEstimate\|null, hasImport }`. |
+| PATCH | `/api/coach/onboarding` | JWT | Salva progresso parcial do wizard (sub-schema Zod do step atual) ou `{ skip: true }` (→ `onboardingSkippedAt`). |
+| POST | `/api/coach/onboarding/complete` | JWT | Finaliza: `onboardingCompletedAt`/`onboardingVersion`, limpa `onboardingDraft`, sincroniza `tomPreferido`↔`coachTone` + grava toggles de nudge + quiet hours. |
+| GET | `/api/coach/level-estimate` | JWT | Roda `estimatePlayerLevel` on-demand (`getDashboardStats`×2 + `getAnalyticsBySite` + `users.createdAt`); retorna `LevelEstimate`; **nao persiste**. |
+| GET | `/api/coach/nudges` | JWT | Lista `coach_nudge_log` do usuario (`?status=&category=&limit=`), ordenado `sentAt desc`. |
+| POST | `/api/coach/nudges/:id/dismiss` | JWT | `status='dismissed'` + dispara `checkAndFreezeCategory`. Idempotente. Ownership: `404` se id de outro user. |
+| POST | `/api/coach/nudges/:id/snooze` | JWT | body `{ duration: 'short'\|'long' }` → snooze 1d / 30d (`status='snoozed'`, `snoozeUntil`). `400` se `duration` invalido. |
+| POST | `/api/coach/nudges/:id/engage` | JWT | `status='engaged'`. Idempotente. |
+| POST | `/api/coach/nudges/:id/unsubscribe` | JWT | `status='unsubscribed'` + `upsertCoachPreferences({ nudgeB<Cat>: false })` + `checkAndFreezeCategory`. |
+| POST | `/api/coach/preferences/unfreeze` | JWT | body `{ category: NudgeCategory }` → remove `frozenCategories[category]`. `400` se categoria inexistente. |
+| POST | `/api/admin/coach/freeze-category` | JWT + admin | body `{ userId, category, action: 'freeze'\|'unfreeze' }` → seta/remove `frozenCategories[category]` (`reason: 'admin'`). `403` se nao-admin. |
+| GET | `/api/coach/preferences` | JWT | **estendido** — response ganha `frozenCategories: Record<category, { frozenAt, reason, dismissRate?, windowDays? }>`. |
+| PUT | `/api/coach/preferences` | JWT | **estendido** — ganha `unfreezeCategory?` (so descongela; congelar via PUT → `400` Zod `.strict()`); espelha `coachTone` → `ai_structured_profile.tomPreferido`. |
+
+**Frontend (rota nova):** `/coach-ai/onboarding` (protegida) → `CoachOnboarding` (wizard full/light). Banner `OnboardingBanner` em `/coach-ai` (aba chat) e `/inicio` quando `!onboardingCompletedAt`.
+
 **Tools (registry, nao endpoints REST):**
 - `read_theme_with_linked_stats_and_spots` — **Sprint stats-themes-linking-1 (RF-03 / ADR-142)** — extensao da tool legada `read_theme_with_linked_spots` com payload `stats[]` (currentValue + sparkline30d 30d + targetMin/Max + direction + isCustom) + `summary.stats_count/_in_range/_alarm`. Tier `pro/premium/admin`. Audit `log`. Description em arquivo dedicado `server/coachTools/readThemeWithLinkedStatsAndSpots.prompts.ts` (lesson #10).
 - `read_theme_with_linked_spots` — **DEPRECATED alias** de `read_theme_with_linked_stats_and_spots`. Mesmo handler, emite `console.warn('[deprecation] ...')`. Sera removido em sprint stats-themes-linking-2.

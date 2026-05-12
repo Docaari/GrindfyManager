@@ -1,15 +1,17 @@
 // =============================================================================
-// Coach Cron Runner — Sprint Coach-2B (ADR-087)
+// Coach Cron Runner — Sprint Coach-2B (ADR-087) + Sprint AI-1A / RF-04 (ADR-152)
 //
 // node-cron in-process. Ativacao via NODE_ENV=production OU
 // COACH_CRON_ENABLED=true.
 //
 // Schedules:
-//   - * * * * *      cleanup pending coach_actions > 30min (ADR-077)
-//   - 0 * 28 * *     B-SNAPSHOT (filtra local hour=9)
-//   - 0 * * * *      B-STUDY (filtra local hour=19, foco ativo)
+//   - * * * * *      cleanup pending coach_actions > 30min (ADR-077) — SEMPRE
+//   - 0 * 28 * *     B-SNAPSHOT (filtra local hour=9)            ┐ proatividade —
+//   - 0 * * * *      B-STUDY (filtra local hour=19, foco ativo)  ┤ NAO registrados
+//   - 0 6 * * 1      generateCoachRecommendations (segunda 6h)   ┘ se COACH_NUDGES_ENABLED=false
 // =============================================================================
 
+import nodeCron from "node-cron";
 import { storage } from "../storage";
 import { processBSnapshotTick } from "./jobs/processBSnapshot";
 import { processBStudyTick } from "./jobs/processBStudy";
@@ -31,17 +33,15 @@ export function startCoachCrons(): void {
     console.info("coach.cron.disabled", { reason: "env_off" });
     return;
   }
-  let cron: any;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    cron = require("node-cron");
-  } catch {
-    console.info("coach.cron.disabled", { reason: "node-cron not installed" });
+  const cron: any = (nodeCron as any) ?? (nodeCron as any)?.default;
+  if (!cron || typeof cron.schedule !== "function") {
+    console.info("coach.cron.disabled", { reason: "node-cron not available" });
     return;
   }
 
   // Wave D (ADR-144): cada tick envolvido em withAdvisoryLock. Cleanup pending
   // (1min) eh especialmente sensivel — 60×N replicas/dia = waste massivo.
+  // Cleanup NAO eh proatividade -> sempre registrado, independente do kill switch.
   cron.schedule("* * * * *", async () => {
     try {
       await withAdvisoryLock("cron:coach-cleanup", async () => {
@@ -54,6 +54,15 @@ export function startCoachCrons(): void {
       console.error("coach.cron.cleanup.error", { err });
     }
   });
+
+  // Sprint AI-1A / RF-04 — kill switch global. COACH_NUDGES_ENABLED=false NAO
+  // registra os schedules de proatividade (B-SNAPSHOT, B-STUDY,
+  // generateCoachRecommendations). O cleanup acima continua.
+  if (process.env.COACH_NUDGES_ENABLED === "false") {
+    started = true;
+    console.info("coach.cron.nudges_disabled");
+    return;
+  }
 
   cron.schedule("0 * 28 * *", async () => {
     try {

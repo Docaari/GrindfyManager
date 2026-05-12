@@ -78,7 +78,62 @@ export const users = pgTable("users", {
   // Sprint home-reform-5 item 11 — Home customization (visibility toggles + flags).
   // Shape em shared/types/homeSettings.ts. JSONB unico (1 row por user, sem joins).
   homeLayoutSettings: jsonb("home_layout_settings"),
+  // Sprint AI-1A / RF-01 (ADR-151) — perfil estruturado de IA (memoria de longo
+  // prazo estruturada). Shape: AiStructuredProfile (abaixo). Lesson #7: nullable,
+  // default '{}'::jsonb; o storage normaliza (back-fill schemaVersion + clamps).
+  // Migration 0065.
+  aiStructuredProfile: jsonb("ai_structured_profile"),
 });
+
+// -----------------------------------------------------------------------------
+// AiStructuredProfile — shape do users.ai_structured_profile (ADR-151).
+// Versionado (schemaVersion). v1.
+// -----------------------------------------------------------------------------
+export type AiPlayerLevel =
+  | "sem_dados"
+  | "iniciando"
+  | "micro_ascensao"
+  | "mid_consistente"
+  | "high_stakes"
+  | "recreativo_serio";
+
+export interface AiStructuredProfileMeta {
+  id: string;
+  texto: string;
+  prazo?: "mes" | "trimestre" | null;
+  criadaEm: string;
+  origem: "onboarding" | "chat" | "manual";
+}
+
+export interface AiStructuredProfileOnboardingDraft {
+  step: number;
+  mode: "full" | "light";
+  startedAt: string;
+}
+
+export interface AiStructuredProfile {
+  schemaVersion: number;
+  nivel?: AiPlayerLevel | null;
+  nivelConfirmado?: boolean;
+  nivelEstimadoEm?: string | null;
+  metas?: AiStructuredProfileMeta[];
+  focoDoMes?: string | null;
+  focoDoMesDefinidoEm?: string | null;
+  tomPreferido?: "gentle" | "balanced" | "direct";
+  padroesConhecidos?: string[];
+  redesPrincipais?: string[];
+  stakesTipico?: string | null;
+  volumeTipicoMes?: number | null;
+  tempoJogaSerioMeses?: number | null;
+  perfilDeclarado?: "recreativo_serio" | "semi_pro" | "pro" | null;
+  onboardingCompletedAt?: string | null;
+  onboardingVersion?: number | null;
+  onboardingSkippedAt?: string | null;
+  onboardingDraft?: AiStructuredProfileOnboardingDraft | null;
+  reOnboardingOfferedAt?: string | null;
+  reOnboardingDeclinedAt?: string | null;
+  updatedAt?: string;
+}
 
 // Auth tokens table - email verification and password reset tokens
 export const authTokens = pgTable("auth_tokens", {
@@ -4458,6 +4513,11 @@ export const userCoachPreferences = pgTable("user_coach_preferences", {
 
   coachTone: varchar("coach_tone", { length: 20 }).notNull().default("balanced"),
 
+  // Sprint AI-1A / RF-02 (ADR-152) — estado de auto-congelamento por categoria.
+  // Mapa { [category]: { frozenAt, reason: 'auto_dismiss_rate'|'admin'|'manual',
+  //   dismissRate?, windowDays? } }. NOT NULL DEFAULT '{}'. Migration 0066.
+  frozenCategories: jsonb("frozen_categories").notNull().default(sql`'{}'::jsonb`),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -4481,6 +4541,12 @@ export const updateCoachPreferencesSchema = z.object({
   channelEmail: z.boolean().optional(),
   channelPush: z.boolean().optional(),
   coachTone: z.enum(["gentle", "balanced", "direct"]).optional(),
+  // Sprint AI-1A / RF-02 — descongelar uma categoria via PUT. Congelamento NUNCA
+  // eh setado via PUT (so auto-congelamento ou endpoint admin) — por isso so
+  // `unfreezeCategory` (remover), nao `frozenCategories` (mapa cru).
+  unfreezeCategory: z.enum([
+    "B-SNAPSHOT", "B-LEAK", "B-STUDY", "B-VOLUME", "B-GRADE", "B-DOWNSWING", "B-LIFE", "B-MENTAL",
+  ]).optional(),
 }).strict().superRefine((val, ctx) => {
   if (val.maxNudgesPerHour !== undefined && val.maxNudgesPerDay !== undefined
       && val.maxNudgesPerHour > val.maxNudgesPerDay) {

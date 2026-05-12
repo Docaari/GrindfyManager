@@ -1,0 +1,88 @@
+%% Sprint AI-1A — ER delta sobre o modelo de Coach existente (ADR-151 + ADR-152)
+%% So as mudancas: users.ai_structured_profile (NOVA coluna JSONB), user_coach_preferences.frozen_categories (NOVA coluna JSONB),
+%% coach_nudge_log (sem coluna nova — status ganha valor 'unsubscribed'; campos existentes destacados).
+%% Tabelas inalteradas (user_ai_profile, monthly_coach_summaries, chat_sessions) mostradas so para contexto.
+
+erDiagram
+    users {
+        varchar user_platform_id PK "USER-XXXX"
+        varchar email
+        varchar subscription_plan "free|pro|premium|admin"
+        varchar timezone "default America/Sao_Paulo"
+        timestamp created_at "→ accountAgeMonths na deteccao de nivel"
+        boolean tts_first_run_seen "precedente de flag de onboarding"
+        jsonb home_layout_settings "precedente JSONB de config 1:1"
+        jsonb ai_structured_profile "◄── NOVO (migracao 0065) — nullable, DEFAULT '{}'::jsonb. Shape versionado AiStructuredProfile: { schemaVersion, nivel?, nivelConfirmado?, nivelEstimadoEm?, metas?[], focoDoMes?, tomPreferido?, padroesConhecidos?[], redesPrincipais?[], stakesTipico?, volumeTipicoMes?, tempoJogaSerioMeses?, perfilDeclarado?, onboardingCompletedAt?, onboardingVersion?, onboardingSkippedAt?, onboardingDraft?{step,mode,startedAt}, reOnboardingOfferedAt?, reOnboardingDeclinedAt?, updatedAt? }. Storage: server/storage/aiStructuredProfile.ts normaliza (back-fill schemaVersion, clamp tamanhos)."
+    }
+
+    user_coach_preferences {
+        varchar user_id PK "FK users.user_platform_id"
+        boolean nudge_b_snapshot "default true"
+        boolean nudge_b_leak "default true"
+        boolean nudge_b_study "default true"
+        boolean nudge_b_volume "default true"
+        boolean nudge_b_grade "default true"
+        boolean nudge_b_downswing "default true"
+        boolean nudge_b_life "default false"
+        boolean nudge_b_mental "default false"
+        int quiet_hours_start "default 21"
+        int quiet_hours_end "default 9"
+        int max_nudges_per_day "default 3"
+        int max_nudges_per_hour "default 1"
+        boolean channel_in_app
+        boolean channel_email "nao usado neste sprint"
+        boolean channel_push "nao usado neste sprint"
+        varchar coach_tone "gentle|balanced|direct, default balanced — espelhado em ai_structured_profile.tomPreferido (RF-09)"
+        jsonb frozen_categories "◄── NOVO (migracao 0066) — NOT NULL DEFAULT '{}'::jsonb. Mapa { [category: NudgeCategory]: { frozenAt: ISO, reason: 'auto_dismiss_rate'|'admin'|'manual', dismissRate?: number, windowDays?: number } }. Edicao via PUT so DESCONGELA (unfreezeCategory? campo / POST /preferences/unfreeze); congelamento so via checkAndFreezeCategory ou POST /admin/coach/freeze-category. normalizeCoachPreferences back-fills {}."
+    }
+
+    coach_nudge_log {
+        varchar id PK "nanoid"
+        varchar user_id FK "users.user_platform_id, ON DELETE CASCADE"
+        varchar category "B-SNAPSHOT|B-LEAK|B-STUDY|B-VOLUME|B-GRADE|B-DOWNSWING|B-LIFE|B-MENTAL — varchar(32)"
+        varchar cycle_key "YYYY-MM | YYYY-WW | null"
+        varchar status "◄ ganha valor 'unsubscribed' — agora: sent|engaged|dismissed|snoozed|unsubscribed — varchar(16) cabe (NENHUMA coluna nova)"
+        varchar title_i18n "varchar(200)"
+        text body_preview "pt-BR, max 500"
+        varchar channel "in_app|email|push, default in_app"
+        varchar chat_session_id "soft FK chat_sessions.id (o nudge criou)"
+        varchar triggered_by_event "cron_28th | csv_upload | ... | 'auto_freeze_notice' (◄ NOVO valor — discrimina o aviso de congelamento; o frontend renderiza diferente; NAO cria categoria B-SYSTEM)"
+        timestamp sent_at "DEFAULT NOW() — = telemetria de 'entregue'"
+        timestamp engaged_at "setado por POST .../engage (status='engaged')"
+        timestamp dismissed_at "setado por POST .../dismiss (status='dismissed') — dispara checkAndFreezeCategory"
+        timestamp snooze_until "setado por POST .../snooze { duration: short|long } → now + 1d|30d (status='snoozed') — lido por getActiveSnoozeForCategory (CHECK 1.6)"
+        timestamp created_at "DEFAULT NOW()"
+    }
+
+    user_ai_profile {
+        varchar user_id PK "FK users.user_platform_id — INALTERADO"
+        text content "prosa qualitativa via Haiku, default '', max 2000 — o estruturado e ADITIVO, nao migra isto"
+        int version "versao da prosa (nao confundir com ai_structured_profile.schemaVersion)"
+        int token_count
+        timestamp updated_at
+    }
+
+    monthly_coach_summaries {
+        varchar user_id FK "users.user_platform_id — INALTERADO neste sprint"
+        varchar coach_type "back-compat (ADR-148 §nota)"
+        varchar month "YYYY-MM"
+        text summary
+        int sessions_compacted
+        int token_count
+        timestamp created_at
+    }
+
+    chat_sessions {
+        varchar id PK "INALTERADO — os nudges atuais viram chatSession + chatMessage; reforma do feed e AI-1B"
+        varchar user_id FK
+        varchar coach_type "lente inicial (ADR-148)"
+        text summary "via Haiku ao arquivar"
+        varchar status "active|archived"
+    }
+
+    users ||--o| user_coach_preferences : "1:1 — getCoachPreferences (cache 30s)"
+    users ||--o| user_ai_profile : "1:1 — prosa de longo prazo"
+    users ||--o{ monthly_coach_summaries : "resumos mensais"
+    users ||--o{ coach_nudge_log : "log de nudges (telemetria; archive 90d pendente — ADR-085)"
+    users ||--o{ chat_sessions : "conversas + nudges (hoje)"
+    chat_sessions ||--o| coach_nudge_log : "soft FK chat_session_id"

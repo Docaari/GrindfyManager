@@ -13,7 +13,7 @@
 // =============================================================================
 
 import { useState, useRef, useEffect, useCallback, useMemo, KeyboardEvent } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
@@ -543,16 +543,48 @@ const NUDGE_LABELS: Record<NudgeKey, string> = {
   bMental: 'Cuidado mental',
 };
 
+type FrozenCategoryEntry = { frozenAt?: string; reason?: string; dismissRate?: number; windowDays?: number };
 type PrefsResponse = {
   nudges?: Partial<Record<NudgeKey, boolean>>;
   quietHours?: { startHour?: number; endHour?: number; timezone?: string };
   frequencyCap?: { perDay?: number; perHour?: number };
+  frozenCategories?: Record<string, FrozenCategoryEntry>;
 };
 
+const FROZEN_CATEGORY_LABELS: Record<string, string> = {
+  'B-SNAPSHOT': 'Lembrete de snapshot',
+  'B-LEAK': 'Avisos de leak',
+  'B-STUDY': 'Lembrete de estudo',
+  'B-VOLUME': 'Acompanhamento de volume',
+  'B-GRADE': 'Sugestoes de grade',
+  'B-DOWNSWING': 'Alerta de downswing',
+  'B-LIFE': 'Vida fora do poker',
+  'B-MENTAL': 'Cuidado mental',
+};
+
+function frozenReasonLabel(reason?: string): string {
+  if (reason === 'admin') return 'admin';
+  if (reason === 'auto_dismiss_rate') return 'voce dispensou a maioria dos avisos';
+  return reason || 'pausada';
+}
+
 function CoachPreferencesPanel() {
+  const queryClient = useQueryClient();
   const { data, isLoading, isError } = useQuery<PrefsResponse>({
     queryKey: ['/api/coach/preferences'],
     queryFn: () => apiRequest('GET', '/api/coach/preferences'),
+  });
+
+  const frozenCategories = (data?.frozenCategories && typeof data.frozenCategories === 'object')
+    ? data.frozenCategories
+    : {};
+  const frozenEntries = Object.entries(frozenCategories);
+
+  const unfreezeMutation = useMutation({
+    mutationFn: (category: string) => apiRequest('POST', '/api/coach/preferences/unfreeze', { category }),
+    onSuccess: () => {
+      try { queryClient.invalidateQueries({ queryKey: ['/api/coach/preferences'] }); } catch { /* noop */ }
+    },
   });
 
   const [nudges, setNudges] = useState<Record<NudgeKey, boolean>>(() =>
@@ -675,6 +707,39 @@ function CoachPreferencesPanel() {
           className="w-16 bg-gray-800 border border-gray-700 rounded px-1 text-gray-100"
         />
       </div>
+
+      {data && (
+        <div data-testid="coach-prefs-frozen-section" className="space-y-2 border-t border-gray-800 pt-4">
+          <h4 className="text-sm font-medium text-gray-300">Categorias pausadas</h4>
+          {frozenEntries.length === 0 ? (
+            <p className="text-xs text-gray-500">Nenhuma categoria pausada.</p>
+          ) : (
+            <div className="space-y-2">
+              {frozenEntries.map(([cat, entry]) => (
+                <div
+                  key={cat}
+                  data-testid={`coach-prefs-frozen-item-${cat}`}
+                  className="flex items-center justify-between gap-3 text-xs text-gray-300"
+                >
+                  <span>
+                    {FROZEN_CATEGORY_LABELS[cat] ?? cat} — pausada (motivo: {frozenReasonLabel(entry?.reason)})
+                    {entry?.frozenAt ? ` desde ${String(entry.frozenAt).slice(0, 10)}` : ''}
+                  </span>
+                  <button
+                    type="button"
+                    data-testid={`coach-prefs-unfreeze-${cat}`}
+                    onClick={() => unfreezeMutation.mutate(cat)}
+                    disabled={unfreezeMutation.isPending}
+                    className="px-2 py-1 rounded border border-gray-700 text-gray-300"
+                  >
+                    Reativar
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <Button
         data-testid="coach-prefs-save"

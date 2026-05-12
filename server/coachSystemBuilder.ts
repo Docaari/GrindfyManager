@@ -36,6 +36,9 @@ export interface StaticInputs {
   aiProfile?: string | null;
   statsSnapshot?: any | null;
   lastSummary?: string | null;
+  /** Sprint AI-1A / RF-06 (ADR-151) — perfil estruturado de IA. Bloco STATIC
+   *  (cacheado); muda raramente (so no onboarding). */
+  structuredProfile?: any | null;
 }
 
 export interface DynamicInputs {
@@ -113,6 +116,118 @@ function formatStats(stats: any): string {
 }
 
 // =============================================================================
+// formatStructuredProfile — Sprint AI-1A / RF-06 (ADR-151)
+//
+// Renderiza o perfil estruturado de IA em bullets pt-BR (nunca JSON cru).
+// 3 modos:
+//   - populado     -> bloco "## Perfil Estruturado do Jogador:" com linhas.
+//   - vazio (sem reOnboardingDeclinedAt recente) -> linha "ofereca diagnostico
+//       rapido (3 perguntas: ...)".
+//   - vazio + reOnboardingDeclinedAt < 30 dias -> string vazia (bloco omitido).
+//
+// `isStructuredProfileEmpty` eh re-implementado local (pura) para evitar import
+// circular com storage. Mesma semantica de server/storage/aiStructuredProfile.ts.
+// =============================================================================
+
+const TOM_INSTRUCAO: Record<string, string> = {
+  gentle: 'tom gentil, encorajador, sem cobranca dura',
+  balanced: 'tom equilibrado de par/companheiro de grind',
+  direct: 'tom direto, sem rodeio, vai ao ponto',
+};
+
+const PERFIL_DECLARADO_LABEL: Record<string, string> = {
+  recreativo_serio: 'recreativo serio',
+  semi_pro: 'semi-pro',
+  pro: 'pro',
+};
+
+const NIVEL_HUMANO: Record<string, string> = {
+  sem_dados: 'ainda sem dados suficientes',
+  iniciando: 'comecando a jornada',
+  micro_ascensao: 'micro grinder em ascensao',
+  mid_consistente: 'mid-stakes consistente',
+  high_stakes: 'high-stakes',
+  recreativo_serio: 'recreativo serio',
+};
+
+function structuredProfileIsEmpty(p: any): boolean {
+  if (p == null || typeof p !== 'object') return true;
+  if (p.nivelConfirmado === true) return false;
+  if (Array.isArray(p.metas) && p.metas.length > 0) return false;
+  if (typeof p.focoDoMes === 'string' && p.focoDoMes.trim().length > 0) return false;
+  if (p.tomPreferido === 'gentle' || p.tomPreferido === 'balanced' || p.tomPreferido === 'direct') return false;
+  if (p.onboardingCompletedAt != null) return false;
+  return true;
+}
+
+const RE_ONBOARDING_COOLDOWN_DAYS = 30;
+
+const DIAGNOSTICO_LINE =
+  'O perfil estruturado do jogador ainda nao foi preenchido — em algum momento natural da conversa, ofereca um diagnostico rapido (3 perguntas: tom preferido, 1 meta do mes, 1 leak/foco) para te conhecer melhor. Nao seja insistente.';
+
+export function formatStructuredProfile(
+  profile: any,
+  opts?: { reOnboardingDeclinedAt?: string | null },
+): string {
+  const declinedAt = opts?.reOnboardingDeclinedAt ?? profile?.reOnboardingDeclinedAt ?? null;
+
+  if (structuredProfileIsEmpty(profile)) {
+    if (declinedAt) {
+      const ts = new Date(declinedAt).getTime();
+      if (Number.isFinite(ts)) {
+        const ageDays = (Date.now() - ts) / (24 * 3600 * 1000);
+        if (ageDays < RE_ONBOARDING_COOLDOWN_DAYS) {
+          return '';
+        }
+      }
+    }
+    return DIAGNOSTICO_LINE;
+  }
+
+  const lines: string[] = ['## Perfil Estruturado do Jogador:'];
+
+  if (profile.nivel) {
+    const human = NIVEL_HUMANO[profile.nivel] ?? String(profile.nivel);
+    const flag = profile.nivelConfirmado
+      ? '(confirmado pelo jogador)'
+      : '(estimativa — confirme com o jogador antes de assumir)';
+    lines.push(`- Nivel estimado: ${human} ${flag}`);
+  }
+  if (profile.perfilDeclarado) {
+    const label = PERFIL_DECLARADO_LABEL[profile.perfilDeclarado] ?? String(profile.perfilDeclarado);
+    lines.push(`- Perfil declarado: ${label}`);
+  }
+  if (typeof profile.stakesTipico === 'string' && profile.stakesTipico.trim().length > 0) {
+    lines.push(`- Stakes tipico: ${profile.stakesTipico}`);
+  }
+  if (typeof profile.volumeTipicoMes === 'number') {
+    lines.push(`- Volume tipico: ~${profile.volumeTipicoMes} torneios/mes`);
+  }
+  if (typeof profile.tempoJogaSerioMeses === 'number') {
+    lines.push(`- Joga serio ha: ${profile.tempoJogaSerioMeses} meses`);
+  }
+  if (Array.isArray(profile.redesPrincipais) && profile.redesPrincipais.length > 0) {
+    lines.push(`- Redes principais: ${profile.redesPrincipais.join(', ')}`);
+  }
+  if (Array.isArray(profile.metas) && profile.metas.length > 0) {
+    const textos = profile.metas.map((m: any) => (typeof m?.texto === 'string' ? m.texto : '')).filter(Boolean);
+    if (textos.length > 0) lines.push(`- Metas ativas: ${textos.join(' | ')}`);
+  }
+  if (typeof profile.focoDoMes === 'string' && profile.focoDoMes.trim().length > 0) {
+    lines.push(`- Foco do mes: ${profile.focoDoMes}`);
+  }
+  if (profile.tomPreferido) {
+    const instr = TOM_INSTRUCAO[profile.tomPreferido] ?? '';
+    lines.push(`- Tom preferido: ${profile.tomPreferido}${instr ? ` — ${instr}` : ''}`);
+  }
+  if (Array.isArray(profile.padroesConhecidos) && profile.padroesConhecidos.length > 0) {
+    lines.push(`- Padroes conhecidos: ${profile.padroesConhecidos.join('; ')}`);
+  }
+
+  return lines.join('\n');
+}
+
+// =============================================================================
 // buildStaticSystemBlock — cacheado (TTL ~5 min)
 //
 // O parametro `coachType` eh preservado na assinatura (back-compat) mas NAO eh
@@ -143,6 +258,15 @@ export function buildStaticSystemBlock(
     if (up.createdAt) profileLines.push(`Criado em: ${up.createdAt}`);
     if (up.totalTournaments != null) profileLines.push(`Total de torneios: ${up.totalTournaments}`);
     if (profileLines.length > 0) parts.push(`\n## Perfil do jogador:\n${profileLines.join('\n')}`);
+  }
+
+  // Sprint AI-1A / RF-06 — perfil estruturado, ENTRE "## Perfil do jogador:" e
+  // "## Perfil do Jogador (memoria de longo prazo):". So entra se foi fornecido.
+  if (inputs.structuredProfile !== undefined && inputs.structuredProfile !== null) {
+    const sp = formatStructuredProfile(inputs.structuredProfile);
+    if (sp && sp.trim().length > 0) {
+      parts.push(`\n${sp}`);
+    }
   }
 
   if (inputs.aiProfile && String(inputs.aiProfile).trim().length > 0) {

@@ -30,7 +30,10 @@ export type NudgeCategory =
   | "B-MENTAL";
 
 export type NudgeDenyReason =
+  | "nudges_globally_disabled"
   | "category_disabled"
+  | "category_frozen"
+  | "category_snoozed"
   | "quiet_hours"
   | "daily_cap_reached"
   | "hourly_cap_reached"
@@ -85,6 +88,17 @@ export async function shouldSendNudge(
 ): Promise<NudgeDecision> {
   const now = ctx.now ?? new Date();
 
+  // 0. Kill switch global (RF-04) — resolvido a cada chamada (runtime). ABSOLUTO:
+  // nem isCritical bypassa. Vence tudo (primeiro check, antes do try).
+  if (process.env.COACH_NUDGES_ENABLED === "false") {
+    console.info("coach.nudge.deny", {
+      userId,
+      category: ctx.category,
+      reason: "nudges_globally_disabled",
+    });
+    return { allow: false, reason: "nudges_globally_disabled" };
+  }
+
   try {
     // 1. Categoria toggle
     const prefs = await getCoachPreferences(userId);
@@ -97,6 +111,38 @@ export async function shouldSendNudge(
         reason: "category_disabled",
       });
       return { allow: false, reason: "category_disabled" };
+    }
+
+    // 1.5. Categoria congelada (RF-03) — bypassada se isCritical.
+    if (!ctx.isCritical) {
+      const frozen = (prefs as any).frozenCategories?.[ctx.category];
+      if (frozen) {
+        console.info("coach.nudge.deny", {
+          userId,
+          category: ctx.category,
+          reason: "category_frozen",
+          frozenSince: frozen.frozenAt,
+        });
+        return { allow: false, reason: "category_frozen" };
+      }
+    }
+
+    // 1.6. Snooze ativo (RF-03) — bypassada se isCritical.
+    if (!ctx.isCritical) {
+      const snoozeUntil = await (storage as any).getActiveSnoozeForCategory?.(
+        userId,
+        ctx.category,
+        now,
+      );
+      if (snoozeUntil && new Date(snoozeUntil).getTime() > now.getTime()) {
+        console.info("coach.nudge.deny", {
+          userId,
+          category: ctx.category,
+          reason: "category_snoozed",
+          snoozeUntil,
+        });
+        return { allow: false, reason: "category_snoozed" };
+      }
     }
 
     // 2. Quiet hours (bypassada se isCritical)

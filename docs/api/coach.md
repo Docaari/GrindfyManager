@@ -593,3 +593,91 @@ function calculateMessageCost(usage: {
 - Sequence diagrams: `docs/architecture/sequence-coach-chat-cached.mermaid`, `docs/architecture/sequence-message-feedback.mermaid`, `docs/architecture/sequence-coach-tool-use.mermaid`, `docs/architecture/sequence-coach-page-context.mermaid`
 - Tools detalhadas: `docs/api/coach-tools.md`
 - Data model: `docs/architecture/data-model.mermaid` (dominio AI Coach + AI Coach Tools)
+
+---
+
+## Sprint AI-1A — anti-fadiga completo + onboarding conversacional + deteccao de nivel + perfil estruturado
+
+> ADRs: **151** (perfil estruturado JSONB), **152** (anti-fadiga — snooze + telemetria + auto-congelamento + kill switch), **153** (onboarding wizard guiado), **154** (deteccao de nivel rule-based). Diagramas: `Docs/architecture/diagrams/coach-ai-1a/`. Spec: `Docs/specs/sprint-ai-1a.md`.
+
+### Onboarding conversacional (wizard guiado — ADR-153)
+
+#### `GET /api/coach/onboarding`
+- **Auth:** JWT.
+- **Resposta 200:** `{ completed: boolean, mode: 'full'|'light'|null, draft: { step, mode, startedAt }|null, structuredProfile: AiStructuredProfile, levelEstimate: LevelEstimate|null, hasImport: boolean }`.
+  - `completed` ⟺ `users.ai_structured_profile.onboardingCompletedAt != null`.
+  - `mode` — `full` se nunca completou; `light` se `isStructuredProfileEmpty(profile)` E conta antiga; `null` se ja completou. O frontend pode passar `?mode=` ao abrir o wizard.
+  - `draft` — `ai_structured_profile.onboardingDraft` (o wizard retoma do `step`); `null` se nao iniciou.
+  - `levelEstimate` — resultado de `estimatePlayerLevel` (mesmo de `GET /api/coach/level-estimate`); `null` se erro ao carregar.
+  - `hasImport` — `true` se ja importou historico (`getUploadHistory`/contagem de torneios > 0).
+
+#### `PATCH /api/coach/onboarding`
+- **Auth:** JWT. **Body:** sub-schema Zod do step atual (campos parciais) **OU** `{ skip: true }`.
+  - Campos aceitos (subset por step): `perfilDeclarado` (`'recreativo_serio'|'semi_pro'|'pro'`), `stakesTipico` (≤50), `volumeTipicoMes` (number), `tempoJogaSerioMeses` (number), `redesPrincipais` (string[], cada ≤50 — clampado, nao `400`), `nivel` (`PlayerLevel`), `nivelConfirmado` (boolean), `metas` (≤3, cada `{ texto: ≤200, prazo?: 'mes'|'trimestre' }`), `focoDoMes` (≤200), `tomPreferido` (`'gentle'|'balanced'|'direct'`), `step` (1-6 full / 1-3 light), `mode` (`'full'|'light'`).
+- **Efeito:** `updateAiStructuredProfile(userId, delta)` (merge raso — arrays substituem por completo; seta `updatedAt`; clampa tamanhos) + atualiza `onboardingDraft = { step, mode, startedAt }`. `{ skip: true }` → seta `onboardingSkippedAt = now` (NAO altera `onboardingCompletedAt`).
+- **Erros:** `400` — `tomPreferido` fora do enum; meta > 200 chars; `step` fora de range; `nivel` fora do enum.
+- **Resposta 200:** `{ structuredProfile, draft }`.
+
+#### `POST /api/coach/onboarding/complete`
+- **Auth:** JWT. **Body:** agregado — `tomPreferido` obrigatorio; `metas`/`focoDoMes` opcionais; `nudges` (8 toggles `bSnapshot`/`bLeak`/`bStudy`/`bVolume`/`bGrade`/`bDownswing`/`bLife`/`bMental` — booleans) + `quietHours: { startHour, endHour }` (0-23) — vem do step 6.
+- **Efeito:** `onboardingCompletedAt = now`, `onboardingVersion = 1`, limpa `onboardingDraft`; `updateAiStructuredProfile({ tomPreferido, ... })`; `upsertCoachPreferences({ coachTone: tomPreferido, nudgeBSnapshot: ..., quietHoursStart: ..., quietHoursEnd: ... })` (RF-09 sincronizacao — grava nos dois lugares).
+- **Resposta 200:** `{ structuredProfile, preferences }`.
+
+#### `GET /api/coach/level-estimate`
+- **Auth:** JWT. **Efeito:** carrega `getDashboardStats(userId, 'all')` + `getDashboardStats(userId, '90d')` + `getAnalyticsBySite(userId, 'all')` + `users.createdAt` (→ `accountAgeMonths`) + `users.subscriptionPlan`; conversao USD aplicada antes (lesson #6); chama `estimatePlayerLevel`. **Nao persiste** (idempotente).
+- **Resposta 200:** `{ nivel, confidence: 'low'|'medium'|'high', humanLabel, evidence: { abiUSD, volumeAllTime, volumeLast90d, roiAllTime, distinctNetworks, accountAgeMonths }, note?: string }`.
+  - Niveis: `sem_dados` (volume<30 ou ABI null) / `iniciando` / `micro_ascensao` / `mid_consistente` / `high_stakes` / `recreativo_serio`. `note` preenchido quando `sem_dados`. Usuario sem nenhum torneio → `sem_dados`, sem throw (lesson #9).
+
+### Anti-fadiga — telemetria de nudge in-app (ADR-152)
+
+#### `GET /api/coach/nudges`
+- **Auth:** JWT. **Query:** `?status=sent|engaged|dismissed|snoozed|unsubscribed`, `?category=B-SNAPSHOT|...`, `?limit=N`.
+- **Resposta 200:** `{ nudges: CoachNudgeLog[] }` — so do usuario logado (nao vaza); ordenado `sentAt desc`. Cada row: `id`, `category`, `cycleKey`, `status`, `titleI18n`, `bodyPreview`, `channel`, `chatSessionId`, `triggeredByEvent` (incl. `'auto_freeze_notice'` — o frontend renderiza diferente), `sentAt`, `engagedAt`, `dismissedAt`, `snoozeUntil`, `createdAt`.
+
+#### `POST /api/coach/nudges/:id/dismiss`
+- **Auth:** JWT. **Ownership:** `getNudgeLogById(id).userId === req.user.userPlatformId` senao `404`.
+- **Efeito:** `updateNudgeLogStatus(id, 'dismissed', { dismissedAt: now })` + `checkAndFreezeCategory(userId, row.category)` (se `sent >= 3` na janela de 7d E `dismissRate > 0.5` → congela + cria row de aviso `triggeredByEvent='auto_freeze_notice'`). **Idempotente** — re-dismiss = no-op. **Resposta 200:** `{ nudge }`.
+
+#### `POST /api/coach/nudges/:id/snooze`
+- **Auth:** JWT. **Body:** `{ duration: 'short' | 'long' }` — `short` = `now + 1 dia`, `long` = `now + 30 dias`. `400` se invalido.
+- **Efeito:** `updateNudgeLogStatus(id, 'snoozed', { snoozeUntil })`. Depois: `shouldSendNudge(userId, { category: row.category })` → `{ allow: false, reason: 'category_snoozed' }` ate expirar (engine CHECK 1.6 via `getActiveSnoozeForCategory`). **Resposta 200:** `{ nudge }`.
+
+#### `POST /api/coach/nudges/:id/engage`
+- **Auth:** JWT. **Efeito:** `updateNudgeLogStatus(id, 'engaged', { engagedAt: now })`. Idempotente. **Resposta 200:** `{ nudge }`.
+
+#### `POST /api/coach/nudges/:id/unsubscribe`
+- **Auth:** JWT. **Efeito:** `updateNudgeLogStatus(id, 'unsubscribed')` + `upsertCoachPreferences({ nudgeB<Cat>: false })` (desliga o toggle) + `checkAndFreezeCategory`. **Resposta 200:** `{ nudge, preferences }`.
+
+#### `POST /api/coach/preferences/unfreeze`
+- **Auth:** JWT. **Body:** `{ category: NudgeCategory }` (enum dos 8 `B-*` — `400` se inexistente).
+- **Efeito:** remove `frozenCategories[category]` (no-op se nao existe). **Resposta 200:** `{ preferences }`.
+
+#### `POST /api/admin/coach/freeze-category`
+- **Auth:** JWT + `requirePermission('admin')` — `403` se nao-admin.
+- **Body:** `{ userId, category: NudgeCategory, action: 'freeze' | 'unfreeze' }`.
+- **Efeito:** `freeze` → `frozenCategories[category] = { frozenAt: now, reason: 'admin' }`; `unfreeze` → remove. **Resposta 200:** `{ ok: true, frozenCategories }`.
+
+#### `GET /api/coach/preferences` — estendido
+- O response (`buildPrefsResponse`) ganha **`frozenCategories: Record<NudgeCategory, { frozenAt: string; reason: 'auto_dismiss_rate'|'admin'|'manual'; dismissRate?: number; windowDays?: number }>`** (vazio `{}` ou com entradas). Os 8 toggles + quiet hours + caps + `coachTone` inalterados. A aba "Preferencias" do hub `/coach-ai` renderiza uma secao "Categorias pausadas" + botao "Reativar" (`POST /api/coach/preferences/unfreeze`).
+
+#### `PUT /api/coach/preferences` — estendido
+- Ganha o campo opcional **`unfreezeCategory?: NudgeCategory`** — se presente, remove `frozenCategories[unfreezeCategory]`. **NAO** aceita `frozenCategories: {...}` no body (Zod `.strict()` → `400`; congelamento so via auto-congelamento ou `POST /api/admin/coach/freeze-category`).
+- Quando o body inclui `coachTone`, o handler **tambem** chama `updateAiStructuredProfile(userId, { tomPreferido: coachTone })` (espelha — RF-09 sincronizacao).
+
+### nudgeEngine — 8 checks (ADR-152, estende ADR-085)
+
+Ordem do `shouldSendNudge(userId, ctx)`: **(0)** kill switch global `COACH_NUDGES_ENABLED === 'false'` → `nudges_globally_disabled` (absoluto — nem `isCritical` bypassa); **(1)** categoria toggle off → `category_disabled`; **(1.5)** categoria congelada (`prefs.frozenCategories[ctx.category]`) → `category_frozen` (bypass se `isCritical`); **(1.6)** snooze ativo (`getActiveSnoozeForCategory > now`) → `category_snoozed` (bypass se `isCritical`); **(2)** quiet hours → `quiet_hours` (bypass se `isCritical`) — inalterado; **(3)** daily cap → `daily_cap_reached` — inalterado; **(4)** hourly cap → `hourly_cap_reached` — inalterado; **(5)** one-shot per cycle → `already_sent_this_cycle` — inalterado; senao `ALLOW`. Erro em qualquer step → safe-deny `engine_error` com `console.error` (lesson #9). O `cronRunner` nao registra os schedules de B-SNAPSHOT, B-STUDY e `generateCoachRecommendations` se `COACH_NUDGES_ENABLED === 'false'` (o cleanup de pending coach_actions continua). Nudges ja `sent` permanecem quando o kill switch aciona (o kill switch para de gerar novos; nao apaga).
+
+### Perfil estruturado no system prompt (ADR-151 §7)
+
+O bloco STATIC cacheado ganha `## Perfil Estruturado do Jogador:` entre `## Perfil do jogador:` (nome/plano/total torneios) e `## Perfil do Jogador (memoria de longo prazo):` (a prosa). Populado: linhas curtas pt-BR (nivel + flag de confirmacao, perfil declarado, stakes/volume/tempo, redes, metas, foco, tom + instrucao de como aplicar, padroes — so declarados). Vazio (`isStructuredProfileEmpty`) E re-onboarding nao recusado recentemente (`reOnboardingDeclinedAt` ausente ou >30d): 1 linha instruindo a oferecer um diagnostico rapido (3 perguntas). Vazio mas re-onboarding recusado recentemente: bloco omitido. Vai no array STATIC com `cache_control: ephemeral`; quebra unica de cache aceita (lesson #10 + ADR-019).
+
+### Referencias AI-1A
+
+- ADR-151: `Docs/architecture/decisions/151-ai-structured-profile-jsonb.md`
+- ADR-152: `Docs/architecture/decisions/152-anti-fadiga-snooze-telemetry-autofreeze-killswitch.md`
+- ADR-153: `Docs/architecture/decisions/153-onboarding-conversacional-wizard-guiado.md`
+- ADR-154: `Docs/architecture/decisions/154-deteccao-nivel-rule-based.md`
+- Diagramas: `Docs/architecture/diagrams/coach-ai-1a/{onboarding-flow,nudge-engine-checks,system-prompt-structure,structured-profile-and-nudge-telemetry-er}.mermaid`
+- Spec: `Docs/specs/sprint-ai-1a.md`
+- Memoria estruturada (delta sobre ADR-015/AI-002): `Docs/architecture/ai-coach/adr-002-memory-architecture.md` (nota AI-1A no topo)

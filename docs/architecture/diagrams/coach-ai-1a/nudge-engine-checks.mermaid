@@ -1,0 +1,60 @@
+%% Sprint AI-1A — nudgeEngine shouldSendNudge(userId, ctx) com os 8 checks (ADR-152, estende ADR-085)
+%% Ordem: barato/decisivo primeiro. + telemetria + auto-congelamento.
+
+flowchart TD
+    call(["shouldSendNudge(userId, ctx)<br/>ctx = { category, isCritical?, cycleKey?, now? }"]) --> c0
+
+    c0{"CHECK 0 — Kill switch global<br/>process.env.COACH_NUDGES_ENABLED === 'false'?<br/>(resolvido a cada chamada — runtime)"}
+    c0 -->|"sim — ABSOLUTO, nem isCritical bypassa"| deny0(["DENY: nudges_globally_disabled"])
+    c0 -->|"nao"| c1
+
+    c1{"CHECK 1 — Categoria toggle<br/>prefs.nudgeB&lt;Cat&gt; === false?<br/>(getCoachPreferences — cache 30s, ADR-084)"}
+    c1 -->|"sim"| deny1(["DENY: category_disabled"])
+    c1 -->|"nao"| c15
+
+    c15{"CHECK 1.5 — Categoria congelada (NOVO)<br/>prefs.frozenCategories[ctx.category] existe?<br/>(mesma leitura de getCoachPreferences — sem query extra)"}
+    c15 -->|"sim E !isCritical"| deny15(["DENY: category_frozen<br/>console.info {reason, frozenSince}"])
+    c15 -->|"sim MAS isCritical → bypass"| c16
+    c15 -->|"nao"| c16
+
+    c16{"CHECK 1.6 — Snooze ativo (NOVO)<br/>getActiveSnoozeForCategory(userId, category, now) > now?<br/>(query: coach_nudge_log status='snoozed', snoozeUntil mais futuro)"}
+    c16 -->|"sim E !isCritical"| deny16(["DENY: category_snoozed<br/>console.info {reason, snoozeUntil}"])
+    c16 -->|"sim MAS isCritical → bypass / snooze expirado → prossegue"| c2
+    c16 -->|"nao"| c2
+
+    c2{"CHECK 2 — Quiet hours (inalterado)<br/>isInQuietHours(localHour, start, end)?<br/>(bypass se isCritical)"}
+    c2 -->|"sim E !isCritical"| deny2(["DENY: quiet_hours"])
+    c2 -->|"nao / isCritical"| c3
+
+    c3{"CHECK 3 — Daily cap (inalterado)<br/>countNudgeLog(24h, exclui 'snoozed') >= maxNudgesPerDay?"}
+    c3 -->|"sim"| deny3(["DENY: daily_cap_reached"])
+    c3 -->|"nao"| c4
+
+    c4{"CHECK 4 — Hourly cap (inalterado)<br/>countNudgeLog(1h, exclui 'snoozed') >= maxNudgesPerHour?"}
+    c4 -->|"sim"| deny4(["DENY: hourly_cap_reached"])
+    c4 -->|"nao"| c5
+
+    c5{"CHECK 5 — One-shot per cycle (inalterado)<br/>findNudgeLog(category, cycleKey, status IN sent|engaged|dismissed) existe?"}
+    c5 -->|"sim"| deny5(["DENY: already_sent_this_cycle"])
+    c5 -->|"nao"| allow(["ALLOW<br/>caller cria chatSession + chatMessage + createNudgeLog({status:'sent'})"])
+
+    %% Erro em qualquer step
+    c0 -.->|"erro DB / inesperado"| err
+    c1 -.-> err
+    c15 -.-> err
+    c16 -.-> err
+    err(["DENY: engine_error<br/>console.error (lesson #9) — NAO throw, caller continua"])
+
+    %% Telemetria + auto-congelamento (fora do shouldSendNudge — disparado pelos endpoints REST)
+    subgraph telemetria["Telemetria + auto-congelamento (ADR-152 §6 — endpoints REST RF-10)"]
+        ep["POST /api/coach/nudges/:id/dismiss → status='dismissed'<br/>POST .../unsubscribe → status='unsubscribed' + desliga toggle"] --> freeze["checkAndFreezeCategory(userId, category)<br/>getNudgeDismissRate(userId, category, 7d)<br/>{ sent (status IN sent|engaged|dismissed|unsubscribed), dismissed (status IN dismissed|unsubscribed), rate }"]
+        freeze --> freezeQ{"sent >= 3 (MIN_SAMPLE)<br/>E rate > 0.5 (DISMISS_RATE_THRESHOLD)?"}
+        freezeQ -->|"nao"| noFreeze["nao congela"]
+        freezeQ -->|"sim E nao ja congelada (idempotente)"| doFreeze["upsertCoachPreferences({ frozenCategories: {<br/>  ...current, [category]: { frozenAt, reason:'auto_dismiss_rate', dismissRate, windowDays:7 } } })<br/>+ cria coach_nudge_log row: triggeredByEvent='auto_freeze_notice', status='sent'<br/>  titleI18n='Avisos de X pausados' (NAO passa por shouldSendNudge — e meta, sempre entregue)"]
+        doFreeze -.->|"agora category_frozen no CHECK 1.5"| c15
+        ep2["POST .../snooze { duration: 'short'|'long' } → status='snoozed', snoozeUntil = now + 1d|30d"] -.->|"agora category_snoozed no CHECK 1.6"| c16
+        ep3["POST /api/coach/preferences/unfreeze { category }<br/>OU POST /api/admin/coach/freeze-category { userId, category, action }"] -.->|"remove/seta frozenCategories[category]"| c15
+    end
+
+    %% cronRunner gating (ADR-152 §1)
+    cron["cronRunner.startCoachCrons()<br/>se COACH_NUDGES_ENABLED === 'false':<br/>NAO registra B-SNAPSHOT, B-STUDY, generateCoachRecommendations<br/>(cleanup de coach_actions continua sempre — nao e proatividade)<br/>log: coach.cron.nudges_disabled"] -.->|"quando registrados, chamam"| call

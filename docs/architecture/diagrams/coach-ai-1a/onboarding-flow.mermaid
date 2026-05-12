@@ -1,0 +1,66 @@
+%% Sprint AI-1A — Fluxo do onboarding conversacional (wizard guiado: full + light)
+%% ADR-153. Persistencia incremental em users.ai_structured_profile + onboardingDraft.
+%% Banner em /coach-ai (aba chat) e /inicio quando !onboardingCompletedAt.
+
+flowchart TD
+    start(["Usuario abre /coach-ai ou /inicio"]) --> bannerQ{"GET /api/coach/onboarding<br/>completed?"}
+    bannerQ -->|"completed = true"| noBanner["Sem banner — perfil ja configurado"]
+    bannerQ -->|"completed = false"| banner["OnboardingBanner visivel:<br/>'Configure seu perfil — 3 min'<br/>[Comecar] [agora nao]"]
+
+    banner -->|"clica 'agora nao'"| skip["PATCH /api/coach/onboarding { skip: true }<br/>→ ai_structured_profile.onboardingSkippedAt = now<br/>banner esconde por essa sessao (reaparece na proxima)"]
+    banner -->|"clica 'Comecar'"| route["→ /coach-ai/onboarding?mode=full|light<br/>(GET decide o default: full se nunca completou;<br/>light se isStructuredProfileEmpty + conta antiga)"]
+
+    %% O agente tambem pode oferecer o re-onboarding leve pelo system prompt
+    promptOffer["System prompt (bloco STATIC, ADR-151 §7):<br/>se isStructuredProfileEmpty E !reOnboardingDeclinedAt(<30d)<br/>→ 'ofereca diagnostico rapido (3 perguntas)'"] -.->|"usuario aceita (fora do escopo automatizado)"| routeLight["→ /coach-ai/onboarding?mode=light"]
+    routeLight --> route
+
+    route --> loadDraft{"GET retornou draft?<br/>{ step, mode, startedAt }"}
+    loadDraft -->|"sim"| resume["Wizard retoma do draft.step<br/>com os dados ja salvos em ai_structured_profile"]
+    loadDraft -->|"nao"| step1
+
+    resume --> stepN
+
+    subgraph wizardFull["Wizard FULL — 6 steps (cada step: PATCH parcial ao avancar)"]
+        step1["Step 1 — Perfil de jogador<br/>tempoJogaSerioMeses, perfilDeclarado (chips),<br/>stakesTipico, volumeTipicoMes, redesPrincipais (multi + 'outra' clamp 50)"]
+        step2["Step 2 — Status do import<br/>mostra hasImport (getUploadHistory/contagem)<br/>se nao: link /upload (nao bloqueia)"]
+        step3["Step 3 — Deteccao de nivel<br/>GET /api/coach/level-estimate → mostra estimativa<br/>chips: 'confere' / 'nao, sou mais [picker]' / 'prefiro nao dizer'<br/>(sem_dados → pergunta auto-declarado, opcional)"]
+        step4["Step 4 — Metas (≤3, max 200 chars cada + prazo) — PULAVEL"]
+        step5["Step 5 — Foco do mes (texto curto max 200) — PULAVEL"]
+        step6["Step 6 — Tom + nudges<br/>chips gentle/balanced/direct (default balanced)<br/>+ 8 toggles nudge (rotulos UX ↔ B-*; B-LIFE/B-MENTAL default false)<br/>+ quiet hours (2 inputs)<br/>[Concluir]"]
+        step1 --> step2 --> step3 --> step4 --> step5 --> step6
+    end
+
+    subgraph wizardLight["Wizard LIGHT — 3 steps"]
+        lstep1["Step 1 — Tom (chips gentle/balanced/direct)"]
+        lstep2["Step 2 — 1 meta do mes (opcional)"]
+        lstep3["Step 3 — Foco do mes (opcional)<br/>[Concluir]"]
+        lstep1 --> lstep2 --> lstep3
+    end
+
+    stepN["(step retomado)"] -.-> wizardFull
+    stepN -.-> wizardLight
+    route -->|"mode=full"| step1
+    route -->|"mode=light"| lstep1
+
+    %% Persistencia incremental
+    step1 -.->|"PATCH { perfilDeclarado, stakesTipico, ..., step: 1 }"| patchDB[("PATCH /api/coach/onboarding<br/>→ updateAiStructuredProfile(delta) (merge raso, clamp tamanhos)<br/>+ onboardingDraft = { step, mode, startedAt }<br/>Zod valida o sub-schema do step (400 se invalido)")]
+    step2 -.-> patchDB
+    step3 -.->|"PATCH { nivel, nivelConfirmado, nivelEstimadoEm, step: 3 }"| patchDB
+    step4 -.-> patchDB
+    step5 -.-> patchDB
+    step6 -.-> patchDB
+    lstep1 -.-> patchDB
+    lstep2 -.-> patchDB
+    lstep3 -.-> patchDB
+
+    step6 -->|"[Concluir]"| complete
+    lstep3 -->|"[Concluir]"| complete
+
+    complete[("POST /api/coach/onboarding/complete<br/>Zod valida o agregado (tomPreferido obrigatorio)<br/>→ onboardingCompletedAt = now, onboardingVersion = 1<br/>→ limpa onboardingDraft<br/>→ updateAiStructuredProfile({ tomPreferido, ... })<br/>→ upsertCoachPreferences({ coachTone: tomPreferido,<br/>   nudgeB*: ..., quietHoursStart/End: ... })  [RF-09 sincronizacao]")]
+
+    complete --> done(["Perfil estruturado populado<br/>banner some (completed = true)<br/>relatorios futuros (AI-1B+) usam nivel/metas/foco/tom/redes"])
+
+    %% Onde os dados alimentam o perfil estruturado
+    patchDB -.->|"escreve"| profile[("users.ai_structured_profile (JSONB, ADR-151)<br/>{ schemaVersion, nivel, nivelConfirmado, metas, focoDoMes,<br/>  tomPreferido, redesPrincipais, perfilDeclarado, stakesTipico,<br/>  volumeTipicoMes, tempoJogaSerioMeses, onboardingDraft, ... }")]
+    complete -.->|"escreve (final)"| profile
+    profile -.->|"lido pelo system prompt (bloco STATIC)"| prompt(["## Perfil Estruturado do Jogador: (ADR-151 §7)"])

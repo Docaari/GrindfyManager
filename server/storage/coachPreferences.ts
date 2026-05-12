@@ -16,6 +16,13 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { userCoachPreferences } from "@shared/schema";
 
+export interface FrozenCategoryEntry {
+  frozenAt: string;
+  reason: "auto_dismiss_rate" | "admin" | "manual" | string;
+  dismissRate?: number;
+  windowDays?: number;
+}
+
 export interface CoachPreferences {
   nudgeBSnapshot: boolean;
   nudgeBLeak: boolean;
@@ -33,6 +40,8 @@ export interface CoachPreferences {
   channelEmail: boolean;
   channelPush: boolean;
   coachTone: "gentle" | "balanced" | "direct";
+  // Sprint AI-1A / RF-02 — estado de auto-congelamento por categoria.
+  frozenCategories: Record<string, FrozenCategoryEntry>;
   updatedAt?: Date;
 }
 
@@ -53,6 +62,7 @@ export const COACH_PREFS_DEFAULTS: CoachPreferences = {
   channelEmail: true,
   channelPush: false,
   coachTone: "balanced",
+  frozenCategories: {},
 };
 
 const CACHE_TTL_MS = 30_000;
@@ -82,6 +92,10 @@ export function normalizeCoachPreferences(row: any): CoachPreferences {
     coachTone:
       (row?.coachTone as CoachPreferences["coachTone"]) ??
       COACH_PREFS_DEFAULTS.coachTone,
+    frozenCategories:
+      (row?.frozenCategories && typeof row.frozenCategories === "object"
+        ? row.frozenCategories
+        : {}) as Record<string, FrozenCategoryEntry>,
     updatedAt: row?.updatedAt,
   };
 }

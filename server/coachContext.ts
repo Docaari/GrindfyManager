@@ -48,6 +48,8 @@ interface DataLoaders {
   getWeeklyPlan?: (userId: string) => Promise<any | null>;
   getStudyProgress?: (userId: string) => Promise<any[]>;
   getPageContext?: (userId: string, sessionId: string) => Promise<any>;
+  // Sprint AI-1A / RF-06 — perfil estruturado de IA para o bloco STATIC.
+  getStructuredProfile?: (userId: string) => Promise<any | null>;
 }
 
 export async function assembleContext(
@@ -78,6 +80,7 @@ export async function assembleContext(
     weeklyPlanData,
     studyProgressData,
     pageContextData,
+    structuredProfileData,
   ] = await Promise.all([
     dataLoaders.getAiProfile ? dataLoaders.getAiProfile(userId).catch(() => null) : Promise.resolve(null),
     dataLoaders.getActiveGrind ? dataLoaders.getActiveGrind(userId).catch(() => null) : Promise.resolve(null),
@@ -86,6 +89,7 @@ export async function assembleContext(
     dataLoaders.getWeeklyPlan ? dataLoaders.getWeeklyPlan(userId).catch(() => null) : Promise.resolve(null),
     dataLoaders.getStudyProgress ? dataLoaders.getStudyProgress(userId).catch(() => []) : Promise.resolve([]),
     dataLoaders.getPageContext ? dataLoaders.getPageContext(userId, sessionId).catch(() => null) : Promise.resolve(null),
+    dataLoaders.getStructuredProfile ? dataLoaders.getStructuredProfile(userId).catch(() => null) : Promise.resolve(null),
   ]);
 
   // 3. [DEAD CODE — TODO cleanup] O array `systemParts` abaixo (e as queries
@@ -207,6 +211,7 @@ export async function assembleContext(
       aiProfile: aiProfileText ?? null,
       statsSnapshot: stats ?? null,
       lastSummary: lastSummary ?? null,
+      structuredProfile: structuredProfileData ?? null,
     },
     {
       activeGrind: activeGrindData ?? null,

@@ -9947,6 +9947,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       if (status === "dismissed") updates.dismissedAt = extra.dismissedAt ?? new Date();
       if (status === "engaged") updates.engagedAt = extra.engagedAt ?? new Date();
       if (status === "snoozed") updates.snoozeUntil = extra.snoozeUntil ?? null;
+      // Sprint AI-1A — status 'unsubscribed' (usuario desligou a categoria a partir
+      // de um nudge): registra como dismiss (conta no dismiss rate).
+      if (status === "unsubscribed") updates.dismissedAt = extra.dismissedAt ?? new Date();
       await db
         .update(coachNudgeLog)
         .set(updates)
@@ -9954,6 +9957,126 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     } catch (err) {
       console.error("storage.updateNudgeLogStatus.error", { id, err });
       throw err;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sprint AI-1A / RF-02 (ADR-152) — anti-fadiga: snooze/dismiss-rate/list/byId
+  // ---------------------------------------------------------------------------
+  async getNudgeLogById(id: string): Promise<CoachNudgeLog | undefined> {
+    try {
+      const [row] = await db
+        .select()
+        .from(coachNudgeLog)
+        .where(eq(coachNudgeLog.id, id))
+        .limit(1);
+      return row;
+    } catch (err) {
+      console.error("storage.getNudgeLogById.error", { id, err });
+      throw err;
+    }
+  }
+
+  /** O snoozeUntil mais futuro entre rows 'snoozed' da categoria com snoozeUntil > now. */
+  async getActiveSnoozeForCategory(
+    userId: string,
+    category: string,
+    now: Date,
+  ): Promise<Date | null> {
+    try {
+      const rows = await db
+        .select({ snoozeUntil: coachNudgeLog.snoozeUntil })
+        .from(coachNudgeLog)
+        .where(
+          and(
+            eq(coachNudgeLog.userId, userId),
+            eq(coachNudgeLog.category, category),
+            eq(coachNudgeLog.status, "snoozed"),
+            gt(coachNudgeLog.snoozeUntil, now),
+          ),
+        )
+        .orderBy(desc(coachNudgeLog.snoozeUntil))
+        .limit(1);
+      const first = Array.isArray(rows) ? rows[0] : undefined;
+      const su = first?.snoozeUntil;
+      if (!su) return null;
+      const d = su instanceof Date ? su : new Date(su);
+      return Number.isFinite(d.getTime()) ? d : null;
+    } catch (err) {
+      console.error("storage.getActiveSnoozeForCategory.error", { userId, category, err });
+      return null;
+    }
+  }
+
+  /**
+   * Taxa de dismiss da categoria nos ultimos `sinceDays` dias.
+   * sent = rows com status IN ('sent','engaged','dismissed','unsubscribed') — exclui 'snoozed'.
+   * dismissed = rows com status IN ('dismissed','unsubscribed').
+   */
+  async getNudgeDismissRate(
+    userId: string,
+    category: string,
+    sinceDays: number,
+  ): Promise<{ sent: number; dismissed: number; rate: number }> {
+    try {
+      const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+      const [row] = await db
+        .select({
+          sent: sql<number>`count(*) filter (where ${coachNudgeLog.status} in ('sent','engaged','dismissed','unsubscribed'))`,
+          dismissed: sql<number>`count(*) filter (where ${coachNudgeLog.status} in ('dismissed','unsubscribed'))`,
+        })
+        .from(coachNudgeLog)
+        .where(
+          and(
+            eq(coachNudgeLog.userId, userId),
+            eq(coachNudgeLog.category, category),
+            gte(coachNudgeLog.sentAt, since),
+          ),
+        );
+      const sent = Number(row?.sent ?? 0);
+      const dismissed = Number(row?.dismissed ?? 0);
+      const rate = sent > 0 ? dismissed / sent : 0;
+      return { sent, dismissed, rate };
+    } catch (err) {
+      console.error("storage.getNudgeDismissRate.error", { userId, category, err });
+      return { sent: 0, dismissed: 0, rate: 0 };
+    }
+  }
+
+  async listNudgeLog(
+    userId: string,
+    opts: { category?: string; status?: string; since?: Date; limit?: number } = {},
+  ): Promise<CoachNudgeLog[]> {
+    try {
+      const conds: any[] = [eq(coachNudgeLog.userId, userId)];
+      if (opts.category) conds.push(eq(coachNudgeLog.category, opts.category));
+      if (opts.status) conds.push(eq(coachNudgeLog.status, opts.status));
+      if (opts.since) conds.push(gte(coachNudgeLog.sentAt, opts.since));
+      const limit = Math.max(1, Math.min(200, opts.limit ?? 100));
+      const rows = await db
+        .select()
+        .from(coachNudgeLog)
+        .where(and(...conds))
+        .orderBy(desc(coachNudgeLog.sentAt))
+        .limit(limit);
+      return Array.isArray(rows) ? rows : [];
+    } catch (err) {
+      console.error("storage.listNudgeLog.error", { userId, err });
+      return [];
+    }
+  }
+
+  /** Sprint AI-1A / RF-05 — delega ao service de auto-congelamento. */
+  async checkAndFreezeCategory(
+    userId: string,
+    category: any,
+  ): Promise<{ frozen: boolean; rate?: number }> {
+    try {
+      const { checkAndFreezeCategory } = await import("./coach/nudgeAutoFreeze");
+      return await checkAndFreezeCategory(userId, category);
+    } catch (err) {
+      console.error("storage.checkAndFreezeCategory.error", { userId, category, err });
+      return { frozen: false };
     }
   }
 
