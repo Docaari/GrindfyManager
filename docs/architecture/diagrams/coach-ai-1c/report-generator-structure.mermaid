@@ -1,0 +1,60 @@
+%% Estrutura dos geradores de relatorio — Sprint AI-1C (ADR-159 §2.5) — RF-04.
+%% Helpers compartilhados (reportGeneratorShared.ts) + 3 generators (weekly/daily/monthly)
+%% + processReportJobsTick despacha por job.reportType. 'quarterly' -> skipped (AI-2B).
+
+flowchart TB
+    subgraph SHARED["server/services/reportGeneratorShared.ts<br/><i>(extraido de weeklyReportGenerator.ts — sem regressao)</i>"]
+        S1["DEFAULT_REPORT_MODEL = 'claude-sonnet-4-6'<br/>getReportModel() = process.env.COACH_MODEL ?? DEFAULT_REPORT_MODEL<br/>PRICE_PER_M"]
+        S2["ALLOWED_HREFS + sanitizeHref(href, fallback)<br/><i>whitelist de rotas Wouter REGISTRADAS — lesson #19</i>"]
+        S3["computeCost(usage)"]
+        S4["n(v,fallback) · ymd(d) · safe&lt;T&gt;(fn,fallback) · resolveStorage(injected?)"]
+        S5["callLlm({ model, system, userMessage, maxTokens })<br/><i>new AnthropicCtor em try/catch + fallback factory — lesson #5/#35<br/>system: [{ type:'text', text, cache_control:{type:'ephemeral'} }]<br/>retorna { parsedJson?, text, usage }</i>"]
+        S6["persistReport({ storage, userId, reportType, periodStart, periodEnd,<br/>status, content, markdown, model, summarizerModel, usage, costUsdEstimate, degradedReason })<br/><i>reportType eh PARAMETRO (nao hardcodado 'weekly') -> storage.upsertReport</i>"]
+        S7["renderMarkdownBase(content) · buildCtas(parsed, opts) · mergeLlm(sections, parsed)"]
+        S8["buildReportFollowUp(storage, userId)<br/><i>(ADR-161) findActiveLeakFocusList + verify_leak_progress logic + getAiStructuredProfile.metas<br/>-> ReportContent.followUp | undefined (omitido se nada ativo — lesson #11)</i>"]
+    end
+
+    subgraph GENW["server/services/weeklyReportGenerator.ts<br/><i>(refatorado — reusa SHARED)</i>"]
+        W1["generateWeeklyReport({ userId, periodStart, periodEnd, failSoft?, injectedStorage? })"]
+        W2["gatherBundle (a semana) — getDashboardStats, getPerformanceByPeriod('7d'),<br/>getTournaments(userId,5000,0,'7d') §6.1, detectLeaks, getConsolidatedBalance,<br/>getBankrollSnapshots, listWalletTransactionsByUser, getStudySessionsV2/V1,<br/>getPlannedTournaments, getGrindSessions, listWarmupRituals, getAiStructuredProfile"]
+        W3["runBackfills (coach_lesson_recommendations + study_weekly_plans — idempotente)"]
+        W4["summarizeBundleHierarchical (RF-07 — SUBSTITUI o stub 'sumariza se grande' do AI-1B)"]
+        W5["buildSections (5 secoes) + insights (3) + nextWeekPlan + cta + followUp -> ReportContent + markdown"]
+    end
+
+    subgraph GEND["server/services/dailyDebriefGenerator.ts<br/><i>(NOVO — reusa SHARED)</i>"]
+        D1["generateDailyDebrief({ userId, periodStart, failSoft?, injectedStorage? })<br/><i>periodEnd = periodStart</i>"]
+        D2["gatherDailyBundle — getGrindSessions(userId) filtra por data + status completed/finished,<br/>getSessionTournaments(sessionId) (FX -> USD), starred_hands da sessao (spots),<br/>getGrindSessions ultimas ~10 (ritmo recente), findActiveLeakFocusList + getAiStructuredProfile"]
+        D3["<b>NAO runBackfills · NAO summarize</b> (bundle pequeno — summarizer_model_used=null)"]
+        D4["sessionSummary + insights (1-2 com [fonte:]) + followUp + cta + header -> ReportContent + markdown<br/><i>0 torneios/0 spots -> dataSufficiency='low', sem LLM, custo aprox 0</i>"]
+    end
+
+    subgraph GENM["server/services/monthlyReportGenerator.ts<br/><i>(NOVO — reusa SHARED)</i>"]
+        M1["generateMonthlyReport({ userId, periodStart, periodEnd, failSoft?, injectedStorage? })"]
+        M2["gatherMonthlyBundle — getDashboardStats(custom)/getPerformanceByPeriod('periodStart to periodEnd'),<br/>getConsolidatedBalance, getBankrollSnapshots({to:monthEnd}), listWalletTransactionsByUser,<br/>getAnalyticsBy*, getStudySessionsV2/V1, listWarmupRituals, findActiveLeakFocusList, getAiStructuredProfile,<br/>buildMonthlyComparatives(12) §6.1, getVarianceVsExpected (null -> heuristica), detectLeaks x coach_leak_focus, metas"]
+        M3["runBackfills (roda no monthly — cobre >=1 semana)"]
+        M4["summarizeBundleHierarchical (RF-07 — aciona se bundle > threshold; esp. 12 meses de serie)"]
+        M5["5 secoes + comparatives + variance + leaksDelta + goalsProgress + insights (3-5) + nextWeekPlan + followUp + cta -> ReportContent v2 + markdown<br/><i>mes vazio -> dataSufficiency='low', CTA /upload, sem LLM, custo aprox 0</i>"]
+    end
+
+    subgraph DISPATCH["server/jobs/reportJobRunner.ts — processReportJobsTick"]
+        P1["claim atomico -> revalidateEligibility (getReportTier — corrige o PRO_PLANS bug)"]
+        P2{"getGeneratorFor(job.reportType)"}
+        P3["'weekly' -> generateWeeklyReport"]
+        P4["'daily' -> generateDailyDebrief"]
+        P5["'monthly' -> generateMonthlyReport"]
+        P6["'quarterly' / desconhecido -> null<br/>console.warn('report.job.unsupported_report_type') + status='skipped'"]
+        P7["persistOrFetchReportId (usa claimed.reportType — NAO o literal 'weekly')<br/>updateReportJob(jobId, { status:'done', reportId })"]
+    end
+
+    SHARED -. reusado por .-> GENW
+    SHARED -. reusado por .-> GEND
+    SHARED -. reusado por .-> GENM
+    P1 --> P2
+    P2 --> P3 --> W1
+    P2 --> P4 --> D1
+    P2 --> P5 --> M1
+    P2 --> P6
+    P3 --> P7
+    P4 --> P7
+    P5 --> P7

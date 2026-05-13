@@ -44,6 +44,9 @@ Este arquivo e **vivo**: cresce a cada sprint conforme novas tools sao adicionad
 | 16 | `log_leak_focus` | write | **true** | — | persist | **AI-0A — registrada (handler ja existia)** |
 | 17 | `log_study_session` | write | **true** | — | persist | **AI-0A — registrada (handler ja existia)** |
 | 18 | `verify_leak_progress` | read | false | — | log | **AI-0A — registrada (handler ja existia; NAO e write)** |
+| 19 | `bulk_query_dimensions` | read | false | — | log | **AI-1C — tool batching, generaliza `query_dimension` (ADR-160)** |
+
+> **AI-1C (ADR-160):** `bulk_query_dimensions` adicionada -> **19 tools + 1 alias** = 20 entradas no array `coachTools`. (Os testes do registry validam **presenca individual** — `getTool('bulk_query_dimensions')` — nunca length absoluta; lesson #8.) `gateByTier: ['pro','premium','admin']` (igual ao `query_dimension` — free nao recebe).
 
 **`confirm-strict`** (`confirmationLevel: 'strict'`) eh um campo opcional do `CoachTool` descriptor, **em
 memoria** (registry) — **nao** persistido em `coach_actions` na v1 (decisao do founder, ADR-146). Hoje so
@@ -158,10 +161,41 @@ z.object({
 }
 ```
 
-**Handler:** `server/coachTools/handlers/queryDimension.ts`. Input validado via `inputSchema.safeParse` no topo (aplica `period='all'` default; `validation_failed` se `dimension` fora do enum). Roteia para `storage.getDashboardStats` (sem `groupBy`) ou `storage.getAnalyticsBy{Site|Category|Speed|BuyinRange|DayOfWeek|Month|Field}` apropriado (`groupBy:'fieldSize'` -> `getAnalyticsByField`, NÃO os buckets V2). Reusa funcoes existentes do projeto — todas filtram `WHERE grind_session_id IS NULL` (regra §6.1). Sem dado => `{ rows:[], totalCount:0, note }`. DB explode => loga + `{ ok:false, error:'handler_error' }` (lesson #9, distinto de "no rows").
+**Handler:** `server/coachTools/handlers/queryDimension.ts`. Input validado via `inputSchema.safeParse` no topo (aplica `period='all'` default; `validation_failed` se `dimension` fora do enum). **AI-1C (ADR-160):** o corpo do handler (tudo depois do `safeParse`) foi extraido para uma funcao exportada `runQueryDimension(input: QueryDimensionInput, ctx: { userId: string })` — `query_dimension` e `bulk_query_dimensions` ambos a usam (DRY; sem regressao). Roteia para `storage.getDashboardStats` (sem `groupBy`) ou `storage.getAnalyticsBy{Site|Category|Speed|BuyinRange|DayOfWeek|Month|Field}` apropriado (`groupBy:'fieldSize'` -> `getAnalyticsByField`, NAO os buckets V2). Reusa funcoes existentes do projeto — todas filtram `WHERE grind_session_id IS NULL` (regra §6.1). Sem dado => `{ rows:[], totalCount:0, note }`. DB explode => loga + `{ ok:false, error:'handler_error' }` (lesson #9, distinto de "no rows").
 
 **Gate:** `gateByTier: ['pro', 'premium', 'admin']` (ADR-145 — read tools = Pro+; free nao recebe tools).
 **Audit:** `'log'` (linha em `coach_actions` sem `result`).
+
+---
+
+## Tool 1b: `bulk_query_dimensions` (AI-1C — ADR-160)
+
+**Description (para LLM):**
+> "Roda VARIAS consultas de dimensao numa chamada so — passe um array de specs (ate 8). Use isto em vez de chamar query_dimension N vezes seguidas. Cada item aceita os mesmos campos de query_dimension (dimension, groupBy, filters, period) + um id opcional pra voce correlacionar o resultado."
+
+**Input schema (Zod):**
+```ts
+z.object({
+  queries: z.array(
+    z.object({ id: z.string().optional() }).merge(queryDimensionInputSchema)  // { id?, dimension, groupBy?, filters?, period? }
+  ).min(1).max(8)   // acima de 8 -> { ok:false, error:'validation_failed' } (NAO trunca — arrays absurdos sao rejeitados)
+})
+```
+
+**Output:**
+```ts
+{ results: Array<
+    | { id?: string, dimension, groupBy, rows, totalCount, period, note? }   // shape de query_dimension, na MESMA ordem das queries
+    | { id?: string, ok: false, error: 'validation_failed', details }        // spec individual invalida no zod
+    | { id?: string, ok: false, error: 'handler_error', message }            // spec que fez o DB explodir (logado antes — lesson #9)
+  > }
+```
+Uma spec ruim no array **nao derruba** as outras. Execucao **sequencial** (reads no `tournaments` — evita pressao no DB; melhor que N round-trips de tool use). Preserva a `id` do item no resultado.
+
+**Handler:** `server/coachTools/handlers/bulkQueryDimensions.ts`. Valida o array via `bulkQueryDimensionsInputSchema.safeParse`; para cada item re-valida via `queryDimensionInputSchema.safeParse(item)` (-> `validation_failed` granular) e se ok chama `await runQueryDimension(item, ctx)` (que ja tem o seu try/catch interno -> `handler_error`) num try/catch externo (cinto + suspensorio). Registrada em `server/coachTools/index.ts` via `safeRegister(bulkQueryDimensionsTool)`. Testes do registry validam `getTool('bulk_query_dimensions')` (presenca individual — lesson #8), nunca length de `coachTools`.
+
+**Gate:** `gateByTier: ['pro', 'premium', 'admin']` (mesma logica do `query_dimension` — o registry filtra; free nao ve a tool).
+**Audit:** `'log'` ("nivel none" do roadmap = `requiresConfirmation: false`; `'log'` registra a invocacao p/ telemetria, nao persiste — `'log'` != `'persist'`). **`requiresConfirmation: false`** (read tool — nenhum side-effect).
 
 ---
 

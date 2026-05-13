@@ -1,0 +1,30 @@
+%% Sumarizacao hierarquica Haiku->Sonnet — Sprint AI-1C (ADR-159 §5 / RF-07).
+%% server/coach/hierarchicalSummarizer.ts -> summarizeBundleHierarchical({ bundle, reportType, model? }).
+%% Camadas raw->mes->trimestre->ano para series longas (esp. last_12_months do monthly).
+%% Threshold COACH_REPORT_SUMMARIZE_THRESHOLD_CHARS (~20k). Daily nunca aciona. Weekly so se exceder.
+%% Modelo Haiku: process.env.COACH_REPORT_SUMMARIZER_MODEL ?? COACH_MEMORY_MODEL ?? HAIKU_MODEL_DEFAULT.
+%% Fail-soft: Haiku falha -> bundle truncado (sem LLM), summarizerModelUsed=null (logado — lesson #9).
+
+flowchart TD
+    A["generateMonthlyReport / generateWeeklyReport(refatorado)<br/>apos gatherBundle"] --> B{"JSON.stringify(bundle).length > COACH_REPORT_SUMMARIZE_THRESHOLD_CHARS (~20k)?<br/><i>(estimativa barata; prompt caching ja cobre o STATIC)</i>"}
+    B -->|"Nao (bundle pequeno — daily SEMPRE cai aqui)"| C["return { summarizedBundle: bundle, summarizerModelUsed: null, layersUsed: 0 }<br/><b>no-op — nao chama o LLM</b>"]
+    B -->|"Sim"| D["separa o bundle:<br/>- partes 'longas' (series last_12_months, lista de torneios do mes se grande, leaks historicos) -> camadas Haiku<br/>- 'mes corrente em detalhe' (dashStats, leaks atuais, metas, warm-up do mes) -> vai DIRETO pro sonnet"]
+
+    D --> L1["<b>Camada 1 — raw -> resumo/mes</b><br/>1 chamada Haiku que devolve 12 resumos curtos (1 por mes)<br/><i>1 chamada (cabe no contexto) > 12 chamadas (mais barato)</i>"]
+    L1 --> L2["<b>Camada 2 — 12 resumos/mes -> 4 resumos/trimestre</b><br/>1 chamada Haiku (Q1..Q4)"]
+    L2 --> L3["<b>Camada 3 — 4 resumos/trimestre -> 1 resumo/ano</b><br/>1 chamada Haiku"]
+    L3 --> E["summarizedBundle = { ...mesCorrenteEmDetalhe, evolucao: { resumoAno, resumosTrimestre?, numerosCrus: { previousPeriod, last6Months } } }<br/><i>so o resumo final (ano) + (opcional) os resumos/trimestre + os numeros crus das janelas-chave (mes -1, 6m) vao pro sonnet</i>"]
+    E --> F["return { summarizedBundle, summarizerModelUsed: '&lt;haiku model&gt;', layersUsed: 3 }<br/><i>JSON.stringify(summarizedBundle).length &lt; JSON.stringify(bundle).length; mes corrente preservado em detalhe</i>"]
+
+    L1 -. "qualquer chamada Haiku falha (excecao / sem ANTHROPIC_API_KEY / new AnthropicCtor que e vi.fn() — lesson #5/#35)" .-> G
+    L2 -. "idem" .-> G
+    L3 -. "idem" .-> G
+    G["<b>fail-soft</b>: console.error('report.summarizer.error', { err }) (logar ANTES — lesson #9)<br/>-> trunca as series longas pros ultimos N meses (sem LLM)<br/>-> return { summarizedBundle: bundleTruncado, summarizerModelUsed: null, layersUsed: 0 }<br/><b>NAO derruba o relatorio — so perde detalhe de contexto</b>"]
+
+    C --> H["o gerador passa summarizedBundle pro prompt do sonnet 4.6<br/>grava reports.summarizer_model_used (= '&lt;haiku&gt;' se sumarizou, null caso contrario)"]
+    F --> H
+    G --> H
+
+    %% Reaproveitamento: a chamada base de coachMemory.ts (getAnthropicClient + messages.create + getMemoryModel)
+    %% e o pattern reusado; so a estrutura de camadas e nova. O weeklyReportGenerator.ts (refatorado)
+    %% usa o MESMO summarizeBundleHierarchical (substitui o stub 'sumariza com Haiku se grande' do AI-1B).

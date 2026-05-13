@@ -1,0 +1,41 @@
+%% Follow-ups inteligentes — Sprint AI-1C (ADR-161 / RF-08).
+%% 3 frentes: (1) secao "Seu acompanhamento" (ReportContent.followUp) nos 3 relatorios;
+%% (2) bloco "## Follow-ups abertos" no contexto DINAMICO do chat (coachContext.ts);
+%% (3) 1 instrucao no GRINDFY_AI_BASE (STATIC) sobre mencionar sem ser repetitivo.
+%% Reusa coach_leak_focus + verify_leak_progress (como FUNCAO) + AiStructuredProfileMeta. Zero tabela nova.
+
+flowchart TD
+    subgraph SRC["Fontes (reutilizadas — zero tabela/migracao nova)"]
+        SRC1["coach_leak_focus<br/>findActiveLeakFocusList(userId) / findActiveLeakFocus(userId)<br/>{ leakCode, targetMonth, baselineStatKey, baselineValue, baselineSampleSize }"]
+        SRC2["verify_leak_progress logic<br/>findActiveLeakFocus + queryStatByKey(userId, baselineStatKey)<br/>-> { status: 'improving'|'regressing'|'stable'|'insufficient_sample', improvementPct }<br/><i>(reusada como FUNCAO no gerador, nao como tool do LLM)</i>"]
+        SRC3["users.ai_structured_profile (AI-1A)<br/>getAiStructuredProfile(userId).metas: AiStructuredProfileMeta[]<br/>{ id, texto, prazo: 'mes'|'trimestre'|null, criadaEm, origem } + .focoDoMes"]
+    end
+
+    subgraph FE1["Frente 1 — secao nos relatorios (ReportContent.followUp)"]
+        F1A["buildReportFollowUp(storage, userId) (em reportGeneratorShared.ts):<br/>activeFocus = findActiveLeakFocusList; para cada -> verify_leak_progress logic -> status/progressNote<br/>goalsInProgress = metas.filter(prazo in {'mes','trimestre'}); focoDoMes na narrative"]
+        F1B{"activeFocus.length === 0 && goalsInProgress.length === 0?"}
+        F1B -->|"Sim"| F1C["return undefined<br/><b>followUp ausente — a secao e OMITIDA (lesson #11 — nao inventa)</b>"]
+        F1B -->|"Nao"| F1D["ReportContent.followUp = { activeLeakFocus, goalsInProgress, narrative: '' }<br/>-> passado no prompt do gerador (sem a narrative) -> LLM preenche narrative (1-2 frases fechando o loop)"]
+        F1D --> F1E["render: '## Seu acompanhamento' (no daily: 'Acompanhamento') no markdown + ReportView<br/>so quando followUp presente. Weekly + Monthly + Daily."]
+        F1A --> F1B
+    end
+
+    subgraph FE2["Frente 2 — bloco no contexto DINAMICO do chat"]
+        F2A["coachContext.ts assembleContext (bloco DINAMICO — padrao systemParts.push, como '## Leaks Detectados'):<br/>activeFocus = safe(findActiveLeakFocusList, []); profile = safe(getAiStructuredProfile, null)<br/>metasEmProgresso = profile?.metas?.filter(prazo in {'mes','trimestre'})"]
+        F2B{"activeFocus.length > 0 || metasEmProgresso.length > 0?"}
+        F2B -->|"Sim"| F2C["systemParts.push('## Follow-ups abertos:\n- Foco de leak ativo: X (escolhido em YYYY-MM) — status: ...\n- Meta em progresso (prazo): texto\n- Foco do mes: ...')<br/><b>vai no DINAMICO — NAO no STATIC, NAO quebra o cache (ADR-019)</b>"]
+        F2B -->|"Nao"| F2D["nada — sem bloco<br/><i>reusa findActiveLeakFocusList/getAiStructuredProfile — nao duplica queries (atencao lesson #17)</i>"]
+        F2A --> F2B
+    end
+
+    subgraph FE3["Frente 3 — instrucao no system prompt STATIC base"]
+        F3A["GRINDFY_AI_BASE (coachSystemBuilder.ts — bloco STATIC, prompt unico do agente):<br/>+1 frase: 'Quando houver um bloco \"## Follow-ups abertos\" no contexto, e for natural na conversa,<br/>mencione brevemente o follow-up pendente (foco de leak, meta) e ofereca fechar o loop —<br/>sem ser repetitivo nem interromper o assunto do usuario.'<br/><i>1 frase, fonte unica (lesson #10). Vai no STATIC — nao varia, muda 1x no deploy.</i>"]
+    end
+
+    SRC --> FE1
+    SRC --> FE2
+    FE2 -.->|"o agente le o bloco DINAMICO + segue a instrucao do STATIC"| FE3
+
+    %% NOTA: o follow-up no relatorio e conteudo PASSIVO (nao e nudge — nao passa pelo shouldSendNudge,
+    %% nao tem cycleKey/quiet hours). Risco de 'ser chato' mitigado: e uma secao de um relatorio
+    %% que o user ja optou em receber, nao uma interrupcao separada.

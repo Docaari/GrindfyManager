@@ -1,0 +1,51 @@
+%% Tier gating estrito — Sprint AI-1C (ADR-159 §2.2) — RF-02.
+%% getReportTier(user) canonico (inclui Trial) -> tabela tier->tipos -> o enqueuer itera os elegiveis.
+%% Corrige o bug latente do AI-1B: PRO_PLANS=['pro','premium','admin'] vs users.subscription_plan
+%% que e 'trial'|'active'|'expired'|'admin' (pro/premium vem de user_subscriptions JOIN via resolveUserTier).
+
+flowchart TD
+    subgraph BUG["BUG LATENTE do AI-1B (corrigido aqui)"]
+        B1["reportJobRunner.ts: PRO_PLANS = new Set(['pro','premium','admin'])<br/>+ listUsersForCron(\"subscription_plan IN ('pro','premium')\")"]
+        B2["users.subscription_plan = 'trial' | 'active' | 'expired' | 'admin'<br/><b>NUNCA 'pro'/'premium'</b> (pro/premium vem de user_subscriptions JOIN subscription_plans)"]
+        B3["<b>Resultado: hoje so 'admin' recebe o Weekly Report</b><br/>(o filtro IN ('pro','premium') so pega admin; getUserSubscriptionPlan le 'active' cru, PRO_PLANS rejeita)"]
+        B1 --> B3
+        B2 --> B3
+    end
+
+    subgraph FIX["server/coach/reportEligibility.ts (NOVO — fonte canonica)"]
+        F1["getReportTier(user): Promise&lt;'free' | 'eligible'&gt;<br/>= user.subscriptionPlan === 'trial' ? 'eligible'<br/>  : (await resolveUserTier(user)) in {'pro','premium','admin'} ? 'eligible' : 'free'<br/><i>resolveUserTier NAO muda (gateia rate limit + tools — Trial->free la, mantem)</i>"]
+        F2["isReportEligible(userId, type: 'weekly'|'daily'|'monthly'): Promise&lt;boolean&gt;<br/>= try { u = getUserById(userId); if (getReportTier(u)==='free') return false;<br/>  prefs = getCoachPreferences(userId); return prefs[report{Weekly|Daily|Monthly}Enabled] === true }<br/>  catch { console.error; return false }  <i>safe-deny — lesson #9</i>"]
+    end
+
+    subgraph TABLE["Tabela tier -> tipos de relatorio (todos opt-in default false)"]
+        T1["resolveUserTier='admin' (role='admin' OU subscriptionPlan='admin') -> eligible: Daily/Weekly/Monthly"]
+        T2["subscriptionPlan='trial' -> eligible: Daily/Weekly/Monthly  <i>(NOVO — antes nem o weekly chegava)</i>"]
+        T3["subscriptionPlan='active' + plano 'pro' em user_subscriptions -> eligible: Daily/Weekly/Monthly"]
+        T4["subscriptionPlan='active' + plano 'premium' -> eligible: Daily/Weekly/Monthly"]
+        T5["subscriptionPlan in {'free','expired',''} / 'active' sem subscription -> <b>free: NUNCA recebe nada</b><br/>(toggles nao aparecem na UI; setar true via API direta -> enqueuer/processor revalida e nao enfileira/skipa)"]
+    end
+
+    subgraph ENQ["enqueueWeeklyReportJobsTick (enfileira weekly E monthly)"]
+        E1["storage.listUsersForCron(\"subscription_plan IN ('trial','active','admin')\")<br/><i>candidate set — a whitelist de listUsersForCron ja aceita esses valores</i>"]
+        E2["para cada candidate: getLocalHour(now,tz)===7 ?<br/>&nbsp;&nbsp;weekday===1 (segunda) -> isReportEligible(userId,'weekly')<br/>&nbsp;&nbsp;civilUtc.getUTCDate()===1 (dia 1 do mes) -> isReportEligible(userId,'monthly')"]
+        E3["isReportEligible -> getReportTier -> resolveUserTier (com cache 30s + promise-cache) confirma pro/premium p/ 'active', descarta 'active' sem subscription = free"]
+        E4["elegivel & opt-in -> insertReportJobOnConflictDoNothing({ reportType, periodStart, periodEnd, ... })"]
+    end
+
+    subgraph PROC["processReportJobsTick — revalidacao no processamento (downgrade)"]
+        P1["claimReportJob -> revalidateEligibility(storage, claimed):<br/>getCoachPreferences(userId).report{type}Enabled === true ? + getReportTier(getUserById(userId)) !== 'free' ?"]
+        P2{"virou free OU desligou opt-in entre enfileirar e processar?"}
+        P2 -->|"Sim"| P3["status='skipped', last_error='no_longer_eligible'<br/><i>nenhum reports row</i>"]
+        P2 -->|"Nao"| P4["getGeneratorFor(reportType) -> gera o relatorio"]
+        P1 --> P2
+    end
+
+    BUG -.->|"corrigido por"| FIX
+    FIX --> TABLE
+    TABLE --> ENQ
+    F2 --> E3
+    ENQ --> PROC
+    F1 --> P1
+    F2 --> P1
+
+    %% Refator AI-1B: isWeeklyReportEligible -> delega a isReportEligible(userId,'weekly'); PRO_PLANS removido de reportJobRunner.ts.

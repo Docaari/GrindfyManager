@@ -1,0 +1,38 @@
+%% Daily Debrief — Sprint AI-1C (ADR-159 §2.3) — fluxo event-driven pós-session.completed.
+%% Gatilho: PUT /api/grind-sessions/:id { status:'completed' } -> enqueue best-effort
+%% (fire-and-forget, nunca bloqueia/quebra a resposta) -> report_jobs row 'daily' ->
+%% processor (15min, AI-1B) -> generateDailyDebrief -> reports row -> timeline do hub.
+
+flowchart TD
+    A["Jogador finaliza sessao no /grind-live<br/>PUT /api/grind-sessions/:id { status: 'completed' }"] --> B["handleUpdateGrindSession<br/>storage.updateGrindSession(id, body)"]
+    B --> C["stopService.evaluateStops(userId, id)<br/><i>try/catch best-effort</i>"]
+    C --> D["res.status(200).json(...)<br/><b>resposta sai imediatamente</b>"]
+    D --> E["void enqueueDailyDebriefForSession({ userId, sessionId: id, now })<br/><i>.catch(err => console.error('daily.enqueue.error'))</i><br/><b>fire-and-forget — nunca lanca, nunca atrasa</b>"]
+
+    E --> F{"COACH_NUDGES_ENABLED === 'false'?"}
+    F -->|"Sim"| G["no-op<br/><i>(relatorios = proatividade)</i>"]
+    F -->|"Nao"| H{"isReportEligible(userId, 'daily')?<br/>getReportTier !== 'free' && reportDailyEnabled"}
+    H -->|"Nao"| G2["no-op"]
+    H -->|"Sim"| I["storage.getGrindSession(sessionId)<br/>periodStart = ymd(completedAt no fuso do user)<br/>periodEnd = periodStart"]
+    I --> J{"ja existe reports row 'daily' desse dia?<br/>getReportForPeriod(userId,'daily',periodStart)"}
+    J -->|"Sim"| G3["no-op<br/><i>(cap 1/dia — pre-check barato)</i>"]
+    J -->|"Nao"| K["storage.insertReportJobOnConflictDoNothing<br/>{ reportType:'daily', periodStart, periodEnd,<br/>scheduledFor: now, status:'pending', timezone,<br/>subscriptionPlanAtEnqueue, enqueuedBy:'session_completed' }"]
+    K --> L["report_jobs row 'daily' (pending)<br/><i>UNIQUE (user_id,'daily',periodStart) — 1/dia</i>"]
+
+    L --> M["processReportJobsTick (cron */15)<br/>claim atomico -> revalidateEligibility (getReportTier)<br/>-> getGeneratorFor('daily')"]
+    M --> N{"downgrade entre enfileirar e processar?"}
+    N -->|"Sim"| O["status='skipped', last_error='no_longer_eligible'<br/><i>nenhum reports row</i>"]
+    N -->|"Nao"| P["generateDailyDebrief({ userId, periodStart, failSoft?, injectedStorage })"]
+    P --> Q["gatherDailyBundle:<br/>getGrindSessions(userId) filtra por data + status completed/finished<br/>getSessionTournaments(sessionId) — FX -> USD (lesson #6)<br/>starred_hands da sessao (spots/notas)<br/>getGrindSessions ultimas ~10 (ritmo recente)<br/>findActiveLeakFocusList + getAiStructuredProfile (followUp)"]
+    Q --> R{"sessao com 0 torneios e 0 spots?"}
+    R -->|"Sim"| S["daily minimalista<br/>status='ready', dataSufficiency='low'<br/>header minimalista, sem LLM, custo aprox 0"]
+    R -->|"Nao"| T{"ANTHROPIC_API_KEY ausente / LLM falha 3x?"}
+    T -->|"Sim"| U["deterministico<br/>status='degraded', degraded_reason='no_anthropic_key' | 'llm_failed_3x'<br/>numeros completos, sem prosa, job 'done' nunca 'failed'"]
+    T -->|"Nao"| V["callLlm (sonnet 4.6, max_tokens ~1200,<br/>prompt unico server/coach/prompts/dailyDebrief.ts + CITATIONS_RULES)<br/><b>NAO aciona sumarizacao (bundle pequeno) — summarizer_model_used=null</b>"]
+    V --> W["ReportContent v2: header + sessionSummary + insights (1-2 com [fonte:])<br/>+ followUp (se foco de leak ativo / meta) + cta (so tools AI-0A / rotas Wouter)<br/>+ markdown; cost_usd_estimate + tokens gravados (~$0.013)"]
+    S --> X
+    U --> X
+    W --> X["persistReport (storage.upsertReport, reportType='daily')<br/>updateReportJob(jobId, { status:'done', reportId })"]
+    X --> Y["GET /api/coach/timeline -> item kind:'report', reportType:'daily'<br/>GET /api/coach/reports/:id -> ReportView renderiza sessionSummary + feedback + Acompanhamento"]
+
+    %% NOTA: runBackfills (rec de lesson + plano de estudo) NAO roda no daily — so weekly/monthly.

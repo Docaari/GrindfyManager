@@ -1,0 +1,57 @@
+%% Monthly Report — Sprint AI-1C (ADR-159 §2.4-2.6) — fluxo cron dia 1 7h tz.
+%% Gatilho: regra no enqueuer hourly do AI-1B (getLocalHour===7 && civilDay===1 no fuso do user)
+%% -> report_jobs row 'monthly' (period_start = 1o dia do mes anterior) -> processor (15min)
+%% -> gatherMonthlyBundle (12 meses) -> hierarchicalSummarizer (Haiku se grande) ->
+%% generateMonthlyReport (sonnet 4.6) -> reports row v2 (comparativos/variancia/leaks/metas).
+
+sequenceDiagram
+    autonumber
+    participant Cron as cron 0 * * * * (hourly)
+    participant Enq as enqueueWeeklyReportJobsTick<br/>(enfileira weekly E monthly)
+    participant Stor as storage
+    participant Elig as reportEligibility.ts
+    participant Jobs as report_jobs (fila)
+    participant Proc as processReportJobsTick<br/>(cron */15)
+    participant Gen as monthlyReportGenerator
+    participant Sum as hierarchicalSummarizer (Haiku)
+    participant LLM as Anthropic sonnet 4.6
+    participant Reports as reports (tabela)
+    participant Hub as /coach-ai timeline
+
+    Cron->>Enq: tick({ now })
+    Note over Enq: COACH_NUDGES_ENABLED==='false' -> retorna cedo.<br/>withAdvisoryLock('cron:report-job-enqueuer') (ADR-144).
+    Enq->>Stor: listUsersForCron("subscription_plan IN ('trial','active','admin')")
+    Stor-->>Enq: candidate set [{ userPlatformId, timezone, subscriptionPlan }]
+    loop para cada candidate
+        Enq->>Enq: getLocalHour(now, tz) === 7 ?<br/>localCivilDate(now, tz).civilUtc.getUTCDate() === 1 ?
+        alt dia 1 7h no fuso do user
+            Enq->>Elig: isReportEligible(userId, 'monthly')
+            Elig->>Stor: getUserById(userId) -> getReportTier(user) (resolveUserTier p/ 'active')
+            Elig->>Stor: getCoachPreferences(userId).reportMonthlyEnabled
+            Elig-->>Enq: true | false (safe-deny em erro)
+            alt elegivel
+                Enq->>Enq: previousMonthBounds(civilUtc)<br/>periodStart = 1o dia do mes anterior (Date.UTC — vira do ano OK)<br/>periodEnd = ultimo dia do mes anterior (28/29/30/31)
+                Enq->>Jobs: insertReportJobOnConflictDoNothing({ reportType:'monthly', periodStart, periodEnd,<br/>scheduledFor: now, status:'pending', timezone, subscriptionPlanAtEnqueue, enqueuedBy:'cron_enqueuer' })
+                Note over Jobs: UNIQUE (user_id,'monthly',periodStart) -> 1 monthly job por user por mes.<br/>2 enqueuers concorrentes -> 1 job (ON CONFLICT DO NOTHING).
+            end
+        end
+    end
+
+    Proc->>Jobs: listDueReportJobs({ now, limit: 25 }) -> claimReportJob (UPDATE WHERE status='pending' RETURNING)
+    Proc->>Proc: revalidateEligibility(getReportTier) — downgrade -> status='skipped', last_error='no_longer_eligible'
+    Proc->>Gen: getGeneratorFor('monthly') -> generateMonthlyReport({ userId, periodStart, periodEnd, failSoft?, injectedStorage })
+    Gen->>Stor: gatherMonthlyBundle:<br/>getDashboardStats(userId,'custom',{dateFrom,dateTo}) + getPerformanceByPeriod(userId,'periodStart to periodEnd')<br/>getConsolidatedBalance (USD) + getBankrollSnapshots({to:monthEnd}) + listWalletTransactionsByUser({from,to})<br/>getAnalyticsBy* + planned/weekly_plans vs tournaments<br/>getStudySessionsV2/V1 + findActiveLeakFocusList + getAiStructuredProfile.focoDoMes<br/>listWarmupRituals({from,to}) (so warm-up)<br/>buildMonthlyComparatives(12) -> serie mes-a-mes [{month:'YYYY-MM',profit,roi,count}] (12 chamadas getPerformanceByPeriod, §6.1)<br/>getVarianceVsExpected (null hoje -> heuristica ROI vs ROI medio 12m, variance.method='heuristic')<br/>detectLeaks x coach_leak_focus + verify_leak_progress (resolvidos/novos — sem tabela nova)<br/>metas: AiStructuredProfileMeta[] (goalsProgress — LLM interpreta texto livre)
+    Gen->>Gen: runBackfills (coach_lesson_recommendations + study_weekly_plans — idempotente, roda no monthly)
+    alt mes sem dados (user novo)
+        Gen->>Reports: status='ready', dataSufficiency='low', header convidando a importar, CTA /upload, custo aprox 0 (sem LLM)
+    else bundle grande (12 meses + leaks + metas + warm-up)
+        Gen->>Sum: summarizeBundleHierarchical({ bundle, reportType:'monthly' })<br/>(threshold COACH_REPORT_SUMMARIZE_THRESHOLD_CHARS ~20k)
+        Sum-->>Gen: { summarizedBundle, summarizerModelUsed: '<haiku>', layersUsed }<br/>(Haiku falha -> bundle truncado, summarizerModelUsed=null — logado, lesson #9)
+        Gen->>LLM: callLlm (sonnet 4.6, max_tokens ~4000, prompt unico server/coach/prompts/monthlyReport.ts + CITATIONS_RULES, cache_control ephemeral)
+        Note over LLM: ANTHROPIC_API_KEY ausente / falha 3x -> deterministico, degraded_reason, job 'done' nunca 'failed'.<br/>new AnthropicCtor em try/catch (sonnet E haiku — lesson #5/#35).
+        LLM-->>Gen: JSON: 5 secoes + comparatives.trendNarrative + variance.narrative (rotulado estimativa) +<br/>leaksDelta.narrative + goalsProgress[].narrative + insights (3-5 com [fonte:]) + nextWeekPlan + followUp.narrative
+        Gen->>Reports: ReportContent v2 (schemaVersion:2) + markdown; summarizer_model_used + model_used + cost_usd_estimate (~$0.11) + tokens
+    end
+    Gen-->>Proc: { content, markdown, status, model, usage }
+    Proc->>Jobs: updateReportJob(jobId, { status:'done', reportId })
+    Reports->>Hub: GET /api/coach/timeline -> item kind:'report', reportType:'monthly' (badge "Mensal")<br/>GET /api/coach/reports/:id -> ReportView: 5 secoes + evolucao (comparatives) + variancia + leaks resolvidos/novos + metas + Acompanhamento
