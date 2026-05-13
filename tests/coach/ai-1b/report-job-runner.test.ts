@@ -178,7 +178,7 @@ describe('enqueueWeeklyReportJobsTick — timezone awareness', () => {
     // 2026-05-11 eh uma segunda. 07:00 America/Sao_Paulo == 10:00 UTC.
     const now = new Date(Date.UTC(2026, 4, 11, 10, 0, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-SP': { reportWeeklyEnabled: true } },
     });
     vi.doMock('../../../server/storage/coachPreferences', () => ({ getCoachPreferences }));
@@ -202,7 +202,7 @@ describe('enqueueWeeklyReportJobsTick — timezone awareness', () => {
 
     const now = new Date(Date.UTC(2026, 4, 11, 10, 0, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-SP': { reportWeeklyEnabled: true } },
     });
     vi.doMock('../../../server/storage/coachPreferences', () => ({ getCoachPreferences }));
@@ -222,7 +222,7 @@ describe('enqueueWeeklyReportJobsTick — timezone awareness', () => {
     // 2026-05-12 terca, 10:00 UTC == 07:00 SP, mas eh terca -> nao cria.
     const now = new Date(Date.UTC(2026, 4, 12, 10, 0, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-SP': { reportWeeklyEnabled: true } },
     });
     vi.doMock('../../../server/storage/coachPreferences', () => ({ getCoachPreferences }));
@@ -241,7 +241,7 @@ describe('enqueueWeeklyReportJobsTick — timezone awareness', () => {
     // 2026-05-11 segunda, 11:00 UTC == 08:00 SP -> hora != 7.
     const now = new Date(Date.UTC(2026, 4, 11, 11, 0, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-SP': { reportWeeklyEnabled: true } },
     });
     vi.doMock('../../../server/storage/coachPreferences', () => ({ getCoachPreferences }));
@@ -262,8 +262,8 @@ describe('enqueueWeeklyReportJobsTick — timezone awareness', () => {
     const now = new Date(Date.UTC(2026, 4, 10, 17, 0, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
       users: [
-        { userPlatformId: 'USER-KI', timezone: 'Pacific/Kiritimati', subscriptionPlan: 'pro' },
-        { userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' },
+        { userPlatformId: 'USER-KI', timezone: 'Pacific/Kiritimati', subscriptionPlan: 'trial' },
+        { userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' },
       ],
       prefsByUser: { 'USER-KI': { reportWeeklyEnabled: true }, 'USER-SP': { reportWeeklyEnabled: true } },
     });
@@ -284,7 +284,7 @@ describe('enqueueWeeklyReportJobsTick — timezone awareness', () => {
     // Pacific/Pago_Pago = UTC-11. Segunda 07:00 local == segunda 18:00 UTC.
     const now = new Date(Date.UTC(2026, 4, 11, 18, 0, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-PG', timezone: 'Pacific/Pago_Pago', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-PG', timezone: 'Pacific/Pago_Pago', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-PG': { reportWeeklyEnabled: true } },
     });
     vi.doMock('../../../server/storage/coachPreferences', () => ({ getCoachPreferences }));
@@ -303,7 +303,7 @@ describe('enqueueWeeklyReportJobsTick — timezone awareness', () => {
     // 2027-01-04 eh a primeira segunda de 2027. 07:00 SP == 10:00 UTC.
     const now = new Date(Date.UTC(2027, 0, 4, 10, 0, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-SP': { reportWeeklyEnabled: true } },
     });
     vi.doMock('../../../server/storage/coachPreferences', () => ({ getCoachPreferences }));
@@ -317,16 +317,22 @@ describe('enqueueWeeklyReportJobsTick — timezone awareness', () => {
 
 // =============================================================================
 // 2) Enqueuer — elegibilidade (opt-in + plano)
+//
+// AI-1B bug fix: `users.subscription_plan` so assume 'trial'|'active'|'expired'|
+// 'admin' — NUNCA 'pro'/'premium'. A distincao pro/premium vem de
+// resolveUserTier(...) (user_subscriptions JOIN subscription_plans). Elegivel:
+// 'trial' direto | 'admin' | 'active' com resolveUserTier ∈ {pro,premium,admin}.
+// 'expired'/'free' -> NAO elegivel.
 // =============================================================================
 describe('enqueueWeeklyReportJobsTick — elegibilidade', () => {
-  it('user Pro+ com opt-in DESLIGADO -> nao cria job', async () => {
+  it('user trial com opt-in DESLIGADO -> nao cria job', async () => {
     vi.resetModules();
     delete process.env.COACH_NUDGES_ENABLED;
     mockAdvisoryLockPassthrough();
 
     const now = new Date(Date.UTC(2026, 4, 11, 10, 0, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-OFF', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-OFF', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-OFF': { reportWeeklyEnabled: false } },
     });
     vi.doMock('../../../server/storage/coachPreferences', () => ({ getCoachPreferences }));
@@ -337,18 +343,75 @@ describe('enqueueWeeklyReportJobsTick — elegibilidade', () => {
     expect(jobs.length).toBe(0);
   });
 
-  it('user Free (mesmo com reportWeeklyEnabled=true) -> nao cria job (revalida o plano)', async () => {
+  it('user expired (mesmo com reportWeeklyEnabled=true) -> nao cria job', async () => {
     vi.resetModules();
     delete process.env.COACH_NUDGES_ENABLED;
     mockAdvisoryLockPassthrough();
 
     const now = new Date(Date.UTC(2026, 4, 11, 10, 0, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      // listUsersForCron("subscription_plan IN ('pro','premium')") em producao filtra Free fora,
-      // mas testamos defesa em profundidade: mesmo que apareca Free, nao cria.
-      users: [{ userPlatformId: 'USER-FREE', timezone: 'America/Sao_Paulo', subscriptionPlan: 'free' }],
-      prefsByUser: { 'USER-FREE': { reportWeeklyEnabled: true } },
+      // listUsersForCron("subscription_plan IN ('trial','active','admin')") ja filtra
+      // 'expired' fora em producao; aqui testamos defesa em profundidade.
+      users: [{ userPlatformId: 'USER-EXP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'expired' }],
+      prefsByUser: { 'USER-EXP': { reportWeeklyEnabled: true } },
     });
+    vi.doMock('../../../server/storage/coachPreferences', () => ({ getCoachPreferences }));
+    vi.doMock('../../../server/storage', () => ({ storage }));
+
+    const { enqueueWeeklyReportJobsTick } = await import('../../../server/jobs/reportJobRunner');
+    await enqueueWeeklyReportJobsTick({ now });
+    expect(jobs.length).toBe(0);
+  });
+
+  it('user admin (opt-in ligado) -> cria job (admin sempre elegivel)', async () => {
+    vi.resetModules();
+    delete process.env.COACH_NUDGES_ENABLED;
+    mockAdvisoryLockPassthrough();
+
+    const now = new Date(Date.UTC(2026, 4, 11, 10, 0, 0));
+    const { storage, jobs, getCoachPreferences } = makeFakeStorage({
+      users: [{ userPlatformId: 'USER-ADM', timezone: 'America/Sao_Paulo', subscriptionPlan: 'admin' }],
+      prefsByUser: { 'USER-ADM': { reportWeeklyEnabled: true } },
+    });
+    vi.doMock('../../../server/storage/coachPreferences', () => ({ getCoachPreferences }));
+    vi.doMock('../../../server/storage', () => ({ storage }));
+
+    const { enqueueWeeklyReportJobsTick } = await import('../../../server/jobs/reportJobRunner');
+    await enqueueWeeklyReportJobsTick({ now });
+    expect(jobs.map(j => j.userId)).toEqual(['USER-ADM']);
+  });
+
+  it("user 'active' com resolveUserTier -> 'premium' (subscription pro/premium ativa): cria job; snapshot = tier resolvido", async () => {
+    vi.resetModules();
+    delete process.env.COACH_NUDGES_ENABLED;
+    mockAdvisoryLockPassthrough();
+
+    const now = new Date(Date.UTC(2026, 4, 11, 10, 0, 0));
+    const { storage, jobs, getCoachPreferences } = makeFakeStorage({
+      users: [{ userPlatformId: 'USER-PREM', timezone: 'America/Sao_Paulo', subscriptionPlan: 'active' }],
+      prefsByUser: { 'USER-PREM': { reportWeeklyEnabled: true } },
+    });
+    // a distincao pro/premium vem do JOIN — mockamos resolveUserTier.
+    vi.doMock('../../../server/coachAccess', () => ({ resolveUserTier: vi.fn(async () => 'premium') }));
+    vi.doMock('../../../server/storage/coachPreferences', () => ({ getCoachPreferences }));
+    vi.doMock('../../../server/storage', () => ({ storage }));
+
+    const { enqueueWeeklyReportJobsTick } = await import('../../../server/jobs/reportJobRunner');
+    await enqueueWeeklyReportJobsTick({ now });
+    expect(jobs.map(j => j.userId)).toEqual(['USER-PREM']);
+  });
+
+  it("user 'active' mas resolveUserTier -> 'free' (sem subscription pro/premium ativa): nao cria job", async () => {
+    vi.resetModules();
+    delete process.env.COACH_NUDGES_ENABLED;
+    mockAdvisoryLockPassthrough();
+
+    const now = new Date(Date.UTC(2026, 4, 11, 10, 0, 0));
+    const { storage, jobs, getCoachPreferences } = makeFakeStorage({
+      users: [{ userPlatformId: 'USER-ACTFREE', timezone: 'America/Sao_Paulo', subscriptionPlan: 'active' }],
+      prefsByUser: { 'USER-ACTFREE': { reportWeeklyEnabled: true } },
+    });
+    vi.doMock('../../../server/coachAccess', () => ({ resolveUserTier: vi.fn(async () => 'free') }));
     vi.doMock('../../../server/storage/coachPreferences', () => ({ getCoachPreferences }));
     vi.doMock('../../../server/storage', () => ({ storage }));
 
@@ -366,8 +429,8 @@ describe('enqueueWeeklyReportJobsTick — elegibilidade', () => {
     const now = new Date(Date.UTC(2026, 4, 11, 10, 0, 0));
     const { storage, jobs } = makeFakeStorage({
       users: [
-        { userPlatformId: 'USER-BAD', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' },
-        { userPlatformId: 'USER-OK', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' },
+        { userPlatformId: 'USER-BAD', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' },
+        { userPlatformId: 'USER-OK', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' },
       ],
     });
     const getCoachPreferences = vi.fn(async (uid: string) => {
@@ -398,7 +461,7 @@ describe('enqueueWeeklyReportJobsTick — COACH_NUDGES_ENABLED gating', () => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const now = new Date(Date.UTC(2026, 4, 11, 10, 0, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-SP': { reportWeeklyEnabled: true } },
     });
     vi.doMock('../../../server/storage/coachPreferences', () => ({ getCoachPreferences }));
@@ -431,7 +494,7 @@ describe('processReportJobsTick — happy path', () => {
 
     const now = new Date(Date.UTC(2026, 4, 11, 10, 30, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-SP': { reportWeeklyEnabled: true } },
     });
     // enfileira manualmente via storage helper:
@@ -463,7 +526,7 @@ describe('processReportJobsTick — happy path', () => {
 
     const now = new Date(Date.UTC(2026, 4, 11, 10, 30, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-SP': { reportWeeklyEnabled: true } },
       existingReportForPeriod: new Set(['USER-SP|weekly|2026-05-04']),
     });
@@ -491,7 +554,7 @@ describe('processReportJobsTick — happy path', () => {
 
     const now = new Date(Date.UTC(2026, 4, 11, 10, 30, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-SP': { reportWeeklyEnabled: true } },
     });
     await storage.insertReportJobOnConflictDoNothing({
@@ -557,7 +620,7 @@ describe('processReportJobsTick — retry / backoff / fail-soft', () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const now = new Date(Date.UTC(2026, 4, 11, 10, 30, 0));
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-SP': { reportWeeklyEnabled: true } },
     });
     await storage.insertReportJobOnConflictDoNothing({
@@ -600,7 +663,7 @@ describe('processReportJobsTick — retry / backoff / fail-soft', () => {
 
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { storage, jobs, getCoachPreferences } = makeFakeStorage({
-      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'pro' }],
+      users: [{ userPlatformId: 'USER-SP', timezone: 'America/Sao_Paulo', subscriptionPlan: 'trial' }],
       prefsByUser: { 'USER-SP': { reportWeeklyEnabled: true } },
     });
     await storage.insertReportJobOnConflictDoNothing({

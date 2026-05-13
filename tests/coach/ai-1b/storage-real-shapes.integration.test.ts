@@ -81,15 +81,17 @@ describe("processReportJobsTick — lookup real de user + elegibilidade via snap
     return { storage, jobs, upsertCalls };
   }
 
-  it("user Pro+ opt-in: processor revalida via subscriptionPlanAtEnqueue (snapshot) + opt-in -> gera o reports row + job done", async () => {
+  it("user Pro+ opt-in: processor revalida via subscriptionPlanAtEnqueue (snapshot = tier resolvido) + opt-in -> gera o reports row + job done", async () => {
     vi.resetModules();
     delete process.env.COACH_NUDGES_ENABLED;
     advisoryPassthrough();
 
     const { storage, jobs, upsertCalls } = makeStorage({
-      usersById: { "uuid-abc": { id: "uuid-abc", userPlatformId: "USER-0042", subscriptionPlan: "pro" } },
+      // users.subscription_plan cru = 'active'; o tier pro/premium vem do JOIN.
+      usersById: { "uuid-abc": { id: "uuid-abc", userPlatformId: "USER-0042", subscriptionPlan: "active" } },
     });
-    // job enfileirado COM o snapshot do plano (como o enqueuer faz).
+    // job enfileirado COM o snapshot do tier RESOLVIDO (como o enqueuer faz —
+    // 'active' -> resolveUserTier -> 'pro'). O processor revalida sobre este valor.
     await storage.insertReportJobOnConflictDoNothing({
       userId: "USER-0042",
       reportType: "weekly",
@@ -164,12 +166,12 @@ describe("processReportJobsTick — lookup real de user + elegibilidade via snap
 
   it("getUser(USER-XXXX) NUNCA casa (lookup por UUID) — getUserById(USER-XXXX) eh o correto", async () => {
     const { storage } = makeStorage({
-      usersById: { "uuid-1": { id: "uuid-1", userPlatformId: "USER-9999", subscriptionPlan: "premium" } },
+      usersById: { "uuid-1": { id: "uuid-1", userPlatformId: "USER-9999", subscriptionPlan: "active" } },
     });
     // simula o bug do reviewer: chamar getUser com o userPlatformId.
     expect(await storage.getUser("USER-9999")).toBeUndefined();
     // o jeito certo:
-    expect((await storage.getUserById("USER-9999"))?.subscriptionPlan).toBe("premium");
+    expect((await storage.getUserById("USER-9999"))?.subscriptionPlan).toBe("active");
   });
 });
 

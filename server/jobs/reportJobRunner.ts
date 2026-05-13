@@ -23,7 +23,60 @@ import { withAdvisoryLock } from "../lib/advisoryLock";
 import { getLocalHour } from "../coach/timezone";
 import { getCoachPreferences } from "../storage/coachPreferences";
 
-const PRO_PLANS = new Set(["pro", "premium", "admin"]);
+// =============================================================================
+// Elegibilidade de plano (AI-1B bug fix — `users.subscription_plan` so assume
+// 'trial' | 'active' | 'expired' | 'admin'; NUNCA 'pro'/'premium'. A distincao
+// pro/premium vem de user_subscriptions JOIN subscription_plans, resolvida por
+// resolveUserTier(...) em server/coachAccess.ts -> 'free'|'pro'|'premium'|'admin').
+//
+// Regra: elegivel se subscriptionPlan === 'trial' OU 'admin' (ou role 'admin')
+//        OU resolveUserTier(...) ∈ {'pro','premium','admin'} (user 'active' com
+//        subscription pro/premium ativa). 'expired'/'free'/sem-subscription -> NAO.
+// O AI-1C vai formalizar isto num modulo reportEligibility.ts; aqui fica inline.
+// =============================================================================
+const ELIGIBLE_PLAN_OR_TIER = new Set(["trial", "admin", "pro", "premium"]);
+
+/**
+ * Resolve o "valor de elegibilidade" para um user a partir do plano cru de
+ * `users.subscription_plan`. Retorna o tier elegivel ('trial'|'admin'|'pro'|
+ * 'premium') que deve ser gravado em `subscription_plan_at_enqueue`, ou `null`
+ * se o user NAO eh elegivel. Erro de resolveUserTier -> null (safe-deny, logado).
+ */
+async function resolveEligibleTierSnapshot(userId: string, rawPlan?: string | null): Promise<string | null> {
+  const plan = String(rawPlan ?? "").toLowerCase();
+  if (plan === "admin") return "admin";
+  if (plan === "trial") return "trial";
+  if (plan === "pro" || plan === "premium") return plan; // defensivo: ja eh tier
+  if (plan === "active") {
+    try {
+      const { resolveUserTier } = await import("../coachAccess");
+      const tier = await resolveUserTier({ userPlatformId: userId, subscriptionPlan: "active" });
+      if (tier === "pro" || tier === "premium" || tier === "admin") return tier;
+      return null; // 'free' (active mas sem subscription pro/premium ativa)
+    } catch (err) {
+      console.error("report.eligibility.tier.error", { userId, err: err instanceof Error ? err.message : String(err) });
+      return null; // safe-deny (lesson #9)
+    }
+  }
+  // 'expired' | 'free' | '' | desconhecido -> nao elegivel
+  return null;
+}
+
+/**
+ * Para a revalidacao no processor: o snapshot `subscription_plan_at_enqueue`
+ * normalmente ja contem o tier resolvido ('trial'|'admin'|'pro'|'premium'); se
+ * por algum motivo contiver o plano cru 'active' (job legado), re-resolve.
+ */
+async function isEligibleSnapshot(userId: string, snapshotValue?: string | null): Promise<boolean> {
+  const v = String(snapshotValue ?? "").toLowerCase();
+  if (ELIGIBLE_PLAN_OR_TIER.has(v)) return true;
+  if (v === "active") {
+    const resolved = await resolveEligibleTierSnapshot(userId, "active");
+    return resolved != null;
+  }
+  return false;
+}
+
 const BACKOFF_MS = [15 * 60 * 1000, 60 * 60 * 1000, 4 * 60 * 60 * 1000]; // attempt 1->15min, 2->1h, 3->4h
 const PROCESS_LIMIT = 25;
 const PACING_MS = 200;
@@ -92,15 +145,22 @@ function previousWeekMonday(civilUtc: Date, weekday: number): { periodStart: str
   return { periodStart: ymd(prevMonday), periodEnd: ymd(prevSunday) };
 }
 
-async function isWeeklyReportEligible(storage: any, userId: string, plan?: string): Promise<boolean> {
+/**
+ * Decide se o user eh elegivel para o Weekly Report AGORA (enqueue) e, se sim,
+ * qual valor gravar em `subscription_plan_at_enqueue`. Retorna `null` quando NAO
+ * elegivel (plano fora do conjunto, opt-in desligado, ou erro -> safe-deny).
+ */
+async function weeklyReportEligibleSnapshot(storage: any, userId: string, plan?: string | null): Promise<string | null> {
   try {
-    const effectivePlan = plan ?? (await storage.getUserSubscriptionPlan?.(userId)) ?? "free";
-    if (!PRO_PLANS.has(String(effectivePlan))) return false;
+    const rawPlan = plan ?? (await storage.getUserSubscriptionPlan?.(userId)) ?? "free";
+    const tierSnapshot = await resolveEligibleTierSnapshot(userId, rawPlan);
+    if (tierSnapshot == null) return null;
     const prefs = await getCoachPreferences(userId);
-    return prefs?.reportWeeklyEnabled === true;
+    if (prefs?.reportWeeklyEnabled !== true) return null;
+    return tierSnapshot;
   } catch (err) {
     console.error("report.eligibility.error", { userId, err: err instanceof Error ? err.message : String(err) });
-    return false; // safe-deny (lesson #9)
+    return null; // safe-deny (lesson #9)
   }
 }
 
@@ -117,7 +177,10 @@ export async function enqueueWeeklyReportJobsTick(opts: { now?: Date; injectedSt
     const storage = await resolveStorage(opts.injectedStorage);
     let users: Array<{ userPlatformId: string; timezone: string; subscriptionPlan: string }> = [];
     try {
-      users = (await storage.listUsersForCron?.("subscription_plan IN ('pro','premium')")) ?? [];
+      // `users.subscription_plan` so assume 'trial'|'active'|'expired'|'admin'.
+      // Candidatos a elegibilidade: 'trial' (direto), 'active' (re-check via
+      // resolveUserTier), 'admin'. 'expired' fica de fora.
+      users = (await storage.listUsersForCron?.("subscription_plan IN ('trial','active','admin')")) ?? [];
     } catch (err) {
       console.error("report.job.enqueuer.list_users_error", { err });
       return;
@@ -130,8 +193,8 @@ export async function enqueueWeeklyReportJobsTick(opts: { now?: Date; injectedSt
         if (getLocalHour(now, tz) !== 7) continue;
         const { weekday, civilUtc } = localCivilDate(now, tz);
         if (weekday !== 1) continue; // so segunda no fuso do user
-        const eligible = await isWeeklyReportEligible(storage, userId, u?.subscriptionPlan);
-        if (!eligible) continue;
+        const tierSnapshot = await weeklyReportEligibleSnapshot(storage, userId, u?.subscriptionPlan);
+        if (tierSnapshot == null) continue; // nao elegivel (plano / opt-in / erro)
         const { periodStart, periodEnd } = previousWeekMonday(civilUtc, weekday);
         await storage.insertReportJobOnConflictDoNothing?.({
           id: undefined,
@@ -143,7 +206,9 @@ export async function enqueueWeeklyReportJobsTick(opts: { now?: Date; injectedSt
           status: "pending",
           maxAttempts: 3,
           timezone: tz,
-          subscriptionPlanAtEnqueue: u?.subscriptionPlan ?? null,
+          // grava o tier RESOLVIDO ('trial'|'admin'|'pro'|'premium'), nao o
+          // subscription_plan cru — o processor revalida sobre este valor.
+          subscriptionPlanAtEnqueue: tierSnapshot,
           enqueuedBy: "cron_enqueuer",
         });
       } catch (err) {
@@ -209,23 +274,29 @@ async function revalidateEligibility(storage: any, claimed: any): Promise<boolea
     console.error("report.job.revalidate.prefs.error", { userId, err });
     return false; // safe-deny
   }
-  // plano: prioriza o snapshot do enqueue; senao consulta o storage por userPlatformId.
-  let plan: string | undefined =
+  // plano/tier: prioriza o snapshot do enqueue (que ja contem o tier resolvido —
+  // 'trial'|'admin'|'pro'|'premium'); senao consulta o storage por userPlatformId.
+  let value: string | undefined =
     typeof claimed?.subscriptionPlanAtEnqueue === "string" && claimed.subscriptionPlanAtEnqueue
       ? claimed.subscriptionPlanAtEnqueue
       : undefined;
-  if (plan == null) {
+  if (value == null) {
     try {
       const p = await storage.getUserSubscriptionPlan?.(userId);
-      plan = typeof p === "string" ? p : undefined;
+      value = typeof p === "string" ? p : undefined;
     } catch (err) {
       console.error("report.job.revalidate.plan.error", { userId, err });
     }
   }
-  // se nem o snapshot nem o lookup deram um plano, confia no opt-in (ja revalidado
-  // acima) — nao bloqueia por incerteza de plano (o enqueuer ja filtrou Pro+).
-  if (plan == null) return true;
-  return PRO_PLANS.has(String(plan));
+  // se nem o snapshot nem o lookup deram um valor, confia no opt-in (ja revalidado
+  // acima) — nao bloqueia por incerteza de plano (o enqueuer ja filtrou).
+  if (value == null) return true;
+  try {
+    return await isEligibleSnapshot(userId, value);
+  } catch (err) {
+    console.error("report.job.revalidate.tier.error", { userId, err });
+    return false; // safe-deny
+  }
 }
 
 async function processOneJob(storage: any, job: any, now: Date): Promise<void> {
