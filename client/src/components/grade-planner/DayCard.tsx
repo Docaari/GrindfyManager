@@ -32,7 +32,7 @@ export function DayCard({
     <div className="day-column">
       {profiles.map((profile) => {
         const profileStats = profile.profileType === 'C'
-          ? { count: 0, totalBuyIn: 0, avgBuyIn: 0, startTime: null, endTime: null, durationHours: 0, vanillaPercentage: 0, pkoPercentage: 0, mysteryPercentage: 0, normalPercentage: 0, turboPercentage: 0, hyperPercentage: 0 }
+          ? { count: 0, totalBuyIn: 0, avgBuyIn: 0, startTime: null, endTime: null, durationHours: 0, vanillaPercentage: 0, pkoPercentage: 0, mysteryPercentage: 0, normalPercentage: 0, turboPercentage: 0, hyperPercentage: 0, medianFieldSize: null }
           : getProfileStats(day.id, profile.profileType);
 
         const isProfileActive = currentActiveProfile === profile.profileType;
@@ -138,6 +138,11 @@ export function DayCard({
                             return `${predominantType.name} (${predominantType.percentage.toFixed(0)}%) ${predominantSpeed.name} (${predominantSpeed.percentage.toFixed(0)}%)`;
                           })()}
                         </div>
+                        {isProfileActive && profileStats.medianFieldSize != null && (
+                          <div className="metrics-line">
+                            Mediana: ~{profileStats.medianFieldSize.toLocaleString('pt-BR')} participantes
+                          </div>
+                        )}
                       </div>
                     </div>
 

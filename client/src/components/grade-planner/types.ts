@@ -73,7 +73,7 @@ export interface DayStats {
   normalPercentage: number;
   turboPercentage: number;
   hyperPercentage: number;
-  avgFieldSize: number;
+  medianFieldSize: number | null;
   startTime: string | null;
   endTime: string | null;
   durationHours: number;
@@ -89,7 +89,7 @@ export const emptyDayStats: DayStats = {
   normalPercentage: 0,
   turboPercentage: 0,
   hyperPercentage: 0,
-  avgFieldSize: 0,
+  medianFieldSize: null,
   startTime: null,
   endTime: null,
   durationHours: 0,

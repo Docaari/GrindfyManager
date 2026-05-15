@@ -9,9 +9,16 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { getPlannerSiteColor, getPlannerTypeColor, getPlannerSpeedColor } from "@/lib/poker-colors";
 import { weekDays, sites, types, speeds, type TournamentForm, type DayStats } from './types';
 import { TYPE_COLORS, type TournamentPrimaryType } from "@shared/tournamentTypes";
+import { computeMedianFieldSizeForDisplay } from "@/lib/median";
 
 const getSiteColor = getPlannerSiteColor;
 const getTypeColor = getPlannerTypeColor;
@@ -150,6 +157,9 @@ export function PlanningDialog({
     return acc;
   }, { small: 0, medium: 0, large: 0, huge: 0 });
 
+  // RF-07: mediana agregada de participantes (resistente a outliers).
+  const medianParticipantsDisplay = computeMedianFieldSizeForDisplay(tournaments);
+
   // Group tournaments by breaks
   const tournamentsByBreak = tournaments.reduce((acc: Record<string, any[]>, tournament: any) => {
     if (tournament.time) {
@@ -215,8 +225,8 @@ export function PlanningDialog({
             </div>
           )}
 
-          {/* Metrics - 6 columns */}
-          <div className="grid grid-cols-6 gap-4 mb-6">
+          {/* Metrics - 7 columns (RF-07: +Mediana de Participantes) */}
+          <div className="grid grid-cols-7 gap-4 mb-6">
             <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg text-center">
               <div className="text-2xl font-bold text-emerald-400 mb-1">{dayStats?.count || 0}</div>
               <div className="text-sm text-slate-400">Torneios</div>
@@ -240,6 +250,26 @@ export function PlanningDialog({
             <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg text-center">
               <div className="text-2xl font-bold text-emerald-400 mb-1">{breaks.size}</div>
               <div className="text-sm text-slate-400">Breaks</div>
+            </div>
+            <div className="p-4 bg-slate-900 border border-slate-600 rounded-lg text-center">
+              <div className="text-2xl font-bold text-emerald-400 mb-1">{medianParticipantsDisplay}</div>
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="text-sm text-slate-400 cursor-help"
+                      title="Resistente a outliers — nao distorcida por torneios isolados muito grandes."
+                    >
+                      Mediana de Participantes
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs text-xs">
+                      Resistente a outliers — nao distorcida por torneios isolados muito grandes.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
 

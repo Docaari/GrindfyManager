@@ -1,6 +1,7 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { weekDays, type DayStats } from './types';
 import { TYPE_COLORS, type TournamentPrimaryType } from "@shared/tournamentTypes";
+import { computeMedianFieldSizeForDisplay } from "@/lib/median";
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
@@ -33,17 +34,8 @@ export function WeeklySummaryDashboard({
   const totalInvestment = activeDayTournaments.reduce((sum: number, t: any) => sum + (parseFloat(t.buyIn) || 0), 0);
   const abi = totalCount > 0 ? (totalInvestment / totalCount) : 0;
 
-  // Participants
-  const tournamentsWithGuaranteed = activeDayTournaments.filter((t: any) => t.guaranteed && parseFloat(t.guaranteed) > 0);
-  const avgParticipants = (() => {
-    if (tournamentsWithGuaranteed.length === 0) return 'N/A';
-    const totalParticipants = tournamentsWithGuaranteed.reduce((sum: number, t: any) => {
-      const guaranteed = parseFloat(t.guaranteed) || 0;
-      const buyIn = parseFloat(t.buyIn) || 0;
-      return sum + (buyIn > 0 ? Math.round(guaranteed / buyIn) : 0);
-    }, 0);
-    return Math.round(totalParticipants / tournamentsWithGuaranteed.length).toString();
-  })();
+  // RF-05: Mediana de participantes (resistente a outliers como Sunday Million).
+  const medianParticipants = computeMedianFieldSizeForDisplay(activeDayTournaments);
 
   // Total hours
   const totalHours = weekDays
@@ -138,9 +130,9 @@ export function WeeklySummaryDashboard({
         </div>
         <div className="weekly-summary-card">
           <div className="weekly-card-icon">👥</div>
-          <div className="weekly-card-value">{avgParticipants}</div>
-          <div className="weekly-card-label">M&#233;dia Participantes</div>
-          <div className="weekly-card-sublabel">Estimativa</div>
+          <div className="weekly-card-value">{medianParticipants}</div>
+          <div className="weekly-card-label">Mediana Participantes</div>
+          <div className="weekly-card-sublabel">Estimativa (mediana)</div>
         </div>
         <div className="weekly-summary-card">
           <div className="weekly-card-icon">⏱️</div>

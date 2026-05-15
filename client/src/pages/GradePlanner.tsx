@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectorPanel } from "@/components/grade-planner/SelectorPanel";
 
 import { tournamentSchema, type TournamentForm, weekDays } from '@/components/grade-planner/types';
+import { computeDayStats } from '@/pages/grade-planner-helpers';
 import { mapZodIssuesToForm } from '@/lib/zodErrorMapper';
 import { LoadingScreen } from '@/components/grade-planner/LoadingScreen';
 import { WeeklySummaryBar } from '@/components/grade-planner/WeeklySummaryBar';
@@ -335,51 +336,8 @@ export default function GradePlanner() {
     return getTournamentsForDay(dayOfWeek).length > 0;
   };
 
-  // Calculate stats for summary bar
-  const calculateStats = (tournaments: any[]) => {
-    const totalTournaments = tournaments.length;
-    if (totalTournaments === 0) return {
-      count: 0, avgBuyIn: 0, totalBuyIn: 0,
-      vanillaPercentage: 0, pkoPercentage: 0, mysteryPercentage: 0,
-      normalPercentage: 0, turboPercentage: 0, hyperPercentage: 0,
-      avgFieldSize: 0, startTime: null, endTime: null, durationHours: 0,
-    };
-
-    const totalBuyIn = tournaments.reduce((sum: number, t: any) => sum + parseFloat(t.buyIn || 0), 0);
-    const avgBuyIn = totalBuyIn / totalTournaments;
-
-    const tournamentsWithTime = tournaments.filter((t: any) => t.time && t.time.trim() !== '');
-    let startTime = null;
-    let endTime = null;
-    let durationHours = 0;
-
-    if (tournamentsWithTime.length > 0) {
-      const times = tournamentsWithTime.map((t: any) => {
-        const [hours, minutes] = t.time.trim().split(':').map(Number);
-        return hours * 60 + minutes;
-      });
-      const earliestMinutes = Math.min(...times);
-      const latestMinutes = Math.max(...times);
-      const earliestHours = Math.floor(earliestMinutes / 60);
-      const earliestMins = earliestMinutes % 60;
-      startTime = `${earliestHours.toString().padStart(2, '0')}:${earliestMins.toString().padStart(2, '0')}`;
-      const endMinutes = latestMinutes + (3 * 60);
-      const endHours = Math.floor(endMinutes / 60);
-      const endMins = endMinutes % 60;
-      endTime = `${(endHours % 24).toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`;
-      durationHours = (endMinutes - earliestMinutes) / 60;
-    }
-
-    return {
-      count: totalTournaments, avgBuyIn, totalBuyIn,
-      vanillaPercentage: 0, pkoPercentage: 0, mysteryPercentage: 0,
-      normalPercentage: 0, turboPercentage: 0, hyperPercentage: 0,
-      avgFieldSize: 0, startTime, endTime,
-      durationHours: Math.round(durationHours * 10) / 10,
-    };
-  };
-
-  const getDayStats = (dayId: number) => calculateStats(getTournamentsForDay(dayId));
+  // RF-04: stats agregadas via helper puro (computeDayStats).
+  const getDayStats = (dayId: number) => computeDayStats(getTournamentsForDay(dayId));
 
   // Edit handlers
   const handleEditTournament = (tournament: any) => {
