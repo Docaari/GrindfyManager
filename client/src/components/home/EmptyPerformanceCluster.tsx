@@ -1,13 +1,13 @@
 /**
- * EmptyPerformanceCluster — Sprint home-reform-3 (Onda 3) RF-A5.
+ * Spec: Docs/specs/home-reform-3.md §RF-A5 + Docs/specs/sprint-variance-1.md §RF-08
  *
- * Spec: Docs/specs/home-reform-3.md §RF-A5
- *
- * Placeholder agregado mostrado quando topDeltas + variance + recommendations
- * + heuristics estao todos vazios (substitui 4 cards Onda 2 vazios).
+ * Placeholder agregado quando topDeltas + variance + recommendations + heuristics
+ * estao todos vazios. CTA simulador renderiza quando sessionsCount >= 5
+ * (evita poluir onboarding zerado).
  */
 
 import React from 'react';
+import { Link } from 'wouter';
 
 interface Props {
   sessionsCount: number;
@@ -15,6 +15,7 @@ interface Props {
 
 export default function EmptyPerformanceCluster({ sessionsCount }: Props): JSX.Element {
   const reachedThreshold = sessionsCount >= 30;
+  const showVarianceCta = sessionsCount >= 5;
   return (
     <div
       data-testid="empty-performance-cluster"
@@ -26,6 +27,15 @@ export default function EmptyPerformanceCluster({ sessionsCount }: Props): JSX.E
           ? 'Sem sinal forte ainda. Volte apos sua proxima sessao.'
           : `Atual: ${sessionsCount} sessoes. Continue grindando.`}
       </p>
+      {showVarianceCta && (
+        <Link
+          href="/coach-ai?tab=variance"
+          data-testid="empty-cluster-variance-cta"
+          className="inline-block text-xs text-emerald-300 hover:text-emerald-200 underline mt-1"
+        >
+          Simular variancia
+        </Link>
+      )}
     </div>
   );
 }

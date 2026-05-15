@@ -1,0 +1,69 @@
+%% Sprint Variance-1 — Sequencia detalhada de queries em getVarianceVsExpected
+%% Mostra os 3 caminhos: cache hit, primedope hit, fallback heuristico
+%% ADRs: 162 (algoritmo storage), 163 (fxResolver canonico)
+sequenceDiagram
+    actor User
+    participant FE as Client (Home)
+    participant Route as /api/home/overview<br/>(home.ts)
+    participant Cache as home-overview-cache<br/>(TTL 30s)
+    participant Storage as storage.<br/>getVarianceVsExpected
+    participant DB as PostgreSQL
+    participant FX as fxResolver.<br/>resolveExchangeRates
+
+    User->>FE: Abre /inicio
+    FE->>Route: GET /api/home/overview<br/>(requireAuth, JWT)
+    Route->>Cache: get(userId)
+
+    alt Cache HIT (TTL valido)
+        Cache-->>Route: bodyCached
+        Route-->>FE: 200 body (variance pode<br/>estar fresh — invalidado<br/>por mutations ADR-164)
+    else Cache MISS
+        Cache-->>Route: undefined
+        Route->>Storage: getVarianceVsExpected(userId)
+
+        Storage->>DB: SELECT FROM grind_sessions<br/>WHERE user_id=$1<br/>AND status='completed'<br/>AND created_at >= NOW() - 90d
+        DB-->>Storage: sessions[] (count = N)
+
+        alt N < 20 (gate)
+            Storage-->>Route: null
+            Note over Route: home.ts:722 maps<br/>variance: null
+        else N >= 20
+            Storage->>FX: resolveExchangeRates(userId)
+            Note over FX: ADR-061+121 — cascade:<br/>users.exchangeRates →<br/>wallets.exchangeRates →<br/>system_fx_rates → constants
+            FX-->>Storage: FxRates { BRL, EUR, CNY, ... }
+
+            Storage->>DB: SELECT FROM session_tournaments<br/>WHERE session_id IN (...)
+            DB-->>Storage: tournaments[] (com currency)
+
+            Note over Storage: Agrupa por dia<br/>Converte P&L para USD<br/>(lesson #6)<br/>actualUsd = sum(dailyPnlUsd)
+
+            Storage->>DB: SELECT result_json, created_at<br/>FROM primedope_runs<br/>WHERE user_id=$1<br/>AND created_at >= NOW() - 90d<br/>ORDER BY created_at DESC<br/>LIMIT 1
+            DB-->>Storage: row | null
+
+            alt row valido + zod parse OK
+                Note over Storage: expectedSource = 'primedope-cache'<br/>expectedUsd = data.ev<br/>sigmaUsd = data.stdDev
+            else row null OU shape quebrado
+                Note over Storage: console.warn<br/>expectedSource = 'fallback-zero'<br/>expectedUsd = 0<br/>sigmaUsd = 1.5 * stddev(dailyPnlUsd)
+            end
+
+            Note over Storage: deviationUsd = actualUsd - expectedUsd<br/>sigmaMultiple = deviationUsd / sigmaUsd<br/>clamp [-10, 10]<br/>sanitize NaN/Infinity → 0<br/>status: lucky/normal/unlucky
+
+            Storage-->>Route: VarianceResult shape
+            Note over Route: home.ts:722-736 (RF-02)<br/>Sanitize defensivo:<br/>Number.isFinite + literal parse
+        end
+
+        Route->>Cache: set(userId, body)
+        Route-->>FE: 200 body
+    end
+
+    FE->>FE: VarianceCard render branch<br/>por expectedSource + status
+
+    alt expectedSource = 'primedope-cache'
+        FE->>FE: tracker.emit('home_variance_view')
+        Note over FE: Renderiza numeros + status<br/>lucky/normal/unlucky
+    else expectedSource = 'fallback-zero'
+        FE->>FE: tracker.emit('home_variance_fallback_view')
+        Note over FE: Renderiza CTA<br/>"Abrir simulador" →<br/>/coach-ai?tab=variance
+    else variance = null
+        Note over FE: Card hidden<br/>cluster vazio →<br/>EmptyPerformanceCluster
+    end

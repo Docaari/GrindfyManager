@@ -30,8 +30,12 @@ export type DailyInsightType =
   | 'pending-hands'
   | 'roi-decline'
   | 'study-gap'
+  | 'tough-stretch'
   | 'celebration'
   | 'fallback';
+
+const TOUGH_STRETCH_COOLDOWN_MS = 2 * 24 * 60 * 60 * 1000;
+const TOUGH_STRETCH_SIGMA_THRESHOLD = -1.5;
 
 export type InsightSeverity = 'neutral' | 'critical' | 'celebration';
 
@@ -47,6 +51,11 @@ export interface DailyInsight {
 export interface ComputeDailyInsightOptions {
   now?: Date;
   timezone?: string;
+  /**
+   * Sprint Variance-1 RF-05: userId para a regra tough-stretch checar cooldown 2d
+   * via localStorage. Opcional — quando ausente, cooldown e ignorado (sempre dispara).
+   */
+  userId?: string;
 }
 
 // =============================================================================
@@ -163,6 +172,49 @@ export function computeDailyInsight(
         body: 'Aproveite para estudar antes de voltar — Coach tem insights guardados.',
         cta: { label: `Falar com Coach ${ARROW}`, href: '/coach-ai' },
         severity: 'neutral',
+      };
+    }
+  }
+
+  // Regra 4.5 — tough-stretch (variance <= -1.5σ). Cooldown 2d via localStorage.
+  // Gate: so dispara quando expectedSource='primedope-cache' (baseline real).
+  // Fallback heuristic nao tem baseline pra comparar, mensagem ficaria descontextualizada.
+  const variance = safe?.variance;
+  if (
+    variance &&
+    typeof variance === 'object' &&
+    variance.expectedSource === 'primedope-cache' &&
+    variance.status === 'unlucky' &&
+    typeof variance.sigmaMultiple === 'number' &&
+    variance.sigmaMultiple <= TOUGH_STRETCH_SIGMA_THRESHOLD
+  ) {
+    const userId = opts.userId;
+    let cooldownActive = false;
+    if (userId) {
+      try {
+        const key = `daily-insight-cooldown:tough-stretch:${userId}`;
+        const lastShownIso = typeof localStorage !== 'undefined'
+          ? localStorage.getItem(key)
+          : null;
+        if (lastShownIso) {
+          const ageMs = now.getTime() - new Date(lastShownIso).getTime();
+          if (Number.isFinite(ageMs) && ageMs < TOUGH_STRETCH_COOLDOWN_MS) {
+            cooldownActive = true;
+          }
+        }
+      } catch {
+        // localStorage indisponivel — sem cooldown.
+      }
+    }
+    if (!cooldownActive) {
+      const sigmaTxt = variance.sigmaMultiple.toFixed(1);
+      return {
+        type: 'tough-stretch',
+        emoji: E_CHART_DOWN,
+        title: 'Sequencia dificil',
+        body: `Sua variancia 90d esta em ${sigmaTxt}σ abaixo do esperado. Isso e estatisticamente normal — quer conversar com o Coach?`,
+        cta: { label: `Falar com Coach ${ARROW}`, href: '/coach-ai?tab=chat' },
+        severity: 'critical',
       };
     }
   }

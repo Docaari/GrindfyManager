@@ -22,6 +22,7 @@ import { Link } from 'wouter';
 import { tokens } from '@/lib/ui-tokens';
 import { emit } from '@/lib/tracker';
 import { computeDailyInsight, type DailyInsight as DailyInsightT } from '@/lib/home/dailyInsight';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DailyInsightProps {
   data: any;
@@ -40,10 +41,12 @@ function severityClasses(sev: DailyInsightT['severity']): string {
 }
 
 export default function DailyInsight({ data }: DailyInsightProps): JSX.Element {
+  const { user } = useAuth();
+  const userId = user?.userPlatformId;
   // Memoizacao: dep em meta.generatedAt para evitar recompute.
   const insight = useMemo<DailyInsightT>(
-    () => computeDailyInsight(data ?? {}),
-    [data?.meta?.generatedAt],
+    () => computeDailyInsight(data ?? {}, { userId }),
+    [data?.meta?.generatedAt, userId],
   );
 
   const viewEmittedRef = useRef(false);
@@ -54,7 +57,14 @@ export default function DailyInsight({ data }: DailyInsightProps): JSX.Element {
       insightType: insight.type,
       severity: insight.severity ?? 'neutral',
     });
-  }, [insight.type, insight.severity]);
+    // Tough-stretch grava timestamp pra cooldown 2d (rule respeitar proximo render).
+    if (insight.type === 'tough-stretch' && userId) {
+      try {
+        const key = `daily-insight-cooldown:tough-stretch:${userId}`;
+        localStorage.setItem(key, new Date().toISOString());
+      } catch {}
+    }
+  }, [insight.type, insight.severity, userId]);
 
   const handleClick = () => {
     emit('home_insight_click', {

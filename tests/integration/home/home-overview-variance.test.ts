@@ -178,3 +178,100 @@ describe('GET /api/home/overview — variance (RF-30)', () => {
     expect(res.body.variance.expectedUsd).toBe(0);
   });
 });
+
+// =============================================================================
+// Sprint Variance-1 — RF-02 (sanitize defensivo em routes/home.ts)
+//
+// Spec : Docs/specs/sprint-variance-1.md §RF-02
+// ADR  : 162 §2.3
+//
+// Storage pode retornar shape "envenenado" (NaN, Infinity, expectedSource
+// arbitrario). O route deve coercir para defaults seguros antes de serializar.
+// =============================================================================
+
+describe('GET /api/home/overview — variance sanitize defensivo (RF-02)', () => {
+  it('storage retorna expectedSource="garbage" -> route normaliza para "fallback-zero"', async () => {
+    const poisoned = {
+      sessionsCount: 25,
+      actualUsd: 500,
+      expectedUsd: 100,
+      expectedSource: 'garbage',
+      deviationUsd: 400,
+      sigmaUsd: 200,
+      sigmaMultiple: 2.0,
+      status: 'lucky',
+      period: '90d',
+    };
+    (storage.getVarianceVsExpected as any).mockResolvedValue(poisoned);
+    const req = makeReq();
+    const res = makeRes();
+    await handleHomeOverview(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.variance).not.toBeNull();
+    expect(res.body.variance.expectedSource).toBe('fallback-zero');
+  });
+
+  it('storage retorna sigmaMultiple=NaN -> route normaliza para 0', async () => {
+    const poisoned = {
+      sessionsCount: 25,
+      actualUsd: 500,
+      expectedUsd: 100,
+      expectedSource: 'primedope-cache',
+      deviationUsd: 400,
+      sigmaUsd: 200,
+      sigmaMultiple: NaN,
+      status: 'lucky',
+      period: '90d',
+    };
+    (storage.getVarianceVsExpected as any).mockResolvedValue(poisoned);
+    const req = makeReq();
+    const res = makeRes();
+    await handleHomeOverview(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.variance).not.toBeNull();
+    expect(Number.isFinite(res.body.variance.sigmaMultiple)).toBe(true);
+    expect(res.body.variance.sigmaMultiple).toBe(0);
+  });
+
+  it('storage retorna actualUsd=Infinity -> route normaliza para 0', async () => {
+    const poisoned = {
+      sessionsCount: 25,
+      actualUsd: Infinity,
+      expectedUsd: 100,
+      expectedSource: 'primedope-cache',
+      deviationUsd: Infinity,
+      sigmaUsd: 200,
+      sigmaMultiple: 1.0,
+      status: 'lucky',
+      period: '90d',
+    };
+    (storage.getVarianceVsExpected as any).mockResolvedValue(poisoned);
+    const req = makeReq();
+    const res = makeRes();
+    await handleHomeOverview(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.variance).not.toBeNull();
+    expect(Number.isFinite(res.body.variance.actualUsd)).toBe(true);
+    expect(res.body.variance.actualUsd).toBe(0);
+  });
+
+  it('storage retorna sessionsCount negativo -> route normaliza para 0 (Math.max)', async () => {
+    const poisoned = {
+      sessionsCount: -5,
+      actualUsd: 500,
+      expectedUsd: 100,
+      expectedSource: 'primedope-cache',
+      deviationUsd: 400,
+      sigmaUsd: 200,
+      sigmaMultiple: 1.0,
+      status: 'lucky',
+      period: '90d',
+    };
+    (storage.getVarianceVsExpected as any).mockResolvedValue(poisoned);
+    const req = makeReq();
+    const res = makeRes();
+    await handleHomeOverview(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.variance.sessionsCount).toBeGreaterThanOrEqual(0);
+  });
+});

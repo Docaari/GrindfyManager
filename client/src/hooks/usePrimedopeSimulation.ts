@@ -142,6 +142,13 @@ export function usePrimedopeSimulation() {
           data,
         );
       } catch {}
+      // refetchType: 'none' marca stale sem refetch — Home so refetch quando user voltar.
+      try {
+        queryClient.invalidateQueries({
+          queryKey: ["/api/home/overview"],
+          refetchType: 'none',
+        });
+      } catch {}
     },
     onError: (err: any) => {
       try {

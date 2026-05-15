@@ -95,6 +95,11 @@ export async function handleUpdateGrindSession(req: any, res: any): Promise<void
     let extra: { stopReached?: string | null; lockedUntil?: string } = {};
     if (req.body?.status === "completed") {
       try {
+        invalidateHomeOverviewCache(userId);
+      } catch (err: any) {
+        console.error("[handleUpdateGrindSession] invalidateHomeOverviewCache failed:", err?.message);
+      }
+      try {
         const { stopService } = await import("../services/stopService");
         const result = await stopService.evaluateStops(userId, id);
         if (result?.stopReached) {

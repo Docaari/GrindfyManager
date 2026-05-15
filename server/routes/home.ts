@@ -33,6 +33,7 @@ import { getGradeTodaySummary, type GradeProfile } from '../services/gradeToday'
 import { buildHeaderStrip, type HeaderStripData } from '../services/homeHeader';
 import { buildCoachContext, type CoachContextData } from '../services/coachContext';
 import { buildImmediateAction, type ImmediateActionData } from '../services/immediateAction';
+import { VARIANCE_SOURCE, VARIANCE_STATUS } from '@shared/variance';
 
 // =============================================================================
 // Cache in-memory per-userId — D4 / ADR-102 §2.3
@@ -718,19 +719,23 @@ export async function handleHomeOverview(req: any, res: Response): Promise<void>
         period: '30d',
       }));
 
-    // variance: passa shape inteiro OU null.
+    // ADR-162 §2.3 — defesa em profundidade contra storage corrompido.
+    const num = (v: any): number =>
+      typeof v === 'number' && Number.isFinite(v) ? v : 0;
     const varianceOut: HomeOverviewBody['variance'] = varianceResult && typeof varianceResult === 'object'
       ? {
-          sessionsCount: Number(varianceResult.sessionsCount ?? 0),
-          actualUsd: Number(varianceResult.actualUsd ?? 0),
-          expectedUsd: Number(varianceResult.expectedUsd ?? 0),
-          expectedSource: (varianceResult.expectedSource === 'fallback-zero' ? 'fallback-zero' : 'primedope-cache') as
-            'primedope-cache' | 'fallback-zero',
-          deviationUsd: Number(varianceResult.deviationUsd ?? 0),
-          sigmaUsd: Number(varianceResult.sigmaUsd ?? 0),
-          sigmaMultiple: Number(varianceResult.sigmaMultiple ?? 0),
-          status: ((varianceResult.status === 'lucky' || varianceResult.status === 'unlucky') ? varianceResult.status : 'normal') as
-            'lucky' | 'normal' | 'unlucky',
+          sessionsCount: Math.max(0, Math.floor(num(varianceResult.sessionsCount))),
+          actualUsd: num(varianceResult.actualUsd),
+          expectedUsd: num(varianceResult.expectedUsd),
+          expectedSource: varianceResult.expectedSource === VARIANCE_SOURCE.PRIMEDOPE_CACHE
+            ? VARIANCE_SOURCE.PRIMEDOPE_CACHE
+            : VARIANCE_SOURCE.FALLBACK_ZERO,
+          deviationUsd: num(varianceResult.deviationUsd),
+          sigmaUsd: num(varianceResult.sigmaUsd),
+          sigmaMultiple: num(varianceResult.sigmaMultiple),
+          status: varianceResult.status === VARIANCE_STATUS.LUCKY || varianceResult.status === VARIANCE_STATUS.UNLUCKY
+            ? varianceResult.status
+            : VARIANCE_STATUS.NORMAL,
           period: '90d',
         }
       : null;

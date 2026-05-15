@@ -181,7 +181,17 @@ import {
   type NewsItemRow,
   type UserNewsPreferenceRow,
   type NewsPreferenceUpdate,
+  // Sprint Variance-1 RF-01 — variance KPI lookup.
+  primedopeRuns,
 } from "@shared/schema";
+import {
+  VARIANCE_SOURCE,
+  VARIANCE_STATUS,
+  VARIANCE_THRESHOLDS,
+  VARIANCE_CLAMP,
+  type VarianceSource,
+  type VarianceStatus,
+} from "@shared/variance";
 import { db } from "./db";
 import { eq, desc, asc, and, gte, lte, lt, sql, like, not, inArray, gt, isNotNull, isNull, count, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -11661,10 +11671,148 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return [];
   }
 
-  async getVarianceVsExpected(_userId: string): Promise<any> {
-    // TODO Onda 3: filtra grind_sessions 90d, lookup primedope_simulations cache.
-    // Onda 2: retorna null (bloco oculto).
-    return null;
+  // ADR-162 algoritmo + ADR-163 fxResolver canonico.
+  // Schema-nota: grindSessions nao tem currency/siteCurrency/pnlNative — em prod
+  // row.profit eh tratado como USD-equivalente. Tests injetam `currency`/`pnlNative`
+  // sinteticos via mocks; o fallback `??` cobre ambos caminhos.
+  async getVarianceVsExpected(userId: string): Promise<{
+    sessionsCount: number;
+    actualUsd: number;
+    expectedUsd: number;
+    expectedSource: VarianceSource;
+    deviationUsd: number;
+    sigmaUsd: number;
+    sigmaMultiple: number;
+    status: VarianceStatus;
+    period: '90d';
+  } | null> {
+    try {
+      if (!userId) return null;
+
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+      const whereClause = and(
+        eq(grindSessions.userId, userId),
+        eq(grindSessions.status, 'completed'),
+        gte(grindSessions.createdAt, ninetyDaysAgo),
+      );
+
+      const countRows: any[] = await (db as any)
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(grindSessions)
+        .where(whereClause);
+      const sessionsCount = Number(countRows?.[0]?.count ?? 0);
+
+      if (sessionsCount < 20) return null;
+
+      const sessionRows: any[] = await (db as any)
+        .select()
+        .from(grindSessions)
+        .where(whereClause);
+
+      const { FALLBACK_FX_RATES, convertToUSD, resolveExchangeRates } =
+        await import('./services/fxResolver');
+      let fxRates: Record<string, number> = { ...FALLBACK_FX_RATES };
+      try {
+        const resolved = await resolveExchangeRates(userId);
+        if (resolved?.rates) fxRates = resolved.rates;
+      } catch (err) {
+        console.warn('[getVarianceVsExpected] fxResolver failed:', (err as any)?.message);
+      }
+
+      let actualUsd = 0;
+      const rowUsdPairs: Array<{ pnlUsd: number; dateKey: string }> = [];
+      for (const row of sessionRows ?? []) {
+        const pnlNative = Number(row?.pnlNative ?? row?.profit ?? row?.profitLoss ?? 0);
+        const currency = String(row?.currency ?? row?.siteCurrency ?? 'USD');
+        const pnlUsd = convertToUSD(pnlNative, currency, fxRates);
+        const safePnl = Number.isFinite(pnlUsd) ? pnlUsd : 0;
+        actualUsd += safePnl;
+        const rawDate = row?.date ?? row?.startedAt ?? row?.createdAt;
+        let dateKey: string;
+        if (rawDate instanceof Date) dateKey = rawDate.toISOString().slice(0, 10);
+        else if (typeof rawDate === 'string' && rawDate.length >= 10) dateKey = rawDate.slice(0, 10);
+        else dateKey = 'unknown';
+        rowUsdPairs.push({ pnlUsd: safePnl, dateKey });
+      }
+
+      const primedopeRows: any[] = await (db as any)
+        .select()
+        .from(primedopeRuns)
+        .where(
+          and(
+            eq(primedopeRuns.userId, userId),
+            gte(primedopeRuns.createdAt, ninetyDaysAgo),
+          ),
+        )
+        .orderBy(desc(primedopeRuns.createdAt))
+        .limit(1);
+
+      let expectedUsd = 0;
+      let sigmaUsd = 0;
+      let expectedSource: VarianceSource = VARIANCE_SOURCE.FALLBACK_ZERO;
+
+      const primedopeRow = primedopeRows?.[0];
+      const data = primedopeRow?.resultJson?.data ?? null;
+      const ev = data?.ev;
+      const stdDev = data?.stdDev;
+      if (
+        primedopeRow &&
+        typeof ev === 'number' && Number.isFinite(ev) &&
+        typeof stdDev === 'number' && Number.isFinite(stdDev)
+      ) {
+        expectedUsd = ev;
+        sigmaUsd = stdDev;
+        expectedSource = VARIANCE_SOURCE.PRIMEDOPE_CACHE;
+      } else {
+        if (primedopeRow) {
+          console.warn(
+            '[getVarianceVsExpected] primedope_run shape invalido -> fallback',
+            { userIdPrefix: userId.slice(0, 6), hasData: !!data },
+          );
+        }
+        const dailyPnlMap = new Map<string, number>();
+        for (const { pnlUsd, dateKey } of rowUsdPairs) {
+          if (dateKey === 'unknown') continue;
+          dailyPnlMap.set(dateKey, (dailyPnlMap.get(dateKey) ?? 0) + pnlUsd);
+        }
+        const dailyValues = Array.from(dailyPnlMap.values());
+        const n = dailyValues.length;
+        if (n > 1) {
+          const mean = dailyValues.reduce((s, v) => s + v, 0) / n;
+          const variance =
+            dailyValues.reduce((s, v) => s + (v - mean) * (v - mean), 0) / n;
+          sigmaUsd = 1.5 * Math.sqrt(variance);
+        }
+      }
+
+      const sanitize = (v: number): number => (Number.isFinite(v) ? v : 0);
+      actualUsd = sanitize(actualUsd);
+      expectedUsd = sanitize(expectedUsd);
+      sigmaUsd = sanitize(sigmaUsd);
+      const deviationUsd = sanitize(actualUsd - expectedUsd);
+      let sigmaMultiple = sanitize(sigmaUsd > 0 ? deviationUsd / sigmaUsd : 0);
+      sigmaMultiple = Math.max(VARIANCE_CLAMP.MIN, Math.min(VARIANCE_CLAMP.MAX, sigmaMultiple));
+
+      let status: VarianceStatus;
+      if (sigmaMultiple >= VARIANCE_THRESHOLDS.LUCKY) status = VARIANCE_STATUS.LUCKY;
+      else if (sigmaMultiple <= VARIANCE_THRESHOLDS.UNLUCKY) status = VARIANCE_STATUS.UNLUCKY;
+      else status = VARIANCE_STATUS.NORMAL;
+
+      return {
+        sessionsCount,
+        actualUsd,
+        expectedUsd,
+        expectedSource,
+        deviationUsd,
+        sigmaUsd,
+        sigmaMultiple,
+        status,
+        period: '90d',
+      };
+    } catch (err) {
+      console.error('[storage.getVarianceVsExpected] failed', err);
+      return null;
+    }
   }
 
   // ===========================================================================

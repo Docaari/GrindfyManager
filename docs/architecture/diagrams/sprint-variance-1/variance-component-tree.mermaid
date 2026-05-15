@@ -1,0 +1,67 @@
+%% Sprint Variance-1 — Arvore de componentes frontend afetados
+%% Mostra todos os pontos de UI que consomem o KPI de variancia
+%% RFs: 04 (empty-state), 05 (dailyInsight tough-stretch), 06 (props GradePlanner), 07 (invalidate client), 08 (CTA cluster), 09 (rename label)
+flowchart TD
+    home["/inicio<br/><i>client/src/pages/Home.tsx</i>"]
+
+    home --> overview["useQuery(['/api/home/overview'])<br/><i>TanStack Query</i>"]
+
+    overview --> body["body.variance:<br/>VarianceResult | null"]
+
+    body --> variancePath{"data.variance"}
+
+    variancePath -->|"!== null"| varianceCard["VarianceCard<br/><i>client/src/components/home/VarianceCard.tsx</i>"]
+    variancePath -->|"=== null"| emptyCluster["EmptyPerformanceCluster<br/><i>client/src/components/home/EmptyPerformanceCluster.tsx</i><br/><b>RF-08:</b> CTA quando sessionsCount >= 5"]
+
+    varianceCard --> sourceBranch{"data.expectedSource"}
+
+    sourceBranch -->|"'primedope-cache'"| cardReal["Card real (existente)<br/><i>data-testid=home-variance-card</i><br/>Numeros: actualUsd, expectedUsd, sigmaMultiple<br/>Tracker: home_variance_view"]
+    sourceBranch -->|"'fallback-zero'"| cardEmpty["<b>RF-04:</b> Mini-card empty-state (novo)<br/><i>data-testid=home-variance-empty-card</i><br/>Titulo + body curto<br/>CTA 'Abrir simulador'<br/>Tracker: home_variance_fallback_view"]
+
+    cardReal --> ctaLink1["href=/coach-ai?tab=variance"]
+    cardEmpty --> ctaLink2["href=/coach-ai?tab=variance"]
+    emptyCluster --> ctaLink3["href=/coach-ai?tab=variance<br/><i>data-testid=empty-cluster-variance-cta</i>"]
+
+    %% Rule tough-stretch (RF-05)
+    body -.->|"alimenta engine"| dailyEngine["dailyInsight.ts<br/><i>client/src/lib/home/dailyInsight.ts</i><br/>computeDailyInsight()"]
+
+    dailyEngine --> rule["<b>RF-05:</b> Rule 'tough-stretch' (nova)<br/>variance.status='unlucky'<br/>+ sigmaMultiple <= -1.5<br/>+ cooldown frio (2d localStorage)<br/>Prioridade: entre study-gap e celebration"]
+
+    rule --> dailyCard["DailyInsightCard<br/>title: 'Sequencia dificil'<br/>severity: 'critical'<br/>CTA → /coach-ai?tab=chat"]
+
+    %% PrimedopePanel context (RF-06)
+    gradePlanner["/grade-planner<br/><i>client/src/pages/GradePlanner.tsx</i>"]
+    gradePlanner --> tabsTriggers["TabsTriggers"]
+    tabsTriggers --> selectorTab["aba 'Tournament Selector'"]
+    tabsTriggers --> varianceTab["<b>RF-09:</b> aba 'Simulador PrimeDope'<br/><i>(renomeada de 'Variance Calculator (Beta)')</i><br/>data-testid=coach-variance-panel (preservado)"]
+
+    varianceTab --> primedopePanel["PrimedopePanel<br/><i>client/src/components/primedope/PrimedopePanel.tsx</i>"]
+
+    gradePlanner --> activeDay["activeDayProfile.profile<br/>+ getTodayDayOfWeek()"]
+    activeDay -.->|"<b>RF-06:</b> props novos<br/>(profileLetter + dayOfWeek)"| primedopePanel
+
+    primedopePanel --> prefill["primedopeBucketsPrefill.ts<br/><i>(servico existente)</i><br/>Buckets prefilled<br/>quando ambos props presentes"]
+
+    primedopePanel --> simulateBtn["Btn 'Simular' →<br/>usePrimedopeSimulation"]
+
+    simulateBtn --> hook["<b>RF-07:</b> usePrimedopeSimulation<br/><i>client/src/hooks/usePrimedopeSimulation.ts</i><br/>useMutation.onSuccess:<br/>queryClient.invalidateQueries(<br/>['/api/home/overview'])"]
+
+    hook -.->|"forca refetch"| overview
+
+    %% Telemetria
+    cardReal -.-> tracker1["tracker.emit<br/>'home_variance_view'"]
+    cardEmpty -.-> tracker2["tracker.emit<br/>'home_variance_fallback_view'<br/><i>NOVA — useRef 1x/mount</i>"]
+
+    classDef route fill:#1e40af,color:#fff
+    classDef component fill:#0f766e,color:#fff
+    classDef newComponent fill:#10b981,color:#fff
+    classDef branch fill:#f59e0b,color:#000
+    classDef hook fill:#7c3aed,color:#fff
+    classDef tracker fill:#6b7280,color:#fff
+
+    class home,gradePlanner route
+    class varianceCard,cardReal,emptyCluster,dailyEngine,dailyCard,primedopePanel,selectorTab component
+    class cardEmpty,rule,varianceTab,activeDay,prefill newComponent
+    class variancePath,sourceBranch branch
+    class hook,overview,simulateBtn hook
+    class tracker1,tracker2 tracker

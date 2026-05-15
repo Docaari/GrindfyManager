@@ -390,3 +390,154 @@ describe('computeDailyInsight — DailyInsight shape', () => {
     expect(typeof insight.cta.href).toBe('string');
   });
 });
+
+// =============================================================================
+// Sprint Variance-1 — RF-05: rule "tough-stretch"
+//
+// Spec : Docs/specs/sprint-variance-1.md §RF-05
+// ADR  : 162 (depende de variance KPI)
+//
+// Nova regra entre `study-gap` (4) e `celebration` (5).
+// Condicao: data.variance.status='unlucky' && sigmaMultiple <= -1.5.
+// CTA: /coach-ai?tab=chat
+// Cooldown: 2 dias via localStorage('daily-insight-cooldown:tough-stretch:{userId}').
+//
+// Lesson #15: localStorage polyfill ja em tests/setup.ts.
+// =============================================================================
+
+function withVariance(overrides: any = {}) {
+  return baseData({
+    variance: {
+      sessionsCount: 30,
+      actualUsd: -500,
+      expectedUsd: 200,
+      expectedSource: 'primedope-cache',
+      deviationUsd: -700,
+      sigmaUsd: 350,
+      sigmaMultiple: -2.0,
+      status: 'unlucky',
+      period: '90d',
+    },
+    // Defaults para nao disparar regras anteriores.
+    banners: { cooldown: null, flight: null },
+    pendingHands: [],
+    statusStrip: {
+      banca: null,
+      roi30d: { value: 5, sparkline: [5, 5, 5, 5, 5] },
+      today: null,
+      pendencias: null,
+    },
+    recentSessions: [
+      { id: 'S1', date: new Date().toISOString().slice(0, 10), pnlUsd: 0, tournamentCount: 0, primaryPlatform: 'GG', status: 'finalized' },
+    ],
+    lifetime: { totalTournaments: 100, totalSessions: 30, activeDays: 50, currentStreakDays: 0 },
+    ...overrides,
+  });
+}
+
+describe('computeDailyInsight — RF-05 tough-stretch rule', () => {
+  beforeEach(() => {
+    try { localStorage.clear(); } catch {}
+  });
+
+  it('sigmaMultiple = -2.0 + status=unlucky -> type="tough-stretch", CTA /coach-ai?tab=chat', async () => {
+    const { computeDailyInsight } = await import('../dailyInsight');
+    const data = withVariance();
+    const insight = computeDailyInsight(data as any);
+    expect(insight.type).toBe('tough-stretch');
+    expect(insight.cta.href).toBe('/coach-ai?tab=chat');
+    expect(insight.title.toLowerCase()).toMatch(/dificil|sequenc/);
+  });
+
+  it('sigmaMultiple = -1.5 (boundary inclusivo) -> dispara tough-stretch', async () => {
+    const { computeDailyInsight } = await import('../dailyInsight');
+    const data = withVariance({
+      variance: {
+        sessionsCount: 30,
+        actualUsd: -250,
+        expectedUsd: 200,
+        expectedSource: 'primedope-cache',
+        deviationUsd: -450,
+        sigmaUsd: 300,
+        sigmaMultiple: -1.5,
+        status: 'unlucky',
+        period: '90d',
+      },
+    });
+    const insight = computeDailyInsight(data as any);
+    expect(insight.type).toBe('tough-stretch');
+  });
+
+  it('sigmaMultiple = -1.0 (threshold nao atingido) -> NAO dispara', async () => {
+    const { computeDailyInsight } = await import('../dailyInsight');
+    const data = withVariance({
+      variance: {
+        sessionsCount: 30,
+        actualUsd: 50,
+        expectedUsd: 200,
+        expectedSource: 'primedope-cache',
+        deviationUsd: -150,
+        sigmaUsd: 150,
+        sigmaMultiple: -1.0,
+        status: 'unlucky',
+        period: '90d',
+      },
+    });
+    const insight = computeDailyInsight(data as any);
+    expect(insight.type).not.toBe('tough-stretch');
+  });
+
+  it('variance=null -> NAO dispara tough-stretch (sem crash)', async () => {
+    const { computeDailyInsight } = await import('../dailyInsight');
+    const data = withVariance({ variance: null });
+    const insight = computeDailyInsight(data as any);
+    expect(insight).toBeTruthy();
+    expect(insight.type).not.toBe('tough-stretch');
+  });
+
+  it('cooldown 2d: insight dismissed ha 1d -> NAO dispara; ha 3d -> dispara', async () => {
+    const { computeDailyInsight } = await import('../dailyInsight');
+    const userId = 'USER-TS-1';
+    const data = withVariance({
+      profile: 'hybrid',
+      profileMeta: { totalUploads: 100, totalSessions: 30, sessionTournamentCount: 30, detectedAt: '', userId },
+    });
+
+    // Cooldown ha 1 dia (recent) -> bloqueia.
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    localStorage.setItem(`daily-insight-cooldown:tough-stretch:${userId}`, oneDayAgo);
+    let insight = computeDailyInsight(data as any, { userId } as any);
+    expect(insight.type).not.toBe('tough-stretch');
+
+    // Cooldown ha 3 dias (>2d) -> ja expirou, dispara.
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    localStorage.setItem(`daily-insight-cooldown:tough-stretch:${userId}`, threeDaysAgo);
+    insight = computeDailyInsight(data as any, { userId } as any);
+    expect(insight.type).toBe('tough-stretch');
+  });
+
+  it('ordem: tough-stretch entre study-gap e celebration (regra 4 vence; regra 5 perde)', async () => {
+    const { computeDailyInsight } = await import('../dailyInsight');
+
+    // study-gap (regra 4) tem prioridade > tough-stretch.
+    // 8d sem grindar + variance unlucky -> study-gap vence.
+    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const dataGapWins = withVariance({
+      recentSessions: [
+        { id: 'S1', date: eightDaysAgo, pnlUsd: 0, tournamentCount: 0, primaryPlatform: 'GG', status: 'finalized' },
+      ],
+    });
+    const insightGap = computeDailyInsight(dataGapWins as any);
+    expect(insightGap.type).toBe('study-gap');
+
+    // celebration (regra 5) tem prioridade < tough-stretch.
+    // streak=10 + variance unlucky (-2.0) -> tough-stretch vence.
+    const dataToughWins = withVariance({
+      lifetime: { totalTournaments: 100, totalSessions: 30, activeDays: 50, currentStreakDays: 10 },
+    });
+    const insightTough = computeDailyInsight(dataToughWins as any);
+    expect(insightTough.type).toBe('tough-stretch');
+  });
+});

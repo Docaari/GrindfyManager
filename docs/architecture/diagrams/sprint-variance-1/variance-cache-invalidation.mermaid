@@ -1,0 +1,53 @@
+%% Sprint Variance-1 — Triggers de invalidacao de cache home-overview
+%% 3 fontes invalidam o cache (2 server-side + 1 client-side)
+%% ADR-164 — hibrido server + client
+flowchart LR
+    subgraph triggers["3 Triggers de Mutation"]
+        t1["PUT /api/grind-sessions/:id<br/><i>status='completed'</i><br/>(handler ja recebe gancho Daily Debrief AI-1C)"]
+        t2["POST /upload<br/><i>CSV import bem-sucedido</i>"]
+        t3["POST /api/primedope/simulate<br/><i>via usePrimedopeSimulation hook</i>"]
+    end
+
+    subgraph server["Server-side"]
+        invalidator["invalidateHomeOverviewCache(userId)<br/><i>server/routes/home.ts:77 — public helper</i><br/><b>(lesson #21)</b>"]
+        cache[("home-overview-cache<br/><i>Map user_id → body</i><br/>TTL 30s")]
+    end
+
+    subgraph client["Client-side"]
+        rqClient["queryClient.invalidateQueries<br/><i>queryKey: ['/api/home/overview']</i>"]
+        rqCache[("TanStack Query Cache<br/>/api/home/overview")]
+    end
+
+    subgraph effect["Efeito"]
+        nextGet["Proxima GET /api/home/overview"]
+        recompute["Storage recomputa variance<br/><i>com dados frescos:<br/>actualUsd e/ou expectedUsd</i>"]
+        renderUpdated["VarianceCard re-renderiza<br/><i>com novo expectedSource e/ou status</i>"]
+    end
+
+    t1 -->|"apos commit storage<br/>(RF-03 server-side)"| invalidator
+    t2 -->|"apos persistencia (RF-03)"| invalidator
+    t3 -->|"useMutation.onSuccess<br/>(RF-07 client-side)"| rqClient
+
+    invalidator -->|"Map.delete(userId)<br/>O(1) sync"| cache
+    rqClient -->|"marca stale + refetch"| rqCache
+
+    cache -.->|"cache miss"| nextGet
+    rqCache -.->|"refetch automatico"| nextGet
+
+    nextGet --> recompute
+    recompute --> renderUpdated
+
+    %% Backstop natural
+    backstop["TTL 30s natural<br/><i>backstop para mutations<br/>menores nao cobertas</i>"] -.->|"expire"| cache
+
+    classDef trigger fill:#dc2626,color:#fff
+    classDef serverCache fill:#1e40af,color:#fff
+    classDef clientCache fill:#7c3aed,color:#fff
+    classDef effectBox fill:#10b981,color:#fff
+    classDef backstopBox fill:#6b7280,color:#fff
+
+    class t1,t2,t3 trigger
+    class invalidator,cache serverCache
+    class rqClient,rqCache clientCache
+    class nextGet,recompute,renderUpdated effectBox
+    class backstop backstopBox

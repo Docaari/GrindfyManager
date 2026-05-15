@@ -232,3 +232,73 @@ describe('GradePlanner — switching de abas via click', () => {
     expect(screen.getByTestId('mock-selector-panel')).toBeInTheDocument();
   });
 });
+
+// =============================================================================
+// Sprint Variance-1 — RF-09: rename label "Variance Calculator (Beta)" -> "Simulador PrimeDope"
+//
+// Spec : Docs/specs/sprint-variance-1.md §RF-09
+// Local: client/src/pages/GradePlanner.tsx:959-968.
+//
+// Mudancas:
+//   - TabsTrigger header label: "Variance Calculator (PrimeDope) + Beta" -> "Simulador PrimeDope".
+//   - Tooltip/subtexto: "Estima variancia esperada via Monte Carlo (PrimeDope.com)".
+//   - data-testid="coach-variance-panel" preservado (testes existentes).
+//
+// PT-BR (convencao §8).
+// =============================================================================
+
+describe('GradePlanner — RF-09 rename "Simulador PrimeDope"', () => {
+  it('container coach-variance-panel renderiza com novo header "Simulador PrimeDope"', async () => {
+    const GradePlanner = await loadGradePlanner();
+    render(withClient(<GradePlanner />));
+
+    const tabVariance = screen.getByTestId('coach-tab-variance');
+    fireEvent.click(tabVariance);
+
+    const panel = screen.getByTestId('coach-variance-panel');
+    expect(panel.textContent ?? '').toMatch(/Simulador PrimeDope/);
+  });
+
+  it('NAO mostra string "Variance Calculator" + sufixo "Beta"', async () => {
+    const GradePlanner = await loadGradePlanner();
+    render(withClient(<GradePlanner />));
+
+    const tabVariance = screen.getByTestId('coach-tab-variance');
+    fireEvent.click(tabVariance);
+
+    const panel = screen.getByTestId('coach-variance-panel');
+    const text = panel.textContent ?? '';
+    expect(text).not.toMatch(/Variance Calculator/);
+    // Beta NAO deve aparecer como badge.
+    expect(text).not.toMatch(/\bBeta\b/);
+  });
+
+  it('mostra tooltip/subtexto explicativo "Monte Carlo"', async () => {
+    const GradePlanner = await loadGradePlanner();
+    render(withClient(<GradePlanner />));
+
+    const tabVariance = screen.getByTestId('coach-tab-variance');
+    fireEvent.click(tabVariance);
+
+    const panel = screen.getByTestId('coach-variance-panel');
+    // O tooltip pode estar como atributo `title=`, em subtexto visivel, ou
+    // span [aria-label]. Aceita qualquer canal: subtitle text, title attr,
+    // ou data-tooltip.
+    const text = panel.textContent ?? '';
+    const titleAttr = (panel.querySelector('[title]') as HTMLElement | null)?.getAttribute('title') ?? '';
+    const ariaLabel = (panel.querySelector('[aria-label]') as HTMLElement | null)?.getAttribute('aria-label') ?? '';
+    const combined = `${text} ${titleAttr} ${ariaLabel}`;
+    expect(combined).toMatch(/Monte Carlo/i);
+  });
+
+  it('regressao: data-testid="coach-variance-panel" preservado', async () => {
+    const GradePlanner = await loadGradePlanner();
+    render(withClient(<GradePlanner />));
+
+    const tabVariance = screen.getByTestId('coach-tab-variance');
+    fireEvent.click(tabVariance);
+
+    // Critical: testes existentes dependem deste testid.
+    expect(screen.getByTestId('coach-variance-panel')).toBeInTheDocument();
+  });
+});

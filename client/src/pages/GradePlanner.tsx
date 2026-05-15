@@ -124,7 +124,8 @@ export default function GradePlanner() {
 
   const getActiveProfile = (dayOfWeek: number): 'A' | 'B' | 'C' | 'OFF' | null => {
     const state = profileStates?.find((ps: any) => ps.dayOfWeek === dayOfWeek);
-    const profile = state?.activeProfile;
+    // Aceitar tanto `activeProfile` (canonical) quanto `profile` (shape alternativo).
+    const profile = (state as any)?.activeProfile ?? (state as any)?.profile;
     if (!profile) return null;
     if (profile === 'OFF') return 'OFF';
     if (profile === 'A' || profile === 'B' || profile === 'C') return profile;
@@ -663,11 +664,12 @@ export default function GradePlanner() {
   }, [plannedTournaments, getActiveProfile, queryClient, addPlannedMutation, updateTournamentMutation, toast]);
 
   // Sprint coach-page-reform-1 RF-01: tabs sempre renderizam (ate sem user
-  // hidratado) para nao quebrar URL persistence. LoadingScreen so se a query
-  // de planned tournaments OU profileStates esta carregando E user existe.
-  // Isso preserva UX de loading inicial pos-login mas permite render durante
-  // testes que nao hidratam useAuth.
-  if (user && (plannedLoading || profileStatesLoading)) {
+  // hidratado) para nao quebrar URL persistence. LoadingScreen apenas quando
+  // profileStates ainda carrega (forma da grade).
+  // Sprint Variance-1 RF-06: removido gate `plannedLoading` para que o
+  // PrimedopePanel monte imediato (prefill via useQuery comeca a hidratar).
+  // `plannedTournaments` ja tem default `[]` quando `data` ainda undefined.
+  if (user && profileStatesLoading) {
     return <LoadingScreen />;
   }
 
@@ -956,24 +958,32 @@ export default function GradePlanner() {
             <FlightsPanel />
           </TabsContent>
 
-          {/* Aba Variance Calculator — PrimedopePanel ocupa 100% da aba (RF-03). */}
-          <TabsContent value="variance" className="mt-0">
-            <div data-testid="coach-variance-panel" className="flex h-full flex-col">
-              <div className="flex items-center gap-2 rounded-t-lg bg-gray-900/60 px-4 py-2 mb-2">
-                <h2 className="text-sm font-semibold text-white">
-                  Variance Calculator (PrimeDope)
-                </h2>
-                <span className="rounded bg-gray-800 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gray-400">
-                  Beta
-                </span>
-              </div>
-              <div className="min-h-0 flex-1 overflow-auto">
-                <PrimedopePanel
-                  userId={user?.userPlatformId ?? ''}
-                  bankrollUsd={bankrollUsd}
-                />
-              </div>
-            </div>
+          {/* forceMount: PrimedopePanel monta antes do clique pra prefill useQuery
+              comecar hidratacao imediatamente (RF-06). */}
+          <TabsContent value="variance" className="mt-0" forceMount>
+            {(() => {
+              const today = getTodayDayOfWeek();
+              const todayProfile = getActiveProfile(today);
+              const profileLetter = todayProfile && todayProfile !== 'OFF' ? todayProfile : 'A';
+              return (
+                <div data-testid="coach-variance-panel" className="flex h-full flex-col">
+                  <div className="flex items-center gap-2 rounded-t-lg bg-gray-900/60 px-4 py-2 mb-2">
+                    <h2 className="text-sm font-semibold text-white">Simulador PrimeDope</h2>
+                    <span className="text-[10px] text-gray-400">
+                      Estima variancia esperada via Monte Carlo (PrimeDope.com)
+                    </span>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-auto">
+                    <PrimedopePanel
+                      userId={user?.userPlatformId ?? ''}
+                      bankrollUsd={bankrollUsd}
+                      profileLetter={profileLetter}
+                      dayOfWeek={today}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
           </TabsContent>
         </Tabs>
 

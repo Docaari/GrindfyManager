@@ -1,0 +1,72 @@
+%% Sprint Variance-1 — Fluxo end-to-end do KPI de Variancia
+%% De /inicio (request) ate VarianceCard (render branch por expectedSource + status).
+%% ADRs: 162 (storage), 163 (FX), 164 (cache invalidation)
+flowchart TD
+    user["Usuario abre /inicio"] --> getHome["GET /api/home/overview<br/><i>requireAuth + cache TTL 30s</i>"]
+
+    getHome --> cacheCheck{"home-overview-cache<br/>hit?"}
+    cacheCheck -->|"sim"| serveCache["Retorna body cacheado<br/><i>(variance pode estar fresh)</i>"]
+    cacheCheck -->|"nao"| routeHandler["home.ts:412<br/><i>Promise.allSettled 17 timed()</i>"]
+
+    routeHandler --> callStorage["storage.getVarianceVsExpected(userId)<br/><i>server/storage.ts (RF-01)</i>"]
+
+    callStorage --> querySessions["Query grind_sessions 90d<br/><i>WHERE user_id + status='completed'<br/>+ created_at >= NOW() - 90d</i>"]
+
+    querySessions --> gate20{"sessionsCount<br/>>= 20?"}
+    gate20 -->|"nao"| returnNull["return null<br/><i>(gate unico, ADR-162)</i>"]
+    returnNull --> mapNull["home.ts:722<br/>varianceOut = null"]
+    mapNull --> bodyNull["body.variance = null"]
+    bodyNull --> cardNull["VarianceCard return null<br/><i>cluster vazio → EmptyPerformanceCluster</i>"]
+
+    gate20 -->|"sim"| fxResolve["fxResolver.resolveExchangeRates(userId)<br/><i>ADR-163 — cascade canonica</i>"]
+
+    fxResolve --> fxCascade["Cascade FX:<br/>1. users.exchangeRates<br/>2. wallets.exchangeRates<br/>3. system_fx_rates<br/>4. FALLBACK_CONSTANTS"]
+
+    fxCascade --> aggregateUSD["Agregar P&L USD por dia<br/><i>session_tournaments + FX (lesson #6)</i>"]
+
+    aggregateUSD --> lookupPD["SELECT result_json, created_at<br/>FROM primedope_runs<br/>WHERE user_id + 90d<br/>ORDER BY created_at DESC LIMIT 1"]
+
+    lookupPD --> validateShape{"zod parse<br/>result_json.data.{ev,stdDev}<br/>finitos?"}
+
+    validateShape -->|"sim"| branchCache["expectedSource = 'primedope-cache'<br/>expectedUsd = data.ev<br/>sigmaUsd = data.stdDev"]
+    validateShape -->|"nao OU sem row"| logWarn["console.warn — shape quebrado / no row"]
+    logWarn --> branchFallback["expectedSource = 'fallback-zero'<br/>expectedUsd = 0<br/>sigmaUsd = 1.5 * stddev(dailyPnlUsd)"]
+
+    branchCache --> compute["deviationUsd = actualUsd - expectedUsd<br/>sigmaMultiple = deviationUsd / sigmaUsd<br/><b>clamp [-10, 10]</b><br/><b>sanitize NaN/Infinity → 0</b>"]
+    branchFallback --> compute
+
+    compute --> statusBranch{"sigmaMultiple"}
+    statusBranch -->|">= 1"| statusLucky["status = 'lucky'"]
+    statusBranch -->|"<= -1"| statusUnlucky["status = 'unlucky'"]
+    statusBranch -->|"-1 < x < 1"| statusNormal["status = 'normal'"]
+
+    statusLucky --> shape["VarianceResult shape<br/>{ sessionsCount, actualUsd, expectedUsd,<br/>expectedSource, deviationUsd, sigmaUsd,<br/>sigmaMultiple, status, period='90d' }"]
+    statusUnlucky --> shape
+    statusNormal --> shape
+
+    shape --> mapRoute["home.ts:722-736 (RF-02)<br/><i>sanitize defensivo:<br/>Number.isFinite + literal parse</i>"]
+
+    mapRoute --> body["body.variance = shape"]
+
+    body --> renderCard["VarianceCard render<br/><i>client/src/components/home/VarianceCard.tsx</i>"]
+
+    renderCard --> sourceBranch{"data.expectedSource"}
+    sourceBranch -->|"'primedope-cache'"| cardReal["Card real<br/><i>numeros visiveis + status lucky/normal/unlucky</i><br/>tracker 'home_variance_view'"]
+    sourceBranch -->|"'fallback-zero'"| cardEmpty["Card empty-state<br/><i>data-testid=home-variance-empty-card</i><br/>CTA 'Abrir simulador' → /coach-ai?tab=variance<br/>tracker 'home_variance_fallback_view'"]
+
+    serveCache --> renderCard
+
+    %% Side-effect: rule daily insight
+    body -.->|"alimenta"| dailyInsight["dailyInsight.ts (RF-05)<br/>Rule 'tough-stretch':<br/>variance.status='unlucky' && sigmaMultiple <= -1.5<br/>CTA → /coach-ai?tab=chat"]
+
+    classDef storage fill:#2d3748,color:#fff
+    classDef route fill:#1e40af,color:#fff
+    classDef branch fill:#f59e0b,color:#000
+    classDef render fill:#10b981,color:#fff
+    classDef nullPath fill:#6b7280,color:#fff
+
+    class callStorage,querySessions,fxResolve,fxCascade,aggregateUSD,lookupPD,compute storage
+    class routeHandler,mapRoute,body,getHome route
+    class gate20,validateShape,statusBranch,sourceBranch,cacheCheck branch
+    class renderCard,cardReal,cardEmpty,dailyInsight render
+    class returnNull,mapNull,bodyNull,cardNull nullPath
