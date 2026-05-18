@@ -164,10 +164,21 @@ describe('mapLibraryToPlanned', () => {
     expect(result.profile).toBe('B');
   });
 
-  it('deve definir time com valor do destino', () => {
+  it('deve preservar o time da biblioteca, ignorando o time do destino', () => {
+    const lib = makeLibraryTournament({ time: '13:30' });
+    const dest = makeDestination({ time: '11:00' });
+
+    const result = mapLibraryToPlanned(lib, dest);
+
+    // O bloco onde o torneio cai define so o dia — o horario e o original.
+    expect(result.time).toBe('13:30');
+  });
+
+  it('deve usar o time do destino quando a biblioteca nao tem time', () => {
+    const lib = makeLibraryTournament({ time: null });
     const dest = makeDestination({ time: '21:00' });
 
-    const result = mapLibraryToPlanned(makeLibraryTournament(), dest);
+    const result = mapLibraryToPlanned(lib, dest);
 
     expect(result.time).toBe('21:00');
   });
@@ -316,6 +327,7 @@ describe('mapLibraryToPlanned', () => {
       guaranteed: '100000',
       type: 'PKO',
       speed: 'Turbo',
+      time: '13:30',
       lateRegMinutes: 60,
       gameType: 'NLH',
       startingStack: 15000,
@@ -334,7 +346,8 @@ describe('mapLibraryToPlanned', () => {
       type: 'PKO',
       speed: 'Turbo',
       dayOfWeek: 5,
-      time: '22:00',
+      // time preservado da biblioteca (13:30), nao o do destino (22:00).
+      time: '13:30',
       profile: 'C',
       status: 'upcoming',
       priority: 2,
@@ -377,7 +390,8 @@ describe('mapLibraryToPlanned', () => {
     expect(result.type).toBeNull();
     expect(result.speed).toBeNull();
     expect(result.dayOfWeek).toBe(4);
-    expect(result.time).toBe('18:00');
+    // lib tem time '20:00' (default do helper) — preservado, nao o do destino.
+    expect(result.time).toBe('20:00');
     expect(result.profile).toBe('A');
     expect(result.status).toBe('upcoming');
     expect(result.priority).toBe(2);

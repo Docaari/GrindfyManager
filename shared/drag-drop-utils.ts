@@ -71,7 +71,10 @@ export function mapLibraryToPlanned(
     type: libraryTournament.type,
     speed: libraryTournament.speed,
     dayOfWeek: destination.dayOfWeek,
-    time: destination.time,
+    // O torneio mantem o horario original da biblioteca — o bloco onde foi
+    // solto define so o dia. Para mudar o horario o user edita o card.
+    // Fallback pro horario do destino so quando a biblioteca nao tem time.
+    time: libraryTournament.time ?? destination.time,
     profile: destination.profile,
     status: 'upcoming',
     priority: 2,
