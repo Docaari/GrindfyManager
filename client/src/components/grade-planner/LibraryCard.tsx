@@ -1,7 +1,11 @@
+import { useState, useRef, useEffect } from "react";
 import { Trash2 } from "lucide-react";
 import { getPlannerSiteColor, getPlannerSpeedColor, getPlannerTypeColor } from "@/lib/poker-colors";
 import { formatBuyIn } from "@shared/platform-currency";
 import { Badge } from "@/components/ui/badge";
+
+/** Delay (ms) antes do X de exclusao aparecer ao passar o mouse no card. */
+export const LIBRARY_CARD_DELETE_REVEAL_MS = 650;
 
 interface LibraryCardProps {
   tournament: any;
@@ -43,6 +47,35 @@ export function LibraryCard({
   const parsedBuyIn = parseFloat(tournament.buyIn || "0");
   const buyIn = isNaN(parsedBuyIn) ? 0 : parsedBuyIn;
 
+  // Exclusao: o X so aparece depois de LIBRARY_CARD_DELETE_REVEAL_MS com o
+  // mouse parado no card. Atraso deliberado — o card e draggable (cursor-grab),
+  // um X instantaneo no hover atrapalha o arrasto e gera exclusao acidental.
+  const [showDelete, setShowDelete] = useState(false);
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (revealTimer.current) clearTimeout(revealTimer.current);
+    };
+  }, []);
+
+  const handleMouseEnter = () => {
+    if (!onTrash) return;
+    if (revealTimer.current) clearTimeout(revealTimer.current);
+    revealTimer.current = setTimeout(
+      () => setShowDelete(true),
+      LIBRARY_CARD_DELETE_REVEAL_MS,
+    );
+  };
+
+  const handleMouseLeave = () => {
+    if (revealTimer.current) {
+      clearTimeout(revealTimer.current);
+      revealTimer.current = null;
+    }
+    setShowDelete(false);
+  };
+
   if (compact) {
     return (
       <div
@@ -67,6 +100,8 @@ export function LibraryCard({
       ref={innerRef}
       {...draggableProps}
       {...dragHandleProps}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className="bg-gray-800 border border-gray-700 rounded-lg p-3 hover:border-gray-500 transition-colors cursor-grab group shadow-lg shadow-black/20"
     >
       <div className="flex items-start gap-3">
@@ -120,14 +155,15 @@ export function LibraryCard({
           </div>
         </div>
 
-        {/* Trash button on hover */}
-        {onTrash && (
+        {/* Trash button — aparece apos LIBRARY_CARD_DELETE_REVEAL_MS de hover */}
+        {onTrash && showDelete && (
           <button
+            data-testid="library-card-delete"
             onClick={(e) => {
               e.stopPropagation();
               onTrash(tournament.id);
             }}
-            className="p-1 rounded hover:bg-red-900/50 text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+            className="p-1 rounded hover:bg-red-900/50 text-gray-500 hover:text-red-400 transition-colors flex-shrink-0 animate-in fade-in"
             title="Mover para lixeira"
           >
             <Trash2 className="w-3.5 h-3.5" />

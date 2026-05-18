@@ -197,6 +197,7 @@ import { eq, desc, asc, and, gte, lte, lt, sql, like, not, inArray, gt, isNotNul
 import { nanoid } from "nanoid";
 import { normalizeTournamentTypePayload } from "./storage/normalizeTournamentTypePayload";
 import { getDisplayRegistrationTime } from "@shared/grade-time";
+import { ensureLibraryEntryForPlannedSafe } from "./services/libraryAutoPopulate";
 
 // Utility function to build period conditions with custom date range support
 function buildPeriodCondition(period: string, filters: any) {
@@ -3554,6 +3555,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .insert(plannedTournaments)
       .values({ ...normalized, id })
       .returning();
+    // Espelha o planned em tournament_library (cobre todos os call sites).
+    // Fire-and-forget: nunca quebra o create. Skip quando libraryTemplateId
+    // ja vem setado. Ver server/services/libraryAutoPopulate.ts.
+    ensureLibraryEntryForPlannedSafe(created as any);
     return created;
   }
 

@@ -1,14 +1,8 @@
 import type { Express } from "express";
 import { ZodError } from "zod";
-import { nanoid } from "nanoid";
-import { and, eq } from "drizzle-orm";
 import { requireAuth } from "../auth";
 import { storage } from "../storage";
-import { db } from "../db";
-import {
-  insertPlannedTournamentSchema,
-  tournamentLibrary,
-} from "@shared/schema";
+import { insertPlannedTournamentSchema } from "@shared/schema";
 import { detectAddonReaFromName } from "@shared/addon-rea-detector";
 import { TOURNAMENT_PRIMARY_TYPES, type TournamentPrimaryType } from "@shared/tournamentTypes";
 import { selectorCache } from "../services/selectorCache";
@@ -63,77 +57,8 @@ export async function handleCreatePlannedTournament(req: CreatePlannedTournament
   // MEDIUM #10: payload inclui libraryTemplateId quando o torneio veio da biblioteca
   // (necessario para alreadyInGrid funcionar). O spread preserva o campo automaticamente
   // pois insertPlannedTournamentSchema e criado a partir da tabela plannedTournaments.
+  // O auto-populate de tournament_library roda dentro de storage.createPlannedTournament.
   const created = await storage.createPlannedTournament({ ...payload, userId: req.userId });
-
-  // Auto-populate tournament_library quando user adiciona manualmente na grade.
-  // Skip se ja veio da biblioteca/selector (libraryTemplateId setado). Dedup por
-  // (userId, name, site, buy_in, time) contra active+trashed pra evitar
-  // re-criar lixo. Fire-and-forget — falha aqui nao quebra o create do planned.
-  if (!payload.libraryTemplateId && payload.name && payload.site) {
-    Promise.resolve().then(async () => {
-      try {
-        const buyInStr = String(payload.buyIn ?? "0");
-        const timeStr = payload.time ?? null;
-        const existing = await db
-          .select()
-          .from(tournamentLibrary)
-          .where(
-            and(
-              eq(tournamentLibrary.userId, req.userId),
-              eq(tournamentLibrary.name, payload.name),
-              eq(tournamentLibrary.site, payload.site),
-              eq(tournamentLibrary.buyIn, buyInStr),
-            ),
-          );
-        const match = existing.find(
-          (row) => (row.time ?? null) === timeStr,
-        );
-        if (match) {
-          // Ja existe (ativo ou trashed). Se ativo e o planned ainda nao
-          // aponta pra ele, linkamos pra manter alreadyInGrid funcionando.
-          if (!match.deletedAt && created?.id) {
-            await storage.updatePlannedTournament(created.id, {
-              libraryTemplateId: match.id,
-            });
-          }
-          return;
-        }
-        const templateId = nanoid();
-        await db.insert(tournamentLibrary).values({
-          id: templateId,
-          userId: req.userId,
-          name: payload.name,
-          site: payload.site,
-          buyIn: buyInStr,
-          guaranteed: payload.guaranteed != null ? String(payload.guaranteed) : null,
-          time: timeStr,
-          type: payload.type ?? null,
-          speed: payload.speed ?? null,
-          fieldSize: payload.fieldSize ?? null,
-          source: "manual",
-          dayOfWeek: typeof payload.dayOfWeek === "number" ? payload.dayOfWeek : null,
-          currency: payload.currency ?? "USD",
-          allowsAddOn: payload.allowsAddOn ?? false,
-          addOnCost: payload.addOnCost != null ? String(payload.addOnCost) : null,
-          allowsReentry: payload.allowsReentry ?? false,
-          maxReentries: payload.maxReentries ?? null,
-          lateRegMinutes: payload.lateRegMinutes ?? null,
-          registrationTime: payload.registrationTime ?? null,
-        });
-        if (created?.id) {
-          await storage.updatePlannedTournament(created.id, {
-            libraryTemplateId: templateId,
-          });
-        }
-      } catch (err) {
-        console.error(
-          "grade-planner: auto-populate tournament_library failed for user",
-          req.userId,
-          err,
-        );
-      }
-    });
-  }
 
   // RF-07: Log + invalidate caches when from Selector
   if (metadata && metadata.fromSelector === true) {

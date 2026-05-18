@@ -1,8 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { filterLibraryTournaments } from "@shared/library-filters";
+import {
+  readBibliotecaFilters,
+  writeBibliotecaFilters,
+  DEFAULT_BIBLIOTECA_FILTERS,
+} from "@/lib/bibliotecaFilters";
 import { getCurrencyForSite } from "@shared/platform-currency";
 import { LibraryCard } from "./LibraryCard";
 import {
@@ -51,22 +56,42 @@ export function BibliotecaPanel({
   const queryClient = useQueryClient();
 
   // State
+  // Filtros hidratam de localStorage no mount; useEffect abaixo re-persiste.
+  const [persistedInit] = useState(readBibliotecaFilters);
   const [search, setSearch] = useState("");
   const [showTrash, setShowTrash] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showSupremaModal, setShowSupremaModal] = useState(false);
-  const [filterType, setFilterType] = useState<string>("");
-  const [filterSpeed, setFilterSpeed] = useState<string>("");
+  const [filterType, setFilterType] = useState<string>(persistedInit.filterType);
+  const [filterSpeed, setFilterSpeed] = useState<string>(persistedInit.filterSpeed);
   // RF-05.1: filterSites multi-select (substitui filterSite single).
-  const [filterSites, setFilterSites] = useState<string[]>([]);
-  // RF-05.3: filterDaysOfWeek multi-select.
-  const [filterDaysOfWeek, setFilterDaysOfWeek] = useState<number[]>([]);
-  const [filterCurrency, setFilterCurrency] = useState<string>("");
-  const [filterMinBuyIn, setFilterMinBuyIn] = useState<string>("");
-  const [filterMaxBuyIn, setFilterMaxBuyIn] = useState<string>("");
-  const [sortMode, setSortMode] = useState<string>("platform-buyin");
+  const [filterSites, setFilterSites] = useState<string[]>(persistedInit.filterSites);
+  const [filterCurrency, setFilterCurrency] = useState<string>(persistedInit.filterCurrency);
+  const [filterMinBuyIn, setFilterMinBuyIn] = useState<string>(persistedInit.filterMinBuyIn);
+  const [filterMaxBuyIn, setFilterMaxBuyIn] = useState<string>(persistedInit.filterMaxBuyIn);
+  const [sortMode, setSortMode] = useState<string>(persistedInit.sortMode);
+
+  // Persiste filtros a cada mudanca. `search` fica de fora de proposito —
+  // busca textual e transiente. Skip do mount: nao reescreve o que acabou
+  // de ser lido (evita criar a key pra quem nunca mexeu nos filtros).
+  const skipFirstPersist = useRef(true);
+  useEffect(() => {
+    if (skipFirstPersist.current) {
+      skipFirstPersist.current = false;
+      return;
+    }
+    writeBibliotecaFilters({
+      filterType,
+      filterSpeed,
+      filterSites,
+      filterCurrency,
+      filterMinBuyIn,
+      filterMaxBuyIn,
+      sortMode,
+    });
+  }, [filterType, filterSpeed, filterSites, filterCurrency, filterMinBuyIn, filterMaxBuyIn, sortMode]);
 
   // Manual add form state
   const [addSite, setAddSite] = useState("");
@@ -172,7 +197,6 @@ export function BibliotecaPanel({
       types: filterType ? [filterType] : undefined,
       speeds: filterSpeed ? [filterSpeed] : undefined,
       filterSites: filterSites.length > 0 ? filterSites : undefined,
-      filterDaysOfWeek: filterDaysOfWeek.length > 0 ? filterDaysOfWeek : undefined,
       currencies: filterCurrency ? [filterCurrency] : undefined,
       minBuyIn: filterMinBuyIn ? parseFloat(filterMinBuyIn) : undefined,
       maxBuyIn: filterMaxBuyIn ? parseFloat(filterMaxBuyIn) : undefined,
@@ -195,7 +219,7 @@ export function BibliotecaPanel({
           return 0;
       }
     });
-  }, [libraryTournaments, search, filterType, filterSpeed, filterSites, filterDaysOfWeek, filterCurrency, filterMinBuyIn, filterMaxBuyIn, sortMode]);
+  }, [libraryTournaments, search, filterType, filterSpeed, filterSites, filterCurrency, filterMinBuyIn, filterMaxBuyIn, sortMode]);
 
   const totalCount = Array.isArray(libraryTournaments) ? libraryTournaments.length : 0;
   const trashCount = Array.isArray(trashTournaments) ? trashTournaments.length : 0;
@@ -228,18 +252,17 @@ export function BibliotecaPanel({
   };
 
   const clearFilters = () => {
-    setFilterType("");
-    setFilterSpeed("");
+    setFilterType(DEFAULT_BIBLIOTECA_FILTERS.filterType);
+    setFilterSpeed(DEFAULT_BIBLIOTECA_FILTERS.filterSpeed);
     setFilterSites([]);
-    setFilterDaysOfWeek([]);
-    setFilterCurrency("");
-    setFilterMinBuyIn("");
-    setFilterMaxBuyIn("");
+    setFilterCurrency(DEFAULT_BIBLIOTECA_FILTERS.filterCurrency);
+    setFilterMinBuyIn(DEFAULT_BIBLIOTECA_FILTERS.filterMinBuyIn);
+    setFilterMaxBuyIn(DEFAULT_BIBLIOTECA_FILTERS.filterMaxBuyIn);
     setSearch("");
   };
 
   const hasActiveFilters =
-    filterType || filterSpeed || filterSites.length > 0 || filterDaysOfWeek.length > 0 ||
+    filterType || filterSpeed || filterSites.length > 0 ||
     filterCurrency || filterMinBuyIn || filterMaxBuyIn;
 
   // =========================================================================
@@ -346,12 +369,10 @@ export function BibliotecaPanel({
           />
         </div>
 
-        {/* RF-05: chips multi-select de plataforma + dia da semana. */}
+        {/* Chips multi-select de plataforma. */}
         <BibliotecaQuickFilters
           filterSites={filterSites}
-          filterDaysOfWeek={filterDaysOfWeek}
           onFilterSitesChange={setFilterSites}
-          onFilterDaysOfWeekChange={setFilterDaysOfWeek}
         />
 
         {/* Filter toggle */}
