@@ -1,7 +1,7 @@
 # Guia Brownfield — Aplicando o Kit em Projetos Existentes
 ## Como trazer disciplina para um codebase que já existe
 
-*Março 2026*
+*Snapshot original: Março 2026 — Última revisão: Maio 2026*
 *Baseado em Nick Tune (O'Reilly), GitHub Spec Kit discussions, ClaudeKit brownfield docs, e práticas validadas.*
 
 ---

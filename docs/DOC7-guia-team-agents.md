@@ -1,7 +1,7 @@
 # Guia de Team Agents para Desenvolvimento de SaaS
 ## Configurações prontas para uso com prompts copy-paste
 
-*Março 2026*
+*Snapshot original: Março 2026 — Última revisão: Maio 2026 (modelos, plataformas e /fast mode)*
 *Baseado na documentação oficial Anthropic, Claudio Novaglio, alexop.dev, Rajesh Royal (OpenZeppelin), Dára Sobaloju, e Addy Osmani.*
 
 ---
@@ -16,7 +16,7 @@ Team Agents adicionam overhead real:
 - ~15x tokens de uma sessão única (Anthropic)
 - 3-4x tokens do equivalente sequencial com subagentes
 - Coordenação overhead (task claiming, messaging, conflitos)
-- Requer Opus 4.6 + plano Pro ($20/mês mínimo) ou Max ($100-200/mês recomendado)
+- Requer Opus 4.7 (recomendado) ou Opus 4.6 + plano Pro ($20/mês mínimo) ou Max ($100-200/mês recomendado). Ative `/fast` no lead para saída acelerada sem trocar de modelo (disponível em 4.6 e 4.7)
 
 **Use Team Agents quando:**
 - A tarefa tem componentes distintos e independentes
@@ -47,7 +47,9 @@ Dára Sobaloju (Fev 2026): "Você ainda precisa ser um bom tech lead. As equipes
 }
 ```
 
-### 2. Instalar tmux (recomendado)
+### 2. Visualização dos teammates por plataforma
+
+**macOS / Linux (terminal) — tmux (recomendado):**
 
 ```bash
 # macOS
@@ -59,11 +61,24 @@ sudo apt install tmux
 
 tmux permite ver cada agente em seu próprio painel. Sem ele, os teammates rodam em background (in-process) e você navega com Shift+Down.
 
+**Windows (terminal):**
+
+Use o Claude Code desktop para Windows ou rode o CLI no Windows Terminal/PowerShell — a navegação in-process (Shift+Down/Up) funciona nativamente. Para painéis estilo tmux, opções são WSL2 + tmux ou panes do Windows Terminal. Não bloqueante: in-process basta para começar.
+
+**Web (claude.ai/code) ou Claude Code desktop:**
+
+Navegação in-process com Shift+Down/Up. Sem necessidade de tmux.
+
 ### 3. Verificar versão
 
 ```bash
 claude --version
-# Requer v2.1.32 ou superior
+# Mínimo absoluto para Agent Teams: v2.1.32 (declarado pela doc oficial).
+# Recomendado em Mai/2026: v2.1.142+ (ganhou Agent View Research Preview,
+#   plugin dependency management, hook terminal sequences e Opus 4.7 como
+#   default do /fast mode).
+# Última versão estável em Mai/2026: v2.1.145.
+# Cadence é quase diária — confira a versão atual em https://docs.claude.com/claude-code
 ```
 
 ---
@@ -464,13 +479,21 @@ Cada teammate planeja primeiro (read-only), envia o plano para o lead, e só exe
 
 ### Forçar modelo dos teammates
 
-Para reduzir custo, use Sonnet nos teammates:
+Para reduzir custo, use Sonnet nos teammates (Sonnet 4.6 ou superior):
 
 ```
-Crie um team com 3 teammates. Use Sonnet para cada teammate.
+Crie um team com 3 teammates. Use Sonnet 4.6 para cada teammate.
 ```
 
-O lead continua rodando no modelo da sessão (Opus). Sonnet é suficiente para a maioria das tarefas de implementação e review.
+O lead continua rodando no modelo da sessão (Opus 4.7 recomendado). Sonnet é suficiente para a maioria das tarefas de implementação e review. Para trabalho mecânico de leitura intensa, Haiku 4.5 também pode ser usado nos teammates.
+
+### Ativar Fast mode no lead
+
+`/fast` ativa Claude Opus com saída mais rápida (não é downgrade para modelo menor). Disponível em Opus 4.6 e 4.7 — desde Claude Code v2.1.142, **Opus 4.7 é o default do `/fast`**. Útil quando o lead está orquestrando muitos teammates e a latência da síntese final atrapalha o ciclo.
+
+### Consultar uso de créditos
+
+`/usage-credits` mostra consumo da janela atual (renomeado de `/extra-usage` na v2.1.144 — o alias antigo ainda funciona, mas será descontinuado). Particularmente útil em sessões com teams, onde o consumo escala rápido.
 
 ---
 

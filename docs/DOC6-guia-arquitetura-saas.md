@@ -1,7 +1,7 @@
 # Guia de Arquitetura para Projetos SaaS
 ## Como criar diagramas, fluxos e documentação que agentes de IA consomem
 
-*Março 2026*
+*Snapshot original: Março 2026 — Última revisão: Maio 2026 (sem mudanças de conteúdo; referências C4/ADR/Mermaid permanecem válidas)*
 *Baseado no C4 Model (Simon Brown), ADRs (Michael Nygard), práticas de O'Reilly e Mermaid como linguagem de diagramação.*
 
 ---

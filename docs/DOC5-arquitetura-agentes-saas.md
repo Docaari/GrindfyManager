@@ -1,7 +1,7 @@
 # Arquitetura de Agentes para Desenvolvimento de SaaS
 ## Quais agentes usar, quando, e como orquestrar
 
-*Março 2026*
+*Snapshot original: Março 2026 — Última revisão: Maio 2026 (modelos atualizados para Opus 4.7 / Sonnet 4.6 / Haiku 4.5)*
 *Fontes: Documentação oficial Anthropic, Simon Willison, Addy Osmani, PubNub Engineering, Heeki Park, Claudio Novaglio, workshop Agile Manifesto 2026, e experiências documentadas de produção.*
 
 ---
@@ -79,9 +79,10 @@ Use quando a tarefa tem componentes distintos que precisam se comunicar. Cada te
 **Custo:** ~15x o uso de tokens de uma sessão única (documentado pela Anthropic). Um time de 3 agentes usa 3-4x os tokens de fazer o mesmo trabalho sequencialmente, mas o tempo cai de horas para minutos.
 
 **Configuração:**
-- Requer Claude Opus 4.6 (Pro $20/mês ou Max $100-200/mês)
+- Requer Claude Opus 4.7 (Pro $20/mês ou Max $100-200/mês). Opus 4.6 também suporta teams; 4.7 é o atual e tem melhor tracking de estado em sessões longas
 - Feature experimental: habilitar em settings.json
-- tmux recomendado para visualizar cada agente em seu painel
+- tmux recomendado em macOS/Linux para visualizar cada agente em seu painel. No Claude Code desktop (Windows/Mac) ou na web (claude.ai/code), use o navegador in-process com Shift+Down/Up
+- **Dica de custo:** ative `/fast` no lead — Claude Opus com saída mais rápida (não troca de modelo), disponível em Opus 4.6 e 4.7
 
 **Regra de ouro:** 3-5 teammates é o sweet spot. Comece com 3. Escale só quando o trabalho genuinamente se beneficia de paralelismo. Três agentes focados superam cinco dispersos.
 
