@@ -343,8 +343,9 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
   let degradedReason: string | null = null;
   let llmModelUsed: string | null = null;
 
+  let summarizerModelUsed: string | null = null;
   if (tournaments > 0) {
-    const bundle = {
+    const rawBundle = {
       tone,
       level,
       period: { start: periodStart, end: periodEnd },
@@ -354,6 +355,13 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
       goalsProgress: extras.goalsProgress ?? [],
       followUp: extras.followUp ?? null,
     };
+
+    // RF-07 — sumarizacao hierarquica Haiku->Sonnet (no-op se bundle pequeno).
+    const { maybeSummarizeBundle } = await import("./reportSummarizer");
+    const summarized = await maybeSummarizeBundle(rawBundle);
+    const bundle = summarized.bundle;
+    summarizerModelUsed = summarized.summarizerModelUsed;
+
     try {
       const out = await callMonthlyLlm({ model, bundle, tone, level });
       if ("clientUnavailable" in out) {
@@ -423,7 +431,7 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
     ],
     generation: {
       model: llmModelUsed,
-      summarizerModel: null,
+      summarizerModel: summarizerModelUsed,
       degraded,
       degradedReason,
       costUsdEstimate: costUsd,
