@@ -1,0 +1,70 @@
+%% AI-2B (ADR-172) — Pipeline de email de relatórios com idempotência + retry + unsubscribe HMAC.
+%% Reusa Gmail SMTP (server/emailService.ts em prod). 3 kinds: report_weekly | report_monthly | report_quarterly.
+%% Daily Debrief NÃO entra (Q-G lock). COACH_NUDGES_ENABLED desliga tudo (kill switch absoluto ADR-152).
+
+sequenceDiagram
+    actor Processor as processReportJobsTick<br/>(15min tick AI-1B)
+    participant Sender as reportEmailSender.ts<br/>sendReportEmail()
+    participant Storage as storage<br/>(prefs + reports + users + email_log)
+    participant Eligibility as reportEligibility.ts<br/>isReportEligible
+    participant Template as server/emails/templates/<br/>{weekly|monthly|quarterly}ReportEmail.ts
+    participant Hmac as crypto.createHmac<br/>EMAIL_UNSUBSCRIBE_SECRET ?? JWT_SECRET
+    participant Mailer as EmailService.getTransporter<br/>(nodemailer + Gmail SMTP)
+    actor User
+    participant Unsubscribe as GET /api/coach/email/unsubscribe<br/>(público, HMAC valida)
+
+    Note over Processor,Mailer: Fluxo NORMAL (report ready → email best-effort inline)
+
+    Processor->>Processor: report ready (status='ready')
+    Processor->>Sender: void sendReportEmail({reportId, userId, kind:'report_quarterly'}).catch(err => log)<br/>(best-effort, NÃO bloqueia tick)
+    Sender->>Storage: getUserCoachPreferences(userId)
+    Storage-->>Sender: prefs
+    alt prefs.emailQuarterlyEnabled === false
+        Sender-->>Processor: {status:'skipped', error:'opt_in_off'}<br/>(sem row em email_log)
+    else
+        Sender->>Eligibility: isReportEligible(userId, 'quarterly')<br/>(revalida tier — safety net)
+        Eligibility-->>Sender: true
+        Sender->>Storage: insertEmailLog({id, userId, reportId, kind, toEmail, subject, status:'pending'})
+        Storage->>Storage: INSERT ... ON CONFLICT (report_id, kind) DO NOTHING
+        alt UNIQUE conflict (já enviado antes)
+            Sender-->>Processor: {status:'skipped', error:'already_sent_or_pending'}
+        else
+            Sender->>Hmac: token = createHmac('sha256', SECRET).update(`${userId}|${kind}|${expiresAt}`)
+            Hmac-->>Sender: HMAC + URL-safe base64 token
+            Sender->>Storage: getReport(reportId) + getUser(userId)
+            Storage-->>Sender: {content, markdown} + {firstName, email}
+            Sender->>Template: renderTemplate(kind, {content, userName, unsubscribeUrl, baseUrl})
+            Template-->>Sender: {subject, html, text}<br/>(disclaimer REPORT_DISCLAIMER no footer ADR-173)
+            Sender->>Mailer: transporter.sendMail({from, to, subject, html, text})
+            alt SMTP success
+                Mailer-->>Sender: {messageId, response}
+                Sender->>Storage: updateEmailLog({status:'sent', sentAt:NOW, messageId})
+                Sender-->>Processor: {status:'sent', messageId}
+            else SMTP failure
+                Mailer-->>Sender: throw SmtpError
+                Sender->>Sender: console.error lesson #9 logar antes
+                Sender->>Storage: updateEmailLog({status:'failed', attempts+1, errorMessage})
+                Sender-->>Processor: {status:'failed', error}
+                Note over Sender,Storage: Retry exponencial 15min/1h/4h<br/>via job loop que varre idx_email_log_pending<br/>após 3 tentativas → status='failed' final
+            end
+        end
+    end
+
+    Note over User,Unsubscribe: Fluxo UNSUBSCRIBE (user clica link no email)
+
+    User->>Unsubscribe: GET /api/coach/email/unsubscribe?token=USER-0005.report_quarterly.1735689600000.abc123...
+    Unsubscribe->>Unsubscribe: parse token<br/>extract userId, kind, expiresAt, hmac
+    Unsubscribe->>Hmac: recompute HMAC(`${userId}|${kind}|${expiresAt}`)<br/>+ crypto.timingSafeEqual(receivedHmac, expectedHmac)
+    alt token inválido (HMAC mismatch ou expirado)
+        Hmac-->>Unsubscribe: invalid
+        Unsubscribe-->>User: 400 "Link inválido ou expirado. [Link login → /coach-ai]"
+    else
+        Hmac-->>Unsubscribe: valid + not expired
+        Unsubscribe->>Storage: UPDATE user_coach_preferences SET email_quarterly_enabled = false<br/>WHERE user_id = $userId
+        Storage-->>Unsubscribe: updated
+        Unsubscribe-->>User: 200 HTML "Você foi descadastrado de relatórios trimestrais por email. [Gerenciar preferências]"
+    end
+
+    Note over Processor,Mailer: Kill switch absoluto
+
+    Processor->>Processor: if COACH_NUDGES_ENABLED === false → skip ALL email sends<br/>(consistente com AI-1B/1C — proatividade desligada)

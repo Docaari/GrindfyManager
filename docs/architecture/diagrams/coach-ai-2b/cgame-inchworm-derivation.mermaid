@@ -1,0 +1,65 @@
+%% AI-2B (ADR-170) — C-game/Inchworm derivação determinística (zero LLM, zero prompt invasivo).
+%% warm-up rituals em prod desde W-3 → classifyWarmupGame (A/B/C heurística Q-D) → aggregateCgameForPeriod
+%% → getInchwormSeries(months) → endpoint GET /api/coach/cgame/snapshot → UI tab "Mental" no /coach-ai.
+%% NÃO tier-gated em leitura (free vê seus dados próprios). Quarterly Report consome cgameSnapshot.
+
+flowchart TB
+    subgraph Source["Fonte (read-only puro — sem ALTER)"]
+        Warmup[("warmup_rituals<br/>em prod desde W-3<br/>emotional_check_score 0-10<br/>decision_to_play bool<br/>override_used bool<br/>blocks_completed jsonb<br/>linked_grind_session_id")]
+    end
+
+    subgraph Aggregator["server/services/cgameAggregator.ts (puro — 0 LLM, 0 side-effect)"]
+        Classify["classifyWarmupGame(ritual)<br/>determinística Q-D"]
+        AggPeriod["aggregateCgameForPeriod(userId, range)<br/>→ {aPct, bPct, cPct, sampleSize, confidence}"]
+        Inchworm["getInchwormSeries(userId, months)<br/>→ [{month, aPct, bPct, cPct}, ...]"]
+        Movement["getCgameMovement(current, comparison)<br/>→ {aPctDelta, cPctDelta, narrative}"]
+    end
+
+    subgraph Heuristica["Heurística Q-D (env-configurable)"]
+        AGame["A-game<br/>score >= CGAME_A_THRESHOLD (default 8)<br/>AND override_used = false<br/>AND decision_to_play = true"]
+        CGame["C-game<br/>score <= CGAME_C_THRESHOLD (default 4)<br/>AND override_used = true<br/>AND decision_to_play = true<br/>(risco — jogou em mau estado)"]
+        BGame["B-game<br/>resto<br/>(incluindo decision_to_play = false<br/>= decidiu não jogar = B, NÃO C)"]
+    end
+
+    subgraph Confidence["Confidence"]
+        High["sample >= 20 → high"]
+        Medium["sample 8-19 → medium"]
+        Low["sample < 8 → low<br/>(também: 0 → empty state UI)"]
+    end
+
+    subgraph Consumers["Consumers"]
+        Endpoint["GET /api/coach/cgame/snapshot<br/>?period=30d|90d|trimestre|ano<br/>requireAuth<br/>NÃO tier-gated — free vê"]
+        Hub["Hub /coach-ai aba 'Mental'<br/>CgameSummaryCard %A/%B/%C<br/>+ InchwormChart 6 meses (Recharts)<br/>+ movement narrative<br/>data-testid lesson #2"]
+        Quarterly["quarterlyReportGenerator.ts<br/>ADR-169<br/>cgameSnapshot em ReportContent v3<br/>+ Inchworm series + movement narrative"]
+    end
+
+    Warmup -->|"listWarmupRitualsForRange<br/>idx user_id, completed_at"| Classify
+    Classify -->|"matches A heuristic"| AGame
+    Classify -->|"matches C heuristic"| CGame
+    Classify -->|"else"| BGame
+    AGame --> AggPeriod
+    BGame --> AggPeriod
+    CGame --> AggPeriod
+    AggPeriod -->|"sampleSize"| High
+    AggPeriod -->|"sampleSize"| Medium
+    AggPeriod -->|"sampleSize"| Low
+    AggPeriod --> Inchworm
+    AggPeriod --> Movement
+    Movement -->|"narrative template determinístico<br/>(sem LLM)"| Endpoint
+    Inchworm --> Endpoint
+    AggPeriod --> Endpoint
+    Endpoint --> Hub
+    AggPeriod --> Quarterly
+    Inchworm --> Quarterly
+    Movement --> Quarterly
+
+    classDef source fill:#1f2937,stroke:#374151,color:#fff
+    classDef agg fill:#1e40af,stroke:#1e3a8a,color:#fff
+    classDef heur fill:#7c2d12,stroke:#6b1c08,color:#fff
+    classDef conf fill:#365314,stroke:#15803d,color:#fff
+    classDef cons fill:#581c87,stroke:#4c1d95,color:#fff
+    class Warmup source
+    class Classify,AggPeriod,Inchworm,Movement agg
+    class AGame,BGame,CGame heur
+    class High,Medium,Low conf
+    class Endpoint,Hub,Quarterly cons

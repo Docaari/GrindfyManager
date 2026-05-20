@@ -66,6 +66,11 @@ import { diagnosePlateauTool } from './handlers/diagnosePlateau';
 import { computeGrindStudyRatioTool } from './handlers/computeGrindStudyRatio';
 import { calculateEffectiveRakeTool } from './handlers/calculateEffectiveRake';
 import { queryPoolIntelligenceTool } from './handlers/queryPoolIntelligence';
+// AI-2B — career goals + mental hand + IRPF summary (4 tools).
+import { defineCareerGoalTool } from './handlers/defineCareerGoal';
+import { evaluateCareerGoalTool } from './handlers/evaluateCareerGoal';
+import { logMentalHandTool } from './handlers/logMentalHand';
+import { computeIrpfSummaryTool } from './handlers/computeIrpfSummary';
 
 // -----------------------------------------------------------------------------
 // Registration (idempotent via try/catch — silencia "tool_already_registered"
@@ -121,6 +126,12 @@ safeRegister(computeGrindStudyRatioTool as unknown as CoachTool);
 safeRegister(calculateEffectiveRakeTool as unknown as CoachTool);
 safeRegister(queryPoolIntelligenceTool as unknown as CoachTool);
 
+// AI-2B — career goals + mental hand + IRPF summary (4 tools).
+safeRegister(defineCareerGoalTool as unknown as CoachTool);
+safeRegister(evaluateCareerGoalTool as unknown as CoachTool);
+safeRegister(logMentalHandTool as unknown as CoachTool);
+safeRegister(computeIrpfSummaryTool as unknown as CoachTool);
+
 export {
   readCooldownHistoryTool,
   readUserHudStatsToolV2,
@@ -152,6 +163,11 @@ export {
   computeGrindStudyRatioTool,
   calculateEffectiveRakeTool,
   queryPoolIntelligenceTool,
+  // AI-2B
+  defineCareerGoalTool,
+  evaluateCareerGoalTool,
+  logMentalHandTool,
+  computeIrpfSummaryTool,
 };
 
 // Agregado para introspeccao por testes (lesson #8 — testes validam presenca
@@ -186,4 +202,9 @@ export const coachTools = [
   computeGrindStudyRatioTool,
   calculateEffectiveRakeTool,
   queryPoolIntelligenceTool,
+  // AI-2B
+  defineCareerGoalTool,
+  evaluateCareerGoalTool,
+  logMentalHandTool,
+  computeIrpfSummaryTool,
 ];

@@ -22,6 +22,7 @@ import nodeCron from "node-cron";
 import { withAdvisoryLock } from "../lib/advisoryLock";
 import { getLocalHour } from "../coach/timezone";
 import { getCoachPreferences } from "../storage/coachPreferences";
+import { PREF_FIELD_BY_KIND, type ReportKind } from "../coach/reportEligibility";
 
 // =============================================================================
 // Elegibilidade de plano (AI-1B bug fix — `users.subscription_plan` so assume
@@ -317,6 +318,115 @@ export async function enqueueDailyDebriefForSession(args: EnqueueDailyDebriefArg
 }
 
 // =============================================================================
+// AI-2B (ADR-169) — Quarterly enqueuer
+// =============================================================================
+
+/**
+ * Trigger: dia 1 de jan/abr/jul/out às 7h local (fuso do user) + reportQuarterlyEnabled
+ * + isReportEligible(userId, 'quarterly')=true → INSERT report_jobs row 'quarterly'.
+ * period_start = 1º dia do trimestre anterior; period_end = último dia.
+ * Idempotência: storage.insertReportJob → null on UNIQUE conflict.
+ * Kill switch: COACH_NUDGES_ENABLED=false → no-op.
+ *
+ * Lesson #37: import estático de node-cron já no topo. Lesson #34: storage injetável.
+ */
+export async function enqueueQuarterlyReportJobsTick(
+  now?: Date,
+  injectedStorage?: any,
+): Promise<void> {
+  if (isNudgesDisabled()) return;
+  const nowDate = now ?? new Date();
+  const storage = await resolveStorage(injectedStorage);
+  if (typeof storage.iterateUsersWithTimezone !== "function") {
+    console.error("quarterly.enqueuer.storage.iterateUsersWithTimezone.missing");
+    return;
+  }
+  try {
+    for await (const u of storage.iterateUsersWithTimezone()) {
+      const userId = u?.userPlatformId;
+      if (!userId) continue;
+      const tz = u?.timezone || "America/Sao_Paulo";
+      try {
+        // Mês deve ser jan(1), abr(4), jul(7), out(10).
+        const QUARTERLY_MONTHS = new Set([1, 4, 7, 10]);
+        let localMonth: number;
+        let localDay: number;
+        try {
+          const fmt = new Intl.DateTimeFormat("en-US", {
+            timeZone: tz,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+          const parts = fmt.formatToParts(nowDate);
+          localMonth = parseInt(parts.find((p) => p.type === "month")?.value ?? "0", 10);
+          localDay = parseInt(parts.find((p) => p.type === "day")?.value ?? "0", 10);
+        } catch {
+          localMonth = nowDate.getUTCMonth() + 1;
+          localDay = nowDate.getUTCDate();
+        }
+        if (!QUARTERLY_MONTHS.has(localMonth)) continue;
+        if (localDay !== 1) continue;
+        if (getLocalHour(nowDate, tz) !== 7) continue;
+
+        // Opt-in.
+        const prefs = await storage.getUserCoachPreferences?.(userId);
+        if (!prefs || prefs.reportQuarterlyEnabled !== true) continue;
+
+        // Tier elegível.
+        const tierSnapshot = await resolveEligibleTierSnapshot(userId, u?.subscriptionPlan);
+        if (tierSnapshot == null) continue;
+
+        // Calcula período = trimestre anterior.
+        const year = nowDate.getUTCFullYear();
+        // localMonth ∈ {1,4,7,10}; trimestre anterior:
+        // jan(1) → Q4 ano anterior (out-dez)
+        // abr(4) → Q1 (jan-mar)
+        // jul(7) → Q2 (abr-jun)
+        // out(10) → Q3 (jul-set)
+        let qStartYear = year;
+        let qStartMonth: number;
+        let qEndMonth: number;
+        if (localMonth === 1) {
+          qStartYear = year - 1;
+          qStartMonth = 10;
+          qEndMonth = 12;
+        } else if (localMonth === 4) {
+          qStartMonth = 1;
+          qEndMonth = 3;
+        } else if (localMonth === 7) {
+          qStartMonth = 4;
+          qEndMonth = 6;
+        } else {
+          qStartMonth = 7;
+          qEndMonth = 9;
+        }
+        const periodStart = `${qStartYear}-${String(qStartMonth).padStart(2, "0")}-01`;
+        const lastDay = new Date(Date.UTC(qStartYear, qEndMonth, 0));
+        const periodEnd = `${qStartYear}-${String(qEndMonth).padStart(2, "0")}-${String(lastDay.getUTCDate()).padStart(2, "0")}`;
+
+        await storage.insertReportJob?.({
+          userId,
+          reportType: "quarterly",
+          periodStart,
+          periodEnd,
+          scheduledFor: nowDate,
+          status: "pending",
+          maxAttempts: 3,
+          timezone: tz,
+          subscriptionPlanAtEnqueue: tierSnapshot,
+          enqueuedBy: "cron_enqueuer",
+        });
+      } catch (err) {
+        console.error("quarterly.enqueuer.user.error", { userId, err: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  } catch (err) {
+    console.error("quarterly.enqueuer.iter.error", { err: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+// =============================================================================
 // Processor
 // =============================================================================
 function buildReportRowFromResult(result: any): Record<string, any> {
@@ -380,6 +490,10 @@ async function callGeneratorByType(
     const { generateMonthlyReport } = await import("../services/monthlyReportGenerator");
     return generateMonthlyReport(args as any);
   }
+  if (type === "quarterly") {
+    const { generateQuarterlyReport } = await import("../services/quarterlyReportGenerator");
+    return generateQuarterlyReport(args as any);
+  }
   return null;
 }
 
@@ -390,11 +504,13 @@ async function callGeneratorByType(
 // pra getUserSubscriptionPlan(userPlatformId) so se o snapshot estiver ausente.
 async function revalidateEligibility(storage: any, claimed: any): Promise<boolean> {
   const userId = claimed?.userId;
+  const reportType = (claimed?.reportType ?? "weekly") as ReportKind;
   try {
     const prefs = await getCoachPreferences(userId);
-    if (prefs?.reportWeeklyEnabled !== true) return false;
+    const field = PREF_FIELD_BY_KIND[reportType];
+    if (!field || prefs?.[field] !== true) return false;
   } catch (err) {
-    console.error("report.job.revalidate.prefs.error", { userId, err });
+    console.error("report.job.revalidate.prefs.error", { userId, reportType, err });
     return false; // safe-deny
   }
   // plano/tier: prioriza o snapshot do enqueue (que ja contem o tier resolvido —
@@ -469,6 +585,19 @@ async function processOneJob(storage: any, job: any, now: Date): Promise<void> {
 
     const reportId: string | null = await persistOrFetchReportId(storage, claimed, result);
     await storage.updateReportJob?.(job.id, { status: "done", reportId, updatedAt: new Date() });
+    if (reportId) {
+      const emailKind = `report_${reportType}` as "report_weekly" | "report_monthly" | "report_quarterly";
+      if (emailKind === "report_weekly" || emailKind === "report_monthly" || emailKind === "report_quarterly") {
+        try {
+          const { sendReportEmail } = await import("../services/reportEmailSender");
+          void sendReportEmail({ reportId, userId, kind: emailKind }, storage).catch((err) =>
+            console.error("report.job.email.send.error", { reportId, userId, kind: emailKind, err: err instanceof Error ? err.message : String(err) }),
+          );
+        } catch (err) {
+          console.error("report.job.email.import.error", { reportId, userId, err: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("report.job.error", { jobId: job.id, userId, reportType, attempts, err: msg });
@@ -546,11 +675,14 @@ export async function registerReportJobRunner(): Promise<void> {
   cron.schedule("0 * * * *", () => {
     enqueueWeeklyReportJobsTick({}).catch((err) => console.error("report.job.enqueuer.tick.error", { err }));
   });
+  cron.schedule("0 * * * *", () => {
+    enqueueQuarterlyReportJobsTick(new Date()).catch((err) => console.error("report.job.quarterly.tick.error", { err }));
+  });
   cron.schedule("*/15 * * * *", () => {
     processReportJobsTick({}).catch((err) => console.error("report.job.processor.tick.error", { err }));
   });
   _registered = true;
-  console.info("report.job.runner.started", { enqueuer: "0 * * * *", processor: "*/15 * * * *" });
+  console.info("report.job.runner.started", { enqueuer: "0 * * * *", quarterly: "0 * * * *", processor: "*/15 * * * *" });
 }
 
 /** Helper de teste — reseta o flag de registro. */

@@ -1883,3 +1883,227 @@ export {
   handleUnfreezeCategory,
   handleAdminFreezeCategory,
 };
+
+// =============================================================================
+// AI-2B (ADR-170/171/172/173) — Sprint AI-2B handlers
+// =============================================================================
+
+async function resolveAi2bStorage(injected?: any): Promise<any> {
+  if (injected) return injected;
+  const mod = await import("../storage");
+  return (mod as any).storage;
+}
+
+// -----------------------------------------------------------------------------
+// GET /api/coach/cgame/snapshot — C-game + Inchworm series (não tier-gated)
+// -----------------------------------------------------------------------------
+export async function handleGetCgameSnapshot(req: any, res: any, injectedStorage?: any): Promise<void> {
+  const VALID_PERIODS = new Set(["30d", "90d", "trimestre", "ano"]);
+  const period = String(req?.query?.period ?? "30d");
+  if (!VALID_PERIODS.has(period)) {
+    res.status(400).json({ error: "invalid_period", validValues: Array.from(VALID_PERIODS) });
+    return;
+  }
+  const userId = req?.user?.userPlatformId;
+  if (!userId) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  const storage = await resolveAi2bStorage(injectedStorage);
+  const now = new Date();
+  const days = period === "30d" ? 30 : period === "90d" ? 90 : period === "trimestre" ? 90 : 365;
+  const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const end = now;
+  const prevEnd = new Date(start.getTime() - 1);
+  const prevStart = new Date(prevEnd.getTime() - days * 24 * 60 * 60 * 1000);
+
+  try {
+    const { aggregateCgameForPeriod, getInchwormSeries, getCgameMovement } = await import("../services/cgameAggregator");
+    const [current, inchwormSeries, movement] = await Promise.all([
+      aggregateCgameForPeriod(userId, { start, end }, storage),
+      getInchwormSeries(userId, 6, storage),
+      getCgameMovement(userId, { start, end }, { start: prevStart, end: prevEnd }, storage),
+    ]);
+    res.status(200).json({ current, inchwormSeries, movement });
+  } catch (err) {
+    console.error("handleGetCgameSnapshot.error", { userId, err: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: "internal_error" });
+  }
+}
+
+// -----------------------------------------------------------------------------
+// GET /api/coach/mental-hands — paginated viewer
+// -----------------------------------------------------------------------------
+export async function handleListMentalHands(req: any, res: any, injectedStorage?: any): Promise<void> {
+  const userId = req?.user?.userPlatformId;
+  if (!userId) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  const limit = req?.query?.limit ? parseInt(String(req.query.limit), 10) : 20;
+  const offset = req?.query?.offset ? parseInt(String(req.query.offset), 10) : 0;
+  const emotion = req?.query?.emotion ? String(req.query.emotion) : undefined;
+  const storage = await resolveAi2bStorage(injectedStorage);
+  try {
+    const fn = storage.listMentalHandsPaginated
+      ?? (await import("../storage/mentalHandsStorage")).listMentalHandsPaginated;
+    const rows = await fn(userId, { limit, offset, emotion }, storage);
+    res.status(200).json({ items: rows ?? [], limit, offset });
+  } catch (err) {
+    console.error("handleListMentalHands.error", { userId, err: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: "internal_error" });
+  }
+}
+
+// -----------------------------------------------------------------------------
+// POST /api/coach/mental-hands — open to free + rate limit 20/dia
+// -----------------------------------------------------------------------------
+export async function handleCreateMentalHand(req: any, res: any, injectedStorage?: any): Promise<void> {
+  const userId = req?.user?.userPlatformId;
+  if (!userId) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  const { logMentalHandInputSchema } = await import("../coachTools/handlers/logMentalHand");
+  const parsed = logMentalHandInputSchema.safeParse(req?.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input", details: parsed.error.issues });
+    return;
+  }
+  const storage = await resolveAi2bStorage(injectedStorage);
+  try {
+    const countFn = storage.countMentalHandsCreatedToday
+      ?? (await import("../storage/mentalHandsStorage")).countMentalHandsCreatedToday;
+    const count = await countFn(userId, storage);
+    if (count >= 20) {
+      res.status(429).json({ error: "rate_limit_exceeded", limit: 20, period: "1d" });
+      return;
+    }
+    const createFn = storage.createMentalHand
+      ?? (await import("../storage/mentalHandsStorage")).createMentalHand;
+    // 1-arg payload form (compatível com 2-arg storage helper via createMentalHand normalization).
+    const created = await createFn({
+      userId,
+      situation: parsed.data.situation,
+      emotion: parsed.data.emotion,
+      realResponse: parsed.data.realResponse,
+      idealResponse: parsed.data.idealResponse,
+      tags: parsed.data.tags ?? null,
+      linkedGrindSessionId: parsed.data.linkedGrindSessionId ?? null,
+      occurredAt: parsed.data.occurredAt ? new Date(parsed.data.occurredAt) : new Date(),
+    });
+    res.status(201).json(created);
+  } catch (err) {
+    console.error("handleCreateMentalHand.error", { userId, err: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: "internal_error" });
+  }
+}
+
+// -----------------------------------------------------------------------------
+// DELETE /api/coach/mental-hands/:id — ownership 404 (não 403)
+// -----------------------------------------------------------------------------
+export async function handleDeleteMentalHand(req: any, res: any, injectedStorage?: any): Promise<void> {
+  const userId = req?.user?.userPlatformId;
+  if (!userId) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  const handId = req?.params?.id;
+  if (!handId) {
+    res.status(400).json({ error: "id_required" });
+    return;
+  }
+  const storage = await resolveAi2bStorage(injectedStorage);
+  try {
+    const getFn = storage.getMentalHand
+      ?? (await import("../storage/mentalHandsStorage")).getMentalHand;
+    const existing = await getFn(userId, handId, storage);
+    if (!existing) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+    const delFn = storage.deleteMentalHand
+      ?? (await import("../storage/mentalHandsStorage")).deleteMentalHand;
+    await delFn(userId, handId, storage);
+    res.status(204).send();
+  } catch (err) {
+    console.error("handleDeleteMentalHand.error", { userId, err: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: "internal_error" });
+  }
+}
+
+// -----------------------------------------------------------------------------
+// GET /api/coach/email/unsubscribe — public (HMAC validated)
+// -----------------------------------------------------------------------------
+export async function handleUnsubscribeEmail(req: any, res: any, injectedStorage?: any): Promise<void> {
+  const tokenRaw = req?.query?.token;
+  if (!tokenRaw || typeof tokenRaw !== "string") {
+    res.status(400).json({ error: "missing_token" });
+    return;
+  }
+  const parts = tokenRaw.split(".");
+  if (parts.length !== 4) {
+    res.status(400).json({ error: "invalid_token_format" });
+    return;
+  }
+  const [userIdPart, kindPart, expiresAtStr, providedHmac] = parts;
+  const expiresAt = parseInt(expiresAtStr, 10);
+  if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) {
+    res.status(400).json({ error: "token_expired" });
+    return;
+  }
+  const VALID_KINDS = new Set(["report_weekly", "report_monthly", "report_quarterly"]);
+  if (!VALID_KINDS.has(kindPart)) {
+    res.status(400).json({ error: "invalid_kind" });
+    return;
+  }
+  const secret = process.env.EMAIL_UNSUBSCRIBE_SECRET ?? process.env.JWT_SECRET;
+  if (!secret) {
+    console.error("handleUnsubscribeEmail.secret_missing");
+    res.status(503).json({ error: "service_misconfigured" });
+    return;
+  }
+  const crypto = await import("node:crypto");
+  const expectedHmac = crypto.createHmac("sha256", secret).update(`${userIdPart}|${kindPart}|${expiresAt}`).digest("hex");
+  if (expectedHmac !== providedHmac) {
+    res.status(400).json({ error: "invalid_signature" });
+    return;
+  }
+
+  const storage = await resolveAi2bStorage(injectedStorage);
+  try {
+    if (typeof storage.setEmailOptIn === "function") {
+      await storage.setEmailOptIn(userIdPart, kindPart, false);
+    }
+    res.status(200).type("html").send(
+      `<html><body><h1>Voce foi descadastrado</h1><p>Do tipo de email: ${kindPart}</p></body></html>`,
+    );
+  } catch (err) {
+    console.error("handleUnsubscribeEmail.error", { err: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: "internal_error" });
+  }
+}
+
+// -----------------------------------------------------------------------------
+// POST /api/coach/onboarding/accept-disclaimer — idempotente
+// -----------------------------------------------------------------------------
+export async function handleAcceptDisclaimer(req: any, res: any, injectedStorage?: any): Promise<void> {
+  const userId = req?.user?.userPlatformId;
+  if (!userId) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  const storage = await resolveAi2bStorage(injectedStorage);
+  try {
+    if (typeof storage.updateUserCoachPreferences === "function") {
+      await storage.updateUserCoachPreferences(userId, { disclaimerAcceptedAt: new Date() });
+    } else {
+      const { upsertCoachPreferences } = await import("../storage/coachPreferences");
+      await upsertCoachPreferences(userId, { disclaimerAcceptedAt: new Date() } as any);
+    }
+    res.status(200).json({ ok: true, acceptedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error("handleAcceptDisclaimer.error", { userId, err: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: "internal_error" });
+  }
+}

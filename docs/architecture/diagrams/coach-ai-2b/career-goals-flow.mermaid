@@ -1,0 +1,106 @@
+%% AI-2B (ADR-168) — Sequência completa do tool define_career_goal (write/confirm/undo) + evaluate_career_goal (read-only puro).
+%% Universos paralelos: career_goals (autoritativo, estruturado) + ai_structured_profile.metas (legacy, sync opt-in unidirecional).
+%% Cap 5 ativas (env COACH_CAREER_GOALS_MAX_ACTIVE), gating isToolEligibleTier (Pro+/Trial; Free não vê).
+
+sequenceDiagram
+    actor User
+    participant LLM as Claude (Sonnet 4.6)
+    participant Chat as /api/coach/chat
+    participant Registry as coachTools/index.ts<br/>+ isToolEligibleTier
+    participant DefineH as defineCareerGoal.ts<br/>handler
+    participant EvalH as evaluateCareerGoal.ts<br/>handler
+    participant Runner as coachToolRunner<br/>(preview/confirm/undo)
+    participant Storage as careerGoalsStorage<br/>(getAllUserGoals helper)
+    participant DB as PostgreSQL<br/>(career_goals + users.ai_structured_profile)
+    participant Actions as coach_actions<br/>(undo via createdId)
+    participant Perf as getPerformanceByPeriod<br/>(FX → USD, lesson #6)
+
+    Note over User,Actions: Fase 1 — DEFINE (preview → confirm → execute → optional sync legacy)
+
+    User->>Chat: "minha meta: $50k profit ate dezembro"
+    Chat->>Registry: listToolsForUser(userId)
+    Registry->>Registry: isToolEligibleTier(user, 'define_career_goal')<br/>(Trial→true, Pro/Premium/Admin→true, Free→false)
+    Registry-->>Chat: tools eligible
+    Chat->>LLM: stream com tools
+    LLM-->>Chat: tool_use {name:'define_career_goal',<br/>input:{title:'Atingir $50k profit', targetMetric:'profit_usd',<br/>targetValue:50000, targetDeadline:'2026-12-31',<br/>horizon:'ano'}}
+    Chat->>Runner: preview(toolName, input, userId)
+    Runner->>DefineH: runDefineCareerGoal(input, ctx)
+    DefineH->>DefineH: Zod .strict() valida (title max 120)
+    DefineH->>Storage: countActiveGoals(userId)
+    Storage->>DB: SELECT COUNT(*) FROM career_goals WHERE user_id=$1 AND status='active'
+    DB-->>Storage: count
+    alt count >= COACH_CAREER_GOALS_MAX_ACTIVE (default 5)
+        DefineH->>Storage: listActiveOldest(userId, 1)
+        Storage->>DB: SELECT * FROM career_goals WHERE user_id=$1 AND status='active' ORDER BY created_at ASC LIMIT 1
+        Storage-->>DefineH: oldestActive
+        DefineH-->>Runner: PreviewResult {wouldExceedCap:true, oldestActive, askArchive:true}
+        Runner-->>Chat: preview com flag de cap
+        Chat-->>LLM: tool_result + flag
+        LLM-->>Chat: "Voce ja tem 5 metas. Confirmar substitui<br/>'<oldestActive.title>' por essa nova?"
+        Chat-->>User: render PreviewCard + 2 botoes
+        User->>Chat: clica "Confirmar (arquivar antiga)"
+    else
+        DefineH-->>Runner: PreviewResult {goalProposed, wouldExceedCap:false}
+        Runner-->>Chat: preview
+        Chat-->>User: render PreviewCard + 1 botao confirm
+        User->>Chat: clica "Confirmar"
+    end
+
+    Chat->>Runner: confirm(actionId, userId)
+    Runner->>Actions: SELECT coach_action WHERE id=$1 AND status='pending'
+    Actions-->>Runner: action row
+    Runner->>DefineH: executeDefineCareerGoal(action.input, ctx)
+    DefineH->>DB: db.transaction(async tx => ...)<br/>lesson #32 fallback se tx undefined
+    alt wouldExceedCap && user escolheu archive
+        DefineH->>Storage: archiveGoal(tx, oldestActiveId)
+        Storage->>DB: UPDATE career_goals SET status='abandoned', updated_at=NOW()<br/>WHERE id=$oldestActiveId AND user_id=$userId
+    end
+    DefineH->>Storage: insertCareerGoal(tx, {id:nanoid(), userId, title, ...})
+    Storage->>DB: INSERT INTO career_goals (...) VALUES (...)
+    DB-->>Storage: createdId
+    DefineH->>Storage: syncToLegacyMetasOptional(tx, userId, {id:createdId, title, horizon})<br/>(origem='career_goal' marcado no JSONB)
+    Storage->>DB: UPDATE users SET ai_structured_profile = jsonb_set(...) WHERE user_platform_id=$userId
+    Storage-->>DefineH: created
+    DefineH-->>Runner: {ok:true, createdId}
+    Runner->>Actions: UPDATE coach_action SET<br/>status='completed',<br/>payload_after={createdId, archivedOldestId?},<br/>undo_expires_at=NOW+30min
+    Runner-->>Chat: {ok:true}
+    Chat-->>User: success + botão "desfazer (30min)"
+
+    Note over User,Actions: Fase 2 — UNDO (opcional, dentro 30min)
+
+    User->>Chat: POST /api/coach/actions/:actionId/undo
+    Chat->>Runner: undo(actionId, userId)
+    Runner->>Actions: SELECT coach_action<br/>WHERE id=$1 AND undo_expires_at > NOW
+    Actions-->>Runner: action + payload_after
+    Runner->>DefineH: undoDefineCareerGoal(payload_after, userId)
+    DefineH->>DB: db.transaction(async tx => ...)
+    DefineH->>Storage: deleteCareerGoal(tx, createdId, userId)<br/>+ revertLegacyMetaEntry(tx, userId, createdId)
+    Storage->>DB: DELETE FROM career_goals WHERE id=$createdId AND user_id=$userId
+    DB-->>Storage: deletedCount
+    alt archivedOldestId presente
+        DefineH->>Storage: restoreArchivedGoal(tx, archivedOldestId)
+        Storage->>DB: UPDATE career_goals SET status='active', updated_at=NOW()<br/>WHERE id=$archivedOldestId
+    end
+    DefineH-->>Runner: {ok:true, deletedCount}
+    Runner->>Actions: UPDATE coach_action SET status='undone'
+    Runner-->>Chat: {ok:true}
+    Chat-->>User: "Meta removida (e meta antiga restaurada se aplicavel)"
+
+    Note over User,Actions: Fase 3 — EVALUATE (read-only puro — sem side-effect em DB)
+
+    User->>Chat: "como esta a meta de $50k?"
+    Chat->>LLM: stream com tools
+    LLM-->>Chat: tool_use {name:'evaluate_career_goal', input:{goalId:'goal_abc'}}
+    Chat->>Runner: invoke(toolName, input, userId)<br/>(requiresConfirmation:false, auditLevel:'log')
+    Runner->>EvalH: runEvaluateCareerGoal({goalId}, ctx)
+    EvalH->>Storage: getCareerGoalById(goalId, userId)
+    Storage->>DB: SELECT * FROM career_goals WHERE id=$1 AND user_id=$userId
+    Storage-->>EvalH: goal {targetMetric:'profit_usd', targetValue:50000, createdAt, targetDeadline}
+    EvalH->>Perf: getPerformanceByPeriod(userId, goal.createdAt..now)<br/>(WHERE grindSessionId IS NULL, FX→USD)
+    Perf-->>EvalH: {profitUsd: 22500, sessionsCount: 87}
+    EvalH->>EvalH: progressPct = 45.0, daysRemaining = 215<br/>estimate = on_track (45% em 30% do tempo)<br/>narrative = "Voce esta acima do ritmo..."<br/>confidence = high (sample 87 >= 20)
+    EvalH-->>Runner: {goal, progress}
+    Runner-->>Chat: tool_result
+    Chat-->>LLM: continue com result
+    LLM-->>Chat: response interpretativa
+    Chat-->>User: "Voce esta com $22.5k (45%) — acima do ritmo necessario..."

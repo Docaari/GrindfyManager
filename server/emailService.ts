@@ -20,7 +20,8 @@ export class EmailService {
   }
 
   // SMTP Configuration via environment variables
-  private static getTransporter(): Transporter {
+  // AI-2B (ADR-172): exposed as public for reportEmailSender + tests.
+  static getTransporter(): Transporter {
     if (!this.transporter) {
       const smtpHost = process.env.SMTP_HOST;
       const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);

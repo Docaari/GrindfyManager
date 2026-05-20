@@ -49,6 +49,12 @@ export interface CoachPreferences {
   // Sprint AI-1C (ADR-159) — opt-in Daily Debrief + Monthly Report.
   reportDailyEnabled: boolean;
   reportMonthlyEnabled: boolean;
+  // Sprint AI-2B (ADR-169/172) — opt-in Quarterly + email channels.
+  reportQuarterlyEnabled: boolean;
+  emailWeeklyEnabled: boolean;
+  emailMonthlyEnabled: boolean;
+  emailQuarterlyEnabled: boolean;
+  disclaimerAcceptedAt: Date | null;
   updatedAt?: Date;
 }
 
@@ -75,6 +81,11 @@ export const COACH_PREFS_DEFAULTS: CoachPreferences = {
   nudgeBImport: true,
   reportDailyEnabled: false,
   reportMonthlyEnabled: false,
+  reportQuarterlyEnabled: false,
+  emailWeeklyEnabled: false,
+  emailMonthlyEnabled: false,
+  emailQuarterlyEnabled: false,
+  disclaimerAcceptedAt: null,
 };
 
 const CACHE_TTL_MS = 30_000;
@@ -116,6 +127,16 @@ export function normalizeCoachPreferences(row: any): CoachPreferences {
       row?.reportDailyEnabled ?? COACH_PREFS_DEFAULTS.reportDailyEnabled,
     reportMonthlyEnabled:
       row?.reportMonthlyEnabled ?? COACH_PREFS_DEFAULTS.reportMonthlyEnabled,
+    reportQuarterlyEnabled:
+      row?.reportQuarterlyEnabled ?? COACH_PREFS_DEFAULTS.reportQuarterlyEnabled,
+    emailWeeklyEnabled:
+      row?.emailWeeklyEnabled ?? COACH_PREFS_DEFAULTS.emailWeeklyEnabled,
+    emailMonthlyEnabled:
+      row?.emailMonthlyEnabled ?? COACH_PREFS_DEFAULTS.emailMonthlyEnabled,
+    emailQuarterlyEnabled:
+      row?.emailQuarterlyEnabled ?? COACH_PREFS_DEFAULTS.emailQuarterlyEnabled,
+    disclaimerAcceptedAt:
+      row?.disclaimerAcceptedAt ?? COACH_PREFS_DEFAULTS.disclaimerAcceptedAt,
     updatedAt: row?.updatedAt,
   };
 }

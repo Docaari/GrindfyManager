@@ -29,6 +29,11 @@ export const AI_2A_TOOL_NAMES: ReadonlySet<string> = new Set([
   "compute_grind_study_ratio",
   "calculate_effective_rake",
   "query_pool_intelligence",
+  // Sprint AI-2B — career goals + mental hand + IRPF summary.
+  "define_career_goal",
+  "evaluate_career_goal",
+  "log_mental_hand",
+  "compute_irpf_summary",
 ]);
 
 type UserShape = {

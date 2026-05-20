@@ -27,7 +27,7 @@
 import { resolveUserTier, type CoachTier } from "../coachAccess";
 
 export type ReportTier = "free" | "eligible";
-export type ReportKind = "weekly" | "daily" | "monthly";
+export type ReportKind = "weekly" | "daily" | "monthly" | "quarterly";
 
 export const LIST_USERS_FOR_REPORTS_FILTER =
   "subscription_plan IN ('trial','active','admin')";
@@ -73,10 +73,14 @@ export async function getReportTier(user: ReportEligibilityUserInput | null | un
   return "free";
 }
 
-const PREF_FIELD_BY_KIND: Record<ReportKind, "reportWeeklyEnabled" | "reportDailyEnabled" | "reportMonthlyEnabled"> = {
+export const PREF_FIELD_BY_KIND: Record<
+  ReportKind,
+  "reportWeeklyEnabled" | "reportDailyEnabled" | "reportMonthlyEnabled" | "reportQuarterlyEnabled"
+> = {
   weekly: "reportWeeklyEnabled",
   daily: "reportDailyEnabled",
   monthly: "reportMonthlyEnabled",
+  quarterly: "reportQuarterlyEnabled",
 };
 
 /**

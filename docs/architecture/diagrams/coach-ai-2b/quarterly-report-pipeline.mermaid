@@ -1,0 +1,69 @@
+%% AI-2B (ADR-169) — Pipeline completo do Quarterly Career Review.
+%% Enqueuer hourly tick (TZ-aware jan/abr/jul/out dia 1 7h local) → report_jobs → processor → quarterlyReportGenerator
+%% → ReportContent v3 (5 seções novas) → persist → sendReportEmail inline best-effort (ADR-172).
+
+flowchart TD
+    Start([Tick hourly enqueueReportJobsTick]) --> KillCheck{COACH_NUDGES_ENABLED<br/>=== false?}
+    KillCheck -->|true| End([No-op — kill switch absoluto])
+    KillCheck -->|false| IterUsers[iterateUsersWithTimezone<br/>LIST_USERS_FOR_CRON_PRO_PLUS<br/>'trial','active','admin']
+
+    IterUsers --> ForEachUser{Para cada user<br/>elegível}
+    ForEachUser --> LocalHourCheck{getLocalHour user, now<br/>=== 7?}
+    LocalHourCheck -->|não| SkipUser1[Skip user — hora errada]
+    LocalHourCheck -->|sim| Day1Check{getLocalDate.day === 1<br/>e mês ∈ jan, abr, jul, out?}
+    Day1Check -->|não| SkipUser2[Skip user — data errada]
+    Day1Check -->|sim| EligCheck{isReportEligible<br/>userId, 'quarterly'?}
+    EligCheck -->|false| SkipUser3[Skip user — opt-in OFF ou tier ineligible]
+    EligCheck -->|true| ComputeRange[computePreviousQuarterRange<br/>período_start = 1º dia trimestre anterior<br/>período_end = último dia trimestre anterior]
+    ComputeRange --> InsertJob[INSERT report_jobs row<br/>report_type='quarterly'<br/>status='pending'<br/>ON CONFLICT user_id, type, period_start DO NOTHING]
+    InsertJob --> SkipUser1
+    SkipUser1 --> ForEachUser
+    SkipUser2 --> ForEachUser
+    SkipUser3 --> ForEachUser
+
+    ForEachUser --> ProcessorTick[Tick 15min processReportJobsTick]
+    ProcessorTick --> KillCheck2{COACH_NUDGES_ENABLED?}
+    KillCheck2 -->|false| End2([No-op — pipeline desligado])
+    KillCheck2 -->|true| ClaimJob[Claim 1 job pending<br/>SET status='running']
+    ClaimJob --> DispatchByType{job.reportType?}
+    DispatchByType -->|'weekly'| WeeklyGen[weeklyReportGenerator]
+    DispatchByType -->|'monthly'| MonthlyGen[monthlyReportGenerator]
+    DispatchByType -->|'daily'| DailyGen[dailyDebriefGenerator]
+    DispatchByType -->|'quarterly'| QuarterlyGen[quarterlyReportGenerator]
+    DispatchByType -->|outro| SkipUnknown[SET status='skipped'<br/>unknown_report_type]
+
+    QuarterlyGen --> RevalidateTier{isReportEligible<br/>revalidar?}
+    RevalidateTier -->|false| SkipDowngraded[SET status='skipped'<br/>tier_downgraded]
+    RevalidateTier -->|true| BuildBundle[buildQuarterlyBundle<br/>3 meses de dados]
+
+    BuildBundle --> Cgame[aggregateCgameForPeriod<br/>+ getInchwormSeries 6m<br/>+ getCgameMovement vs Q-1<br/>ADR-170]
+    Cgame --> MentalH[listMentalHandsForRange<br/>+ selectTopHighlights 3<br/>ADR-171]
+    MentalH --> Goals[listCareerGoalsActive<br/>filter horizon ∈ trimestre/ano/multi_ano<br/>+ evaluateCareerGoal cada uma<br/>ADR-168]
+    Goals --> IrpfCheck{users.country = BR<br/>OU timezone america?}
+    IrpfCheck -->|não| SkipIrpf[irpfSummary = undefined<br/>seção omitida no markdown]
+    IrpfCheck -->|sim| BuildIrpf[fxCascade.getAveragePtaxForRange<br/>PTAX médio trimestre<br/>+ wallet_tx reason='rakeback'<br/>+ disclaimer Q-C]
+    SkipIrpf --> Comparatives
+    BuildIrpf --> Comparatives[bulk_query_dimensions<br/>Q-1, Q-2, mesmo Q ano anterior<br/>ADR-160]
+    Comparatives --> Variance[varianceAnalysis.ts<br/>sample maior → confidence alto<br/>ADR-166]
+    Variance --> Leaks[detectLeaks<br/>+ coach_leak_focus<br/>resolvidos/novos/ativos]
+    Leaks --> FollowUp[buildReportFollowUp<br/>ADR-161]
+
+    FollowUp --> SizeCheck{bundle size<br/>> 20K chars?}
+    SizeCheck -->|sim - sempre quarterly| Haiku[summarizeBundleHierarchical<br/>Haiku COACH_REPORT_SUMMARIZER_MODEL<br/>summarizer_model_used populado]
+    SizeCheck -->|não - raro| NoSum[summarizer_model_used = null]
+    Haiku --> LLMCall
+    NoSum --> LLMCall[callLlm Sonnet 4.6<br/>max_tokens 4000<br/>prompt único quarterlyReport.ts<br/>GRINDFY_AI_BASE + CITATIONS_RULES cache ephemeral]
+
+    LLMCall --> NoKey{ANTHROPIC_API_KEY<br/>presente?}
+    NoKey -->|não| Degraded[status='degraded'<br/>content estruturado preenchido<br/>narrative ausente<br/>lesson #5/#35]
+    NoKey -->|sim| ComposeContent[Compor ReportContent v3<br/>schemaVersion: 3<br/>14+ seções<br/>+ cgameSnapshot + mentalHandHighlights<br/>+ careerGoalsProgress + irpfSummary<br/>+ followUp + disclaimer ADR-173]
+
+    Degraded --> Persist
+    ComposeContent --> Persist[persistReport<br/>INSERT reports<br/>UPDATE report_jobs SET status='done']
+    Persist --> EmailTrigger{prefs.email_quarterly_enabled<br/>= true?}
+    EmailTrigger -->|false| Done([Done — só in-app])
+    EmailTrigger -->|true| SendEmail[sendReportEmail<br/>kind='report_quarterly'<br/>best-effort fire-and-forget<br/>ADR-172]
+    SendEmail --> Done
+
+    SkipUnknown --> Done
+    SkipDowngraded --> Done
