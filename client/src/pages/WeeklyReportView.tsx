@@ -102,9 +102,51 @@ export default function WeeklyReportView() {
         </div>
       ) : null}
 
+      {/* AI-1C — sessionSummary (daily) */}
+      {content.sessionSummary ? (
+        <div data-testid="report-session-summary" className="rounded-lg border border-gray-700 bg-gray-800/40 p-3 text-xs text-gray-300">
+          <h3 className="text-sm font-medium text-gray-200">Resumo da sessão</h3>
+          <p className="mt-1">Sessões: {content.sessionSummary.sessionsCount}; Torneios: {content.sessionSummary.tournamentsCount}</p>
+          {content.sessionSummary.profitUsd != null ? (
+            <p className="mt-1">Lucro: ${content.sessionSummary.profitUsd.toFixed(2)} USD{content.sessionSummary.roiPct != null ? ` (ROI ${content.sessionSummary.roiPct.toFixed(1)}%)` : ""}</p>
+          ) : null}
+          {content.sessionSummary.spotsCount != null ? (
+            <p className="mt-1">Spots registrados: {content.sessionSummary.spotsCount}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* AI-1C — comparatives (monthly) */}
+      {content.comparatives?.previousPeriod ? (
+        <div data-testid="report-comparatives" className="rounded-lg border border-gray-700 bg-gray-800/40 p-3 text-xs text-gray-300">
+          <h3 className="text-sm font-medium text-gray-200">Comparativo mês anterior</h3>
+          <p className="mt-1">
+            {content.comparatives.previousPeriod.label}: ${(content.comparatives.previousPeriod.profit ?? 0).toFixed(2)} USD
+            {content.comparatives.previousPeriod.roi != null ? ` (ROI ${content.comparatives.previousPeriod.roi.toFixed(1)}%)` : ""}
+          </p>
+          {content.comparatives.trendNarrative ? <p className="mt-1 text-gray-400">{content.comparatives.trendNarrative}</p> : null}
+        </div>
+      ) : null}
+
+      {/* AI-1C — variance (monthly) */}
+      {content.variance ? (
+        <div data-testid="report-variance" className="rounded-lg border border-gray-700 bg-gray-800/40 p-3 text-xs text-gray-300">
+          <h3 className="text-sm font-medium text-gray-200">Variância (heurística)</h3>
+          {content.variance.estimatedBySkillUsd != null ? (
+            <>
+              <p className="mt-1">Estimativa por skill: ${content.variance.estimatedBySkillUsd.toFixed(2)} USD</p>
+              <p className="mt-1">Estimativa por variância: ${(content.variance.estimatedByVarianceUsd ?? 0).toFixed(2)} USD</p>
+            </>
+          ) : (
+            <p className="mt-1 text-gray-400">Sem dados suficientes para decomposição skill/variância.</p>
+          )}
+          <p className="mt-1 text-gray-500">Confidence: {content.variance.confidence} (n={content.variance.sampleSize ?? 0})</p>
+        </div>
+      ) : null}
+
       {content.nextWeekPlan ? (
         <div className="rounded-lg border border-gray-700 bg-gray-800/40 p-3 text-xs text-gray-300">
-          <h3 className="text-sm font-medium text-gray-200">Plano da próxima semana</h3>
+          <h3 className="text-sm font-medium text-gray-200">{content.reportType === "monthly" ? "Plano do próximo mês" : content.reportType === "daily" ? "Próximo passo" : "Plano da próxima semana"}</h3>
           {content.nextWeekPlan.recommendedAction ? <p className="mt-1">{content.nextWeekPlan.recommendedAction}</p> : null}
           {content.nextWeekPlan.studyFocus ? <p className="mt-1">Foco de estudo: {content.nextWeekPlan.studyFocus}</p> : null}
         </div>

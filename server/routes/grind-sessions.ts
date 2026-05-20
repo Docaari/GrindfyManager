@@ -109,6 +109,16 @@ export async function handleUpdateGrindSession(req: any, res: any): Promise<void
       } catch (err: any) {
         console.error("[handleUpdateGrindSession] evaluateStops failed:", err?.message);
       }
+      // AI-1C / RF-03 — Daily Debrief enqueue (best-effort, fire-and-forget;
+      // nunca atrasa a resposta nem lanca; respeita kill switch e opt-in).
+      try {
+        const { enqueueDailyDebriefForSession } = await import("../jobs/reportJobRunner");
+        void enqueueDailyDebriefForSession({ userId, sessionId: id }).catch((err) =>
+          console.error("[handleUpdateGrindSession] daily_debrief_enqueue failed:", err?.message ?? err),
+        );
+      } catch (err: any) {
+        console.error("[handleUpdateGrindSession] daily_debrief_enqueue import failed:", err?.message);
+      }
     }
     res.status(200).json({ ...(updated as any), ...extra });
   } catch (err: any) {

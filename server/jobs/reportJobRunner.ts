@@ -192,30 +192,128 @@ export async function enqueueWeeklyReportJobsTick(opts: { now?: Date; injectedSt
         const tz = u?.timezone || "America/Sao_Paulo";
         if (getLocalHour(now, tz) !== 7) continue;
         const { weekday, civilUtc } = localCivilDate(now, tz);
-        if (weekday !== 1) continue; // so segunda no fuso do user
-        const tierSnapshot = await weeklyReportEligibleSnapshot(storage, userId, u?.subscriptionPlan);
-        if (tierSnapshot == null) continue; // nao elegivel (plano / opt-in / erro)
-        const { periodStart, periodEnd } = previousWeekMonday(civilUtc, weekday);
-        await storage.insertReportJobOnConflictDoNothing?.({
-          id: undefined,
-          userId,
-          reportType: "weekly",
-          periodStart,
-          periodEnd,
-          scheduledFor: now,
-          status: "pending",
-          maxAttempts: 3,
-          timezone: tz,
-          // grava o tier RESOLVIDO ('trial'|'admin'|'pro'|'premium'), nao o
-          // subscription_plan cru — o processor revalida sobre este valor.
-          subscriptionPlanAtEnqueue: tierSnapshot,
-          enqueuedBy: "cron_enqueuer",
-        });
+        // Weekly: segunda no fuso do user.
+        if (weekday === 1) {
+          const tierSnapshot = await weeklyReportEligibleSnapshot(storage, userId, u?.subscriptionPlan);
+          if (tierSnapshot != null) {
+            const { periodStart, periodEnd } = previousWeekMonday(civilUtc, weekday);
+            await storage.insertReportJobOnConflictDoNothing?.({
+              id: undefined,
+              userId,
+              reportType: "weekly",
+              periodStart,
+              periodEnd,
+              scheduledFor: now,
+              status: "pending",
+              maxAttempts: 3,
+              timezone: tz,
+              subscriptionPlanAtEnqueue: tierSnapshot,
+              enqueuedBy: "cron_enqueuer",
+            });
+          }
+        }
+        // AI-1C / RF-05 — Monthly: dia 1 do mes no fuso do user (7h ja foi checado acima).
+        if (civilUtc.getUTCDate() === 1) {
+          const monthlyEligible = await monthlyReportEligibleSnapshot(storage, userId, u?.subscriptionPlan);
+          if (monthlyEligible != null) {
+            const { periodStart, periodEnd } = previousMonthRangeForCivil(civilUtc);
+            await storage.insertReportJobOnConflictDoNothing?.({
+              id: undefined,
+              userId,
+              reportType: "monthly",
+              periodStart,
+              periodEnd,
+              scheduledFor: now,
+              status: "pending",
+              maxAttempts: 3,
+              timezone: tz,
+              subscriptionPlanAtEnqueue: monthlyEligible,
+              enqueuedBy: "cron_enqueuer",
+            });
+          }
+        }
       } catch (err) {
         console.error("report.job.enqueuer.user.error", { userId, err: err instanceof Error ? err.message : String(err) });
       }
     }
   });
+}
+
+// AI-1C / RF-05.1 — previous-month range (1o ao ultimo dia do mes que acabou,
+// no fuso do user — civilUtc representa o "hoje civil" no fuso do user).
+function previousMonthRangeForCivil(civilUtc: Date): { periodStart: string; periodEnd: string } {
+  const y = civilUtc.getUTCFullYear();
+  const m = civilUtc.getUTCMonth(); // 0..11; "mes anterior" = m-1
+  const firstOfPrev = new Date(Date.UTC(y, m - 1, 1));
+  const lastOfPrev = new Date(Date.UTC(y, m, 0));
+  return { periodStart: ymd(firstOfPrev), periodEnd: ymd(lastOfPrev) };
+}
+
+// Elegibilidade do Monthly Report — mesma logica do weekly, mas com a
+// preferencia `reportMonthlyEnabled`.
+async function monthlyReportEligibleSnapshot(storage: any, userId: string, plan?: string | null): Promise<string | null> {
+  try {
+    const rawPlan = plan ?? (await storage.getUserSubscriptionPlan?.(userId)) ?? "free";
+    const tierSnapshot = await resolveEligibleTierSnapshot(userId, rawPlan);
+    if (tierSnapshot == null) return null;
+    const prefs = await getCoachPreferences(userId);
+    if ((prefs as any)?.reportMonthlyEnabled !== true) return null;
+    return tierSnapshot;
+  } catch (err) {
+    console.error("report.eligibility.monthly.error", { userId, err: err instanceof Error ? err.message : String(err) });
+    return null; // safe-deny
+  }
+}
+
+// AI-1C / RF-03 — Daily Debrief enqueue (event-driven pos-session.completed).
+// Chamado de handleUpdateGrindSession quando status='completed'. Best-effort:
+// nunca lanca, nunca atrasa a resposta do PUT (caller faz fire-and-forget).
+// Idempotencia via UNIQUE (user_id, 'daily', period_start=data).
+export interface EnqueueDailyDebriefArgs {
+  userId: string;
+  sessionId?: string;
+  sessionDate?: string; // 'YYYY-MM-DD' no fuso do user; se ausente, deriva de now+tz
+  now?: Date;
+  injectedStorage?: any;
+}
+
+export async function enqueueDailyDebriefForSession(args: EnqueueDailyDebriefArgs): Promise<void> {
+  if (isNudgesDisabled()) return; // kill switch global = no-op
+  const now = args.now ?? new Date();
+  try {
+    const storage = await resolveStorage(args.injectedStorage);
+    const userId = args.userId;
+    if (!userId) return;
+
+    // Tier elegivel + opt-in do daily.
+    const rawPlan = (await storage.getUserSubscriptionPlan?.(userId)) ?? "free";
+    const tierSnapshot = await resolveEligibleTierSnapshot(userId, rawPlan);
+    if (tierSnapshot == null) return;
+    const prefs = await getCoachPreferences(userId);
+    if ((prefs as any)?.reportDailyEnabled !== true) return;
+
+    // Data da sessao no fuso do user.
+    let tz = "America/Sao_Paulo";
+    try { tz = (await storage.getUserTimezone?.(userId)) || tz; } catch { /* fallback */ }
+    const date = args.sessionDate ?? localCivilDate(now, tz).civilUtc.toISOString().slice(0, 10);
+
+    await storage.insertReportJobOnConflictDoNothing?.({
+      id: undefined,
+      userId,
+      reportType: "daily",
+      periodStart: date,
+      periodEnd: date,
+      scheduledFor: now,
+      status: "pending",
+      maxAttempts: 3,
+      timezone: tz,
+      subscriptionPlanAtEnqueue: tierSnapshot,
+      enqueuedBy: "session_completed",
+    });
+  } catch (err) {
+    console.error("report.job.daily_enqueue.error", { userId: args.userId, err: err instanceof Error ? err.message : String(err) });
+    // nunca lanca — best-effort
+  }
 }
 
 // =============================================================================
@@ -252,12 +350,37 @@ async function persistOrFetchReportId(storage: any, claimed: any, result: any): 
   const row = buildReportRowFromResult(result);
   const saved = await storage.upsertReport?.({
     userId: claimed.userId,
-    reportType: "weekly",
+    reportType: String(claimed?.reportType ?? "weekly"),
     periodStart: claimed.periodStart,
     periodEnd: claimed.periodEnd,
     ...row,
   });
   return saved?.id ?? null;
+}
+
+// AI-1C / RF-04 — despacho do gerador por reportType. Default weekly preserva
+// compat com os jobs e tests do AI-1B (que nao setam reportType explicito em
+// alguns fixtures). `'daily'` -> dailyDebriefGenerator; `'monthly'` ->
+// monthlyReportGenerator; `'quarterly'`/desconhecido -> retorna null (caller
+// loga + marca skipped).
+async function callGeneratorByType(
+  reportType: string,
+  args: { userId: string; periodStart: string; periodEnd: string; failSoft?: boolean; injectedStorage?: any },
+): Promise<any | null> {
+  const type = String(reportType ?? "weekly").toLowerCase();
+  if (type === "weekly") {
+    const { generateWeeklyReport } = await import("../services/weeklyReportGenerator");
+    return generateWeeklyReport(args as any);
+  }
+  if (type === "daily") {
+    const { generateDailyDebrief } = await import("../services/dailyDebriefGenerator");
+    return generateDailyDebrief(args as any);
+  }
+  if (type === "monthly") {
+    const { generateMonthlyReport } = await import("../services/monthlyReportGenerator");
+    return generateMonthlyReport(args as any);
+  }
+  return null;
 }
 
 // Revalidacao de elegibilidade no momento de processar: usa o snapshot
@@ -312,9 +435,12 @@ async function processOneJob(storage: any, job: any, now: Date): Promise<void> {
     return;
   }
 
+  // AI-1C / RF-04 — reportType pode ser 'weekly' (AI-1B default), 'daily', 'monthly'.
+  const reportType = String(claimed?.reportType ?? "weekly").toLowerCase();
+
   // idempotencia da geracao — reports row ja existe?
   try {
-    const existing = await storage.getReportForPeriod?.(userId, "weekly", claimed.periodStart);
+    const existing = await storage.getReportForPeriod?.(userId, reportType, claimed.periodStart);
     if (existing) {
       await storage.updateReportJob?.(job.id, { status: "done", reportId: existing.id, updatedAt: new Date() });
       return;
@@ -328,20 +454,24 @@ async function processOneJob(storage: any, job: any, now: Date): Promise<void> {
   const failSoft = attempts >= maxAttempts;
 
   try {
-    const { generateWeeklyReport } = await import("../services/weeklyReportGenerator");
-    const result = await generateWeeklyReport({
+    const result = await callGeneratorByType(reportType, {
       userId,
       periodStart: claimed.periodStart,
       periodEnd: claimed.periodEnd,
       ...(failSoft ? { failSoft: true } : {}),
       injectedStorage: storage,
-    } as any);
+    });
+    if (result == null) {
+      console.error("report.job.unsupported_report_type", { jobId: job.id, userId, reportType });
+      await storage.updateReportJob?.(job.id, { status: "skipped", lastError: `unsupported_report_type:${reportType}`, updatedAt: new Date() });
+      return;
+    }
 
     const reportId: string | null = await persistOrFetchReportId(storage, claimed, result);
     await storage.updateReportJob?.(job.id, { status: "done", reportId, updatedAt: new Date() });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("report.job.error", { jobId: job.id, userId, attempts, err: msg });
+    console.error("report.job.error", { jobId: job.id, userId, reportType, attempts, err: msg });
     if (attempts < maxAttempts) {
       const idx = Math.min(attempts - 1, BACKOFF_MS.length - 1);
       const nextAt = new Date(now.getTime() + BACKOFF_MS[Math.max(0, idx)]);
@@ -349,18 +479,14 @@ async function processOneJob(storage: any, job: any, now: Date): Promise<void> {
     } else {
       // fail-soft (RF-09) — gera o relatorio deterministico e marca done (nunca failed).
       try {
-        const { generateWeeklyReport } = await import("../services/weeklyReportGenerator");
-        const fallback = await generateWeeklyReport({
+        const fallback = await callGeneratorByType(reportType, {
           userId,
           periodStart: claimed.periodStart,
           periodEnd: claimed.periodEnd,
           failSoft: true,
           injectedStorage: storage,
-        } as any);
-        let reportId: string | null = await persistOrFetchReportId(storage, claimed, fallback);
-        // garante que um reports row degraded existe mesmo se o gerador mockado nao persistiu
-        // nem incluiu reportId — neste caso persistOrFetchReportId ja chamou upsertReport
-        // com o row construido (status=degraded, degradedReason=llm_failed_3x via buildReportRowFromResult).
+        });
+        let reportId: string | null = fallback ? await persistOrFetchReportId(storage, claimed, fallback) : null;
         await storage.updateReportJob?.(job.id, { status: "done", reportId, lastError: msg.slice(0, 1000), updatedAt: new Date() });
       } catch (err2) {
         console.error("report.job.failsoft.error", { jobId: job.id, userId, err: err2 instanceof Error ? err2.message : String(err2) });
