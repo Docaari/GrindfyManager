@@ -119,6 +119,8 @@ function Router() {
                   <Route path="/grind-live" component={() => (<ProtectedRoute><GrindSessionLive /></ProtectedRoute>)} />
                   <Route path="/mental" component={() => (<ProtectedRoute><MentalPrep /></ProtectedRoute>)} />
                   <Route path="/coach" component={() => (<ProtectedRoute><GradePlanner /></ProtectedRoute>)} />
+                  {/* Alias /grade-planner -> GradePlanner. LLM/CTAs antigos referenciam ambos; ambos validos. */}
+                  <Route path="/grade-planner" component={() => (<ProtectedRoute><GradePlanner /></ProtectedRoute>)} />
                   <Route path="/upload" component={() => (<ProtectedRoute><UploadHistory /></ProtectedRoute>)} />
                   <Route path="/settings" component={() => (<ProtectedRoute><Settings /></ProtectedRoute>)} />
                   <Route path="/estudos" component={() => (<ProtectedRoute><Studies /></ProtectedRoute>)} />

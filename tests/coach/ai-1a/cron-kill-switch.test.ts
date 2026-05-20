@@ -145,15 +145,21 @@ describe('processBStudyTick — B-STUDY congelada para um user', () => {
     const insertChatMessageMock = vi.fn(async () => ({ id: 'cm-x' }));
     const createNudgeLogMock = vi.fn(async () => 'nl-x');
 
+    // Foco com createdAt 8d atras (>7d threshold) + count=0 study sessions.
+    const eightDaysAgo = new Date(Date.UTC(2026, 4, 4, 0, 0, 0));
     vi.doMock('../../../server/storage', () => ({
       storage: {
         listUsersForCron: listUsersForCronMock,
         createChatSession: createChatSessionMock,
         insertChatMessage: insertChatMessageMock,
         createNudgeLog: createNudgeLogMock,
-        // alguns ticks usam outras funcoes — deixar como noop tolerante
         hasSnapshotThisMonth: vi.fn(async () => false),
         getStudyFocusForUser: vi.fn(async () => ({ active: true })),
+        // processBStudy chama findActiveLeakFocusList + countStudySessionsMatchingFocus.
+        findActiveLeakFocusList: vi.fn(async (uid: string) => [
+          { leakCode: 'ICM', description: 'ICM tight push', createdAt: eightDaysAgo, baselineSampleSize: 100 },
+        ]),
+        countStudySessionsMatchingFocus: vi.fn(async () => 0),
       },
     }));
 
