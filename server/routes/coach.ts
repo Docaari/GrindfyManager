@@ -1060,6 +1060,14 @@ export function registerCoachRoutes(app: Express): void {
   app.post('/api/admin/coach/freeze-category', requireAuth, async (req: any, res: any) => {
     await handleAdminFreezeCategory(req, res);
   });
+  // Sprint coach-launch-fix RF-14 — admin cost metrics (chat messages).
+  app.get('/api/admin/coach/cost-metrics', requireAuth, async (req: any, res: any) => {
+    await handleGetCostMetrics(req, res);
+  });
+  // Sprint AI-1C — admin cost metrics dos reports automaticos (weekly/daily/monthly).
+  app.get('/api/admin/coach/report-cost-metrics', requireAuth, async (req: any, res: any) => {
+    await handleGetReportCostMetrics(req, res);
+  });
   // Sprint AI-1B — timeline / reports / suggestions.
   registerCoachAi1bRoutes(app, requireAuth);
 }
@@ -1633,6 +1641,109 @@ export async function handleGetCostMetrics(
     });
   } catch (err: any) {
     console.error('[coach.cost-metrics] error', { err });
+    res.status(500).json({ message: 'Erro interno' });
+  }
+}
+
+// =============================================================================
+// Sprint AI-1C — GET /api/admin/coach/report-cost-metrics (admin)
+// Agrega `reports.cost_usd_estimate` por tipo (weekly/daily/monthly) num
+// periodo (default 30d). Permite monitorar gasto LLM dos relatorios automaticos
+// separadamente das chat messages (`/api/admin/coach/cost-metrics`).
+// =============================================================================
+
+export async function handleGetReportCostMetrics(
+  req: any,
+  res: any,
+  injectedStorage?: any,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: 'Nao autenticado' });
+    return;
+  }
+  if (!isAdminUser(req.user)) {
+    res.status(403).json({ message: 'Acesso negado' });
+    return;
+  }
+  const rawDays = req.query?.days;
+  let days = 30;
+  if (rawDays !== undefined && rawDays !== '') {
+    const n = Number(rawDays);
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1 || n > 365) {
+      res.status(400).json({ message: 'days deve ser inteiro entre 1 e 365' });
+      return;
+    }
+    days = n;
+  }
+
+  let store: any = injectedStorage;
+  if (!store) {
+    try {
+      const { storage: realStorage } = await import('../storage');
+      store = realStorage;
+    } catch (err) {
+      console.error('[coach.report-cost-metrics] storage init failed', err);
+      res.status(500).json({ message: 'Erro interno' });
+      return;
+    }
+  }
+
+  try {
+    const now = new Date();
+    const from = new Date(now.getTime() - days * 24 * 3600 * 1000);
+
+    // Tenta usar metodo dedicado do storage; se ausente, agrega via raw SQL.
+    let agg: any = null;
+    try {
+      agg = await store.getReportCostMetrics?.({ from, to: now });
+    } catch (err) {
+      console.error('[coach.report-cost-metrics] storage method failed', err);
+    }
+
+    if (!agg) {
+      // Fallback: raw SQL sobre reports table.
+      try {
+        const { db } = await import('../db');
+        const { sql } = await import('drizzle-orm');
+        const result: any = await (db as any).execute(sql`
+          SELECT report_type,
+                 COUNT(*)::int as count,
+                 COALESCE(SUM(cost_usd_estimate), 0)::float as total_cost,
+                 COALESCE(AVG(cost_usd_estimate), 0)::float as avg_cost
+          FROM reports
+          WHERE created_at >= ${from.toISOString()}::timestamp
+            AND created_at <= ${now.toISOString()}::timestamp
+          GROUP BY report_type
+        `);
+        const list = Array.isArray(result?.rows) ? result.rows : Array.isArray(result) ? result : [];
+        const byType: Record<string, { count: number; totalCost: number; avgCost: number }> = {};
+        let totalReports = 0;
+        let totalCost = 0;
+        for (const r of list) {
+          const t = String(r?.report_type ?? r?.reportType ?? 'unknown');
+          const c = Number(r?.count ?? 0);
+          const tc = Number(r?.total_cost ?? r?.totalCost ?? 0);
+          const ac = Number(r?.avg_cost ?? r?.avgCost ?? 0);
+          byType[t] = { count: c, totalCost: tc, avgCost: ac };
+          totalReports += c;
+          totalCost += tc;
+        }
+        agg = { totalReports, totalCost, byType };
+      } catch (err) {
+        console.error('[coach.report-cost-metrics] fallback sql failed', err);
+        agg = { totalReports: 0, totalCost: 0, byType: {} };
+      }
+    }
+
+    res.status(200).json({
+      period: { from: from.toISOString(), to: now.toISOString(), days },
+      totalReports: agg?.totalReports ?? 0,
+      totalCost: agg?.totalCost ?? 0,
+      avgCostPerReport: (agg?.totalReports ?? 0) > 0 ? (agg.totalCost / agg.totalReports) : 0,
+      byType: agg?.byType ?? {},
+    });
+  } catch (err: any) {
+    console.error('[coach.report-cost-metrics] error', { err });
     res.status(500).json({ message: 'Erro interno' });
   }
 }

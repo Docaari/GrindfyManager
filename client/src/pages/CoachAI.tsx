@@ -666,6 +666,10 @@ type PrefsResponse = {
   quietHours?: { startHour?: number; endHour?: number; timezone?: string };
   frequencyCap?: { perDay?: number; perHour?: number };
   frozenCategories?: Record<string, FrozenCategoryEntry>;
+  // AI-1B + AI-1C — opt-in dos relatorios automaticos.
+  reportWeeklyEnabled?: boolean;
+  reportDailyEnabled?: boolean;
+  reportMonthlyEnabled?: boolean;
 };
 
 const FROZEN_CATEGORY_LABELS: Record<string, string> = {
@@ -711,6 +715,10 @@ function CoachPreferencesPanel() {
   const [quietEnd, setQuietEnd] = useState<number>(9);
   const [perDay, setPerDay] = useState<number>(3);
   const [perHour, setPerHour] = useState<number>(1);
+  // Sprint AI-1B + AI-1C — opt-in dos 3 relatorios automaticos.
+  const [reportWeekly, setReportWeekly] = useState<boolean>(false);
+  const [reportDaily, setReportDaily] = useState<boolean>(false);
+  const [reportMonthly, setReportMonthly] = useState<boolean>(false);
 
   useEffect(() => {
     if (!data) return;
@@ -731,6 +739,9 @@ function CoachPreferencesPanel() {
       if (typeof data.frequencyCap.perDay === 'number') setPerDay(data.frequencyCap.perDay);
       if (typeof data.frequencyCap.perHour === 'number') setPerHour(data.frequencyCap.perHour);
     }
+    if (typeof data.reportWeeklyEnabled === 'boolean') setReportWeekly(data.reportWeeklyEnabled);
+    if (typeof data.reportDailyEnabled === 'boolean') setReportDaily(data.reportDailyEnabled);
+    if (typeof data.reportMonthlyEnabled === 'boolean') setReportMonthly(data.reportMonthlyEnabled);
   }, [data]);
 
   const saveMutation = useMutation({
@@ -751,8 +762,11 @@ function CoachPreferencesPanel() {
       quietHoursEnd: quietEnd,
       maxNudgesPerDay: perDay,
       maxNudgesPerHour: perHour,
+      reportWeeklyEnabled: reportWeekly,
+      reportDailyEnabled: reportDaily,
+      reportMonthlyEnabled: reportMonthly,
     });
-  }, [nudges, quietStart, quietEnd, perDay, perHour, saveMutation]);
+  }, [nudges, quietStart, quietEnd, perDay, perHour, reportWeekly, reportDaily, reportMonthly, saveMutation]);
 
   return (
     <div data-testid="coach-prefs-panel" className="p-4 space-y-5 max-w-xl">
@@ -823,6 +837,42 @@ function CoachPreferencesPanel() {
           onChange={(e) => setPerHour(Number(e.target.value))}
           className="w-16 bg-gray-800 border border-gray-700 rounded px-1 text-gray-100"
         />
+      </div>
+
+      {/* AI-1B + AI-1C — opt-in dos relatorios automaticos. */}
+      <div data-testid="coach-prefs-reports" className="space-y-2 border-t border-gray-800 pt-4">
+        <h4 className="text-sm font-medium text-gray-300">Relatorios automaticos</h4>
+        <label className="flex items-center justify-between gap-3 text-sm text-gray-300">
+          <span>Relatorio semanal (segunda 7h fuso local)</span>
+          <input
+            type="checkbox"
+            data-testid="coach-prefs-toggle-report-weekly"
+            checked={reportWeekly}
+            onChange={(e) => setReportWeekly(e.target.checked)}
+            className="h-4 w-4"
+          />
+        </label>
+        <label className="flex items-center justify-between gap-3 text-sm text-gray-300">
+          <span>Daily Debrief (pos finalizacao de sessao)</span>
+          <input
+            type="checkbox"
+            data-testid="coach-prefs-toggle-report-daily"
+            checked={reportDaily}
+            onChange={(e) => setReportDaily(e.target.checked)}
+            className="h-4 w-4"
+          />
+        </label>
+        <label className="flex items-center justify-between gap-3 text-sm text-gray-300">
+          <span>Relatorio mensal (dia 1 do mes 7h fuso local)</span>
+          <input
+            type="checkbox"
+            data-testid="coach-prefs-toggle-report-monthly"
+            checked={reportMonthly}
+            onChange={(e) => setReportMonthly(e.target.checked)}
+            className="h-4 w-4"
+          />
+        </label>
+        <p className="text-xs text-gray-500">Disponivel para Trial + Pro/Premium. Free nao recebe.</p>
       </div>
 
       {data && (
