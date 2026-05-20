@@ -47,6 +47,8 @@ import { getTournamentSuggestionsTool } from './handlers/getTournamentSuggestion
 import { explainTournamentScoreTool } from './handlers/explainTournamentScore';
 import { simulateBankrollScenarioTool } from './handlers/simulateBankrollScenario';
 import { verifyLeakProgressTool } from './handlers/verifyLeakProgress';
+// AI-1C — bulk batching wrapper para query_dimension (RF-06, ADR-160).
+import { bulkQueryDimensionsTool } from './handlers/bulkQueryDimensions';
 // AI-0A — write tools (handlers de Coach-2B), confirmacao SEMPRE v1.
 import { registerTournamentInGradeTool } from './handlers/registerTournamentInGrade';
 import { recordWalletTransactionTool } from './handlers/recordWalletTransaction';
@@ -87,6 +89,9 @@ safeRegister(explainTournamentScoreTool);
 safeRegister(simulateBankrollScenarioTool);
 safeRegister(verifyLeakProgressTool as unknown as CoachTool);
 
+// AI-1C — bulk batching (RF-06).
+safeRegister(bulkQueryDimensionsTool);
+
 // AI-0A — write tools (RF-06..11), confirmacao SEMPRE v1 (ADR-146).
 safeRegister(registerTournamentInGradeTool as unknown as CoachTool);
 safeRegister(recordWalletTransactionTool as unknown as CoachTool);
@@ -115,10 +120,12 @@ export {
   logSessionCompletedTool,
   logLeakFocusTool,
   logStudySessionTool,
+  bulkQueryDimensionsTool,
 };
 
 // Agregado para introspeccao por testes (lesson #8 — testes validam presenca
-// individual, nunca length absoluta). Inclui as 17 tools canonicas + 1 alias.
+// individual, nunca length absoluta). Inclui as 17 tools canonicas + 1 alias
+// + bulk_query_dimensions (AI-1C).
 export const coachTools = [
   readCooldownHistoryTool,
   readUserHudStatsToolV2,
@@ -138,4 +145,5 @@ export const coachTools = [
   logSessionCompletedTool,
   logLeakFocusTool,
   logStudySessionTool,
+  bulkQueryDimensionsTool,
 ];
