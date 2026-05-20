@@ -46,6 +46,9 @@ export interface CoachPreferences {
   reportWeeklyEnabled: boolean;
   nudgeBGapcheck: boolean;
   nudgeBImport: boolean;
+  // Sprint AI-1C (ADR-159) — opt-in Daily Debrief + Monthly Report.
+  reportDailyEnabled: boolean;
+  reportMonthlyEnabled: boolean;
   updatedAt?: Date;
 }
 
@@ -70,6 +73,8 @@ export const COACH_PREFS_DEFAULTS: CoachPreferences = {
   reportWeeklyEnabled: false,
   nudgeBGapcheck: true,
   nudgeBImport: true,
+  reportDailyEnabled: false,
+  reportMonthlyEnabled: false,
 };
 
 const CACHE_TTL_MS = 30_000;
@@ -107,6 +112,10 @@ export function normalizeCoachPreferences(row: any): CoachPreferences {
       row?.reportWeeklyEnabled ?? COACH_PREFS_DEFAULTS.reportWeeklyEnabled,
     nudgeBGapcheck: row?.nudgeBGapcheck ?? COACH_PREFS_DEFAULTS.nudgeBGapcheck,
     nudgeBImport: row?.nudgeBImport ?? COACH_PREFS_DEFAULTS.nudgeBImport,
+    reportDailyEnabled:
+      row?.reportDailyEnabled ?? COACH_PREFS_DEFAULTS.reportDailyEnabled,
+    reportMonthlyEnabled:
+      row?.reportMonthlyEnabled ?? COACH_PREFS_DEFAULTS.reportMonthlyEnabled,
     updatedAt: row?.updatedAt,
   };
 }

@@ -1103,6 +1103,9 @@ function buildPrefsResponse(prefs: any, timezone: string) {
     reportWeeklyEnabled: prefs.reportWeeklyEnabled ?? false,
     nudgeBGapcheck: prefs.nudgeBGapcheck ?? true,
     nudgeBImport: prefs.nudgeBImport ?? true,
+    // Sprint AI-1C (ADR-159) — opt-in Daily Debrief + Monthly Report.
+    reportDailyEnabled: prefs.reportDailyEnabled ?? false,
+    reportMonthlyEnabled: prefs.reportMonthlyEnabled ?? false,
     updatedAt: prefs.updatedAt
       ? (prefs.updatedAt instanceof Date
           ? prefs.updatedAt.toISOString()

@@ -616,6 +616,10 @@ export const grindSessions = pgTable("grind_sessions", {
   roi: decimal("roi"), // ROI da sessão
   fts: integer("fts"), // Final tables da sessão
   cravadas: integer("cravadas"), // Cravadas da sessão
+  // Lucro reconciliado da banca (USD) — delta saldos das wallets reportado no
+  // SessionSummaryModal ("Lucro Total da Sessao"). Nullable: sessoes legadas
+  // ou sem reconciliacao caem no fallback profit (P&L de torneios) + snapshots.
+  walletProfitUsd: decimal("wallet_profit_usd"),
   energiaMedia: decimal("energia_media"), // Energia média (dos breaks)
   focoMedio: decimal("foco_medio"), // Foco médio (dos breaks)
   confiancaMedia: decimal("confianca_media"), // Confiança média (dos breaks)
@@ -4524,6 +4528,10 @@ export const userCoachPreferences = pgTable("user_coach_preferences", {
   nudgeBGapcheck: boolean("nudge_b_gapcheck").notNull().default(true),
   nudgeBImport: boolean("nudge_b_import").notNull().default(true),
 
+  // Sprint AI-1C (ADR-159) — opt-in Daily Debrief + Monthly Report. Migration 0068.
+  reportDailyEnabled: boolean("report_daily_enabled").notNull().default(false),
+  reportMonthlyEnabled: boolean("report_monthly_enabled").notNull().default(false),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -4551,6 +4559,9 @@ export const updateCoachPreferencesSchema = z.object({
   reportWeeklyEnabled: z.boolean().optional(),
   nudgeBGapcheck: z.boolean().optional(),
   nudgeBImport: z.boolean().optional(),
+  // Sprint AI-1C (ADR-159) — opt-in Daily Debrief + Monthly Report.
+  reportDailyEnabled: z.boolean().optional(),
+  reportMonthlyEnabled: z.boolean().optional(),
   // Sprint AI-1A / RF-02 — descongelar uma categoria via PUT. Congelamento NUNCA
   // eh setado via PUT (so auto-congelamento ou endpoint admin) — por isso so
   // `unfreezeCategory` (remover), nao `frozenCategories` (mapa cru).
@@ -5192,15 +5203,22 @@ export interface ReportContentCta {
   payloadHint?: Record<string, unknown>;
 }
 
+export type ReportContentType = "weekly" | "monthly" | "daily";
+
 export interface ReportContent {
   schemaVersion: number;
-  reportType: "weekly";
+  reportType: ReportContentType;
   periodStart: string;
   periodEnd: string;
   dataSufficiency: "ok" | "low";
   level?: AiPlayerLevel | null;
   tone?: "gentle" | "balanced" | "direct";
   header: { title: string; summaryLine: string; comparison?: string };
+  // Para reportType='weekly'/'monthly' as 4 sub-secoes basicas sao obrigatorias
+  // (mentalOps continua opcional como antes); para 'daily' o gerador preenche
+  // sub-secoes com stubs zerados (relatorio curto usa `sessionSummary` para
+  // os numeros principais; sub-secoes continuam presentes para back-compat
+  // do renderer e dos tests existentes do AI-1B).
   sections: {
     volumeResults: {
       sessionsCompleted: number;
@@ -5258,6 +5276,69 @@ export interface ReportContent {
     degraded: boolean;
     degradedReason: string | null;
     costUsdEstimate?: number | null;
+  };
+
+  // Sprint AI-1C (ADR-159) — campos novos opcionais. Frontend tolera ausencia;
+  // bumps de `schemaVersion` (1 -> 2) ficam a cargo do gerador quando popular
+  // qualquer um destes blocos. Lesson #7 (deprecation gradual).
+
+  // RF-05.4 — comparativos mes-a-mes (monthly; weekly pode ter previousPeriod).
+  comparatives?: {
+    previousPeriod?: { label: string; profit: number | null; roi: number | null; count: number | null };
+    last6Months?: Array<{ month: string; profit: number; roi: number | null; count: number }>;
+    last12Months?: Array<{ month: string; profit: number; roi: number | null; count: number }>;
+    trendNarrative?: string;
+  };
+
+  // RF-05.4 — analise de variancia (monthly).
+  variance?: {
+    bankrollDeltaUsd: number | null;
+    estimatedBySkillUsd: number | null;
+    estimatedByVarianceUsd: number | null;
+    sampleSize: number | null;
+    method: "heuristic" | "primedope";
+    narrative?: string;
+    confidence?: "high" | "medium" | "low";
+  };
+
+  // RF-05.4 — leaks resolvidos vs novos no mes (monthly).
+  leaksDelta?: {
+    resolved: Array<{ code: string; label: string; note?: string }>;
+    newSignals: Array<{ code: string; label: string; severity?: string }>;
+    activeFocus: Array<{ code: string; label: string; status: string; progressNote?: string }>;
+    narrative?: string;
+  };
+
+  // RF-05.4 — progresso das metas do `ai_structured_profile` (monthly).
+  goalsProgress?: Array<{
+    goalId: string;
+    texto: string;
+    prazo: "mes" | "trimestre" | null;
+    estimate: "on_track" | "behind" | "ahead" | "unknown";
+    narrative?: string;
+  }>;
+
+  // RF-08 — secao "Seu acompanhamento" (weekly/monthly/daily).
+  followUp?: {
+    activeLeakFocus: Array<{ code: string; label: string; targetMonth: string; status: string; progressNote?: string }>;
+    goalsInProgress: Array<{ goalId: string; texto: string; prazo: "mes" | "trimestre" | null }>;
+    narrative?: string;
+  };
+
+  // RF-03.4 — resumo agregado da(s) sessao(oes) do dia (daily); pode aparecer
+  // tambem em 'monthly' agregado, mas o cabecalho do daily eh o principal.
+  sessionSummary?: {
+    sessionDate: string;
+    sessionsCount: number;
+    tournamentsCount: number;
+    profitUsd: number | null;
+    roiPct: number | null;
+    itmPct?: number | null;
+    finalTables?: number;
+    cravadas?: number;
+    spotsCount?: number;
+    profitByCurrency?: Array<{ currency: string; native: number; usd: number }>;
+    narrative?: string;
   };
 }
 
