@@ -246,8 +246,6 @@ Catalogo completo em `Docs/architecture/lessons-learned.md`. **Consultar antes d
 **Crons aposentados (AI-1B, ADR-156):** `generateCoachRecommendations` (segunda 6h BRT) e `generateWeeklyStudyPlan` (segunda 9h UTC) tiveram o **agendamento desligado** — absorvidos pelo Weekly Report. As tabelas `coach_lesson_recommendations` e `study_weekly_plans` continuam preenchidas pelo gerador do report (chaves de semana mantidas — BRT pra rec, UTC pro plano — back-compat com `/inicio` cards + `StudyWeeklyPlanCard`). Trade-off: Free perde a rec de lesson automatica semanal (rec via chat / tool `recommend_lesson` on-demand; follow-up "cron leve pra todos" documentado se inaceitavel).
 
 **Pendencias tecnicas conhecidas:**
-- `0.0.0.0` hardcoded no server (baixa prioridade).
-- Endpoints `/api/test/*` pendentes de remocao em producao.
 - Adicionar MSW para testes de integracao do Coach (CSRF, refresh, redirect 401).
 - AI-1C: Daily Debrief + Monthly Report + tier gating estrito + sumarizacao hierarquica Haiku→Sonnet + tool batching + follow-ups — arquitetura+ADRs (159/160/161) prontos (`Docs/specs/sprint-ai-1c.md` + `Docs/architecture/diagrams/coach-ai-1c/`), migracao 0068; **proximo = test-writer → implementer**. Variancia mensal ainda heuristica (`getVarianceVsExpected` retorna `null` — TODO PrimeDope AI-2A).
 - Plano de IA — Fase 1 (AI-1A/1B + AI-1C arquitetado): Fase 2 = AI-2A (write tools grade/estudo + tools diagnostico + nudges B-DOWNSWING/B-VOLUME/B-GRADE) → AI-2B (carreira + Quarterly Review + mental via warm-up + email). Ver `memory/ai_agents_improvement_plan_2026-05-11.md`.

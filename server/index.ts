@@ -99,10 +99,14 @@ app.use((req, res, next) => {
 
   // Serve both the API and the client on a single port.
   const port = parseInt(process.env.PORT || "3000", 10);
+  // HOST env permite override do bind (default 0.0.0.0 — aceita conexoes em
+  // todas as interfaces). Em ambientes com proxy reverso local, setar HOST=127.0.0.1
+  // restringe o bind para loopback.
+  const host = process.env.HOST || "0.0.0.0";
   let refreshTokenInterval: NodeJS.Timeout | undefined;
   server.listen({
     port,
-    host: "0.0.0.0",
+    host,
   }, () => {
     log(`serving on port ${port}`);
     startSupremaAutoSync();
