@@ -197,6 +197,42 @@ export async function assembleContext(
     } catch { /* graceful degradation */ }
   }
 
+  // AI-1C / RF-08 (ADR-161) — follow-ups abertos: lista os ultimos relatorios
+  // recentes (weekly/daily/monthly) ainda nao lidos / nao dispensados + suas
+  // suggestions. Permite ao agente fechar o loop sobre o que ja sugeriu.
+  // Best-effort — falha de leitura nao quebra o context.
+  try {
+    const recentReports = (await (storage as any).listReportsForUser?.({ userId, limit: 3 })) ?? [];
+    const openLines: string[] = [];
+    for (const r of Array.isArray(recentReports) ? recentReports : []) {
+      if (r?.dismissedAt) continue;
+      const content = r?.content ?? {};
+      const type = content?.reportType ?? r?.reportType ?? "report";
+      const period = content?.periodStart ?? r?.periodStart ?? "";
+      const headerLine = content?.header?.summaryLine ?? "";
+      const recommended = content?.nextWeekPlan?.recommendedAction ?? null;
+      const activeFoci = content?.followUp?.activeLeakFocus
+        ?.map?.((f: any) => f.label || f.code)
+        .filter(Boolean)
+        .slice(0, 3) ?? [];
+      const goals = content?.followUp?.goalsInProgress
+        ?.map?.((g: any) => g.texto)
+        .filter(Boolean)
+        .slice(0, 3) ?? [];
+      const bits: string[] = [`[${type} ${period}] ${headerLine}`.trim()];
+      if (recommended) bits.push(`Ação sugerida: ${recommended}`);
+      if (activeFoci.length) bits.push(`Focos ativos: ${activeFoci.join(", ")}`);
+      if (goals.length) bits.push(`Metas em progresso: ${goals.join(", ")}`);
+      if (r?.readAt) bits.push(`(jogador ja leu)`);
+      openLines.push("- " + bits.join(" | "));
+    }
+    if (openLines.length > 0) {
+      systemParts.push(
+        `\n## Follow-ups abertos (relatorios recentes — feche o loop quando apropriado):\n${openLines.join("\n")}`,
+      );
+    }
+  } catch { /* graceful degradation */ }
+
   // Sprint coach-launch-fix RF-08 (P1 #8): usa buildSystemArray que retorna
   // SystemBlock[] com cache_control ephemeral no bloco STATIC (cache hit ratio
   // melhora drasticamente entre mensagens da mesma sessao). Quando feature flag

@@ -93,6 +93,65 @@ async function safePerf(storage: any, userId: string, range: string): Promise<an
   }
 }
 
+// AI-1C / RF-05.4 + RF-08 — gather followUp + goalsProgress for monthly.
+async function gatherFollowUpAndGoals(storage: any, userId: string): Promise<{
+  followUp?: {
+    activeLeakFocus: Array<{ code: string; label: string; targetMonth: string; status: string; progressNote?: string }>;
+    goalsInProgress: Array<{ goalId: string; texto: string; prazo: "mes" | "trimestre" | null }>;
+  };
+  goalsProgress?: Array<{ goalId: string; texto: string; prazo: "mes" | "trimestre" | null; estimate: "on_track" | "behind" | "ahead" | "unknown"; narrative?: string }>;
+}> {
+  const activeLeakFocus: Array<{ code: string; label: string; targetMonth: string; status: string; progressNote?: string }> = [];
+  const goalsInProgress: Array<{ goalId: string; texto: string; prazo: "mes" | "trimestre" | null }> = [];
+  const goalsProgress: Array<{ goalId: string; texto: string; prazo: "mes" | "trimestre" | null; estimate: "on_track" | "behind" | "ahead" | "unknown"; narrative?: string }> = [];
+  try {
+    const raw = (await storage.findActiveLeakFocusList?.(userId)) ?? [];
+    for (const f of Array.isArray(raw) ? raw : []) {
+      activeLeakFocus.push({
+        code: String(f?.leakCode ?? f?.code ?? ""),
+        label: String(f?.label ?? f?.leakCode ?? "leak"),
+        targetMonth: String(f?.targetMonth ?? ""),
+        status: String(f?.status ?? "active"),
+        progressNote: f?.progressNote ?? undefined,
+      });
+    }
+  } catch (err) {
+    console.error("monthly_report.followup.leaks.error", { userId, err });
+  }
+  try {
+    const { getAiStructuredProfile } = await import("../storage/aiStructuredProfile");
+    const profile = await getAiStructuredProfile(userId);
+    const metas = Array.isArray((profile as any)?.metas) ? (profile as any).metas : [];
+    for (const m of metas) {
+      const prazo = (m?.prazo === "mes" || m?.prazo === "trimestre") ? m.prazo : null;
+      goalsInProgress.push({
+        goalId: String(m?.id ?? ""),
+        texto: String(m?.texto ?? ""),
+        prazo,
+      });
+      // Heuristica leve: nao temos "valor alvo" estruturado nas metas;
+      // estimate sempre 'unknown' nesta versao deterministic. LLM-narrative
+      // wave futura pode preencher com interpretacao do texto.
+      goalsProgress.push({
+        goalId: String(m?.id ?? ""),
+        texto: String(m?.texto ?? ""),
+        prazo,
+        estimate: "unknown",
+      });
+    }
+  } catch (err) {
+    console.error("monthly_report.followup.metas.error", { userId, err });
+  }
+  const out: any = {};
+  if (activeLeakFocus.length > 0 || goalsInProgress.length > 0) {
+    out.followUp = { activeLeakFocus, goalsInProgress };
+  }
+  if (goalsProgress.length > 0) {
+    out.goalsProgress = goalsProgress;
+  }
+  return out;
+}
+
 export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Promise<MonthlyReportResult> {
   const { userId, periodStart, periodEnd } = args;
   const storage = await resolveStorage(args.injectedStorage);
@@ -101,9 +160,10 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
   const prev = previousMonthRange(periodStart);
   const prevRangeArg = `${prev.start} to ${prev.end}`;
 
-  const [perfCurrent, perfPrev] = await Promise.all([
+  const [perfCurrent, perfPrev, extras] = await Promise.all([
     safePerf(storage, userId, rangeArg),
     safePerf(storage, userId, prevRangeArg),
+    gatherFollowUpAndGoals(storage, userId),
   ]);
 
   const tournaments = N(perfCurrent?.count ?? perfCurrent?.tournaments);
@@ -205,6 +265,8 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
             : `Mes empata com ${prev.start.slice(0, 7)}.`,
     },
     variance,
+    ...(extras.followUp ? { followUp: extras.followUp } : {}),
+    ...(extras.goalsProgress ? { goalsProgress: extras.goalsProgress } : {}),
   };
 
   // Markdown simples.

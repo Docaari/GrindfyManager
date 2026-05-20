@@ -128,6 +128,41 @@ export default function WeeklyReportView() {
         </div>
       ) : null}
 
+      {/* AI-1C — followUp (weekly/monthly/daily) */}
+      {content.followUp && (content.followUp.activeLeakFocus?.length || content.followUp.goalsInProgress?.length) ? (
+        <div data-testid="report-follow-up" className="rounded-lg border border-gray-700 bg-gray-800/40 p-3 text-xs text-gray-300">
+          <h3 className="text-sm font-medium text-gray-200">Seu acompanhamento</h3>
+          {content.followUp.activeLeakFocus?.length ? (
+            <div className="mt-2">
+              <p className="text-gray-400">Foco de leak ativo:</p>
+              <ul className="mt-1 list-disc pl-5">
+                {content.followUp.activeLeakFocus.map((f: any, i: number) => (
+                  <li key={`leak-${i}`}>
+                    {f.label || f.code}
+                    {f.status ? ` — ${f.status}` : ""}
+                    {f.progressNote ? ` (${f.progressNote})` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {content.followUp.goalsInProgress?.length ? (
+            <div className="mt-2">
+              <p className="text-gray-400">Metas em progresso:</p>
+              <ul className="mt-1 list-disc pl-5">
+                {content.followUp.goalsInProgress.map((g: any, i: number) => (
+                  <li key={`goal-${i}`}>
+                    {g.texto}
+                    {g.prazo ? ` — ${g.prazo}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {content.followUp.narrative ? <p className="mt-2 text-gray-400">{content.followUp.narrative}</p> : null}
+        </div>
+      ) : null}
+
       {/* AI-1C — variance (monthly) */}
       {content.variance ? (
         <div data-testid="report-variance" className="rounded-lg border border-gray-700 bg-gray-800/40 p-3 text-xs text-gray-300">

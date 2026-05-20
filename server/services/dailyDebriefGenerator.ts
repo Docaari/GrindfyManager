@@ -181,6 +181,49 @@ function buildMarkdown(c: ReportContent, sum: SessionAggregate): string {
   return lines.join("\n");
 }
 
+// AI-1C / RF-08 — followUp block (foco de leak ativo + metas em progresso).
+// Safe-deny por dep: erro em uma fonte nao impede o resto.
+async function gatherFollowUp(storage: any, userId: string): Promise<{
+  activeLeakFocus: Array<{ code: string; label: string; targetMonth: string; status: string; progressNote?: string }>;
+  goalsInProgress: Array<{ goalId: string; texto: string; prazo: "mes" | "trimestre" | null }>;
+} | undefined> {
+  const activeLeakFocus: Array<{ code: string; label: string; targetMonth: string; status: string; progressNote?: string }> = [];
+  const goalsInProgress: Array<{ goalId: string; texto: string; prazo: "mes" | "trimestre" | null }> = [];
+  try {
+    const raw = (await storage.findActiveLeakFocusList?.(userId)) ?? [];
+    for (const f of Array.isArray(raw) ? raw : []) {
+      activeLeakFocus.push({
+        code: String(f?.leakCode ?? f?.code ?? ""),
+        label: String(f?.label ?? f?.leakCode ?? "leak"),
+        targetMonth: String(f?.targetMonth ?? ""),
+        status: String(f?.status ?? "active"),
+        progressNote: f?.progressNote ?? undefined,
+      });
+    }
+  } catch (err) {
+    console.error("daily_debrief.followup.leaks.error", { userId, err });
+  }
+  try {
+    const { getAiStructuredProfile } = await import("../storage/aiStructuredProfile");
+    const profile = await getAiStructuredProfile(userId);
+    const metas = Array.isArray((profile as any)?.metas) ? (profile as any).metas : [];
+    // Daily: so metas mensais sao relevantes pro fechamento de loop pos-sessao.
+    for (const m of metas) {
+      if (m?.prazo === "mes") {
+        goalsInProgress.push({
+          goalId: String(m?.id ?? ""),
+          texto: String(m?.texto ?? ""),
+          prazo: "mes",
+        });
+      }
+    }
+  } catch (err) {
+    console.error("daily_debrief.followup.metas.error", { userId, err });
+  }
+  if (activeLeakFocus.length === 0 && goalsInProgress.length === 0) return undefined;
+  return { activeLeakFocus, goalsInProgress };
+}
+
 export async function generateDailyDebrief(args: GenerateDailyDebriefArgs): Promise<DailyDebriefResult> {
   const { userId, periodStart, periodEnd } = args;
   const storage = await resolveStorage(args.injectedStorage);
@@ -189,6 +232,8 @@ export async function generateDailyDebrief(args: GenerateDailyDebriefArgs): Prom
   const agg = await aggregateSessionsForDate(storage, userId, date);
   const hasData = agg.sessionsCount > 0;
   const roi = agg.buyInUsd > 0 ? (agg.profitUsd / agg.buyInUsd) * 100 : null;
+
+  const followUp = await gatherFollowUp(storage, userId);
 
   const content: ReportContent = {
     schemaVersion: 2,
@@ -231,6 +276,7 @@ export async function generateDailyDebrief(args: GenerateDailyDebriefArgs): Prom
       spotsCount: agg.spotsCount,
       profitByCurrency: agg.profitByCurrency,
     },
+    ...(followUp ? { followUp } : {}),
   };
 
   const markdown = buildMarkdown(content, agg);
