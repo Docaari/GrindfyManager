@@ -104,6 +104,7 @@ export default function AddTournamentDialog({
                 <option value="Revolution">Revolution</option>
                 <option value="Bodog">Bodog</option>
                 <option value="Suprema">Suprema</option>
+                <option value="WPT Global">WPT Global</option>
               </select>
             </div>
             <div>

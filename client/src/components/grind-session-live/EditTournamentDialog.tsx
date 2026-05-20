@@ -49,6 +49,7 @@ export default function EditTournamentDialog({
                   <SelectItem value="Revolution">Revolution</SelectItem>
                   <SelectItem value="Bodog">Bodog</SelectItem>
                   <SelectItem value="Suprema">Suprema</SelectItem>
+                  <SelectItem value="WPT Global">WPT Global</SelectItem>
                 </SelectContent>
               </Select>
             </div>

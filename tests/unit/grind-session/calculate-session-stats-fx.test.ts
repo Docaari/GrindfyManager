@@ -316,7 +316,7 @@ describe('calculateSessionStats - ABI (avg buy-in USD) e Media Participantes', (
     expect(stats.abi).toBeCloseTo(15, 2);
   });
 
-  it('Media Participantes: Gtd / BI quando sem add-on', () => {
+  it('Mediana Participantes: Gtd / BI quando sem add-on', () => {
     const tournaments = [
       {
         id: 't-1',
@@ -344,11 +344,11 @@ describe('calculateSessionStats - ABI (avg buy-in USD) e Media Participantes', (
       },
     ];
     const stats = calculateSessionStats(tournaments, [], {}, null, {});
-    // 4400/22 = 200; 1100/11 = 100; media = 150
-    expect(stats.avgParticipants).toBeCloseTo(150, 2);
+    // 4400/22 = 200; 1100/11 = 100; mediana(2 elementos) = (200+100)/2 = 150
+    expect(stats.medianParticipants).toBeCloseTo(150, 2);
   });
 
-  it('Media Participantes: Gtd / (BI + AddOn) quando add-on pago', () => {
+  it('Mediana Participantes: Gtd / (BI + AddOn) quando add-on pago', () => {
     const tournaments = [
       {
         id: 't-addon',
@@ -366,10 +366,10 @@ describe('calculateSessionStats - ABI (avg buy-in USD) e Media Participantes', (
     ];
     const stats = calculateSessionStats(tournaments, [], {}, null, {});
     // 4400 / (22 + 22) = 100
-    expect(stats.avgParticipants).toBeCloseTo(100, 2);
+    expect(stats.medianParticipants).toBeCloseTo(100, 2);
   });
 
-  it('Media Participantes: ignora torneios sem guaranteed', () => {
+  it('Mediana Participantes: ignora torneios sem guaranteed', () => {
     const tournaments = [
       {
         id: 't-with',
@@ -398,10 +398,10 @@ describe('calculateSessionStats - ABI (avg buy-in USD) e Media Participantes', (
     ];
     const stats = calculateSessionStats(tournaments, [], {}, null, {});
     // So conta o primeiro: 4400/22 = 200
-    expect(stats.avgParticipants).toBeCloseTo(200, 2);
+    expect(stats.medianParticipants).toBeCloseTo(200, 2);
   });
 
-  it('Media Participantes: zero quando nenhum torneio elegivel', () => {
+  it('Mediana Participantes: zero quando nenhum torneio elegivel', () => {
     const tournaments = [
       {
         id: 't-no-gtd',
@@ -416,7 +416,7 @@ describe('calculateSessionStats - ABI (avg buy-in USD) e Media Participantes', (
       },
     ];
     const stats = calculateSessionStats(tournaments, [], {}, null, {});
-    expect(stats.avgParticipants).toBe(0);
+    expect(stats.medianParticipants).toBe(0);
   });
 });
 

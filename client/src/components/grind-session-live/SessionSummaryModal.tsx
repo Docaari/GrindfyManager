@@ -43,7 +43,10 @@ interface SessionSummaryModalProps {
   finalNotes: string;
   setFinalNotes: (notes: string) => void;
   onContinueSession: () => void;
-  onEndSession: () => void;
+  // walletProfitUsd: lucro reconciliado da banca (card "Lucro Total da Sessao").
+  // Passado adiante para persistir em grind_sessions.wallet_profit_usd — assim
+  // o historico mostra o mesmo numero que apareceu ao finalizar.
+  onEndSession: (walletProfitUsd?: number) => void;
   onStartFullCooldown?: (logId: string) => void;
   onStartQuickCooldown?: (logId: string) => void;
   bankrollManagementEnabled?: boolean;
@@ -243,18 +246,48 @@ export default function SessionSummaryModal({
 
   const guardAndReconcile = async (): Promise<boolean> => {
     if (hasMissing) {
-      safeTrack("summary_submit_blocked_missing_platforms", {
+      safeTrack("summary_submit_skipped_missing_platforms", {
         sessionId,
         missingPlatforms: missing,
       });
-      toast({ title: "Cadastre as wallets pendentes antes de finalizar." });
-      return false;
+      // P1: registra o skip server-side (skipReconciliation=true) para deixar
+      // trilha de auditoria — o endpoint cria o marcador `skippedByUser`. Best-
+      // effort: se a chamada falhar a sessao finaliza mesmo assim.
+      if (sessionId) {
+        try {
+          await apiRequest(
+            "POST",
+            `/api/grind-sessions/${sessionId}/reconcile-wallets`,
+            { adjustments: [], skipReconciliation: true },
+          );
+        } catch (err: any) {
+          const status: number | undefined = err?.response?.status;
+          const code = err?.response?.data?.code;
+          // 409 already_reconciled eh idempotente — trilha ja existe.
+          if (!(status === 409 && code === "already_reconciled")) {
+            safeTrack("summary_skip_reconcile_failed", {
+              sessionId,
+              errorCode: status ?? 0,
+            });
+          }
+        }
+      }
+      toast({
+        title: "Sessao finalizada sem reconciliar",
+        description: "Cadastre as wallets pendentes e reconcilie depois em /bankroll.",
+      });
+      return true;
     }
     return submitReconcile();
   };
 
   const handleFinalizeSession = async () => {
-    if (await guardAndReconcile()) onEndSession();
+    if (await guardAndReconcile()) {
+      // Persiste o lucro da banca apenas quando a secao de bankroll esta
+      // visivel (ha wallets reconciliaveis). Sem wallets, o historico mantem
+      // o fallback de P&L de torneios.
+      onEndSession(showProfitCard ? totalProfitUSD : undefined);
+    }
   };
 
   const handleRegisterMissingWallet = () => {
@@ -324,7 +357,7 @@ export default function SessionSummaryModal({
             <div className="text-amber-200/80 mb-2">
               Voce jogou em {visibleMissing.join(", ")}
               {extraMissingCount > 0 ? `, +${extraMissingCount} mais` : ""}
-              . Cadastre antes de finalizar para garantir reconcile correto.
+              . Pode finalizar mesmo assim — reconcilie depois em /bankroll, ou cadastre agora pra reconcile inline.
             </div>
             <button
               type="button"
@@ -562,7 +595,7 @@ export default function SessionSummaryModal({
             data-testid="cta-finalize-session"
             className="end-session-btn bg-primary text-primary-foreground"
             onClick={handleFinalizeSession}
-            disabled={isReconciling || hasMissing}
+            disabled={isReconciling}
           >
             Finalizar Sessao
           </button>

@@ -5,8 +5,9 @@ import { Settings, Plus, Eye, X } from "lucide-react";
 import { generateTimeSlots } from "@shared/grade-hours";
 import { getDisplayRegistrationTime } from "@shared/grade-time";
 import { getCellDisplayInfo } from "@shared/grade-cell-overflow";
-import { groupBuyInsByCurrency, formatGroupedBuyIns, formatBuyIn } from "@shared/platform-currency";
+import { groupBuyInsByCurrency, formatGroupedBuyIns, formatBuyIn, getCurrencyForSite } from "@shared/platform-currency";
 import { TournamentChip } from "./TournamentChip";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
   Popover,
   PopoverContent,
@@ -22,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { sites, types, speeds } from "./types";
+import { useToast } from "@/hooks/use-toast";
 
 /** Days ordered Mon-Sun for grid columns. dayOfWeek uses JS convention: 0=Sun, 1=Mon...6=Sat */
 const GRID_DAYS = [
@@ -47,8 +49,6 @@ const PROFILE_COLORS_INACTIVE: Record<string, string> = {
   C: "bg-gray-700 hover:bg-orange-600/30 text-gray-400 hover:text-white",
   OFF: "bg-gray-700 hover:bg-gray-600 text-gray-500 hover:text-gray-300",
 };
-
-const MAX_VISIBLE_CHIPS = 3;
 
 /**
  * Convert a time string "HH:MM" to the slot label it falls into.
@@ -96,6 +96,57 @@ export function WeekGrid({
 }: WeekGridProps) {
   const tournaments = Array.isArray(plannedTournaments) ? plannedTournaments : [];
   const TIME_SLOTS = generateTimeSlots(gradeStartHour, gradeEndHour);
+  const { toast } = useToast();
+
+  // hooks ANTES de early return (lesson #1).
+  const anyProfileActive = useMemo(() => {
+    return GRID_DAYS.some((d) => {
+      const p = getActiveProfile(d.id);
+      return p && p !== "OFF";
+    });
+  }, [getActiveProfile]);
+
+  const showEmptyState = tournaments.length === 0 && !anyProfileActive;
+  const todayJsDay = new Date().getDay();
+  const targetEmptyDay = GRID_DAYS.find((d) => d.id === todayJsDay)?.id ?? 0;
+
+  // Resumo do dia (buy-in total, # MTTs, % PKO, % Turbo) — exibido no topo de
+  // cada coluna junto do botao "Detalhes" (antes ficava no rodape da tabela).
+  const daySummaries = useMemo(() => {
+    const map: Record<number, { buyInDisplay: string; abiDisplay: string; countDisplay: string; pkoDisplay: string; turboDisplay: string } | null> = {};
+    for (const day of GRID_DAYS) {
+      const profile = getActiveProfile(day.id);
+      if (!profile || profile === "OFF") { map[day.id] = null; continue; }
+      const dayTournaments = tournaments.filter((t: any) => t.dayOfWeek === day.id && t.profile === profile);
+      const count = dayTournaments.length;
+      if (count === 0) { map[day.id] = { buyInDisplay: "", abiDisplay: "", countDisplay: "0 MTTs", pkoDisplay: "", turboDisplay: "" }; continue; }
+      const grouped = groupBuyInsByCurrency(dayTournaments);
+      const buyInDisplay = formatGroupedBuyIns(grouped);
+      // ABI por moeda: total da moeda / # torneios daquela moeda.
+      const countByCcy: Record<string, number> = {};
+      for (const t of dayTournaments) {
+        const num = parseFloat(t.buyIn);
+        if (isNaN(num)) continue;
+        const code = getCurrencyForSite(t.site).code;
+        countByCcy[code] = (countByCcy[code] || 0) + 1;
+      }
+      const abiGrouped: Record<string, number> = {};
+      for (const code of Object.keys(grouped)) {
+        if (countByCcy[code]) abiGrouped[code] = grouped[code] / countByCcy[code];
+      }
+      const abiDisplay = formatGroupedBuyIns(abiGrouped);
+      const pkoCount = dayTournaments.filter((t: any) => t.type === "PKO").length;
+      const turboCount = dayTournaments.filter((t: any) => t.speed === "Turbo" || t.speed === "Hyper").length;
+      map[day.id] = {
+        buyInDisplay,
+        abiDisplay,
+        countDisplay: `${count} MTT${count > 1 ? "s" : ""}`,
+        pkoDisplay: `PKO ${Math.round((pkoCount / count) * 100)}%`,
+        turboDisplay: `T ${Math.round((turboCount / count) * 100)}%`,
+      };
+    }
+    return map;
+  }, [tournaments, getActiveProfile]);
 
   /** Get tournaments for a given day+slot, filtered by active profile */
   function getTournamentsForCell(dayId: number, slotLabel: string): any[] {
@@ -112,6 +163,29 @@ export function WeekGrid({
     });
   }
 
+  if (showEmptyState) {
+    return (
+      <div className="flex-1 flex items-center justify-center min-h-[300px]">
+        <EmptyState
+          area="grade-planner-empty"
+          title="Sua grade esta vazia"
+          description="Ative um perfil A/B/C e clique em uma celula para adicionar torneios."
+          ctaLabel="Ativar Perfil A"
+          ctaAction={() => setActiveProfile(targetEmptyDay, "A")}
+          secondaryCTA={{
+            label: "Ver tour rapido",
+            onClick: () => {
+              toast({
+                title: "Tour rapido — Grade Planner",
+                description: "1. Ative perfil A/B/C no header  2. Clique celula vazia para adicionar torneio  3. Use o Selector para sugestoes ICE.",
+              });
+            },
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-x-auto scroll-smooth">
       <div className="min-w-[800px]">
@@ -119,7 +193,7 @@ export function WeekGrid({
           {/* Header */}
           <thead>
             <tr>
-              <th className="w-20 bg-gray-900 border border-gray-700 p-2 text-sm text-gray-400 text-center sticky left-0 z-10">
+              <th className="w-20 bg-gray-900 border border-gray-700 p-2 text-base text-gray-400 text-center sticky left-0 z-10">
                 <div className="flex items-center justify-center gap-1">
                   <span>Hora</span>
                   {onOpenSettings && (
@@ -141,7 +215,7 @@ export function WeekGrid({
                     key={day.id}
                     className={`bg-gray-900 border border-gray-700 p-2 text-center ${isOff ? "opacity-50" : ""}`}
                   >
-                    <div className="text-base font-semibold text-white mb-1">{day.short}</div>
+                    <div className="text-lg font-semibold text-white mb-1">{day.short}</div>
                     <div className="flex justify-center gap-1">
                       {(["A", "B", "C", "OFF"] as const).map((profile) => {
                         const isActive = activeProfile === profile || (!activeProfile && profile === "OFF");
@@ -152,7 +226,7 @@ export function WeekGrid({
                           <button
                             key={profile}
                             onClick={() => setActiveProfile(day.id, profile)}
-                            className={`w-9 h-7 rounded text-xs font-bold transition-all focus:ring-2 focus:ring-emerald-400 focus:outline-none ${cls}`}
+                            className={`w-9 h-7 rounded text-sm font-bold transition-all focus:ring-2 focus:ring-emerald-400 focus:outline-none ${cls}`}
                             title={profile === "OFF" ? "Dia OFF" : `Perfil ${profile}`}
                           >
                             {profile === "OFF" ? "OFF" : profile}
@@ -160,20 +234,40 @@ export function WeekGrid({
                         );
                       })}
                     </div>
-                    {/* Sprint F4 RF-01: drill-down "Ver detalhes" do dia.
+                    {/* Resumo do dia + drill-down "Detalhes" (Sprint F4 RF-01).
                         Visivel apenas quando profile != OFF (dia ativo). */}
-                    {!isOff && onShowDayDetails && (
-                      <button
-                        type="button"
-                        data-testid={`week-grid-day-detail-${day.id}`}
-                        onClick={() => onShowDayDetails(day.id)}
-                        className="mt-2 inline-flex items-center justify-center gap-1 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-[10px] font-medium text-gray-300 transition-colors hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                        title="Ver detalhes do dia"
-                      >
-                        <Eye className="h-3 w-3" />
-                        <span>Detalhes</span>
-                      </button>
-                    )}
+                    {!isOff && (() => {
+                      const s = daySummaries[day.id];
+                      return (
+                        <div className="mt-2 flex flex-col items-center gap-1">
+                          {s && (s.buyInDisplay || s.countDisplay) && (
+                            <div className="leading-tight">
+                              <span className="text-xs text-emerald-400 font-semibold">
+                                {s.buyInDisplay}{s.buyInDisplay ? " · " : ""}{s.countDisplay}
+                                {s.abiDisplay ? ` · ABI ${s.abiDisplay}` : ""}
+                              </span>
+                              {(s.pkoDisplay || s.turboDisplay) && (
+                                <span className="text-xs text-gray-400">
+                                  {" · "}{s.pkoDisplay} · {s.turboDisplay}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {onShowDayDetails && (
+                            <button
+                              type="button"
+                              data-testid={`week-grid-day-detail-${day.id}`}
+                              onClick={() => onShowDayDetails(day.id)}
+                              className="inline-flex items-center justify-center gap-1 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                              title="Ver detalhes do dia"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              <span>Detalhes</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </th>
                 );
               })}
@@ -184,14 +278,15 @@ export function WeekGrid({
           <tbody>
             {TIME_SLOTS.map((slot) => (
               <tr key={slot}>
-                <td className="bg-gray-900 border border-gray-700 p-1 text-sm text-gray-400 text-center font-mono sticky left-0 z-10 w-20">
+                <td className="bg-gray-900 border border-gray-700 p-1 text-base text-gray-400 text-center font-mono sticky left-0 z-10 w-20">
                   {slot}
                 </td>
                 {GRID_DAYS.map((day) => {
                   const activeProfile = getActiveProfile(day.id);
                   const isOff = activeProfile === "OFF" || !activeProfile;
                   const cellTournaments = getTournamentsForCell(day.id, slot);
-                  const displayInfo = getCellDisplayInfo(cellTournaments, MAX_VISIBLE_CHIPS);
+                  // Mostra TODOS os torneios do slot (sem "+N torneios") — ordenados por prioridade.
+                  const displayInfo = getCellDisplayInfo(cellTournaments, Number.MAX_SAFE_INTEGER);
                   const droppableId = `cell-${day.id}-${slot}`;
 
                   return (
@@ -248,14 +343,6 @@ export function WeekGrid({
                                   )}
                                 </Draggable>
                               ))}
-                              {displayInfo.hasOverflow && (
-                                <OverflowIndicator
-                                  count={displayInfo.overflow}
-                                  tournaments={cellTournaments.slice(MAX_VISIBLE_CHIPS)}
-                                  onClickTournament={onClickTournament}
-                                  onRemove={onRemoveTournament}
-                                />
-                              )}
                             </div>
                           )}
                           {provided.placeholder}
@@ -267,89 +354,9 @@ export function WeekGrid({
               </tr>
             ))}
           </tbody>
-          <DaySummaryFooter
-            tournaments={tournaments}
-            getActiveProfile={getActiveProfile}
-          />
         </table>
       </div>
     </div>
-  );
-}
-
-// =============================================================================
-// DaySummaryFooter — Summary row at the bottom of the grid
-// =============================================================================
-
-function DaySummaryFooter({
-  tournaments,
-  getActiveProfile,
-}: {
-  tournaments: any[];
-  getActiveProfile: (dayOfWeek: number) => "A" | "B" | "C" | "OFF" | null;
-}) {
-  const daySummaries = useMemo(() => {
-    return GRID_DAYS.map((day) => {
-      const profile = getActiveProfile(day.id);
-      const isOff = !profile || profile === "OFF";
-      if (isOff) return { isOff: true, buyInDisplay: "", countDisplay: "", pkoDisplay: "", turboDisplay: "" };
-
-      const dayTournaments = tournaments.filter(
-        (t: any) => t.dayOfWeek === day.id && t.profile === profile,
-      );
-      const count = dayTournaments.length;
-      if (count === 0) return { isOff: false, buyInDisplay: "", countDisplay: "0 MTTs", pkoDisplay: "", turboDisplay: "" };
-
-      const grouped = groupBuyInsByCurrency(dayTournaments);
-      const buyInDisplay = formatGroupedBuyIns(grouped);
-
-      const pkoCount = dayTournaments.filter((t: any) => t.type === "PKO").length;
-      const turboCount = dayTournaments.filter(
-        (t: any) => t.speed === "Turbo" || t.speed === "Hyper",
-      ).length;
-      const pkoPct = Math.round((pkoCount / count) * 100);
-      const turboPct = Math.round((turboCount / count) * 100);
-
-      return {
-        isOff: false,
-        buyInDisplay: `${buyInDisplay}`,
-        countDisplay: `${count} MTT${count > 1 ? "s" : ""}`,
-        pkoDisplay: `PKO ${pkoPct}%`,
-        turboDisplay: `T ${turboPct}%`,
-      };
-    });
-  }, [tournaments, getActiveProfile]);
-
-  return (
-    <tfoot>
-      <tr>
-        <td className="bg-gray-900 border border-gray-700 p-2 text-xs text-gray-400 text-center sticky left-0 z-10">
-          Resumo
-        </td>
-        {GRID_DAYS.map((day, idx) => {
-          const summary = daySummaries[idx];
-          if (summary.isOff) {
-            return (
-              <td key={day.id} className="bg-gray-800/60 border border-gray-700 border-dashed p-2 text-center">
-                <span className="text-sm text-gray-500">&mdash;</span>
-              </td>
-            );
-          }
-          return (
-            <td key={day.id} className="bg-gray-800/50 border border-gray-700 p-2 text-center">
-              <div className="text-xs text-emerald-400 font-semibold leading-tight">
-                {summary.buyInDisplay} &middot; {summary.countDisplay}
-              </div>
-              {(summary.pkoDisplay || summary.turboDisplay) && (
-                <div className="text-[11px] text-gray-400 leading-tight">
-                  {summary.pkoDisplay} &middot; {summary.turboDisplay}
-                </div>
-              )}
-            </td>
-          );
-        })}
-      </tr>
-    </tfoot>
   );
 }
 
@@ -506,58 +513,6 @@ export function CellChip({
               </Button>
             )}
           </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// =============================================================================
-// OverflowIndicator — "+N torneios" chip with expandable popover
-// =============================================================================
-
-function OverflowIndicator({
-  count,
-  tournaments,
-  onClickTournament,
-  onRemove,
-}: {
-  count: number;
-  tournaments: any[];
-  onClickTournament: (t: any) => void;
-  onRemove?: (id: string) => void;
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button className="w-full text-center text-[10px] text-gray-400 hover:text-white bg-gray-700/50 rounded py-0.5 transition-colors">
-          +{count} torneio{count > 1 ? "s" : ""}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="bg-gray-800 border-gray-600 text-white w-64 p-2 max-h-[300px] overflow-y-auto"
-        side="right"
-        align="start"
-      >
-        <div className="text-xs font-medium text-gray-400 mb-2">
-          {count} torneio{count > 1 ? "s" : ""} adiciona{count > 1 ? "is" : "l"}
-        </div>
-        <div className="space-y-1">
-          {tournaments.map((t: any) => (
-            <div key={t.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-700">
-              <div className="flex-1 min-w-0" onClick={() => onClickTournament(t)}>
-                <TournamentChip tournament={t} />
-              </div>
-              {onRemove && (
-                <button
-                  onClick={() => onRemove(t.id)}
-                  className="text-gray-500 hover:text-red-400 flex-shrink-0"
-                >
-                  <span className="text-[10px]">X</span>
-                </button>
-              )}
-            </div>
-          ))}
         </div>
       </PopoverContent>
     </Popover>

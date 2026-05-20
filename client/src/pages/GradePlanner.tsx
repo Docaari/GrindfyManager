@@ -22,7 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectorPanel } from "@/components/grade-planner/SelectorPanel";
 
 import { tournamentSchema, type TournamentForm, weekDays } from '@/components/grade-planner/types';
-import { computeDayStats } from '@/pages/grade-planner-helpers';
+import { computeDayStats, buildOffDayToastPayload } from '@/pages/grade-planner-helpers';
 import { mapZodIssuesToForm } from '@/lib/zodErrorMapper';
 import { LoadingScreen } from '@/components/grade-planner/LoadingScreen';
 import { WeeklySummaryBar } from '@/components/grade-planner/WeeklySummaryBar';
@@ -448,9 +448,15 @@ export default function GradePlanner() {
     // FIX UX: se o dia esta OFF ou sem perfil, nao deixar o clique silencioso
     if (!activeProfile || activeProfile === 'OFF') {
       const dayName = weekDays.find(d => d.id === dayOfWeek)?.name || 'este dia';
+      const payload = buildOffDayToastPayload({
+        dayName,
+        dayOfWeek,
+        setActiveProfile,
+      });
       toast({
-        title: `${dayName} está OFF`,
-        description: "Ative o perfil A, B ou C no cabeçalho da coluna para adicionar torneios.",
+        title: payload.title,
+        description: payload.description,
+        action: payload.action as any,
       });
       return;
     }

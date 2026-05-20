@@ -4,8 +4,51 @@
 // Extraido de GradePlanner.tsx (calculateStats inline) para permitir teste
 // unitario sem montar a pagina inteira.
 
+import React from "react";
 import { emptyDayStats, type DayStats } from "@/components/grade-planner/types";
 import { estimatedFieldSize, median } from "@/lib/median";
+
+// Sprint UX-QW-2 — RF-05
+// Helper que monta o payload do toast disparado quando user clica em celula
+// vazia de dia OFF no /grade-planner. Inclui ToastAction "Ativar A" que chama
+// setActiveProfile(dayOfWeek, 'A') no click.
+//
+// Lesson #11: helper isolado evita logica decorativa dentro do componente.
+// Decisao tecnica: action eh um <button> nativo (NAO Radix ToastAction) porque
+// o teste renderiza payload.action standalone — Radix Action precisa de Toast
+// root context. Botao nativo funciona standalone E dentro do Toast em prod.
+
+export interface OffDayToastPayload {
+  title: string;
+  description: string;
+  action: React.ReactElement;
+}
+
+export function buildOffDayToastPayload(opts: {
+  dayName: string;
+  dayOfWeek: number;
+  setActiveProfile: (dayOfWeek: number, profile: "A" | "B" | "C" | "OFF") => void;
+}): OffDayToastPayload {
+  const { dayName, dayOfWeek, setActiveProfile } = opts;
+  const altText = `Ativar A para ${dayName}`;
+  const action = React.createElement(
+    "button",
+    {
+      type: "button",
+      "aria-label": "Ativar A",
+      "data-alt-text": altText,
+      onClick: () => setActiveProfile(dayOfWeek, "A"),
+      className:
+        "inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium",
+    },
+    "Ativar A",
+  );
+  return {
+    title: `${dayName} esta OFF`,
+    description: "Ative o perfil A, B ou C no cabecalho para adicionar torneios.",
+    action,
+  };
+}
 
 /**
  * Calcula as estatisticas agregadas (DayStats) para uma lista de torneios.

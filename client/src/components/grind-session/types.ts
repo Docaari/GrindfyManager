@@ -7,6 +7,7 @@ export interface SessionHistoryData {
   estimatedDurationMin?: number;
   volume: number;
   profit: number;
+  profitUsd?: number;
   abiMed: number;
   roi: number;
   fts: number;

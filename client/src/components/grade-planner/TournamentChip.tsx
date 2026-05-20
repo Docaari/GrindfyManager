@@ -1,7 +1,7 @@
 import { Star, Sparkles } from "lucide-react";
 import { prepareTournamentChip } from "@shared/grade-chip-data";
 import { getDisplayRegistrationTime } from "@shared/grade-time";
-import { getPlannerSiteColor, getPlannerTypeColor, getPlannerSpeedColor } from "@/lib/poker-colors";
+import { getPlannerSiteColor } from "@/lib/poker-colors";
 import { formatBuyIn } from "@shared/platform-currency";
 import {
   Tooltip,
@@ -9,6 +9,22 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import pokerStarsIcon from "@assets/poker-icons/PokerStars.png";
+import partyIcon from "@assets/poker-icons/Party.png";
+import ggIcon from "@assets/poker-icons/GG.png";
+import wpnIcon from "@assets/poker-icons/WPN.png";
+import chicoIcon from "@assets/poker-icons/Chico.png";
+import betOnlineIcon from "@assets/poker-icons/BetOnline.png";
+
+// Iniciais coloridas como fallback; quando ha PNG da plataforma, usa o icone.
+const SITE_ICONS: Record<string, string> = {
+  PokerStars: pokerStarsIcon,
+  PartyPoker: partyIcon,
+  GGPoker: ggIcon,
+  WPN: wpnIcon,
+  Chico: chicoIcon,
+  BetOnline: betOnlineIcon,
+};
 
 interface TournamentChipProps {
   tournament: any;
@@ -42,47 +58,83 @@ const SITE_ABBREVIATIONS: Record<string, string> = {
   Suprema: "SUP",
 };
 
+/** Compact guaranteed display: $10k, $1.5k, $750. */
+function formatGtdCompact(raw: any): string | null {
+  const n = parseFloat(raw || "0");
+  if (!isFinite(n) || n <= 0) return null;
+  if (n >= 1000) return `$${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k`;
+  return `$${n}`;
+}
+
 export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
   const chip = prepareTournamentChip(tournament);
   const siteColor = getPlannerSiteColor(tournament.site);
   const typeBg = TYPE_BG[chip.typeColor] || TYPE_BG.gray;
-  const siteAbbr = SITE_ABBREVIATIONS[tournament.site] || tournament.site?.slice(0, 3) || "?";
+  const siteAbbr = SITE_ABBREVIATIONS[tournament.site] || tournament.site?.slice(0, 3)?.toUpperCase() || "?";
+  const siteIcon = SITE_ICONS[tournament.site];
+  const timeLabel = getDisplayRegistrationTime(tournament) || tournament.time || "";
+  const gtdLabel = formatGtdCompact(tournament.guaranteed);
 
   return (
     <TooltipProvider delayDuration={300}>
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className={`rounded-md px-2.5 py-1.5 text-xs cursor-pointer hover:brightness-110 transition-all ${typeBg} border border-gray-600`}
+            className={`rounded-md px-2 py-1.5 text-sm cursor-pointer hover:brightness-110 transition-all ${typeBg} border border-gray-600`}
             onClick={(e) => {
               e.stopPropagation();
               onClick?.();
             }}
           >
-            <div className="flex items-center gap-1 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0">
               {chip.priorityIndicator === "star" && (
-                <Star className="w-3 h-3 text-amber-400 flex-shrink-0" fill="currentColor" />
+                <Star className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="currentColor" />
               )}
               {/* TS-G polish (UX-2 2026-04-25): icone Sparkles indica que o
                   torneio foi adicionado via Tournament Selector. Cor diferente
                   do Star de prioridade para nao confundir os dois indicadores. */}
               {chip.viaSelector && (
                 <Sparkles
-                  className="w-3 h-3 text-yellow-300 flex-shrink-0"
+                  className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0"
                   fill="currentColor"
                   data-testid="tournament-chip-via-selector"
                 />
               )}
-              <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${siteColor}`} />
-              <span className="text-emerald-400 font-bold text-sm flex-shrink-0">
+              {/* Plataforma: icone PNG quando disponivel, senao iniciais coloridas. */}
+              {siteIcon ? (
+                <img
+                  src={siteIcon}
+                  alt={tournament.site}
+                  title={tournament.site}
+                  data-testid="tournament-chip-site-badge"
+                  className="h-5 w-5 rounded-sm object-contain flex-shrink-0"
+                />
+              ) : (
+                <span
+                  className={`flex-shrink-0 rounded px-1 py-0.5 text-[10px] font-bold leading-none text-white ${siteColor}`}
+                  title={tournament.site}
+                  data-testid="tournament-chip-site-badge"
+                >
+                  {siteAbbr}
+                </span>
+              )}
+              {timeLabel && (
+                <span className="text-gray-400 font-mono text-xs flex-shrink-0">{timeLabel}</span>
+              )}
+              <span className="text-emerald-400 font-bold text-base flex-shrink-0">
                 {chip.buyInDisplay}
               </span>
-              <span className="text-gray-300 truncate text-xs" title={tournament.name || tournament.site || siteAbbr}>
-                {chip.nameShort || siteAbbr}
+              <span className="text-gray-200 truncate text-sm flex-1 min-w-0" title={tournament.name || tournament.site || siteAbbr}>
+                {tournament.name || siteAbbr}
               </span>
               {chip.speedBadge && (
-                <span className={`text-[10px] px-1 rounded flex-shrink-0 ${SPEED_BADGE_COLORS[tournament.speed] || ""}`}>
+                <span className={`text-xs px-1 rounded flex-shrink-0 ${SPEED_BADGE_COLORS[tournament.speed] || ""}`}>
                   {chip.speedBadge}
+                </span>
+              )}
+              {gtdLabel && (
+                <span className="text-cyan-300 text-xs font-semibold flex-shrink-0" title="Garantido">
+                  {gtdLabel}
                 </span>
               )}
             </div>

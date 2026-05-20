@@ -32,6 +32,7 @@ interface SessionHistoryData {
   finalNotes?: string;
   volume: number;
   profit: number;
+  profitUsd?: number;
   abiMed: number;
   roi: number;
   fts: number;
@@ -363,9 +364,18 @@ export default function SessionHistory() {
                     <div className="text-xs text-gray-400">Volume</div>
                   </div>
                   <div className="text-center bg-green-900/20 border border-green-600/30 rounded-lg p-3">
-                    <div className={`text-lg font-bold ${session.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {formatCurrency(session.profit)}
-                    </div>
+                    {/* Lucro reconciliado da banca quando disponivel; fallback
+                        p/ P&L de torneios em sessoes legadas. */}
+                    {(() => {
+                      const displayProfit = Number(
+                        session.profitUsd ?? session.profit,
+                      ) || 0;
+                      return (
+                        <div className={`text-lg font-bold ${displayProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {formatCurrency(displayProfit)}
+                        </div>
+                      );
+                    })()}
                     <div className="text-xs text-gray-400">Profit</div>
                   </div>
                   <div className="text-center bg-purple-900/20 border border-purple-600/30 rounded-lg p-3">

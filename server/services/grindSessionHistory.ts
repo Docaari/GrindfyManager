@@ -172,10 +172,41 @@ function sessionDetailsAvailable(
   return hasBefore && hasAfter;
 }
 
+/**
+ * Deriva o lucro reconciliado da banca (USD) a partir das session_wallet_snapshots
+ * de uma sessao: soma (closingBalance - openingBalance) por wallet, convertido
+ * para USD pela rate da moeda nativa. So conta snapshots com closingBalance != null
+ * (skipReconciliation grava closing=null — nao ha valor reportado). Retorna null
+ * quando nenhuma snapshot utilizavel existe (caller cai no fallback).
+ */
+function reconciledWalletProfitUsd(
+  walletSnapshots: any[] | undefined,
+  rates: Record<string, number>,
+): number | null {
+  if (!Array.isArray(walletSnapshots) || walletSnapshots.length === 0) return null;
+  let total = 0;
+  let usable = 0;
+  for (const s of walletSnapshots) {
+    if (s?.closingBalance == null || s?.openingBalance == null) continue;
+    const deltaNative = Number(s.closingBalance) - Number(s.openingBalance);
+    if (!Number.isFinite(deltaNative)) continue;
+    const ccy = s.nativeCurrency || "USD";
+    if (ccy === "USD") {
+      total += deltaNative;
+    } else {
+      const rate = rates?.[ccy];
+      total += rate && rate > 0 ? deltaNative / rate : deltaNative;
+    }
+    usable++;
+  }
+  return usable > 0 ? total : null;
+}
+
 function buildSessionEntry(
   session: any,
   snapshots: any[],
   fxCtx?: { rates: Record<string, number>; primaryCurrency?: string },
+  walletSnapshots?: any[],
 ): SessionHistoryEntry {
   const startedAt = session.startTime ?? session.startedAt ?? session.date;
   const completedAt = session.completedAt ?? session.endTime ?? startedAt;
@@ -187,7 +218,22 @@ function buildSessionEntry(
   const ccy = fxCtx?.primaryCurrency ?? "USD";
   const rate = fxCtx?.rates?.[ccy] ?? 1;
   const safeRate = rate > 0 ? rate : 1;
-  const profitUsd = ccy === "USD" ? profitNative : profitNative / safeRate;
+  const profitFromTournaments = ccy === "USD" ? profitNative : profitNative / safeRate;
+
+  // Precedencia do lucro exibido no historico (founder A, 2026-05-18):
+  //   1. grind_sessions.wallet_profit_usd persistido — numero exato do card
+  //      "Lucro Total da Sessao" mostrado ao finalizar (sessoes novas).
+  //   2. session_wallet_snapshots reconciliadas — backfill p/ sessoes legadas
+  //      que foram reconciliadas (delta closing-opening por wallet, FX-aware).
+  //   3. fallback: profit de P&L de torneios (sessoes sem reconciliacao).
+  let profitUsd: number;
+  const persistedWalletProfit = session.walletProfitUsd;
+  if (persistedWalletProfit != null && String(persistedWalletProfit) !== "") {
+    profitUsd = parseDecimal(persistedWalletProfit);
+  } else {
+    const reconciled = reconciledWalletProfitUsd(walletSnapshots, fxCtx?.rates ?? {});
+    profitUsd = reconciled != null ? reconciled : profitFromTournaments;
+  }
   const tournamentsCount = Number(session.volume ?? 0) || 0;
   return {
     type: "session",
@@ -251,12 +297,37 @@ export async function getGrindSessionHistory(
       } catch {
         // segue sem rates — profit fica em moeda nativa (V1 legacy).
       }
+      // session_wallet_snapshots agrupadas por sessionId — alimentam o backfill
+      // do lucro reconciliado da banca (sessoes legadas sem wallet_profit_usd).
+      // Best-effort: falha aqui degrada para fallback de P&L de torneios.
+      const walletSnapshotsBySession = new Map<string, any[]>();
+      try {
+        const storageAny = storage as any;
+        if (typeof storageAny.listSessionWalletSnapshotsByUser === "function") {
+          const allWalletSnaps =
+            (await storageAny.listSessionWalletSnapshotsByUser(userId)) ?? [];
+          for (const ws of allWalletSnaps) {
+            const sid = ws?.sessionId;
+            if (!sid) continue;
+            const arr = walletSnapshotsBySession.get(sid) ?? [];
+            arr.push(ws);
+            walletSnapshotsBySession.set(sid, arr);
+          }
+        }
+      } catch (err) {
+        console.warn(
+          "[grindSessionHistory] listSessionWalletSnapshotsByUser falhou:",
+          (err as any)?.message,
+        );
+      }
+
       // Heuristica V1: assume USD como primaryCurrency (sessoes da maioria dos
       // founders sao USD). Se moeda nativa for outra, dashboardService.ts cobre
       // o calculo granular per-platform — aqui o numero pode ter ~erro pequeno.
       // TODO V2: derivar primaryCurrency via session_tournaments[0].site.
       sessionEntries = sessions.map((s: any) =>
-        buildSessionEntry(s, snapshots, { rates, primaryCurrency: "USD" }),
+        buildSessionEntry(s, snapshots, { rates, primaryCurrency: "USD" },
+          walletSnapshotsBySession.get(s.id)),
       );
     } catch (err) {
       console.warn(

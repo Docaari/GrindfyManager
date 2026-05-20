@@ -141,6 +141,41 @@ function sendErrorWithCode(res: Response, err: any, fallback: string, logTag: st
 // Handlers
 // =============================================================================
 
+/**
+ * Sprint UX-QW-2 RF-06 — handler testavel que retorna apenas a lista de wallets
+ * enriquecida com `lastTransactionAt`. Aceita injectedStorage como 3o arg
+ * (lesson #34) — em producao usa lazy import do `../storage`.
+ *
+ * Coexiste com `handleGetWallets` (que serve a UI atual com consolidated +
+ * warnings). Nao registra rota nova — quem precisa apenas das wallets pode
+ * filtrar do response existente.
+ */
+export async function handleListWallets(
+  req: any,
+  res: Response,
+  injectedStorage?: any,
+): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) { unauthorized(res); return; }
+  try {
+    const includeArchivedRaw = req.query?.includeArchived;
+    const includeArchived =
+      includeArchivedRaw === true ||
+      includeArchivedRaw === "true" ||
+      includeArchivedRaw === 1 ||
+      includeArchivedRaw === "1";
+    const storage =
+      injectedStorage ?? (await import("../storage")).storage;
+    const wallets = await storage.listWalletsByUser(userId, { includeArchived });
+    res.status(200).json({ wallets });
+  } catch (err: any) {
+    console.error("GET /api/wallets (handleListWallets) failed:", err);
+    res
+      .status(mapErrorToStatus(err))
+      .json({ message: err?.message ?? "Erro ao listar carteiras" });
+  }
+}
+
 export async function handleGetWallets(req: any, res: Response): Promise<void> {
   const userId = userIdOf(req);
   if (!userId) { unauthorized(res); return; }

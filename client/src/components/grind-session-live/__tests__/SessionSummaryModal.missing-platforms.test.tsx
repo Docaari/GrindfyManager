@@ -169,10 +169,10 @@ describe('SessionSummaryModal Sprint B2 (M3) — banner missing-platforms-banner
 describe('SessionSummaryModal Sprint B2 (M3) — CTAs disabled com missingPlatforms', () => {
   // cta-start-cooldown removido (cooldown removal 2363509) — so cta-finalize-session.
 
-  it('cta-finalize-session fica disabled quando missingPlatforms.length > 0', () => {
+  it('cta-finalize-session NAO bloqueia quando missingPlatforms.length > 0 (skip reconcile, finaliza mesmo assim)', () => {
     render(wrap(<SessionSummaryModal {...baseProps} />));
     const cta = screen.getByTestId('cta-finalize-session') as HTMLButtonElement;
-    expect(cta.disabled).toBe(true);
+    expect(cta.disabled).toBe(false);
   });
 
   it('CTA habilita quando missingPlatforms vazio', () => {
@@ -188,16 +188,29 @@ describe('SessionSummaryModal Sprint B2 (M3) — CTAs disabled com missingPlatfo
     expect(finalize.disabled).toBe(false);
   });
 
-  it('click em CTA disabled NAO dispara apiRequest (defesa)', async () => {
+  it('click em CTA com missingPlatforms registra skip server-side (skipReconciliation=true)', async () => {
     render(wrap(<SessionSummaryModal {...baseProps} />));
     const cta = screen.getByTestId('cta-finalize-session');
     fireEvent.click(cta);
-    // Wait nada — defensive: garante que nada foi chamado.
     await new Promise((r) => setTimeout(r, 30));
     const reconcileCalls = apiRequestMock.mock.calls.filter((c: any[]) =>
       typeof c[1] === 'string' && c[1].includes('/reconcile-wallets'),
     );
-    expect(reconcileCalls.length).toBe(0);
+    // P1: trilha de auditoria — modal chama o endpoint com adjustments vazio
+    // + skipReconciliation:true (cria marcador skippedByUser server-side).
+    expect(reconcileCalls.length).toBe(1);
+    const [, , body] = reconcileCalls[0];
+    expect(body).toEqual({ adjustments: [], skipReconciliation: true });
+  });
+
+  it('CTA com missingPlatforms finaliza a sessao mesmo se o skip-reconcile falhar (best-effort)', async () => {
+    apiRequestMock.mockRejectedValueOnce(new Error('network'));
+    const onEndSession = vi.fn();
+    render(
+      wrap(<SessionSummaryModal {...baseProps} onEndSession={onEndSession} />),
+    );
+    fireEvent.click(screen.getByTestId('cta-finalize-session'));
+    await waitFor(() => expect(onEndSession).toHaveBeenCalled());
   });
 });
 
@@ -239,9 +252,9 @@ describe('SessionSummaryModal Sprint B2 (M3) — register-wallet-cta abre dialog
 describe('SessionSummaryModal Sprint B2 (M3) — apos criar wallet refetch desbloqueia', () => {
   it('quando missingPlatforms passa a vazio (refetch atualizou), banner some e CTAs habilitam', () => {
     const { rerender } = render(wrap(<SessionSummaryModal {...baseProps} />));
-    // Inicialmente: banner visivel, CTA disabled
+    // Inicialmente: banner visivel, CTA habilitado (skip reconcile)
     expect(screen.getByTestId('missing-platforms-banner')).toBeInTheDocument();
-    expect((screen.getByTestId('cta-finalize-session') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('cta-finalize-session') as HTMLButtonElement).disabled).toBe(false);
 
     // Simula refetch: missingPlatforms vazio
     rerender(

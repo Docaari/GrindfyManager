@@ -663,6 +663,7 @@ export interface IStorage {
   listSessionTournaments(sessionId: string, userId: string, tx?: any): Promise<any[]>;
   findSessionWalletSnapshot(sessionId: string, userId: string, tx?: any): Promise<any | null>;
   listSessionWalletSnapshots(sessionId: string, userId: string, tx?: any): Promise<any[]>;
+  listSessionWalletSnapshotsByUser(userId: string): Promise<any[]>;
   createSessionWalletSnapshot(input: any, tx?: any): Promise<any>;
   setUserBankrollV2Migrated(userId: string, value: boolean, tx?: any): Promise<void>;
   backfillSnapshotsWalletId(userId: string, walletId: string, tx?: any): Promise<number>;
@@ -4396,12 +4397,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       // Remove o mais antigo se já tem 5
       const toDelete = existing.slice(4); // Mantém apenas os primeiros 4
       if (toDelete.length > 0) {
+        // inArray (NAO sql`IN (${...})` interpolado — o template tratava o
+        // .join() como um unico bound param `IN ($1)`, type mismatch no PG →
+        // 500 pos-persist. Disparava so com >=5 uploads. followup resolvido.)
         await db
           .delete(uploadHistory)
           .where(
             and(
               eq(uploadHistory.userId, uploadRecord.userId),
-              sql`${uploadHistory.id} IN (${toDelete.map(r => `'${r.id}'`).join(', ')})`
+              inArray(uploadHistory.id, toDelete.map(r => r.id))
             )
           );
       }
@@ -4809,6 +4813,42 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .from(wallets)
       .where(and(...conditions))
       .orderBy(wallets.displayOrder, wallets.createdAt);
+
+    // Sprint UX-QW-2 RF-06: enriquece cada wallet com lastTransactionAt (MAX
+    // de wallet_transactions.occurred_at). Aceita resultado raw como linha
+    // unica via runner.execute para evitar N+1 — agrega tudo numa query.
+    if (!Array.isArray(result) || result.length === 0) return result;
+    try {
+      const ids = result.map((w: any) => w.id);
+      // Subquery agregada: para cada wallet do user, MAX(occurred_at).
+      const aggResult: any = await runner.execute(
+        sql`
+          SELECT wallet_id, MAX(occurred_at) AS last_tx
+          FROM wallet_transactions
+          WHERE user_id = ${userId}
+            AND wallet_id = ANY(${ids}::text[])
+          GROUP BY wallet_id
+        `,
+      );
+      const rows = Array.isArray(aggResult) ? aggResult : aggResult.rows ?? [];
+      const byWalletId = new Map<string, string | null>();
+      for (const r of rows) {
+        const wid = r.wallet_id ?? r.walletId;
+        const lt = r.last_tx ?? r.lastTx ?? null;
+        byWalletId.set(
+          wid,
+          lt ? (lt instanceof Date ? lt.toISOString() : String(lt)) : null,
+        );
+      }
+      for (const w of result) {
+        (w as any).lastTransactionAt = byWalletId.get((w as any).id) ?? null;
+      }
+    } catch (err) {
+      // Best-effort: se a query falhar (ex: schema legado em testes que
+      // mockam db parcial), nao quebra a listagem. Cada wallet so fica sem
+      // lastTransactionAt (front trata como ausente).
+      console.warn("listWalletsByUser: lastTransactionAt enrichment failed", err);
+    }
     return result;
   }
 
@@ -5238,6 +5278,30 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       reason: r.reason ?? "session_result",
       walletTransactionId: r.walletTransactionId ?? null,
       createdAt: r.createdAt ?? null,
+    }));
+  }
+
+  // Batch: todas as session_wallet_snapshots de um usuario, agrupaveis por
+  // sessionId no caller. Usado pelo historico de sessoes (grindSessionHistory)
+  // para derivar o lucro reconciliado da banca sem N+1.
+  async listSessionWalletSnapshotsByUser(userId: string): Promise<any[]> {
+    const result: any = await db.execute(
+      sql`SELECT
+            sws.session_id          AS "sessionId",
+            sws.wallet_id           AS "walletId",
+            sws.native_currency     AS "nativeCurrency",
+            sws.opening_balance     AS "openingBalance",
+            sws.closing_balance     AS "closingBalance"
+          FROM session_wallet_snapshots sws
+          WHERE sws.user_id = ${userId}`,
+    );
+    const rows = Array.isArray(result) ? result : result.rows ?? [];
+    return rows.map((r: any) => ({
+      sessionId: r.sessionId ?? r.session_id,
+      walletId: r.walletId ?? r.wallet_id,
+      nativeCurrency: r.nativeCurrency ?? r.native_currency,
+      openingBalance: r.openingBalance != null ? parseFloat(String(r.openingBalance)) : null,
+      closingBalance: r.closingBalance != null ? parseFloat(String(r.closingBalance)) : null,
     }));
   }
 

@@ -142,11 +142,12 @@ export interface SessionStats {
   /** Average buy-in (USD) por torneio registrado/finalizado da sessao. */
   abi: number;
   /**
-   * Media de participantes estimada via Gtd / BI (ou Gtd / (BI + AddOn) quando
-   * add-on foi pago). Conta apenas torneios com guaranteed > 0 e buyIn > 0.
-   * Zero quando nenhum torneio elegivel.
+   * Mediana de participantes estimada via Gtd / BI (ou Gtd / (BI + AddOn) quando
+   * add-on foi pago). Resistente a outliers (Sunday Million etc — alinhado com
+   * grade-planner, ver client/src/lib/median.ts). Conta apenas torneios com
+   * guaranteed > 0 e buyIn > 0. Zero quando nenhum torneio elegivel.
    */
-  avgParticipants: number;
+  medianParticipants: number;
   /** Add-ons pagos: count, total USD e breakdown por currency native. */
   addOnsPaid: AddOnsPaidSummary;
   breakdown: SessionFinancialBreakdown;

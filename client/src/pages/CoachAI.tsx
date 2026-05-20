@@ -60,6 +60,7 @@ import {
 } from '@/components/coach/CoachLessonRecommendationCard';
 // Sprint AI-1A follow-up (RF-07): banner de onboarding no topo da aba Chat.
 import OnboardingBanner from '@/components/coach/OnboardingBanner';
+import { CoachLensChips } from '@/components/coach-ai/CoachLensChips';
 // Sprint AI-1B — timeline (reports + nudges) + quick suggestions anti-blank-page.
 import NudgeCard from '@/components/coach/NudgeCard';
 import { getFallbackSuggestions } from '@/lib/quickSuggestionsFallback';
@@ -388,28 +389,13 @@ function ChatPanel() {
       </div>
 
       <div className="flex flex-col flex-1 min-w-0">
-        {/* Chips de lente/foco — NAO 3 coaches; so ajustam o coachType (lente inicial). */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800">
-          <span className="text-xs text-gray-500">Foco:</span>
-          {LENS_OPTIONS.map((lens) => (
-            <button
-              key={lens.value}
-              type="button"
-              data-testid={`coach-lens-chip-${lens.value}`}
-              onClick={() => { setCoachType(lens.value); setInputValue(''); }}
-              aria-pressed={coachType === lens.value}
-              className={cn(
-                'flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors',
-                coachType === lens.value
-                  ? 'bg-green-600/20 text-green-400 border border-green-600/30'
-                  : 'text-gray-400 hover:text-gray-200 border border-gray-700 hover:bg-gray-800'
-              )}
-            >
-              <lens.icon size={14} />
-              {lens.label}
-            </button>
-          ))}
-        </div>
+        <CoachLensChips
+          coachType={coachType}
+          onChangeCoachType={(value) => {
+            setCoachType(value);
+            setInputValue('');
+          }}
+        />
 
         {/* Sidebar de conversas (mobile — colapsa em barra horizontal de acesso). */}
         <div className="md:hidden border-b border-gray-800 max-h-40 overflow-auto">

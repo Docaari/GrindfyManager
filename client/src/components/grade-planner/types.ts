@@ -55,7 +55,7 @@ export const weekDays = [
 
 export const sites = [
   "PokerStars", "PartyPoker", "888poker", "GGPoker", "WPN",
-  "iPoker", "CoinPoker", "Chico", "Revolution", "Bodog", "Suprema"
+  "iPoker", "CoinPoker", "Chico", "Revolution", "Bodog", "Suprema", "WPT Global"
 ];
 
 // SSoT: re-export literal de shared/tournamentTypes (ordem do SSoT preservada).

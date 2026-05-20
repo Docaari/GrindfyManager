@@ -204,9 +204,18 @@ export default function SessionHistoryList({
                             month: 'long'
                           })}
                         </div>
-                        <div className={`session-card-result ${(Number(session.profit) || 0) >= 0 ? 'profit' : 'loss'}`}>
-                          {formatCurrency(Number(session.profit) || 0)}
-                        </div>
+                        {/* Lucro reconciliado da banca (wallet_profit_usd) quando
+                            disponivel; fallback p/ P&L de torneios em sessoes legadas. */}
+                        {(() => {
+                          const displayProfit = Number(
+                            session.profitUsd ?? session.profit,
+                          ) || 0;
+                          return (
+                            <div className={`session-card-result ${displayProfit >= 0 ? 'profit' : 'loss'}`}>
+                              {formatCurrency(displayProfit)}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Session Summary Metrics */}

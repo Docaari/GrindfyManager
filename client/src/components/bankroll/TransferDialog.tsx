@@ -6,7 +6,7 @@
  * inline quando open=true. Producao pode envelopar em Dialog primitivo.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -49,12 +49,40 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [fromId, setFromId] = useState(defaultFromWalletId ?? wallets[0]?.id ?? "");
-  const [toId, setToId] = useState(defaultToWalletId ?? wallets[1]?.id ?? "");
+  const [toId, setToId] = useState(
+    defaultToWalletId ??
+      wallets.find((w) => w.id !== (defaultFromWalletId ?? wallets[0]?.id))?.id ??
+      "",
+  );
   const [amountFrom, setAmountFrom] = useState("");
   const [fxRate, setFxRate] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<{ code?: string; message?: string; marketRate?: number; providedRate?: number } | null>(null);
   const [needsConfirm, setNeedsConfirm] = useState(false);
+
+  // Sync defaults quando dialog reabre — caso contrario state inicial persiste
+  // entre aberturas (componente fica montado com open=false retornando null).
+  // Fix bug 2026-05-15: clicar "Transferir" em wallet X reabria modal com
+  // wallet origem antiga selecionada → operador podia debitar wallet errada.
+  useEffect(() => {
+    if (!open) return;
+    const initialFrom = defaultFromWalletId ?? wallets[0]?.id ?? "";
+    const initialTo =
+      defaultToWalletId ??
+      wallets.find((w) => w.id !== initialFrom)?.id ??
+      wallets[1]?.id ??
+      "";
+    setFromId(initialFrom);
+    setToId(initialTo);
+    setAmountFrom("");
+    setFxRate("");
+    setError(null);
+    setNeedsConfirm(false);
+    setSubmitting(false);
+    // wallets ref muda toda render por causa do useMemo no parent — incluir
+    // length+ids basta para detectar mudancas reais (evita loop).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultFromWalletId, defaultToWalletId]);
 
   const fromWallet = useMemo(() => wallets.find((w) => w.id === fromId), [wallets, fromId]);
   const toWallet = useMemo(() => wallets.find((w) => w.id === toId), [wallets, toId]);

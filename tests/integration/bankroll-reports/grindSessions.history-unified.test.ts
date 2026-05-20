@@ -316,3 +316,55 @@ describe('getGrindSessionHistory — union session + manual_report (RF-05)', () 
     expect(entries).toEqual([]);
   });
 });
+
+/**
+ * profitUsd da sessao = lucro reconciliado da banca (founder A, 2026-05-18).
+ * Precedencia: wallet_profit_usd persistido > delta de session_wallet_snapshots
+ * reconciliadas > fallback P&L de torneios (session.profit).
+ */
+describe('getGrindSessionHistory — profitUsd via lucro da banca', () => {
+  it('wallet_profit_usd persistido vence o profit de torneios', async () => {
+    (storage.getGrindSessions as any).mockResolvedValue([
+      { ...completedSession, profit: '-857.75', walletProfitUsd: '-1009' },
+    ]);
+    const entries = await getGrindSessionHistory('USER-0001');
+    const s = entries.find((e: any) => e.id === 'SES-1');
+    expect(s.profitUsd).toBe(-1009);
+  });
+
+  it('sem wallet_profit_usd: backfill soma delta closing-opening das snapshots', async () => {
+    (storage.getGrindSessions as any).mockResolvedValue([
+      { ...completedSession, profit: '-857.75', walletProfitUsd: null },
+    ]);
+    (storage as any).listSessionWalletSnapshotsByUser = vi.fn().mockResolvedValue([
+      // -200 USD + -150 USD = -350 USD reconciliado.
+      { sessionId: 'SES-1', walletId: 'w1', nativeCurrency: 'USD', openingBalance: 1000, closingBalance: 800 },
+      { sessionId: 'SES-1', walletId: 'w2', nativeCurrency: 'USD', openingBalance: 500, closingBalance: 350 },
+    ]);
+    const entries = await getGrindSessionHistory('USER-0001');
+    const s = entries.find((e: any) => e.id === 'SES-1');
+    expect(s.profitUsd).toBeCloseTo(-350, 5);
+  });
+
+  it('snapshot sem closing_balance (skip reconciliation) nao conta — cai no fallback', async () => {
+    (storage.getGrindSessions as any).mockResolvedValue([
+      { ...completedSession, profit: '-857.75', walletProfitUsd: null },
+    ]);
+    (storage as any).listSessionWalletSnapshotsByUser = vi.fn().mockResolvedValue([
+      { sessionId: 'SES-1', walletId: 'w1', nativeCurrency: 'USD', openingBalance: 1000, closingBalance: null },
+    ]);
+    const entries = await getGrindSessionHistory('USER-0001');
+    const s = entries.find((e: any) => e.id === 'SES-1');
+    expect(s.profitUsd).toBeCloseTo(-857.75, 5);
+  });
+
+  it('sem persistido e sem snapshots: fallback para profit de torneios', async () => {
+    (storage.getGrindSessions as any).mockResolvedValue([
+      { ...completedSession, profit: '-857.75', walletProfitUsd: null },
+    ]);
+    (storage as any).listSessionWalletSnapshotsByUser = vi.fn().mockResolvedValue([]);
+    const entries = await getGrindSessionHistory('USER-0001');
+    const s = entries.find((e: any) => e.id === 'SES-1');
+    expect(s.profitUsd).toBeCloseTo(-857.75, 5);
+  });
+});

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { weekDays, type DayStats } from './types';
 import { groupBuyInsByCurrency, formatGroupedBuyIns, getCurrencyForSite } from '@shared/platform-currency';
+import { computeMedianFieldSizeForDisplay } from '@/lib/median';
 
 interface WeeklySummaryBarProps {
   getTournamentsForDay: (dayId: number) => any[];
@@ -58,6 +59,11 @@ export function WeeklySummaryBar({
   const pkoPct = totalCount > 0 ? Math.round((pkoCount / totalCount) * 100) : 0;
   const turboPct = totalCount > 0 ? Math.round((turboCount / totalCount) * 100) : 0;
 
+  const medianParticipantsDisplay = useMemo(
+    () => computeMedianFieldSizeForDisplay(activeDayTournaments),
+    [activeDayTournaments],
+  );
+
   // Active profiles summary label
   const activeProfiles = useMemo(() => {
     const profiles = new Set<string>();
@@ -99,7 +105,7 @@ export function WeeklySummaryBar({
       </div>
 
       {/* Metrics grid */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         <div className="bg-gray-800/50 rounded-lg p-3 text-center">
           <div className="text-xs text-gray-400">Total Buy-in</div>
           <div className="text-xl font-bold text-emerald-400">{totalBuyInDisplay}</div>
@@ -111,6 +117,18 @@ export function WeeklySummaryBar({
         <div className="bg-gray-800/50 rounded-lg p-3 text-center">
           <div className="text-xs text-gray-400">ABI</div>
           <div className="text-lg font-bold text-white">{abiDisplay}</div>
+        </div>
+        <div
+          className="bg-gray-800/50 rounded-lg p-3 text-center"
+          title="Mediana de participantes estimada via Gtd / BI (resistente a outliers como Sunday Million)"
+        >
+          <div className="text-xs text-gray-400">Mediana</div>
+          <div
+            className="text-lg font-bold text-white"
+            data-testid="weekly-summary-median-participants"
+          >
+            {medianParticipantsDisplay}
+          </div>
         </div>
         <div className="bg-gray-800/50 rounded-lg p-3 text-center">
           <div className="text-xs text-gray-400">PKO</div>

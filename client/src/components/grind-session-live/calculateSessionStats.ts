@@ -11,6 +11,7 @@ import type {
 } from './types';
 import { getCurrencyForSite } from '@shared/platform-currency';
 import { convertToNativeCurrency } from '@shared/wallet-reconciliation';
+import { median } from '@/lib/median';
 
 // Parser robusto que aceita formato brasileiro ("190,00", "1.234,56") e
 // internacional ("190.00", "1,234.56"). Retorna 0 quando invalido.
@@ -525,7 +526,7 @@ export const calculateSessionStats = (
     totalReturnsUSD: 0,
     profitUSD: 0,
     abi: 0,
-    avgParticipants: 0,
+    medianParticipants: 0,
     addOnsPaid: EMPTY_ADDONS_PAID,
     breakdown: EMPTY_BREAKDOWN,
     itm: 0,
@@ -567,7 +568,7 @@ export const calculateSessionStats = (
   const concluidos = finishedTournaments.length;
 
   // Todos os torneios da sessao (registrados + finalizados) — usado para
-  // Total Investido (committed money) + ABI + Media Participantes.
+  // Total Investido (committed money) + ABI + Mediana Participantes.
   const allSessionTournaments = [...registeredTournaments, ...finishedTournaments];
 
   // Per-tournament conversion info (currency-aware) — ADR-033 + FX bug fix.
@@ -642,12 +643,13 @@ export const calculateSessionStats = (
     ? conversionInfos.reduce((sum, info) => sum + info.buyInUSD, 0) / conversionInfos.length
     : 0;
 
-  // Media participantes: Gtd / (BI + AddOn quando pago). So conta torneios
-  // com guaranteed > 0 e buyIn > 0 (campos opcionais nem sempre preenchidos).
-  const eligibleParticipants = conversionInfos.filter((i) => i.participantsEstimate > 0);
-  const avgParticipants = eligibleParticipants.length > 0
-    ? eligibleParticipants.reduce((sum, i) => sum + i.participantsEstimate, 0) / eligibleParticipants.length
-    : 0;
+  // Mediana de participantes: Gtd / (BI + AddOn quando pago). Resistente a
+  // outliers (Sunday Million etc). So conta torneios com guaranteed > 0 e
+  // buyIn > 0 (campos opcionais nem sempre preenchidos). Zero quando vazio.
+  const eligibleEstimates = conversionInfos
+    .map((i) => i.participantsEstimate)
+    .filter((v) => v > 0);
+  const medianParticipants = median(eligibleEstimates) ?? 0;
 
   // Add-ons pagos: count + total USD + breakdown por currency native.
   const addOnsPaid = buildAddOnsSummary(allSessionTournaments, usdConversionRates);
@@ -749,7 +751,7 @@ export const calculateSessionStats = (
     totalReturnsUSD,
     profitUSD,
     abi,
-    avgParticipants,
+    medianParticipants,
     addOnsPaid,
     breakdown,
     itm,

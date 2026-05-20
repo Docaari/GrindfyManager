@@ -7,6 +7,7 @@
  */
 import React from "react";
 import { WALLET_PLATFORM_LABELS, type WalletPlatform } from "@shared/wallet-platforms";
+import { WalletStalenessBadge } from "@/components/bankroll/WalletStalenessBadge";
 
 export interface WalletListItem {
   id: string;
@@ -19,6 +20,9 @@ export interface WalletListItem {
   color?: string | null;
   displayOrder?: number;
   isShotPocket?: boolean;
+  lastTransactionAt?: string | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
 }
 
 export interface WalletSuggestion {
@@ -177,8 +181,13 @@ export function WalletList({ wallets, selectedWalletId, onSelect, onCreateClick 
                   </span>
                 )}
               </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {platformLabel(w.platform)}
+              <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+                <span>{platformLabel(w.platform)}</span>
+                <WalletStalenessBadge
+                  lastTransactionAt={w.lastTransactionAt}
+                  updatedAt={w.updatedAt}
+                  createdAt={w.createdAt}
+                />
               </div>
               <div className="text-xs mt-1 flex items-baseline justify-between">
                 {/* QW-B: simbolo de moeda explicito + label "~ $X USD" para equivalente */}

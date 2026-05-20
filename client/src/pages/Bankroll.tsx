@@ -14,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { BankrollWidget } from "@/components/bankroll/BankrollWidget";
 import { BankrollHistoryTable } from "@/components/bankroll/BankrollHistoryTable";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { WalletList, type WalletListItem, type WalletSuggestion } from "@/components/bankroll/WalletList";
 import { WalletDetailPanel } from "@/components/bankroll/WalletDetailPanel";
 import { OverallWalletPanel } from "@/components/bankroll/OverallWalletPanel";
@@ -95,6 +96,9 @@ export default function BankrollPage() {
       color: w.color ?? null,
       displayOrder: w.displayOrder,
       isShotPocket: w.isShotPocket,
+      lastTransactionAt: w.lastTransactionAt ?? null,
+      updatedAt: w.updatedAt ?? null,
+      createdAt: w.createdAt ?? null,
     }));
   }, [walletsResp, consolidated]);
 
@@ -110,6 +114,7 @@ export default function BankrollPage() {
     ? null
     : walletItems.find((w) => w.id === selectedWalletId) ?? null;
   const hasWallets = walletItems.length > 0;
+  const hasActiveWallets = walletItems.some((w) => w.status === "active");
 
   function handleCreateClick(suggestion?: WalletSuggestion) {
     setCreatePrefill(
@@ -154,7 +159,18 @@ export default function BankrollPage() {
         </div>
       </header>
 
-      <BankrollWidget />
+      {hasActiveWallets && <BankrollWidget />}
+
+      {!hasActiveWallets && (
+        <EmptyState
+          area="bankroll-empty"
+          title="Sua banca espera por voce"
+          description="Crie sua primeira carteira para acompanhar saldos, transacoes e regras de banca."
+          ctaLabel="Criar primeira carteira"
+          ctaAction={() => setCreateDialogOpen(true)}
+          secondaryLink={{ label: "Saber mais", href: "/help/bankroll" }}
+        />
+      )}
 
       <div className="rounded-lg border bg-card overflow-hidden">
         <div className="flex flex-col md:flex-row min-h-[400px]">

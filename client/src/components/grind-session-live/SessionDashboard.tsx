@@ -165,14 +165,14 @@ export default function SessionDashboard({
             </div>
           </div>
 
-          <div className="metric-card metric-avg-participants" data-testid="kpi-avg-participants">
+          <div className="metric-card metric-median-participants" data-testid="kpi-median-participants">
             <div className="metric-icon">{'\u{1F465}'}</div>
             <div className="metric-value">
-              {integerFormatter.format(Math.round(stats.avgParticipants))}
+              {integerFormatter.format(Math.round(stats.medianParticipants))}
             </div>
-            <div className="metric-label">Media Participantes</div>
+            <div className="metric-label">Mediana Participantes</div>
             <div className="metric-sub text-[10px] text-gray-500">
-              Estimado via Gtd / BI{stats.avgParticipants > 0 ? '' : ' (sem Gtd)'}
+              Estimado via Gtd / BI{stats.medianParticipants > 0 ? '' : ' (sem Gtd)'}
             </div>
           </div>
 

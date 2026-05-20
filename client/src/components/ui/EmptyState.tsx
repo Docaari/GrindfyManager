@@ -40,6 +40,9 @@ export const EMPTY_STATE_AREAS = [
   'coach-conversations',
   'bankroll-wallets',
   'biblioteca',
+  'grade-planner-empty',
+  'grind-live-empty',
+  'bankroll-empty',
 ] as const;
 export type EmptyStateArea = (typeof EMPTY_STATE_AREAS)[number];
 
@@ -52,6 +55,17 @@ export interface EmptyStateSecondaryLink {
   href: string;
 }
 
+/**
+ * Sprint UX-QW-2 RF-01 — slot opcional para "acao secundaria que dispara
+ * callback JS" (ex: abrir dialog, navegar via Wouter). Coexiste com
+ * `secondaryLink` (anchor). Quando ambos definidos, CTA renderiza primeiro.
+ */
+export interface EmptyStateSecondaryCTA {
+  label: string;
+  onClick: () => void;
+  ariaLabel?: string;
+}
+
 export interface EmptyStateProps {
   icon?: React.ReactNode;
   title: string;
@@ -59,6 +73,7 @@ export interface EmptyStateProps {
   ctaLabel: string;
   ctaAction: () => void;
   secondaryLink?: EmptyStateSecondaryLink;
+  secondaryCTA?: EmptyStateSecondaryCTA;
   variant?: EmptyStateVariant;
   iconSize?: EmptyStateIconSize;
   area?: EmptyStateArea;
@@ -77,29 +92,25 @@ export function EmptyState({
   ctaLabel,
   ctaAction,
   secondaryLink,
+  secondaryCTA,
   variant = 'default',
   iconSize = 'md',
   area = 'generic',
 }: EmptyStateProps) {
-  const handleClick = () => {
+  const fireTelemetry = (event: string) => {
     try {
       const telemetry =
         typeof window !== 'undefined'
           ? (window as unknown as { __telemetry?: TelemetryClient }).__telemetry
           : undefined;
       if (telemetry?.track) {
-        telemetry.track('ui.empty_state_cta_clicked', { area });
+        telemetry.track(event, { area });
       } else if (
         typeof process !== 'undefined' &&
         process.env?.NODE_ENV !== 'production'
       ) {
-        // RF-13 (N5) — log antes de fallback (lesson #9). Dev-only para nao
-        // poluir prod. console.debug eh silenciado por padrao em devtools.
         // eslint-disable-next-line no-console
-        console.debug(
-          '[EmptyState] telemetry skipped: window.__telemetry unavailable',
-          { area },
-        );
+        console.debug(`[EmptyState] telemetry skipped: ${event}`, { area });
       }
     } catch (err) {
       if (
@@ -107,11 +118,20 @@ export function EmptyState({
         process.env?.NODE_ENV !== 'production'
       ) {
         // eslint-disable-next-line no-console
-        console.debug('[EmptyState] telemetry error:', err, { area });
+        console.debug('[EmptyState] telemetry error:', err, { area, event });
       }
       // telemetria sem panico (lesson #9)
     }
+  };
+
+  const handleClick = () => {
+    fireTelemetry('ui.empty_state_cta_clicked');
     ctaAction();
+  };
+
+  const handleSecondaryClick = () => {
+    fireTelemetry('ui.empty_state_secondary_cta_clicked');
+    secondaryCTA?.onClick();
   };
 
   const isCompact = variant === 'compact';
@@ -153,13 +173,25 @@ export function EmptyState({
       >
         {description}
       </p>
-      <Button
-        data-testid="empty-state-cta"
-        onClick={handleClick}
-        aria-label={ctaLabel}
-      >
-        {ctaLabel}
-      </Button>
+      <div className="flex flex-col sm:flex-row items-center gap-2">
+        <Button
+          data-testid="empty-state-cta"
+          onClick={handleClick}
+          aria-label={ctaLabel}
+        >
+          {ctaLabel}
+        </Button>
+        {secondaryCTA && (
+          <Button
+            data-testid="empty-state-secondary-cta"
+            variant="ghost"
+            onClick={handleSecondaryClick}
+            aria-label={secondaryCTA.ariaLabel ?? secondaryCTA.label}
+          >
+            {secondaryCTA.label}
+          </Button>
+        )}
+      </div>
       {secondaryLink && (
         <a
           data-testid="empty-state-secondary-link"

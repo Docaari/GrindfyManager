@@ -753,7 +753,7 @@ export default function GrindSessionLive() {
     }
   };
 
-  const handleEndSession = async () => {
+  const handleEndSession = async (walletProfitUsd?: number) => {
     const sessionId = activeSession?.id;
     if (!sessionId) return;
     // P0 launch-fix: guard double-click. Sem isto, dois cliques rapidos no
@@ -802,6 +802,11 @@ export default function GrindSessionLive() {
         confiancaMedia: sessionData.mentalAverages.confidence.toString(),
         inteligenciaEmocionalMedia: sessionData.mentalAverages.emotionalIntelligence.toString(),
         interferenciasMedia: sessionData.mentalAverages.interference.toString(),
+        // Lucro reconciliado da banca — card "Lucro Total da Sessao" do modal.
+        // Persistido para o historico de sessoes exibir o mesmo numero.
+        ...(typeof walletProfitUsd === 'number' && Number.isFinite(walletProfitUsd)
+          ? { walletProfitUsd: walletProfitUsd.toString() }
+          : {}),
       });
     } catch (err) {
       console.error("Failed to end session:", err);
