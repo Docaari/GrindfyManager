@@ -24,6 +24,10 @@ import { processBStudyTick } from "./jobs/processBStudy";
 // foi removido (ADR-156).
 import { gapCheckTick } from "./jobs/gapCheck";
 import { bImportTick } from "./jobs/bImport";
+// AI-2A nudges (ADR-167).
+import { bDownswingTick } from "./jobs/bDownswing";
+import { bVolumeTick } from "./jobs/bVolume";
+import { bGradeTick } from "./jobs/bGrade";
 import { withAdvisoryLock } from "../lib/advisoryLock";
 
 let started = false;
@@ -104,6 +108,32 @@ export function startCoachCrons(): void {
       await withAdvisoryLock("cron:coach-b-import", () => bImportTick({}));
     } catch (err) {
       console.error("coach.cron.b_import.tick.error", { err });
+    }
+  });
+
+  // Sprint AI-2A (ADR-167) — 3 nudges novos. Todos gateados pelo kill switch
+  // global (acima). Hourly ticks que filtram dia/hora local internamente.
+  cron.schedule("0 * * * *", async () => {
+    try {
+      await withAdvisoryLock("cron:coach-b-downswing", () => bDownswingTick({}));
+    } catch (err) {
+      console.error("coach.cron.b_downswing.tick.error", { err });
+    }
+  });
+
+  cron.schedule("0 * * * *", async () => {
+    try {
+      await withAdvisoryLock("cron:coach-b-volume", () => bVolumeTick({}));
+    } catch (err) {
+      console.error("coach.cron.b_volume.tick.error", { err });
+    }
+  });
+
+  cron.schedule("0 * * * *", async () => {
+    try {
+      await withAdvisoryLock("cron:coach-b-grade", () => bGradeTick({}));
+    } catch (err) {
+      console.error("coach.cron.b_grade.tick.error", { err });
     }
   });
 

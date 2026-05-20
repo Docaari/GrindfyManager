@@ -131,9 +131,13 @@ export async function computeSuggestions(
   injectedStorage?: any,
 ): Promise<Suggestion[]> {
   const r = normalizeRoute(route);
-  const cacheKey = `${userId ?? "anon"}|${r}`;
-  const cached = _cache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  // Sprint AI-2A RF-07 — chip OCR recente bypassa cache (estado pos-upload).
+  const isOcrAwareRoute = r === "/stats" || r === "/estudos/stats" || r === "/grind-live";
+  if (!isOcrAwareRoute) {
+    const cacheKey = `${userId ?? "anon"}|${r}`;
+    const cached = _cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+  }
 
   let result: Suggestion[] = staticFor(r);
 
@@ -185,10 +189,34 @@ export async function computeSuggestions(
     result = staticFor(r);
   }
 
+  // Sprint AI-2A RF-07 — OCR bridge: se /stats|/grind-live e tem upload<24h,
+  // injeta sugestao "analisar stats do ultimo upload" no inicio do set.
+  if (isOcrAwareRoute && userId) {
+    try {
+      let store: any = injectedStorage;
+      if (!store) {
+        const mod = await import("../storage");
+        store = (mod as any).storage;
+      }
+      const recent = await store?.getRecentStatsUpload?.(userId, 24);
+      if (recent && recent.uploadedAt) {
+        result = [
+          s("ocr-recent", "Analisar stats do último upload"),
+          ...result,
+        ];
+      }
+    } catch (err) {
+      console.error("coach.quick_suggestions.ocr_bridge.error", { userId, err });
+    }
+  }
+
   // clamp 2-4.
   const clamped = result.slice(0, 4);
   const finalResult = clamped.length >= 2 ? clamped : staticFor(r).slice(0, 4);
-  _cache.set(cacheKey, { value: finalResult, expiresAt: Date.now() + CACHE_TTL_MS });
+  if (!isOcrAwareRoute) {
+    const cacheKey = `${userId ?? "anon"}|${r}`;
+    _cache.set(cacheKey, { value: finalResult, expiresAt: Date.now() + CACHE_TTL_MS });
+  }
   return finalResult;
 }
 

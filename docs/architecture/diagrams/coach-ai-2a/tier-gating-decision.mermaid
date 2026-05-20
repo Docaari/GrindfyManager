@@ -1,0 +1,56 @@
+%% AI-2A — Decision tree: 3 funções de tier coexistem com responsabilidades distintas (ADR-167)
+%% resolveUserTier (rate limit + tools legadas), getReportTier (AI-1C — relatórios), isToolEligibleTier (AI-2A — tools novas)
+
+flowchart TB
+    classDef question fill:#1565c0,stroke:#0d47a1,color:#fff
+    classDef yes fill:#2e7d32,stroke:#1b5e20,color:#fff
+    classDef no fill:#c62828,stroke:#b71c1c,color:#fff
+    classDef trial fill:#ef6c00,stroke:#bf360c,color:#fff
+    classDef resolved fill:#4527a0,stroke:#311b92,color:#fff
+
+    start([Coach precisa decidir<br/>elegibilidade]):::question
+
+    start --> q1{Para qual<br/>capacidade?}:::question
+
+    q1 -->|Rate limit do chat<br/>OU tools AI-0A/0B/1A/1B/1C| RUT[resolveUserTier user]:::resolved
+    q1 -->|Relatório<br/>weekly/daily/monthly<br/>AI-1C| GRT[getReportTier user]:::resolved
+    q1 -->|Tool AI-2A<br/>(8 tools novas)| ITET[isToolEligibleTier<br/>user, toolName]:::resolved
+
+    %% ===== resolveUserTier (sem mudança neste sprint) =====
+    RUT --> rutPlan{users.subscription_plan?}:::question
+    rutPlan -->|admin| rutA[tier='admin']:::yes
+    rutPlan -->|trial| rutT[tier='free'<br/>**Trial vira free aqui — pattern hoje**]:::trial
+    rutPlan -->|active| rutAct{user_subscriptions<br/>JOIN subscription_plans<br/>tier?}:::question
+    rutAct -->|pro| rutP[tier='pro']:::yes
+    rutAct -->|premium| rutPr[tier='premium']:::yes
+    rutAct -->|nenhum| rutAF[tier='free']:::no
+    rutPlan -->|expired/free| rutF[tier='free']:::no
+
+    %% ===== getReportTier AI-1C (corrige bug PRO_PLANS do AI-1B) =====
+    GRT --> grtPlan{users.subscription_plan?}:::question
+    grtPlan -->|trial| grtE1[tier='eligible'<br/>**Trial passa direto**<br/>(consistente com AI-1C)]:::yes
+    grtPlan -->|admin| grtE2[tier='eligible']:::yes
+    grtPlan -->|active| grtRU[chama resolveUserTier]:::resolved
+    grtRU --> grtRUR{retorna<br/>pro/premium/admin?}:::question
+    grtRUR -->|sim| grtE3[tier='eligible']:::yes
+    grtRUR -->|não free| grtF1[tier='free'<br/>**não recebe relatório**]:::no
+    grtPlan -->|free/expired| grtF2[tier='free']:::no
+
+    %% ===== isToolEligibleTier AI-2A (Q-E locked: Trial recebe tools) =====
+    ITET --> itetTool{toolName em<br/>AI_2A_TOOLS?}:::question
+    itetTool -->|não| itetSkip[delega ao descriptor.gateByTier<br/>via registry<br/>(tools legadas inalteradas)]:::resolved
+    itetTool -->|sim| itetPlan{users.subscription_plan?}:::question
+    itetPlan -->|trial| itetE1[true<br/>**Trial recebe AI-2A tools**<br/>(Q-E locked 2026-05-20)]:::yes
+    itetPlan -->|admin| itetE2[true]:::yes
+    itetPlan -->|free/expired| itetF1[false<br/>**Free não vê AI-2A tools**]:::no
+    itetPlan -->|active| itetRU[chama resolveUserTier]:::resolved
+    itetRU --> itetRUR{retorna<br/>pro/premium/admin?}:::question
+    itetRUR -->|sim| itetE3[true]:::yes
+    itetRUR -->|free| itetF2[false]:::no
+
+    %% ===== Notas explicativas =====
+    rutT -.->|Trial não muda<br/>**rate limit estrito mantido**<br/>**resolveUserTier inalterado**| NoteRUT["⚠️ resolveUserTier NÃO mudou em AI-1C nem AI-2A.<br/>Trial continua gateado como 'free' lá.<br/>O fato de Trial receber relatório e tools<br/>é decisão das funções **separadas**<br/>getReportTier (AI-1C) e isToolEligibleTier (AI-2A)."]:::resolved
+
+    grtE1 -.->|Bug latente AI-1B<br/>corrigido em AI-1C| NoteGRT["⚠️ Bug latente do AI-1B:<br/>PRO_PLANS = {'pro','premium','admin'}<br/>vs users.subscription_plan ∈ {'trial','active','expired','admin'}.<br/>Só admin recebia Weekly Report.<br/>getReportTier corrigiu — itera 'trial+active+admin'."]:::resolved
+
+    itetE1 -.->|Rate limit das tools<br/>AI-2A no Trial = Pro-like<br/>(gateado independente)| NoteITET["⚠️ Trial recebe tools AI-2A,<br/>mas rate limit geral de chat continua segregado<br/>(via resolveUserTier→free).<br/>**Q-E locked:** chamada de tool AI-2A no Trial<br/>= bucket Pro (mais generoso que Free)."]:::resolved

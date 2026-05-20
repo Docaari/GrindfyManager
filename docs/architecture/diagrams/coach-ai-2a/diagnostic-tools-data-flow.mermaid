@@ -1,0 +1,107 @@
+%% AI-2A — Fluxo de dados dos 5 diagnostic tools read-only (ADR-166)
+%% Mostra de qual tabela/service cada tool puxa dados + DRY com Monthly Report (varianceAnalysis.ts extraído)
+
+flowchart TB
+    classDef tool fill:#1f4e79,stroke:#0b2a4a,color:#fff
+    classDef shared fill:#2e7d32,stroke:#1b5e20,color:#fff
+    classDef table fill:#666,stroke:#333,color:#fff
+    classDef service fill:#bf6900,stroke:#7a4500,color:#fff
+    classDef pageContext fill:#7b1fa2,stroke:#4a148c,color:#fff
+
+    subgraph LLM["LLM (Claude Sonnet 4.6)"]
+      llmCall["tool_use:<br/>analyze_variance<br/>diagnose_plateau<br/>compute_grind_study_ratio<br/>calculate_effective_rake<br/>query_pool_intelligence"]
+    end
+
+    subgraph Handlers["Handlers (server/coachTools/handlers/)"]
+      tAV[analyzeVariance.ts]:::tool
+      tDP[diagnosePlateau.ts]:::tool
+      tGSR[computeGrindStudyRatio.ts]:::tool
+      tER[calculateEffectiveRake.ts]:::tool
+      tPI[queryPoolIntelligence.ts]:::tool
+    end
+
+    subgraph SharedHelpers["Shared helpers (DRY — lesson #10)"]
+      vaHelper["server/coach/varianceAnalysis.ts<br/>computeVarianceAnalysis"]:::shared
+      fxR["server/services/fxResolver.ts<br/>resolveExchangeRates (ADR-163)"]:::shared
+      leakDet["server/coachLeakDetection.ts<br/>detectLeaks + findActiveLeakFocusList"]:::shared
+    end
+
+    subgraph Storage["Storage layer"]
+      perfBP["getPerformanceByPeriod<br/>(§6.1: grind_session_id IS NULL)"]:::service
+      varExp["getVarianceVsExpected<br/>(retorna null hoje;<br/>PrimeDope futuro)"]:::service
+      dashStats["getDashboardStats"]:::service
+      grindSess["getGrindSessions"]:::service
+      studyV2["getStudySessionsV2"]:::service
+      walletTx["listWalletTransactionsByUser<br/>(filtra reason='rakeback' — ADR-039)"]:::service
+      profAdh["getProfileAdherenceTrend (novo)"]:::service
+      poolQuery["queryTournamentPoolIntelligence (novo)"]:::service
+    end
+
+    subgraph Tables["Tabelas PostgreSQL"]
+      tournaments[("tournaments<br/>grind_session_id IS NULL")]:::table
+      walletTrx[("wallet_transactions")]:::table
+      grindSessTbl[("grind_sessions")]:::table
+      studyV2Tbl[("study_sessions_v2")]:::table
+      poolIntel[("tournament_pool_intelligence<br/>(novo migration 0070,<br/>12 rows seed BR)")]:::table
+      primedope[("primedope_runs<br/>(cache — ADR-162)")]:::table
+      coachLeakFoc[("coach_leak_focus")]:::table
+    end
+
+    subgraph OCRBridge["OCR Bridge (RF-07 — sem tool nova)"]
+      hsu[("hud_stats_uploads")]:::table
+      recentUp["getRecentStatsUpload<br/>(server/storage/coachSignalsStorage.ts)"]:::service
+      assembleCtx["server/coachContext.ts<br/>assembleContext (DINÂMICO)"]:::pageContext
+      quickSug["server/coach/quickSuggestions.ts<br/>mapa rota → sugestões"]:::pageContext
+      blockUp["## Upload Recente<br/>(bloco DINÂMICO, não quebra cache STATIC)"]:::pageContext
+      suggUp["Sugestão: 'Quer que eu analise os stats?'"]:::pageContext
+    end
+
+    subgraph MonthlyReport["Monthly Report AI-1C (DRY consumer)"]
+      mrGen["monthlyReportGenerator.ts<br/>(refactor: chama vaHelper)"]:::shared
+    end
+
+    llmCall --> tAV
+    llmCall --> tDP
+    llmCall --> tGSR
+    llmCall --> tER
+    llmCall --> tPI
+
+    tAV --> vaHelper
+    vaHelper --> perfBP
+    vaHelper --> varExp
+    vaHelper --> fxR
+    perfBP --> tournaments
+    varExp --> primedope
+    mrGen -. reuso DRY .-> vaHelper
+
+    tDP --> perfBP
+    tDP --> dashStats
+    tDP --> studyV2
+    tDP --> profAdh
+    tDP --> leakDet
+    leakDet --> coachLeakFoc
+    dashStats --> tournaments
+    studyV2 --> studyV2Tbl
+    profAdh --> tournaments
+
+    tGSR --> grindSess
+    tGSR --> studyV2
+    grindSess --> grindSessTbl
+
+    tER --> perfBP
+    tER --> walletTx
+    tER --> fxR
+    walletTx --> walletTrx
+
+    tPI --> poolQuery
+    poolQuery --> poolIntel
+
+    %% OCR bridge: não é uma tool, é page-context + quick-suggestion
+    recentUp --> hsu
+    assembleCtx --> recentUp
+    assembleCtx --> blockUp
+    quickSug --> recentUp
+    quickSug --> suggUp
+
+    blockUp -. LLM lê no system prompt .-> llmCall
+    suggUp -. UI mostra ao user .-> llmCall

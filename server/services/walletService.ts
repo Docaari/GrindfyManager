@@ -791,6 +791,46 @@ async function getConsolidatedBalance(
 }
 
 // =============================================================================
+// Sprint AI-2A (RF-08) — getConsolidatedBalanceAt
+//
+// Derivado de bankroll_snapshots: o snapshot mais recente com occurred_at <=
+// atDate eh tomado como referencia historica em USD. Quando nao ha snapshot
+// anterior a `atDate`, retorna null (fallback p/ heuristica do caller).
+// =============================================================================
+async function getConsolidatedBalanceAt(
+  userId: string,
+  atDate: Date,
+): Promise<number | null> {
+  try {
+    const { db } = await import("../db");
+    const schemaMod = await import("@shared/schema");
+    const { bankrollSnapshots } = schemaMod as any;
+    const { and, eq, lte, sql } = await import("drizzle-orm");
+    const rows: any[] = await db
+      .select({
+        newAmount: bankrollSnapshots.newAmount,
+        occurredAt: bankrollSnapshots.occurredAt,
+      })
+      .from(bankrollSnapshots)
+      .where(
+        and(
+          eq(bankrollSnapshots.userId, userId),
+          lte(bankrollSnapshots.occurredAt, atDate as any),
+        ),
+      )
+      .orderBy(sql`${bankrollSnapshots.occurredAt} DESC`)
+      .limit(1);
+    const r = rows?.[0];
+    if (!r) return null;
+    const amt = Number(r.newAmount);
+    return Number.isFinite(amt) ? amt : null;
+  } catch (err) {
+    console.error("walletService.getConsolidatedBalanceAt.error", { userId, err });
+    return null;
+  }
+}
+
+// =============================================================================
 // Migration v1 -> v2
 // =============================================================================
 
@@ -1668,4 +1708,10 @@ export const walletService = {
   settlePending,
   // Sprint Bankroll-Reports-Detail RF-06
   getBalanceSnapshotPair,
+  // Sprint AI-2A RF-08
+  getConsolidatedBalanceAt,
 };
+
+// Sprint AI-2A: re-exports nomeados (handlers + signals storage importam via
+// named export para facilitar `vi.doMock`).
+export { getConsolidatedBalance, getConsolidatedBalanceAt };

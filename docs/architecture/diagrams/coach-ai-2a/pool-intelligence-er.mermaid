@@ -1,0 +1,74 @@
+%% AI-2A — ERD das 2 tabelas novas (migration 0070): user_off_days + tournament_pool_intelligence
+%% ADR-165 (mark_off_day → user_off_days; bulk_propose_grade lê) + ADR-166 (query_pool_intelligence → tournament_pool_intelligence)
+
+erDiagram
+    USERS ||--o{ USER_OFF_DAYS : "1:N CASCADE"
+    USERS ||--o{ PLANNED_TOURNAMENTS : "1:N CASCADE"
+    USER_OFF_DAYS }o..o{ PLANNED_TOURNAMENTS : "consulta lógica<br/>(bulk_propose_grade<br/>pula off_dates)"
+    TOURNAMENT_POOL_INTELLIGENCE ||..o{ PLANNED_TOURNAMENTS : "matched via<br/>tournament_pattern LIKE name<br/>(read-only, sem FK)"
+
+    USERS {
+        varchar(21) user_platform_id PK
+        varchar email
+        varchar subscription_plan "trial|active|expired|admin"
+        varchar timezone "fuso horário local"
+        jsonb ai_structured_profile "AI-1A (ADR-151)"
+    }
+
+    USER_OFF_DAYS {
+        varchar(21) id PK "nanoid"
+        varchar(21) user_id FK "REFERENCES users CASCADE"
+        date off_date "YYYY-MM-DD no fuso do user"
+        text reason "opcional, livre"
+        varchar(32) source "coach_tool | manual_ui | cron_default"
+        timestamp created_at "DEFAULT NOW"
+        _ unique_user_date UK "UNIQUE (user_id, off_date)"
+        _ idx_user_date IDX "INDEX (user_id, off_date)"
+    }
+
+    TOURNAMENT_POOL_INTELLIGENCE {
+        varchar(21) id PK "nanoid (seed: pool_seed_001..012)"
+        varchar(32) site "WPN | GG | Stars | Party | Bodog | ..."
+        varchar(120) tournament_pattern "matched via LIKE"
+        numeric buy_in_min "USD"
+        numeric buy_in_max "USD"
+        integer field_avg "média histórica"
+        numeric field_volatility "stddev"
+        varchar(16) pool_quality "soft | medium | tough (CHECK enum)"
+        text notes "pt-BR curto"
+        timestamp updated_at
+        timestamp created_at
+        _ idx_site IDX "INDEX (site)"
+        _ idx_pattern IDX "INDEX (tournament_pattern)"
+    }
+
+    PLANNED_TOURNAMENTS {
+        varchar(21) id PK
+        varchar(21) user_id FK
+        date week_start_date
+        integer day_of_week "0=domingo, 6=sábado"
+        varchar profile "A|B|C"
+        varchar site
+        varchar name
+        time time_local
+        numeric buy_in
+        varchar type
+        varchar speed
+        varchar status
+        varchar(21) series_id FK "Flight-1 ADR-090 SET NULL"
+        timestamp created_at
+    }
+
+    COACH_ACTIONS {
+        varchar(21) id PK
+        varchar(21) user_id FK
+        varchar(64) tool_name "mark_off_day | bulk_propose_grade | ..."
+        jsonb input
+        jsonb payload_after "para bulk_propose_grade: {createdIds[], summary, skipped}"
+        timestamp undo_expires_at "confirmed_at + 5min"
+        varchar(16) status "pending|completed|undone|expired"
+    }
+
+    USERS ||--o{ COACH_ACTIONS : "1:N"
+    COACH_ACTIONS }o..o{ USER_OFF_DAYS : "mark_off_day → 1 row<br/>(audit; undo deleta)"
+    COACH_ACTIONS }o..o{ PLANNED_TOURNAMENTS : "bulk_propose_grade →<br/>N rows via payload_after.createdIds<br/>(undo deleta em lote)"

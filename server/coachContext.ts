@@ -52,11 +52,45 @@ interface DataLoaders {
   getStructuredProfile?: (userId: string) => Promise<any | null>;
 }
 
+/**
+ * Sprint AI-2A / RF-07 — bloco DINAMICO "## Upload Recente" injetado quando o
+ * storage tem upload de stats < 24h (best-effort). Funcao auxiliar local
+ * (nao exportada) reusada pelo branch principal + branch shortcut.
+ */
+async function buildRecentUploadBlock(userId: string): Promise<string | null> {
+  try {
+    const mod = await import("./storage");
+    const s: any = (mod as any).storage;
+    const recent = await s?.getRecentStatsUpload?.(userId, 24);
+    if (!recent || !recent.uploadedAt) return null;
+    const when = new Date(recent.uploadedAt as any).toISOString();
+    const topStats = (recent.statsExtracted ?? [])
+      .slice(0, 5)
+      .map((st: any) => `${st.statId}=${st.value}`)
+      .join(", ");
+    return `\n## Upload Recente:\nTimestamp: ${when}\nTop stats: ${topStats || "(none)"}\n`;
+  } catch (err) {
+    console.error("coach_context.recent_upload.error", { userId, err });
+    return null;
+  }
+}
+
 export async function assembleContext(
-  input: ContextInput,
-  dataLoaders: DataLoaders,
+  input: ContextInput | { userId: string; pageContext?: any },
+  dataLoaders?: DataLoaders,
 ): Promise<{ system: SystemBlock[] | string; messages: Array<{ role: string; content: string }> }> {
-  const { coachType, userId, message, sessionId } = input;
+  // Sprint AI-2A / RF-07 — shortcut quando chamado sem dataLoaders (apenas para
+  // context "leve" ex: testes do OCR bridge). Retorna systemParts com bloco
+  // upload recente quando disponivel.
+  if (!dataLoaders) {
+    const userId = (input as any).userId;
+    const block = userId ? await buildRecentUploadBlock(userId) : null;
+    const systemParts: string[] = [];
+    if (block) systemParts.push(block);
+    return { system: systemParts.length > 0 ? systemParts.join("\n") : "", systemParts, messages: [] } as any;
+  }
+
+  const { coachType, userId, message, sessionId } = input as ContextInput;
 
   // 1. Get system prompt (legacy — usado quando RF-08 buildSystemArray
   // estiver desligado via flag — porem o builder novo ja inclui base prompt).

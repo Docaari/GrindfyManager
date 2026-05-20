@@ -1,0 +1,98 @@
+%% AI-2A — Sequência de bulk_propose_grade strict (write tool em massa com cap 20, transação, undo lookup por IDs)
+%% ADR-165. Outras write tools (schedule_study_block, create_study_theme, mark_off_day) seguem padrão similar mas single-row.
+
+sequenceDiagram
+    actor User
+    participant LLM as Claude (Sonnet 4.6)
+    participant Chat as /api/coach/chat
+    participant Registry as coachTools/index.ts<br/>registry + isToolEligibleTier
+    participant Handler as bulkProposeGrade.ts<br/>handler
+    participant ProposeSvc as proposeGrade.ts<br/>(scoring reuse)
+    participant Scoring as server/scoring/<br/>getTournamentSuggestions
+    participant Storage as storage<br/>(planned_tournaments, user_off_days, wallets)
+    participant Runner as coachToolRunner<br/>(preview/confirm/undo)
+    participant Actions as coach_actions<br/>(payload_after.createdIds)
+    participant DB as PostgreSQL<br/>(db.transaction)
+
+    Note over User,DB: Fase 1 — PREVIEW (LLM propõe + user vê o pacote)
+
+    User->>Chat: "monta minha grade da semana, profile A, strict"
+    Chat->>Registry: listToolsForUser(userId)
+    Registry->>Registry: isToolEligibleTier(user, 'bulk_propose_grade')<br/>(Trial→true, Pro/Premium/Admin→true, Free→false)
+    Registry-->>Chat: tools eligible
+    Chat->>LLM: stream com tools
+    LLM-->>Chat: tool_use {name:'bulk_propose_grade',<br/>input:{weekStartDate, profile:'A', strict:true, maxTournaments:20}}
+    Chat->>Runner: preview(toolName, input, userId)
+    Runner->>Handler: runBulkProposeGrade(input, ctx)
+    Handler->>Handler: Zod .strict() valida (cap 20)
+    Handler->>ProposeSvc: proposeGradeForWeek(userId, opts)
+    ProposeSvc->>Storage: listOffDaysForUser(userId, [weekStart..+6])
+    Storage-->>ProposeSvc: offDates Set<string>
+    loop para cada dayOfWeek em daysOfWeek
+        alt date em offDates
+            ProposeSvc->>ProposeSvc: conflicts.push({reason:'off_day'})
+        else
+            ProposeSvc->>Scoring: getTournamentSuggestions(...)
+            Scoring-->>ProposeSvc: top N candidatos
+        end
+    end
+    ProposeSvc->>Storage: listPlannedTournaments({userId, weekStartDate})
+    Storage-->>ProposeSvc: rows existentes
+    ProposeSvc->>ProposeSvc: dedup intra-pacote + cross-check already_in_grade
+    ProposeSvc->>Storage: walletService.getConsolidatedBalance(userId)<br/>(USD via fxResolver)
+    Storage-->>ProposeSvc: balanceUsd
+    alt balance < sum(buyIn) * COACH_GRADE_BANKROLL_THRESHOLD_MULT
+        ProposeSvc->>ProposeSvc: conflicts.push({reason:'wallet_below_threshold'})
+    end
+    ProposeSvc-->>Handler: {proposed, conflicts, summary}
+    Handler->>Handler: strictWouldReject = strict && conflicts.length > 0
+    Handler-->>Runner: PreviewResult
+    Runner->>Actions: INSERT coach_action(<br/>status='pending',<br/>requires_confirmation=true,<br/>input,<br/>preview_result)
+    Actions-->>Runner: actionId
+    Runner-->>Chat: {actionId, preview}
+    Chat-->>LLM: tool_result com actionId + preview
+    LLM-->>Chat: response com card de confirmação<br/>("12 torneios propostos. Confirmar?")
+    Chat-->>User: render PreviewCard
+
+    Note over User,DB: Fase 2 — CONFIRM (user clica "confirmar")
+
+    User->>Chat: POST /api/coach/actions/:actionId/confirm
+    Chat->>Runner: confirm(actionId, userId)
+    Runner->>Actions: SELECT coach_action WHERE id=$1 AND status='pending'
+    Actions-->>Runner: action row
+    alt strictWouldReject === true
+        Runner-->>Chat: {ok:false, error:'strict_conflict', conflicts}
+        Chat-->>User: erro "conflitos detectados"
+    else
+        Runner->>Handler: executeBulkProposeGrade(action.preview)
+        Handler->>DB: db.transaction(async tx => ...)
+        Note over Handler,DB: lesson #32 — fallback gentil se db.transaction indef.
+        loop para cada proposed
+            Handler->>Storage: createPlannedTournament(tx, {userId, weekStartDate, ...p})
+            Storage->>DB: INSERT planned_tournaments
+            DB-->>Storage: id
+            Storage-->>Handler: id
+        end
+        Handler->>Handler: createdIds = [id1, id2, ...]
+        Handler-->>Runner: {ok:true, registered, skipped, createdIds}
+        Runner->>Actions: UPDATE coach_action SET<br/>status='completed',<br/>payload_after={createdIds, summary, skipped},<br/>confirmed_at=NOW,<br/>undo_expires_at=NOW+5min
+        Runner-->>Chat: {ok:true, registered:12, skipped:0}
+        Chat-->>User: success + botão "desfazer (5min)"
+    end
+
+    Note over User,DB: Fase 3 — UNDO (opcional, dentro da janela 5min)
+
+    User->>Chat: POST /api/coach/actions/:actionId/undo
+    Chat->>Runner: undo(actionId, userId)
+    Runner->>Actions: SELECT coach_action<br/>WHERE id=$1 AND status='completed'<br/>AND undo_expires_at > NOW
+    Actions-->>Runner: action row + payload_after.createdIds
+    Runner->>Handler: undoBulkProposeGrade(payload_after.createdIds, userId)
+    Handler->>DB: db.transaction(async tx => ...)
+    Handler->>Storage: deletePlannedTournamentsByIds(tx, createdIds, userId)
+    Storage->>DB: DELETE FROM planned_tournaments<br/>WHERE id = ANY($createdIds)<br/>AND user_id = $userId
+    DB-->>Storage: deletedCount
+    Storage-->>Handler: deletedCount
+    Handler-->>Runner: {ok:true, deletedCount}
+    Runner->>Actions: UPDATE coach_action SET status='undone', undone_at=NOW
+    Runner-->>Chat: {ok:true}
+    Chat-->>User: "12 torneios removidos da grade"

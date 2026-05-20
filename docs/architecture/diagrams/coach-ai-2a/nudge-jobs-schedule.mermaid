@@ -1,0 +1,117 @@
+%% AI-2A — Cronograma dos 3 nudges novos (B-DOWNSWING, B-VOLUME, B-GRADE) no cronRunner
+%% Gate global COACH_NUDGES_ENABLED + filtros locais por dia/hora do user (ADR-087) — ADR-167
+
+sequenceDiagram
+    autonumber
+    participant Cron as node-cron<br/>(hourly UTC, 0 * * * *)
+    participant Runner as cronRunner.ts<br/>startCoachCrons
+    participant Lock as withAdvisoryLock<br/>(ADR-144)
+    participant TickD as bDownswingTick
+    participant TickV as bVolumeTick
+    participant TickG as bGradeTick
+    participant Eligible as listUsersForCron<br/>(LIST_USERS_FOR_CRON_PRO_PLUS<br/>= trial + active + admin)
+    participant TZIter as iterateUsersWithTimezone<br/>(localHour/localDayOfWeek filter)
+    participant Prefs as user_coach_preferences<br/>(toggles + frozen_categories)
+    participant Signals as coachSignalsStorage<br/>(getDrawdownInWindow,<br/>countTournamentsThisWeek,<br/>avgWeeklyTournaments,<br/>countPlannedTournamentsForWeek)
+    participant Engine as shouldSendNudge<br/>(8 checks — ADR-085)
+    participant Log as coach_nudge_log<br/>(persist + cycleKey)
+
+    Note over Cron,Log: STARTUP — cronRunner.ts startCoachCrons()
+
+    Cron->>Runner: server boot
+    alt process.env.COACH_NUDGES_ENABLED === 'false'
+        Runner-->>Runner: log + return (não registra crons — ADR-152)
+    else
+        Runner->>Cron: schedule "0 * * * *" bDownswingTick
+        Runner->>Cron: schedule "0 * * * *" bVolumeTick (filtro: terça 11h local)
+        Runner->>Cron: schedule "0 * * * *" bGradeTick (filtro: domingo 18h local)
+    end
+
+    Note over Cron,Log: TICK HORÁRIO (cada hora UTC)
+
+    Cron->>Lock: withAdvisoryLock("nudge_bdownswing_tick", TickD)
+    Lock->>TickD: bDownswingTick({ now })
+    alt COACH_NUDGES_ENABLED=false em runtime
+        TickD-->>Lock: return (defesa em profundidade)
+    else
+        TickD->>Eligible: listUsersForCron("subscription_plan IN ('trial','active','admin')")
+        Eligible-->>TickD: users[]
+        loop para cada user (pacing 200ms)
+            TickD->>Prefs: getCoachPreferences(userId)
+            Prefs-->>TickD: { nudgeBDownswing: bool, frozen_categories }
+            alt !nudgeBDownswing OR 'B-DOWNSWING' em frozen
+                Note over TickD: skip user
+            else
+                TickD->>Signals: getDrawdownInWindow(userId, 7)
+                Signals-->>TickD: { refBankrollUsd, currentBankrollUsd, drawdownPct, sampleConfidence }
+                alt sampleConfidence='low' OR drawdownPct<15
+                    Note over TickD: skip (sem nudge)
+                else
+                    TickD->>Engine: shouldSendNudge({userId, category:'B-DOWNSWING', cycleKey:'YYYY-WW'})
+                    Engine-->>TickD: { canSend: true }
+                    TickD->>Log: persistCoachNudgeLog({...,<br/>body: "Banca caiu X% em 7d. Variância ou leak?",<br/>cta: {kind:'tool', target:'analyze_variance'}})
+                    Log-->>TickD: ok
+                end
+            end
+        end
+    end
+
+    Cron->>Lock: withAdvisoryLock("nudge_bvolume_tick", TickV)
+    Lock->>TickV: bVolumeTick({ now })
+    TickV->>Eligible: listUsersForCron(...)
+    Eligible-->>TickV: users[]
+    TickV->>TZIter: iterateUsersWithTimezone(<br/>users, (u, lh, ldow) => ldow===2 && lh===11)
+    Note over TickV,TZIter: Filtra users em terça-feira 11h local (Q-I locked)
+    TZIter-->>TickV: usersAtTuesday11h
+    loop para cada user filtrado
+        TickV->>Prefs: getCoachPreferences(userId)
+        Prefs-->>TickV: { nudgeBVolume }
+        alt !nudgeBVolume
+            Note over TickV: skip
+        else
+            TickV->>Signals: countTournamentsThisWeek(userId)
+            Signals-->>TickV: currentSoFar
+            TickV->>Signals: avgWeeklyTournaments(userId, weeks=4)
+            Signals-->>TickV: { avg, sampleSize }
+            alt sampleSize<2
+                Note over TickV: skip (sem baseline)
+            else
+                TickV->>TickV: projectedWeekVolume = currentSoFar * (7/daysElapsed)
+                alt projectedWeekVolume >= avg*(1 - COACH_VOLUME_DROP_PCT/100)
+                    Note over TickV: skip (volume ok)
+                else
+                    TickV->>Engine: shouldSendNudge({category:'B-VOLUME', cycleKey:'YYYY-WW'})
+                    Engine-->>TickV: canSend
+                    TickV->>Log: persist nudge<br/>(cta: bulk_propose_grade)
+                end
+            end
+        end
+    end
+
+    Cron->>Lock: withAdvisoryLock("nudge_bgrade_tick", TickG)
+    Lock->>TickG: bGradeTick({ now })
+    TickG->>Eligible: listUsersForCron(...)
+    TickG->>TZIter: iterateUsersWithTimezone(<br/>(u, lh, ldow) => ldow===0 && lh===18)
+    Note over TickG,TZIter: Filtra users em domingo 18h local (Q-I locked)
+    TZIter-->>TickG: usersAtSunday18h
+    loop para cada user filtrado
+        TickG->>Prefs: getCoachPreferences(userId)
+        Prefs-->>TickG: { nudgeBGrade }
+        alt !nudgeBGrade
+            Note over TickG: skip
+        else
+            TickG->>Signals: countPlannedTournamentsForWeek(userId, nextMondayLocal)
+            Signals-->>TickG: plannedCount
+            alt plannedCount >= 3
+                Note over TickG: skip (grade já feita)
+            else
+                TickG->>Signals: getGradeAdherenceForWeek(userId, lastWeekStart)<br/>(opcional, enriquece body)
+                Signals-->>TickG: { planned, played, adherencePct }
+                TickG->>Engine: shouldSendNudge({category:'B-GRADE', cycleKey:'YYYY-WW'})
+                Engine-->>TickG: canSend
+                TickG->>Log: persist nudge<br/>(body inclui adherence se disponível,<br/>cta: bulk_propose_grade)
+            end
+        end
+    end
+
+    Note over Cron,Log: Erro em 1 user no loop NÃO trava os outros<br/>(try/catch + console.error — lesson #9)

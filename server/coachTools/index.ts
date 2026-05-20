@@ -56,6 +56,16 @@ import { startGrindSessionTool } from './handlers/startGrindSession';
 import { logSessionCompletedTool } from './handlers/logSessionCompleted';
 import { logLeakFocusTool } from './handlers/logLeakFocus';
 import { logStudySessionTool } from './handlers/logStudySession';
+// AI-2A — write tools + diagnostic tools (9 novas).
+import { bulkProposeGradeTool } from './handlers/bulkProposeGrade';
+import { scheduleStudyBlockTool } from './handlers/scheduleStudyBlock';
+import { createStudyThemeTool } from './handlers/createStudyTheme';
+import { markOffDayTool } from './handlers/markOffDay';
+import { analyzeVarianceTool } from './handlers/analyzeVariance';
+import { diagnosePlateauTool } from './handlers/diagnosePlateau';
+import { computeGrindStudyRatioTool } from './handlers/computeGrindStudyRatio';
+import { calculateEffectiveRakeTool } from './handlers/calculateEffectiveRake';
+import { queryPoolIntelligenceTool } from './handlers/queryPoolIntelligence';
 
 // -----------------------------------------------------------------------------
 // Registration (idempotent via try/catch — silencia "tool_already_registered"
@@ -100,6 +110,17 @@ safeRegister(logSessionCompletedTool as unknown as CoachTool);
 safeRegister(logLeakFocusTool as unknown as CoachTool);
 safeRegister(logStudySessionTool as unknown as CoachTool);
 
+// AI-2A — write tools (RF-02..05) + diagnostic tools (RF-06.1..5) — 9 tools.
+safeRegister(bulkProposeGradeTool as unknown as CoachTool);
+safeRegister(scheduleStudyBlockTool as unknown as CoachTool);
+safeRegister(createStudyThemeTool as unknown as CoachTool);
+safeRegister(markOffDayTool as unknown as CoachTool);
+safeRegister(analyzeVarianceTool as unknown as CoachTool);
+safeRegister(diagnosePlateauTool as unknown as CoachTool);
+safeRegister(computeGrindStudyRatioTool as unknown as CoachTool);
+safeRegister(calculateEffectiveRakeTool as unknown as CoachTool);
+safeRegister(queryPoolIntelligenceTool as unknown as CoachTool);
+
 export {
   readCooldownHistoryTool,
   readUserHudStatsToolV2,
@@ -121,11 +142,21 @@ export {
   logLeakFocusTool,
   logStudySessionTool,
   bulkQueryDimensionsTool,
+  // AI-2A
+  bulkProposeGradeTool,
+  scheduleStudyBlockTool,
+  createStudyThemeTool,
+  markOffDayTool,
+  analyzeVarianceTool,
+  diagnosePlateauTool,
+  computeGrindStudyRatioTool,
+  calculateEffectiveRakeTool,
+  queryPoolIntelligenceTool,
 };
 
 // Agregado para introspeccao por testes (lesson #8 — testes validam presenca
 // individual, nunca length absoluta). Inclui as 17 tools canonicas + 1 alias
-// + bulk_query_dimensions (AI-1C).
+// + bulk_query_dimensions (AI-1C) + 9 AI-2A.
 export const coachTools = [
   readCooldownHistoryTool,
   readUserHudStatsToolV2,
@@ -146,4 +177,13 @@ export const coachTools = [
   logLeakFocusTool,
   logStudySessionTool,
   bulkQueryDimensionsTool,
+  bulkProposeGradeTool,
+  scheduleStudyBlockTool,
+  createStudyThemeTool,
+  markOffDayTool,
+  analyzeVarianceTool,
+  diagnosePlateauTool,
+  computeGrindStudyRatioTool,
+  calculateEffectiveRakeTool,
+  queryPoolIntelligenceTool,
 ];
