@@ -791,21 +791,25 @@ export function registerUploadRoutes(app: Express): void {
         });
       }
 
-      // Save upload history
-      const uploadData = {
-        id: nanoid(),
-        userId: userPlatformId,
-        filename: file.originalname,
-        fileType: file.originalname.split('.').pop() || 'unknown',
-        status: 'completed',
-        tournamentsImported: successCount,
-        duplicatesFound: duplicateTournaments.length,
-        processingTime: 0,
-        createdAt: new Date(),
-        errorMessage: errorCount > 0 ? `${errorCount} erros durante importação` : null
-      };
-
-      await storage.createUploadHistory(uploadData);
+      // Save upload history — payload alinhado ao schema upload_history
+      // (tournamentsCount/uploadDate/duplicatesFound; sem fileType/processingTime/
+      // createdAt/tournamentsImported que nao existem na tabela). try/catch
+      // separado porque a persistencia do historico é metadata: se falhar, NAO
+      // deve invalidar o upload que ja gravou os torneios — apenas loga e segue
+      // com res.json 200 (consistente com o outro endpoint upload-history que
+      // tambem isola a escrita do historico em try/catch — followup 2026-05-14).
+      try {
+        await storage.createUploadHistory({
+          userId: userPlatformId,
+          filename: file.originalname,
+          status: successCount > 0 ? 'success' : 'error',
+          tournamentsCount: successCount,
+          duplicatesFound: duplicateTournaments.length,
+          errorMessage: errorCount > 0 ? `${errorCount} erros durante importação` : null,
+        } as any);
+      } catch (historyErr) {
+        console.error('upload-with-duplicates: createUploadHistory failed (non-blocking):', historyErr);
+      }
 
 
       res.json({
@@ -817,6 +821,7 @@ export function registerUploadRoutes(app: Express): void {
       });
 
     } catch (error) {
+      console.error('POST /api/upload-with-duplicates failed:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   });
