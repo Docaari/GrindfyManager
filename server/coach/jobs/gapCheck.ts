@@ -20,8 +20,8 @@ import { storage } from "../../storage";
 import { shouldSendNudge } from "../nudgeEngine";
 import { getLocalHour } from "../timezone";
 import { getCoachPreferences } from "../../storage/coachPreferences";
+import { resolveEligiblePlanTier, LIST_USERS_FOR_CRON_PRO_PLUS } from "../planEligibility";
 
-const PRO_PLANS = new Set(["pro", "premium", "admin"]);
 const D3_LOCAL_HOUR = 10; // hora util — evita quiet hours; engine filtra de qualquer forma.
 
 interface TickOptions {
@@ -63,7 +63,8 @@ function localWeekday(now: Date, tz: string): number {
 async function isWeeklyReportEligible(store: any, userId: string, plan?: string): Promise<boolean> {
   try {
     const effectivePlan = plan ?? (await store.getUserSubscriptionPlan?.(userId)) ?? "free";
-    if (!PRO_PLANS.has(String(effectivePlan))) return false;
+    const tier = await resolveEligiblePlanTier(userId, effectivePlan);
+    if (tier == null) return false;
     const prefs = await getCoachPreferences(userId);
     return prefs?.reportWeeklyEnabled === true;
   } catch (err) {
@@ -120,7 +121,7 @@ export async function gapCheckTick(opts: TickOptions = {}): Promise<void> {
   const store = await resolveStorage(opts.injectedStorage);
   let users: Array<{ userPlatformId: string; timezone: string; subscriptionPlan: string }> = [];
   try {
-    users = (await store.listUsersForCron?.("subscription_plan IN ('pro','premium')")) ?? [];
+    users = (await store.listUsersForCron?.(LIST_USERS_FOR_CRON_PRO_PLUS)) ?? [];
   } catch (err) {
     console.error("gap_check.list_users_error", { err });
     return;

@@ -17,8 +17,8 @@
 import { storage } from "../../storage";
 import { shouldSendNudge } from "../nudgeEngine";
 import { getLocalHour } from "../timezone";
+import { isProPlusEligible, LIST_USERS_FOR_CRON_PRO_PLUS } from "../planEligibility";
 
-const PRO_PLANS = new Set(["pro", "premium", "admin"]);
 const LOCAL_HOUR = 15; // hora util — 15h local; engine filtra quiet hours de qualquer forma.
 const DEFAULT_DAYS = 5;
 
@@ -53,7 +53,7 @@ function getISOWeek(d: Date): string {
 async function isProPlus(store: any, userId: string, plan?: string): Promise<boolean> {
   try {
     const effectivePlan = plan ?? (await store.getUserSubscriptionPlan?.(userId)) ?? "free";
-    return PRO_PLANS.has(String(effectivePlan));
+    return await isProPlusEligible(userId, effectivePlan);
   } catch (err) {
     console.error("b_import.plan.error", { userId, err });
     return false;
@@ -72,7 +72,7 @@ export async function bImportTick(opts: TickOptions = {}): Promise<void> {
 
   let users: Array<{ userPlatformId: string; timezone: string; subscriptionPlan: string }> = [];
   try {
-    users = (await store.listUsersForCron?.("subscription_plan IN ('pro','premium')")) ?? [];
+    users = (await store.listUsersForCron?.(LIST_USERS_FOR_CRON_PRO_PLUS)) ?? [];
   } catch (err) {
     console.error("b_import.list_users_error", { err });
     return;
