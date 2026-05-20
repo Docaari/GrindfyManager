@@ -93,6 +93,18 @@ async function safePerf(storage: any, userId: string, range: string): Promise<an
   }
 }
 
+// AI-1C — quando `storage.getVarianceVsExpected` retorna nao-null (>=20
+// sessoes em 90d), preferir a estimativa PrimeDope sobre a heuristica.
+async function safeGetVarianceVsExpected(storage: any, userId: string): Promise<any | null> {
+  try {
+    if (typeof storage.getVarianceVsExpected !== "function") return null;
+    return (await storage.getVarianceVsExpected(userId)) ?? null;
+  } catch (err) {
+    console.error("monthly_report.variance.primedope.error", { userId, err });
+    return null;
+  }
+}
+
 // AI-1C / RF-05.4 + RF-08 — gather followUp + goalsProgress for monthly.
 async function gatherFollowUpAndGoals(storage: any, userId: string): Promise<{
   followUp?: {
@@ -160,10 +172,11 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
   const prev = previousMonthRange(periodStart);
   const prevRangeArg = `${prev.start} to ${prev.end}`;
 
-  const [perfCurrent, perfPrev, extras] = await Promise.all([
+  const [perfCurrent, perfPrev, extras, primedopeVariance] = await Promise.all([
     safePerf(storage, userId, rangeArg),
     safePerf(storage, userId, prevRangeArg),
     gatherFollowUpAndGoals(storage, userId),
+    safeGetVarianceVsExpected(storage, userId),
   ]);
 
   const tournaments = N(perfCurrent?.count ?? perfCurrent?.tournaments);
@@ -184,20 +197,43 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
         ? (profitPrev / N(perfPrev?.buyIn ?? perfPrev?.totalBuyIn)) * 100
         : null;
 
-  // Heuristica de variancia: bankroll delta ≈ profit; estimate by skill = ROI 12m
-  // medio * buyIn; by variance = resto. Confidence baixa quando n pequeno.
+  // Variancia: preferir PrimeDope (`getVarianceVsExpected`) quando >=20 sessoes
+  // em 90d; caso contrario heuristica (bankroll delta ≈ profit; estimate by
+  // skill = ROI * buyIn; by variance = resto). Confidence baixa quando n pequeno.
   const profitVsPrev = profit - profitPrev;
   const sampleSize = tournaments;
-  const variance = {
-    bankrollDeltaUsd: profit,
-    estimatedBySkillUsd: roi !== null && buyIn > 0 ? (roi / 100) * buyIn : null,
-    estimatedByVarianceUsd: null as number | null,
-    sampleSize,
-    method: "heuristic" as const,
-    confidence: (sampleSize >= 200 ? "medium" : "low") as "medium" | "low",
+  type VarianceBlock = {
+    bankrollDeltaUsd: number | null;
+    estimatedBySkillUsd: number | null;
+    estimatedByVarianceUsd: number | null;
+    sampleSize: number | null;
+    method: "heuristic" | "primedope";
+    confidence?: "high" | "medium" | "low";
+    narrative?: string;
   };
-  if (variance.estimatedBySkillUsd !== null) {
-    variance.estimatedByVarianceUsd = profit - variance.estimatedBySkillUsd;
+  let variance: VarianceBlock;
+  if (primedopeVariance) {
+    const sm = Number(primedopeVariance?.sigmaMultiple ?? 0);
+    const conf = Math.abs(sm) >= 2 ? "high" : Math.abs(sm) >= 1 ? "medium" : "low";
+    variance = {
+      bankrollDeltaUsd: Number(primedopeVariance?.actualUsd ?? profit),
+      estimatedBySkillUsd: Number(primedopeVariance?.expectedUsd ?? 0),
+      estimatedByVarianceUsd: Number(primedopeVariance?.deviationUsd ?? 0),
+      sampleSize: Number(primedopeVariance?.sessionsCount ?? sampleSize),
+      method: "primedope",
+      confidence: conf,
+      narrative: `Status PrimeDope: ${primedopeVariance?.status ?? "unknown"} (σ-multiple ${sm.toFixed(2)}).`,
+    };
+  } else {
+    const bySkill = roi !== null && buyIn > 0 ? (roi / 100) * buyIn : null;
+    variance = {
+      bankrollDeltaUsd: profit,
+      estimatedBySkillUsd: bySkill,
+      estimatedByVarianceUsd: bySkill !== null ? profit - bySkill : null,
+      sampleSize,
+      method: "heuristic",
+      confidence: sampleSize >= 200 ? "medium" : "low",
+    };
   }
 
   const sections = makeEmptySections();
