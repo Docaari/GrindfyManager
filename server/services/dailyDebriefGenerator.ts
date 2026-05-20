@@ -40,6 +40,66 @@ async function resolveStorage(injected?: any): Promise<any> {
   return (mod as any).storage;
 }
 
+const DAILY_DEBRIEF_DEFAULT_MODEL = "claude-sonnet-4-6";
+const DAILY_DEBRIEF_PRICE_PER_M = { input: 3, output: 15, cacheCreate: 3.75, cacheRead: 0.3 };
+
+// LLM call mirroring weeklyReportGenerator.callLlm pattern (lesson #5/#35).
+// Retorna `{ parsed, usage }` em sucesso ou `{ clientUnavailable: true }` quando
+// SDK/key/cliente nao disponivel — caller cai pro deterministic.
+async function callDailyDebriefLlm(args: {
+  model: string;
+  bundle: any;
+  tone: string;
+  level: string | null;
+}): Promise<{ parsed: any; usage: any } | { clientUnavailable: true }> {
+  const { DAILY_DEBRIEF_SYSTEM, buildDailyDebriefPrompt } = await import("../coach/prompts/dailyDebrief");
+  let AnthropicCtor: any;
+  try {
+    const sdkMod = await import("@anthropic-ai/sdk");
+    AnthropicCtor = (sdkMod as any).default ?? sdkMod;
+  } catch {
+    return { clientUnavailable: true };
+  }
+  let client: any;
+  try {
+    client = new AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY });
+  } catch {
+    try { client = AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY }); } catch { client = null; }
+  }
+  if (!client || !client.messages || typeof client.messages.create !== "function") {
+    return { clientUnavailable: true };
+  }
+  const userMsg = buildDailyDebriefPrompt({ tone: args.tone, level: args.level, bundle: args.bundle });
+  const response = await client.messages.create({
+    model: args.model,
+    max_tokens: 1200,
+    system: [
+      { type: "text", text: DAILY_DEBRIEF_SYSTEM, cache_control: { type: "ephemeral" } },
+    ],
+    messages: [{ role: "user", content: userMsg }],
+  });
+  const text = Array.isArray(response?.content)
+    ? response.content.filter((b: any) => b?.type === "text").map((b: any) => b.text).join("")
+    : (typeof response?.content === "string" ? response.content : "");
+  let parsed: any = {};
+  try {
+    const m = text.match(/\{[\s\S]*\}/);
+    parsed = m ? JSON.parse(m[0]) : JSON.parse(text);
+  } catch {
+    parsed = {};
+  }
+  return { parsed, usage: response?.usage ?? null };
+}
+
+function computeDailyDebriefCost(usage: any): number {
+  const i = Number(usage?.input_tokens ?? usage?.inputTokens ?? 0);
+  const o = Number(usage?.output_tokens ?? usage?.outputTokens ?? 0);
+  const cc = Number(usage?.cache_creation_input_tokens ?? usage?.cacheCreationInputTokens ?? 0);
+  const cr = Number(usage?.cache_read_input_tokens ?? usage?.cacheReadInputTokens ?? 0);
+  const p = DAILY_DEBRIEF_PRICE_PER_M;
+  return (i * p.input + o * p.output + cc * p.cacheCreate + cr * p.cacheRead) / 1_000_000;
+}
+
 const N = (v: any): number => {
   const n = typeof v === "string" ? parseFloat(v) : Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -225,7 +285,7 @@ async function gatherFollowUp(storage: any, userId: string): Promise<{
 }
 
 export async function generateDailyDebrief(args: GenerateDailyDebriefArgs): Promise<DailyDebriefResult> {
-  const { userId, periodStart, periodEnd } = args;
+  const { userId, periodStart, periodEnd, failSoft } = args;
   const storage = await resolveStorage(args.injectedStorage);
   const date = periodStart;
 
@@ -235,34 +295,127 @@ export async function generateDailyDebrief(args: GenerateDailyDebriefArgs): Prom
 
   const followUp = await gatherFollowUp(storage, userId);
 
+  // Tom + nivel (perfil estruturado tem prioridade; fallback coachTone).
+  let tone: "gentle" | "balanced" | "direct" = "balanced";
+  let level: string | null = null;
+  try {
+    const { getCoachPreferences } = await import("../storage/coachPreferences");
+    const prefs = await getCoachPreferences(userId);
+    if (prefs?.coachTone) tone = prefs.coachTone as any;
+  } catch { /* default */ }
+  try {
+    const { getAiStructuredProfile } = await import("../storage/aiStructuredProfile");
+    const profile = await getAiStructuredProfile(userId);
+    if ((profile as any)?.tomPreferido) tone = (profile as any).tomPreferido;
+    if ((profile as any)?.nivel) level = (profile as any).nivel;
+  } catch { /* default */ }
+
+  // Tenta LLM narrative para enriquecer header.summaryLine + insights +
+  // recommendedAction. Bundle pequeno (1 sessao) -> custo ~$0.013/debrief.
+  // Sessao com 0 torneios -> NAO chama LLM (custo zero).
+  const model = process.env.COACH_MODEL || DAILY_DEBRIEF_DEFAULT_MODEL;
+  let llmHeaderSummary: string | null = null;
+  let llmHeaderComparison: string | null = null;
+  let llmInsights: Array<{ text: string; citations: string[]; confidence?: "high" | "medium" | "low" }> = [];
+  let llmRecommendedAction: string | null = null;
+  let usage: any = null;
+  let costUsd = 0;
+  let degraded = false;
+  let degradedReason: string | null = null;
+  let llmModelUsed: string | null = null;
+
+  if (hasData) {
+    const bundle = {
+      tone,
+      level,
+      sessionSummary: {
+        sessionDate: date,
+        sessionsCount: agg.sessionsCount,
+        tournamentsCount: agg.tournamentsCount,
+        profitUsd: agg.profitUsd,
+        roiPct: roi,
+        itmCount: agg.itmCount,
+        finalTables: agg.finalTables,
+        cravadas: agg.cravadas,
+        spotsCount: agg.spotsCount,
+        profitByCurrency: agg.profitByCurrency,
+      },
+      followUp: followUp ?? null,
+    };
+    try {
+      const out = await callDailyDebriefLlm({ model, bundle, tone, level });
+      if ("clientUnavailable" in out) {
+        degraded = true;
+        degradedReason = "no_anthropic_key";
+      } else {
+        const p = out.parsed ?? {};
+        llmHeaderSummary = typeof p?.header?.summaryLine === "string" ? p.header.summaryLine : null;
+        llmHeaderComparison = typeof p?.header?.comparison === "string" ? p.header.comparison : null;
+        if (Array.isArray(p?.insights)) {
+          llmInsights = p.insights
+            .filter((i: any) => i && typeof i.text === "string")
+            .slice(0, 2)
+            .map((i: any) => ({
+              text: i.text,
+              citations: Array.isArray(i?.citations) ? i.citations.map(String) : [],
+              confidence: i?.confidence === "high" || i?.confidence === "medium" || i?.confidence === "low"
+                ? i.confidence
+                : "low",
+            }));
+        }
+        if (typeof p?.recommendedAction === "string") {
+          llmRecommendedAction = p.recommendedAction;
+        }
+        usage = out.usage;
+        costUsd = computeDailyDebriefCost(usage);
+        llmModelUsed = model;
+      }
+    } catch (err) {
+      console.error("daily_debrief.llm.error", { userId, err: err instanceof Error ? err.message : String(err) });
+      if (failSoft) {
+        degraded = true;
+        degradedReason = "llm_failed_3x";
+      } else {
+        throw err; // caller (reportJobRunner) conta attempts e cai pro failSoft na ultima.
+      }
+    }
+  }
+
+  // Determinismo fallback para header.summaryLine.
+  const summaryLine = llmHeaderSummary ??
+    (hasData
+      ? `${agg.sessionsCount} sessao(oes), ${agg.tournamentsCount} torneios, ${agg.profitUsd >= 0 ? "+" : ""}$${agg.profitUsd.toFixed(2)} USD${roi !== null ? ` (ROI ${roi.toFixed(1)}%)` : ""}.`
+      : "Sessao registrada sem torneios — tudo certo?");
+
   const content: ReportContent = {
     schemaVersion: 2,
     reportType: "daily",
     periodStart: date,
     periodEnd: periodEnd ?? date,
     dataSufficiency: hasData ? "ok" : "low",
+    level: (level as any) ?? null,
+    tone,
     header: {
       title: `Seu debrief — ${date}`,
-      summaryLine: hasData
-        ? `${agg.sessionsCount} sessao(oes), ${agg.tournamentsCount} torneios, ${agg.profitUsd >= 0 ? "+" : ""}$${agg.profitUsd.toFixed(2)} USD${roi !== null ? ` (ROI ${roi.toFixed(1)}%)` : ""}.`
-        : "Sessao registrada sem torneios — tudo certo?",
+      summaryLine,
+      ...(llmHeaderComparison ? { comparison: llmHeaderComparison } : {}),
     },
     sections: makeEmptySections(),
-    insights: [],
+    insights: llmInsights,
     nextWeekPlan: {
       gradeSuggestionHref: null,
       studyFocus: null,
-      recommendedAction: hasData ? null : "Registre os torneios na proxima sessao.",
+      recommendedAction: llmRecommendedAction ?? (hasData ? null : "Registre os torneios na proxima sessao."),
     },
     cta: hasData
       ? [{ label: "Ver detalhes da sessao", kind: "link", href: "/grind" }]
       : [{ label: "Importar historico", kind: "link", href: "/upload" }],
     generation: {
-      model: null,
+      model: llmModelUsed,
       summarizerModel: null,
-      degraded: false,
-      degradedReason: null,
-      costUsdEstimate: 0,
+      degraded,
+      degradedReason,
+      costUsdEstimate: costUsd,
     },
     sessionSummary: {
       sessionDate: date,
@@ -284,8 +437,10 @@ export async function generateDailyDebrief(args: GenerateDailyDebriefArgs): Prom
   return {
     content,
     markdown,
-    status: "ready",
-    model: null,
-    costUsdEstimate: 0,
+    status: degraded ? "degraded" : "ready",
+    model: llmModelUsed,
+    usage,
+    costUsdEstimate: costUsd,
+    degradedReason,
   };
 }

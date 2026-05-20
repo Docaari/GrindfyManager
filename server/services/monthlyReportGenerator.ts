@@ -36,6 +36,63 @@ async function resolveStorage(injected?: any): Promise<any> {
   return (mod as any).storage;
 }
 
+const MONTHLY_DEFAULT_MODEL = "claude-sonnet-4-6";
+const MONTHLY_PRICE_PER_M = { input: 3, output: 15, cacheCreate: 3.75, cacheRead: 0.3 };
+
+async function callMonthlyLlm(args: {
+  model: string;
+  bundle: any;
+  tone: string;
+  level: string | null;
+}): Promise<{ parsed: any; usage: any } | { clientUnavailable: true }> {
+  const { MONTHLY_REPORT_SYSTEM, buildMonthlyReportPrompt } = await import("../coach/prompts/monthlyReport");
+  let AnthropicCtor: any;
+  try {
+    const sdkMod = await import("@anthropic-ai/sdk");
+    AnthropicCtor = (sdkMod as any).default ?? sdkMod;
+  } catch {
+    return { clientUnavailable: true };
+  }
+  let client: any;
+  try {
+    client = new AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY });
+  } catch {
+    try { client = AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY }); } catch { client = null; }
+  }
+  if (!client || !client.messages || typeof client.messages.create !== "function") {
+    return { clientUnavailable: true };
+  }
+  const userMsg = buildMonthlyReportPrompt({ tone: args.tone, level: args.level, bundle: args.bundle });
+  const response = await client.messages.create({
+    model: args.model,
+    max_tokens: 3500,
+    system: [
+      { type: "text", text: MONTHLY_REPORT_SYSTEM, cache_control: { type: "ephemeral" } },
+    ],
+    messages: [{ role: "user", content: userMsg }],
+  });
+  const text = Array.isArray(response?.content)
+    ? response.content.filter((b: any) => b?.type === "text").map((b: any) => b.text).join("")
+    : (typeof response?.content === "string" ? response.content : "");
+  let parsed: any = {};
+  try {
+    const m = text.match(/\{[\s\S]*\}/);
+    parsed = m ? JSON.parse(m[0]) : JSON.parse(text);
+  } catch {
+    parsed = {};
+  }
+  return { parsed, usage: response?.usage ?? null };
+}
+
+function computeMonthlyCost(usage: any): number {
+  const i = Number(usage?.input_tokens ?? usage?.inputTokens ?? 0);
+  const o = Number(usage?.output_tokens ?? usage?.outputTokens ?? 0);
+  const cc = Number(usage?.cache_creation_input_tokens ?? usage?.cacheCreationInputTokens ?? 0);
+  const cr = Number(usage?.cache_read_input_tokens ?? usage?.cacheReadInputTokens ?? 0);
+  const p = MONTHLY_PRICE_PER_M;
+  return (i * p.input + o * p.output + cc * p.cacheCreate + cr * p.cacheRead) / 1_000_000;
+}
+
 const N = (v: any): number => {
   const n = typeof v === "string" ? parseFloat(v) : Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -165,8 +222,23 @@ async function gatherFollowUpAndGoals(storage: any, userId: string): Promise<{
 }
 
 export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Promise<MonthlyReportResult> {
-  const { userId, periodStart, periodEnd } = args;
+  const { userId, periodStart, periodEnd, failSoft } = args;
   const storage = await resolveStorage(args.injectedStorage);
+
+  // Tom + nivel (perfil estruturado tem prioridade; fallback coachTone).
+  let tone: "gentle" | "balanced" | "direct" = "balanced";
+  let level: string | null = null;
+  try {
+    const { getCoachPreferences } = await import("../storage/coachPreferences");
+    const prefs = await getCoachPreferences(userId);
+    if ((prefs as any)?.coachTone) tone = (prefs as any).coachTone;
+  } catch { /* default */ }
+  try {
+    const { getAiStructuredProfile } = await import("../storage/aiStructuredProfile");
+    const profile = await getAiStructuredProfile(userId);
+    if ((profile as any)?.tomPreferido) tone = (profile as any).tomPreferido;
+    if ((profile as any)?.nivel) level = (profile as any).nivel;
+  } catch { /* default */ }
 
   const rangeArg = `${periodStart} to ${periodEnd}`;
   const prev = previousMonthRange(periodStart);
@@ -255,36 +327,106 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
     withdrawals: 0,
   };
 
+  // LLM narrative — sonnet 4.6. Bundle compacto (numeros + comparativos +
+  // variance + leaks/metas). Custo alvo ~$0.11/mes/user.
+  const model = process.env.COACH_MODEL || MONTHLY_DEFAULT_MODEL;
+  let llmSummaryLine: string | null = null;
+  let llmComparison: string | null = null;
+  let llmInsights: Array<{ text: string; citations: string[]; confidence?: "high" | "medium" | "low" }> = [];
+  let llmRecommendedAction: string | null = null;
+  let llmStudyFocus: string | null = null;
+  let llmTrend: string | null = null;
+  let llmVarianceNarrative: string | null = null;
+  let usage: any = null;
+  let costUsd = 0;
+  let degraded = false;
+  let degradedReason: string | null = null;
+  let llmModelUsed: string | null = null;
+
+  if (tournaments > 0) {
+    const bundle = {
+      tone,
+      level,
+      period: { start: periodStart, end: periodEnd },
+      current: { tournaments, profit, roi, buyIn, finalTables: N(perfCurrent?.finalTables), wins: N(perfCurrent?.wins) },
+      previous: { profit: profitPrev, roi: roiPrev, count: N(perfPrev?.count ?? perfPrev?.tournaments) },
+      variance,
+      goalsProgress: extras.goalsProgress ?? [],
+      followUp: extras.followUp ?? null,
+    };
+    try {
+      const out = await callMonthlyLlm({ model, bundle, tone, level });
+      if ("clientUnavailable" in out) {
+        degraded = true;
+        degradedReason = "no_anthropic_key";
+      } else {
+        const p = out.parsed ?? {};
+        llmSummaryLine = typeof p?.header?.summaryLine === "string" ? p.header.summaryLine : null;
+        llmComparison = typeof p?.header?.comparison === "string" ? p.header.comparison : null;
+        llmTrend = typeof p?.comparatives?.trendNarrative === "string" ? p.comparatives.trendNarrative : null;
+        llmVarianceNarrative = typeof p?.variance?.narrative === "string" ? p.variance.narrative : null;
+        if (Array.isArray(p?.insights)) {
+          llmInsights = p.insights
+            .filter((i: any) => i && typeof i.text === "string")
+            .slice(0, 5)
+            .map((i: any) => ({
+              text: i.text,
+              citations: Array.isArray(i?.citations) ? i.citations.map(String) : [],
+              confidence: i?.confidence === "high" || i?.confidence === "medium" || i?.confidence === "low"
+                ? i.confidence
+                : "low",
+            }));
+        }
+        if (typeof p?.nextWeekPlan?.recommendedAction === "string") llmRecommendedAction = p.nextWeekPlan.recommendedAction;
+        if (typeof p?.nextWeekPlan?.studyFocus === "string") llmStudyFocus = p.nextWeekPlan.studyFocus;
+        usage = out.usage;
+        costUsd = computeMonthlyCost(usage);
+        llmModelUsed = model;
+      }
+    } catch (err) {
+      console.error("monthly_report.llm.error", { userId, err: err instanceof Error ? err.message : String(err) });
+      if (failSoft) {
+        degraded = true;
+        degradedReason = "llm_failed_3x";
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  if (llmVarianceNarrative) variance.narrative = llmVarianceNarrative;
+
   const content: ReportContent = {
     schemaVersion: 2,
     reportType: "monthly",
     periodStart,
     periodEnd,
     dataSufficiency: tournaments > 0 ? "ok" : "low",
+    level: (level as any) ?? null,
+    tone,
     header: {
       title: `Relatorio mensal — ${periodStart.slice(0, 7)}`,
-      summaryLine: `${tournaments} torneios, ${profit >= 0 ? "+" : ""}$${profit.toFixed(2)} USD${roi !== null ? ` (ROI ${roi.toFixed(1)}%)` : ""}.`,
-      comparison:
-        roiPrev !== null && roi !== null
-          ? `ROI vs mes anterior: ${roi >= roiPrev ? "+" : ""}${(roi - roiPrev).toFixed(1)}pp.`
-          : undefined,
+      summaryLine: llmSummaryLine ?? `${tournaments} torneios, ${profit >= 0 ? "+" : ""}$${profit.toFixed(2)} USD${roi !== null ? ` (ROI ${roi.toFixed(1)}%)` : ""}.`,
+      comparison: llmComparison ?? (roiPrev !== null && roi !== null
+        ? `ROI vs mes anterior: ${roi >= roiPrev ? "+" : ""}${(roi - roiPrev).toFixed(1)}pp.`
+        : undefined),
     },
     sections,
-    insights: [],
+    insights: llmInsights,
     nextWeekPlan: {
       gradeSuggestionHref: null,
-      studyFocus: null,
-      recommendedAction: null,
+      studyFocus: llmStudyFocus,
+      recommendedAction: llmRecommendedAction,
     },
     cta: [
       { label: "Ver dashboard", kind: "link", href: "/coach" },
     ],
     generation: {
-      model: null,
+      model: llmModelUsed,
       summarizerModel: null,
-      degraded: false,
-      degradedReason: null,
-      costUsdEstimate: 0,
+      degraded,
+      degradedReason,
+      costUsdEstimate: costUsd,
     },
     comparatives: {
       previousPeriod: {
@@ -293,12 +435,11 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
         roi: roiPrev,
         count: N(perfPrev?.count ?? perfPrev?.tournaments),
       },
-      trendNarrative:
-        profitVsPrev > 0
-          ? `Mes melhor que ${prev.start.slice(0, 7)}: +$${profitVsPrev.toFixed(2)}.`
-          : profitVsPrev < 0
-            ? `Mes pior que ${prev.start.slice(0, 7)}: $${profitVsPrev.toFixed(2)}.`
-            : `Mes empata com ${prev.start.slice(0, 7)}.`,
+      trendNarrative: llmTrend ?? (profitVsPrev > 0
+        ? `Mes melhor que ${prev.start.slice(0, 7)}: +$${profitVsPrev.toFixed(2)}.`
+        : profitVsPrev < 0
+          ? `Mes pior que ${prev.start.slice(0, 7)}: $${profitVsPrev.toFixed(2)}.`
+          : `Mes empata com ${prev.start.slice(0, 7)}.`),
     },
     variance,
     ...(extras.followUp ? { followUp: extras.followUp } : {}),
@@ -333,8 +474,10 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
   return {
     content,
     markdown,
-    status: "ready",
-    model: null,
-    costUsdEstimate: 0,
+    status: degraded ? "degraded" : "ready",
+    model: llmModelUsed,
+    usage,
+    costUsdEstimate: costUsd,
+    degradedReason,
   };
 }
