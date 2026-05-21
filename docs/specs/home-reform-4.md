@@ -25,10 +25,10 @@ Founder pediu explicitamente:
 | 1 | Card "Sessoes" mes atual — fix tamanho/espaco | Concluido (2026-05-03) | UI fix | <1h |
 | 2 | Novo card "Dashboard" mes atual abaixo do Sessoes | Concluido (2026-05-03) — unificado com item 6 | Feature | 2-3h |
 | 3 | Explicacao "Acao imediata" | Concluido (2026-05-03) — entregue inline + abaixo | Doc | 5min |
-| 4 | Substituir "Continue assistindo" por recomendacao Coach IA semanal | Pendente | Feature complexa | 1-2 dias |
+| 4 | Substituir "Continue assistindo" por recomendacao Coach IA semanal | Concluido (2026-05-03) — commit `75d13ec8` | Feature complexa | 1-2 dias |
 | 5 | Substituir "Recomendacao de hoje" por visao rapida grade planner | Concluido (2026-05-03) | Feature | 2-3h |
 | 6 | Performance abaixo de Sessoes (mesmo padrao) com empty states | Concluido (2026-05-03) — unificado com item 2 | UI/refactor | 1-2h |
-| 7 | Card Estudos: 3 stats foco do mes + temas linkados | Pendente | Feature complexa | 1-2 dias |
+| 7 | Card Estudos: 3 stats foco do mes + temas linkados | Concluido (2026-05-04) — commit `a8da8111` | Feature complexa | 1-2 dias |
 | 8 | Remover card "4 torneios, 2 sessoes, 1 dia ativo" | Concluido (2026-05-03) | UI fix | 15min |
 | 9 | Card "Ultimas Sessoes" abaixo de Sessoes (acima Dashboard) | Concluido (2026-05-03) | Reorder | 30min |
 | 10 | Card Dashboard com grafico evolucao do mes selecionado abaixo | Concluido (2026-05-03) | Feature | 2h |
@@ -139,7 +139,9 @@ Decisoes pendentes do founder:
 
 ### Item 4 — Substituir "Continue assistindo" por Recomendacao Coach IA semanal
 
-**Problema:** Founder testou "Continue assistindo" iniciando um podcast e parando na metade. Episodio nao aparece no card. **Nao funciona.**
+**Status:** Concluido (2026-05-03) — commit `75d13ec8`. Sub-spec `home-reform-4-item-4-coach-recommendation.md` implementada integralmente: tabela `coach_lesson_recommendations` (migration 0042) + cron `generateCoachRecommendations` (segunda 06:00 BRT) + servico `recommendLessonForUser` (Coach LLM + fallback leak->tag + fallback popular) + 4 endpoints (`GET /api/home/coach-recommendation`, `POST /:id/dismiss`, `POST /:id/consume`, `POST /api/admin/coach/recommendations/regenerate`) + componente `CoachRecommendationCard` + hook `useCoachRecommendationConsume` (trigger automatico 30s/80%) + ADRs 111-115 + 3 diagramas Mermaid. **Nota AI-1B:** cron `generateCoachRecommendations` foi aposentado em ADR-156 (absorvido pelo Weekly Report) — `coach_lesson_recommendations` continua sendo populada pelo gerador do report semanal; back-compat preservada.
+
+**Problema (historico):** Founder testou "Continue assistindo" iniciando um podcast e parando na metade. Episodio nao aparece no card. **Nao funciona.**
 
 **Decisao:** Remover completamente. Substituir por **Recomendacao de Licao** gerada pelo Coach IA, baseada em relatorio semanal.
 
@@ -239,7 +241,9 @@ Implementacao foi unificada com item 2 (mesmo card, mesma fonte de dados, layout
 
 ### Item 7 — Card Estudos: 3 stats foco + temas linkados
 
-**Problema:** Card de estudos atual nao reflete prioridades do user.
+**Status:** Concluido (2026-05-04) — commit `a8da8111` ("home-reform-4 item 7 + audit completo Home — 21 issues fixadas"). Sub-spec `home-reform-4-item-7-focus-stats.md` implementada: tabela `user_focus_stats` (migration 0043) + tabela `study_sessions` ganhou `theme_id` (migration 0044) + servico `server/services/focusStats.ts` + endpoints `/api/home/focus-stats` + `/api/focus-stats` (CRUD) + componente `FocusStatsCard` em zona Estudos da Home + `FocusStatToggle` + `FocusStatThemePickerDialog` + `ThemeDetailView` em `/estudos` + ADRs 116-118. Commit tambem fechou 21 issues de audit (reviewer round).
+
+**Problema (historico):** Card de estudos atual nao reflete prioridades do user.
 
 **Especificacao da nova feature:**
 
