@@ -78,6 +78,9 @@ interface TournamentCardCompletedProps {
   onEdit: (tournament: any) => void;
   onUnregister: (id: string) => void;
   queryClient: any;
+  /** Sprint D / RF-01.1 — quando presente + status=finished + allowsAddOn +
+   *  !addOnTaken + addOnCost>0, renderiza botao "Add-on retroativo". */
+  onAddOnTaken?: (tournamentId: string, value: boolean) => void;
 }
 
 type TournamentCardProps = TournamentCardRegisteredProps | TournamentCardUpcomingProps | TournamentCardCompletedProps;
@@ -224,7 +227,11 @@ function RegisteredCard({
             )}
             {/* Add-on + Re-entry badges (ADR-014) */}
             {tournament.allowsAddOn && (
-              <Badge className="px-1.5 py-0.5 bg-amber-600 text-white font-semibold" data-testid="badge-plus">
+              <Badge
+                className="px-1.5 py-0.5 bg-amber-600 text-white font-semibold"
+                data-testid="badge-plus"
+                title={`Torneio com add-on disponivel ($${formatAddOnCost(tournament)}). Clique no botao verde durante o break para pagar.`}
+              >
                 Plus
               </Badge>
             )}
@@ -674,9 +681,22 @@ function UpcomingCard({
 }
 
 function CompletedCard({
-  tournament, onEdit, onUnregister, queryClient,
+  tournament, onEdit, onUnregister, queryClient, onAddOnTaken,
 }: TournamentCardCompletedProps) {
   const guaranteedValue = getGuaranteedValue(tournament);
+  // Sprint D / RF-01.1 — add-on retroativo no CompletedCard.
+  const addOnCostNum = (() => {
+    if (tournament.addOnCost == null) return 0;
+    const n = typeof tournament.addOnCost === 'number'
+      ? tournament.addOnCost
+      : parseFloat(String(tournament.addOnCost));
+    return Number.isFinite(n) ? n : 0;
+  })();
+  const showRetroAddOn = !!onAddOnTaken
+    && tournament.status === 'finished'
+    && !!tournament.allowsAddOn
+    && !tournament.addOnTaken
+    && addOnCostNum > 0;
 
   return (
     <div className="tournament-card tournament-finished relative">
@@ -760,7 +780,22 @@ function CompletedCard({
         </div>
         {/* Grid 2x3 Layout para CONCLUIDOS */}
         <div className="grid grid-cols-[1fr_1fr_1.3fr] grid-rows-2 gap-2 w-72 max-w-72">
-          <div></div>
+          {/* Sprint D / RF-01.1 — Add-on retroativo */}
+          {showRetroAddOn ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onAddOnTaken!(tournament.id, true)}
+              data-testid="btn-addon-retroativo"
+              title={`Marcar add-on como pago retroativamente ($${formatAddOnCost(tournament)})`}
+              className="border-2 border-emerald-500 bg-gradient-to-r from-emerald-600/70 to-emerald-700/70 text-white hover:from-emerald-500/80 hover:to-emerald-600/80 h-10 px-2 text-xs font-semibold shadow-lg transition-all duration-200"
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              Add-on
+            </Button>
+          ) : (
+            <div></div>
+          )}
           <Button
             size="sm"
             variant="outline"

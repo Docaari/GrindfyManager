@@ -183,7 +183,18 @@ export default function AlertsPanel({
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={onClearAll}
+                  onClick={() => {
+                    // Sprint D / RF-04.1 — confirm proporcional ao dano:
+                    // >=3 alertas pede confirmacao; <=2 chama direto.
+                    const totalAlerts = activeAlerts.length + firedAlerts.length;
+                    if (totalAlerts >= 3) {
+                      const ok = typeof window !== 'undefined' && window.confirm
+                        ? window.confirm(`Descartar ${totalAlerts} alertas?`)
+                        : true;
+                      if (!ok) return;
+                    }
+                    onClearAll();
+                  }}
                   className="text-gray-400 hover:text-red-400 text-xs"
                 >
                   Limpar todos

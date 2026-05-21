@@ -1,0 +1,53 @@
+%% ADR-186 — Tournament Selector ticket boost
+%% Sprint D / RF-03.4
+%% Campo opcional availableTicket em ScoringInputTournament
+%% Boost +10 clamp 100 + bankroll filter bypass + UI badge
+
+flowchart TD
+    Start(["GET /api/tournament-selector"])
+    Start --> LoadCandidates["candidates = supremaToScoringInput(...)<br/>(buildScoringInput.ts AI-0A)"]
+    LoadCandidates --> LoadTickets["userTickets = storage.getActiveTicketsByUser(userId)"]
+
+    LoadTickets --> EnrichLoop["for each candidate sct:<br/>enrichWithTickets(sct, userTickets, tournament)"]
+
+    EnrichLoop --> MatchCheck{"match heuristica:<br/>1. exact sourceName<br/>2. value tolerancia 1%<br/>FIFO desempate (menor expiresAt)"}
+    MatchCheck -->|"match"| AttachTicket["sct.availableTicket = { id, valueUsd, expiresAt }"]
+    MatchCheck -->|"sem match"| NoTicket["sct.availableTicket = undefined"]
+
+    AttachTicket --> ScoreBase
+    NoTicket --> ScoreBase
+
+    ScoreBase["baseScore = computeTournamentScore(sct)<br/>(server/services/scoring* — PROIBIDO mexer)"]
+    ScoreBase --> BoostCheck{"sct.availableTicket<br/>presente?"}
+
+    BoostCheck -->|"sim"| ApplyBoost["finalScore = min(100, baseScore.score + 10)<br/>finalGrade = scoreToGrade(finalScore)"]
+    BoostCheck -->|"nao"| KeepBase["finalScore = baseScore.score<br/>finalGrade = baseScore.grade"]
+
+    ApplyBoost --> BankrollFilter
+    KeepBase --> BankrollFilter
+
+    BankrollFilter{"availableTicket != null<br/>OR effectiveBuyIn <= maxBuyIn ?"}
+    BankrollFilter -->|"true (ticket bypass OU dentro do BR)"| KeepInList["mantem no resultado"]
+    BankrollFilter -->|"false"| DropFromList["remove (out of bankroll)"]
+
+    KeepInList --> UIRender
+    DropFromList --> UIRender
+
+    UIRender["SelectorPanel renderiza card"]
+    UIRender --> BadgeCheck{"item.availableTicket<br/>presente?"}
+    BadgeCheck -->|"sim"| ShowBadge["render 🎟️ Ticket disponivel ($X)<br/>data-testid='ticket-badge-:id'<br/>title='expira em N dias'"]
+    BadgeCheck -->|"nao"| NoBadge["sem badge"]
+
+    ShowBadge --> Telemetry
+    NoBadge --> Done(["fim"])
+
+    Telemetry["INSERT user_activity<br/>event_type='selector_item_shown_with_ticket_boost'<br/>(RF-03.5 sweep)"]
+    Telemetry --> Done
+
+    classDef bypass fill:#ffe2a8,stroke:#a06800,color:#000
+    classDef boost fill:#d2f5d0,stroke:#1b5e1f,color:#000
+    classDef forbidden fill:#f5d0d0,stroke:#5e1b1b,color:#000
+
+    class AttachTicket,ApplyBoost,ShowBadge boost
+    class BankrollFilter,KeepInList bypass
+    class ScoreBase forbidden

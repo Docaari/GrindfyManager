@@ -38,6 +38,8 @@ import {
   buildLibraryScoringInput,
   buildSupremaScoringInput,
   dayOfWeekFromDate,
+  enrichWithTickets,
+  applyTicketBoost,
   type ScoringBuildResult,
 } from "../scoring/buildScoringInput";
 // Sprint TS-3 RF-04 (ADR-178): tristate bankroll filter + telemetria.
@@ -233,14 +235,35 @@ export async function handleTournamentSelector(
     console.error('selector: getUserSettings failed for user', req.userId, err);
     return undefined;
   });
+  // Sprint D / RF-03.4 (ADR-186) — tickets ativos para boost + bypass.
+  // Best-effort: falha -> [] (selector continua funcionando sem boost).
+  const ticketsPromise = Promise.resolve(
+    (storage as any).getActiveTicketsByUser?.(req.userId) ?? [],
+  ).catch((err: Error) => {
+    console.error('selector: getActiveTicketsByUser failed for user', req.userId, err);
+    return [] as any[];
+  });
 
-  const [bundle, supremaList, libraryList, plannedList, userSettings] = await Promise.all([
+  const [bundle, supremaList, libraryList, plannedList, userSettings, userTicketsRaw] = await Promise.all([
     bundlePromise,
     supremaPromise,
     libraryPromise,
     plannedPromise,
     settingsPromise,
+    ticketsPromise,
   ]);
+  const userTickets: any[] = Array.isArray(userTicketsRaw)
+    ? userTicketsRaw.map((t: any) => ({
+        id: t.id,
+        userId: t.userId,
+        // Adapta shape do storage cru (targetName/ticketValueUSD) para o que
+        // `enrichWithTickets` espera (sourceName/valueUsd).
+        sourceName: t.sourceName ?? t.targetName ?? "",
+        valueUsd: t.valueUsd ?? t.ticketValueUSD ?? 0,
+        expiresAt: t.expiresAt ?? null,
+        status: t.status ?? "available",
+      }))
+    : [];
 
   // ---------------------------------------------------------------------------
   // Compose alreadyInGrid lookups (Q4)
@@ -278,10 +301,16 @@ export async function handleTournamentSelector(
 
   const scored: SelectorTournament[] = [];
 
-  function bankrollBandOf(buyInUSD: number): {
+  // Sprint D / RF-03.4 (ADR-186) — tickets bypass do bankroll filter.
+  // Quando torneio tem availableTicket, bankrollOk=true (ja vai cair na
+  // grade S com boost +10 — bankroll nao impede).
+  function bankrollBandOf(buyInUSD: number, availableTicket?: any | null): {
     bankrollOk: boolean;
     warning: "out_of_bankroll" | "out_of_bankroll_soft" | null;
   } {
+    if (availableTicket != null) {
+      return { bankrollOk: true, warning: null };
+    }
     if (!bankrollConfigured || softLimitUSD == null || hardLimitUSD == null) {
       return { bankrollOk: true, warning: null };
     }
@@ -296,11 +325,21 @@ export async function handleTournamentSelector(
 
   for (const s of (supremaList || []) as any[]) {
     const built = buildSupremaScoringInput(s, date, exchangeRates);
-    const result = computeTournamentScore(built.sct, bundle, { lookbackDays });
-    const band = bankrollBandOf(built.buyInUSD);
+    // Sprint D / RF-03.4 — enriquece SCT com availableTicket antes do score.
+    const enrichedSct = enrichWithTickets(built.sct, userTickets, {
+      name: built.sct.name,
+      date,
+      buyInUsd: built.buyInUSD,
+    });
+    const baseResult = computeTournamentScore(enrichedSct, bundle, { lookbackDays });
+    const boosted = applyTicketBoost(
+      { score: baseResult.score, grade: baseResult.grade },
+      enrichedSct,
+    );
+    const band = bankrollBandOf(built.buyInUSD, enrichedSct.availableTicket);
     const mergedWarnings = band.warning
-      ? [...(result.warnings ?? []), band.warning]
-      : result.warnings;
+      ? [...(baseResult.warnings ?? []), band.warning]
+      : baseResult.warnings;
 
     scored.push({
       id: built.sct.id,
@@ -320,25 +359,37 @@ export async function handleTournamentSelector(
       lateRegMinutes: s.lateRegMinutes ?? null,
       startingStack: s.startingStack ?? null,
       blindLevelMinutes: s.blindLevelMinutes ?? null,
-      score: result.score,
-      grade: result.grade,
-      confidence: result.confidence,
-      rationale: result.rationale,
-      signals: result.signals,
+      score: boosted.score,
+      grade: boosted.grade,
+      confidence: baseResult.confidence,
+      rationale: baseResult.rationale,
+      signals: baseResult.signals,
       warnings: mergedWarnings,
       bankrollOk: band.bankrollOk,
       alreadyInGrid: built.sct.id ? plannedExternalIds.has(built.sct.id) : false,
-    });
+      // Sprint D / RF-03.4 — passa ticket info pro UI badge.
+      availableTicket: enrichedSct.availableTicket ?? null,
+      ticketBoost: boosted.ticketBoost ?? 0,
+    } as any);
   }
 
   for (const l of (libraryList || []) as any[]) {
     const built = libraryToScoringInputForDate(l, date, exchangeRates);
     if (!built) continue;
-    const result = computeTournamentScore(built.sct, bundle, { lookbackDays });
-    const band = bankrollBandOf(built.buyInUSD);
+    const enrichedSct = enrichWithTickets(built.sct, userTickets, {
+      name: built.sct.name,
+      date,
+      buyInUsd: built.buyInUSD,
+    });
+    const baseResult = computeTournamentScore(enrichedSct, bundle, { lookbackDays });
+    const boosted = applyTicketBoost(
+      { score: baseResult.score, grade: baseResult.grade },
+      enrichedSct,
+    );
+    const band = bankrollBandOf(built.buyInUSD, enrichedSct.availableTicket);
     const mergedWarnings = band.warning
-      ? [...(result.warnings ?? []), band.warning]
-      : result.warnings;
+      ? [...(baseResult.warnings ?? []), band.warning]
+      : baseResult.warnings;
 
     scored.push({
       id: built.sct.id,
@@ -352,15 +403,17 @@ export async function handleTournamentSelector(
       category: built.sct.category,
       speed: built.sct.speed,
       fieldSizeEstimate: built.sct.fieldSizeEstimate,
-      score: result.score,
-      grade: result.grade,
-      confidence: result.confidence,
-      rationale: result.rationale,
-      signals: result.signals,
+      score: boosted.score,
+      grade: boosted.grade,
+      confidence: baseResult.confidence,
+      rationale: baseResult.rationale,
+      signals: baseResult.signals,
       warnings: mergedWarnings,
       bankrollOk: band.bankrollOk,
       alreadyInGrid: plannedLibraryIds.has(l.id),
-    });
+      availableTicket: enrichedSct.availableTicket ?? null,
+      ticketBoost: boosted.ticketBoost ?? 0,
+    } as any);
   }
 
   // ---------------------------------------------------------------------------

@@ -49,6 +49,9 @@ export interface DynamicInputs {
   studyProgress?: any[] | null;
   /** Sprint Coach-2A / RF-01 — page context injetado no bloco DINAMICO. */
   pageContext?: any;
+  /** Sprint D / RF-03.3 (ADR-185) — bloco "Inventario de tickets ativos"
+   *  injetado quando keyword/surface gate ativa + user tem >=1 ticket. */
+  ticketsContext?: { text: string; ticketCount: number; totalValueUsd: number } | null;
 }
 
 export interface SystemBlock {
@@ -355,6 +358,13 @@ export function buildDynamicSystemBlock(
       `- ${s.category || s.title || 'N/A'}: knowledge ${s.knowledgeScore ?? 0}% (${s.status || 'N/A'})`,
     );
     parts.push(`\n## Progresso de Estudo:\n${lines.join('\n')}`);
+  }
+
+  // Sprint D / RF-03.3 (ADR-185) — bloco DINAMICO de tickets ativos, gated
+  // por keyword/surface em buildTicketsContext (server/coach/contextBuilders).
+  // Sem cache_control — muda conforme inventario do user.
+  if (inputs.ticketsContext?.text) {
+    parts.push(`\n${inputs.ticketsContext.text}`);
   }
 
   // Sprint Coach-2A / RF-01 — page context (whitelist Zod aplicada via

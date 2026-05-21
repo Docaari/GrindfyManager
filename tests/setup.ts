@@ -210,6 +210,9 @@ afterEach(() => {
   } catch {
     // ignore
   }
+  // NOTE Sprint D — fix wave reviewer MEDIUM-1: o `vi.doUnmock` que vivia aqui
+  // foi movido para o `afterEach` do proprio `tests/integration/tickets-cron.test.ts`
+  // (escopo correto). Vazava pra 8000+ testes que nunca tocaram em expireTickets.
 });
 
 // Set required environment variables for tests

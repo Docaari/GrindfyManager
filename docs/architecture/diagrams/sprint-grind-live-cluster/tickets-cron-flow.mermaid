@@ -1,0 +1,64 @@
+%% ADR-184 — Tickets cron expiracao + notifs in-app
+%% Sprint D / RF-03.1 + RF-03.2
+%% Schedule: 0 3 * * * UTC, SEM gate COACH_NUDGES_ENABLED, lock cron:expire-tickets
+
+sequenceDiagram
+    autonumber
+    participant Cron as node-cron @ 0 3 * * * UTC
+    participant Lock as advisoryLock<br/>cron:expire-tickets
+    participant Tick as expireTicketsTick
+    participant DB as PostgreSQL<br/>(tickets, notifications, user_activity)
+    participant Log as console.info / console.error
+
+    Cron->>Lock: acquire "cron:expire-tickets"
+    alt lock fails (outra replica rodando)
+        Lock-->>Cron: noop
+    else lock acquired
+        Lock->>Tick: invoke ({ now: Date.now() })
+
+        Note over Tick,DB: Fase 1 — SELECT (read-only)
+        Tick->>DB: SELECT tickets WHERE status='available'<br/>AND expires_at <= now + 48h<br/>AND expires_at > now
+        DB-->>Tick: expiringSoon[]
+        Tick->>DB: SELECT tickets WHERE status='available'<br/>AND expires_at <= now
+        DB-->>Tick: justExpired[]
+
+        Note over Tick,DB: Fase 2 — UPDATE batch idempotente
+        Tick->>DB: UPDATE tickets SET status='expired'<br/>WHERE id IN (justExpired.ids)<br/>AND status='available'  -- race guard
+        DB-->>Tick: updateCount
+        Tick->>Tick: result.expired = updateCount
+
+        Note over Tick,DB: Fase 2.5 — re-confirm (proteccao race user "pagar com ticket")
+        Tick->>DB: SELECT id FROM tickets<br/>WHERE id IN (justExpired.ids)<br/>AND status='expired'
+        DB-->>Tick: expiredConfirmed[]
+
+        Note over Tick,DB: Fase 3 — INSERT notifs ticket_expiring (dedupe 7d)
+        loop for ticket of expiringSoon
+            Tick->>DB: SELECT 1 FROM notifications<br/>WHERE user_id=$1 AND type='ticket_expiring'<br/>AND deep_link LIKE '%ticket_id=...'<br/>AND created_at > now - 7d
+            alt dedupe hit
+                DB-->>Tick: exists -> skip
+            else fresh
+                Tick->>DB: INSERT notifications(type='ticket_expiring',<br/>priority='medium', title, body, deep_link)
+                DB-->>Tick: ok
+                Tick->>Tick: result.notif_expiring++
+            end
+        end
+
+        Note over Tick,DB: Fase 4 — INSERT notifs ticket_expired (dedupe 7d) + telemetria
+        loop for ticket of expiredConfirmed
+            Tick->>DB: SELECT 1 FROM notifications<br/>WHERE user_id=$1 AND type='ticket_expired'<br/>AND deep_link LIKE '%ticket_id=...'<br/>AND created_at > now - 7d
+            alt dedupe hit
+                DB-->>Tick: exists -> skip
+            else fresh
+                Tick->>DB: INSERT notifications(type='ticket_expired',<br/>priority='medium', title, body, deep_link)
+                DB-->>Tick: ok
+                Tick->>DB: INSERT user_activity(event_type='ticket_expired',<br/>payload={ticket_id, value_usd, source_name})
+                DB-->>Tick: ok
+                Tick->>Tick: result.notif_expired++
+            end
+        end
+
+        Tick-->>Log: console.info("coach.cron.expire_tickets.done", result)
+        Tick-->>Lock: release
+    end
+
+    Note over Cron,Log: Idempotente: re-run = no-op (UPDATE filtra 'available', dedupe 7d skipa notifs).<br/>Crash entre Fase 2 e Fase 4 = notif perdida do dia (raro, sem dual-write).<br/>Erro em 1 ticket nao trava os outros (try/catch granular por iteracao).

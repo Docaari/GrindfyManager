@@ -91,6 +91,8 @@ import {
   type BankrollSnapshot,
   type InsertBankrollSnapshot,
   tickets,
+  notifications,
+  userActivity,
   type Ticket,
   cooldownLogs,
   starredHands,
@@ -5861,6 +5863,216 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .where(and(eq(tickets.userId, userId), eq(tickets.status, "available")))
       .orderBy(asc(tickets.earnedAt));
     return rows as Ticket[];
+  }
+
+  // ===========================================================================
+  // Sprint D — Tickets cron expiracao + notifs (ADR-184)
+  // Reviewer CRITICAL-1 fix wave: implementacao real dos 6 metodos auxiliares
+  // que `server/jobs/expireTickets.ts` invoca via storage. Sem isso o cron vira
+  // no-op silencioso em prod.
+  //
+  // Shape de retorno NORMALIZADO para o que o job espera:
+  //   { id, userId, sourceName, valueUsd, expiresAt }
+  // (mapeado de tickets.targetName / tickets.ticketValueUSD).
+  //
+  // Lesson #36: nao depende de @shared/schema lazy — eh metodo da classe que
+  // ja importa as tables no topo. Compat com tests via injectedStorage (lesson
+  // #34) — o cron mocka este modulo inteiro.
+  // ===========================================================================
+
+  /**
+   * SELECT tickets WHERE status='available' AND expires_at IN (now, now+48h]
+   * Retorna shape adaptado p/ expireTicketsTick (sourceName / valueUsd).
+   */
+  async getTicketsExpiringSoon(now: Date, tx?: any): Promise<Array<{
+    id: string;
+    userId: string;
+    sourceName: string | null;
+    valueUsd: string;
+    expiresAt: Date;
+  }>> {
+    const runner = tx ?? db;
+    const horizon = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    const rows = await runner
+      .select({
+        id: tickets.id,
+        userId: tickets.userId,
+        sourceName: tickets.targetName,
+        valueUsd: tickets.ticketValueUSD,
+        expiresAt: tickets.expiresAt,
+      })
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.status, "available"),
+          isNotNull(tickets.expiresAt),
+          gt(tickets.expiresAt, now),
+          lte(tickets.expiresAt, horizon),
+        ),
+      );
+    return rows as any[];
+  }
+
+  /**
+   * SELECT tickets WHERE status='available' AND expires_at <= now
+   * Tickets que JA viraram expirados neste run (ainda nao processados).
+   */
+  async getTicketsJustExpired(now: Date, tx?: any): Promise<Array<{
+    id: string;
+    userId: string;
+    sourceName: string | null;
+    valueUsd: string;
+    expiresAt: Date;
+  }>> {
+    const runner = tx ?? db;
+    const rows = await runner
+      .select({
+        id: tickets.id,
+        userId: tickets.userId,
+        sourceName: tickets.targetName,
+        valueUsd: tickets.ticketValueUSD,
+        expiresAt: tickets.expiresAt,
+      })
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.status, "available"),
+          isNotNull(tickets.expiresAt),
+          lte(tickets.expiresAt, now),
+        ),
+      );
+    return rows as any[];
+  }
+
+  /**
+   * UPDATE tickets SET status='expired' WHERE id IN (ids) AND status='available'
+   * Idempotente — guard status='available' (ADR-184 §2.7 race protection).
+   * Retorna numero de rows atualizadas.
+   */
+  async markTicketsExpired(ids: string[], tx?: any): Promise<number> {
+    if (!Array.isArray(ids) || ids.length === 0) return 0;
+    const runner = tx ?? db;
+    const now = new Date();
+    const updated = await runner
+      .update(tickets)
+      .set({ status: "expired", updatedAt: now })
+      .where(and(inArray(tickets.id, ids), eq(tickets.status, "available")))
+      .returning({ id: tickets.id });
+    return updated.length;
+  }
+
+  /**
+   * SELECT ids FROM tickets WHERE id IN (ids) AND status='expired'
+   * Race protection (ADR-184 §2.7): user pode ter usado o ticket entre
+   * SELECT e UPDATE — re-confirma que ficou expired antes do INSERT da notif.
+   */
+  async reconfirmExpiredTicketIds(ids: string[], tx?: any): Promise<string[]> {
+    if (!Array.isArray(ids) || ids.length === 0) return [];
+    const runner = tx ?? db;
+    const rows = await runner
+      .select({ id: tickets.id })
+      .from(tickets)
+      .where(and(inArray(tickets.id, ids), eq(tickets.status, "expired")));
+    return rows.map((r: any) => r.id as string);
+  }
+
+  /**
+   * Dedupe — busca notif do mesmo (user, ticket, type) criada nos ultimos N dias.
+   * ADR-184 §2.3 — match por `deep_link LIKE '%ticket_id=' || $ticketId || '&%'`.
+   * LOW-1 fix: usar `'&%'` (terminador) p/ evitar prefix collision (`ticket_id=abc`
+   * matchando `ticket_id=abc12`). OR fallback p/ EOL (ticket_id ultimo arg).
+   */
+  async hasRecentTicketNotif(
+    userId: string,
+    ticketId: string,
+    type: string,
+    days: number,
+    tx?: any,
+  ): Promise<boolean> {
+    const runner = tx ?? db;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const middleMatch = `%ticket_id=${ticketId}&%`;
+    const endMatch = `%ticket_id=${ticketId}`;
+    const rows = await runner
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.type, type),
+          gt(notifications.createdAt, since),
+          or(
+            like(notifications.deepLink, middleMatch),
+            like(notifications.deepLink, endMatch),
+          ),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  /**
+   * INSERT user_activity row.
+   * Maps job-shape `{userId, eventType, payload}` -> schema `{page, action, metadata}`:
+   *   page = 'system'  (housekeeping/cron-originated)
+   *   action = eventType
+   *   metadata = payload
+   * NAO duplica `analytics.ts:/api/analytics/track` (que eh user-driven com page/feature reais).
+   */
+  async recordUserActivity(input: {
+    userId: string;
+    eventType: string;
+    payload?: Record<string, any> | null;
+  }, tx?: any): Promise<{ id: string }> {
+    const runner = tx ?? db;
+    const id = nanoid();
+    await runner.insert(userActivity).values({
+      id,
+      userId: input.userId,
+      page: "system",
+      action: input.eventType,
+      feature: null,
+      duration: null,
+      metadata: input.payload ?? null,
+      ipAddress: null,
+      userAgent: null,
+      createdAt: new Date(),
+    });
+    return { id };
+  }
+
+  /**
+   * INSERT notifications row.
+   * Aceita shape `{userId, type, title, message, priority, deepLink}` do job.
+   * (NotificationService.createNotification eh class-scoped + acopla subscription —
+   * para tickets/cron precisamos de INSERT bare sem efeitos colaterais.)
+   */
+  async createNotification(input: {
+    userId: string;
+    type: string;
+    title: string;
+    message: string;
+    priority: "low" | "medium" | "high";
+    deepLink?: string | null;
+    daysUntilExpiration?: number | null;
+    scheduledFor?: Date | null;
+  }, tx?: any): Promise<{ id: string }> {
+    const runner = tx ?? db;
+    const id = nanoid();
+    await runner.insert(notifications).values({
+      id,
+      userId: input.userId,
+      type: input.type,
+      title: input.title,
+      message: input.message,
+      priority: input.priority,
+      daysUntilExpiration: input.daysUntilExpiration ?? null,
+      read: false,
+      scheduledFor: input.scheduledFor === undefined ? new Date() : input.scheduledFor,
+      createdAt: new Date(),
+      deepLink: input.deepLink ?? null,
+    } as any);
+    return { id };
   }
 
   async getTicketsByUser(

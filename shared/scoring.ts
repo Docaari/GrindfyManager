@@ -61,6 +61,16 @@ export interface ScoringInputTournament {
   timeOfDayBucket: TimeOfDayBucket | null;
   fieldBucket: FieldBucket | null;
   fieldSizeEstimate: number | null;
+  /** Sprint D / RF-03.4 (ADR-186) — ticket disponivel matching este torneio.
+   *  null/undefined = sem ticket. Quando presente:
+   *  - score recebe +10 (clamp 100) via applyTicketBoost (camada ACIMA do scorer)
+   *  - bankroll filter eh bypassado via shouldPassBankrollFilter
+   *  Resolvido por enrichWithTickets(sct, userTickets, {name,date,buyInUsd}). */
+  availableTicket?: {
+    id: string;
+    valueUsd: number;
+    expiresAt: string | null;
+  } | null;
 }
 
 export interface TournamentScoreResult {
@@ -116,6 +126,18 @@ export interface SelectorTournament {
     buyInUSD: number;
     rulePct: number;
   } | null;
+  /**
+   * Sprint D / RF-03.4 (ADR-186) — ticket disponivel matching este torneio.
+   * Quando presente, score recebe +10 (clamp 100) e bankroll filter eh bypassado.
+   * UI renderiza badge "Ticket disponivel ($X)".
+   */
+  availableTicket?: {
+    id: string;
+    valueUsd: number;
+    expiresAt: string | null;
+  } | null;
+  /** +10 quando availableTicket presente, 0 senao. */
+  ticketBoost?: number;
 }
 
 export interface SelectorPlayerProfile {

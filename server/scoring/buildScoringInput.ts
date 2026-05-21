@@ -17,9 +17,15 @@
 // =============================================================================
 
 import { getTimeOfDayBucket } from "./timeOfDayBucket";
-import { BUYIN_BUCKETS, FIELD_BUCKETS, SUPREMA_CATEGORY_MAP } from "./scoringConstants";
+import {
+  BUYIN_BUCKETS,
+  FIELD_BUCKETS,
+  GRADE_THRESHOLDS,
+  SUPREMA_CATEGORY_MAP,
+} from "./scoringConstants";
 import { normalizeBuyInToUSD } from "./currencyNormalizer";
 import type {
+  GradeLetter,
   ScoringInputTournament,
   TimeOfDayBucket,
   FieldBucket,
@@ -111,6 +117,152 @@ export function buildLibraryScoringInput(
     fieldSizeEstimate: fieldSize,
   };
   return { sct, raw: l, buyInRaw: buyInNum, buyInUSD, currency };
+}
+
+// =============================================================================
+// Sprint D / RF-03.4 (ADR-186) — Selector ticket boost helpers
+// Camada ACIMA do tournamentScorer (PROIBIDO mexer no scorer — boost vive aqui).
+// =============================================================================
+
+interface TicketLike {
+  id: string;
+  sourceName: string;
+  valueUsd: number | string;
+  expiresAt: string | Date | null;
+  status: string;
+}
+
+interface TournamentMatchHints {
+  name: string;
+  date: string;
+  buyInUsd: number;
+}
+
+function ticketValueUsd(t: { valueUsd: number | string }): number {
+  return typeof t.valueUsd === "number" ? t.valueUsd : parseFloat(String(t.valueUsd)) || 0;
+}
+
+function expiresAtMs(expiresAt: string | Date | null | undefined): number | null {
+  if (expiresAt == null) return null;
+  return (expiresAt instanceof Date ? expiresAt : new Date(expiresAt)).getTime();
+}
+
+// Duplicacao DELIBERADA do `scoreToGrade` em server/scoring/tournamentScorer.ts:
+// ADR-186 §2.4 PROIBE alterar o scorer. O boost de ticket vive nesta camada
+// acima, entao re-implementamos a derivacao de grade aqui.
+function scoreToGradeLocal(score: number): GradeLetter {
+  if (score >= GRADE_THRESHOLDS.S) return "S";
+  if (score >= GRADE_THRESHOLDS.A) return "A";
+  if (score >= GRADE_THRESHOLDS.B) return "B";
+  if (score >= GRADE_THRESHOLDS.C) return "C";
+  return "D";
+}
+
+function pickShape(t: TicketLike): { id: string; valueUsd: number; expiresAt: string | null } {
+  const exp = t.expiresAt
+    ? (t.expiresAt instanceof Date ? t.expiresAt.toISOString() : String(t.expiresAt))
+    : null;
+  return {
+    id: t.id,
+    valueUsd: ticketValueUsd(t),
+    expiresAt: exp,
+  };
+}
+
+/**
+ * Match heuristica ticket <-> torneio (ADR-186 §2.2).
+ * 1) exact: sourceName casa nome do torneio (case-insensitive substring).
+ * 2) value: |valueUsd - buyInUsd| / buyInUsd < 1%.
+ * Desempate FIFO: menor expiresAt vence.
+ * Filtros: status='available' + (expiresAt nulo OU > tournament.date).
+ */
+function matchTicket(
+  tournament: TournamentMatchHints,
+  userTickets: TicketLike[]
+): TicketLike | null {
+  if (!Array.isArray(userTickets) || userTickets.length === 0) return null;
+  const tournamentMs = new Date(tournament.date).getTime();
+  const candidates = userTickets.filter((t) => {
+    if (t.status !== "available") return false;
+    const exp = expiresAtMs(t.expiresAt);
+    return exp == null || exp > tournamentMs;
+  });
+  if (candidates.length === 0) return null;
+
+  // Desempate FIFO — menor expiresAt vence; tickets sem prazo (Infinity) vao pro fim.
+  const sortedByExpiry = [...candidates].sort(
+    (a, b) => (expiresAtMs(a.expiresAt) ?? Infinity) - (expiresAtMs(b.expiresAt) ?? Infinity)
+  );
+
+  const tournName = (tournament.name ?? "").toLowerCase();
+  const exact = sortedByExpiry.find((t) => {
+    const sn = (t.sourceName ?? "").toLowerCase();
+    if (!sn) return false;
+    return tournName.includes(sn) || sn.includes(tournName);
+  });
+  if (exact) return exact;
+
+  if (tournament.buyInUsd > 0) {
+    const valueMatch = sortedByExpiry.find((t) => {
+      const delta = Math.abs(ticketValueUsd(t) - tournament.buyInUsd);
+      return delta / tournament.buyInUsd < 0.01;
+    });
+    if (valueMatch) return valueMatch;
+  }
+  return null;
+}
+
+/**
+ * Enriquece o SCT com `availableTicket` quando ha match. No-op caso contrario.
+ *
+ * FOLLOW-UP (reviewer NIT-3): heuristica atual eh exact substring OR value match
+ * 1%. Pode haver falso-positivo em torneios com nomes muito genericos (ex:
+ * sourceName="Daily" matching todo torneio chamado "Daily $5"). Considerar:
+ *   - normalizar accents/whitespace antes do compare.
+ *   - exigir match de site quando sourceName for muito curto (<4 chars).
+ *   - permitir override manual via ticket.targetTemplateId quando presente.
+ * Deixado simples por enquanto pq cron de housekeeping cobre o caso 99%.
+ */
+export function enrichWithTickets(
+  sct: ScoringInputTournament,
+  userTickets: TicketLike[],
+  tournament: TournamentMatchHints
+): ScoringInputTournament {
+  const match = matchTicket(tournament, userTickets);
+  if (!match) return sct;
+  return { ...sct, availableTicket: pickShape(match) };
+}
+
+const TICKET_SCORE_BOOST = 10;
+
+/**
+ * Aplica +10 score (clamp 100) e re-deriva grade quando `availableTicket` presente.
+ * Sem ticket: retorna { ...base, ticketBoost: 0 }. Nao toca em `computeTournamentScore`.
+ */
+export function applyTicketBoost<
+  T extends { score: number; grade: GradeLetter }
+>(
+  base: T,
+  sct: ScoringInputTournament
+): T & { ticketBoost: number } {
+  if (!sct.availableTicket) {
+    return { ...base, ticketBoost: 0 };
+  }
+  const score = Math.min(100, base.score + TICKET_SCORE_BOOST);
+  return { ...base, score, grade: scoreToGradeLocal(score), ticketBoost: TICKET_SCORE_BOOST };
+}
+
+/**
+ * Bankroll filter com bypass por ticket. Torneio acima de maxBuyIn passa quando
+ * tem ticket disponivel (effectiveBuyIn real com ticket = 0).
+ */
+export function shouldPassBankrollFilter(opts: {
+  effectiveBuyIn: number;
+  maxBuyIn: number;
+  availableTicket?: { id: string; valueUsd: number; expiresAt: string | null } | null;
+}): boolean {
+  if (opts.availableTicket != null) return true;
+  return opts.effectiveBuyIn <= opts.maxBuyIn;
 }
 
 /**

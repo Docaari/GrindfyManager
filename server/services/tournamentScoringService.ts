@@ -30,6 +30,9 @@ import {
   buildLibraryScoringInput,
   buildSupremaScoringInput,
   dayOfWeekFromDate,
+  enrichWithTickets,
+  applyTicketBoost,
+  shouldPassBankrollFilter,
   type ScoringBuildResult,
 } from "../scoring/buildScoringInput";
 
@@ -57,6 +60,13 @@ export interface RankedSuggestion {
   grade: "S" | "A" | "B" | "C" | "D";
   confidence: "low" | "medium" | "high";
   rationale: string;
+  /** Sprint D / RF-03.4 (ADR-186) — ticket disponivel matching este torneio. */
+  availableTicket?: {
+    id: string;
+    valueUsd: number;
+    expiresAt: string | null;
+  } | null;
+  ticketBoost?: number;
 }
 
 export interface TournamentRef {
@@ -201,7 +211,7 @@ export async function rankTournamentsForContext(
         ? dayOfWeekFromDate(date)
         : null;
 
-  const [rawBundle, libEntries, supremaList, exchangeRates] = await Promise.all([
+  const [rawBundle, libEntries, supremaList, exchangeRates, userTicketsRaw] = await Promise.all([
     bundleCache.getOrLoad(userId, lookbackDays),
     Promise.resolve(storage.getTournamentLibraryEntries(userId)).catch((err: any) => {
       console.error("tournamentScoringService.library_fetch_failed", { userId, err });
@@ -209,10 +219,27 @@ export async function rankTournamentsForContext(
     }),
     includeSuprema ? fetchSupremaSafe(date) : Promise.resolve([] as any[]),
     getExchangeRates(storage, userId),
+    // Sprint D / RF-03.4 (ADR-186) — paridade com selector route: ticket boost
+    // + bankroll bypass para o Coach tool tambem.
+    Promise.resolve(storage.getActiveTicketsByUser?.(userId) ?? []).catch((err: any) => {
+      console.error("tournamentScoringService.tickets_fetch_failed", { userId, err });
+      return [] as any[];
+    }),
   ]);
   const bundle = normalizeBundle(rawBundle);
   const library: any[] = Array.isArray(libEntries) ? libEntries : [];
   const suprema: any[] = Array.isArray(supremaList) ? supremaList : [];
+  // Adapta shape de storage cru (targetName/ticketValueUSD) para enrichWithTickets.
+  const userTickets: any[] = Array.isArray(userTicketsRaw)
+    ? userTicketsRaw.map((t: any) => ({
+        id: t.id,
+        userId: t.userId,
+        sourceName: t.sourceName ?? t.targetName ?? "",
+        valueUsd: t.valueUsd ?? t.ticketValueUSD ?? 0,
+        expiresAt: t.expiresAt ?? null,
+        status: t.status ?? "available",
+      }))
+    : [];
 
   const maxBuyIn = opts.maxBuyIn;
   const profile = opts.profile;
@@ -232,8 +259,26 @@ export async function rankTournamentsForContext(
 
   const scored: RankedSuggestion[] = [];
   for (const b of built) {
-    if (maxBuyIn != null && b.buyInUSD > maxBuyIn) continue;
-    const result = computeTournamentScore(b.sct, bundle, { lookbackDays });
+    // Enriquece SCT com ticket match antes do score + bankroll filter.
+    const enrichedSct = enrichWithTickets(b.sct, userTickets, {
+      name: b.sct.name,
+      date,
+      buyInUsd: b.buyInUSD,
+    });
+    // Sprint D / RF-03.4 — bypass: ticket disponivel pula bankroll cap.
+    if (
+      maxBuyIn != null &&
+      !shouldPassBankrollFilter({
+        effectiveBuyIn: b.buyInUSD,
+        maxBuyIn,
+        availableTicket: enrichedSct.availableTicket ?? null,
+      })
+    ) continue;
+    const baseResult = computeTournamentScore(enrichedSct, bundle, { lookbackDays });
+    const boosted = applyTicketBoost(
+      { score: baseResult.score, grade: baseResult.grade },
+      enrichedSct,
+    );
     scored.push({
       id: b.sct.id,
       name: b.sct.name,
@@ -242,10 +287,12 @@ export async function rankTournamentsForContext(
       buyInUSD: b.buyInUSD,
       type: (b.sct.category ?? (b.raw?.type ?? null)) as string | null,
       speed: b.sct.speed ?? null,
-      score: result.score,
-      grade: result.grade,
-      confidence: result.confidence,
-      rationale: result.rationale,
+      score: boosted.score,
+      grade: boosted.grade,
+      confidence: baseResult.confidence,
+      rationale: baseResult.rationale,
+      availableTicket: enrichedSct.availableTicket ?? null,
+      ticketBoost: boosted.ticketBoost ?? 0,
     });
   }
 

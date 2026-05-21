@@ -211,6 +211,20 @@ export function SelectorCard({
               {tournament.rationale}
             </p>
 
+            {/* Sprint D / RF-03.4 (ADR-186) — badge ticket disponivel. */}
+            {tournament.availableTicket && (
+              <div
+                data-testid="selector-card-ticket-badge"
+                className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 text-xs font-semibold mt-2"
+                aria-label={`Ticket disponivel valor ${tournament.availableTicket.valueUsd}`}
+              >
+                <span>Ticket disponivel (${Number(tournament.availableTicket.valueUsd).toFixed(2)})</span>
+                {(tournament.ticketBoost ?? 0) > 0 && (
+                  <span className="bg-emerald-600/30 rounded-full px-1.5 py-0.5">+{tournament.ticketBoost} score</span>
+                )}
+              </div>
+            )}
+
             {/* RF-03 (TS-3): linha "Seu ROI" no bucket dominante. Cold start oculta. */}
             {(() => {
               const cold = isColdStart(playerProfile) || (tournament as any).coldStart === "pure";

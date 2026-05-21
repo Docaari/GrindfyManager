@@ -280,7 +280,7 @@ export const analyticsDaily = pgTable("analytics_daily", {
 export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
-  type: varchar("type").notNull(), // subscription_expiring, subscription_expired, general
+  type: varchar("type").notNull(), // subscription_expiring, subscription_expired, general, ticket_expiring, ticket_expired
   title: varchar("title").notNull(),
   message: text("message").notNull(),
   priority: varchar("priority").notNull(), // low, medium, high
@@ -288,6 +288,9 @@ export const notifications = pgTable("notifications", {
   read: boolean("read").default(false),
   scheduledFor: timestamp("scheduled_for").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
+  // Sprint D / ADR-184 §2.3 — deep link p/ deep-linking + dedupe `ticket_id=` LIKE.
+  // Migration 0075. Nullable p/ rows historicas.
+  deepLink: varchar("deep_link"),
 }, (table) => [
   // Migration 0064 (Fase 3 perf): polled em todo page load (/api/notifications/unread-count).
   index("idx_notifications_user_created").on(table.userId, table.createdAt.desc()),

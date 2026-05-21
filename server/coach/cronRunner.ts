@@ -28,6 +28,8 @@ import { bImportTick } from "./jobs/bImport";
 import { bDownswingTick } from "./jobs/bDownswing";
 import { bVolumeTick } from "./jobs/bVolume";
 import { bGradeTick } from "./jobs/bGrade";
+// Sprint D / RF-03.1 (ADR-184) — housekeeping, fora do gate COACH_NUDGES_ENABLED.
+import { expireTicketsTick } from "../jobs/expireTickets";
 import { withAdvisoryLock } from "../lib/advisoryLock";
 
 let started = false;
@@ -64,6 +66,17 @@ export function startCoachCrons(): void {
       });
     } catch (err) {
       console.error("coach.cron.cleanup.error", { err });
+    }
+  });
+
+  // Sprint D / RF-03.1 (ADR-184) — expire-tickets cron diario 03:00 UTC.
+  // Housekeeping de dados (NAO proatividade) — fica FORA do gate
+  // COACH_NUDGES_ENABLED. Mesmo com kill switch ON, este cron roda.
+  cron.schedule("0 3 * * *", async () => {
+    try {
+      await withAdvisoryLock("cron:expire-tickets", () => expireTicketsTick({}));
+    } catch (err) {
+      console.error("coach.cron.expire_tickets.tick.error", { err });
     }
   });
 

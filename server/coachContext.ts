@@ -267,6 +267,21 @@ export async function assembleContext(
     }
   } catch { /* graceful degradation */ }
 
+  // Sprint D / RF-03.3 (ADR-185) — bloco DINAMICO de tickets ativos. Gated
+  // por keyword (ticket/satelite/grade/selecionar torneio) OR surface
+  // (tournament-selector | grade-planner). Best-effort — falha vira null.
+  let ticketsContextData: any = null;
+  try {
+    const { buildTicketsContext } = await import("./coach/contextBuilders/buildTicketsContext");
+    ticketsContextData = await buildTicketsContext({
+      userId,
+      recentUserText: message,
+      pageContext: pageContextData ?? undefined,
+    });
+  } catch (err) {
+    console.error("coach_context.tickets_context.error", { userId, err });
+  }
+
   // Sprint coach-launch-fix RF-08 (P1 #8): usa buildSystemArray que retorna
   // SystemBlock[] com cache_control ephemeral no bloco STATIC (cache hit ratio
   // melhora drasticamente entre mensagens da mesma sessao). Quando feature flag
@@ -290,6 +305,7 @@ export async function assembleContext(
       weeklyPlan: weeklyPlanData ?? null,
       studyProgress: Array.isArray(studyProgressData) ? studyProgressData : [],
       pageContext: pageContextData ?? undefined,
+      ticketsContext: ticketsContextData ?? null,
     },
   );
 
