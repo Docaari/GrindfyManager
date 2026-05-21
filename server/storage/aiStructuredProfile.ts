@@ -38,6 +38,17 @@ export interface AiStructuredProfileOnboardingDraft {
   mode: "full" | "light";
   startedAt: string;
 }
+// AI-3 / RF-03 — cgameRecent snapshot persistido (JSONB schemaless).
+export interface AiStructuredProfileCgameRecent {
+  aPct: number;
+  bPct: number;
+  cPct: number;
+  sampleSize: number;
+  confidence: "high" | "medium" | "low";
+  period: { start: string; end: string };
+  updatedAt: string;
+}
+
 export interface AiStructuredProfile {
   schemaVersion: number;
   nivel?: AiPlayerLevel | null;
@@ -59,7 +70,41 @@ export interface AiStructuredProfile {
   onboardingDraft?: AiStructuredProfileOnboardingDraft | null;
   reOnboardingOfferedAt?: string | null;
   reOnboardingDeclinedAt?: string | null;
+  cgameRecent?: AiStructuredProfileCgameRecent | null;
   updatedAt?: string;
+}
+
+function normalizeCgameRecent(raw: any): AiStructuredProfileCgameRecent | undefined {
+  if (raw == null || typeof raw !== "object") return undefined;
+  const aPct = Number(raw.aPct);
+  const bPct = Number(raw.bPct);
+  const cPct = Number(raw.cPct);
+  const sampleSize = Number(raw.sampleSize);
+  if (!Number.isFinite(aPct) || !Number.isFinite(bPct) || !Number.isFinite(cPct) || !Number.isFinite(sampleSize)) {
+    return undefined;
+  }
+  const confidence = raw.confidence;
+  if (confidence !== "high" && confidence !== "medium" && confidence !== "low") return undefined;
+  const period = raw.period;
+  if (
+    !period
+    || typeof period !== "object"
+    || typeof period.start !== "string"
+    || typeof period.end !== "string"
+  ) {
+    return undefined;
+  }
+  const updatedAt = typeof raw.updatedAt === "string" ? raw.updatedAt : null;
+  if (updatedAt == null) return undefined;
+  return {
+    aPct,
+    bPct,
+    cPct,
+    sampleSize,
+    confidence,
+    period: { start: period.start, end: period.end },
+    updatedAt,
+  };
 }
 
 const SCHEMA_VERSION = 1;
@@ -179,6 +224,13 @@ export function normalizeAiStructuredProfile(raw: any): AiStructuredProfile {
   if (raw.reOnboardingDeclinedAt != null) out.reOnboardingDeclinedAt = String(raw.reOnboardingDeclinedAt);
   if (raw.updatedAt != null) out.updatedAt = String(raw.updatedAt);
 
+  // AI-3 / RF-03 — cgameRecent (clamp não-destrutivo, omite se inválido).
+  if (raw.cgameRecent !== undefined) {
+    const cg = normalizeCgameRecent(raw.cgameRecent);
+    if (cg !== undefined) out.cgameRecent = cg;
+    // se raw.cgameRecent === null OR inválido → omite (out.cgameRecent fica undefined).
+  }
+
   return out;
 }
 
@@ -264,6 +316,23 @@ export async function updateAiStructuredProfile(
   }
   profileCache.delete(userId);
   return normalized;
+}
+
+/**
+ * AI-3 / RF-03 (ADR-174 §2.3) — persiste `cgameRecent` em
+ * `users.ai_structured_profile` (JSONB schemaless). Best-effort.
+ *
+ * Internamente delega a `updateAiStructuredProfile` (merge raso preserva
+ * outros campos do perfil). Idempotente: chamadas repetidas sobrescrevem.
+ *
+ * Lesson #34 — aceita `injectedDb` opcional.
+ */
+export async function updateCgameRecent(
+  userId: string,
+  snapshot: Partial<AiStructuredProfileCgameRecent> & Record<string, any>,
+  injectedDb?: any,
+): Promise<void> {
+  await updateAiStructuredProfile(userId, { cgameRecent: snapshot as AiStructuredProfileCgameRecent }, injectedDb);
 }
 
 export function _resetAiStructuredProfileCacheForTests(): void {

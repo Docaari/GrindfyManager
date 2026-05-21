@@ -1,8 +1,10 @@
 // =============================================================================
 // quarterlyReportEmail — Sprint AI-2B / RF-07.3 (ADR-172)
+// Sprint AI-3 / RF-05.3 (ADR-174) — usa _renderReportShell.
 // =============================================================================
 
-import { escapeHtml, renderFooter } from "./_helpers";
+import { escapeHtml } from "./_helpers";
+import { renderReportShell } from "./_renderReportShell";
 
 function quarterLabel(periodStart: string): string {
   const m = /^(\d{4})-(\d{2})-/.exec(periodStart);
@@ -25,23 +27,21 @@ export function renderQuarterlyReportEmail(args: RenderReportEmailArgs): { subje
   const { content, userName, unsubscribeUrl, baseUrl, reportId } = args;
   const ql = quarterLabel(String(content?.periodStart ?? ""));
   const subject = `Seu relatorio trimestral — ${ql}`;
-  const safeName = escapeHtml(userName);
   const url = `${baseUrl}/coach-ai/relatorio/${escapeHtml(reportId)}`;
 
-  const html = `
-    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-      <h1>Ola ${safeName},</h1>
-      <p>Seu relatorio trimestral do Grindfy esta pronto (${escapeHtml(ql)}).</p>
-      <p style="margin-top:24px;">
-        <a href="${url}" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">
-          Abrir relatorio completo
-        </a>
-      </p>
-      ${renderFooter(content?.disclaimer, unsubscribeUrl)}
-    </div>
-  `;
+  // Miolo do email: nota do trimestre (label + quarter).
+  const bodyHtml = `<p>Resumo do trimestre ${escapeHtml(ql)}.</p>`;
 
-  const text = `Ola ${userName},\n\nSeu relatorio trimestral do Grindfy esta pronto (${ql}).\n\nAbra em: ${url}\n\n${content?.disclaimer ?? ""}\n\nUnsubscribe: ${unsubscribeUrl}`;
+  const shell = renderReportShell({
+    userName,
+    subject,
+    intro: `Seu relatorio trimestral do Grindfy esta pronto (${ql}).`,
+    bodyHtml,
+    ctaLabel: "Abrir relatorio completo",
+    ctaUrl: url,
+    disclaimer: content?.disclaimer,
+    unsubscribeUrl,
+  });
 
-  return { subject, html, text };
+  return { subject, html: shell.html, text: shell.text };
 }

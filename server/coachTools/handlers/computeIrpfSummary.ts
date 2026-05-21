@@ -7,6 +7,7 @@
 
 import { z } from "zod";
 import { REPORT_DISCLAIMER } from "../../coach/disclaimers";
+import { isBrUser } from "../../../shared/brTimezones";
 
 export const computeIrpfSummaryInputSchema = z
   .object({
@@ -30,37 +31,6 @@ async function resolveBaseStorage(injected?: any): Promise<any> {
   } catch {
     return {};
   }
-}
-
-function isBrUser(u: any): boolean {
-  if (!u) return false;
-  const country = String(u.country ?? "").toUpperCase();
-  if (country === "BR") return true;
-  const tz = String(u.timezone ?? "");
-  // Heurística: timezones brasileiros são "America/Sao_Paulo", "America/Bahia", etc.
-  // "America/New_York" não é BR. A spec aceita 'America/*' como "br_or_americas"
-  // — mas a regra Q-C exige BR estrito. Mantenho regra explícita: timezone BR.
-  if (
-    tz === "America/Sao_Paulo" ||
-    tz === "America/Bahia" ||
-    tz === "America/Belem" ||
-    tz === "America/Fortaleza" ||
-    tz === "America/Recife" ||
-    tz === "America/Manaus" ||
-    tz === "America/Cuiaba" ||
-    tz === "America/Campo_Grande" ||
-    tz === "America/Porto_Velho" ||
-    tz === "America/Boa_Vista" ||
-    tz === "America/Rio_Branco" ||
-    tz === "America/Maceio" ||
-    tz === "America/Araguaina" ||
-    tz === "America/Eirunepe" ||
-    tz === "America/Noronha" ||
-    tz === "America/Santarem"
-  ) {
-    return true;
-  }
-  return false;
 }
 
 async function handler(

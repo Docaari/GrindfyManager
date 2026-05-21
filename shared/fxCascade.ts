@@ -1,13 +1,18 @@
 // =============================================================================
 // fxCascade — Sprint AI-2B / RF-04 (ADR-169 §2.6)
+// Sprint AI-3 / RF-02 (ADR-174 §2.2) — wire real para adapters de produção.
 //
 // Helpers de FX para conversão USD/BRL no Quarterly Report (IRPF) + compute_irpf
 // _summary tool. Multi-source: BCB (PTAX) preferred → frankfurter fallback.
 // Cache 24h in-memory.
 //
+// Shape FxRow do adapter: { currency, date, ratePerUsd, source }.
+// AI-3 RF-02: filtra BRL no resultado de frankfurter (que aceita N symbols),
+// mapeia ratePerUsd → media.
+//
 // Lessons aplicadas:
-//   - #9 — log antes do fallback.
-//   - DRY — shared, mockável via vi.doMock.
+//   - #9 — log antes do fallback (FxFetchError do BCB cai pro Frankfurter).
+//   - #3 — mock shape REAL do adapter (FxRow, não {value} legado).
 // =============================================================================
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -15,6 +20,17 @@ const _cache: Map<string, { value: number; expiresAt: number }> = new Map();
 
 function cacheKey(from: string, to: string): string {
   return `avgPtax|${from}|${to}`;
+}
+
+type AdapterRow = { currency?: string; date?: string; ratePerUsd?: number; source?: string };
+
+function avgRatePerUsd(rows: AdapterRow[]): number {
+  const valid = rows
+    .map((r) => Number(r?.ratePerUsd))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (valid.length === 0) return NaN;
+  const sum = valid.reduce((acc, n) => acc + n, 0);
+  return sum / valid.length;
 }
 
 /**
@@ -27,43 +43,52 @@ export async function getAveragePtaxForRange(from: string, to: string): Promise<
   const cached = _cache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
-  let bcbRates: Array<{ value: number }> | null = null;
+  // 1) BCB PTAX adapter (autoridade para IRPF brasileiro).
+  let bcbRows: AdapterRow[] | null = null;
   try {
-    const bcb: any = await import("./fx/bcbClient");
-    const fn = bcb.fetchBcbRatesForRange ?? bcb.default?.fetchBcbRatesForRange;
+    const bcb: any = await import("../server/services/fx/adapters/bcbPtaxAdapter");
+    const fn = bcb.fetchTimeseriesBrl ?? bcb.bcbPtaxAdapter?.fetchTimeseriesBrl ?? bcb.default?.fetchTimeseriesBrl;
     if (typeof fn === "function") {
-      bcbRates = await fn(from, to);
+      bcbRows = await fn(from, to);
     }
   } catch (err) {
+    // Lesson #9: log ANTES do fallback (distingue API down de vazio).
     console.error("fxCascade.bcb.error", { from, to, err: err instanceof Error ? err.message : String(err) });
-    bcbRates = null;
+    bcbRows = null;
   }
 
-  if (Array.isArray(bcbRates) && bcbRates.length > 0) {
-    const sum = bcbRates.reduce((acc, r) => acc + Number(r?.value ?? 0), 0);
-    const avg = sum / bcbRates.length;
-    _cache.set(key, { value: avg, expiresAt: Date.now() + CACHE_TTL_MS });
-    return avg;
+  if (Array.isArray(bcbRows) && bcbRows.length > 0) {
+    const avg = avgRatePerUsd(bcbRows);
+    if (Number.isFinite(avg) && avg > 0) {
+      _cache.set(key, { value: avg, expiresAt: Date.now() + CACHE_TTL_MS });
+      return avg;
+    }
   }
 
-  // Fallback frankfurter.
-  let frankRates: Array<{ value: number }> | null = null;
+  // 2) Fallback Frankfurter (ECB rates — útil em weekend/holiday).
+  let frankRows: AdapterRow[] | null = null;
   try {
-    const frank: any = await import("./fx/frankfurterClient");
-    const fn = frank.fetchFrankfurterRatesForRange ?? frank.default?.fetchFrankfurterRatesForRange;
+    const frank: any = await import("../server/services/fx/adapters/frankfurterAdapter");
+    const fn = frank.fetchTimeseries ?? frank.frankfurterAdapter?.fetchTimeseries ?? frank.default?.fetchTimeseries;
     if (typeof fn === "function") {
-      frankRates = await fn(from, to);
+      // adapter aceita symbols variádico — passa ['BRL'] como 3o arg.
+      frankRows = await fn(from, to, ["BRL"]);
     }
   } catch (err) {
     console.error("fxCascade.frankfurter.error", { from, to, err: err instanceof Error ? err.message : String(err) });
-    frankRates = null;
+    frankRows = null;
   }
 
-  if (Array.isArray(frankRates) && frankRates.length > 0) {
-    const sum = frankRates.reduce((acc, r) => acc + Number(r?.value ?? 0), 0);
-    const avg = sum / frankRates.length;
-    _cache.set(key, { value: avg, expiresAt: Date.now() + CACHE_TTL_MS });
-    return avg;
+  if (Array.isArray(frankRows) && frankRows.length > 0) {
+    // Filtra currency==='BRL' (frankfurter pode retornar mix se chamado sem filtrar).
+    const brlOnly = frankRows.filter((r) => String(r?.currency ?? "").toUpperCase() === "BRL");
+    if (brlOnly.length > 0) {
+      const avg = avgRatePerUsd(brlOnly);
+      if (Number.isFinite(avg) && avg > 0) {
+        _cache.set(key, { value: avg, expiresAt: Date.now() + CACHE_TTL_MS });
+        return avg;
+      }
+    }
   }
 
   throw new Error("no_fx_data");

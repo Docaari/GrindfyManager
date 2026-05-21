@@ -1,0 +1,96 @@
+%% AI-3 (ADR-174 §2.2 RF-02) — FX cascade real-call sequence.
+%% Substitui stubs (shared/fx/bcbClient.ts + frankfurterClient.ts retornando [] que faziam throw 'no_fx_data' sempre)
+%% pelos adapters de produção da Sprint FX-1 (server/services/fx/adapters/bcbPtaxAdapter + frankfurterAdapter).
+%% Ordem: BCB PTAX primeiro (autoridade IRPF brasileiro) → Frankfurter fallback (ECB rates, útil weekend/holiday).
+%% Cache 24h Map in-memory por replica (Redis defer AI-3.1). Q-F lock: não valida from > to no cascade — delega adapter.
+%% Lessons aplicadas: #9 (log antes do fallback — distinguir API down de dados ausentes), #3 (mock shape REAL FxRow[]
+%% nos testes, não shape legado {value,date} dos stubs), #6 (FX → USD normalize — irpfSummary é o ÚNICO consumer
+%% que converte USD→BRL via PTAX médio, resto do bundle permanece USD).
+
+sequenceDiagram
+    participant Caller as quarterlyReportGenerator<br/>OR computeIrpfSummary handler<br/>(server-only callers)
+    participant Cascade as fxCascade.ts<br/>getAveragePtaxForRange(from, to)<br/>(shared/ — Q-A locked stay)
+    participant Cache as in-memory Map<br/>(24h TTL, per-replica)
+    participant BCB as bcbPtaxAdapter<br/>(server/services/fx/adapters/)<br/>fetchTimeseriesBrl(from, to)
+    participant BCBApi as BCB OData API<br/>(olinda.bcb.gov.br)
+    participant Frank as frankfurterAdapter<br/>(server/services/fx/adapters/)<br/>fetchTimeseries(from, to, symbols)
+    participant FrankApi as Frankfurter API<br/>(ECB-backed)
+    participant Logger as pino logger<br/>(lesson #9)
+
+    Note over Caller,Cache: Entry — invariant from <= to (Q-F: cascade não valida)
+
+    Caller->>Cascade: getAveragePtaxForRange('2026-01-01', '2026-03-31')
+    Cascade->>Cache: lookup key=`${from}_${to}`
+
+    alt cache hit (TTL não expirado)
+        Cache-->>Cascade: cachedAvg (number)
+        Cascade-->>Caller: cachedAvg
+    else cache miss
+
+        Note over Cascade,BCB: Tentativa 1 — BCB PTAX (autoridade IRPF)
+
+        Cascade->>BCB: fetchTimeseriesBrl(from, to)
+        BCB->>BCBApi: GET olinda.bcb.gov.br/.../CotacaoDolarPeriodo<br/>(@dataInicial=01-01-2026&@dataFinalCotacao=03-31-2026)
+
+        alt BCB API responde 200 + dados
+            BCBApi-->>BCB: { value: [{cotacaoVenda, dataHoraCotacao}, ...] }
+            BCB->>BCB: map → FxRow[] shape:<br/>{currency: 'BRL', date: 'YYYY-MM-DD',<br/>ratePerUsd: cotacaoVenda, source: 'bcb_ptax'}
+            BCB-->>Cascade: rows: FxRow[]<br/>(ex: ~60 entries para Q1 — business days only)
+
+            alt rows.length > 0
+                Cascade->>Cascade: avg = mean(rows.map(r => r.ratePerUsd))
+                Cascade->>Cache: SET key → { value: avg, expiresAt: now + 24h }
+                Cascade-->>Caller: avg (number, ex: 5.15)
+            else BCB retornou array vazio
+                Note over Cascade,Logger: Lesson #9 — log antes do fallback
+                Cascade->>Logger: warn({ source: 'bcb_ptax', reason: 'empty_array', from, to },<br/>'fxCascade: BCB empty, falling back to Frankfurter')
+                Note right of Cascade: Fall through para Frankfurter
+            end
+
+        else BCB throw FxFetchError<br/>(API down, 5xx, timeout, network)
+            BCBApi-->>BCB: HTTP error / timeout
+            BCB-->>Cascade: throw FxFetchError({ source: 'bcb_ptax', cause: err })
+            Cascade->>Cascade: try/catch capture
+            Note over Cascade,Logger: Lesson #9 — log distingue API down de dados ausentes
+            Cascade->>Logger: warn({ source: 'bcb_ptax', err, from, to },<br/>'fxCascade: BCB threw FxFetchError, falling back to Frankfurter')
+        end
+
+        Note over Cascade,Frank: Tentativa 2 — Frankfurter (ECB rates)
+
+        Cascade->>Frank: fetchTimeseries(from, to, ['BRL'])
+        Frank->>FrankApi: GET api.frankfurter.app/${from}..${to}<br/>?base=USD&symbols=BRL
+
+        alt Frankfurter responde 200 + dados
+            FrankApi-->>Frank: { rates: { '2026-01-02': {BRL: 5.10}, ... } }
+            Frank->>Frank: map → FxRow[] shape:<br/>{currency: 'BRL', date, ratePerUsd, source: 'frankfurter'}<br/>(adapter aceita N symbols — esta call só pede ['BRL'])
+            Frank-->>Cascade: rows: FxRow[]
+
+            alt rows.length > 0
+                Cascade->>Cascade: filter currency === 'BRL'<br/>(safety net — adapter já filtra mas idempotente)
+                Cascade->>Cascade: avg = mean(filtered.map(r => r.ratePerUsd))
+                Cascade->>Cache: SET key → { value: avg, expiresAt: now + 24h }
+                Cascade-->>Caller: avg (number)
+            else rows vazias (Q-F edge: from > to → BCB e Frank vazios)
+                Cascade->>Logger: warn({ source: 'frankfurter', reason: 'empty_after_filter', from, to },<br/>'fxCascade: both sources empty, throwing no_fx_data')
+                Cascade-->>Caller: throw new Error('no_fx_data')
+            end
+
+        else Frankfurter throw FxFetchError
+            FrankApi-->>Frank: HTTP error / timeout
+            Frank-->>Cascade: throw FxFetchError({ source: 'frankfurter', cause: err })
+            Cascade->>Cascade: try/catch capture
+            Cascade->>Logger: error({ source: 'frankfurter', err, from, to },<br/>'fxCascade: both BCB and Frankfurter failed')
+            Cascade-->>Caller: throw new Error('no_fx_data')
+        end
+    end
+
+    Note over Caller: Caller behavior
+
+    alt avg retornado
+        Caller->>Caller: irpfSummary.profitBrl = profitUsd × avg<br/>(lesson #6 — converte SÓ aqui, resto do bundle USD)
+        Caller->>Caller: irpfSummary.disclaimer = REPORT_DISCLAIMER_SHORT (ADR-173)
+    else throw 'no_fx_data'
+        Caller->>Caller: catch → irpfSummary = {<br/>  degraded: true,<br/>  degradedReason: 'fx_unavailable'<br/>}<br/>(lesson #11 default mínimo, não throw para cima)
+    end
+
+    Note over Cascade: Cleanup deletados na sprint (RF-02):<br/>shared/fx/bcbClient.ts (stub retornava [])<br/>shared/fx/frankfurterClient.ts (stub retornava [])<br/>Grep antes valida zero imports remanescentes.

@@ -38,13 +38,11 @@ describe("enqueueQuarterlyReportJobsTick — trigger por mês/dia/hora local", (
     // 2026-04-01 10:00 UTC = 07:00 BRT (UTC-3)
     const insertedJobs: any[] = [];
     const injectedStorage: any = {
-      iterateUsersWithTimezone: vi.fn(async function* () {
-        yield {
+      listUsersForCron: vi.fn(async () => [{
           userPlatformId: "USER-BRT",
           timezone: "America/Sao_Paulo",
           subscriptionPlan: "trial",
-        };
-      }),
+        }]),
       getUserCoachPreferences: vi.fn(async () => ({
         reportQuarterlyEnabled: true,
       })),
@@ -70,13 +68,11 @@ describe("enqueueQuarterlyReportJobsTick — trigger por mês/dia/hora local", (
   it("dia 1 julho 7h BRT → period_start=2026-04-01 (Q2 anterior)", async () => {
     const insertedJobs: any[] = [];
     const injectedStorage: any = {
-      iterateUsersWithTimezone: vi.fn(async function* () {
-        yield {
+      listUsersForCron: vi.fn(async () => [{
           userPlatformId: "USER-BRT",
           timezone: "America/Sao_Paulo",
           subscriptionPlan: "trial",
-        };
-      }),
+        }]),
       getUserCoachPreferences: vi.fn(async () => ({
         reportQuarterlyEnabled: true,
       })),
@@ -98,13 +94,11 @@ describe("enqueueQuarterlyReportJobsTick — trigger por mês/dia/hora local", (
   it("dia 1 janeiro 7h BRT → period_start=2025-10-01 (Q4 ano anterior)", async () => {
     const insertedJobs: any[] = [];
     const injectedStorage: any = {
-      iterateUsersWithTimezone: vi.fn(async function* () {
-        yield {
+      listUsersForCron: vi.fn(async () => [{
           userPlatformId: "USER-BRT",
           timezone: "America/Sao_Paulo",
           subscriptionPlan: "trial",
-        };
-      }),
+        }]),
       getUserCoachPreferences: vi.fn(async () => ({
         reportQuarterlyEnabled: true,
       })),
@@ -128,9 +122,7 @@ describe("enqueueQuarterlyReportJobsTick — skip cases", () => {
   it("fevereiro dia 1 → skip (mês fora do trimestre civil)", async () => {
     const insertedJobs: any[] = [];
     const injectedStorage: any = {
-      iterateUsersWithTimezone: vi.fn(async function* () {
-        yield { userPlatformId: "U", timezone: "America/Sao_Paulo", subscriptionPlan: "trial" };
-      }),
+      listUsersForCron: vi.fn(async () => [{ userPlatformId: "U", timezone: "America/Sao_Paulo", subscriptionPlan: "trial" }]),
       getUserCoachPreferences: vi.fn(async () => ({ reportQuarterlyEnabled: true })),
       insertReportJob: vi.fn(async (p: any) => { insertedJobs.push(p); return p; }),
     };
@@ -145,9 +137,7 @@ describe("enqueueQuarterlyReportJobsTick — skip cases", () => {
   it("abril dia 15 → skip (não é dia 1)", async () => {
     const insertedJobs: any[] = [];
     const injectedStorage: any = {
-      iterateUsersWithTimezone: vi.fn(async function* () {
-        yield { userPlatformId: "U", timezone: "America/Sao_Paulo", subscriptionPlan: "trial" };
-      }),
+      listUsersForCron: vi.fn(async () => [{ userPlatformId: "U", timezone: "America/Sao_Paulo", subscriptionPlan: "trial" }]),
       getUserCoachPreferences: vi.fn(async () => ({ reportQuarterlyEnabled: true })),
       insertReportJob: vi.fn(async (p: any) => { insertedJobs.push(p); return p; }),
     };
@@ -162,9 +152,7 @@ describe("enqueueQuarterlyReportJobsTick — skip cases", () => {
   it("abril dia 1 mas hora local != 7 → skip", async () => {
     const insertedJobs: any[] = [];
     const injectedStorage: any = {
-      iterateUsersWithTimezone: vi.fn(async function* () {
-        yield { userPlatformId: "U", timezone: "America/Sao_Paulo", subscriptionPlan: "trial" };
-      }),
+      listUsersForCron: vi.fn(async () => [{ userPlatformId: "U", timezone: "America/Sao_Paulo", subscriptionPlan: "trial" }]),
       getUserCoachPreferences: vi.fn(async () => ({ reportQuarterlyEnabled: true })),
       insertReportJob: vi.fn(async (p: any) => { insertedJobs.push(p); return p; }),
     };
@@ -180,13 +168,11 @@ describe("enqueueQuarterlyReportJobsTick — skip cases", () => {
   it("Free com opt-in true → revalida via isReportEligible → skip", async () => {
     const insertedJobs: any[] = [];
     const injectedStorage: any = {
-      iterateUsersWithTimezone: vi.fn(async function* () {
-        yield {
+      listUsersForCron: vi.fn(async () => [{
           userPlatformId: "USER-FREE",
           timezone: "America/Sao_Paulo",
           subscriptionPlan: "free",
-        };
-      }),
+        }]),
       getUserCoachPreferences: vi.fn(async () => ({ reportQuarterlyEnabled: true })),
       insertReportJob: vi.fn(async (p: any) => { insertedJobs.push(p); return p; }),
     };
@@ -201,9 +187,7 @@ describe("enqueueQuarterlyReportJobsTick — skip cases", () => {
   it("opt-in false → skip", async () => {
     const insertedJobs: any[] = [];
     const injectedStorage: any = {
-      iterateUsersWithTimezone: vi.fn(async function* () {
-        yield { userPlatformId: "U", timezone: "America/Sao_Paulo", subscriptionPlan: "trial" };
-      }),
+      listUsersForCron: vi.fn(async () => [{ userPlatformId: "U", timezone: "America/Sao_Paulo", subscriptionPlan: "trial" }]),
       getUserCoachPreferences: vi.fn(async () => ({ reportQuarterlyEnabled: false })),
       insertReportJob: vi.fn(async (p: any) => { insertedJobs.push(p); return p; }),
     };
@@ -220,9 +204,7 @@ describe("enqueueQuarterlyReportJobsTick — idempotência", () => {
   it("re-tick na mesma hora → segundo INSERT recebe conflict no-op (storage simula)", async () => {
     let inserted = 0;
     const injectedStorage: any = {
-      iterateUsersWithTimezone: vi.fn(async function* () {
-        yield { userPlatformId: "U", timezone: "America/Sao_Paulo", subscriptionPlan: "trial" };
-      }),
+      listUsersForCron: vi.fn(async () => [{ userPlatformId: "U", timezone: "America/Sao_Paulo", subscriptionPlan: "trial" }]),
       getUserCoachPreferences: vi.fn(async () => ({ reportQuarterlyEnabled: true })),
       insertReportJob: vi.fn(async (payload: any) => {
         inserted += 1;
@@ -247,9 +229,7 @@ describe("enqueueQuarterlyReportJobsTick — COACH_NUDGES_ENABLED=false", () => 
     process.env.COACH_NUDGES_ENABLED = "false";
     const insertedJobs: any[] = [];
     const injectedStorage: any = {
-      iterateUsersWithTimezone: vi.fn(async function* () {
-        yield { userPlatformId: "U", timezone: "America/Sao_Paulo", subscriptionPlan: "trial" };
-      }),
+      listUsersForCron: vi.fn(async () => [{ userPlatformId: "U", timezone: "America/Sao_Paulo", subscriptionPlan: "trial" }]),
       getUserCoachPreferences: vi.fn(async () => ({ reportQuarterlyEnabled: true })),
       insertReportJob: vi.fn(async (p: any) => { insertedJobs.push(p); return p; }),
     };

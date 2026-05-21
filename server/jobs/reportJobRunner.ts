@@ -336,13 +336,33 @@ export async function enqueueQuarterlyReportJobsTick(
 ): Promise<void> {
   if (isNudgesDisabled()) return;
   const nowDate = now ?? new Date();
+
+  // AI-3 efficiency (HIGH-1): pre-check UTC barato antes do SQL. Quarterly trigger
+  // só pode disparar em UTC do dia 1 mês quarterly (tz UTC-12 a UTC+0), dia 2
+  // (tz UTC+0 a UTC+14), ou último dia do mês anterior (tz UTC+1 a UTC+14 que
+  // cruza meia-noite). Fora dessa janela: descartar sem SQL roundtrip.
+  const utcMonth = nowDate.getUTCMonth() + 1;
+  const utcDay = nowDate.getUTCDate();
+  const QUARTERLY_MONTHS_UTC = new Set([1, 4, 7, 10]);
+  const PREV_OF_QUARTERLY_UTC = new Set([12, 3, 6, 9]);
+  const isCandidateUtc =
+    (QUARTERLY_MONTHS_UTC.has(utcMonth) && (utcDay === 1 || utcDay === 2)) ||
+    (PREV_OF_QUARTERLY_UTC.has(utcMonth) && utcDay >= 28);
+  if (!isCandidateUtc) return;
+
   const storage = await resolveStorage(injectedStorage);
-  if (typeof storage.iterateUsersWithTimezone !== "function") {
-    console.error("quarterly.enqueuer.storage.iterateUsersWithTimezone.missing");
+
+  // AI-3 / RF-04 (ADR-174 §2.4) — paridade weekly/monthly: usa listUsersForCron
+  // com filtro SQL canônico em vez de iterateUsersWithTimezone full-scan.
+  let users: Array<{ userPlatformId: string; timezone: string; subscriptionPlan: string }> = [];
+  try {
+    users = (await storage.listUsersForCron?.("subscription_plan IN ('trial','active','admin')")) ?? [];
+  } catch (err) {
+    console.error("quarterly.enqueuer.list_users_error", { err: err instanceof Error ? err.message : String(err) });
     return;
   }
   try {
-    for await (const u of storage.iterateUsersWithTimezone()) {
+    for (const u of users) {
       const userId = u?.userPlatformId;
       if (!userId) continue;
       const tz = u?.timezone || "America/Sao_Paulo";
@@ -373,8 +393,13 @@ export async function enqueueQuarterlyReportJobsTick(
         const prefs = await storage.getUserCoachPreferences?.(userId);
         if (!prefs || prefs.reportQuarterlyEnabled !== true) continue;
 
-        // Tier elegível.
-        const tierSnapshot = await resolveEligibleTierSnapshot(userId, u?.subscriptionPlan);
+        // Tier elegível — AI-3 / RF-04: confiamos no filtro SQL `IN ('trial','active','admin')`.
+        // O snapshot grava o plano cru; revalidateEligibility no processor faz o deep check
+        // (resolveUserTier para 'active') antes de gerar o relatório.
+        const planRaw = String(u?.subscriptionPlan ?? "").toLowerCase();
+        const tierSnapshot = planRaw === "admin" || planRaw === "trial" || planRaw === "active"
+          ? planRaw
+          : await resolveEligibleTierSnapshot(userId, u?.subscriptionPlan);
         if (tierSnapshot == null) continue;
 
         // Calcula período = trimestre anterior.

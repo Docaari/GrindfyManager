@@ -1,0 +1,137 @@
+%% AI-3 (ADR-174) — Quarterly Report LLM real-call sequence (paridade monthlyReportGenerator).
+%% Cobre cron tick hourly → enqueuer (filtro SQL listUsersForCron paridade weekly/monthly AI-1B)
+%% → report_jobs INSERT 'quarterly' → processor 15min → quarterlyReportGenerator com Promise.all gather
+%% (2 waves: independentes + irpf dependente de isBrUser) → updateCgameRecent persist JSONB
+%% → maybeSummarizeBundle (Haiku, quase sempre dispara >20K chars) → callQuarterlyLlm (Sonnet 4.6, max_tokens 4000)
+%% → parse JSON → map nas seções content → persist reports + sendReportEmail best-effort.
+%% Lessons aplicadas: #5/#35 (Anthropic ctor try/catch), #10 (DRY prompt cache), #9 (log antes fallback),
+%% #11 (default mínimo - degraded vs throw), #34 (injectedStorage).
+
+sequenceDiagram
+    participant Cron as enqueueQuarterlyReportJobsTick<br/>(hourly RF-04)
+    participant Storage as storage<br/>(listUsersForCron, report_jobs)
+    participant Proc as processReportJobsTick<br/>(15min AI-1B)
+    participant Gen as quarterlyReportGenerator<br/>(server/services/)
+    participant Profile as users.ai_structured_profile<br/>(JSONB merge)
+    participant Fx as fxCascade.ts<br/>(shared/ — RF-02)
+    participant Sum as reportSummarizer<br/>(Haiku ADR-159)
+    participant Sonnet as Anthropic SDK<br/>(claude-sonnet-4-6)
+    participant Reports as reports table<br/>(persist + cost_usd)
+    participant Email as reportEmailSender<br/>(ADR-172 best-effort)
+
+    Note over Cron,Storage: RF-04 — enqueuer paridade weekly/monthly (filtro SQL)
+
+    Cron->>Cron: COACH_NUDGES_ENABLED check<br/>(kill switch absoluto ADR-152)
+    Cron->>Storage: listUsersForCron("subscription_plan IN ('trial','active','admin')")
+    Storage-->>Cron: users[] (Pro+/Trial/Admin)
+    loop foreach user
+        Cron->>Cron: month ∈ {0,3,6,9}<br/>+ day === 1<br/>+ getLocalHour === 7
+        Cron->>Cron: isReportEligible(userId, 'quarterly')
+        alt elegível
+            Cron->>Storage: INSERT report_jobs<br/>report_type='quarterly'<br/>status='pending'<br/>ON CONFLICT DO NOTHING
+        end
+    end
+
+    Note over Proc,Gen: Tick 15min — claim & dispatch
+
+    Proc->>Storage: claim 1 job pending<br/>SET status='running'
+    Proc->>Gen: generateQuarterlyReport(userId, periodStart, periodEnd)
+
+    Note over Gen,Profile: RF-06 — Promise.all gather em 2 waves
+
+    par Wave 1 (independentes — Promise.allSettled isolated errors)
+        Gen->>Storage: loadStructuredProfile
+        Gen->>Storage: loadPerformance(periodStart, periodEnd)
+        Gen->>Storage: listSessionsForRange
+        Gen->>Storage: listCareerGoalsActive
+        Gen->>Storage: listMentalHandsForRange
+        Gen->>Gen: aggregateCgameForPeriod<br/>(+ getInchwormSeries 6m Promise.all)
+    end
+
+    Gen->>Gen: isBrUser(profile)?<br/>(shared/brTimezones.ts RF-05.1)
+
+    alt user BR
+        Note over Gen,Fx: Wave 2 — irpfSummary depende de profile
+
+        Gen->>Fx: getAveragePtaxForRange(periodStart, periodEnd)
+
+        Note over Fx: RF-02 — FX cascade real (ver diagrama 2)
+
+        alt FX cache hit
+            Fx-->>Gen: avg PTAX (number)
+        else cache miss
+            Fx->>Fx: bcbPtaxAdapter → frankfurterAdapter fallback
+            Fx-->>Gen: avg PTAX OR throw 'no_fx_data'
+        end
+
+        alt FX ok
+            Gen->>Storage: listWalletTransactions(reason='rakeback')
+            Gen->>Gen: compose irpfSummary<br/>(profitBrl numérico + disclaimer ADR-173)
+        else throw no_fx_data
+            Gen->>Gen: irpfSummary = { degraded:true, degradedReason:'fx_unavailable' }<br/>(lesson #11 default mínimo)
+        end
+    end
+
+    Note over Gen,Profile: RF-03 — cgame snapshot persist (best-effort)
+
+    Gen->>Profile: updateCgameRecent(userId, snapshot)<br/>(merge raso preserva outros campos)<br/>fire-and-forget try/catch — NÃO bloqueia
+    Profile-->>Gen: void (or logged error)
+
+    Note over Gen,Sum: RF-01 — sumarização + LLM real
+
+    Gen->>Gen: buildBundle(profile, perf, sessions, cgame,<br/>mentalHands, careerGoals, irpf, comparatives, variance)
+    Gen->>Sum: maybeSummarizeBundle(rawBundle, threshold=20K chars)
+
+    alt bundle > 20K chars (quase sempre quarterly)
+        Sum->>Sum: summarizeBundleHierarchical<br/>(Haiku COACH_REPORT_SUMMARIZER_MODEL)
+        Sum-->>Gen: { bundle: summarized, summarizerModelUsed: 'claude-haiku-4-5...' }
+    else bundle pequeno (raro)
+        Sum-->>Gen: { bundle: raw, summarizerModelUsed: null }
+    end
+
+    Gen->>Gen: tryAnthropicClient()<br/>(lesson #5/#35 — try/catch new ctor)
+
+    alt ANTHROPIC_API_KEY presente
+        Gen->>Gen: callQuarterlyLlm(model, bundle, tone, level)<br/>(duplicado de callMonthlyLlm Q-C; /simplify consolida)
+
+        Note over Gen,Sonnet: Prompt: GRINDFY_AI_BASE + CITATIONS_RULES + REPORT_DISCLAIMER STATIC<br/>(cache_control: ephemeral — lesson #10)
+
+        loop retry up to 3x exponencial
+            Gen->>Sonnet: messages.create({<br/>  model: 'claude-sonnet-4-6',<br/>  max_tokens: 4000,<br/>  system: [STATIC + DYNAMIC],<br/>  messages: [{role: 'user', content: bundle}]<br/>})
+
+            alt success
+                Sonnet-->>Gen: { content: JSON parsed, usage: {input_tokens, output_tokens} }
+            else throw
+                Sonnet-->>Gen: error
+                Gen->>Gen: sleep(2^attempt * 500ms)
+            end
+        end
+
+        alt parsed válido
+            Gen->>Gen: map parsed → content.header.summaryLine<br/>+ content.header.comparison<br/>+ content.comparatives.trendNarrative<br/>+ content.variance.narrative<br/>+ content.insights[]<br/>+ content.nextWeekPlan.{recommendedAction, studyFocus}<br/>+ content.careerGoalsProgress[*].narrative<br/>(preserva goalId, title, progressPct pré-LLM)
+            Gen->>Gen: status='ready'<br/>cost = computeQuarterlyCost(usage)<br/>($3/1M input + $15/1M output Sonnet 4.6)
+        else parsed inválido (string em vez de obj)
+            Gen->>Gen: status='degraded'<br/>degradedReason='llm_parse_error'
+        else throw 3x + failSoft=true
+            Gen->>Gen: status='degraded'<br/>degradedReason='llm_failed_3x'
+        end
+    else no API key
+        Gen->>Gen: status='degraded'<br/>degradedReason='no_anthropic_key'<br/>(content estruturado preservado, narrative ausente)
+    end
+
+    Note over Gen,Reports: Persist + email
+
+    Gen->>Reports: INSERT reports<br/>(content v3, markdown, status, model, cost_usd_estimate,<br/>summarizer_model_used)
+    Gen->>Storage: UPDATE report_jobs SET status='done'
+    Reports-->>Proc: reportId
+
+    Proc->>Email: sendReportEmail({reportId, userId, kind:'report_quarterly'})<br/>(best-effort fire-and-forget ADR-172)
+
+    alt prefs.emailQuarterlyEnabled === true + HMAC unsubscribe OK
+        Email->>Email: render quarterlyReportEmail template<br/>(usa _renderReportShell RF-05.3)
+        Email-->>Proc: status='sent'
+    else opt-in OFF / duplicate
+        Email-->>Proc: status='skipped'
+    end
+
+    Proc->>Proc: tick done

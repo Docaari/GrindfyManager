@@ -120,19 +120,22 @@ export async function getInchwormSeries(
   injectedStorage?: any,
 ): Promise<Array<{ month: string; aPct: number; bPct: number; cPct: number }>> {
   const now = new Date();
-  const series: Array<{ month: string; aPct: number; bPct: number; cPct: number }> = [];
+  // AI-3 / RF-06 — paralelo (Promise.all) em vez de loop serial.
+  const ranges: Array<{ start: Date; end: Date }> = [];
   for (let i = months - 1; i >= 0; i--) {
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 0, 23, 59, 59));
-    const snap = await aggregateCgameForPeriod(userId, { start, end }, injectedStorage);
-    series.push({
-      month: monthKey(start),
-      aPct: snap.aPct,
-      bPct: snap.bPct,
-      cPct: snap.cPct,
-    });
+    ranges.push({ start, end });
   }
-  return series;
+  const snaps = await Promise.all(
+    ranges.map((r) => aggregateCgameForPeriod(userId, r, injectedStorage)),
+  );
+  return ranges.map((r, idx) => ({
+    month: monthKey(r.start),
+    aPct: snaps[idx].aPct,
+    bPct: snaps[idx].bPct,
+    cPct: snaps[idx].cPct,
+  }));
 }
 
 export interface CgameMovement {
@@ -147,8 +150,10 @@ export async function getCgameMovement(
   previous: { start: Date | string; end: Date | string },
   injectedStorage?: any,
 ): Promise<CgameMovement> {
-  const cur = await aggregateCgameForPeriod(userId, current, injectedStorage);
-  const prev = await aggregateCgameForPeriod(userId, previous, injectedStorage);
+  const [cur, prev] = await Promise.all([
+    aggregateCgameForPeriod(userId, current, injectedStorage),
+    aggregateCgameForPeriod(userId, previous, injectedStorage),
+  ]);
   const aPctDelta = cur.aPct - prev.aPct;
   const cPctDelta = cur.cPct - prev.cPct;
   let narrative = "C-game e A-game estavel vs periodo anterior.";
