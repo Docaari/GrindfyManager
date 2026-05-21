@@ -18,6 +18,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { tokens } from '@/lib/ui-tokens';
+import { track } from '@/lib/telemetry';
 
 export type EmptyStateVariant = 'default' | 'compact';
 export type EmptyStateIconSize = 'sm' | 'md' | 'lg';
@@ -77,6 +78,13 @@ export interface EmptyStateProps {
   variant?: EmptyStateVariant;
   iconSize?: EmptyStateIconSize;
   area?: EmptyStateArea;
+  /**
+   * Sprint UX-QW-3 RF-05 — quando definido, clique no secondaryCTA tambem
+   * dispara `track('empty_state.secondary_cta_click', { context })` no
+   * pipeline oficial (`@/lib/telemetry`). Coexiste com o pipeline legado
+   * `window.__telemetry` (RF-01 UX-QW-2). Sem context, nao dispara.
+   */
+  telemetryContext?: string;
 }
 
 const ICON_SIZE_CLASS: Record<EmptyStateIconSize, string> = {
@@ -96,6 +104,7 @@ export function EmptyState({
   variant = 'default',
   iconSize = 'md',
   area = 'generic',
+  telemetryContext,
 }: EmptyStateProps) {
   const fireTelemetry = (event: string) => {
     try {
@@ -131,6 +140,14 @@ export function EmptyState({
 
   const handleSecondaryClick = () => {
     fireTelemetry('ui.empty_state_secondary_cta_clicked');
+    // RF-05 (UX-QW-3): pipeline oficial `@/lib/telemetry` quando contexto definido.
+    if (telemetryContext) {
+      try {
+        track('empty_state.secondary_cta_click', { context: telemetryContext });
+      } catch {
+        // telemetria sem panico (lesson #9).
+      }
+    }
     secondaryCTA?.onClick();
   };
 

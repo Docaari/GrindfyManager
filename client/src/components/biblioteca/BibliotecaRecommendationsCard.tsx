@@ -29,6 +29,7 @@ import * as React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { tokens } from "@/lib/ui-tokens";
 
 interface RecLeak {
   statId: string;
@@ -80,7 +81,8 @@ function formatMinutes(seconds: number): string {
 
 function severityBadgeClass(severity: number): string {
   if (severity >= 8) return "bg-red-500/20 text-red-300 border-red-500/40";
-  if (severity >= 5) return "bg-amber-500/20 text-amber-300 border-amber-500/40";
+  // RF-06 (UX-QW-3): triplet semantico "warn" -> tokens.color.warn.
+  if (severity >= 5) return `${tokens.color.warn.bg} ${tokens.color.warn.text} ${tokens.color.warn.border}`;
   return "bg-yellow-500/20 text-yellow-300 border-yellow-500/40";
 }
 

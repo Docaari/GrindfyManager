@@ -34,6 +34,8 @@ export type DailyInsightType =
   | 'celebration'
   | 'fallback';
 
+import { calendarDaysSince } from '@shared/calendarDaysSince';
+
 const TOUGH_STRETCH_COOLDOWN_MS = 2 * 24 * 60 * 60 * 1000;
 const TOUGH_STRETCH_SIGMA_THRESHOLD = -1.5;
 
@@ -79,15 +81,10 @@ function avg(arr: number[]): number {
   return arr.reduce((sum, v) => sum + (Number.isFinite(v) ? v : 0), 0) / arr.length;
 }
 
-function daysSince(dateIso: string, now: Date): number {
+function daysSince(dateIso: string, now: Date, timezone?: string): number {
   if (!dateIso) return -1;
-  // YYYY-MM-DD ou ISO com tempo. Trunca para midnight UTC.
-  const m = dateIso.match(/^(\d{4}-\d{2}-\d{2})/);
-  const datePart = m ? m[1] : dateIso;
-  const parsed = new Date(datePart);
-  if (isNaN(parsed.getTime())) return -1;
-  const diffMs = now.getTime() - parsed.getTime();
-  return Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  const days = calendarDaysSince(dateIso, now, timezone);
+  return Number.isFinite(days) ? days : -1;
 }
 
 // =============================================================================
@@ -163,7 +160,7 @@ export function computeDailyInsight(
   const recentSessions = Array.isArray(safe?.recentSessions) ? safe.recentSessions : [];
   const lastSession = recentSessions[0];
   if (lastSession?.date) {
-    const daysGap = daysSince(lastSession.date, now);
+    const daysGap = daysSince(lastSession.date, now, opts.timezone);
     if (daysGap >= 7) {
       return {
         type: 'study-gap',

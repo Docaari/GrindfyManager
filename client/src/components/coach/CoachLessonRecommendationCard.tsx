@@ -17,6 +17,7 @@
 import React, { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { safeHref } from "@/lib/safeUrl";
+import { tokens } from "@/lib/ui-tokens";
 
 export interface CoachLessonRecommendation {
   id: string;
@@ -115,7 +116,7 @@ function LessonCard({ lesson }: { lesson: CoachLessonRecommendation }) {
         className={`inline-block px-3 py-1.5 rounded text-sm font-medium ${
           notified
             ? "bg-gray-800 text-gray-400 cursor-default"
-            : "bg-amber-500/20 border border-amber-500/40 text-amber-200 hover:bg-amber-500/30"
+            : `border ${tokens.color.warn.bg} ${tokens.color.warn.border} ${tokens.color.warn.text} hover:opacity-90`
         }`}
       >
         {notified ? "Te avisamos quando liberar" : "Avise-me (em breve)"}

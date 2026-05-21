@@ -1,3 +1,5 @@
+import { calendarDaysSince } from '@shared/calendarDaysSince';
+
 interface PreparationLog {
   id: string;
   userId: string;
@@ -55,9 +57,10 @@ export function mapLogsToStats(logs: PreparationLog[]): MentalPrepStats {
       currentStreak = 1;
     } else {
       const prevDate = new Date(uniqueDates[i - 1]);
-      const diffMs = prevDate.getTime() - currentDate.getTime();
-      // Usar floor para ser mais tolerante (ex: 27h = 1 dia, não 2)
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24) + 0.5);
+      // uniqueDates ja sao strings YYYY-MM-DD geradas via toISOString() (UTC).
+      // Passar timeZone='UTC' garante que o diff fique em UTC e nao bata
+      // off-by-one em fusos negativos (LA/NY) onde 2026-05-20T00:00Z = dia 19 local.
+      const diffDays = calendarDaysSince(currentDate, prevDate, 'UTC');
       if (diffDays === 1) {
         currentStreak++;
       } else {

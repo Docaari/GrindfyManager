@@ -15,6 +15,7 @@ import {
 import { isValidTab } from "@/lib/dashboard-tabs-helpers";
 import { buildCSVContent, formatCSVRow, getExportHeaders, getExportFilename, sanitizeForCSV } from "@/lib/export-helpers";
 import { formatCorrelationInsight } from "@/lib/mental-correlation-helpers";
+import { calendarDaysSince } from "@shared/calendarDaysSince";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -241,8 +242,8 @@ export default function Dashboard() {
       const dismissed = localStorage.getItem('mentalInsightDismissed');
       if (dismissed) {
         const dismissedDate = new Date(dismissed);
-        const daysSince = (Date.now() - dismissedDate.getTime()) / (1000 * 60 * 60 * 24);
-        return daysSince < 7;
+        const days = calendarDaysSince(dismissedDate, new Date());
+        return Number.isFinite(days) && days < 7;
       }
     } catch { /* ignore */ }
     return false;

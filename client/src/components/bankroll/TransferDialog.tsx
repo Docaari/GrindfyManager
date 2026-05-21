@@ -48,6 +48,13 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
 }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  // RF-07 (UX-QW-3): chave estavel derivada dos ids — evita exhaustive-deps
+  // warning + permite identificar quando o conjunto de wallets muda de verdade
+  // (vs apenas a referencia do array re-criada pelo parent a cada render).
+  const walletsKey = React.useMemo(
+    () => wallets.map((w) => w.id).join("|"),
+    [wallets],
+  );
   const [fromId, setFromId] = useState(defaultFromWalletId ?? wallets[0]?.id ?? "");
   const [toId, setToId] = useState(
     defaultToWalletId ??
@@ -79,10 +86,10 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
     setError(null);
     setNeedsConfirm(false);
     setSubmitting(false);
-    // wallets ref muda toda render por causa do useMemo no parent — incluir
-    // length+ids basta para detectar mudancas reais (evita loop).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultFromWalletId, defaultToWalletId]);
+    // RF-07 (UX-QW-3): walletsKey = "|"-joined ids. Identity de `wallets` muda
+    // toda render no parent, mas a chave so muda quando ids mudam de verdade
+    // (add/remove). Permite remover `eslint-disable exhaustive-deps`.
+  }, [open, defaultFromWalletId, defaultToWalletId, walletsKey]);
 
   const fromWallet = useMemo(() => wallets.find((w) => w.id === fromId), [wallets, fromId]);
   const toWallet = useMemo(() => wallets.find((w) => w.id === toId), [wallets, toId]);

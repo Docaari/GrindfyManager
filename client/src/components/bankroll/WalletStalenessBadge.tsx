@@ -21,14 +21,18 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { calendarDaysSince } from '@shared/calendarDaysSince';
 
 export interface WalletStalenessBadgeProps {
   lastTransactionAt?: string | null;
   updatedAt?: string | null;
   createdAt?: string | null;
+  /**
+   * RF-03 — fuso do usuario para o calculo de dias civis (DST-aware).
+   * Quando ausente, usa o fuso resolvido pelo browser.
+   */
+  timeZone?: string;
 }
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 function pickTimestamp(props: WalletStalenessBadgeProps): string | null {
   if (props.lastTransactionAt) return props.lastTransactionAt;
@@ -37,20 +41,13 @@ function pickTimestamp(props: WalletStalenessBadgeProps): string | null {
   return null;
 }
 
-function daysSince(iso: string, now: number): number {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return -1;
-  const diff = now - t;
-  return Math.floor(diff / DAY_MS);
-}
-
 export function WalletStalenessBadge(props: WalletStalenessBadgeProps) {
   const iso = pickTimestamp(props);
   if (!iso) return null;
 
-  const now = Date.now();
-  const days = daysSince(iso, now);
-  if (days < 0) return null;
+  const now = new Date();
+  const days = calendarDaysSince(iso, now, props.timeZone);
+  if (!Number.isFinite(days) || days < 0) return null;
   if (days < 3) return null;
 
   const tone: 'info' | 'warn' = days >= 8 ? 'warn' : 'info';

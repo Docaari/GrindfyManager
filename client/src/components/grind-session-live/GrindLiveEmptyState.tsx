@@ -32,6 +32,7 @@ export function GrindLiveEmptyState({
   return (
     <EmptyState
       area="grind-live-empty"
+      telemetryContext="grind_live_empty"
       title="Pronto para o grind?"
       description="Voce nao tem torneios planejados para hoje. Configure sua grade ou inicie uma sessao vazia."
       ctaLabel="Iniciar Sessao Vazia"

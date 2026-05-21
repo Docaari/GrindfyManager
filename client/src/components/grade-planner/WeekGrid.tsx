@@ -168,6 +168,7 @@ export function WeekGrid({
       <div className="flex-1 flex items-center justify-center min-h-[300px]">
         <EmptyState
           area="grade-planner-empty"
+          telemetryContext="week_grid_empty"
           title="Sua grade esta vazia"
           description="Ative um perfil A/B/C e clique em uma celula para adicionar torneios."
           ctaLabel="Ativar Perfil A"

@@ -164,6 +164,7 @@ export default function BankrollPage() {
       {!hasActiveWallets && (
         <EmptyState
           area="bankroll-empty"
+          telemetryContext="bankroll_empty_wallets"
           title="Sua banca espera por voce"
           description="Crie sua primeira carteira para acompanhar saldos, transacoes e regras de banca."
           ctaLabel="Criar primeira carteira"

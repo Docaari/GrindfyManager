@@ -6,6 +6,7 @@ import { apiRequest } from '@/lib/queryClient';
 import BugReportModal from '@/components/BugReportModal';
 import ImprovementSuggestionModal from '@/components/ImprovementSuggestionModal';
 import HeaderLogo from '@/components/branding/HeaderLogo';
+import { tokens } from '@/lib/ui-tokens';
 import { getTrialDaysRemaining, getSubscriptionStatus, isSuperAdmin } from '../../../shared/permissions';
 import {
   BarChart3,
@@ -368,7 +369,7 @@ const Sidebar: React.FC = () => {
                           {showPendingSpotsBadge && (
                             <span
                               data-testid="sidebar-pending-spots-badge"
-                              className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-semibold"
+                              className={`ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full border text-[10px] font-semibold ${tokens.color.warn.bg} ${tokens.color.warn.border} ${tokens.color.warn.text}`}
                             >
                               {pendingSpotsBadgeText}
                             </span>
