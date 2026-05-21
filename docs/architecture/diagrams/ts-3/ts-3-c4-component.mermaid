@@ -1,0 +1,94 @@
+%% Sprint TS-3 — C4 Component view com novos blocos
+%% Mostra a topologia pós-Sprint 3: tristate filter + calibration dashboard + tool extension + cache compartilhado.
+
+graph TB
+    subgraph users["Usuarios"]
+        founder["Founder/Admin<br/><i>Acesso restrito</i>"]
+        player["Player Pro+/Trial<br/><i>Widget + Chat</i>"]
+    end
+
+    subgraph frontend["Frontend (React + Wouter)"]
+        selectorPanel["SelectorPanel<br/><i>/grade-planner aba Selector</i>"]
+        bankrollControl["BankrollTristateFilter<br/><i>(NOVO RF-04)</i><br/>Segmented all|warn|hide"]
+        selectorCard["SelectorCard<br/><i>RF-03 ROI proprio line</i>"]
+        libraryCardBadge["LibraryCardScoreBadge<br/><i>RF-06 grade do payload</i>"]
+        coachChat["Coach Chat (MiniChat + /coach-ai)<br/><i>RF-02 tool inline</i>"]
+        calibPage["CalibrationDashboard<br/><i>(NOVO RF-05)</i><br/>/admin/tournament-selector-calibration"]
+    end
+
+    subgraph backend["Backend (Express + TS)"]
+        tsRoute["/api/tournament-selector<br/><i>endpoint widget</i>"]
+        libraryRoute["/api/tournament-library<br/><i>RF-06 payload+grade</i>"]
+        calibRoute["/api/admin/tournament-selector/calibration<br/><i>(NOVO RF-05)</i><br/>requirePermission admin"]
+        userSettingsRoute["/api/user-settings<br/><i>persiste bankrollMode</i>"]
+
+        subgraph coachLayer["Coach AI"]
+            coachChatRoute["/api/coach/chat<br/><i>turno + tools</i>"]
+            toolRunner["coachToolRunner<br/><i>ADR-145</i>"]
+            getSuggestionsTool["get_tournament_suggestions<br/><i>(ESTENDIDA RF-02)</i><br/>+bankrollMode +source +cache"]
+            registerInGridTool["register_tournament_in_grade<br/><i>confirm flow ADR-146</i>"]
+            toolEligibility["isToolEligibleTier<br/><i>ADR-167 Trial+Pro+</i>"]
+        end
+
+        subgraph scoringLayer["Scoring (DRY ADR-147)"]
+            scoringService["tournamentScoringService<br/><i>rank + explain</i>"]
+            scorer["computeTournamentScore<br/><i>ADR-015 linear+shrinkage</i>"]
+            tsCache["tournamentSelectorCache<br/><i>(NOVO)</i><br/>Map TTL 30min<br/>key(userId,date,sources,bankrollMode)"]
+            buildInput["buildScoringInput.ts<br/><i>AI-0A</i>"]
+            bankrollRulesMod["bankrollRules.ts<br/><i>hard/soft only</i>"]
+        end
+
+        telemetry["tournament_selector_logs<br/><i>metadata.invokedBy<br/>(widget|coach_tool|admin)</i>"]
+        coachToolLogs["coach_tool_invocations<br/><i>AI-1B</i>"]
+    end
+
+    subgraph data["PostgreSQL"]
+        userSettings[("user_settings<br/>+tournament_selector_bankroll_mode<br/>(NOVO RF-04 migration 0072)")]
+        tournaments[("tournaments<br/>grind_session_id IS NULL<br/>(historico §6.1)")]
+        plannedTournaments[("planned_tournaments<br/>alreadyInGrid lookup")]
+        wallets[("wallets + walletService<br/>consolidatedBalance USD")]
+    end
+
+    player -->|"abre"| selectorPanel
+    selectorPanel --> bankrollControl
+    selectorPanel --> selectorCard
+    selectorPanel --> libraryCardBadge
+    bankrollControl -->|"PUT debounce 500ms"| userSettingsRoute
+    userSettingsRoute -->|"persist mode"| userSettings
+
+    selectorPanel -->|"GET +bankrollMode"| tsRoute
+    libraryCardBadge -.->|"consome payload"| libraryRoute
+
+    tsRoute --> tsCache
+    tsCache -.->|"miss"| scoringService
+    scoringService --> scorer
+    scoringService --> buildInput
+    tsRoute --> bankrollRulesMod
+    tsRoute -->|"event=view metadata.bankrollMode"| telemetry
+
+    libraryRoute --> scoringService
+    libraryRoute -->|"payload +selectorGrade +selectorRationale"| libraryCardBadge
+
+    player -->|"chat"| coachChat
+    coachChat --> coachChatRoute
+    coachChatRoute --> toolRunner
+    toolRunner --> toolEligibility
+    toolRunner --> getSuggestionsTool
+    toolRunner --> registerInGridTool
+    getSuggestionsTool --> tsCache
+    getSuggestionsTool --> userSettings
+    getSuggestionsTool -->|"event=view invokedBy=coach_tool"| telemetry
+    toolRunner -->|"persist invocation"| coachToolLogs
+    registerInGridTool -->|"insert planned_tournament"| plannedTournaments
+    getSuggestionsTool -->|"alreadyInGrid lookup"| plannedTournaments
+
+    bankrollRulesMod --> wallets
+
+    founder -->|"GET ?lookbackDays=90"| calibPage
+    calibPage --> calibRoute
+    calibRoute -.->|"JOIN externalId OR datetime heuristica"| telemetry
+    calibRoute -.->|"JOIN grind_session_id IS NULL"| tournaments
+
+    classDef new fill:#e7f5ff,stroke:#2563eb,stroke-width:2px;
+    classDef existing fill:#f5f5f5,stroke:#666;
+    class bankrollControl,calibPage,calibRoute,tsCache,getSuggestionsTool new;

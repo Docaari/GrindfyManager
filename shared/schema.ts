@@ -926,6 +926,14 @@ export const userSettings = pgTable("user_settings", {
   // ADR-124. Toggle persistente do auto-open do BreakFeedbackPopup em XX:54
   // BRT (close em XX:02). Default true para todos (back-fill via DB DEFAULT).
   breakAutoOpenEnabled: boolean("break_auto_open_enabled").default(true).notNull(),
+  // Sprint TS-3 RF-04 (ADR-178, migration 0072) — tristate Bankroll Mode no
+  // Tournament Selector. 'all' = sem filtro; 'hide' = omite buy-in > hardLimit;
+  // 'warn' = mostra com badge (default). CHECK constraint enforced em DB
+  // (migration 0072 — fix HIGH-4). Q-E lock: persistido em user_settings
+  // (NAO user_coach_preferences).
+  tournamentSelectorBankrollMode: varchar("tournament_selector_bankroll_mode", { length: 8 })
+    .notNull()
+    .default("warn"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

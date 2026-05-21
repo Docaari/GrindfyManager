@@ -43,6 +43,59 @@ export interface SelectorCardProps {
    * "Fora do bankroll" exibe delta absoluto e percentual ("$25 acima (50%)").
    */
   bankrollHardLimitUSD?: number | null;
+  /**
+   * RF-03 (Sprint TS-3): perfil do player p/ esconder a linha "Seu ROI" em
+   * cold-start (<50 torneios). Quando ausente, exibe.
+   */
+  playerProfile?: { totalTournaments?: number; coldStart?: any };
+}
+
+// RF-03 (TS-3): bucket dominante = sinal com maior (score * weight) excluindo
+// `siteRoi` (mesma regra do scorer/rationale). Map para label PT-BR + sample.
+type DominantBucket = {
+  key: string;
+  label: string;
+  value: number;
+  sample: number;
+};
+
+function pickDominantBucket(tournament: SelectorTournament): DominantBucket | null {
+  const s: any = tournament.signals ?? {};
+  const candidates: Array<{ key: string; label: string }> = [
+    { key: "buyInRoi", label: `Buy-in ${tournament.buyIn ? `$${tournament.buyIn}` : ""}`.trim() },
+    {
+      key: "categoryRoi",
+      label: tournament.category ?? "categoria",
+    },
+    { key: "speedRoi", label: tournament.speed ?? "speed" },
+    { key: "dayOfWeekRoi", label: "dia da semana" },
+    { key: "timeOfDayRoi", label: "horario" },
+    { key: "fieldRoi", label: "field" },
+  ];
+  let best: { key: string; label: string; contribution: number } | null = null;
+  for (const c of candidates) {
+    const sig = s[c.key];
+    if (!sig) continue;
+    const contribution = (sig.score ?? 0) * (sig.weight ?? 0);
+    if (!best || contribution > best.contribution) {
+      best = { key: c.key, label: c.label, contribution };
+    }
+  }
+  if (!best) return null;
+  const sig = s[best.key];
+  return {
+    key: best.key,
+    label: best.label,
+    value: Number(sig.value ?? 0),
+    sample: Number(sig.sample ?? 0),
+  };
+}
+
+function isColdStart(profile?: SelectorCardProps["playerProfile"]): boolean {
+  if (!profile) return false;
+  const total = profile.totalTournaments ?? null;
+  if (total == null) return profile.coldStart === "pure" || profile.coldStart === "partial";
+  return total < 50;
 }
 
 export function SelectorCard({
@@ -52,6 +105,7 @@ export function SelectorCard({
   filtersApplied,
   invalidateQueryKey,
   bankrollHardLimitUSD,
+  playerProfile,
 }: SelectorCardProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -157,12 +211,68 @@ export function SelectorCard({
               {tournament.rationale}
             </p>
 
+            {/* RF-03 (TS-3): linha "Seu ROI" no bucket dominante. Cold start oculta. */}
+            {(() => {
+              const cold = isColdStart(playerProfile) || (tournament as any).coldStart === "pure";
+              if (cold) return null;
+              const dom = pickDominantBucket(tournament);
+              if (!dom) return null;
+              const sample = dom.sample;
+              const isLowSample = sample < 15;
+              const sign = dom.value >= 0 ? "+" : "";
+              const formattedRoi = `${sign}${dom.value.toFixed(0)}%`;
+              const ariaLabel = isLowSample
+                ? `Sample baixo no bucket ${dom.label}`
+                : `Seu ROI em ${dom.label}: ${
+                    dom.value >= 0 ? "mais" : "menos"
+                  } ${Math.abs(dom.value).toFixed(0)} porcento, ${sample} amostras`;
+              return (
+                <div
+                  data-testid="selector-card-own-roi"
+                  aria-label={ariaLabel}
+                  className="flex flex-wrap items-center gap-1 mt-2 text-xs text-muted-foreground sm:flex-row"
+                >
+                  {isLowSample ? (
+                    <span>Sample baixo — Score baseado em poucos dados</span>
+                  ) : (
+                    <span>
+                      Seu ROI em {dom.label}: <strong>{formattedRoi}</strong> ({sample} torneios)
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Warnings */}
             <div className="flex flex-wrap gap-1.5 mt-2" data-testid="selector-card-warnings">
-              {!tournament.bankrollOk && (
-                <Badge variant="destructive" data-testid="warn-bankroll">
-                  {bankrollOvershootLabel}
+              {/*
+                Sprint TS-3 RF-04 (ADR-178): badge + linha "Acima do bankroll".
+                bankrollWarning eh independente do legacy bankrollOk:
+                - mode='warn' + above_hard_limit -> badge vermelho
+                - mode='warn' + above_soft_limit -> badge amarelo (variant outline)
+                - mode='hide' nunca mostra warning (omitido do payload)
+                - mode='all' nunca mostra warning (campo eh null)
+              */}
+              {tournament.bankrollWarning ? (
+                <Badge
+                  variant={tournament.bankrollWarning.reason === "above_hard_limit" ? "destructive" : "outline"}
+                  data-testid={
+                    tournament.bankrollWarning.reason === "above_hard_limit"
+                      ? "warn-bankroll"
+                      : "warn-bankroll-soft"
+                  }
+                  title={`Buy-in $${tournament.bankrollWarning.buyInUSD.toFixed(0)} acima do limite $${tournament.bankrollWarning.limitUSD.toFixed(0)}`}
+                >
+                  {tournament.bankrollWarning.reason === "above_hard_limit"
+                    ? `Acima do bankroll: buy-in $${tournament.bankrollWarning.buyInUSD.toFixed(0)} (limite $${tournament.bankrollWarning.limitUSD.toFixed(0)})`
+                    : `Acima do soft: $${tournament.bankrollWarning.buyInUSD.toFixed(0)} (soft $${tournament.bankrollWarning.limitUSD.toFixed(0)})`}
                 </Badge>
+              ) : (
+                !tournament.bankrollOk && (
+                  <Badge variant="destructive" data-testid="warn-bankroll">
+                    {bankrollOvershootLabel}
+                  </Badge>
+                )
               )}
               {tournament.warnings.includes('unfamiliar_site') && (
                 <Badge variant="outline" data-testid="warn-site">Site novo</Badge>

@@ -1,0 +1,65 @@
+%% Sprint TS-3 / RF-04 — Bankroll tristate filter sequence (detalhado)
+%% Expande o diagrama da spec com: default lookup, fallback warn, persist debounce, telemetria, cache invalidation.
+
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as SelectorPanel + BankrollTristateFilter
+    participant API as /api/tournament-selector
+    participant Cache as tournamentSelectorCache<br/>key(userId,date,sources,bankrollMode)
+    participant USet as /api/user-settings
+    participant BR as bankrollRules.computeThresholds
+    participant Wallet as walletService.getConsolidatedBalance
+    participant Scoring as scoringService
+    participant Logs as tournament_selector_logs
+
+    User->>UI: Abre /grade-planner aba Selector
+    UI->>USet: GET user_settings.tournament_selector_bankroll_mode
+    alt coluna existe + valor presente
+        USet-->>UI: 'warn' | 'all' | 'hide'
+    else coluna inexistente (DB legado) ou null
+        USet-->>UI: undefined → fallback frontend 'warn'
+    end
+
+    UI->>API: GET ?date=2026-05-21&bankrollMode=warn
+    API->>API: resolveBankrollMode(query, userSettings, alias)
+    Note over API: precedence:<br/>1) query bankrollMode<br/>2) query bankrollFilter (alias deprecated)<br/>3) user_settings<br/>4) 'warn'
+
+    API->>Cache: get(userId, date, sources, bankrollMode='warn')
+    alt cache hit
+        Cache-->>API: tournaments scored
+    else cache miss
+        API->>BR: computeThresholds({amount, rule})
+        BR->>Wallet: getConsolidatedBalance(userId) [USD FX-aware]
+        Wallet-->>BR: amount USD
+        BR-->>API: { softLimitUSD, hardLimitUSD, rulePct }
+        API->>Scoring: rankTournamentsForContext(...)
+        Scoring-->>API: scored[] {score, grade, confidence, rationale, buyInUSD}
+        loop Cada torneio
+            alt mode='hide' AND buyInUSD > hardLimitUSD
+                API->>API: omit do response
+            else mode='warn' AND buyInUSD > hardLimitUSD
+                API->>API: include + bankrollWarning={reason:'above_hard_limit',limitUSD,buyInUSD,rulePct}
+            else mode='warn' AND buyInUSD > softLimitUSD
+                API->>API: include + bankrollWarning={reason:'above_soft_limit',...}
+            else mode='all' OR within soft
+                API->>API: include sem warning
+            end
+        end
+        API->>Cache: set(key, results, ttl=30min)
+    end
+
+    API->>Logs: INSERT event=view, metadata={bankrollMode:'warn',source,...}
+    API-->>UI: { tournaments[], bankrollMode resolved }
+
+    UI->>UI: Render SelectorCard com badge vermelho/amarelo se bankrollWarning
+
+    User->>UI: Click segmented control "Esconder fora"
+    UI->>UI: optimistic update local state mode='hide'
+    UI->>UI: debounce 500ms
+    UI->>USet: PUT { tournament_selector_bankroll_mode: 'hide' }
+    USet-->>UI: 200 OK
+    UI->>UI: invalidate queryKey ['/api/tournament-selector']
+    UI->>API: GET ?bankrollMode=hide (re-fetch)
+    API->>Cache: get(... bankrollMode='hide') → key diferente, miss
+    Note over Cache: keys por modo coexistem<br/>(memory footprint até 3x — TTL 30min GC natural)

@@ -47,8 +47,14 @@ vi.mock('../../../server/storage', () => ({
   },
 }));
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  // Sprint TS-3 fix HIGH-2: shared cache (tournamentSelectorCache) NAO eh mockado
+  // neste arquivo legacy; reset explicito para evitar bleed cross-it (lesson #21).
+  const { _resetTournamentSelectorCacheForTests } = await import(
+    '../../../server/scoring/tournamentSelectorCache'
+  );
+  _resetTournamentSelectorCacheForTests();
 });
 
 function makeBundleStub(totalTournaments: number = 200) {

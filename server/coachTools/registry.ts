@@ -17,6 +17,10 @@
 
 import type { ZodTypeAny } from 'zod';
 
+// Sprint TS-3: import estatico para conseguir resetar o cache sincrono em
+// `_resetRegistry` (lesson #21 cross-test bleed do singleton Map).
+import { _resetTournamentSelectorCacheForTests } from "../scoring/tournamentSelectorCache";
+
 // -----------------------------------------------------------------------------
 // Tipos
 // -----------------------------------------------------------------------------
@@ -35,7 +39,9 @@ export interface CoachTool<I = any, O = any> {
   handler: (input: I, ctx: ToolContext) => Promise<O>;
   requiresConfirmation?: boolean;
   auditLevel?: 'none' | 'log' | 'persist';
-  gateByTier?: Array<'free' | 'pro' | 'premium' | 'admin'>;
+  // Sprint TS-3 HIGH-1 (ADR-180 §2.2): 'trial' adicionado p/ permitir tools
+  // que liberam Trial via gate estatico (alem do runtime isToolEligibleTier).
+  gateByTier?: Array<'free' | 'trial' | 'pro' | 'premium' | 'admin'>;
   // ADR-146: write tools que mexem em dinheiro marcam confirmationLevel='strict'
   // (flag em memoria no descriptor — NAO persistida em coach_actions na v1).
   // Tools sem a flag sao tratadas como 'standard'.
@@ -91,6 +97,15 @@ export function _resetRegistry(): void {
   // — cached pelo loader — ainda observe os tools listados).
   for (const [name, tool] of coreTools.entries()) {
     registry.set(name, tool);
+  }
+  // Sprint TS-3: reset do cache singleton compartilhado com
+  // /api/tournament-selector (ADR-180). Sincrono via import estatico —
+  // testes AI-0A chamam _resetRegistry no beforeEach esperando estado limpo
+  // (lesson #21 cross-test bleed do singleton Map).
+  try {
+    _resetTournamentSelectorCacheForTests();
+  } catch {
+    /* best-effort */
   }
 }
 

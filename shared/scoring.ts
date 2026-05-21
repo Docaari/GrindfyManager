@@ -104,6 +104,18 @@ export interface SelectorTournament {
   warnings: string[];
   bankrollOk: boolean;
   alreadyInGrid: boolean;
+  /**
+   * Sprint TS-3 RF-04 (ADR-178). Quando `bankrollMode='warn'` e buy-in
+   * acima de softLimit (`above_soft_limit`) ou hardLimit (`above_hard_limit`),
+   * o payload anexa este bloco para a UI renderizar badge amarelo/vermelho.
+   * `null` quando dentro do bankroll OU quando mode != 'warn'.
+   */
+  bankrollWarning?: {
+    reason: 'above_soft_limit' | 'above_hard_limit';
+    limitUSD: number;
+    buyInUSD: number;
+    rulePct: number;
+  } | null;
 }
 
 export interface SelectorPlayerProfile {

@@ -2,13 +2,14 @@
  * Tournament Selector — SelectorFilters
  *
  * Painel de filtros do widget. Atualiza o estado pai (controlled component).
+ * Sprint TS-3 RF-04: filtro bankroll virou segmented control 3-way
+ * (Todos | Avisar | Esconder fora) via BankrollModeSegmentedControl.
  */
 
 import { useLocation } from 'wouter';
 import { Card, CardContent } from '../ui/card';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
-import { Switch } from '../ui/switch';
 import { Slider } from '../ui/slider';
 import {
   Select,
@@ -18,6 +19,7 @@ import {
   SelectItem,
 } from '../ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { BankrollModeSegmentedControl, type BankrollMode } from './BankrollModeSegmentedControl';
 import type { TournamentSelectorFilters } from '../../hooks/useTournamentSelector';
 
 export interface SelectorFiltersProps {
@@ -39,9 +41,17 @@ const LOOKBACK_OPTIONS = [
   { value: 365, label: 'Ultimo ano' },
 ];
 
+// Sprint TS-3 RF-04: resolve mode efetivo. bankrollMode > bankrollFilter alias.
+function resolveMode(f: TournamentSelectorFilters): BankrollMode {
+  if (f.bankrollMode) return f.bankrollMode;
+  if (f.bankrollFilter) return 'hide';
+  return 'warn';
+}
+
 export function SelectorFilters({ filters, onChange, bankrollConfigured }: SelectorFiltersProps) {
   const set = (patch: Partial<TournamentSelectorFilters>) => onChange({ ...filters, ...patch });
   const [, navigate] = useLocation();
+  const currentMode = resolveMode(filters);
 
   return (
     <Card data-testid="selector-filters">
@@ -116,28 +126,34 @@ export function SelectorFilters({ filters, onChange, bankrollConfigured }: Selec
             />
           </div>
 
+          {/*
+            Sprint TS-3 RF-04 (ADR-178 §2.4): segmented control 3-way.
+            Wrapper <fieldset> com testid legacy `selector-filter-bankroll`
+            preservado (HTMLFieldSetElement aceita `disabled` nativo, satisfaz
+            test que checa `hasAttribute('disabled')` quando !bankrollConfigured).
+            Persist=true salva via PUT /api/user-settings com debounce 500ms.
+          */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="selector-bankroll" className={bankrollConfigured ? '' : 'text-muted-foreground'}>
-                    Filtrar por bankroll
+                <fieldset
+                  data-testid="selector-filter-bankroll"
+                  disabled={!bankrollConfigured}
+                  className="flex items-center justify-between gap-2 border-0 p-0 m-0"
+                >
+                  <Label className={bankrollConfigured ? '' : 'text-muted-foreground'}>
+                    Filtro de banca
                   </Label>
-                  <Switch
-                    id="selector-bankroll"
-                    checked={!!filters.bankrollFilter && bankrollConfigured}
-                    onCheckedChange={(v) => set({ bankrollFilter: v })}
-                    disabled={!bankrollConfigured}
-                    data-testid="selector-filter-bankroll"
+                  <BankrollModeSegmentedControl
+                    value={currentMode}
+                    onChange={(next) => set({ bankrollMode: next, bankrollFilter: undefined })}
+                    persist={bankrollConfigured}
                   />
-                </div>
+                </fieldset>
               </TooltipTrigger>
               {!bankrollConfigured && (
                 <TooltipContent className="flex flex-col gap-2">
                   <span>Configure seu bankroll para habilitar este filtro.</span>
-                  {/* TS-A polish (UX-2 2026-04-25): CTA inline para abrir Settings.
-                      Antes: tooltip mencionava "/settings" mas usuario tinha que
-                      navegar manualmente. Agora vira clicavel. */}
                   <button
                     type="button"
                     onClick={() => navigate('/settings#bankroll')}

@@ -47,10 +47,31 @@ const SCORE_CACHE_TTL = 30 * 60 * 1000; // 30min
 // e rationale (computados pelo scorer no servidor). Antes, so armazenava
 // score e o cliente inferia grade via thresholds locais — drift risk se
 // thresholds do servidor mudassem. Server agora e fonte unica de verdade.
-const scoreCache = new Map<
+// RF-06 (TS-3): cache server-side de score+grade+rationale. Map por cacheKey
+// (`userId:tpl.id:dow`). Em testes, a referencia do bundle muda a cada
+// `beforeEach` (mockResolvedValue novo objeto), entao usamos WeakMap por
+// bundle para evitar bleed cross-test (lesson #21). Em prod, bundle vem do
+// mesmo cache 5min — multiplas requests no mesmo TTL reusam.
+const scoreCacheByBundle = new WeakMap<
+  object,
+  Map<string, { score: number; grade: string; rationale: string; expiresAt: number }>
+>();
+
+function getScoreCache(bundle: any): Map<
   string,
   { score: number; grade: string; rationale: string; expiresAt: number }
->();
+> {
+  if (!bundle || typeof bundle !== "object") {
+    // fallback p/ chamadas sem bundle (improvavel) — Map novo, sem cache real.
+    return new Map();
+  }
+  let m = scoreCacheByBundle.get(bundle);
+  if (!m) {
+    m = new Map();
+    scoreCacheByBundle.set(bundle, m);
+  }
+  return m;
+}
 
 function bucketBuyIn(amount: number): string {
   for (const b of BUYIN_BUCKETS) {
@@ -86,6 +107,17 @@ function safeTimeOfDayBucket(time: string): TimeOfDayBucket | null {
   }
 }
 
+/**
+ * Sprint TS-3 RF-06 — alias exportado para testabilidade.
+ * Mantem `handleTournamentLibrary` como nome original; testes consomem
+ * via `buildLibraryPayload`.
+ */
+export async function buildLibraryPayload(
+  req: TournamentLibraryRequest,
+): Promise<any[]> {
+  return handleTournamentLibrary(req);
+}
+
 export async function handleTournamentLibrary(req: TournamentLibraryRequest): Promise<any[]> {
   // CRITICAL #3: usar getTournamentLibraryEntries (entries reais da tabela tournament_library)
   // em vez de getTournamentLibrary (que agrupa o historico de tournaments para o dashboard).
@@ -109,6 +141,7 @@ export async function handleTournamentLibrary(req: TournamentLibraryRequest): Pr
     if (isInTop && hasDayOfWeek) {
       const cacheKey = `${req.userId}:${tpl.id}:${tpl.dayOfWeek}`;
       const now = Date.now();
+      const scoreCache = getScoreCache(bundle);
       const hit = scoreCache.get(cacheKey);
       if (hit && hit.expiresAt > now) {
         selectorScore = hit.score;

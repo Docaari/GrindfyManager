@@ -2,10 +2,16 @@ import type { Express } from "express";
 import { requireAuth } from "../auth";
 import rateLimit from "express-rate-limit";
 
+// RF-01 (TS-3): key por userPlatformId — alinha com o resto do codebase.
+// Sem isso, jogadores em mesma rede corporativa compartilhavam bucket.
+export function supremaKeyGenerator(req: any): string {
+  return req.user?.userPlatformId || req.ip;
+}
+
 const supremaRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
-  keyGenerator: (req: any) => req.user?.id || req.ip,
+  keyGenerator: supremaKeyGenerator,
   message: { message: "Limite de requisições atingido. Tente novamente em 1 minuto." },
 });
 

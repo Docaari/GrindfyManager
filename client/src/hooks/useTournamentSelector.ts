@@ -33,7 +33,10 @@ export interface TournamentSelectorFilters {
   sources?: string;
   minScore?: number;
   minSample?: number;
+  /** @deprecated Sprint TS-3 RF-04 — use `bankrollMode`. Mantido p/ back-compat. */
   bankrollFilter?: boolean;
+  /** Sprint TS-3 RF-04 (ADR-178): tristate `all` | `hide` | `warn`. */
+  bankrollMode?: 'all' | 'hide' | 'warn';
   lookbackDays?: number;
 }
 
@@ -50,7 +53,8 @@ export function buildSelectorQueryKey(filters: TournamentSelectorFilters) {
     filters.sources ?? 'suprema,library',
     filters.minScore ?? 0,
     filters.minSample ?? 0,
-    filters.bankrollFilter ?? false,
+    // Sprint TS-3 RF-04: bankrollMode > bankrollFilter (alias).
+    filters.bankrollMode ?? (filters.bankrollFilter ? 'hide' : 'all'),
     filters.lookbackDays ?? DEFAULT_LB,
   ] as const;
 }
@@ -67,7 +71,12 @@ export function useTournamentSelector(
       if (filters.sources) params.set('sources', filters.sources);
       if (filters.minScore != null) params.set('minScore', String(filters.minScore));
       if (filters.minSample != null) params.set('minSample', String(filters.minSample));
-      if (filters.bankrollFilter) params.set('bankrollFilter', 'true');
+      // Sprint TS-3 RF-04 (ADR-178): bankrollMode primario, bankrollFilter alias.
+      if (filters.bankrollMode) {
+        params.set('bankrollMode', filters.bankrollMode);
+      } else if (filters.bankrollFilter) {
+        params.set('bankrollFilter', 'true');
+      }
       if (filters.lookbackDays) params.set('lookbackDays', String(filters.lookbackDays));
       const url = `/api/tournament-selector?${params.toString()}`;
       return apiRequest('GET', url);

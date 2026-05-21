@@ -25,6 +25,7 @@ import { registerStudiesV2Routes } from "./studies-v2";
 import { registerTournamentLibraryRoutes } from "./tournament-library";
 import { registerCoachRoutes } from "./coach";
 import { registerTournamentSelectorRoutes } from "./tournament-selector";
+import { registerAdminSelectorCalibrationRoutes } from "./admin/tournamentSelectorCalibration";
 import { registerBankrollRoutes } from "./bankroll";
 import { registerWalletRoutes } from "./wallets";
 import { registerWarmupRitualsRoutes } from "./warmup-rituals";
@@ -232,6 +233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerTournamentLibraryRoutes(app);
   registerCoachRoutes(app);
   registerTournamentSelectorRoutes(app);
+  registerAdminSelectorCalibrationRoutes(app);
   registerBankrollRoutes(app);
   registerWalletRoutes(app);
   registerWarmupRitualsRoutes(app);

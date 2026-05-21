@@ -1,0 +1,75 @@
+%% Sprint TS-3 — Data model delta
+%% Mostra apenas o que MUDA: nova coluna em user_settings + payload extensions (tournament-library + /api/tournament-selector).
+%% Tabelas existentes desenhadas em forma minimal apenas para contexto FK.
+
+erDiagram
+    user_settings {
+        string user_id PK_FK "FK users"
+        string tournament_selector_bankroll_mode "VARCHAR(8) NOT NULL DEFAULT warn<br/>CHECK IN (all,hide,warn)<br/>(NOVO RF-04 migration 0072)"
+        timestamp updated_at
+    }
+
+    users {
+        string id PK
+        string subscription_plan "trial|active|expired|admin"
+    }
+
+    tournament_selector_logs {
+        string id PK
+        string user_id FK
+        string event_type "view|add_to_grid"
+        string tournament_external_id "nullable (heuristica matching)"
+        timestamp scheduled_at "para matching datetime"
+        timestamp created_at
+        jsonb metadata "invokedBy: widget|coach_tool|admin_dashboard<br/>bankrollMode: all|hide|warn<br/>source|grade|score|...<br/>(JSDoc enum, SEM CHECK)"
+    }
+
+    tournaments {
+        string id PK
+        string user_id FK
+        string external_id "para matching forte em RF-05"
+        string grind_session_id "IS NULL para historico §6.1"
+        timestamp played_at
+        decimal buy_in_usd
+        decimal profit_usd
+    }
+
+    planned_tournaments {
+        string id PK
+        string user_id FK
+        string tournament_external_id "lookup alreadyInGrid"
+        date date
+    }
+
+    %% Payload extensions (sem schema migration — apenas anotacao do response shape)
+
+    api_tournament_selector_response {
+        string note "shape do JSON response (NAO eh tabela)"
+        array tournaments "cada item ganha:<br/>+bankrollWarning? {reason,limitUSD,buyInUSD,rulePct}<br/>+alreadyInGrid:bool (quando invokedBy=coach_tool)"
+        string bankrollMode "resolvido (echo do request)"
+    }
+
+    api_tournament_library_response {
+        string note "shape do JSON response (NAO eh tabela)"
+        array tournaments "cada item com selectorScore ganha:<br/>+selectorGrade: S|A|B|C|D<br/>+selectorRationale: string<br/>(RF-06 — remove inferGradeFromScore client)"
+    }
+
+    api_admin_calibration_response {
+        string note "shape do JSON response (NAO eh tabela — RF-05)"
+        bool insufficientData "true se totalAdds<50"
+        int currentVolume "quando insufficientData"
+        int requiredVolume "constant 50"
+        int lookbackDays "30|90|180"
+        int totalAdds
+        int realizedAdds
+        array buckets "{grade, adds, realized, realizedRoiPct, expectedRoiPct, discrepancyPct}"
+        array warnings "bucket_off_calibration_X | sample_low_in_grade_Y"
+        timestamp generatedAt
+    }
+
+    users ||--o| user_settings : has
+    users ||--o{ tournament_selector_logs : logs
+    users ||--o{ tournaments : owns
+    users ||--o{ planned_tournaments : plans
+    tournament_selector_logs }o--o| tournaments : "matches via externalId OR datetime heuristic (RF-05)"
+    planned_tournaments }o--o| tournaments : "post-play link"

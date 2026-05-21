@@ -16,6 +16,15 @@ import { requireAuth } from "../auth";
 import { storage } from "../storage";
 import { playerBundleCache } from "../services/playerBundle";
 import { selectorCache } from "../services/selectorCache";
+// Sprint TS-3 fix HIGH-2 (ADR-180 §2.3) — cache compartilhado widget<->tool.
+// Key canonica: { userId, date, sources, bankrollMode }. Dual-write mantem
+// `selectorCache` legacy p/ back-compat (invalidations cross-system em
+// bankrollService/walletService/playerBundle/grade-planner/upload).
+import {
+  getTournamentSelectorCache,
+  setTournamentSelectorCache,
+  type CacheKey as TsCacheKey,
+} from "../scoring/tournamentSelectorCache";
 import { getSupremaTournaments } from "../supremaService";
 import { computeTournamentScore } from "../scoring/tournamentScorer";
 import {
@@ -31,6 +40,16 @@ import {
   dayOfWeekFromDate,
   type ScoringBuildResult,
 } from "../scoring/buildScoringInput";
+// Sprint TS-3 RF-04 (ADR-178): tristate bankroll filter + telemetria.
+import {
+  applyBankrollMode,
+  buildSelectorTelemetryMetadata,
+  type BankrollMode,
+  type BankrollRules,
+} from "../scoring/bankrollModeFilter";
+import { resolveBankrollMode } from "../services/userSettingsService";
+// Nota: helper `logSelectorEvent` usado pelo Coach tool; rota widget chama
+// `storage.insertSelectorLog` direto p/ preservar timing dos testes legados.
 import type {
   ColdStartLevel,
   SelectorTournament,
@@ -47,7 +66,10 @@ export interface TournamentSelectorRequest {
   sources?: string;         // "suprema,library" default
   minScore?: number;        // 0-100
   minSample?: number;       // sample size threshold for primary buckets
+  /** @deprecated Sprint TS-3 RF-04: usar `bankrollMode`. true→hide, false→all. */
   bankrollFilter?: boolean;
+  /** Sprint TS-3 RF-04 (ADR-178): tristate. Default herda user_settings. */
+  bankrollMode?: BankrollMode;
   lookbackDays?: number;    // default 180
 }
 
@@ -81,11 +103,12 @@ function classifyColdStart(totalTournaments: number): ColdStartLevel {
   return false;
 }
 
-function filtersHashOf(req: TournamentSelectorRequest): string {
+function filtersHashOf(req: TournamentSelectorRequest, resolvedMode?: BankrollMode): string {
+  // Sprint TS-3 RF-04: bankrollMode entra no hash p/ separar cache entre os 3 modos.
   return [
     req.minScore ?? 0,
     req.minSample ?? 0,
-    req.bankrollFilter ? 1 : 0,
+    resolvedMode ?? (req.bankrollFilter ? "hide" : "all"),
   ].join("|");
 }
 
@@ -136,15 +159,43 @@ export async function handleTournamentSelector(
   const lookbackDays = req.lookbackDays ?? 180;
   const minScore = req.minScore ?? 0;
   const minSample = req.minSample ?? 0;
-  const bankrollFilter = req.bankrollFilter ?? false;
+  // Sprint TS-3 RF-04 (ADR-178): bankrollMode primario, bankrollFilter alias.
+  // Ordem: req.bankrollMode > req.bankrollFilter (alias) > user_settings > 'warn'.
+  let bankrollMode: BankrollMode;
+  if (req.bankrollMode) {
+    bankrollMode = req.bankrollMode;
+  } else if (req.bankrollFilter === true) {
+    bankrollMode = "hide";
+  } else if (req.bankrollFilter === false) {
+    bankrollMode = "all";
+  } else {
+    bankrollMode = await resolveBankrollMode(req.userId);
+  }
+  const bankrollFilter = bankrollMode === "hide"; // legacy mirror p/ telemetria
 
   const wantsSuprema = sources.includes("suprema");
   const wantsLibrary = sources.includes("library");
-  const filtersHash = filtersHashOf(req);
+  const filtersHash = filtersHashOf(req, bankrollMode);
 
   // ---------------------------------------------------------------------------
-  // Cache check (30min TTL)
+  // Cache check (30min TTL) — Sprint TS-3 HIGH-2: tenta cache compartilhado
+  // primeiro (key canonica { userId, date, sources, bankrollMode }), depois
+  // legacy `selectorCache` (back-compat com entries pre-existentes que ainda
+  // sao invalidadas por bankroll/wallet/playerBundle).
   // ---------------------------------------------------------------------------
+  const sharedCacheKey: TsCacheKey = {
+    userId: req.userId,
+    date,
+    sources,
+    bankrollMode,
+    // fingerprint opcional (lookbackDays+minScore+minSample) preserva isolacao
+    // legacy do widget; Coach tool nao passa entao usa shape canonica curto.
+    fingerprint: `lb=${lookbackDays}|ms=${minScore}|mp=${minSample}`,
+  };
+  const sharedCached = getTournamentSelectorCache<TournamentSelectorResponse>(sharedCacheKey);
+  if (sharedCached) {
+    return { ...sharedCached, cacheHit: true };
+  }
   const cached = selectorCache.get<TournamentSelectorResponse>(
     req.userId, date, sources, lookbackDays, filtersHash,
   );
@@ -329,9 +380,25 @@ export async function handleTournamentSelector(
     });
   }
 
-  if (bankrollFilter && bankrollConfigured) {
-    filtered = filtered.filter((t) => t.bankrollOk);
-  }
+  // Sprint TS-3 RF-04 (ADR-178): tristate substitui filter booleano.
+  // - mode='hide'  -> omite above_hard_limit (band.bankrollOk=false).
+  // - mode='warn'  -> mantem todos + anexa bankrollWarning quando relevante.
+  // - mode='all'   -> sem filtro nem warning.
+  // bankrollOk continua usado p/ legacy "out_of_bankroll" warning string.
+  const brRules: BankrollRules = {
+    bankrollConfigured,
+    bankrollAmountUSD: bankrollConfigured ? (bankrollAmount as number) : null,
+    rule: bankrollRule,
+    softLimitUSD,
+    hardLimitUSD,
+    rulePct: thresholds?.rulePct ?? 0,
+  };
+  const applied = applyBankrollMode(
+    filtered.map((t) => ({ ...t, buyInUSD: t.buyInUSD ?? t.buyIn ?? 0 })),
+    brRules,
+    bankrollMode,
+  );
+  filtered = applied.tournaments as any;
 
   // Sort: score DESC -> confidence DESC -> startTime ASC
   const confRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -368,28 +435,40 @@ export async function handleTournamentSelector(
     warnings: responseWarnings,
   };
 
-  // Cache result
+  // Cache result — Sprint TS-3 HIGH-2: dual-write.
+  // 1. Shared cache (Coach tool le do mesmo storage).
+  setTournamentSelectorCache(sharedCacheKey, response);
+  // 2. Legacy cache (back-compat: invalidations cross-system continuam wired).
   selectorCache.set(req.userId, date, sources, lookbackDays, filtersHash, response);
 
-  // Async log: view (Q9 — minimal metadata)
+  // Async log: view. Sprint TS-3 RF-04: metadata agora carrega `bankrollMode`
+  // + `invokedBy: 'widget'` (DRY com Coach tool via buildSelectorTelemetryMetadata).
+  // Mantemos a chamada direta a `storage.insertSelectorLog` (back-compat com
+  // testes que espionam o mock — helper logSelectorEvent reimporta o storage
+  // num microtask adicional, quebra timing dos testes legados).
+  const telemetryMetadata = buildSelectorTelemetryMetadata({
+    bankrollMode,
+    invokedBy: "widget",
+    source: sources,
+    cacheHit: false,
+    totalReturned: response.totalReturned,
+    filtersApplied: {
+      sources,
+      minScore,
+      minSample,
+      bankrollFilter,
+      lookbackDays,
+    },
+  });
   Promise.resolve().then(async () => {
     try {
       await storage.insertSelectorLog({
         userId: req.userId,
         eventType: "view",
-        metadata: {
-          totalReturned: response.totalReturned,
-          filtersApplied: {
-            sources,
-            minScore,
-            minSample,
-            bankrollFilter,
-            lookbackDays,
-          },
-        },
+        metadata: telemetryMetadata,
       });
     } catch (err) {
-      // never block response on log failure - mas registramos o erro para diagnostico
+      // Nunca bloqueia response (lesson #9: logue antes de fallback).
       console.error('selector: insertSelectorLog (view) failed for user', req.userId, err);
     }
   });
@@ -422,7 +501,20 @@ export function registerTournamentSelectorRoutes(app: Express): void {
       const sources = (req.query.sources as string) || undefined;
       const minScore = req.query.minScore ? parseInt(String(req.query.minScore), 10) : undefined;
       const minSample = req.query.minSample ? parseInt(String(req.query.minSample), 10) : undefined;
-      const bankrollFilter = req.query.bankrollFilter === "true";
+      // Sprint TS-3 RF-04 (ADR-178): bankrollMode primario; bankrollFilter alias deprecated.
+      const rawMode = req.query.bankrollMode as string | undefined;
+      const bankrollMode =
+        rawMode === "all" || rawMode === "hide" || rawMode === "warn"
+          ? (rawMode as BankrollMode)
+          : undefined;
+      const bankrollFilter =
+        bankrollMode != null
+          ? undefined
+          : req.query.bankrollFilter === "true"
+            ? true
+            : req.query.bankrollFilter === "false"
+              ? false
+              : undefined;
       const lookbackDays = req.query.lookbackDays ? parseInt(String(req.query.lookbackDays), 10) : undefined;
 
       const response = await handleTournamentSelector({
@@ -432,6 +524,7 @@ export function registerTournamentSelectorRoutes(app: Express): void {
         minScore,
         minSample,
         bankrollFilter,
+        bankrollMode,
         lookbackDays,
       });
       res.json(response);

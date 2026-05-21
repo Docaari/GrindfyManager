@@ -1,0 +1,60 @@
+%% Sprint TS-3 / RF-05 — Calibration dashboard query flow
+%% Admin auth → query JOIN logs+tournaments → discrepancy compute → insufficientData branch → cache TTL 1h.
+
+sequenceDiagram
+    autonumber
+    actor Admin as Founder/Admin
+    participant FE as CalibrationDashboard<br/>/admin/tournament-selector-calibration
+    participant Auth as requireAuth + requirePermission('admin')
+    participant API as GET /api/admin/tournament-selector/calibration
+    participant Cache as calibrationCache<br/>Map TTL 1h
+    participant DB as PostgreSQL
+    participant AdminLog as admin_access_log<br/>(opcional)
+
+    Admin->>FE: navega /admin/tournament-selector-calibration
+    FE->>FE: useUserRole().isAdmin === true?
+    alt nao admin
+        FE-->>Admin: redirect /inicio
+    end
+    FE->>API: GET ?lookbackDays=90
+    API->>Auth: validate JWT + role
+    alt 401/403
+        Auth-->>FE: deny
+        FE-->>Admin: error toast
+    end
+
+    API->>AdminLog: INSERT (best-effort, try/catch)
+    Note over AdminLog: skip se tabela nao existe<br/>console.warn (lesson #9)
+
+    API->>Cache: get(lookbackDays=90)
+    alt cache hit (< 1h)
+        Cache-->>API: cached result
+    else cache miss
+        API->>DB: WITH adds_realized AS (...)<br/>SELECT grade, COUNT(*), AVG(roi_pct)<br/>FROM tournament_selector_logs l<br/>LEFT JOIN tournaments t ON (<br/>  t.external_id = l.tournament_external_id<br/>  OR (t.user_id = l.user_id<br/>      AND t.played_at BETWEEN l.created_at AND l.created_at + INTERVAL '14 days'<br/>      AND ABS(t.played_at - l.scheduled_at) < 48h)<br/>)<br/>WHERE l.event_type='add_to_grid'<br/>  AND l.created_at >= NOW() - INTERVAL '90 days'<br/>  AND t.grind_session_id IS NULL  /* §6.1 */<br/>GROUP BY grade
+
+        DB-->>API: rows[] {grade, adds, realized, realized_roi_pct}
+        API->>API: compute totalAdds = SUM(adds)
+
+        alt totalAdds < 50
+            API->>API: return { insufficientData: true,<br/>  currentVolume: totalAdds,<br/>  requiredVolume: 50,<br/>  lookbackDays }
+        else totalAdds >= 50
+            loop Cada grade
+                API->>API: expectedRoiPct = (mid_point - 50) * 0.5<br/>S=21.25, A=13.5, B=6, C=-1.5, D=-15
+                API->>API: discrepancyPct = realizedRoiPct - expectedRoiPct
+                API->>API: if abs(discrepancy)>5pp AND adds>=20<br/>  warnings += 'bucket_off_calibration_<grade>'
+                API->>API: if realized<5<br/>  warnings += 'sample_low_in_grade_<grade>'
+            end
+            API->>API: return { lookbackDays, totalAdds, realizedAdds,<br/>  buckets[], generatedAt, warnings[] }
+        end
+        API->>Cache: set(lookbackDays=90, result, ttl=1h)
+    end
+
+    API-->>FE: response JSON
+    alt insufficientData
+        FE-->>Admin: "Aguardando volume telemetria — atual N de 50 minimo"
+    else
+        FE-->>Admin: Tabela 5 grades<br/>colunas: grade | adds | realized | realizedRoiPct | expectedRoiPct | discrepancy<br/>cor verde/vermelho por discrepancy<br/>warnings exibidos<br/>nota causalidade vs preditividade
+    end
+
+    Admin->>FE: toggle lookback 30 / 90 / 180
+    FE->>API: re-fetch com ?lookbackDays=N (cache key diferente)

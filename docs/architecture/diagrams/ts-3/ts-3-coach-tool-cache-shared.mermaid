@@ -1,0 +1,72 @@
+%% Sprint TS-3 / RF-02 — Coach tool get_tournament_suggestions ESTENDIDA + cache compartilhado + telemetria dual
+%% Expande o diagrama da spec com: tier gate (isToolEligibleTier), cache cross-surface, dual log, alreadyInGrid lookup.
+
+sequenceDiagram
+    autonumber
+    actor User
+    participant Chat as Coach Chat UI<br/>(MiniChat + /coach-ai)
+    participant ChatAPI as /api/coach/chat
+    participant LLM as Anthropic Sonnet 4.6<br/>(ADR-021)
+    participant Runner as coachToolRunner<br/>(ADR-145)
+    participant Elig as isToolEligibleTier<br/>(ADR-167)
+    participant Tool as get_tournament_suggestions<br/>(ESTENDIDA RF-02)
+    participant Cache as tournamentSelectorCache<br/>(compartilhado com widget)
+    participant USet as user_settings
+    participant Planned as planned_tournaments
+    participant Scoring as tournamentScoringService<br/>(ADR-147 §1)
+    participant ToolLogs as coach_tool_invocations
+    participant TSLogs as tournament_selector_logs
+
+    User->>Chat: "Qual torneio voce me sugere agora?"
+    Chat->>ChatAPI: POST messages (page context: route='/grade-planner')
+    ChatAPI->>LLM: stream com tools registry (get_tournament_suggestions inclusa)
+    LLM-->>ChatAPI: tool_use { name:'get_tournament_suggestions', input:{topN:5,date:today,bankrollMode:undef} }
+
+    ChatAPI->>Runner: invoke(toolName, input, userId)
+    Runner->>Elig: isToolEligibleTier(user, 'get_tournament_suggestions')
+    alt Free (nao Trial nao Pro+)
+        Elig-->>Runner: false
+        Runner-->>ChatAPI: { ok:false, error:'tier_locked' }
+        ChatAPI-->>LLM: tool_result(tier_locked)
+        LLM-->>Chat: "Este recurso esta disponivel para Pro+ ou Trial"
+    else Trial ou Pro+
+        Elig-->>Runner: true
+        Runner->>Tool: handler(input, ctx)
+
+        Note over Tool: resolve bankrollMode:<br/>1) input.bankrollMode<br/>2) user_settings (USet)<br/>3) fallback 'warn'
+        Tool->>USet: SELECT tournament_selector_bankroll_mode
+        USet-->>Tool: 'warn' (resolved)
+
+        Tool->>Cache: get(userId, date, sources='both', bankrollMode='warn')
+        alt cache hit (widget abriu nos ultimos 30min)
+            Cache-->>Tool: scored[] {score, grade, confidence, rationale, buyInUSD, bankrollWarning?}
+            Note right of Cache: cacheHit=true → latencia <50ms
+        else cache miss
+            Tool->>Scoring: rankTournamentsForContext(userId, {date, topN, bankrollMode})
+            Scoring->>Scoring: computeTournamentScore × N (ADR-015)
+            Scoring-->>Tool: scored[]
+            Tool->>Cache: set(key, results, ttl=30min)
+            Note right of Cache: futuro widget hit cross-surface
+        end
+
+        Tool->>Planned: SELECT external_id<br/>WHERE user_id=? AND date=?<br/>AND tournament_external_id IN (...)
+        Planned-->>Tool: ids ja na grade
+        Tool->>Tool: enriquece cada suggestion com alreadyInGrid:boolean
+
+        Tool->>TSLogs: INSERT event=view,<br/>metadata={invokedBy:'coach_tool',source,bankrollMode,suggestionsCount,cacheHit}
+        Tool-->>Runner: { suggestions[], total, date }
+
+        Runner->>ToolLogs: INSERT (padrao runner)
+        Runner-->>ChatAPI: tool_result
+        ChatAPI-->>LLM: tool_result (LLM continua turno)
+
+        LLM->>LLM: gera narrativa<br/>("Olha, voce tem 3 grade S hoje. Os top:")
+        LLM-->>Chat: stream resposta + acoes inline "Adicionar a grade"
+    end
+
+    User->>Chat: clica "Adicionar a grade"
+    Chat->>ChatAPI: invoca register_tournament_in_grade (ADR-146 confirm)
+    ChatAPI->>Runner: invoke('register_tournament_in_grade', {tournamentExternalId,...})
+    Runner->>Planned: INSERT
+    Runner->>TSLogs: INSERT event=add_to_grid, metadata={invokedBy:'coach_tool',grade,score}
+    Runner-->>Chat: confirmation

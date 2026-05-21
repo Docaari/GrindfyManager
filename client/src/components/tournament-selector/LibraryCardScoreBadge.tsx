@@ -1,8 +1,9 @@
 /**
- * Tournament Selector — LibraryCardScoreBadge (RF-05)
+ * Tournament Selector — LibraryCardScoreBadge (RF-05, refactor TS-3 RF-06)
  *
- * Badge de score que aparece nos cards da TournamentLibraryNew para os top 50
- * templates. Quando selectorScore=null, omitido.
+ * Badge de score nos cards da TournamentLibraryNew. Server (RF-06) sempre
+ * envia `selectorGrade` quando `selectorScore != null`. NAO ha mais
+ * `inferGradeFromScore` local — server e fonte unica de verdade.
  */
 
 import { Badge } from '../ui/badge';
@@ -10,24 +11,33 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { getGradeColor, formatScore } from '../../lib/scoringHelpers';
 import type { GradeLetter } from '../../../../shared/scoring';
 
-function inferGradeFromScore(score: number): GradeLetter {
-  if (score >= 85) return 'S';
-  if (score >= 70) return 'A';
-  if (score >= 55) return 'B';
-  if (score >= 40) return 'C';
-  return 'D';
-}
-
 export interface LibraryCardScoreBadgeProps {
   selectorScore: number | null | undefined;
   selectorGrade?: GradeLetter | string | null;
   rationale?: string | null;
 }
 
-export function LibraryCardScoreBadge({ selectorScore, selectorGrade, rationale }: LibraryCardScoreBadgeProps) {
+export function LibraryCardScoreBadge({
+  selectorScore,
+  selectorGrade,
+  rationale,
+}: LibraryCardScoreBadgeProps) {
   if (selectorScore == null) return null;
 
-  const grade = (selectorGrade as GradeLetter | undefined) ?? inferGradeFromScore(selectorScore);
+  // RF-06: server obriga selectorGrade quando score != null. Drift defensivo:
+  // DEV throws (catches bug em desenvolvimento); PROD warn + render null.
+  if (selectorGrade == null) {
+    const msg =
+      "LibraryCardScoreBadge: selectorScore presente mas selectorGrade ausente. " +
+      "Server deve sempre enviar grade junto. (RF-06 — sem inferGradeFromScore local)";
+    if (process.env.NODE_ENV !== "production") {
+      throw new Error(msg);
+    }
+    console.warn(msg);
+    return null;
+  }
+
+  const grade = selectorGrade as GradeLetter;
   const color = getGradeColor(grade);
 
   const badge = (
