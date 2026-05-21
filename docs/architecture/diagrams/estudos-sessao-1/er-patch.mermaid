@@ -1,0 +1,53 @@
+%% Sprint Estudos-Sessao-1 — ER patch
+%% Mostra so as duas tabelas afetadas + a relacao nova.
+%% Ref: Docs/specs/sprint-estudos-sessao-1.md (RF-01); ADR-177; migration 0072.
+
+erDiagram
+    study_sessions {
+        varchar id PK "nanoid"
+        varchar user_id FK "references users.user_platform_id, not null"
+        varchar theme_id FK "references study_themes.id, nullable (ADR-117)"
+        varchar study_card_id FK "nullable (legacy, ADR-117)"
+        timestamp date "startedAt — fonte canonica do timer (lesson #12)"
+        integer duration "minutos; preenchido no PATCH finish"
+        varchar status "NOVO — varchar(16) NOT NULL DEFAULT 'active'<br/>enum: active | finished | abandoned"
+        integer focus_score "nullable; preenchimento opcional V2"
+        integer productivity_score "nullable; preenchimento opcional V2"
+        text insights "nullable; preenchimento opcional V2"
+        text[] activities "['theme'] | ['lesson'] | ..."
+        timestamp created_at "defaultNow"
+    }
+
+    study_notes {
+        varchar id PK "nanoid"
+        varchar study_card_id FK "references study_cards.id<br/>NULLABLE — era NOT NULL, agora deprecation gradual (lesson #7)"
+        varchar study_session_id FK "NOVO — references study_sessions.id<br/>ON DELETE CASCADE, nullable"
+        text content "not null"
+        timestamp created_at "defaultNow"
+        timestamp updated_at "defaultNow"
+    }
+
+    %% Relacao nova
+    study_sessions ||--o{ study_notes : "tem notes (ON DELETE CASCADE)"
+
+    %% Relacao legacy preservada (study_cards continua tendo notes historicas)
+    %% study_cards ||--o{ study_notes : "legacy (back-compat)"
+
+    %% ===== CHECK constraint =====
+    %% study_notes_link_xor:
+    %%   (study_card_id IS NOT NULL) OR (study_session_id IS NOT NULL)
+    %% XOR-fraco: pelo menos um link presente. Storage Zod canoniza
+    %% que payload de sessao-endpoint forca study_card_id=NULL.
+    %%
+    %% ===== Index novos =====
+    %% idx_study_sessions_active (user_id, theme_id) WHERE status='active'
+    %%   -> habilita query "tem sessao ativa pra este tema?" (V2 fora de escopo MVP)
+    %% idx_study_notes_session (study_session_id) WHERE study_session_id IS NOT NULL
+    %%   -> habilita GET /api/study-sessions/:id/notes performante
+    %%
+    %% ===== Lifecycle status =====
+    %% 'active'    -> default; sessao em curso; UI editavel + timer rodando
+    %% 'finished'  -> PATCH /api/study-sessions/:id {status:'finished', duration}
+    %%                UI read-only; timer parado
+    %% 'abandoned' -> V2 (cron diario marca active sem nota nova ha >8h)
+    %%                coluna existe, valor nunca atribuido no MVP

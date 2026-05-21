@@ -613,6 +613,23 @@ export interface IStorage {
   // Study session operations
   getStudySessions(userId: string): Promise<StudySession[]>;
   createStudySession(session: InsertStudySession): Promise<StudySession>;
+  // Sprint Estudos-Sessao-1 RF-03 / RF-06 — single-session lookup com IDOR scope.
+  getStudySession(id: string, userId: string): Promise<StudySession | null>;
+  updateStudySession(
+    id: string,
+    userId: string,
+    patch: Partial<InsertStudySession>,
+  ): Promise<StudySession | null>;
+  // Sprint Estudos-Sessao-1 RF-04 — notes linkadas a sessao.
+  getStudyNotesBySession(sessionId: string, userId: string): Promise<StudyNote[]>;
+  createStudyNoteForSession(data: {
+    studySessionId: string;
+    content: string;
+    tags?: string[];
+    title?: string | null;
+  }): Promise<StudyNote>;
+  getStudyNoteById(id: string): Promise<StudyNote | null>;
+  deleteStudyNote(id: string): Promise<boolean>;
 
   // Active days operations
   getActiveDays(userId: string): Promise<ActiveDay[]>;
@@ -634,6 +651,20 @@ export interface IStorage {
   getAnalyticsByFieldSize(userId: string, period?: string, filters?: any): Promise<any[]>;
   getTournamentLibraryEntries(userId: string): Promise<TournamentLibrary[]>;
   insertSelectorLog(log: InsertTournamentSelectorLog): Promise<TournamentSelectorLog>;
+  // Sprint TS-3 RF-05 — agregacao "score vs ROI realizado" para dashboard admin.
+  aggregateSelectorCalibration(args: {
+    lookbackDays: number;
+    excludeSessionTournaments?: boolean;
+  }): Promise<{
+    totalAdds: number;
+    realizedAdds: number;
+    buckets: Array<{
+      grade: string;
+      adds: number;
+      realized: number;
+      realizedRoiPct: number;
+    }>;
+  }>;
 
   // Bankroll Module (Sprint 2)
   getUserBankrollForUpdate(userId: string, tx?: any): Promise<{ bankrollAmount: string | null; bankrollRule: string } | null>;
@@ -4063,6 +4094,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const sessionData = {
       ...session,
       id: nanoid(),
+      // Sprint Estudos-Sessao-1 RF-02: default status='active' quando handler nao envia.
+      status: (session as any).status ?? 'active',
       activities: Array.isArray(session.activities) ? session.activities : (session.activities !== undefined && session.activities !== null ? [session.activities as string] : []),
       insights: Array.isArray(session.insights) ? session.insights : (session.insights !== undefined && session.insights !== null ? [session.insights as string] : [])
     };
@@ -4072,6 +4105,116 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .values(sessionData as typeof studySessions.$inferInsert)
       .returning();
     return newSession;
+  }
+
+  // Sprint Estudos-Sessao-1 RF-03 / RF-06: single-session lookup com IDOR scope.
+  // Retorna null quando id nao existe OU pertence a outro user.
+  async getStudySession(id: string, userId: string): Promise<StudySession | null> {
+    try {
+      const [row] = await db
+        .select()
+        .from(studySessions)
+        .where(and(eq(studySessions.id, id), eq(studySessions.userId, userId)))
+        .limit(1);
+      return row ?? null;
+    } catch (err) {
+      // Lesson #9: log antes do fallback. Distinguir "no row" de "DB explodiu".
+      console.error('storage.getStudySession.error', { id, userId, err });
+      return null;
+    }
+  }
+
+  async updateStudySession(
+    id: string,
+    userId: string,
+    patch: Partial<InsertStudySession>,
+  ): Promise<StudySession | null> {
+    try {
+      // IDOR: refaz ownership check antes do UPDATE.
+      const owned = await this.getStudySession(id, userId);
+      if (!owned) return null;
+      const cleanPatch: any = {};
+      if (patch.status !== undefined) cleanPatch.status = patch.status;
+      if (patch.duration !== undefined) cleanPatch.duration = patch.duration;
+      if (patch.focusScore !== undefined) cleanPatch.focusScore = patch.focusScore;
+      if (patch.productivityScore !== undefined) cleanPatch.productivityScore = patch.productivityScore;
+      if (patch.insights !== undefined) cleanPatch.insights = patch.insights;
+      if (Object.keys(cleanPatch).length === 0) return owned;
+      const [updated] = await db
+        .update(studySessions)
+        .set(cleanPatch)
+        .where(and(eq(studySessions.id, id), eq(studySessions.userId, userId)))
+        .returning();
+      return updated ?? null;
+    } catch (err) {
+      console.error('storage.updateStudySession.error', { id, userId, err });
+      return null;
+    }
+  }
+
+  // Sprint Estudos-Sessao-1 RF-04: notes linkadas a sessao.
+  async getStudyNotesBySession(sessionId: string, userId: string): Promise<StudyNote[]> {
+    try {
+      // IDOR scoping: confirma que a sessao eh do user antes de listar.
+      const owned = await this.getStudySession(sessionId, userId);
+      if (!owned) return [];
+      return await db
+        .select()
+        .from(studyNotes)
+        .where(eq(studyNotes.studySessionId, sessionId))
+        .orderBy(asc(studyNotes.createdAt));
+    } catch (err) {
+      console.error('storage.getStudyNotesBySession.error', { sessionId, userId, err });
+      return [];
+    }
+  }
+
+  async createStudyNoteForSession(data: {
+    studySessionId: string;
+    content: string;
+    tags?: string[];
+    title?: string | null;
+  }): Promise<StudyNote> {
+    const noteData = {
+      id: nanoid(),
+      studyCardId: null,
+      studySessionId: data.studySessionId,
+      title: data.title ?? null,
+      content: data.content,
+      tags: Array.isArray(data.tags) ? data.tags : [],
+    };
+    const [newNote] = await db
+      .insert(studyNotes)
+      .values(noteData as typeof studyNotes.$inferInsert)
+      .returning();
+    return newNote;
+  }
+
+  async getStudyNoteById(id: string): Promise<StudyNote | null> {
+    try {
+      const [row] = await db
+        .select()
+        .from(studyNotes)
+        .where(eq(studyNotes.id, id))
+        .limit(1);
+      return row ?? null;
+    } catch (err) {
+      console.error('storage.getStudyNoteById.error', { id, err });
+      return null;
+    }
+  }
+
+  async deleteStudyNote(id: string): Promise<boolean> {
+    try {
+      const result: any = await db.delete(studyNotes).where(eq(studyNotes.id, id));
+      const rows = result?.rowCount ?? result?.rows?.length;
+      // Drivers (pg, neon-serverless) reportam rowCount em formatos distintos.
+      // Quando indisponivel, assume sucesso (delete eh idempotente).
+      return rows === undefined ? true : rows > 0;
+    } catch (err) {
+      console.error('storage.deleteStudyNote.error', { id, err });
+      return false;
+    }
   }
 
   // Active days operations
@@ -4684,6 +4827,72 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       } as any)
       .returning();
     return inserted;
+  }
+
+  /**
+   * Sprint TS-3 RF-05 (ADR-179) — agrega "score vs ROI realizado" cohort
+   * lookbackDays. Matching por externalId (forte). Respeita CLAUDE.md §6.1
+   * (tournaments.grind_session_id IS NULL).
+   */
+  async aggregateSelectorCalibration(args: {
+    lookbackDays: number;
+    excludeSessionTournaments?: boolean;
+  }): Promise<{
+    totalAdds: number;
+    realizedAdds: number;
+    buckets: Array<{
+      grade: string;
+      adds: number;
+      realized: number;
+      realizedRoiPct: number;
+    }>;
+  }> {
+    const lookback = args.lookbackDays;
+    try {
+      const result: any = await db.execute(sql`
+        WITH adds_realized AS (
+          SELECT
+            l.grade,
+            t.profit_usd,
+            t.buy_in_usd,
+            CASE
+              WHEN t.buy_in_usd IS NOT NULL AND CAST(t.buy_in_usd AS NUMERIC) > 0
+              THEN (CAST(t.profit_usd AS NUMERIC) / CAST(t.buy_in_usd AS NUMERIC)) * 100
+              ELSE NULL
+            END AS roi_pct
+          FROM tournament_selector_logs l
+          LEFT JOIN tournaments t ON (
+            t.external_id = l.tournament_external_id
+            AND t.external_id IS NOT NULL
+            AND t.grind_session_id IS NULL
+          )
+          WHERE l.event_type = 'add_to_grid'
+            AND l.created_at >= NOW() - (${lookback} || ' days')::INTERVAL
+        )
+        SELECT
+          grade,
+          COUNT(*)::INT AS adds,
+          COUNT(roi_pct)::INT AS realized,
+          COALESCE(AVG(roi_pct), 0)::FLOAT AS realized_roi_pct
+        FROM adds_realized
+        WHERE grade IS NOT NULL
+        GROUP BY grade
+        ORDER BY grade
+      `);
+      const rows = (result.rows ?? result) as any[];
+      const buckets = rows.map((r: any) => ({
+        grade: String(r.grade),
+        adds: Number(r.adds ?? 0),
+        realized: Number(r.realized ?? 0),
+        realizedRoiPct: Number(r.realized_roi_pct ?? 0),
+      }));
+      const totalAdds = buckets.reduce((s, b) => s + b.adds, 0);
+      const realizedAdds = buckets.reduce((s, b) => s + b.realized, 0);
+      return { totalAdds, realizedAdds, buckets };
+    } catch (err) {
+      console.error("aggregateSelectorCalibration failed:", err);
+      return { totalAdds: 0, realizedAdds: 0, buckets: [] };
+    }
   }
 
   // ==========================================================================

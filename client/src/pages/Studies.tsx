@@ -31,6 +31,8 @@ import { OnboardingWizard } from '@/components/studies/onboarding/OnboardingWiza
 import { ThemesView } from '@/components/studies/ThemesView';
 // MEDIUM-6 reviewer: novo detail view para /estudos/temas/:id.
 import ThemeDetailView from '@/components/studies/ThemeDetailView';
+// Sprint Estudos-Sessao-1 RF-05: pagina dedicada /estudos/sessao/:id.
+import StudySessionPage from '@/components/studies/StudySessionPage';
 import { StatsView } from '@/components/studies/StatsView';
 import { SpotsView } from '@/components/studies/SpotsView';
 import { StudiesDashboard } from '@/components/studies/dashboard/StudiesDashboard';
@@ -44,6 +46,7 @@ type ViewKey =
   | 'dashboard'
   | 'temas'
   | 'tema-detail'
+  | 'sessao-detail'
   | 'stats'
   | 'spots'
   | 'recomendacoes'
@@ -88,6 +91,14 @@ function extractThemeIdFromPath(path: string): string | null {
   return id;
 }
 
+// Sprint Estudos-Sessao-1 RF-05: extrai sessionId do path '/estudos/sessao/:id'.
+function extractSessionIdFromPath(path: string): string | null {
+  const stripped = path.split('?')[0].replace(/\/+$/, '');
+  const m = /^\/estudos\/sessao\/([^/]+)$/.exec(stripped);
+  if (!m) return null;
+  return m[1] || null;
+}
+
 function viewFromPath(path: string): ViewKey {
   const stripped = path.split('?')[0];
   if (stripped === '/estudos' || stripped === '/estudos/' || stripped.startsWith('/estudos/dashboard')) {
@@ -95,6 +106,9 @@ function viewFromPath(path: string): ViewKey {
   }
   if (stripped.startsWith('/estudos/temas')) {
     return extractThemeIdFromPath(stripped) ? 'tema-detail' : 'temas';
+  }
+  if (stripped.startsWith('/estudos/sessao')) {
+    return extractSessionIdFromPath(stripped) ? 'sessao-detail' : 'unknown';
   }
   if (stripped.startsWith('/estudos/stats')) return 'stats';
   if (stripped.startsWith('/estudos/spots')) return 'spots';
@@ -189,6 +203,16 @@ export default function Studies() {
         return (
           <div data-testid="studies-view-tema-detail">
             <ThemeDetailView themeId={themeId} />
+          </div>
+        );
+      }
+      case 'sessao-detail': {
+        // Sprint Estudos-Sessao-1 RF-05: render StudySessionPage.
+        const sessionId = extractSessionIdFromPath(location || '/estudos/sessao');
+        if (!sessionId) return <Redirect to="/estudos/dashboard" />;
+        return (
+          <div data-testid="studies-view-sessao-detail">
+            <StudySessionPage sessionId={sessionId} />
           </div>
         );
       }

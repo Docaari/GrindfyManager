@@ -1,0 +1,90 @@
+%% Sprint Estudos-Sessao-1 — fluxo "iniciar sessao -> anotar -> finalizar"
+%% Cobre: POST create + redirect + GET single-session + GET/POST notes + PATCH finish + redirect back.
+%% Ref: Docs/specs/sprint-estudos-sessao-1.md (RF-02..RF-09); ADR-177.
+
+sequenceDiagram
+    actor User
+    participant TDV as ThemeDetailView<br/>(/estudos/temas/:themeId)
+    participant Wouter as Wouter router
+    participant SSP as StudySessionPage<br/>(/estudos/sessao/:id)
+    participant NB as NotesBlock
+    participant ST as SessionTimer
+    participant API as Express API
+    participant Storage as studyStorage<br/>(server/storage/studyStorage.ts)
+    participant DB as PostgreSQL<br/>(study_sessions + study_notes)
+
+    Note over User,DB: 1) Inicio da sessao (RF-09)
+
+    User->>TDV: Click "Iniciar sessao de estudo"
+    TDV->>API: POST /api/study-sessions<br/>{themeId, date, duration:0, activities:['theme']}
+    API->>Storage: createStudySession({userId, themeId, status:'active', ...})
+    Storage->>DB: INSERT INTO study_sessions (..., status='active') RETURNING *
+    DB-->>Storage: row {id, userId, themeId, status:'active', date, ...}
+    Storage-->>API: session row
+    API-->>TDV: 200 {id, themeId, status:'active', date, ...}
+    TDV->>TDV: navigate('/estudos/sessao/' + created.id)<br/>invalidateQueries(['/api/study-sessions'])<br/>invalidateQueries(['/api/home/focus-stats'])
+    TDV->>Wouter: location -> /estudos/sessao/:id
+
+    Note over User,DB: 2) Mount da pagina dedicada (RF-05, RF-06)
+
+    Wouter->>SSP: render StudySessionPage sessionId=:id
+    SSP->>API: GET /api/study-sessions/:id
+    API->>Storage: getStudySession(id, userId)
+    Storage->>DB: SELECT * FROM study_sessions WHERE id=$1 AND user_id=$2
+    DB-->>Storage: row
+    alt session null
+        Storage-->>API: null
+        API-->>SSP: 404
+        SSP-->>User: empty state "sessao nao encontrada"<br/>link /estudos/temas
+    else session encontrada
+        Storage-->>API: session
+        API-->>SSP: 200 {id, themeId, status, date, ...}
+        SSP->>API: GET /api/study-themes (paralelo)<br/>(lookup nome do tema)
+        API-->>SSP: [{id, name, color, ...}, ...]
+        SSP->>API: GET /api/study-sessions/:id/notes (RF-04)
+        API->>Storage: getStudyNotesBySession(id, userId)
+        Storage->>DB: SELECT * FROM study_notes<br/>WHERE study_session_id=$1<br/>JOIN study_sessions ON user_id=$2<br/>ORDER BY created_at ASC
+        DB-->>Storage: notes[]
+        Storage-->>API: notes
+        API-->>SSP: 200 [notes]
+        SSP->>NB: render <NotesBlock sessionId=id readOnly={status==='finished'}>
+        SSP->>ST: render <SessionTimer startedAt=session.date status=session.status onFinish={...}>
+        Note over ST: elapsedSec = (now - session.date) / 1000<br/>setInterval 1s atualiza elapsed<br/>(refresh F5 recalcula — lesson #12)
+    end
+
+    Note over User,DB: 3) Adicionar note durante sessao (RF-08, RF-10)
+
+    User->>NB: Digita texto + click "Adicionar"<br/>(ou Ctrl+Enter)
+    NB->>API: POST /api/study-sessions/:id/notes<br/>{content}
+    API->>Storage: createStudyNoteForSession({sessionId, userId, content})
+    Storage->>DB: INSERT INTO study_notes<br/>(study_session_id=$1, study_card_id=NULL, content=$2)<br/>RETURNING *
+    Note over DB: CHECK study_notes_link_xor passa<br/>(study_session_id IS NOT NULL)
+    DB-->>Storage: note row
+    Storage-->>API: note
+    API-->>NB: 200 {id, content, createdAt, ...}
+    NB->>NB: invalidateQueries(['/api/study-sessions', id, 'notes'])<br/>track('study_note_created', {sessionId, length})
+    NB-->>User: nova note aparece no topo da lista
+
+    Note over User,DB: 4) Finalizar sessao (RF-07, RF-09)
+
+    User->>ST: Click "Finalizar"
+    ST->>SSP: onFinish(durationMinutes = Math.round(elapsedSec/60))
+    SSP->>API: PATCH /api/study-sessions/:id<br/>{duration, status:'finished'}
+    API->>Storage: updateStudySession(id, userId, {duration, status:'finished'})
+    Storage->>DB: UPDATE study_sessions<br/>SET duration=$1, status='finished'<br/>WHERE id=$2 AND user_id=$3<br/>RETURNING *
+    alt sessao de outro user
+        DB-->>Storage: 0 rows
+        Storage-->>API: null
+        API-->>SSP: 404
+        SSP-->>User: toast erro "sessao nao encontrada"
+    else sucesso
+        DB-->>Storage: row atualizada
+        Storage-->>API: session
+        API-->>SSP: 200 {id, status:'finished', duration, ...}
+        SSP->>SSP: track('study_session_finished', {sessionId, durationMin, noteCount})<br/>invalidateQueries(['/api/home/focus-stats'])<br/>toast "Sessao finalizada (Xmin)"
+        SSP->>Wouter: navigate('/estudos/temas/' + session.themeId)
+        Wouter-->>User: render ThemeDetailView atualizado
+    end
+
+    Note over User,DB: Edge case: refresh F5 durante timer ativo
+    Note over ST,API: SSP re-monta -> GET /api/study-sessions/:id retorna session.date original<br/>SessionTimer recalcula elapsedSec = (now - session.date)/1000<br/>Timer mostra tempo correto (sem reset) — lesson #12

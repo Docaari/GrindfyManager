@@ -972,7 +972,12 @@ export const studyMaterials = pgTable("study_materials", {
 
 export const studyNotes = pgTable("study_notes", {
   id: varchar("id").primaryKey().notNull(),
-  studyCardId: varchar("study_card_id").notNull(),
+  // Sprint Estudos-Sessao-1 RF-01 (migration 0073): studyCardId virou NULLABLE
+  // — lesson #7 (deprecation gradual). Notes podem pertencer a um study_card
+  // legacy OU a uma study_session. CHECK constraint XOR-fraco no DB garante
+  // pelo menos um dos dois links presente.
+  studyCardId: varchar("study_card_id"),
+  studySessionId: varchar("study_session_id", { length: 21 }),
   title: varchar("title"),
   content: text("content").notNull(),
   tags: jsonb("tags").$type<string[]>().default([]),
@@ -997,8 +1002,16 @@ export const studySessions = pgTable("study_sessions", {
   focusScore: integer("focus_score"), // 0-10
   productivityScore: integer("productivity_score"), // 0-10
   insights: text("insights"),
+  // Sprint Estudos-Sessao-1 RF-01 (migration 0073): lifecycle de sessao.
+  // Default 'active' mantem retro-compat de sessoes legacy.
+  status: varchar("status", { length: 16 }).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Sprint Estudos-Sessao-1 RF-01: lifecycle do study_sessions legacy. Distinto
+// do STUDY_SESSION_STATUSES (V2) que vive abaixo com valores 'running'/'completed'.
+export const STUDY_SESSION_LEGACY_STATUSES = ['active', 'finished', 'abandoned'] as const;
+export type StudySessionLegacyStatus = typeof STUDY_SESSION_LEGACY_STATUSES[number];
 
 // Active Days - para controlar quais dias da semana estão ativos na Grade
 export const activeDays = pgTable("active_days", {
@@ -1811,11 +1824,24 @@ export const insertStudyMaterialSchema = createInsertSchema(studyMaterials).omit
   updatedAt: true,
 });
 
-export const insertStudyNoteSchema = createInsertSchema(studyNotes).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+// Sprint Estudos-Sessao-1 RF-01: studyCardId e studySessionId sao ambos opcionais
+// no schema base, mas o refinement XOR-fraco exige pelo menos um presente
+// (espelha a CHECK constraint study_notes_link_xor do DB).
+export const insertStudyNoteSchema = createInsertSchema(studyNotes)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .refine(
+    (data) =>
+      (data.studyCardId !== undefined && data.studyCardId !== null) ||
+      (data.studySessionId !== undefined && data.studySessionId !== null),
+    {
+      message: "Note must link to a study_card_id or a study_session_id",
+      path: ["studySessionId"],
+    },
+  );
 
 
 

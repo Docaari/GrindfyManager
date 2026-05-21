@@ -125,10 +125,19 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
         activities: ['theme'],
       });
     },
-    onSuccess: () => {
+    // Sprint Estudos-Sessao-1 RF-09: redirect para /estudos/sessao/:id apos
+    // POST sucesso. apiRequest retorna JSON parseado direto (lesson #13),
+    // entao `created.id` funciona sem precisar de .json().
+    onSuccess: (created: any) => {
       qc.invalidateQueries({ queryKey: ['/api/study-sessions'] });
       qc.invalidateQueries({ queryKey: ['/api/home/focus-stats'] });
-      toast({ title: 'Sessao de estudo iniciada' });
+      const sessionId = created?.id;
+      if (sessionId) {
+        navigate(`/estudos/sessao/${sessionId}`);
+      } else {
+        // Fallback defensivo se backend nao retornar id (nao deve acontecer).
+        toast({ title: 'Sessao de estudo iniciada' });
+      }
     },
     onError: () => {
       toast({
