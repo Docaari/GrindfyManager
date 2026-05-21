@@ -1,0 +1,60 @@
+flowchart TD
+    Start(["CSV upload<br/>(POST /api/upload-history)"])
+    Parser["PokerCSVParser.parseCSV(content)"]
+    DetectNet["parsePokerSiteData(row)<br/>normaliza network case-insensitive<br/>(R1-02)"]
+    NetLookup{"network<br/>detectada?"}
+    NetFallback["fallback 'unknown'<br/>parse minimo +<br/>log warn"]
+
+    FlagCheck{"CSV_PARSER_NEW_PRIZE_SEMANTICS<br/>=== 'true' ?"}
+
+    LegacyBranch["LEGACY (default false):<br/>prize = parseFloat(row.Result)<br/>RAW por rede — divergente"]
+    NewBranch["NEW (canonico):<br/>PRIZE_FORMULA_BY_NETWORK[net](row, buyIn)<br/>lookup table → NET profit universal"]
+
+    FormulaTable["Lookup table por rede:<br/>pokerstars → Result (ja NET)<br/>ggnetwork  → Result - buyIn (GROSS)<br/>wpn        → Result - buyIn (hipot)<br/>partypoker → Result - buyIn<br/>chico      → Result - buyIn<br/>888poker   → Result - buyIn<br/>ipoker     → Result - buyIn<br/>bodog      → Result - buyIn<br/>coinpoker  → Result - buyIn<br/>revolution → Result - buyIn"]
+
+    LogNew["log 'csvParser.new_prize_semantics.applied'<br/>{userId, network, count}<br/>(lesson #9 — auditavel)"]
+
+    BuildTournament["ParsedTournament {<br/>  ...,<br/>  prize: <calculado>,<br/>  network,<br/>  ...<br/>}"]
+
+    Persist["createTournamentsBatch<br/>(500/insert)"]
+    DB[("tournaments table<br/>prize coluna<br/>(historico legacy + novo coexistem)")]
+
+    Dashboard["Dashboard / DynamicCharts /<br/>DashboardFilters"]
+    DashFlag{"config.csvParserNewPrizeSemantics<br/>=== true ?"}
+    DashLegacy["profit = prize - buyIn<br/>(formula legacy universal —<br/>duplica desconto pra PokerStars)"]
+    DashNew["profit = prize<br/>(NET ja canonico —<br/>sem subtrair buyIn)"]
+    DashChart["Render charts<br/>(ROI, profit by site, etc)"]
+
+    Start --> Parser
+    Parser --> DetectNet
+    DetectNet --> NetLookup
+    NetLookup -- "sim" --> FlagCheck
+    NetLookup -- "nao" --> NetFallback
+    NetFallback --> FlagCheck
+
+    FlagCheck -- "false (default)" --> LegacyBranch
+    FlagCheck -- "true" --> NewBranch
+    NewBranch --> FormulaTable
+    FormulaTable --> LogNew
+    LegacyBranch --> BuildTournament
+    LogNew --> BuildTournament
+
+    BuildTournament --> Persist
+    Persist --> DB
+
+    DB --> Dashboard
+    Dashboard --> DashFlag
+    DashFlag -- "false (default)" --> DashLegacy
+    DashFlag -- "true" --> DashNew
+    DashLegacy --> DashChart
+    DashNew --> DashChart
+
+    classDef flag fill:#FFE4B5,stroke:#7a5e2b,color:#000
+    classDef legacy fill:#E8E8E8,stroke:#555,color:#000
+    classDef new fill:#90EE90,stroke:#2d572c,color:#000
+    classDef log fill:#FFB6C1,stroke:#7a2d3c,color:#000
+
+    class FlagCheck,DashFlag flag
+    class LegacyBranch,DashLegacy legacy
+    class NewBranch,FormulaTable,DashNew new
+    class LogNew log

@@ -4604,6 +4604,45 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return created;
   }
 
+  async updateUploadHistory(
+    id: string,
+    patch: Partial<{
+      status: string;
+      processedCount: number;
+      tournamentsCount: number;
+      errorMessage: string | null;
+    }>,
+  ): Promise<UploadHistory | null> {
+    const update: Record<string, unknown> = {};
+    if (patch.status !== undefined) update.status = patch.status;
+    if (patch.processedCount !== undefined) update.processedCount = patch.processedCount;
+    if (patch.tournamentsCount !== undefined) update.tournamentsCount = patch.tournamentsCount;
+    if (patch.errorMessage !== undefined) update.errorMessage = patch.errorMessage;
+    if (Object.keys(update).length === 0) {
+      const [row] = await db.select().from(uploadHistory).where(eq(uploadHistory.id, id));
+      return row ?? null;
+    }
+    const [updated] = await db
+      .update(uploadHistory)
+      .set(update)
+      .where(eq(uploadHistory.id, id))
+      .returning();
+    return updated ?? null;
+  }
+
+  // Quando `userId` informado, retorna null se row pertence a outro user
+  // (404 silencioso pra nao vazar existencia cross-user).
+  async getUploadHistoryById(id: string, userId?: string): Promise<UploadHistory | null> {
+    const [row] = await db
+      .select()
+      .from(uploadHistory)
+      .where(eq(uploadHistory.id, id))
+      .limit(1);
+    if (!row) return null;
+    if (userId && row.userId !== userId) return null;
+    return row;
+  }
+
   async deleteUploadHistory(id: string, userId: string): Promise<UploadHistory | null> {
     const [deleted] = await db
       .delete(uploadHistory)

@@ -643,6 +643,10 @@ export class PokerCSVParser {
     // Pre-process CSV to fix unquoted monetary commas (e.g. "$5,000 GTD" -> "$5000 GTD")
     const processedContent = this.preprocessCSV(fileContent);
 
+    // ADR-181 kill-switch: ON emite audit log com breakdown por rede pra diff
+    // manual antes do backfill historico de prize=NET canonico.
+    const newPrizeSemantics = process.env.CSV_PARSER_NEW_PRIZE_SEMANTICS === 'true';
+
     return new Promise((resolve, reject) => {
       const stream = Readable.from(processedContent);
 
@@ -685,6 +689,18 @@ export class PokerCSVParser {
             // but errors are logged server-side.
           }
           if (tournaments.length === 0 && rowNum > 1) { // rowNum > 1 to account for header
+          }
+          if (newPrizeSemantics && tournaments.length > 0) {
+            const byNetwork: Record<string, number> = {};
+            for (const t of tournaments) {
+              const key = (t.site || 'unknown').toString().toLowerCase();
+              byNetwork[key] = (byNetwork[key] || 0) + 1;
+            }
+            console.info('csvParser.new_prize_semantics.applied', {
+              userId,
+              count: tournaments.length,
+              byNetwork,
+            });
           }
           resolve(tournaments);
         })
@@ -1584,8 +1600,9 @@ export class PokerCSVParser {
 
   private static parseGenericNetworkFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}, siteName: string): ParsedTournament | null {
 
-    // Generic network format - use provided siteName
-    const name = row[' Name'] || row['Tournament Name'] || row['Tournament'] || row['name'] || row['tournament'] || '';
+    // Generic network format - use provided siteName.
+    // `Name` sem espaco eh header canonico do Generic Network.
+    const name = row[' Name'] || row['Name'] || row['Tournament Name'] || row['Tournament'] || row['name'] || row['tournament'] || '';
     const gameId = row[' Game ID'] || row['Game ID'] || row['id'] || '';
 
     const playerReentries = row[' ReEntries/Rebuys'] || row['ReEntries/Rebuys'] || row['reentries'] || '';
@@ -1838,11 +1855,12 @@ export class PokerCSVParser {
       return 'Mystery';
     }
 
-    // PKO has second priority
+    // KO word-boundary aceita digito adjacente (ex: `$5+$0.50KO`) mas exclui
+    // TOKYO/PIKO/KOREA (delimitador = non-letter).
     if (flagsUpper.includes('BOUNTY') ||
         nameUpper.includes('PROGRESSIVE') ||
         nameUpper.includes('KNOCKOUT') ||
-        /\bKO\b/.test(nameUpper) ||
+        /(?:^|[^A-Z])KO(?:[^A-Z]|$)/.test(nameUpper) ||
         nameUpper.includes('BOUNTY') ||
         nameUpper.includes('PKO')) {
       return 'PKO';

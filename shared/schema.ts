@@ -1063,8 +1063,10 @@ export const uploadHistory = pgTable("upload_history", {
   id: varchar("id").primaryKey().notNull(),
   userId: varchar("user_id").notNull().references(() => users.userPlatformId, { onDelete: "cascade" }),
   filename: varchar("filename").notNull(),
-  status: varchar("status").notNull(), // success, error, processing
+  status: varchar("status").notNull(), // success | failed | processing
   tournamentsCount: integer("tournaments_count").default(0),
+  // Incrementado por batch durante processamento async; lido pelo polling.
+  processedCount: integer("processed_count").notNull().default(0),
   errorMessage: text("error_message"),
   uploadDate: timestamp("upload_date").defaultNow(),
   duplicatesFound: integer("duplicates_found").default(0),
@@ -1073,6 +1075,8 @@ export const uploadHistory = pgTable("upload_history", {
 }, (table) => [
   // Migration 0064 (Fase 3 perf): /api/upload-history list.
   index("idx_upload_history_user_created").on(table.userId, table.createdAt.desc()),
+  // Migration 0074 — status discriminator (low cardinality; baixo custo na tabela).
+  index("idx_upload_history_status").on(table.status),
 ]);
 
 // Relations

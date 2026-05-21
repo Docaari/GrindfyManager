@@ -391,6 +391,52 @@ export function registerUploadRoutes(app: Express): void {
           };
         });
 
+        // RF-02 (ADR-181): >ASYNC_THRESHOLD entra em background com polling.
+        if (tournamentsToInsert.length > ASYNC_THRESHOLD) {
+          let asyncHistoryId: string | undefined;
+          try {
+            const [created] = await db
+              .insert(uploadHistory)
+              .values({
+                id: nanoid(),
+                userId: userPlatformId,
+                filename: file.originalname || 'upload.csv',
+                status: 'processing',
+                tournamentsCount: tournamentsToInsert.length,
+                processedCount: 0,
+                errorMessage: null,
+                uploadDate: new Date(),
+                duplicatesFound: duplicatesIgnored,
+              })
+              .returning();
+            asyncHistoryId = created?.id;
+          } catch (histErr) {
+            console.error('upload_history.async.create_failed', histErr);
+          }
+          if (!asyncHistoryId) {
+            return res.status(500).json({ message: 'Failed to enqueue async upload' });
+          }
+          void processAsyncBatches(storage, asyncHistoryId, userPlatformId, tournamentsToInsert).catch(async (err) => {
+            console.error('upload_history.background_failed', {
+              uploadHistoryId: asyncHistoryId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+            try {
+              await storage.updateUploadHistory(asyncHistoryId!, {
+                status: 'failed',
+                errorMessage: err instanceof Error ? err.message : String(err),
+              });
+            } catch {
+              // log capturado acima
+            }
+          });
+          return res.status(202).json({
+            uploadHistoryId: asyncHistoryId,
+            estimatedTournaments: tournamentsToInsert.length,
+            status: 'processing',
+          });
+        }
+
         const savedTournaments = await storage.createTournamentsBatch(tournamentsToInsert);
         const successCount = savedTournaments.length;
         const errorCount = tournamentsToInsert.length - successCount;
@@ -966,6 +1012,8 @@ export function registerUploadRoutes(app: Express): void {
   // Sprint Flight-1 RF-06/RF-07: novos handlers expostos via Express.
   app.post('/api/upload', requireAuth, upload.single('file'), handleUploadCsv as any);
   app.post('/api/upload/confirm-flights', requireAuth, handleConfirmFlights as any);
+  // RF-02 (Backend-Sweep ADR-181): polling de progresso async.
+  app.get('/api/upload-history/:id', requireAuth, (req: any, res) => handleGetUploadHistoryById(req, res) as any);
 }
 
 // ============================================================================
@@ -1297,5 +1345,290 @@ export async function handleConfirmFlights(req: any, res: any): Promise<void> {
   } catch (err: any) {
     console.error("[handleConfirmFlights] failed:", err);
     res.status(500).json({ message: "Internal error" });
+  }
+}
+
+// ADR-181 §2.2 — sync path ate ASYNC_THRESHOLD; acima processa em background
+// em chunks de BATCH_CHUNK, atualizando processed_count por batch. Falha de
+// batch nao aborta processamento (preserva trabalho parcial).
+const ASYNC_THRESHOLD = 5000;
+const BATCH_CHUNK = 500;
+
+function mapParsedToInsertRows(
+  tournamentsParsed: Array<any>,
+  userPlatformId: string,
+): any[] {
+  return tournamentsParsed.map((t) => {
+    const enriched = enrichTournamentTypeFields({ name: t.name, category: t.category });
+    const buyInNum = Number(t.buyIn ?? 0);
+    const rakeNum = Number(t.rake ?? 0);
+    const stakeOnly = Math.max(0, buyInNum - rakeNum);
+    const preservedCategory = (t.category && t.category.trim() !== '')
+      ? t.category
+      : enriched.type;
+    return {
+      userId: userPlatformId,
+      name: t.name.trim(),
+      buyIn: t.buyIn.toString(),
+      prize: t.prize?.toString() || "0",
+      position: t.position || null,
+      datePlayed: t.datePlayed ?? new Date(),
+      site: t.site,
+      format: t.format,
+      type: enriched.type,
+      category: preservedCategory,
+      isFlight: enriched.isFlight,
+      allowsAddOn: enriched.allowsAddOn,
+      addOnCost: enriched.allowsAddOn ? stakeOnly.toString() : null,
+      allowsReentry: enriched.allowsReentry,
+      speed: t.speed,
+      fieldSize: t.fieldSize || null,
+      finalTable: t.finalTable || false,
+      bigHit: t.bigHit || false,
+      currency: t.currency || "USD",
+      prizePool: t.prizePool?.toString() || null,
+      reentries: t.reentries || 0,
+      tournamentId: t.tournamentId || null,
+    };
+  });
+}
+
+async function processAsyncBatches(
+  injectedStorage: any,
+  uploadHistoryId: string,
+  userPlatformId: string,
+  rows: any[],
+): Promise<void> {
+  const total = rows.length;
+  let processed = 0;
+  let failedRows = 0;
+  for (let i = 0; i < rows.length; i += BATCH_CHUNK) {
+    const batch = rows.slice(i, i + BATCH_CHUNK);
+    try {
+      await injectedStorage.createTournamentsBatch(batch);
+    } catch (err) {
+      failedRows += batch.length;
+      console.error('upload_history.batch_failed', {
+        uploadHistoryId,
+        batchStart: i,
+        batchSize: batch.length,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      // Continua — preserva trabalho parcial conforme ADR-181.
+    }
+    processed = Math.min(i + batch.length, total);
+    try {
+      await injectedStorage.updateUploadHistory(uploadHistoryId, {
+        processedCount: processed,
+      });
+    } catch (updateErr) {
+      console.error('upload_history.update_failed', {
+        uploadHistoryId,
+        processed,
+        error: updateErr instanceof Error ? updateErr.message : String(updateErr),
+      });
+    }
+  }
+  const successCount = total - failedRows;
+  if (successCount > 0) {
+    playerBundleCache.invalidate(userPlatformId);
+    selectorCache.invalidateAllForUser(userPlatformId);
+  }
+  try {
+    await injectedStorage.updateUploadHistory(uploadHistoryId, {
+      status: successCount > 0 ? 'success' : 'failed',
+      tournamentsCount: successCount,
+    });
+  } catch (finalErr) {
+    console.error('upload_history.finalize_failed', {
+      uploadHistoryId,
+      error: finalErr instanceof Error ? finalErr.message : String(finalErr),
+    });
+  }
+}
+
+export async function handlePostUploadHistory(
+  req: any,
+  res: any,
+  injectedStorage?: any,
+): Promise<void> {
+  const store = injectedStorage ?? storage;
+  try {
+    const userPlatformId = req.user?.userPlatformId;
+    if (!userPlatformId || !String(userPlatformId).startsWith('USER-')) {
+      res.status(401).json({ message: 'Invalid user platform ID' });
+      return;
+    }
+
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ message: 'No file uploaded' });
+      return;
+    }
+
+    if (file.originalname) {
+      const magicErr = validateUploadMagicBytes({ originalname: file.originalname, buffer: file.buffer });
+      if (magicErr) {
+        res.status(400).json({ message: magicErr });
+        return;
+      }
+    }
+
+    const userSettings = await store.getUserSettings(userPlatformId);
+    const exchangeRates = withExchangeRateDefaults(userSettings?.exchangeRates);
+
+    const fileContent = file.buffer.toString('utf-8');
+    const parsed = await PokerCSVParser.parseCSV(fileContent, userPlatformId, exchangeRates);
+
+    const withId = parsed.filter((t: any) => t.tournamentId && t.tournamentId.trim() !== '');
+    const withoutId = parsed.filter((t: any) => !t.tournamentId || t.tournamentId.trim() === '');
+
+    const [existingIds, existingByFields] = await Promise.all([
+      store.findExistingTournamentIds(
+        userPlatformId,
+        withId.map((t: any) => t.tournamentId!),
+      ),
+      store.findExistingTournamentsByFields(
+        userPlatformId,
+        withoutId.map((t: any) => ({ name: t.name, datePlayed: t.datePlayed, buyIn: t.buyIn, site: t.site })),
+      ),
+    ]);
+
+    const validParsed: any[] = [];
+    let duplicatesIgnored = 0;
+    for (const t of withId) {
+      if (existingIds.has(t.tournamentId!)) {
+        duplicatesIgnored++;
+      } else {
+        validParsed.push(t);
+      }
+    }
+    for (const t of withoutId) {
+      if (t.datePlayed) {
+        const key = `${t.site}|${t.name.trim()}|${t.datePlayed.toISOString()}|${t.buyIn}`;
+        if (existingByFields.has(key)) {
+          duplicatesIgnored++;
+        } else {
+          validParsed.push(t);
+        }
+      } else {
+        validParsed.push(t);
+      }
+    }
+
+    const rows = mapParsedToInsertRows(validParsed, userPlatformId);
+    const total = rows.length;
+
+    if (total <= ASYNC_THRESHOLD) {
+      const saved = await store.createTournamentsBatch(rows);
+      const successCount = Array.isArray(saved) ? saved.length : total;
+      if (successCount > 0) {
+        playerBundleCache.invalidate(userPlatformId);
+        selectorCache.invalidateAllForUser(userPlatformId);
+      }
+      try {
+        await store.createUploadHistory({
+          userId: userPlatformId,
+          filename: file.originalname || 'upload.csv',
+          status: successCount > 0 ? 'success' : 'failed',
+          tournamentsCount: successCount,
+          processedCount: successCount,
+          errorMessage: null,
+          duplicatesFound: duplicatesIgnored,
+        });
+      } catch (historyErr) {
+        console.error('upload_history.create_failed_sync', historyErr);
+      }
+      res.status(200).json({
+        message: `${successCount} tournaments uploaded successfully`,
+        imported: successCount,
+        tournamentsImported: successCount,
+        savedCount: successCount,
+        duplicates: duplicatesIgnored,
+        parsed: parsed.length,
+        skipped: duplicatesIgnored,
+      });
+      return;
+    }
+
+    const createdRecord = await store.createUploadHistory({
+      userId: userPlatformId,
+      filename: file.originalname || 'upload.csv',
+      status: 'processing',
+      tournamentsCount: total,
+      processedCount: 0,
+      errorMessage: null,
+      duplicatesFound: duplicatesIgnored,
+    });
+    const uploadHistoryId = createdRecord?.id;
+    if (!uploadHistoryId) {
+      res.status(500).json({ message: 'Failed to enqueue async upload' });
+      return;
+    }
+
+    void processAsyncBatches(store, uploadHistoryId, userPlatformId, rows).catch(async (err) => {
+      console.error('upload_history.background_failed', {
+        uploadHistoryId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      try {
+        await store.updateUploadHistory(uploadHistoryId, {
+          status: 'failed',
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
+      } catch {
+        // ignored — log acima ja capturou
+      }
+    });
+
+    res.status(202).json({
+      uploadHistoryId,
+      estimatedTournaments: total,
+      status: 'processing',
+    });
+  } catch (err: any) {
+    console.error('[handlePostUploadHistory] failed:', err);
+    res.status(500).json({
+      message: 'Failed to upload file',
+      error: clientErrorDetail(err),
+    });
+  }
+}
+
+export async function handleGetUploadHistoryById(
+  req: any,
+  res: any,
+  injectedStorage?: any,
+): Promise<void> {
+  const store = injectedStorage ?? storage;
+  try {
+    const userPlatformId = req.user?.userPlatformId;
+    if (!userPlatformId || !String(userPlatformId).startsWith('USER-')) {
+      res.status(401).json({ message: 'Invalid user platform ID' });
+      return;
+    }
+    const { id } = req.params || {};
+    if (!id) {
+      res.status(400).json({ message: 'Missing upload history id' });
+      return;
+    }
+    const row = await store.getUploadHistoryById(id, userPlatformId);
+    if (!row) {
+      res.status(404).json({ message: 'Upload history not found' });
+      return;
+    }
+    // Defense-in-depth: storage ja filtra por userId, mas a checagem aqui
+    // protege contra storage adapter que ignore o filtro.
+    if (row.userId && row.userId !== userPlatformId) {
+      res.status(404).json({ message: 'Upload history not found' });
+      return;
+    }
+    res.status(200).json(row);
+  } catch (err: any) {
+    console.error('[handleGetUploadHistoryById] failed:', err);
+    res.status(500).json({
+      message: 'Failed to fetch upload history',
+      error: clientErrorDetail(err),
+    });
   }
 }

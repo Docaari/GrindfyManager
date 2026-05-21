@@ -1,0 +1,60 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant FE as "Frontend<br/>(FilmagemUpload / AutoUpload)"
+    participant Multer as "Multer<br/>(10MB limit)"
+    participant Route as "POST /api/upload-history"
+    participant Parser as "PokerCSVParser"
+    participant Storage as "storage<br/>(Drizzle)"
+    participant UH as "upload_history<br/>(processed_count NEW)"
+    participant TT as "tournaments<br/>(batch 500/insert)"
+    participant Poll as "GET /api/upload-history/:id"
+
+    User->>FE: Seleciona CSV (~18K rows)
+    FE->>Multer: POST multipart/form-data
+    Multer-->>FE: 413 if > 10MB
+    Multer->>Route: file.buffer
+    Route->>Parser: parseCSV(content)
+    Parser-->>Route: ParsedTournament[]
+
+    alt count <= 5000 (sync path — inalterado)
+        Route->>Storage: parseCSVWithDuplicateCheck + createTournamentsBatch
+        Storage->>TT: INSERT batch
+        Route-->>FE: 200 {imported, duplicates}
+    else count > 5000 (async path — RF-02 NOVO)
+        Route->>UH: INSERT id=$id, status='processing',<br/>processed_count=0, tournaments_count=$estimated
+        UH-->>Route: uploadHistoryId
+        Route-->>FE: 202 Accepted {uploadHistoryId, estimatedTournaments, status:'processing'}
+        FE->>FE: startPolling(uploadHistoryId, intervalMs=2000, timeoutMs=300000)
+
+        par background loop (fire-and-forget)
+            loop each batch (500/iter)
+                Route->>Storage: createTournamentsBatch(batch)
+                Storage->>TT: INSERT batch
+                alt batch ok
+                    Route->>UH: UPDATE processed_count = MIN(i+500, total)
+                else batch falha
+                    Route-->>Route: console.error('upload_history.batch_failed', ...)
+                    Note over Route: lesson #9 — log antes de fallback<br/>Continua proximos batches (partial work)
+                end
+            end
+            Route->>UH: UPDATE status='success'
+        and frontend polling (cada 2s)
+            loop ate status != 'processing' OR timeout 5min
+                FE->>Poll: GET /api/upload-history/:id
+                Poll->>UH: SELECT status, processed_count, tournaments_count
+                UH-->>Poll: row
+                Poll-->>FE: {status, processed_count, tournaments_count, progress_pct}
+                FE->>User: render "{processed}/{total} ({pct}%)"
+            end
+            alt status === 'success'
+                FE->>User: Concluido — {imported} imported (+ partial warning se processed < total)
+            else status === 'failed'
+                FE->>User: Erro — {errorMessage}
+            else timeout 5min
+                FE->>User: Expirou client-side (background segue;<br/>refresh /upload-history mostra estado real)
+            end
+        end
+    end
+
+    Note over UH: Migration 0074:<br/>ALTER TABLE ADD COLUMN processed_count integer NOT NULL DEFAULT 0;<br/>CREATE INDEX idx_upload_history_status ON upload_history(status);
