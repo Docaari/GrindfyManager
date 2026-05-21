@@ -14,6 +14,8 @@
 // =============================================================================
 
 import type { ReportContent } from "@shared/schema";
+import { callReportLlm } from "../coach/anthropicClient";
+import { computeReportCost } from "../coach/reportCost";
 
 export interface GenerateDailyDebriefArgs {
   userId: string;
@@ -41,64 +43,6 @@ async function resolveStorage(injected?: any): Promise<any> {
 }
 
 const DAILY_DEBRIEF_DEFAULT_MODEL = "claude-sonnet-4-6";
-const DAILY_DEBRIEF_PRICE_PER_M = { input: 3, output: 15, cacheCreate: 3.75, cacheRead: 0.3 };
-
-// LLM call mirroring weeklyReportGenerator.callLlm pattern (lesson #5/#35).
-// Retorna `{ parsed, usage }` em sucesso ou `{ clientUnavailable: true }` quando
-// SDK/key/cliente nao disponivel — caller cai pro deterministic.
-async function callDailyDebriefLlm(args: {
-  model: string;
-  bundle: any;
-  tone: string;
-  level: string | null;
-}): Promise<{ parsed: any; usage: any } | { clientUnavailable: true }> {
-  const { DAILY_DEBRIEF_SYSTEM, buildDailyDebriefPrompt } = await import("../coach/prompts/dailyDebrief");
-  let AnthropicCtor: any;
-  try {
-    const sdkMod = await import("@anthropic-ai/sdk");
-    AnthropicCtor = (sdkMod as any).default ?? sdkMod;
-  } catch {
-    return { clientUnavailable: true };
-  }
-  let client: any;
-  try {
-    client = new AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY });
-  } catch {
-    try { client = AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY }); } catch { client = null; }
-  }
-  if (!client || !client.messages || typeof client.messages.create !== "function") {
-    return { clientUnavailable: true };
-  }
-  const userMsg = buildDailyDebriefPrompt({ tone: args.tone, level: args.level, bundle: args.bundle });
-  const response = await client.messages.create({
-    model: args.model,
-    max_tokens: 1200,
-    system: [
-      { type: "text", text: DAILY_DEBRIEF_SYSTEM, cache_control: { type: "ephemeral" } },
-    ],
-    messages: [{ role: "user", content: userMsg }],
-  });
-  const text = Array.isArray(response?.content)
-    ? response.content.filter((b: any) => b?.type === "text").map((b: any) => b.text).join("")
-    : (typeof response?.content === "string" ? response.content : "");
-  let parsed: any = {};
-  try {
-    const m = text.match(/\{[\s\S]*\}/);
-    parsed = m ? JSON.parse(m[0]) : JSON.parse(text);
-  } catch {
-    parsed = {};
-  }
-  return { parsed, usage: response?.usage ?? null };
-}
-
-function computeDailyDebriefCost(usage: any): number {
-  const i = Number(usage?.input_tokens ?? usage?.inputTokens ?? 0);
-  const o = Number(usage?.output_tokens ?? usage?.outputTokens ?? 0);
-  const cc = Number(usage?.cache_creation_input_tokens ?? usage?.cacheCreationInputTokens ?? 0);
-  const cr = Number(usage?.cache_read_input_tokens ?? usage?.cacheReadInputTokens ?? 0);
-  const p = DAILY_DEBRIEF_PRICE_PER_M;
-  return (i * p.input + o * p.output + cc * p.cacheCreate + cr * p.cacheRead) / 1_000_000;
-}
 
 const N = (v: any): number => {
   const n = typeof v === "string" ? parseFloat(v) : Number(v);
@@ -324,7 +268,11 @@ export async function generateDailyDebrief(args: GenerateDailyDebriefArgs): Prom
   let degradedReason: string | null = null;
   let llmModelUsed: string | null = null;
 
-  if (hasData) {
+  // Sprint AI-3.1 / RF-06 (ADR-176) — invoca LLM em 2 casos:
+  //   1. hasData (paridade com pre-AI-3.1: sempre tentava narrativa).
+  //   2. ANTHROPIC_API_KEY presente, mesmo sem dados (AI-3.1 paridade weekly).
+  // Sem chave + sem dados: skip absoluto (status='ready', cost=0).
+  if (hasData || process.env.ANTHROPIC_API_KEY) {
     const bundle = {
       tone,
       level,
@@ -332,23 +280,35 @@ export async function generateDailyDebrief(args: GenerateDailyDebriefArgs): Prom
         sessionDate: date,
         sessionsCount: agg.sessionsCount,
         tournamentsCount: agg.tournamentsCount,
-        profitUsd: agg.profitUsd,
+        profitUsd: hasData ? agg.profitUsd : null,
         roiPct: roi,
         itmCount: agg.itmCount,
         finalTables: agg.finalTables,
         cravadas: agg.cravadas,
         spotsCount: agg.spotsCount,
         profitByCurrency: agg.profitByCurrency,
+        hasData,
       },
       followUp: followUp ?? null,
     };
     try {
-      const out = await callDailyDebriefLlm({ model, bundle, tone, level });
-      if ("clientUnavailable" in out) {
+      const { DAILY_DEBRIEF_SYSTEM, buildDailyDebriefPrompt } = await import("../coach/prompts/dailyDebrief");
+      const out = await callReportLlm({
+        systemPrompt: DAILY_DEBRIEF_SYSTEM,
+        userPromptBuilder: (b, opts) => buildDailyDebriefPrompt({ tone: opts.tone ?? tone, level: opts.level ?? level, bundle: b }),
+        model,
+        bundle,
+        tone,
+        level,
+        maxTokens: 1200,
+        parseOnError: "fallback-degraded",
+      });
+      if (out.degradedReason) {
+        // Surface todos: no_anthropic_key | llm_failed_3x | llm_parse_error.
         degraded = true;
-        degradedReason = "no_anthropic_key";
+        degradedReason = out.degradedReason;
       } else {
-        const p = out.parsed ?? {};
+        const p = out.content ?? {};
         llmHeaderSummary = typeof p?.header?.summaryLine === "string" ? p.header.summaryLine : null;
         llmHeaderComparison = typeof p?.header?.comparison === "string" ? p.header.comparison : null;
         if (Array.isArray(p?.insights)) {
@@ -367,7 +327,7 @@ export async function generateDailyDebrief(args: GenerateDailyDebriefArgs): Prom
           llmRecommendedAction = p.recommendedAction;
         }
         usage = out.usage;
-        costUsd = computeDailyDebriefCost(usage);
+        costUsd = computeReportCost(usage, "sonnet46");
         llmModelUsed = model;
       }
     } catch (err) {

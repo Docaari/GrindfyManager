@@ -1,8 +1,10 @@
 // =============================================================================
 // monthlyReportEmail — Sprint AI-2B / RF-07.3 (ADR-172)
+// Sprint AI-3.1 / RF-04 (ADR-176) — migrado para `_renderReportShell`.
 // =============================================================================
 
-import { escapeHtml, renderFooter } from "./_helpers";
+import { escapeHtml } from "./_helpers";
+import { renderReportShell } from "./_renderReportShell";
 
 const MONTH_NAMES_PT = [
   "Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho",
@@ -29,23 +31,21 @@ export function renderMonthlyReportEmail(args: RenderReportEmailArgs): { subject
   const { content, userName, unsubscribeUrl, baseUrl, reportId } = args;
   const ml = monthLabel(String(content?.periodStart ?? ""));
   const subject = `Seu relatorio mensal — ${ml}`;
-  const safeName = escapeHtml(userName);
   const url = `${baseUrl}/coach-ai/relatorio/${escapeHtml(reportId)}`;
 
-  const html = `
-    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-      <h1>Ola ${safeName},</h1>
-      <p>Seu relatorio mensal do Grindfy esta pronto (${escapeHtml(ml)}).</p>
-      <p style="margin-top:24px;">
-        <a href="${url}" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">
-          Abrir relatorio completo
-        </a>
-      </p>
-      ${renderFooter(content?.disclaimer, unsubscribeUrl)}
-    </div>
-  `;
+  // @safe-html — ml passa por escapeHtml; restante eh literal.
+  const safeBodyHtml = `<p>Resumo do mes ${escapeHtml(ml)}.</p>`;
 
-  const text = `Ola ${userName},\n\nSeu relatorio mensal do Grindfy esta pronto (${ml}).\n\nAbra em: ${url}\n\n${content?.disclaimer ?? ""}\n\nUnsubscribe: ${unsubscribeUrl}`;
+  const shell = renderReportShell({
+    userName,
+    subject,
+    intro: `Seu relatorio mensal do Grindfy esta pronto (${escapeHtml(ml)}).`,
+    safeBodyHtml,
+    ctaLabel: "Abrir relatorio completo",
+    ctaUrl: url,
+    disclaimer: content?.disclaimer,
+    unsubscribeUrl,
+  });
 
-  return { subject, html, text };
+  return { subject, html: shell.html, text: shell.text };
 }

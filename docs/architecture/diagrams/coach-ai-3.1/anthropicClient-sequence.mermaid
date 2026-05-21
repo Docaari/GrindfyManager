@@ -1,0 +1,69 @@
+%% Diagrama Mermaid — Sprint AI-3.1 / RF-06 (ADR-176 §2.7)
+%%
+%% Sequence: 5 callsites lockstep -> callReportLlm -> retry 3x exponencial ->
+%%           parseOnError fallback -> log lesson #9 -> degradedReason discriminado.
+%%
+%% Mock layer abaixo do separador mostra cenario test (vi.mock intercepta
+%% callReportLlm direto, NAO @anthropic-ai/sdk -- elimina drift lesson #5/#35).
+%%
+%% Lessons: #5/#35 (new AnthropicCtor try/catch factory fallback),
+%%          #9 (log antes do fallback), #34 (injectedClient testabilidade),
+%%          #36 (lazy SDK import).
+
+sequenceDiagram
+    autonumber
+    participant Caller as Generator caller<br/>(quarterly/monthly/daily/<br/>recommendLesson/summarizer)
+    participant Wrapper as anthropicClient.ts<br/>callReportLlm
+    participant Client as getAnthropicClient<br/>(lazy import + ctor)
+    participant SDK as @anthropic-ai/sdk<br/>(messages.create)
+    participant Log as console.warn<br/>lesson #9
+    participant CostMod as reportCost.ts<br/>computeReportCost
+
+    Note over Caller,SDK: Producao (happy path Sonnet 4.6)
+
+    Caller->>Wrapper: callReportLlm({systemPrompt, userPromptBuilder, model, bundle, tone, level, maxTokens, parseOnError})
+    Wrapper->>Wrapper: validate tone in WHITELISTED_TONES<br/>validate level in WHITELISTED_LEVELS<br/>(throw sync se invalido)
+    Wrapper->>Client: getAnthropicClient(injected?)
+    Client->>Client: lazy await import("@anthropic-ai/sdk")<br/>new AnthropicCtor({apiKey})<br/>try/catch -> factory fallback
+    Client-->>Wrapper: client (ou null se sem chave)
+    alt client === null
+        Wrapper-->>Caller: { content: {}, usage: 0, degradedReason: "no_anthropic_key" }
+    else client OK
+        Wrapper->>Wrapper: prompt = userPromptBuilder(bundle, {tone, level})
+        loop attempt 1..3 (backoff 100ms / 400ms / 1600ms)
+            Wrapper->>SDK: messages.create({model, system: systemPrompt, messages: [{role:"user", content: prompt}], max_tokens})
+            alt 200 OK
+                SDK-->>Wrapper: response { content, usage }
+                Wrapper->>Wrapper: rawText = response.content[0].text
+                alt JSON.parse(rawText) OK
+                    Wrapper->>CostMod: computeReportCost(usage, "sonnet46")<br/>(ou "haiku45" se reportSummarizer)
+                    CostMod-->>Wrapper: costUsd
+                    Wrapper-->>Caller: { content, usage, rawText, costUsd, degradedReason: undefined }
+                else parse error
+                    Wrapper->>Log: anthropicClient.before_fallback {model, attempt, error:"parse"}
+                    alt parseOnError === "fallback-degraded"
+                        Wrapper-->>Caller: { content: {}, usage, rawText, degradedReason: "llm_parse_error" }
+                    else parseOnError === "throw"
+                        Wrapper-->>Caller: throw ParseError
+                    end
+                end
+            else 429 / 500 / network
+                Wrapper->>Log: anthropicClient.before_fallback {model, attempt, error: <reason>}
+                Note right of Wrapper: sleep backoff = 100 * 4^(attempt-1) ms
+                Wrapper->>Wrapper: continue loop (next attempt)
+            end
+        end
+        Note over Wrapper: 3x falhas consecutivas (loop esgotou)
+        Wrapper-->>Caller: { content: {}, usage: 0, degradedReason: "llm_failed_3x" }
+    end
+
+    Note over Caller,SDK: --- separador: cenario test ---
+
+    participant Test as test file<br/>(quarterlyReportGenerator.test.ts etc)
+    participant MockWrap as vi.mock(<br/>"@/server/coach/anthropicClient")
+
+    Test->>MockWrap: vi.mock("@/server/coach/anthropicClient", () => ({<br/>  callReportLlm: vi.fn().mockResolvedValue({content: {...}, usage: {...}, degradedReason: undefined})<br/>}))
+    Test->>Caller: triggers caller code
+    Caller->>MockWrap: callReportLlm(...) -- intercepta
+    MockWrap-->>Caller: mocked response (controla cenarios: degraded, retry exhaust, parse error)
+    Note right of MockWrap: NAO mocka @anthropic-ai/sdk direto.<br/>Lesson #3: shape do retorno casa<br/>com producao (CallReportLlmResult).<br/>Lesson #5/#35 ja coberto em testes<br/>unit do proprio anthropicClient.ts.

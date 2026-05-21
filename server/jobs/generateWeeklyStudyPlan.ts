@@ -19,6 +19,7 @@
 import cron from "node-cron";
 import { storage } from "../storage";
 import { withAdvisoryLock } from "../lib/advisoryLock";
+import { sleep } from "../utils/sleep";
 import {
   generateWeeklyStudyPlan,
   hasCoachAccess,
@@ -36,10 +37,6 @@ function utcMondayOfWeek(date: Date): Date {
   const delta = dow === 0 ? 6 : dow - 1;
   d.setUTCDate(d.getUTCDate() - delta);
   return d;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function runWeeklyStudyPlan(): Promise<void> {

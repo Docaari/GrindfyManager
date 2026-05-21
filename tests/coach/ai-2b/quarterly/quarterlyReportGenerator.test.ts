@@ -283,11 +283,14 @@ describe("generateQuarterlyReport — careerGoalsProgress (ADR-168)", () => {
 
 describe("generateQuarterlyReport — sumarização hierárquica Haiku", () => {
   it("bundle > 20K chars → summarizer_model_used populated", async () => {
-    // Bundle gigante: 200 sessões
+    // Bundle gigante: 200 sessões com payload denso (handHistories + notes)
+    // para bundle.chars > 20K (AI-3.1 RF-03 chars-only threshold).
     const sessions = Array.from({ length: 200 }, (_, i) => ({
       id: `s${i}`,
       date: `2026-${String(((i % 3) + 1)).padStart(2, "0")}-15`,
       status: "completed",
+      handHistories: "x".repeat(100),
+      notes: "y".repeat(50),
     }));
     const storage = makeMockStorage({
       getGrindSessions: vi.fn(async () => sessions),
@@ -295,12 +298,17 @@ describe("generateQuarterlyReport — sumarização hierárquica Haiku", () => {
     vi.doMock("@anthropic-ai/sdk", () => ({
       default: function FakeAnthropic() { return null; },
     }));
-    const summarizeSpy = vi.fn(async (args: any) => ({
-      summarized: { compact: true },
-      modelUsed: "claude-haiku-4-5-20251001",
+    // Sprint AI-3.1 / RF-03 (ADR-176) — quarterly delega para `maybeSummarizeBundle`
+    // (chars-only puro). Helper legacy `summarizeBundleHierarchical` removido.
+    const summarizeSpy = vi.fn(async (_bundle: any) => ({
+      bundle: { compact: true },
+      summarizerModelUsed: "claude-haiku-4-5-20251001",
+      summarizedAt: new Date(),
+      originalChars: 25000,
+      summarizedChars: 200,
     }));
     vi.doMock("../../../../server/services/reportSummarizer", () => ({
-      summarizeBundleHierarchical: summarizeSpy,
+      maybeSummarizeBundle: summarizeSpy,
     }));
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { generateQuarterlyReport } = await import(

@@ -506,6 +506,13 @@ export interface IStorage {
   // Grind session operations
   // Wave B (Fase 3 perf): optional limit pra paginar — heavy users com 1000s/yr.
   getGrindSessions(userId: string, opts?: { limit?: number; offset?: number }): Promise<GrindSession[]>;
+  // Sprint AI-3.1 / RF-08 (ADR-176) — count puro, evita load N rows so para
+  // `.length`. range opcional aceita `{from, to}` Date OU YYYY-MM-DD strings;
+  // null/undefined conta todas as sessoes do user.
+  countGrindSessions(
+    userId: string,
+    range?: { from: Date | string; to: Date | string } | null,
+  ): Promise<number>;
   getGrindSession(id: string): Promise<GrindSession | undefined>;
   createGrindSession(session: InsertGrindSession): Promise<GrindSession>;
   updateGrindSession(id: string, session: Partial<InsertGrindSession>): Promise<GrindSession>;
@@ -1738,6 +1745,37 @@ export class DatabaseStorage implements IStorage {
       q = q.offset(opts.offset);
     }
     return await q;
+  }
+
+  // Sprint AI-3.1 / RF-08 (ADR-176) — SELECT COUNT(*) puro, evita carregar N
+  // linhas do DB so para `.length`. Range filter best-effort por `date`
+  // (planned date) com fallback para `created_at` se date null. Aceita strings
+  // YYYY-MM-DD ou Date objects.
+  async countGrindSessions(
+    userId: string,
+    range?: { from: Date | string; to: Date | string } | null,
+  ): Promise<number> {
+    try {
+      const cond: any[] = [eq(grindSessions.userId, userId)];
+      if (range && range.from && range.to) {
+        const fromDate = range.from instanceof Date ? range.from : new Date(String(range.from));
+        const toDate = range.to instanceof Date ? range.to : new Date(String(range.to));
+        if (!Number.isNaN(fromDate.getTime()) && !Number.isNaN(toDate.getTime())) {
+          cond.push(gte(grindSessions.date, fromDate as any));
+          cond.push(lte(grindSessions.date, toDate as any));
+        }
+      }
+      const rows = await (db as any)
+        .select({ n: sql<number>`count(*)::int` })
+        .from(grindSessions)
+        .where(cond.length === 1 ? cond[0] : and(...cond));
+      const row = Array.isArray(rows) ? rows[0] : rows;
+      const n = Number(row?.n ?? 0);
+      return Number.isFinite(n) ? n : 0;
+    } catch (err) {
+      console.error("storage.countGrindSessions.error", { userId, err: err instanceof Error ? err.message : String(err) });
+      return 0;
+    }
   }
 
   async getGrindSession(id: string): Promise<GrindSession | undefined> {

@@ -82,14 +82,30 @@ async function handler(
     degraded = true;
   }
 
-  const byCurrency: Array<{ currency: string; profit: number; convertedUsd: number; convertedBrl: number | null }> = [];
+  // Sprint AI-3.1 / RF-02 (ADR-176) — `profit` renomeado para `profitNative`
+  // (campo canonico explicito: valor em moeda nativa, NAO USD). Alias `profit`
+  // preservado deprecated por 1 sprint (mesmo valor). Remove em AI-3.2.
+  const byCurrency: Array<{
+    currency: string;
+    profitNative: number;
+    /** @deprecated remove em AI-3.2 — use profitNative */
+    profit: number;
+    convertedUsd: number;
+    convertedBrl: number | null;
+  }> = [];
   if (!degraded && Array.isArray(perf?.byCurrency)) {
     for (const c of perf.byCurrency) {
       const cur = String(c?.currency ?? "USD").toUpperCase();
       const native = Number(c?.profit ?? 0);
       const ptax = avgPtax as number;
       const convertedUsd = cur === "BRL" ? native / ptax : native;
-      byCurrency.push({ currency: cur, profit: native, convertedUsd, convertedBrl: convertedUsd * ptax });
+      byCurrency.push({
+        currency: cur,
+        profitNative: native,
+        profit: native, // @deprecated alias — remove AI-3.2
+        convertedUsd,
+        convertedBrl: convertedUsd * ptax,
+      });
     }
   }
 

@@ -1,5 +1,7 @@
 // =============================================================================
 // reportSummarizer — Sprint AI-1C / RF-07 (ADR-159)
+// Sprint AI-3.1 / RF-06 + RF-07 (ADR-176) — Anthropic call + cost delegados a
+// `server/coach/anthropicClient.ts` + `server/coach/reportCost.ts`.
 //
 // Sumarizacao hierarquica Haiku->Sonnet. Quando o bundle do gerador eh
 // "grande" (acima de COACH_REPORT_SUMMARIZE_THRESHOLD_CHARS, default 20000),
@@ -10,8 +12,10 @@
 // Daily Debrief: nunca aciona (bundle sempre pequeno).
 // Weekly/Monthly: pode acionar quando o usuario tem muitas sessoes/dados.
 //
-// Lessons: #5/#35 (new AnthropicCtor + factory fallback), #9 (safe-deny).
+// Lessons: #9 (safe-deny + log antes do fallback).
 // =============================================================================
+
+import { callReportLlm } from "../coach/anthropicClient";
 
 const DEFAULT_THRESHOLD_CHARS = 20000;
 const DEFAULT_SUMMARIZER_MODEL = "claude-haiku-4-5-20251001";
@@ -80,40 +84,22 @@ export async function maybeSummarizeBundle(bundle: any): Promise<SummarizeBundle
 
   const model = summarizerModel();
 
-  let AnthropicCtor: any;
   try {
-    const sdkMod = await import("@anthropic-ai/sdk");
-    AnthropicCtor = (sdkMod as any).default ?? sdkMod;
-  } catch {
-    console.error("report_summarizer.sdk_unavailable", { originalChars });
-    return { bundle, summarizerModelUsed: null, summarizedAt: null, originalChars, summarizedChars: null };
-  }
-  let client: any;
-  try {
-    client = new AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY });
-  } catch {
-    try { client = AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY }); } catch { client = null; }
-  }
-  if (!client || !client.messages || typeof client.messages.create !== "function") {
-    console.error("report_summarizer.client_unavailable", { originalChars });
-    return { bundle, summarizerModelUsed: null, summarizedAt: null, originalChars, summarizedChars: null };
-  }
-
-  try {
-    const response = await client.messages.create({
+    const out = await callReportLlm({
+      systemPrompt: SUMMARIZER_SYSTEM,
+      userPromptBuilder: (b) => buildSummarizerPrompt(b),
       model,
-      max_tokens: 4000,
-      system: [{ type: "text", text: SUMMARIZER_SYSTEM, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: buildSummarizerPrompt(bundle) }],
+      bundle,
+      maxTokens: 4000,
+      parseOnError: "fallback-degraded",
     });
-    const text = Array.isArray(response?.content)
-      ? response.content.filter((b: any) => b?.type === "text").map((b: any) => b.text).join("")
-      : (typeof response?.content === "string" ? response.content : "");
-    const m = text.match(/\{[\s\S]*\}/);
-    const parsed = m ? JSON.parse(m[0]) : JSON.parse(text);
-    const summarizedChars = JSON.stringify(parsed).length;
+    if (out.degradedReason || !out.content || typeof out.content !== "object") {
+      console.error("report_summarizer.client_unavailable_or_parse", { originalChars, degradedReason: out.degradedReason });
+      return { bundle, summarizerModelUsed: null, summarizedAt: null, originalChars, summarizedChars: null };
+    }
+    const summarizedChars = JSON.stringify(out.content).length;
     return {
-      bundle: parsed,
+      bundle: out.content,
       summarizerModelUsed: model,
       summarizedAt: new Date(),
       originalChars,
@@ -121,7 +107,6 @@ export async function maybeSummarizeBundle(bundle: any): Promise<SummarizeBundle
     };
   } catch (err) {
     console.error("report_summarizer.error", { originalChars, err: err instanceof Error ? err.message : String(err) });
-    // Safe-deny: retorna bundle original se sumarizacao falhar. Sonnet aguenta.
     return { bundle, summarizerModelUsed: null, summarizedAt: null, originalChars, summarizedChars: null };
   }
 }

@@ -1,0 +1,60 @@
+%% Diagrama Mermaid — Sprint AI-3.1 / RF-04 (ADR-176 §2.6)
+%%
+%% Flow: weekly/monthly/quarterly email templates ->
+%%       _renderReportShell consolidado (param `safeBodyHtml`).
+%%
+%% Note lateral destaca contract caller-side `@safe-html`: caller MUST sanitize
+%% (escapeHtml em user-content; literal de template safe by construction).
+%% Sem DOMPurify server-side (sem jsdom dep).
+%%
+%% Lessons: #16 (DOMPurify USE_PROFILES nao restritivo -> evitar contract runtime ambiguo;
+%%               aqui contract eh static + grep auditavel via @safe-html marker).
+
+graph TB
+    subgraph callers["Email template callers"]
+        weekly["weeklyReportEmail.ts<br/><i>RF-04: migrate de inline -> shell</i>"]
+        monthly["monthlyReportEmail.ts<br/><i>RF-04: migrate de inline -> shell</i>"]
+        quarterly["quarterlyReportEmail.ts<br/><i>Ja migrou em AI-3 (ADR-174)</i>"]
+    end
+
+    subgraph bodyBuilders["bodyHtml construction (caller-side)"]
+        wBody["weeklyBodyHtml<br/><i>escapeHtml(userName) +<br/>escapeHtml(kpiSummary) +<br/>literal template HTML</i>"]
+        mBody["monthlyBodyHtml<br/><i>escapeHtml(comparatives) +<br/>literal template HTML</i>"]
+        qBody["quarterlyBodyHtml<br/><i>escapeHtml(narrativa LLM) +<br/>literal template HTML</i>"]
+    end
+
+    subgraph shell["_renderReportShell.ts (server/emails/templates/)"]
+        shellFn["renderReportShell({<br/>  userName,<br/>  subject,<br/>  intro,<br/>  safeBodyHtml,  <-- RENAME (was bodyHtml)<br/>  ctaLabel,<br/>  ctaUrl,<br/>  disclaimer?,<br/>  unsubscribeUrl<br/>}): { html, text }"]
+        contract["JSDoc contract:<br/><b>@safe-html</b><br/><i>'CALLER MUST SANITIZE.<br/>Nao ha DOMPurify aqui (server context).<br/>escapeHtml em user-content;<br/>literal de template safe by construction.'</i>"]
+    end
+
+    subgraph output["Email output (igual pre/pos-migrate)"]
+        html["{ html, text }<br/><i>HTML identico ao pre-migrate<br/>(snapshot test valida<br/>via string.trim() + regex whitespace)</i>"]
+    end
+
+    subgraph helpers["server/emails/templates/_helpers.ts"]
+        escapeFn["escapeHtml(s: string): string<br/><i>Convencao para campos<br/>vindos de user-content</i>"]
+    end
+
+    wBody -->|"safeBodyHtml literal"| weekly
+    mBody -->|"safeBodyHtml literal"| monthly
+    qBody -->|"safeBodyHtml literal"| quarterly
+
+    weekly -->|"renderReportShell({..., safeBodyHtml})"| shellFn
+    monthly -->|"renderReportShell({..., safeBodyHtml})"| shellFn
+    quarterly -->|"renderReportShell({..., safeBodyHtml})"| shellFn
+
+    shellFn -.->|"contract documenta"| contract
+    wBody -.->|"usa para userName/kpi"| escapeFn
+    mBody -.->|"usa para comparatives"| escapeFn
+    qBody -.->|"usa para narrativa LLM"| escapeFn
+
+    shellFn -->|"render header + CTA + footer<br/>(disclaimer + unsubscribe)"| html
+
+    classDef migrated fill:#dcfce7,stroke:#16a34a,color:#15803d
+    classDef previously fill:#e0e7ff,stroke:#4f46e5,color:#3730a3
+    classDef contractNote fill:#fef3c7,stroke:#d97706,color:#92400e
+
+    class weekly,monthly migrated
+    class quarterly previously
+    class contract contractNote

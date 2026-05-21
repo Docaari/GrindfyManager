@@ -10,6 +10,8 @@
 // =============================================================================
 
 import type { ReportContent } from "@shared/schema";
+import { callReportLlm } from "../coach/anthropicClient";
+import { computeReportCost } from "../coach/reportCost";
 
 export interface GenerateMonthlyReportArgs {
   userId: string;
@@ -37,61 +39,6 @@ async function resolveStorage(injected?: any): Promise<any> {
 }
 
 const MONTHLY_DEFAULT_MODEL = "claude-sonnet-4-6";
-const MONTHLY_PRICE_PER_M = { input: 3, output: 15, cacheCreate: 3.75, cacheRead: 0.3 };
-
-async function callMonthlyLlm(args: {
-  model: string;
-  bundle: any;
-  tone: string;
-  level: string | null;
-}): Promise<{ parsed: any; usage: any } | { clientUnavailable: true }> {
-  const { MONTHLY_REPORT_SYSTEM, buildMonthlyReportPrompt } = await import("../coach/prompts/monthlyReport");
-  let AnthropicCtor: any;
-  try {
-    const sdkMod = await import("@anthropic-ai/sdk");
-    AnthropicCtor = (sdkMod as any).default ?? sdkMod;
-  } catch {
-    return { clientUnavailable: true };
-  }
-  let client: any;
-  try {
-    client = new AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY });
-  } catch {
-    try { client = AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY }); } catch { client = null; }
-  }
-  if (!client || !client.messages || typeof client.messages.create !== "function") {
-    return { clientUnavailable: true };
-  }
-  const userMsg = buildMonthlyReportPrompt({ tone: args.tone, level: args.level, bundle: args.bundle });
-  const response = await client.messages.create({
-    model: args.model,
-    max_tokens: 3500,
-    system: [
-      { type: "text", text: MONTHLY_REPORT_SYSTEM, cache_control: { type: "ephemeral" } },
-    ],
-    messages: [{ role: "user", content: userMsg }],
-  });
-  const text = Array.isArray(response?.content)
-    ? response.content.filter((b: any) => b?.type === "text").map((b: any) => b.text).join("")
-    : (typeof response?.content === "string" ? response.content : "");
-  let parsed: any = {};
-  try {
-    const m = text.match(/\{[\s\S]*\}/);
-    parsed = m ? JSON.parse(m[0]) : JSON.parse(text);
-  } catch {
-    parsed = {};
-  }
-  return { parsed, usage: response?.usage ?? null };
-}
-
-function computeMonthlyCost(usage: any): number {
-  const i = Number(usage?.input_tokens ?? usage?.inputTokens ?? 0);
-  const o = Number(usage?.output_tokens ?? usage?.outputTokens ?? 0);
-  const cc = Number(usage?.cache_creation_input_tokens ?? usage?.cacheCreationInputTokens ?? 0);
-  const cr = Number(usage?.cache_read_input_tokens ?? usage?.cacheReadInputTokens ?? 0);
-  const p = MONTHLY_PRICE_PER_M;
-  return (i * p.input + o * p.output + cc * p.cacheCreate + cr * p.cacheRead) / 1_000_000;
-}
 
 const N = (v: any): number => {
   const n = typeof v === "string" ? parseFloat(v) : Number(v);
@@ -363,12 +310,23 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
     summarizerModelUsed = summarized.summarizerModelUsed;
 
     try {
-      const out = await callMonthlyLlm({ model, bundle, tone, level });
-      if ("clientUnavailable" in out) {
+      const { MONTHLY_REPORT_SYSTEM, buildMonthlyReportPrompt } = await import("../coach/prompts/monthlyReport");
+      const out = await callReportLlm({
+        systemPrompt: MONTHLY_REPORT_SYSTEM,
+        userPromptBuilder: (b, opts) => buildMonthlyReportPrompt({ tone: opts.tone ?? tone, level: opts.level ?? level, bundle: b }),
+        model,
+        bundle,
+        tone,
+        level,
+        maxTokens: 3500,
+        parseOnError: "fallback-degraded",
+      });
+      if (out.degradedReason) {
+        // Surface todos: no_anthropic_key | llm_failed_3x | llm_parse_error.
         degraded = true;
-        degradedReason = "no_anthropic_key";
+        degradedReason = out.degradedReason;
       } else {
-        const p = out.parsed ?? {};
+        const p = out.content ?? {};
         llmSummaryLine = typeof p?.header?.summaryLine === "string" ? p.header.summaryLine : null;
         llmComparison = typeof p?.header?.comparison === "string" ? p.header.comparison : null;
         llmTrend = typeof p?.comparatives?.trendNarrative === "string" ? p.comparatives.trendNarrative : null;
@@ -388,7 +346,7 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
         if (typeof p?.nextWeekPlan?.recommendedAction === "string") llmRecommendedAction = p.nextWeekPlan.recommendedAction;
         if (typeof p?.nextWeekPlan?.studyFocus === "string") llmStudyFocus = p.nextWeekPlan.studyFocus;
         usage = out.usage;
-        costUsd = computeMonthlyCost(usage);
+        costUsd = computeReportCost(usage, "sonnet46");
         llmModelUsed = model;
       }
     } catch (err) {

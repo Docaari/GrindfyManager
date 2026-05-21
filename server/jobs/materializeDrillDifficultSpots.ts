@@ -17,6 +17,7 @@ import { createHash } from "crypto";
 import { withAdvisoryLock } from "../lib/advisoryLock";
 import { storage } from "../storage";
 import { computeInitialState } from "../services/spotReentry/srsAlgorithm";
+import { sleep } from "../utils/sleep";
 
 const CRON_EXPR = "0 6 * * *";
 const PACING_MS = 200; // pacing entre spots para evitar burst
@@ -30,10 +31,6 @@ function startOfUtcDay(d: Date): Date {
   return new Date(
     Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0),
   );
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 async function materializeForUser(

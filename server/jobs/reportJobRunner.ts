@@ -23,6 +23,7 @@ import { withAdvisoryLock } from "../lib/advisoryLock";
 import { getLocalHour } from "../coach/timezone";
 import { getCoachPreferences } from "../storage/coachPreferences";
 import { PREF_FIELD_BY_KIND, type ReportKind } from "../coach/reportEligibility";
+import { sleep } from "../utils/sleep";
 
 // =============================================================================
 // Elegibilidade de plano (AI-1B bug fix — `users.subscription_plan` so assume
@@ -94,10 +95,6 @@ async function resolveStorage(injected?: any): Promise<any> {
   if (injected) return injected;
   const mod = await import("../storage");
   return (mod as any).storage;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 function ymd(d: Date): string {

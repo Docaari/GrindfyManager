@@ -30,13 +30,14 @@ export function renderQuarterlyReportEmail(args: RenderReportEmailArgs): { subje
   const url = `${baseUrl}/coach-ai/relatorio/${escapeHtml(reportId)}`;
 
   // Miolo do email: nota do trimestre (label + quarter).
-  const bodyHtml = `<p>Resumo do trimestre ${escapeHtml(ql)}.</p>`;
+  // @safe-html — escapeHtml ja sanitiza ql; texto literal eh safe by construction.
+  const safeBodyHtml = `<p>Resumo do trimestre ${escapeHtml(ql)}.</p>`;
 
   const shell = renderReportShell({
     userName,
     subject,
     intro: `Seu relatorio trimestral do Grindfy esta pronto (${ql}).`,
-    bodyHtml,
+    safeBodyHtml,
     ctaLabel: "Abrir relatorio completo",
     ctaUrl: url,
     disclaimer: content?.disclaimer,
