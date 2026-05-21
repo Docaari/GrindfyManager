@@ -22,7 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectorPanel } from "@/components/grade-planner/SelectorPanel";
 
 import { tournamentSchema, type TournamentForm, weekDays } from '@/components/grade-planner/types';
-import { computeDayStats, buildOffDayToastPayload } from '@/pages/grade-planner-helpers';
+import { computeDayStats, buildOffDayToastPayload } from '@/components/grade-planner/helpers';
 import { mapZodIssuesToForm } from '@/lib/zodErrorMapper';
 import { LoadingScreen } from '@/components/grade-planner/LoadingScreen';
 import { WeeklySummaryBar } from '@/components/grade-planner/WeeklySummaryBar';

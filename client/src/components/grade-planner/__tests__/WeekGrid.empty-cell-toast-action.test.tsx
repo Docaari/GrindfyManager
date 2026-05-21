@@ -35,7 +35,7 @@ import React from 'react';
 
 // RED: helper ainda nao existe. Implementer adiciona em grade-planner-helpers.ts.
 // @ts-expect-error — RED: buildOffDayToastPayload sera exportado pelo implementer
-import { buildOffDayToastPayload } from '@/pages/grade-planner-helpers';
+import { buildOffDayToastPayload } from '@/components/grade-planner/helpers';
 
 describe('RF-05 buildOffDayToastPayload — formato', () => {
   it('retorna { title, description, action } com title incluindo dayName', () => {
