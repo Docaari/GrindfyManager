@@ -1,0 +1,88 @@
+%% Mini Player 2 - Driver switch (ADR-189 queue homogenea) + Sleep Timer fire (RF-NEW).
+%% Telemetria via user_activity (ADR-191) marcada como side-effect (linhas tracejadas).
+%% Driver switch: pause(old) -> destroy(old) -> instantiate(new) -> load + play(new).
+%% Sleep Timer: setTimeout drift-resistant via targetTimestamp + setInterval recheck.
+
+flowchart TD
+    Start(["AudioPlayerProvider mounted<br/>activeDriver = LibraryAudioDriver<br/>tocando aula Coach (HtmlAudio)"]) --> UserAction{"User action?"}
+
+    UserAction -->|"Click musica Spotify<br/>(MP3 future ou disconnect/reconnect)"| Switch1
+    UserAction -->|"Click aula Coach<br/>na Biblioteca"| Switch2
+    UserAction -->|"Click icone luna<br/>no MiniPlayerBar"| SleepTimer
+    UserAction -->|"play/pause/seek/<br/>volume/speed/<br/>lesson change"| Interaction
+
+    subgraph driverSwitchHtmlToSpot["Driver Switch: HtmlAudio -> Spotify"]
+        Switch1["AudioPlayerContext.playTrack(<br/>{source:'spotify', spotifyUri})"]
+        Switch1 --> SpotConnected{"Spotify driver<br/>ja conectado?"}
+        SpotConnected -->|"Nao"| PromptConnect["UI prompt:<br/>'Conecte Spotify em Preferencias'<br/>SpotifyNotConnectedError"]
+        SpotConnected -->|"Sim"| Engine1["Engine.swapDriver('spotify', track)"]
+        Engine1 --> PauseHtml["oldDriver.pause()<br/>(HtmlAudio.pause)"]
+        PauseHtml -.->|"emit"| TelemFocusLost1["telemetry audio_focus_lost<br/>{driverWhoLost:'html_audio',<br/>driverWhoTook:'spotify'}"]
+        PauseHtml --> DestroyHtml["oldDriver.destroy()<br/>remove event listeners<br/>clear timeouts"]
+        DestroyHtml --> InstSpot["new SpotifyAudioDriver(<br/>accessToken, deviceId)"]
+        InstSpot --> LoadSpot["spotDriver.load(track)<br/>spotDriver.play()<br/>PUT api/play {uris:[uri]}"]
+        LoadSpot -.->|"emit"| TelemSwitch1["telemetry audio_driver_switch<br/>{from:'html_audio',<br/>to:'spotify',<br/>reason:'user_picked_spotify_track',<br/>gapMs}"]
+        LoadSpot --> ActiveSpot["activeDriver = SpotifyAudioDriver<br/>heartbeat 60s comeca"]
+    end
+
+    subgraph driverSwitchSpotToHtml["Driver Switch: Spotify -> HtmlAudio"]
+        Switch2["AudioPlayerContext.playTrack(lesson)<br/>(via LessonPickerDialog ou auto)"]
+        Switch2 --> Engine2["Engine.swapDriver('library', track)"]
+        Engine2 --> PauseSpot["oldDriver.pause()<br/>PUT api/pause"]
+        PauseSpot -.->|"emit"| TelemFocusLost2["telemetry audio_focus_lost<br/>{driverWhoLost:'spotify',<br/>driverWhoTook:'html_audio'}"]
+        PauseSpot --> DestroySpot["oldDriver.destroy()<br/>player.disconnect()<br/>clear refresh setTimeout<br/><b>NOTA:</b> NAO desconecta OAuth<br/>(tokens permanecem em spotify_tokens)"]
+        DestroySpot --> InstHtml["new LibraryAudioDriver()"]
+        InstHtml --> LoadHtml["htmlDriver.load(track)<br/>htmlDriver.play()<br/>audio.play()"]
+        LoadHtml -.->|"emit"| TelemSwitch2["telemetry audio_driver_switch<br/>{from:'spotify',<br/>to:'html_audio',<br/>reason:'user_picked_lesson',<br/>gapMs}"]
+        LoadHtml --> ActiveHtml["activeDriver = LibraryAudioDriver<br/>heartbeat 60s comeca"]
+    end
+
+    subgraph sleepTimerFlow["Sleep Timer (RF-NEW)"]
+        SleepTimer["SleepTimerControl Popover abre<br/>dropdown [15,30,45,60,90]"]
+        SleepTimer --> ChoosePreset["User escolhe preset<br/>(ex: 30min)"]
+        ChoosePreset --> Persist["PATCH /api/user-coach-preferences<br/>{audioSleepTimerMinutes: 30}<br/>(debounce 500ms)"]
+        Persist --> Arm["ctx.setSleepTimer(30)<br/>targetTimestamp = Date.now() + 30*60_000<br/>setTimeout(handleFire, 30*60_000)<br/>setInterval 60s update remainingSeconds"]
+        Arm -.->|"emit"| TelemArm["telemetry sleep_timer_activated<br/>{durationMinutes:30, presetIndex:1}"]
+        Arm --> Tick{"setInterval tick<br/>a cada 60s"}
+        Tick -->|"Date.now() < target"| UpdateBadge["badge update<br/>'29m', '28m', ...<br/>aria-label dinamico"]
+        UpdateBadge --> Tick
+        Tick -->|"Date.now() >= target<br/>(drift-safe vs setTimeout)"| Fire["handleFire()"]
+        Fire --> FadeOut["setInterval step 100ms<br/>volume linear 1 -> 0 em 5s<br/>(50 steps)"]
+        FadeOut --> DriverPause["engine.activeDriver?.pause()<br/>(driver-agnostic)<br/>HtmlAudio: audio.pause()<br/>Spotify: PUT api/pause"]
+        DriverPause --> RestoreVol["restore volume to last user-set<br/>(NAO persiste 0)"]
+        RestoreVol -.->|"emit"| TelemFired["telemetry sleep_timer_fired<br/>{targetMinutes:30,<br/>actualDurationMinutes,<br/>driftMs, driverAtFire}"]
+        RestoreVol --> BarVisible["MiniPlayerBar permanece visivel<br/>displayMode='bar'<br/>isPlaying=false"]
+    end
+
+    subgraph interactionReset["Interaction Reset (D8 spec)"]
+        Interaction["User interaction:<br/>play/pause/seek/volume/<br/>speed/lesson change"] --> CheckTimer{"sleepTimer<br/>armado?"}
+        CheckTimer -->|"Nao"| NoOp(["no-op"])
+        CheckTimer -->|"Sim"| Reset["resetSleepTimer()<br/>clear setTimeout + setInterval<br/>re-arm com mesmo preset<br/>NEW targetTimestamp = Date.now() + N*60_000"]
+        Reset -.->|"emit"| TelemReset["telemetry sleep_timer_cancelled<br/>{remainingMinutes,<br/>reason:'user_interaction'}<br/>+ sleep_timer_activated novo"]
+    end
+
+    subgraph autoplayExternal["Autoplay sequencial (NAO reseta — D8)"]
+        Autoplay(["onEnded -> playNext()"]) --> CheckTimer2{"sleepTimer<br/>armado?"}
+        CheckTimer2 -->|"Sim"| NoReset["timer continua<br/>(autoplay nao conta como interaction)"]
+        CheckTimer2 -->|"Nao"| NoOp2(["no-op"])
+    end
+
+    subgraph telemetryStore["Telemetria (ADR-191 - user_activity)"]
+        TelemFocusLost1 & TelemFocusLost2 & TelemSwitch1 & TelemSwitch2 & TelemArm & TelemFired & TelemReset --> Emitter["audio-telemetry.ts<br/>emitAudioEvent(action, payload)"]
+        Emitter --> Beacon["sendBeacon batch<br/>cap 10/batch<br/>localStorage backlog offline"]
+        Beacon --> Endpoint["POST /api/user-activity<br/>POST /api/user-activity/batch<br/>page='mini_player'"]
+        Endpoint --> DB[("user_activity<br/>tabela existente<br/>SEM migration nova")]
+    end
+
+    ActiveSpot --> Heartbeat["telemetry audio_driver_active<br/>heartbeat 60s<br/>{driver:'spotify',<br/>trackId,sessionDurationSeconds}"]
+    ActiveHtml --> Heartbeat
+    Heartbeat -.-> Emitter
+
+    style Switch1 fill:#fef3c7
+    style Switch2 fill:#fef3c7
+    style SleepTimer fill:#dbeafe
+    style Fire fill:#fca5a5
+    style FadeOut fill:#fca5a5
+    style Emitter fill:#fce7f3
+    style DB fill:#e0e7ff
+    style PromptConnect fill:#fee2e2,stroke:#dc2626

@@ -1,0 +1,104 @@
+%% Mini Player 2 - Component tree pos-MP2 (ADR-189 + ADR-190 + ADR-191)
+%% AudioPlayerProvider mantem-se always-mounted (decisao MP1).
+%% Engine continua com 1 driver ativo (ADR-189 queue homogenea).
+%% Spotify Driver agora real (vs stub em MP1). Sleep Timer + Telemetry novos.
+
+graph TB
+    subgraph rootApp["App.tsx (always-mounted)"]
+        AuthCtx["AuthProvider"]
+        QueryCtx["QueryClientProvider"]
+        AudioProvider["AudioPlayerProvider<br/><i>client/src/contexts/AudioPlayerContext.tsx</i><br/>state: activeSource, activeTrack, isPlaying,<br/>sleepTimerMinutes, sleepTimerRemainingSeconds"]
+    end
+
+    subgraph engineLayer["Audio Engine Layer (client/src/lib/audio-engine/)"]
+        Engine["AudioSourceEngine<br/>activeDriver: IAudioSourceDriver | null<br/>swapDriver(newSource, track)"]
+        IDriverInterface{{"IAudioSourceDriver<br/><i>interface — INALTERADA em MP2</i><br/>load/play/pause/seek/setVolume/<br/>setSpeed/getCurrentTime/getDuration/<br/>destroy/on"}}
+        HtmlDrv["LibraryAudioDriver<br/><i>MP1 — HTMLAudioElement</i><br/>setSpeed: 0.5x..2x"]
+        SpotDrv["SpotifyAudioDriver<br/><b>MP2 RF-01 (real, NAO stub)</b><br/>Web Playback SDK + REST endpoints<br/>setSpeed: no-op (warn)"]
+    end
+
+    subgraph spotifyAuthLayer["Spotify Auth Layer (ADR-190)"]
+        SpotAuth["client/src/lib/spotify/auth.ts<br/>initiateSpotifyAuth() / refreshAccessToken()<br/>disconnectSpotify()"]
+        SDKLoader["client/src/lib/spotify/sdkLoader.ts<br/>lazy load https://sdk.scdn.co/spotify-player.js"]
+        OAuthCallback["client/src/pages/spotify-callback.tsx<br/>postMessage parent + window.close()"]
+    end
+
+    subgraph serverProxy["Server (ADR-190 - refresh_token NUNCA chega ao client)"]
+        OAuthInit[["POST /api/audio/spotify/oauth-init"]]
+        OAuthCb[["GET /api/audio/spotify/oauth-callback"]]
+        TokenRefresh[["POST /api/audio/spotify/refresh"]]
+        Disconnect[["POST /api/audio/spotify/disconnect"]]
+        SpotTokensDB[("spotify_tokens<br/>refresh_token AES-256-GCM<br/>migration 0077")]
+        Cookie["Cookie httpOnly<br/>spotify_session<br/>sameSite=lax + secure"]
+    end
+
+    subgraph sleepTimerLayer["Sleep Timer (RF-NEW)"]
+        SleepMgr["SleepTimerManager<br/><i>dentro do AudioPlayerContext</i><br/>setTimeout(handleFire, N*60_000)<br/>setInterval 60s decrement remainingSeconds<br/>targetTimestamp = Date.now() + ms (drift-resistant)"]
+        SleepCtrl["SleepTimerControl.tsx<br/>Popover Radix + dropdown preset"]
+        PrefDB[("user_coach_preferences<br/>audio_sleep_timer_minutes<br/>migration 0076")]
+    end
+
+    subgraph telemetryLayer["Telemetria (ADR-191 - reuse user_activity)"]
+        TelemEmitter["client/src/lib/audio-telemetry.ts<br/>emitAudioEvent(action, payload, options)<br/>sendBeacon batch + localStorage backlog offline"]
+        UserActivityEndpoint[["POST /api/user-activity<br/>POST /api/user-activity/batch"]]
+        UserActivityDB[("user_activity<br/>page='mini_player'<br/>action=event_name<br/>metadata=payload jsonb<br/><i>tabela existente — sem migration</i>")]
+    end
+
+    subgraph uiSurfaces["UI Consumers"]
+        MiniBar["MiniPlayerBar.tsx<br/>9 controles + Sleep button + Disconnect status"]
+        LessonPicker["LessonPickerDialog.tsx<br/>(MP1)"]
+        PrefsUI["client/src/components/settings/<br/>SpotifyConnectionPanel.tsx<br/><i>aba Preferencias em /coach-ai</i>"]
+        PremiumGate["SpotifyPremiumGateDialog.tsx<br/>Radix Dialog (lesson MP1.1 RF-05)"]
+        useOptionalHook["useOptionalAudioPlayer()<br/><i>Q-L resolvida — naming mantido (ADR-189)</i><br/>retorna AudioPlayerCtx | null"]
+    end
+
+    AuthCtx --> QueryCtx
+    QueryCtx --> AudioProvider
+    AudioProvider --> Engine
+    AudioProvider --> SleepMgr
+    AudioProvider --> TelemEmitter
+
+    Engine --> IDriverInterface
+    IDriverInterface -.->|"source='library'"| HtmlDrv
+    IDriverInterface -.->|"source='spotify'"| SpotDrv
+
+    SpotDrv --> SpotAuth
+    SpotDrv --> SDKLoader
+    SpotAuth --> OAuthInit
+    OAuthInit --> Cookie
+    OAuthInit -.->|"redirect URL"| OAuthCallback
+    OAuthCallback -.->|"window.opener.postMessage<br/>{accessToken, expiresIn, displayName}"| SpotAuth
+    OAuthInit --> OAuthCb
+    OAuthCb --> SpotTokensDB
+    SpotAuth -->|"5min antes de expirar"| TokenRefresh
+    TokenRefresh --> SpotTokensDB
+    SpotAuth --> Disconnect
+    Disconnect --> SpotTokensDB
+
+    SleepMgr --> SleepCtrl
+    SleepCtrl -->|"PATCH debounce 500ms"| PrefDB
+    SleepMgr -.->|"fire/cancelled/activated"| TelemEmitter
+
+    Engine -.->|"audio_driver_switch<br/>audio_focus_lost<br/>audio_driver_active heartbeat 60s"| TelemEmitter
+    SpotAuth -.->|"spotify_connected / disconnected<br/>spotify_token_refreshed"| TelemEmitter
+    SpotDrv -.->|"spotify_premium_check_failed<br/>spotify_reconnect_*"| TelemEmitter
+
+    TelemEmitter --> UserActivityEndpoint
+    UserActivityEndpoint --> UserActivityDB
+
+    MiniBar --> useOptionalHook
+    LessonPicker --> useOptionalHook
+    PrefsUI --> useOptionalHook
+    PrefsUI --> SpotAuth
+    MiniBar --> SleepCtrl
+    SpotDrv -.->|"product !== 'premium'"| PremiumGate
+    useOptionalHook -->|"context | null"| AudioProvider
+
+    style IDriverInterface fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
+    style SpotDrv fill:#dcfce7,stroke:#16a34a,stroke-width:2px
+    style SleepMgr fill:#dbeafe
+    style TelemEmitter fill:#fce7f3
+    style Cookie fill:#fee2e2,stroke:#dc2626
+    style SpotTokensDB fill:#fee2e2,stroke:#dc2626
+    style PrefDB fill:#e0e7ff
+    style UserActivityDB fill:#e0e7ff

@@ -55,6 +55,8 @@ export interface CoachPreferences {
   emailMonthlyEnabled: boolean;
   emailQuarterlyEnabled: boolean;
   disclaimerAcceptedAt: Date | null;
+  // Sprint Mini Player 2 (RF-NEW.2) — sleep timer preset. NULL = nao auto-ativa.
+  audioSleepTimerMinutes: number | null;
   updatedAt?: Date;
 }
 
@@ -86,6 +88,7 @@ export const COACH_PREFS_DEFAULTS: CoachPreferences = {
   emailMonthlyEnabled: false,
   emailQuarterlyEnabled: false,
   disclaimerAcceptedAt: null,
+  audioSleepTimerMinutes: null,
 };
 
 const CACHE_TTL_MS = 30_000;
@@ -137,6 +140,8 @@ export function normalizeCoachPreferences(row: any): CoachPreferences {
       row?.emailQuarterlyEnabled ?? COACH_PREFS_DEFAULTS.emailQuarterlyEnabled,
     disclaimerAcceptedAt:
       row?.disclaimerAcceptedAt ?? COACH_PREFS_DEFAULTS.disclaimerAcceptedAt,
+    audioSleepTimerMinutes:
+      row?.audioSleepTimerMinutes ?? COACH_PREFS_DEFAULTS.audioSleepTimerMinutes,
     updatedAt: row?.updatedAt,
   };
 }

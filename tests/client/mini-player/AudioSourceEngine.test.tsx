@@ -134,16 +134,9 @@ describe('AudioSourceEngine + IAudioSourceDriver (RF-06, ADR-187)', () => {
     });
   });
 
-  describe('SpotifyAudioDriver stub (RF-06 + ADR-187)', () => {
-    it('load/play devem lancar not_implemented', async () => {
-      const { SpotifyAudioDriver } = require('@/lib/audio-engine/SpotifyAudioDriver');
-      const drv = new SpotifyAudioDriver();
-      expect(drv.source).toBe('spotify');
-      await expect(drv.load({
-        source: 'spotify',
-        trackId: 'x',
-        title: 't',
-      } as any)).rejects.toThrow(/not.*implemented/i);
-    });
-  });
+  // NOTA: O teste antigo "SpotifyAudioDriver stub - load/play devem lancar
+  // not_implemented" foi REMOVIDO em MP2 RF-01 (refactor stub -> real). O
+  // comportamento real do SpotifyAudioDriver agora e coberto por
+  // tests/client/mini-player/SpotifyAudioDriver.test.ts. O teste anterior estava
+  // OBSOLETO pois afirmava behavior que nao existe mais (stub throw).
 });

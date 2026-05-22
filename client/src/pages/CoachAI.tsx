@@ -64,6 +64,8 @@ import { CoachLensChips } from '@/components/coach-ai/CoachLensChips';
 // Sprint AI-1B — timeline (reports + nudges) + quick suggestions anti-blank-page.
 import NudgeCard from '@/components/coach/NudgeCard';
 import { getFallbackSuggestions } from '@/lib/quickSuggestionsFallback';
+// Sprint Mini Player 2 (CRITICAL-2) — Spotify connection panel em Preferencias.
+import { SpotifyConnectionPanel } from '@/components/settings/SpotifyConnectionPanel';
 
 const HUB_TABS = ['chat', 'reports', 'audit', 'prefs'] as const;
 type HubTab = (typeof HUB_TABS)[number];
@@ -859,6 +861,12 @@ function CoachPreferencesPanel() {
           />
         </label>
         <p className="text-xs text-gray-500">Disponivel para Trial + Pro/Premium. Free nao recebe.</p>
+      </div>
+
+      {/* Sprint Mini Player 2 (CRITICAL-2) — Integracoes externas. */}
+      <div data-testid="coach-prefs-integrations" className="space-y-2 border-t border-gray-800 pt-4">
+        <h4 className="text-sm font-medium text-gray-300">Integracoes</h4>
+        <SpotifyConnectionPanel />
       </div>
 
       {data && (

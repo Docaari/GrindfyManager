@@ -19,6 +19,8 @@ import { useMiniPlayerHeight } from "@/hooks/useMiniPlayerHeight";
 import { sanitizeCoverUrl } from "@/lib/audio-engine/sanitizeCoverUrl";
 import { cn } from "@/lib/utils";
 import { VolumeControl } from "./VolumeControl";
+// Sprint Mini Player 2 (CRITICAL-2) — Sleep Timer control wired in mini player.
+import { SleepTimerControl } from "./SleepTimerControl";
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
@@ -96,6 +98,11 @@ export function MiniPlayerBar() {
     toggleMute,
     setDisplayMode,
     courseContext,
+    // Sprint Mini Player 2 (CRITICAL-2 + RF-NEW.1).
+    sleepTimerMinutes,
+    sleepTimerRemainingSeconds,
+    setSleepTimer,
+    cancelSleepTimer,
   } = useAudioPlayer();
 
   const vp = useViewport();
@@ -295,6 +302,13 @@ export function MiniPlayerBar() {
             ))}
           </select>
         )}
+        {/* CRITICAL-2 + RF-NEW.1: Sleep Timer control entre velocidade e close. */}
+        <SleepTimerControl
+          activeMinutes={sleepTimerMinutes}
+          remainingSeconds={sleepTimerRemainingSeconds}
+          onActivate={setSleepTimer}
+          onCancel={cancelSleepTimer}
+        />
         <button
           type="button"
           data-testid="mini-player-expand"

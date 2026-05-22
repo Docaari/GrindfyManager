@@ -4573,11 +4573,37 @@ export const userCoachPreferences = pgTable("user_coach_preferences", {
   reportDailyEnabled: boolean("report_daily_enabled").notNull().default(false),
   reportMonthlyEnabled: boolean("report_monthly_enabled").notNull().default(false),
 
+  // Sprint Mini Player 2 (RF-NEW.2) — sleep timer preset. NULL = nao auto-ativa. Migration 0076.
+  audioSleepTimerMinutes: integer("audio_sleep_timer_minutes"),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("uniq_user_coach_preferences_user").on(table.userId),
 ]);
+
+// =============================================================================
+// Sprint Mini Player 2 (ADR-190) — spotify_tokens. Migration 0077.
+// =============================================================================
+export const spotifyTokens = pgTable("spotify_tokens", {
+  userId: varchar("user_id").primaryKey()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  refreshTokenEncrypted: text("refresh_token_encrypted").notNull(),
+  refreshTokenIv: varchar("refresh_token_iv", { length: 32 }).notNull(),
+  refreshTokenAuthTag: varchar("refresh_token_auth_tag", { length: 32 }).notNull(),
+  accessTokenHash: varchar("access_token_hash", { length: 64 }),
+  expiresAt: timestamp("expires_at"),
+  scopes: jsonb("scopes").notNull().default(sql`'[]'::jsonb`),
+  displayName: varchar("display_name"),
+  displayNameHash: varchar("display_name_hash", { length: 64 }),
+  spotifyUserId: varchar("spotify_user_id"),
+  connectedAt: timestamp("connected_at").defaultNow().notNull(),
+  disconnectedAt: timestamp("disconnected_at"),
+  lastRefreshAt: timestamp("last_refresh_at"),
+  refreshFailureCount: integer("refresh_failure_count").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
 
 export const updateCoachPreferencesSchema = z.object({
   nudgeBSnapshot: z.boolean().optional(),
@@ -4603,6 +4629,19 @@ export const updateCoachPreferencesSchema = z.object({
   // Sprint AI-1C (ADR-159) — opt-in Daily Debrief + Monthly Report.
   reportDailyEnabled: z.boolean().optional(),
   reportMonthlyEnabled: z.boolean().optional(),
+  // Sprint Mini Player 2 (RF-NEW.2) — sleep timer preset minutes. Aceita
+  // exatamente [15, 30, 45, 60, 90] ou null (desativa). String/numero fora do
+  // enum -> 400.
+  audioSleepTimerMinutes: z
+    .union([
+      z.literal(15),
+      z.literal(30),
+      z.literal(45),
+      z.literal(60),
+      z.literal(90),
+      z.null(),
+    ])
+    .optional(),
   // Sprint AI-1A / RF-02 — descongelar uma categoria via PUT. Congelamento NUNCA
   // eh setado via PUT (so auto-congelamento ou endpoint admin) — por isso so
   // `unfreezeCategory` (remover), nao `frozenCategories` (mapa cru).

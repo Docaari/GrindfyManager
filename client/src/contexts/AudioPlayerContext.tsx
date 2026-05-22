@@ -38,6 +38,17 @@ import type {
   CourseContext,
   DisplayMode,
 } from "@/lib/audio-engine/types";
+// Sprint Mini Player 2 (CRITICAL-2/4 + HIGH-3/4/5) — audio telemetry
+// canonica + Engine ref pra driver-agnostic ops.
+import { emitAudioEvent } from "@/lib/audio-telemetry";
+// Sprint MP2 R2-H1 fix — Engine + Spotify driver wire pra playback funcional.
+import {
+  createAudioSourceEngine,
+  type AudioSourceEngine,
+  type DriverSwitchInfo,
+} from "@/lib/audio-engine/AudioSourceEngine";
+import { SpotifyAudioDriver } from "@/lib/audio-engine/SpotifyAudioDriver";
+import { refreshAccessToken } from "@/lib/spotify/auth";
 
 export interface AudioPlayerLesson {
   lessonId: string;
@@ -76,6 +87,22 @@ interface AudioPlayerCtx {
   courseContext: CourseContext | null;
   displayMode: DisplayMode;
   setDisplayMode: (m: DisplayMode) => void;
+  // === Sprint Mini Player 2 (RF-NEW.3) ===
+  sleepTimerMinutes: number | null;
+  sleepTimerRemainingSeconds: number | null;
+  setSleepTimer: (minutes: number) => void;
+  cancelSleepTimer: () => void;
+  resetSleepTimer: () => void;
+  // === Sprint Mini Player 2 (HIGH-5 + CRITICAL-2) — Spotify connect surface.
+  // Chamado pelo SpotifyConnectionPanel apos initiateSpotifyAuth resolver
+  // sucesso. Cria SpotifyAudioDriver via Engine factory.
+  connectSpotify: (
+    accessToken: string,
+    expiresIn: number,
+    displayName?: string,
+  ) => void;
+  disconnectSpotifyDriver: () => void;
+  isSpotifyConnected: boolean;
 }
 
 const Ctx = createContext<AudioPlayerCtx | null>(null);
@@ -208,6 +235,25 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   );
   const [displayMode, setDisplayModeState] = useState<DisplayMode>("hidden");
 
+  // === Sprint Mini Player 2 (RF-NEW.3) — Sleep timer state ===
+  const [sleepTimerMinutes, setSleepTimerMinutesState] = useState<number | null>(
+    null,
+  );
+  const [sleepTimerRemainingSeconds, setSleepTimerRemainingSeconds] = useState<
+    number | null
+  >(null);
+  // Target timestamp drift-resistant (D9 / RNF-05).
+  const sleepTargetRef = useRef<number | null>(null);
+  const sleepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sleepFadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+  const volumeBeforeFadeRef = useRef<number | null>(null);
+  const sleepTimerActiveMinutesRef = useRef<number | null>(null);
+  // Latest volume for fade restore (avoid stale closure).
+  const volumeRef = useRef<number>(volume);
+  volumeRef.current = volume;
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const courseContextRef = useRef<CourseContext | null>(null);
   courseContextRef.current = courseContext;
@@ -216,11 +262,233 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   // D22 fullscreen: remember displayMode before fullscreen so we can restore.
   const displayModeBeforeFullscreenRef = useRef<DisplayMode | null>(null);
 
+  // === Sprint Mini Player 2 (CRITICAL-2 + HIGH-3/4/5) — Spotify wire-up ===
+  // Token + driver guardados em refs em memoria (NUNCA em storage — refresh
+  // token fica no server, ADR-190). Engine eh lazy-instanciada quando precisa
+  // tocar track Spotify pela primeira vez.
+  const spotifyTokenRef = useRef<{
+    accessToken: string;
+    expiresIn: number;
+    displayName?: string;
+  } | null>(null);
+  const spotifyDriverRef = useRef<any | null>(null);
+  const [isSpotifyConnected, setIsSpotifyConnected] = useState(false);
+  // MP2 R2-H1: Engine ref pra delegar playback Spotify ao driver real.
+  // Library path continua usando <audio> HTML5 direto (audioRef) — Engine eh
+  // criada lazy somente quando connectSpotify habilita o driver Spotify.
+  const engineRef = useRef<AudioSourceEngine | null>(null);
+  const engineUnsubscribersRef = useRef<Array<() => void>>([]);
+
+  // MP2 R2-H1: subscribe events do driver ativo para refletir state.
+  const bindEngineEvents = useCallback(() => {
+    const eng = engineRef.current;
+    if (!eng) return;
+    // Cleanup antigos.
+    for (const u of engineUnsubscribersRef.current) {
+      try {
+        u();
+      } catch {
+        // ignore
+      }
+    }
+    engineUnsubscribersRef.current = [];
+    engineUnsubscribersRef.current.push(
+      eng.on("timeupdate", (data: any) => {
+        const t = data?.currentTime;
+        if (Number.isFinite(t)) setCurrentSeconds(t);
+      }),
+    );
+    engineUnsubscribersRef.current.push(
+      eng.on("durationchange", (data: any) => {
+        const d = data?.duration;
+        if (Number.isFinite(d) && d > 0) setDurationSeconds(d);
+      }),
+    );
+    engineUnsubscribersRef.current.push(
+      eng.on("ended", () => {
+        // Mesma logica do <audio> onEnded — tenta autoplay sequencial.
+        tryAutoplayNextRef.current?.();
+      }),
+    );
+    engineUnsubscribersRef.current.push(
+      eng.on("error", (err: any) => {
+        emitAudioEvent("audio_driver_error", {
+          message: String(err?.message ?? err),
+        });
+      }),
+    );
+  }, []);
+
+  // Ref pra tryAutoplayNext (declarado depois — evita TDZ).
+  const tryAutoplayNextRef = useRef<(() => void) | null>(null);
+
   // === Derived: current (back-compat projection) ===
   const current = useMemo<AudioPlayerLesson | null>(
     () => trackToLesson(activeTrack),
     [activeTrack],
   );
+
+  // =========================================================================
+  // Sprint Mini Player 2 (RF-NEW.3 / RF-NEW.4) — Sleep Timer logic
+  // =========================================================================
+  const clearSleepTimers = useCallback(() => {
+    if (sleepIntervalRef.current) {
+      clearInterval(sleepIntervalRef.current);
+      sleepIntervalRef.current = null;
+    }
+    if (sleepFadeIntervalRef.current) {
+      clearInterval(sleepFadeIntervalRef.current);
+      sleepFadeIntervalRef.current = null;
+    }
+  }, []);
+
+  const handleSleepTimerFire = useCallback(() => {
+    // D9: fade-out 5s linear (volume -> 0), then pause, restore volume.
+    // HIGH-3/4: driver-agnostic — alem do setIsPlaying(false), tambem
+    // pausa o spotifyDriverRef caso ativo (HtmlAudio sync via efeito).
+    const startVolume = volumeRef.current;
+    volumeBeforeFadeRef.current = startVolume;
+    const FADE_MS = 5000;
+    const STEP_MS = 100;
+    const totalSteps = FADE_MS / STEP_MS;
+    let stepIdx = 0;
+    if (sleepFadeIntervalRef.current) {
+      clearInterval(sleepFadeIntervalRef.current);
+    }
+    sleepFadeIntervalRef.current = setInterval(() => {
+      stepIdx += 1;
+      const t = stepIdx / totalSteps;
+      const next = Math.max(0, startVolume * (1 - t));
+      setVolumeState(clamp01(next));
+      // HIGH-3: aplicar fade no driver Spotify tambem.
+      try {
+        spotifyDriverRef.current?.setVolume?.(clamp01(next));
+      } catch {
+        // ignore
+      }
+      if (stepIdx >= totalSteps) {
+        // fade complete
+        if (sleepFadeIntervalRef.current) {
+          clearInterval(sleepFadeIntervalRef.current);
+          sleepFadeIntervalRef.current = null;
+        }
+        // HIGH-4: pause driver-agnostic — useEffect [isPlaying]
+        // ja pausa <audio> HtmlAudio; aqui chamamos pause direto no driver
+        // Spotify caso esteja ativo.
+        try {
+          spotifyDriverRef.current?.pause?.();
+        } catch {
+          // ignore
+        }
+        setIsPlaying(false);
+        // restore volume
+        setVolumeState(startVolume);
+        try {
+          spotifyDriverRef.current?.setVolume?.(startVolume);
+        } catch {
+          // ignore
+        }
+        // clear sleep state
+        sleepTargetRef.current = null;
+        sleepTimerActiveMinutesRef.current = null;
+        setSleepTimerMinutesState(null);
+        setSleepTimerRemainingSeconds(null);
+        // CRITICAL-4 telemetry — sleep_timer_fired.
+        emitAudioEvent("sleep_timer_fired", {});
+      }
+    }, STEP_MS);
+  }, []);
+
+  const armSleepTimer = useCallback(
+    (minutes: number) => {
+      clearSleepTimers();
+      const totalMs = minutes * 60 * 1000;
+      const target = Date.now() + totalMs;
+      sleepTargetRef.current = target;
+      sleepTimerActiveMinutesRef.current = minutes;
+      setSleepTimerMinutesState(minutes);
+      setSleepTimerRemainingSeconds(minutes * 60);
+      // Tick interval (30s) — recheck Date.now() para drift-resistance.
+      const TICK_MS = 30 * 1000;
+      sleepIntervalRef.current = setInterval(() => {
+        const now = Date.now();
+        const t = sleepTargetRef.current;
+        if (!t) return;
+        const remainingMs = t - now;
+        if (remainingMs <= 0) {
+          // fire
+          if (sleepIntervalRef.current) {
+            clearInterval(sleepIntervalRef.current);
+            sleepIntervalRef.current = null;
+          }
+          handleSleepTimerFire();
+          return;
+        }
+        setSleepTimerRemainingSeconds(Math.ceil(remainingMs / 1000));
+      }, TICK_MS);
+    },
+    [clearSleepTimers, handleSleepTimerFire],
+  );
+
+  const setSleepTimer = useCallback(
+    (minutes: number) => {
+      armSleepTimer(minutes);
+      // CRITICAL-4 + HIGH-7 telemetry.
+      emitAudioEvent("sleep_timer_activated", { minutes });
+    },
+    [armSleepTimer],
+  );
+
+  const cancelSleepTimer = useCallback(() => {
+    const wasActive = sleepTimerActiveMinutesRef.current;
+    clearSleepTimers();
+    sleepTargetRef.current = null;
+    sleepTimerActiveMinutesRef.current = null;
+    setSleepTimerMinutesState(null);
+    setSleepTimerRemainingSeconds(null);
+    // HIGH-6: restaurar volume se fade-out estava em progresso.
+    if (volumeBeforeFadeRef.current !== null) {
+      setVolumeState(volumeBeforeFadeRef.current);
+      try {
+        spotifyDriverRef.current?.setVolume?.(volumeBeforeFadeRef.current);
+      } catch {
+        // ignore
+      }
+      volumeBeforeFadeRef.current = null;
+    }
+    if (wasActive !== null) {
+      // CRITICAL-4 + HIGH-7 telemetry.
+      emitAudioEvent("sleep_timer_cancelled", { minutes: wasActive });
+    }
+  }, [clearSleepTimers]);
+
+  const resetSleepTimer = useCallback(() => {
+    const m = sleepTimerActiveMinutesRef.current;
+    if (m === null) return;
+    armSleepTimer(m);
+  }, [armSleepTimer]);
+
+  // Cleanup on unmount.
+  useEffect(() => {
+    return () => {
+      clearSleepTimers();
+      // MP2 R2-H1: destruir Engine + unsubscribe events.
+      for (const u of engineUnsubscribersRef.current) {
+        try {
+          u();
+        } catch {
+          // ignore
+        }
+      }
+      engineUnsubscribersRef.current = [];
+      try {
+        engineRef.current?.destroy();
+      } catch {
+        // ignore
+      }
+      engineRef.current = null;
+    };
+  }, [clearSleepTimers]);
 
   // === playTrack (RF-07) ===
   const playTrack = useCallback(
@@ -233,8 +501,37 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         setCourseContext(ctxArg);
       }
       setDisplayModeState((prev) => fsmNextOnPlayTrack(prev));
+      // D8: user interaction (lesson pick) reseta timer.
+      resetSleepTimer();
+      // MP2 R2-H1: para Spotify, delegar playback real ao driver via Engine.
+      // Library continua via <audio> HTML5 (sync state -> audio element abaixo).
+      if (track.source === "spotify") {
+        const eng = engineRef.current;
+        if (!eng) {
+          // Factory nao injetada -> usuario nao conectou Spotify ainda.
+          // Throw seria duro; emite telemetria + pausa state.
+          emitAudioEvent("audio_driver_error", {
+            reason: "spotify_not_connected",
+          });
+          setIsPlaying(false);
+          return;
+        }
+        // Fire-and-forget: Engine roteia ao SpotifyAudioDriver. Eventos
+        // do driver atualizam currentSeconds/durationSeconds via bindEngineEvents.
+        (async () => {
+          try {
+            await eng.playTrack(track);
+            spotifyDriverRef.current = eng.getActiveDriver?.() ?? null;
+          } catch (err) {
+            emitAudioEvent("audio_driver_error", {
+              message: String((err as any)?.message ?? err),
+            });
+            setIsPlaying(false);
+          }
+        })();
+      }
     },
-    [],
+    [resetSleepTimer],
   );
 
   // === play(lesson) legado (RF-14 back-compat wrapper) ===
@@ -246,13 +543,37 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     [playTrack],
   );
 
-  const pause = useCallback(() => {
-    setIsPlaying(false);
+  // HIGH-6: limpar fade-out + restaurar volume original ao usuario interagir
+  // com play/pause direto (ex: clica play durante fade). Sem isso, o fade
+  // continua reduzindo o volume e o user fica "no escuro" sobre o porque.
+  const clearFadeAndRestoreVolume = useCallback(() => {
+    if (sleepFadeIntervalRef.current) {
+      clearInterval(sleepFadeIntervalRef.current);
+      sleepFadeIntervalRef.current = null;
+    }
+    if (volumeBeforeFadeRef.current !== null) {
+      const restored = volumeBeforeFadeRef.current;
+      setVolumeState(restored);
+      try {
+        spotifyDriverRef.current?.setVolume?.(restored);
+      } catch {
+        // ignore
+      }
+      volumeBeforeFadeRef.current = null;
+    }
   }, []);
 
+  const pause = useCallback(() => {
+    clearFadeAndRestoreVolume();
+    setIsPlaying(false);
+  }, [clearFadeAndRestoreVolume]);
+
   const toggle = useCallback(() => {
+    clearFadeAndRestoreVolume();
     setIsPlaying((p) => !p);
-  }, []);
+    // D8: toggle reseta sleep timer.
+    resetSleepTimer();
+  }, [clearFadeAndRestoreVolume, resetSleepTimer]);
 
   const close = useCallback(() => {
     setActiveTrack(null);
@@ -264,9 +585,23 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const seek = useCallback((seconds: number) => {
+    // MP2 R2-H1: Spotify path -> driver.seek (REST PUT /me/player/seek).
+    if (activeTrackRef.current?.source === "spotify") {
+      const drv = spotifyDriverRef.current;
+      try {
+        drv?.seek?.(Math.max(0, seconds));
+      } catch {
+        // ignore
+      }
+      setCurrentSeconds(Math.max(0, seconds));
+      resetSleepTimer();
+      return;
+    }
     const a = audioRef.current;
     if (!a) {
       setCurrentSeconds(Math.max(0, seconds));
+      // D8: seek reseta sleep timer.
+      resetSleepTimer();
       return;
     }
     try {
@@ -276,7 +611,8 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
-  }, []);
+    resetSleepTimer();
+  }, [resetSleepTimer]);
 
   const setSpeed = useCallback((rate: number) => {
     if (!Number.isFinite(rate) || rate <= 0) return;
@@ -290,7 +626,15 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         // ignore
       }
     }
-  }, []);
+    // MP2 R2-M2 (DEFER MP3): speed select deveria estar HIDDEN no UI quando
+    // activeTrack.source === 'spotify' (Spotify Web Playback nao suporta
+    // variable speed — SpotifyAudioDriver.setSpeed eh no-op com console.warn).
+    // Atual: setSpeed roda silenciosamente em Spotify (no-op no driver). UI
+    // (MiniPlayerBar/Expanded) deve esconder o controle pra evitar confusao
+    // do user. Tracked como MP3 follow-up.
+    // D8: setSpeed reseta sleep timer.
+    resetSleepTimer();
+  }, [resetSleepTimer]);
 
   const skipBack = useCallback(
     (seconds = 15) => {
@@ -311,22 +655,32 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     const clamped = clamp01(v);
     setVolumeState(clamped);
     writeStoredVolume(clamped);
-  }, []);
+    // D8: setVolume reseta sleep timer.
+    resetSleepTimer();
+  }, [resetSleepTimer]);
 
   const toggleMute = useCallback(() => {
     setIsMuted((m) => !m);
   }, []);
 
-  // Apply volume + mute to underlying <audio>
+  // Apply volume + mute to underlying <audio> + Spotify driver.
   useEffect(() => {
+    const effectiveVolume = isMuted ? 0 : volume;
     const a = audioRef.current;
-    if (!a) return;
+    if (a) {
+      try {
+        a.volume = effectiveVolume;
+      } catch {
+        // ignore
+      }
+    }
+    // MP2 R2-H1: propagar tambem ao Spotify driver (Web Playback SDK).
     try {
-      a.volume = isMuted ? 0 : volume;
+      spotifyDriverRef.current?.setVolume?.(effectiveVolume);
     } catch {
       // ignore
     }
-  }, [volume, isMuted, activeTrack?.audioUrl]);
+  }, [volume, isMuted, activeTrack?.audioUrl, activeTrack?.source]);
 
   // === displayMode setter with guard ===
   const setDisplayMode = useCallback((m: DisplayMode) => {
@@ -390,9 +744,29 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       trigger: "autoplay",
     });
   }, [playTrack]);
+  // MP2 R2-H1: manter ref atualizada pro Engine `ended` handler chamar autoplay.
+  tryAutoplayNextRef.current = tryAutoplayNext;
 
-  // Sync isPlaying state -> audio element.
+  // Sync isPlaying state -> audio element (library) ou driver (spotify).
   useEffect(() => {
+    // Spotify path: pause/play via driver. spotifyDriverRef setado no playTrack.
+    if (activeTrack?.source === "spotify") {
+      const drv = spotifyDriverRef.current;
+      if (!drv) return;
+      try {
+        if (isPlaying) {
+          // play() do driver eh async + idempotente; engine ja chamou no playTrack.
+          // Aqui cobre toggle pause->play.
+          drv.play?.();
+        } else {
+          drv.pause?.();
+        }
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    // Library path: <audio> HTML5.
     const a = audioRef.current;
     if (!a) return;
     if (isPlaying) {
@@ -409,7 +783,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         // ignore
       }
     }
-  }, [isPlaying, activeTrack?.audioUrl]);
+  }, [isPlaying, activeTrack?.audioUrl, activeTrack?.source]);
 
   // Apply speed when audio element becomes available or speed changes.
   useEffect(() => {
@@ -512,6 +886,127 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     return () => document.removeEventListener("fullscreenchange", handler);
   }, [displayMode]);
 
+  // === Sprint Mini Player 2 (CRITICAL-2 + HIGH-5) — connectSpotify ===
+  // Recebe access_token + expiresIn pos initiateSpotifyAuth. Guarda em closure
+  // ref (NUNCA em storage). O driver real eh lazy-instanciado quando o user
+  // toca uma track Spotify (factory injetada na Engine, via ref).
+  //
+  // MP2 R2-H1 fix: cria Engine se ainda nao existe + injeta factory que
+  // monta SpotifyAudioDriver com refresh callback + telemetry + premium gate.
+  const connectSpotify = useCallback(
+    (accessToken: string, expiresIn: number, displayName?: string) => {
+      spotifyTokenRef.current = { accessToken, expiresIn, displayName };
+      setIsSpotifyConnected(true);
+      // MP2 R2-H1: instancia Engine + injeta factory pro driver Spotify.
+      if (!engineRef.current) {
+        engineRef.current = createAudioSourceEngine({
+          onDriverSwitch: (info: DriverSwitchInfo) => {
+            emitAudioEvent("audio_driver_switch", {
+              from: info.from,
+              to: info.to,
+              reason: info.reason,
+            });
+          },
+        });
+        bindEngineEvents();
+      }
+      // Re-injeta factory sempre (caso reconnect com token novo).
+      engineRef.current.setSpotifyDriverFactory((track: AudioTrack) => {
+        const driver = new SpotifyAudioDriver({
+          accessToken,
+          expiresIn,
+          refresh: async () => {
+            const r = await refreshAccessToken();
+            return { accessToken: r.accessToken, expiresIn: r.expiresIn };
+          },
+          telemetry: (action, payload) => {
+            try {
+              emitAudioEvent(action as any, payload as any);
+            } catch {
+              // ignore
+            }
+          },
+          onTokenRefreshed: (newToken, newExp) => {
+            spotifyTokenRef.current = {
+              accessToken: newToken,
+              expiresIn: newExp,
+              displayName: spotifyTokenRef.current?.displayName,
+            };
+          },
+          onReconnectFailed: () => {
+            // Falha de reconnect -> limpa driver + state.
+            try {
+              spotifyDriverRef.current?.destroy?.();
+            } catch {
+              // ignore
+            }
+            spotifyDriverRef.current = null;
+            setIsSpotifyConnected(false);
+            emitAudioEvent("spotify_reconnect_failed", {});
+          },
+        });
+        // Connect SDK -> deviceId pronto.
+        // Fire-and-forget: connect e async, mas o driver guarda currentTrack
+        // em load() + play() respeita deviceId nulo (no-op ate ready).
+        try {
+          (driver as any).connect?.();
+        } catch {
+          // ignore
+        }
+        return driver;
+      });
+      // CRITICAL-4 telemetry.
+      emitAudioEvent("spotify_connected", { hasDisplayName: !!displayName });
+    },
+    [bindEngineEvents],
+  );
+
+  const disconnectSpotifyDriver = useCallback(() => {
+    // MP2 R2-M1: se track Spotify ativa, parar playback + limpar UI.
+    const wasPlayingSpotify =
+      activeTrackRef.current?.source === "spotify";
+    try {
+      spotifyDriverRef.current?.destroy?.();
+    } catch {
+      // ignore
+    }
+    spotifyDriverRef.current = null;
+    spotifyTokenRef.current = null;
+    // Remove factory da Engine (sem destruir Engine — pode haver library).
+    if (engineRef.current) {
+      try {
+        engineRef.current.setSpotifyDriverFactory(null);
+      } catch {
+        // ignore
+      }
+    }
+    setIsSpotifyConnected(false);
+    if (wasPlayingSpotify) {
+      // Limpa state alinhado a close().
+      setActiveTrack(null);
+      setIsPlaying(false);
+      setCurrentSeconds(0);
+      setDurationSeconds(0);
+      setCourseContext(null);
+      setDisplayModeState((prev) => fsmNextOnClose(prev));
+    }
+    // CRITICAL-4 telemetry.
+    emitAudioEvent("spotify_disconnected", {});
+  }, []);
+
+  // === Heartbeat (CRITICAL-4) — emit `audio_driver_active` a cada 60s ===
+  useEffect(() => {
+    if (!isPlaying || !activeTrack) return;
+    const driver = activeTrack.source;
+    const intervalId = setInterval(() => {
+      emitAudioEvent("audio_driver_active", {
+        driver,
+        trackId: activeTrack.trackId,
+      });
+    }, 60 * 1000);
+    return () => clearInterval(intervalId);
+  }, [isPlaying, activeTrack]);
+
   const value = useMemo<AudioPlayerCtx>(
     () => ({
       current,
@@ -539,6 +1034,16 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       courseContext,
       displayMode,
       setDisplayMode,
+      // Sprint Mini Player 2 (RF-NEW.3).
+      sleepTimerMinutes,
+      sleepTimerRemainingSeconds,
+      setSleepTimer,
+      cancelSleepTimer,
+      resetSleepTimer,
+      // Sprint Mini Player 2 (CRITICAL-2 + HIGH-5).
+      connectSpotify,
+      disconnectSpotifyDriver,
+      isSpotifyConnected,
     }),
     [
       current,
@@ -565,6 +1070,14 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       courseContext,
       displayMode,
       setDisplayMode,
+      sleepTimerMinutes,
+      sleepTimerRemainingSeconds,
+      setSleepTimer,
+      cancelSleepTimer,
+      resetSleepTimer,
+      connectSpotify,
+      disconnectSpotifyDriver,
+      isSpotifyConnected,
     ],
   );
 

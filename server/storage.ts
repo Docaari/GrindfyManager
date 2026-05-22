@@ -6023,6 +6023,70 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   /**
+   * Sprint Mini Player 2 (RF-04.2 / ADR-191) — insere 1 evento user-driven em
+   * user_activity. Diferente de recordUserActivity (cron/system), aceita
+   * page/action/feature/metadata livres.
+   */
+  async logUserActivity(input: {
+    userId: string;
+    page: string;
+    action: string;
+    feature?: string | null;
+    duration?: number | null;
+    metadata?: Record<string, any> | null;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): Promise<{ id: string }> {
+    const id = nanoid();
+    await db.insert(userActivity).values({
+      id,
+      userId: input.userId,
+      page: input.page,
+      action: input.action,
+      feature: input.feature ?? null,
+      duration: input.duration ?? null,
+      metadata: input.metadata ?? null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+      createdAt: new Date(),
+    });
+    return { id };
+  }
+
+  /**
+   * Sprint Mini Player 2 (RF-04.2 / ADR-191) — batch insert para sendBeacon.
+   * Cap 10 enforced pelo handler. Aqui apenas executa o INSERT.
+   */
+  async logUserActivityBatch(
+    events: Array<{
+      userId: string;
+      page: string;
+      action: string;
+      feature?: string | null;
+      duration?: number | null;
+      metadata?: Record<string, any> | null;
+      ipAddress?: string | null;
+      userAgent?: string | null;
+    }>,
+  ): Promise<{ inserted: number }> {
+    if (!events || events.length === 0) return { inserted: 0 };
+    const rows = events.map((e) => ({
+      id: nanoid(),
+      userId: e.userId,
+      page: e.page,
+      action: e.action,
+      feature: e.feature ?? null,
+      duration: e.duration ?? null,
+      metadata: e.metadata ?? null,
+      ipAddress: e.ipAddress ?? null,
+      userAgent: e.userAgent ?? null,
+      createdAt: new Date(),
+    }));
+    await db.insert(userActivity).values(rows);
+    return { inserted: rows.length };
+  }
+
+  /**
    * INSERT user_activity row.
    * Maps job-shape `{userId, eventType, payload}` -> schema `{page, action, metadata}`:
    *   page = 'system'  (housekeeping/cron-originated)

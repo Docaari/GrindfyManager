@@ -43,6 +43,8 @@ const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const RegisterPage = lazy(() => import("@/pages/RegisterPage"));
 const VerifyEmailPage = lazy(() => import("@/pages/VerifyEmailPage"));
 const SessionHistory = lazy(() => import("@/pages/SessionHistory"));
+// Sprint Mini Player 2 (RF-01.1) — Spotify OAuth callback fallback page.
+const SpotifyCallbackPage = lazy(() => import("@/pages/spotify-callback"));
 
 // Named exports need wrapper
 const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage").then(m => ({ default: m.ForgotPasswordPage })));
@@ -84,6 +86,7 @@ function Router() {
           <Route path="/reset-password/:token" component={ResetPasswordPage} />
           <Route path="/verify-email" component={VerifyEmailPage} />
           <Route path="/registration-confirmation" component={RegistrationConfirmationPage} />
+          <Route path="/spotify-callback" component={SpotifyCallbackPage} />
           <Route component={LoginPage} />
         </Switch>
       </Suspense>
@@ -111,6 +114,7 @@ function Router() {
               <Suspense fallback={<PageLoader />}>
                 <Switch>
                   <Route path="/reset-password/:token" component={ResetPasswordPage} />
+                  <Route path="/spotify-callback" component={SpotifyCallbackPage} />
                   <Route path="/" component={() => (<ProtectedRoute><Home /></ProtectedRoute>)} />
                   <Route path="/home" component={() => (<ProtectedRoute><Home /></ProtectedRoute>)} />
                   <Route path="/dashboard" component={() => (<ProtectedRoute><Dashboard /></ProtectedRoute>)} />

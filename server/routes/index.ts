@@ -69,6 +69,9 @@ import { registerCoachSessionInsightsRoutes } from "./coach-session-insights";
 import { registerStarredHandsExtendedRoutes } from "./starred-hands-extended";
 import { registerSpotReentryRoutes } from "./spot-reentry";
 import { registerReentryRoutes } from "./reentry";
+// Sprint Mini Player 2 (ADR-190/191).
+import { registerSpotifyAudioRoutes } from "./spotifyAudio";
+import { registerUserActivityRoutes } from "./userActivity";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Wave C (Fase 3 obs): split liveness vs readiness.
@@ -286,6 +289,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerStarredHandsExtendedRoutes(app);
   registerSpotReentryRoutes(app);
   registerReentryRoutes(app);
+
+  // Sprint Mini Player 2 (ADR-190/191).
+  registerSpotifyAudioRoutes(app);
+  registerUserActivityRoutes(app);
 
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);

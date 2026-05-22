@@ -1,7 +1,11 @@
 // AudioSourceEngine — facade routing by track.source.
 // Sprint Mini Player 1 / RF-06 / ADR-187.
-// SpotifyAudioDriver is intentionally NOT imported eagerly: Phase 1 throws
-// before instantiation, avoiding bundle bloat + test resolver edge cases.
+// Sprint Mini Player 2 (CRITICAL-1) — adiciona `spotifyDriverFactory` opcional.
+// Factory eh injetada pelo AudioPlayerContext quando o user conecta o Spotify
+// (Provider re-cria o Engine com a factory atrelada aos tokens em closure).
+// Quando ausente, playTrack(spotify) ainda throw "not implemented" — preserva
+// o comportamento default + o test em tests/client/mini-player/
+// AudioSourceEngine.test.tsx que exige esse throw.
 
 import type {
   AudioDriverEvent,
@@ -10,8 +14,18 @@ import type {
 } from "./types";
 import { LibraryAudioDriver } from "./LibraryAudioDriver";
 
+export type SpotifyDriverFactory = (track: AudioTrack) => IAudioSourceDriver;
+
+export interface DriverSwitchInfo {
+  from: string | null;
+  to: string;
+  reason: "initial" | "source_changed";
+}
+
 interface EngineOptions {
   audioElement?: HTMLAudioElement | null;
+  spotifyDriverFactory?: SpotifyDriverFactory;
+  onDriverSwitch?: (info: DriverSwitchInfo) => void;
 }
 
 function runAll(fns: Array<() => void>): void {
@@ -27,17 +41,29 @@ function runAll(fns: Array<() => void>): void {
 export class AudioSourceEngine {
   activeDriver: IAudioSourceDriver | null = null;
   private audioElement: HTMLAudioElement | null;
+  private spotifyDriverFactory: SpotifyDriverFactory | null;
+  private onDriverSwitch: ((info: DriverSwitchInfo) => void) | null;
   private engineListeners: Map<AudioDriverEvent, Set<(data?: any) => void>>;
   private driverUnsubscribers: Array<() => void>;
 
   constructor(opts: EngineOptions = {}) {
     this.audioElement = opts.audioElement ?? null;
+    this.spotifyDriverFactory = opts.spotifyDriverFactory ?? null;
+    this.onDriverSwitch = opts.onDriverSwitch ?? null;
     this.engineListeners = new Map();
     this.driverUnsubscribers = [];
   }
 
+  setOnDriverSwitch(cb: ((info: DriverSwitchInfo) => void) | null): void {
+    this.onDriverSwitch = cb;
+  }
+
   setAudioElement(el: HTMLAudioElement | null): void {
     this.audioElement = el;
+  }
+
+  setSpotifyDriverFactory(factory: SpotifyDriverFactory | null): void {
+    this.spotifyDriverFactory = factory;
   }
 
   getActiveDriver(): IAudioSourceDriver | null {
@@ -46,6 +72,7 @@ export class AudioSourceEngine {
 
   async playTrack(track: AudioTrack): Promise<void> {
     if (!this.activeDriver || this.activeDriver.source !== track.source) {
+      const from = this.activeDriver?.source ?? null;
       if (this.activeDriver) {
         runAll(this.driverUnsubscribers);
         this.driverUnsubscribers = [];
@@ -54,6 +81,18 @@ export class AudioSourceEngine {
       }
       this.activeDriver = this.createDriver(track);
       this.rebindEngineEvents();
+      // CRITICAL-4 telemetry — driver swap event.
+      if (this.onDriverSwitch) {
+        try {
+          this.onDriverSwitch({
+            from,
+            to: track.source,
+            reason: from === null ? "initial" : "source_changed",
+          });
+        } catch {
+          // never throw
+        }
+      }
     }
     await this.activeDriver.load(track);
     await this.activeDriver.play();
@@ -118,6 +157,13 @@ export class AudioSourceEngine {
       throw new Error("AudioSourceEngine: no audio element bound for library driver");
     }
     if (track.source === "spotify") {
+      if (this.spotifyDriverFactory) {
+        return this.spotifyDriverFactory(track);
+      }
+      // CRITICAL-1: factory ausente -> user nao conectou Spotify ainda. Manter
+      // throw default (alinhado com tests/client/mini-player/
+      // AudioSourceEngine.test.tsx que exige "Spotify driver not implemented"
+      // quando nao ha factory injetada).
       throw new Error("Spotify driver not implemented");
     }
     throw new Error(`Unknown audio source: ${(track as any).source}`);

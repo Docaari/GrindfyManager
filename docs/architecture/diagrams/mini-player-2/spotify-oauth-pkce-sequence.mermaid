@@ -1,0 +1,121 @@
+%% Mini Player 2 - Spotify OAuth PKCE flow via server proxy (ADR-190).
+%% refresh_token NUNCA chega ao client. Cookie httpOnly liga client -> linha em spotify_tokens.
+%% access_token short-lived (60min) em memoria React, refresh proativo 5min antes de expirar.
+
+sequenceDiagram
+    actor User
+    participant Bar as MiniPlayerBar /<br/>SpotifyConnectionPanel
+    participant Auth as client/src/lib/<br/>spotify/auth.ts
+    participant Server as Server<br/>(server/routes/<br/>spotify.ts)
+    participant Spotify as Spotify<br/>(accounts.spotify.com<br/>+ api.spotify.com)
+    participant DB as spotify_tokens<br/>(migration 0077)
+    participant Cookie as Cookie httpOnly<br/>spotify_session<br/>(sameSite=lax)
+    participant Driver as SpotifyAudioDriver
+    participant SDK as Web Playback SDK<br/>sdk.scdn.co/spotify-player.js
+
+    Note over User,SDK: 1. OAuth Initiation
+
+    User->>Bar: Click "Conectar Spotify"<br/>(Preferencias /coach-ai)
+    Bar->>Auth: initiateSpotifyAuth()
+    Auth->>Server: POST /api/audio/spotify/oauth-init<br/>(JWT auth header)
+
+    activate Server
+    Server->>Server: generate state (32 bytes random)<br/>generate code_verifier (64 chars)<br/>compute code_challenge = SHA-256(verifier)<br/>store {state, verifier} in-memory Map TTL 10min
+    Server->>Cookie: Set-Cookie spotify_oauth_session<br/>(httpOnly, signed JWT, TTL 10min)
+    Server-->>Auth: { authUrl, state }<br/>authUrl includes code_challenge + state + redirect_uri
+    deactivate Server
+
+    Auth->>User: window.open(authUrl, popup 500x700)
+    User->>Spotify: GET accounts.spotify.com/authorize<br/>?client_id&code_challenge&state&scope
+    Spotify-->>User: Login + Authorize page
+
+    Note over User,SDK: 2. OAuth Callback
+
+    User->>Spotify: Authorize
+    Spotify->>User: 302 redirect_uri?code=&state=
+    User->>Server: GET /api/audio/spotify/oauth-callback<br/>?code=X&state=Y<br/>(cookie httpOnly enviado automaticamente)
+
+    activate Server
+    Server->>Cookie: read spotify_oauth_session
+    Server->>Server: verify state matches stored<br/>(reject CSRF mismatch)
+    Server->>Spotify: POST accounts.spotify.com/api/token<br/>{grant_type=authorization_code,<br/>code, code_verifier, redirect_uri}
+    Spotify-->>Server: { access_token, refresh_token,<br/>expires_in: 3600, scope }
+    Server->>Spotify: GET api.spotify.com/v1/me<br/>(Bearer access_token)
+    Spotify-->>Server: { id, display_name, email,<br/>product: 'premium'|'free' }
+
+    alt product === 'premium'
+        Server->>Server: encryptRefreshToken(refresh_token)<br/>AES-256-GCM, IV random 12 bytes
+        Server->>DB: INSERT spotify_tokens<br/>(user_id PK, refresh_token_encrypted,<br/>refresh_token_iv, refresh_token_auth_tag,<br/>access_token_hash, expires_at,<br/>scopes, display_name, display_name_hash,<br/>spotify_user_id, connected_at)<br/>ON CONFLICT DO UPDATE
+        Server->>Cookie: Set-Cookie spotify_session<br/>(httpOnly, signed JWT)<br/>clear oauth_session cookie
+        Server-->>User: HTML response<br/>script: window.opener.postMessage(<br/>{type:'spotify-oauth-success',<br/>accessToken, expiresIn, displayName},<br/>origin)<br/>window.close()
+    else product === 'free'
+        Server->>Server: dont persist refresh_token<br/>(NAO criar row em spotify_tokens)
+        Server->>Cookie: clear oauth_session cookie
+        Server-->>User: HTML response<br/>script: window.opener.postMessage(<br/>{type:'spotify-oauth-premium-required',<br/>displayName, email}, origin)<br/>window.close()
+    end
+    deactivate Server
+
+    Note over User,SDK: 3. Driver Activation
+
+    Auth->>Bar: Promise resolve<br/>{accessToken, expiresIn, displayName}
+    Bar->>Driver: new SpotifyAudioDriver(<br/>accessToken, expiresIn, displayName)
+    Driver->>Driver: store accessToken in closure ref<br/>schedule setTimeout(refresh, (expiresIn-300)*1000)
+    Driver->>SDK: lazy load sdk.scdn.co/spotify-player.js<br/>(if not yet loaded)
+    SDK->>Driver: window.onSpotifyWebPlaybackSDKReady
+    Driver->>SDK: new Spotify.Player({<br/>name: 'Grindfy',<br/>getOAuthToken: cb => cb(accessToken),<br/>volume: 1.0})
+    Driver->>SDK: player.connect()
+    SDK-->>Driver: ready event { device_id }
+    Driver->>Driver: store deviceId<br/>emit telemetry spotify_connected
+    Driver-->>Bar: connected = true<br/>UI mostra "Conectado como displayName"
+
+    Note over User,SDK: 4. Proactive Refresh (5min antes de expirar)
+
+    Driver->>Auth: refreshAccessToken()<br/>(setTimeout dispara)
+    Auth->>Server: POST /api/audio/spotify/refresh<br/>(cookie httpOnly enviado)
+
+    activate Server
+    Server->>Cookie: read spotify_session
+    Server->>DB: SELECT refresh_token_encrypted,<br/>iv, auth_tag FROM spotify_tokens<br/>WHERE user_id=$1 AND disconnected_at IS NULL
+    DB-->>Server: row or null
+    alt row exists
+        Server->>Server: decryptRefreshToken(row)
+        Server->>Spotify: POST accounts.spotify.com/api/token<br/>{grant_type=refresh_token, refresh_token}
+        alt success
+            Spotify-->>Server: { access_token, expires_in, refresh_token? }
+            Server->>DB: UPDATE access_token_hash,<br/>expires_at, last_refresh_at<br/>(if new refresh_token, re-encrypt)
+            Server-->>Auth: { accessToken, expiresIn }
+        else failure
+            Spotify-->>Server: 4xx
+            Server->>DB: UPDATE refresh_failure_count++
+            Server-->>Auth: 401
+        end
+    else no row
+        Server-->>Auth: 404 "not connected"
+    end
+    deactivate Server
+
+    alt refresh success
+        Auth->>Driver: update accessToken closure ref<br/>reschedule setTimeout
+        Driver->>Driver: emit telemetry spotify_token_refreshed
+    else refresh failed 3x exponencial (1s/2s/4s)
+        Driver->>Driver: emit spotify_disconnect (reason: token_refresh_failed_3x)
+        Driver->>Driver: destroy() + UI prompt "Reconectar?"
+    end
+
+    Note over User,SDK: 5. Disconnect (user-initiated)
+
+    User->>Bar: Click "Desconectar" em Preferencias
+    Bar->>Bar: ConfirmDialog
+    User->>Bar: Confirm
+    Bar->>Auth: disconnectSpotify()
+    Auth->>Server: POST /api/audio/spotify/disconnect<br/>(cookie httpOnly)
+
+    activate Server
+    Server->>DB: UPDATE spotify_tokens<br/>SET disconnected_at = NOW()<br/>WHERE user_id = $1
+    Server->>Cookie: clear spotify_session cookie
+    Server-->>Auth: 204
+    deactivate Server
+
+    Auth->>Driver: driver.destroy()
+    Driver->>SDK: player.disconnect()
+    Driver->>Driver: emit spotify_disconnected<br/>(reason: user_initiated)
