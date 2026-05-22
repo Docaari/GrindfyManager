@@ -50,11 +50,14 @@ export function MiniPlayerOnboarding() {
       document.addEventListener("click", onAnyClick);
       document.addEventListener("keydown", onKey);
     }, 300);
+    const onDismissEvent = () => dismiss();
+    window.addEventListener("audio.onboarding.dismiss", onDismissEvent);
     return () => {
       clearTimeout(timer);
       clearTimeout(attachTimer);
       document.removeEventListener("click", onAnyClick);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("audio.onboarding.dismiss", onDismissEvent);
     };
   }, [visible]);
 

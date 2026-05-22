@@ -1,0 +1,58 @@
+%%{init: {'theme':'base'}}%%
+sequenceDiagram
+    autonumber
+    participant T as Test runner<br/>(vitest)
+    participant H as TestHarness<br/>(Probe)
+    participant P as AudioPlayerProvider<br/>(state + useMemo)
+    participant C as AudioPlayerContext<br/>(ctx object)
+    participant E as useEffect callback
+
+    Note over T,E: ANTI-PATTERN — useEffect([ctx]) loop OOM (lesson #14/#26/#38 nova variante)
+
+    T->>H: render(&lt;TestHarness /&gt;)
+    H->>P: useAudioPlayer()
+    P->>C: ctx = useMemo(() =&gt; ({playTrack, ...}), [state])
+    P-->>H: ctx (ref #1)
+    H->>E: useEffect(() =&gt; ctx.playTrack(...), [ctx])
+    E->>P: ctx.playTrack(...) muta state
+    P->>P: setState → re-render
+    P->>C: useMemo deps mudou → NOVO ctx (ref #2)
+    P-->>H: ctx (ref #2)
+    H->>E: deps [ctx] mudou → re-dispara effect
+    E->>P: ctx.playTrack(...) muta state DE NOVO
+    P->>P: setState → re-render
+    P->>C: NOVO ctx (ref #3)
+    Note over H,E: LOOP INFINITO<br/>heap cresce → FATAL ERROR<br/>"Reached heap limit Allocation failed"
+
+    Note over T,E: ────────────────────────────────────────────
+    Note over T,E: PATTERN A (canonico) — useRef flag + deps []
+
+    T->>H: render(&lt;TestHarness /&gt;) [refactor]
+    H->>P: useAudioPlayer()
+    P-->>H: ctx (ref #1)
+    H->>H: const firedRef = useRef(false)
+    H->>E: useEffect(() =&gt; { if(firedRef.current) return;<br/>firedRef.current = true;<br/>ctx.playTrack(...) }, [])
+    E->>E: firedRef.current === false → dispara
+    E->>P: ctx.playTrack(...) muta state
+    E->>E: firedRef.current = true (lock)
+    P->>P: setState → re-render
+    P->>C: NOVO ctx (ref #2)
+    P-->>H: ctx (ref #2)
+    Note over H,E: deps [] NUNCA re-dispara<br/>(re-renders nao acionam effect)
+    H-->>T: render estavel — test passa
+
+    Note over T,E: ────────────────────────────────────────────
+    Note over T,E: PATTERN B (alternativo) — Imperative call em act()
+
+    T->>H: render(&lt;Capture /&gt;) com Probe que so LE
+    H->>P: useAudioPlayer()
+    P-->>H: ctx (ref #1)
+    H->>T: capturedCtx = ctx (assignment externo)
+    Note over H,E: SEM useEffect — Probe nao muta nada
+    T->>T: act(async () =&gt; { await capturedCtx.playTrack(...) })
+    T->>P: mutacao controlada pelo body do teste
+    P->>P: setState → re-render
+    P-->>H: ctx (ref #2)
+    H->>T: capturedCtx = ctx (reassignment — ponteiro atualizado)
+    T->>T: expect(capturedCtx.state.status).toBe('playing')
+    T-->>T: assertion pass — sem loop

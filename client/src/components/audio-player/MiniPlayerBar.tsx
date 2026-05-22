@@ -363,6 +363,7 @@ export function MiniPlayerBar() {
             try {
               if (localStorage.getItem("audio.onboarding.seen.v1") !== "true") {
                 localStorage.setItem("audio.onboarding.seen.v1", "true");
+                window.dispatchEvent(new Event("audio.onboarding.dismiss"));
               }
             } catch {
               // ignore

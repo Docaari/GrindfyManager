@@ -94,6 +94,10 @@ Arquivo `.env` na raiz (no `.gitignore`).
 - `SPOTIFY_CLIENT_SECRET` — server-only. Basic-auth no token exchange + refresh contra `https://accounts.spotify.com/api/token`. NUNCA expor no client.
 - `SPOTIFY_REDIRECT_URI` — server-only. Ex: `http://localhost:3000/api/audio/spotify/oauth-callback` (dev) ou `${BASE_URL}/api/audio/spotify/oauth-callback` (prod). Tambem registrado no Spotify Dashboard.
 - `SPOTIFY_TOKEN_ENCRYPTION_KEY` — 32 bytes (64 chars hex) usados pelo AES-256-GCM em `server/services/spotifyTokenCrypto.ts` para encryptar `refresh_token` at rest. **Boot fail** quando `encryptRefreshToken`/`decryptRefreshToken` sao chamados sem essa env (Sprint Mini Player 2 / ADR-190). Gerar com `openssl rand -hex 32`.
+- `WHISPER_FALLBACK_ENABLED` — gate global do fallback Whisper para transcricao quando Mux nao gera caption (default `false`; ADR-200 status `Accepted — DEFER`). Quando `true`, o ingestor em `server/services/whisperFallback.ts` (placeholder MP3.2) eh consultado apos `reason:'no_text_tracks'` + lesson >= 1 dia. Codigo placeholder atual retorna `reason:'whisper_disabled'` ate criterios de ativacao do ADR-200 emergirem (>=3 lessons NULL ha >7d OR demanda founder).
+- `WHISPER_PROVIDER` — provider escolhido quando `WHISPER_FALLBACK_ENABLED=true`. Valores: `'openai_api'` (default, recomendado per ADR-200) ou `'whisper_cpp'` (local binary, descartado por bloat Docker). Ainda nao consumido em codigo de producao (placeholder).
+- `WHISPER_MODEL` — override do modelo. Default `'whisper-1'` quando `WHISPER_PROVIDER='openai_api'` (modelo OpenAI Whisper API hosted). Default `'small'` quando `WHISPER_PROVIDER='whisper_cpp'` (~470MB binario).
+- `WHISPER_COST_BUDGET_USD_MONTHLY` — budget cap mensal em USD para OpenAI Whisper API (default `10`). Cron skipa novos fallbacks se total acumulado do mes ultrapassar. Ver ADR-200 §Implementation Notes + custo ~$0.006/min audio.
 
 ---
 

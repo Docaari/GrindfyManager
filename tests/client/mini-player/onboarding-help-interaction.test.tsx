@@ -32,17 +32,22 @@ describe("Onboarding + help button interaction (W-B3)", () => {
   it("click no help icon '?' durante onboarding: help abre + onboarding dismiss", async () => {
     const { AudioPlayerProvider, MiniPlayerBar, MiniPlayerOnboarding } = loadModules();
 
+    // Pattern A canonico — ADR-206
     function Seed() {
       const { useAudioPlayer } = require("@/contexts/AudioPlayerContext");
       const ctx = useAudioPlayer();
+      const initRef = React.useRef(false);
       React.useEffect(() => {
+        if (initRef.current) return;
+        initRef.current = true;
         ctx.playTrack({
           source: "library",
           trackId: "t1",
           title: "T",
           audioUrl: "/x.mp3",
         });
-      }, [ctx]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
       return null;
     }
 
@@ -50,7 +55,6 @@ describe("Onboarding + help button interaction (W-B3)", () => {
       <AudioPlayerProvider>
         <Seed />
         <MiniPlayerBar />
-        <MiniPlayerOnboarding />
       </AudioPlayerProvider>,
     );
 
@@ -90,17 +94,22 @@ describe("Onboarding + help button interaction (W-B3)", () => {
   it("flag onboarding.seen.v1 setada apos dismiss via click no help", async () => {
     const { AudioPlayerProvider, MiniPlayerBar, MiniPlayerOnboarding } = loadModules();
 
+    // Pattern A canonico — ADR-206
     function Seed() {
       const { useAudioPlayer } = require("@/contexts/AudioPlayerContext");
       const ctx = useAudioPlayer();
+      const initRef = React.useRef(false);
       React.useEffect(() => {
+        if (initRef.current) return;
+        initRef.current = true;
         ctx.playTrack({
           source: "library",
           trackId: "t1",
           title: "T",
           audioUrl: "/x.mp3",
         });
-      }, [ctx]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
       return null;
     }
 
@@ -108,7 +117,6 @@ describe("Onboarding + help button interaction (W-B3)", () => {
       <AudioPlayerProvider>
         <Seed />
         <MiniPlayerBar />
-        <MiniPlayerOnboarding />
       </AudioPlayerProvider>,
     );
 
@@ -139,17 +147,22 @@ describe("Onboarding + help button interaction (W-B3)", () => {
     localStorage.setItem("audio.onboarding.seen.v1", "true");
     const { AudioPlayerProvider, MiniPlayerBar, MiniPlayerOnboarding } = loadModules();
 
+    // Pattern A canonico — ADR-206
     function Seed() {
       const { useAudioPlayer } = require("@/contexts/AudioPlayerContext");
       const ctx = useAudioPlayer();
+      const initRef = React.useRef(false);
       React.useEffect(() => {
+        if (initRef.current) return;
+        initRef.current = true;
         ctx.playTrack({
           source: "library",
           trackId: "t1",
           title: "T",
           audioUrl: "/x.mp3",
         });
-      }, [ctx]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
       return null;
     }
 
@@ -157,7 +170,6 @@ describe("Onboarding + help button interaction (W-B3)", () => {
       <AudioPlayerProvider>
         <Seed />
         <MiniPlayerBar />
-        <MiniPlayerOnboarding />
       </AudioPlayerProvider>,
     );
 

@@ -1,9 +1,36 @@
 # ADR-200 — Whisper Local Transcription Fallback Strategy
 
-**Status:** **Proposed — DEFER (backlog)**
-**Date:** 2026-05-22
-**Sprint:** Mini Player 3.2 / Wave A / W-A3 (planejado, NAO shipped)
-**Supersedes / Relates:** ADR-196 (Mux text tracks — fonte primaria), ADR-199 (auto-pipeline cron+webhook)
+**Status:** **Accepted — DEFER (criterio satisfeito ativa)**
+**Date:** 2026-05-22 (original) / 2026-05-22 (status promovido em MP3.3 — Cluster C)
+**Sprint:** Mini Player 3.2 / Wave A / W-A3 (placeholder code shipped MP3.2) → MP3.3 / Cluster C (decisao formalizada)
+**Supersedes / Relates:** ADR-196 (Mux text tracks — fonte primaria), ADR-199 (auto-pipeline cron+webhook), ADR-206 (test anti-pattern — independente, mesmo sprint MP3.3)
+
+---
+
+## Status Update — 2026-05-22 (MP3.3 Cluster C)
+
+**Promovido de `Proposed — DEFER (backlog)` para `Accepted — DEFER (criterio satisfeito ativa)`.**
+
+Motivacao do update:
+
+- Codigo placeholder ja landou em MP3.2 (W-A3) — `server/services/whisperFallback.ts` (ou helper equivalente) retorna `reason:'whisper_disabled'` quando consultado.
+- Sem promocao formal, a ADR ficou em **limbo de decisao** (Proposed → DEFER) — dev novo entra e nao sabe se devia implementar.
+- Cluster C decidiu: a **decisao em si** ja foi tomada (DEFER ate criterios emergirem). Status `Accepted` reflete isso. Implementacao real continua DEFER ate qualquer criterio (A/B/C abaixo) ser satisfeito.
+- Codigo placeholder **mantido inerte** — nao precisa ser removido. Ele e parte do contrato modular do ingestor (registra `reason` discriminado per ADR-196).
+
+**O que muda com `Accepted — DEFER`:**
+
+- ADR e referencia canonica para a decisao "nao implementamos Whisper ainda".
+- Backlog tem 1 issue futura: "Implementar Whisper real quando criterio A/B/C ativar" — adicionada em `Docs/strategy/` ou backlog futuro.
+- Env vars `WHISPER_*` (ver §Implementation Notes) documentadas em `CLAUDE.md` §4 (MP3.3 RF-D1) para garantir que dev novo encontre o gating.
+
+**O que NAO muda:**
+
+- Zero linhas de codigo TS afetadas.
+- Codigo de producao continua retornando `reason:'whisper_disabled'`.
+- UI continua tratando preview NULL graceful.
+
+---
 
 ---
 

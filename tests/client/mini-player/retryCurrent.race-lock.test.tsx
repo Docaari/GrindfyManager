@@ -93,16 +93,21 @@ describe("retryCurrent race lock (W-B1)", () => {
   it("lock liberado em success path (onCanPlay) permite retry subsequente", async () => {
     const { AudioPlayerProvider, useAudioPlayer } = loadModules();
 
+    // Pattern A canonico — ADR-206
     function Probe() {
       const ctx = useAudioPlayer();
+      const initRef = React.useRef(false);
       React.useEffect(() => {
+        if (initRef.current) return;
+        initRef.current = true;
         ctx.playTrack({
           source: "library",
           trackId: "t1",
           title: "T1",
           audioUrl: "/x.mp3",
         });
-      }, [ctx]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
 
       return (
         <>
@@ -145,16 +150,21 @@ describe("retryCurrent race lock (W-B1)", () => {
   it("lock liberado em error path permite retry subsequente", async () => {
     const { AudioPlayerProvider, useAudioPlayer } = loadModules();
 
+    // Pattern A canonico — ADR-206
     function Probe() {
       const ctx = useAudioPlayer();
+      const initRef = React.useRef(false);
       React.useEffect(() => {
+        if (initRef.current) return;
+        initRef.current = true;
         ctx.playTrack({
           source: "library",
           trackId: "t1",
           title: "T1",
           audioUrl: "/bad.mp3",
         });
-      }, [ctx]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
       return (
         <button data-testid="r" onClick={() => ctx.retryCurrent()}>
           R
@@ -192,16 +202,21 @@ describe("retryCurrent race lock (W-B1)", () => {
     vi.useFakeTimers();
     const { AudioPlayerProvider, useAudioPlayer } = loadModules();
 
+    // Pattern A canonico — ADR-206
     function Probe() {
       const ctx = useAudioPlayer();
+      const initRef = React.useRef(false);
       React.useEffect(() => {
+        if (initRef.current) return;
+        initRef.current = true;
         ctx.playTrack({
           source: "library",
           trackId: "t1",
           title: "T1",
           audioUrl: "/x.mp3",
         });
-      }, [ctx]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
       return (
         <button data-testid="r" onClick={() => ctx.retryCurrent()}>
           R
