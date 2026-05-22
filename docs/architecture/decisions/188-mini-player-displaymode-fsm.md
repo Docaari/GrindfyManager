@@ -235,7 +235,15 @@ Layouts específicos que precisam respeitar o bottom space consomem via:
 ## Referências
 
 - Spec: `Docs/specs/sprint-mini-player-1.md` §5 RF-04 + RF-11 + RF-13, §11 D4/D16/D22.
+- Spec follow-up: `Docs/specs/sprint-mini-player-1.1.md` RF-06 (formaliza `z-45` → `z-[45]` arbitrary explicito).
 - Diagrama complementar: `Docs/architecture/diagrams/mini-player-1/displayMode-state-machine.mermaid`.
+- **Convencao canonica z-index:** `Docs/conventions/z-index.md` (one-pager extraindo a tabela desta ADR + cross-refs). Atualizar la quando z-index mudar — esta ADR documenta a decisao, a convencao documenta o estado atual.
 - ADR irmão: `ADR-187` (AudioSourceEngine + driver pattern).
-- Verificado em código: `client/src/components/MiniChat.tsx:172,196` (z-50 confirmado).
+- Verificado em código: `client/src/components/MiniChat.tsx:172,196` (z-50 confirmado); `client/src/components/audio-player/MiniPlayerExpanded.tsx:30` (z-45 → z-[45] em MP1.1).
 - Lessons relacionadas: #27 (Radix Tabs `onMouseDown` vs `onClick` — relevante se RF-04 expanded usar Tabs), #29 (sub-árvore com `useQuery` sem QueryClientProvider — relevante se Mini Player ler curso via TanStack em teste standalone).
+
+## Addendum MP1.1 (2026-05-22)
+
+Sprint Mini Player 1.1 RF-06 troca `className="z-45"` por `className="z-[45]"` em `MiniPlayerExpanded.tsx:30`. **Decisao funcional inalterada** — gap z-40/z-[45]/z-50 preservado; trocar para `z-50` quebraria a invariante "MiniChat acima de MiniPlayerExpanded". One-liner cosmetico, zero impacto visual ou comportamental.
+
+Sprint Mini Player 1.1 RF-07 reforca a invariante de cleanup do `LibraryAudioDriver.destroy()`: libera `audioEl.src` + `audioEl.load()` para evitar buffer leak + cancelar pending HTTP requests. Comportamento ja implicito em ADR-187; explicitado aqui para test-writer cobrir.

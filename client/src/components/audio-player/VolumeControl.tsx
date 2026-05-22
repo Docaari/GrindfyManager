@@ -2,6 +2,7 @@
 // Tri-modo: click=mute toggle, wheel +-5% (throttle 50ms), hover 200ms=slider.
 
 import React, { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Volume2, Volume1, VolumeX } from "lucide-react";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
 
@@ -50,8 +51,28 @@ export function VolumeControl({ hideSlider = false }: Props) {
     }
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     hoverTimerRef.current = setTimeout(() => {
-      setSliderVisible(true);
+      // flushSync garante que o re-render aconteca antes de
+      // `vi.advanceTimersByTime` retornar nos testes (sem precisar de `act`).
+      // Em prod nao impacta UX porque o callback ja roda fora de batch React.
+      flushSync(() => {
+        setSliderVisible(true);
+      });
     }, HOVER_REVEAL_MS);
+  }
+
+  // Rearma o hideTimer (cancelando qualquer pendente). flushSync garante que
+  // o re-render aconteca antes de `vi.advanceTimersByTime` retornar em testes
+  // (sem precisar de `act`); em prod nao impacta UX porque o callback ja roda
+  // fora de batch React.
+  function rearmHideTimer() {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+    }
+    hideTimerRef.current = setTimeout(() => {
+      flushSync(() => {
+        setSliderVisible(false);
+      });
+    }, HOVER_HIDE_MS);
   }
 
   function handleMouseLeave() {
@@ -59,9 +80,7 @@ export function VolumeControl({ hideSlider = false }: Props) {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
-    hideTimerRef.current = setTimeout(() => {
-      setSliderVisible(false);
-    }, HOVER_HIDE_MS);
+    rearmHideTimer();
   }
 
   useEffect(() => {
@@ -98,6 +117,7 @@ export function VolumeControl({ hideSlider = false }: Props) {
               hideTimerRef.current = null;
             }
           }}
+          onMouseLeave={rearmHideTimer}
         >
           <input
             type="range"

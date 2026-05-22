@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
 import { useMiniPlayerHeight } from "@/hooks/useMiniPlayerHeight";
+import { sanitizeCoverUrl } from "@/lib/audio-engine/sanitizeCoverUrl";
 import { VolumeControl } from "./VolumeControl";
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -142,6 +143,7 @@ export function MiniPlayerBar() {
 
   if (displayMode === "hidden" || !activeTrack) return null;
 
+  const sanitizedCoverUrl = sanitizeCoverUrl(activeTrack.coverUrl);
   const hasPrev = !!(courseContext && courseContext.currentIndex > 0);
   const hasNext = !!(
     courseContext &&
@@ -179,20 +181,14 @@ export function MiniPlayerBar() {
       }}
     >
       <div className="flex items-center gap-3 min-w-0">
-        {activeTrack.coverUrl ? (
+        {sanitizedCoverUrl ? (
           <img
-            src={activeTrack.coverUrl}
+            src={sanitizedCoverUrl}
             alt=""
             className={
               "w-12 h-12 rounded-md object-cover mini-player-cover" +
               (isPlaying && !reducedMotion ? " animate-spin-slow" : "")
             }
-            style={{
-              animationDuration: "8s",
-              animationTimingFunction: "linear",
-              animationIterationCount: "infinite",
-              animationName: isPlaying && !reducedMotion ? "spin" : "none",
-            }}
           />
         ) : (
           <div className="w-12 h-12 rounded-md bg-gray-700 mini-player-cover" />

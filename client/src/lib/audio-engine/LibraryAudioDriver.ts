@@ -109,6 +109,14 @@ export class LibraryAudioDriver implements IAudioSourceDriver {
   }
 
   destroy(): void {
+    // RF-07: ordem importa — pause antes do cleanup (load() pode disparar
+    // re-fetch num <audio> ainda tocando). Listeners sao removidos APOS pause
+    // pra garantir que nenhum 'pause' event handler atrase shutdown.
+    try {
+      this.audioEl.pause();
+    } catch {
+      // ignore
+    }
     for (const [event, handler] of this.nativeHandlers.entries()) {
       try {
         this.audioEl.removeEventListener(event, handler);
@@ -118,8 +126,15 @@ export class LibraryAudioDriver implements IAudioSourceDriver {
     }
     this.listeners.clear();
     this.nativeHandlers.clear();
+    // Libera buffer (RF-07): removeAttribute('src') + load() cancela pending
+    // HTTP requests do audio file. Idempotente — chamar 2x nao crasha.
     try {
-      this.audioEl.pause();
+      this.audioEl.removeAttribute("src");
+    } catch {
+      // ignore
+    }
+    try {
+      this.audioEl.load();
     } catch {
       // ignore
     }

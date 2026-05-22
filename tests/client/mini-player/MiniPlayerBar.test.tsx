@@ -40,7 +40,7 @@ function PlayInitiator() {
           source: 'library',
           trackId: 'l1',
           title: 'Aula 1',
-          coverUrl: '/cover.jpg',
+          coverUrl: 'https://cdn.example.com/cover.jpg',
           courseTitle: 'Curso',
           durationSeconds: 1200,
           audioUrl: '/audio/l1.mp3',
@@ -135,6 +135,6 @@ describe('<MiniPlayerBar> (RF-01)', () => {
     const bar = screen.getByTestId('mini-player-bar');
     const img = bar.querySelector('img');
     expect(img).not.toBeNull();
-    expect(img!.getAttribute('src')).toContain('/cover.jpg');
+    expect(img!.getAttribute('src')).toContain('cdn.example.com/cover.jpg');
   });
 });

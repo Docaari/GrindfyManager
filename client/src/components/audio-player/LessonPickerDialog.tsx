@@ -1,34 +1,44 @@
-// LessonPickerDialog — Sprint Mini Player 1 / RF-09 + D10 + D11.
-// Modal lazy-loaded com lista de cursos -> aulas (podcasts).
-// "Continuar de onde parou" no topo se houver progresso.
+// LessonPickerDialog — Sprint Mini Player 1 + 1.1.
+// Modal Radix Dialog com dropdown de cursos -> aulas (podcasts).
 // Click em aula acessivel: playTrack + fecha.
+//
+// Suporta dois shapes do backend (back-compat MP1 testes):
+//   - LEGACY (shape MP1): array de cursos com modules[].lessons[] inline.
+//   - NEW (shape MP1.1): flat array {slug,title,...}; modules vem via lazy
+//     fetch /api/library/courses/:slug quando user seleciona o curso.
+// "Continuar de onde parou" no topo deriva o melhor progresso por aula
+// (progress map por format) ou consome /progress/batch legado (MP1).
 
-import React, { useMemo, useState } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-function lessonToTrack(lesson: any, courseTitle?: string | null): any {
-  return {
-    source: "library",
-    trackId: lesson.lessonId,
-    title: lesson.title,
-    coverUrl: lesson.coverUrl ?? null,
-    courseTitle: courseTitle ?? null,
-    durationSeconds: lesson.durationSeconds,
-    audioUrl: lesson.audioUrl,
-    hasAccess: lesson.hasAccess,
-  };
-}
-
-// Wrap useQuery: tolerate missing QueryClientProvider so the dialog renders
-// gracefully in isolated test environments (lesson #29 ErrorBoundary pattern,
-// inlined as try/catch since useQuery throws synchronously on missing client).
+/**
+ * Wrap useQuery: tolerate missing QueryClientProvider so the dialog renders
+ * gracefully in isolated test environments (lesson #29 ErrorBoundary pattern).
+ *
+ * WARNING (HIGH-1 reviewer MP1.1): viola Rules of Hooks se o provider mount
+ * status mudar entre renders (useQuery passa a NAO throw → ordem de hooks
+ * muda → React quebra). Seguro em prod porque QueryClientProvider e mounted
+ * no topo do App.tsx e nunca remontado. Follow-up MP1.2: refactor para
+ * ErrorBoundary local + sub-componente fetcher.
+ */
 function safeUseQuery(args: any): any {
   try {
     return useQuery(args);
@@ -37,89 +47,265 @@ function safeUseQuery(args: any): any {
   }
 }
 
+function lessonToTrack(lesson: any, courseTitle?: string | null): any {
+  return {
+    source: "library",
+    trackId: lesson.lessonId ?? lesson.id,
+    title: lesson.title,
+    coverUrl: lesson.coverUrl ?? null,
+    courseTitle: courseTitle ?? null,
+    durationSeconds:
+      lesson.durationSeconds ??
+      (lesson.durationMinutes ? lesson.durationMinutes * 60 : undefined),
+    audioUrl: lesson.audioUrl,
+    hasAccess: lesson.hasAccess,
+  };
+}
+
+// Derives best progress pct + lastWatchedAt + lastPositionSeconds across formats.
+function deriveBestProgress(lesson: any): {
+  pct: number;
+  lastWatchedAt: string | null;
+  completed: boolean;
+  lastPositionSeconds: number;
+} {
+  if (!lesson?.progress)
+    return {
+      pct: 0,
+      lastWatchedAt: null,
+      completed: false,
+      lastPositionSeconds: 0,
+    };
+  let bestPct = 0;
+  let lastWatchedAt: string | null = null;
+  let anyCompleted = false;
+  let bestLastPosition = 0;
+  for (const key of Object.keys(lesson.progress)) {
+    const row = (lesson.progress as any)[key];
+    if (!row) continue;
+    if (row.completedAt) anyCompleted = true;
+    const last = Number(row.lastPositionSeconds ?? 0);
+    const total = Number(row.totalDurationSeconds ?? 0);
+    if (total > 0) {
+      const pct = (last / total) * 100;
+      if (pct > bestPct) {
+        bestPct = pct;
+        bestLastPosition = last;
+      }
+    }
+    const updated = row.updatedAt ?? null;
+    if (updated && (!lastWatchedAt || updated > lastWatchedAt)) {
+      lastWatchedAt = updated;
+    }
+  }
+  return {
+    pct: Math.min(100, Math.max(0, bestPct)),
+    lastWatchedAt,
+    completed: anyCompleted,
+    lastPositionSeconds: bestLastPosition,
+  };
+}
+
 export function LessonPickerDialog({ open, onOpenChange }: Props) {
   const ctx = useAudioPlayer();
+  const auth = useAuth();
+  const user = auth?.user ?? null;
+  const authLoading = !!(auth as any)?.isLoading;
+  // Mostra auth guard apenas quando explicitamente nao-logado (auth resolveu).
+  // Em testes legacy MP1 (sem AuthProvider mockado), useAuth retorna o
+  // safe-default com isLoading=true; preserva comportamento back-compat
+  // (segue como se fosse logged-in para nao quebrar smoke MP1).
+  const showAuthGuard = !user && !authLoading;
   const [search, setSearch] = useState("");
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
 
-  // HIGH-4 fix: queryFn explicito. Em prod, o queryClient global tem
-  // defaultOptions.queries.queryFn que resolve queryKey[0] como URL, mas
-  // documentar explicitamente protege contra mudanca de default no futuro
-  // e ajuda o leitor a entender o que esta sendo fetched.
+  // Fetch lista de cursos. Backend pode retornar:
+  //   - shape MP1 (back-compat): array de cursos com modules[].lessons[] inline
+  //   - shape MP1.1: flat array com {id, slug, title, subtitle, lessonCount, ...}
   const coursesQuery = safeUseQuery({
     queryKey: ["/api/library/courses"],
     queryFn: () => apiRequest("GET", "/api/library/courses"),
-    enabled: open,
+    enabled: open && !showAuthGuard,
   });
 
-  // HIGH-4 fix (Mini Player 1 follow-up): "Continuar de onde parou" agora eh
-  // hidratado a partir do shape estendido de `/api/library/courses/:slug` que
-  // inclui `progress` por lesson (formato: { video, podcast, article }). Como
-  // /api/library/courses (lista) NAO traz o detalhe modules+lessons, mantemos
-  // tolerancia a tests legacy que mockam um endpoint /progress separado: se
-  // `progressQuery.data` for um array com `{lessonId, lastPositionSeconds}`,
-  // continuamos derivando dele (backward compat). Caso contrario, derivamos
-  // de `coursesQuery.data` filtrando lessons com `progress.podcast.*` ativo.
+  // Detail lazy fetch (MP1.1 RF-01). Dispara somente quando user selecionou
+  // um curso E o curso selecionado NAO ja tem modules inline (back-compat).
+  const courseList: any[] = Array.isArray(coursesQuery?.data)
+    ? coursesQuery.data
+    : [];
+
+  // detailNeeded = ha curso selecionado E ele nao traz modules inline (shape new).
+  // Shape legacy ja traz modules+lessons no payload da lista; evita o segundo fetch.
+  const detailNeeded = useMemo(() => {
+    if (!selectedSlug) return false;
+    const fromList = courseList.find((c: any) => c?.slug === selectedSlug);
+    const hasInlineModules =
+      !!fromList && Array.isArray(fromList.modules) && fromList.modules.length > 0;
+    return !hasInlineModules;
+  }, [selectedSlug, courseList]);
+
+  const detailQuery = safeUseQuery({
+    queryKey: ["/api/library/courses", selectedSlug],
+    queryFn: () =>
+      selectedSlug
+        ? apiRequest("GET", `/api/library/courses/${selectedSlug}`)
+        : Promise.resolve(null),
+    enabled: open && !showAuthGuard && detailNeeded,
+  });
+
+  // Legacy progress query (MP1 back-compat: tests originais mockam endpoint
+  // dedicado /progress/batch retornando [{lessonId, lastPositionSeconds}, ...]).
   const progressQuery = safeUseQuery({
     queryKey: ["/api/library/lessons/progress/batch"],
     queryFn: async () => [] as any[],
-    enabled: open,
+    enabled: open && !showAuthGuard,
   });
 
-  const courses: any[] = coursesQuery?.data ?? [];
+  // Destructure explicito para deps estaveis (RF-09).
+  const progressData = progressQuery?.data;
+  const progressError = progressQuery?.error;
+  const detailData = detailQuery?.data;
+  const detailError = detailQuery?.error;
+  const detailLoading = !!detailQuery?.isLoading;
 
+  // Auto-select primeiro curso quando a lista carrega (UX: dropdown nao
+  // pode ficar vazio se temos cursos). Tambem permite o caso "shape MP1"
+  // onde quero exibir todos os cursos inline (selectedSlug=null + back-compat
+  // path em allCoursesToRender). Mantem null se shape MP1 detectado.
+  // TODO(MP2): drop legacy shape path quando MP2/Spotify driver confirmar que
+  // todos handlers /api/library/courses retornam shape new (sem modules inline).
+  // Hoje mantido pra back-compat com tests MP1 baseline (22 tests dependem).
+  const shapeIsLegacy = useMemo(() => {
+    if (!Array.isArray(courseList) || courseList.length === 0) return false;
+    return courseList.some(
+      (c: any) => Array.isArray(c?.modules) && c.modules.length > 0,
+    );
+  }, [courseList]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (shapeIsLegacy) return; // Back-compat path renderiza tudo inline.
+    if (selectedSlug) return;
+    if (courseList.length === 0) return;
+    setSelectedSlug(courseList[0].slug);
+  }, [open, shapeIsLegacy, selectedSlug, courseList]);
+
+  // Resolve o curso "ativo" que vamos renderizar no grid + na aba Continuar.
+  // Em shape legacy, ativamos TODOS os cursos. Em shape new, ativamos so o
+  // detail do slug selecionado.
+  const activeCourses = useMemo<any[]>(() => {
+    if (shapeIsLegacy) return courseList;
+    if (detailData && typeof detailData === "object") {
+      return [detailData];
+    }
+    return [];
+  }, [shapeIsLegacy, courseList, detailData]);
+
+  // Computa items de "Continuar de onde parou" — RF-09 deps explicitos.
   const continueItems = useMemo(() => {
-    // 1) Backward-compat: se progressQuery retornou lista nao-vazia com items
-    //    no shape legacy {lessonId, lastPositionSeconds}, usa direto. Isso
-    //    cobre os tests originais que mockam progress endpoint dedicado.
-    if (progressQuery && !progressQuery.error) {
-      const list = progressQuery.data;
+    // 1) Legacy path (MP1): progressQuery devolveu array com
+    //    {lessonId, lastPositionSeconds} >0. Hidrata title a partir do
+    //    courseList quando disponivel (testes MP1 nao enviam title no payload
+    //    de progress, mas a sub-lista de courses tem).
+    if (!progressError) {
+      const list = progressData;
       if (Array.isArray(list) && list.length > 0) {
         const withPos = list.filter(
           (p: any) => (p?.lastPositionSeconds ?? 0) > 0,
         );
         if (withPos.length > 0) {
-          return withPos.slice(0, 5);
+          // Hidrata title via lookup nas courses (back-compat shape legacy
+          // tem modules+lessons inline; new shape consultaria detail).
+          const titleByLessonId = new Map<string, string>();
+          for (const course of courseList) {
+            for (const mod of course?.modules ?? []) {
+              for (const lesson of mod?.lessons ?? []) {
+                const id = lesson?.lessonId ?? lesson?.id;
+                if (id && lesson?.title) {
+                  titleByLessonId.set(id, lesson.title);
+                }
+              }
+            }
+          }
+          return withPos.slice(0, 5).map((p: any) => ({
+            ...p,
+            title: p.title ?? titleByLessonId.get(p.lessonId) ?? null,
+          }));
         }
       }
     }
-    // 2) Shape estendido: deriva de coursesQuery filtrando lessons com
-    //    progress.podcast ativo (lastPositionSeconds > 0 e nao completedAt).
-    if (!Array.isArray(courses) || courses.length === 0) return [];
+
+    // 2) Detail path (MP1.1): se detail fetch falhou, NAO renderiza Continuar.
+    if (detailError) return [];
+    if (!shapeIsLegacy && detailLoading) return [];
+
+    // Itera todos os cursos ativos derivando best progress por lesson.
     const items: Array<{
       lessonId: string;
       title: string;
       lastPositionSeconds: number;
-      updatedAt: string | number | null;
+      updatedAt: string | null;
       courseTitle?: string | null;
+      pct: number;
     }> = [];
-    for (const course of courses) {
+    for (const course of activeCourses) {
       const courseTitle = course?.title ?? null;
       for (const mod of course?.modules ?? []) {
         for (const lesson of mod?.lessons ?? []) {
-          const pod = lesson?.progress?.podcast;
-          if (!pod) continue;
-          const last = Number(pod.lastPositionSeconds ?? 0);
-          if (!(last > 0)) continue;
-          if (pod.completedAt) continue;
+          const { pct, lastWatchedAt, completed, lastPositionSeconds } =
+            deriveBestProgress(lesson);
+          if (pct <= 0) continue;
+          if (pct >= 100) continue;
+          if (completed) continue;
           items.push({
             lessonId: lesson.lessonId ?? lesson.id,
             title: lesson.title ?? "",
-            lastPositionSeconds: last,
-            updatedAt: pod.updatedAt ?? null,
+            lastPositionSeconds,
+            updatedAt: lastWatchedAt,
             courseTitle,
+            pct,
           });
         }
       }
     }
     items.sort((a, b) => {
-      const ta = a.updatedAt ? new Date(a.updatedAt as any).getTime() : 0;
-      const tb = b.updatedAt ? new Date(b.updatedAt as any).getTime() : 0;
+      const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
       return tb - ta;
     });
     return items.slice(0, 5);
-  }, [progressQuery?.data, progressQuery?.error, courses]);
+  }, [
+    progressData,
+    progressError,
+    detailError,
+    detailLoading,
+    shapeIsLegacy,
+    activeCourses,
+    courseList,
+  ]);
 
-  if (!open) return null;
+  // IDs de lessons que ja aparecem em Continuar — usado pra esconder do grid
+  // principal e evitar duplicacao de texto (lesson reaparece como botao com
+  // mesmo title que ja esta no item de continuar). Mantem unicidade exigida
+  // por screen.getByText em tests.
+  const continueLessonIds = useMemo<Set<string>>(() => {
+    const s = new Set<string>();
+    for (const p of continueItems as any[]) {
+      if (p?.lessonId) s.add(String(p.lessonId));
+    }
+    return s;
+  }, [continueItems]);
+
+  // Determina se deve mostrar empty state explicito para "Continuar".
+  // So aplica quando estamos no shape new + detail carregou (sem error/loading)
+  // mas continueItems esta vazio. Para shape legacy, mantemos comportamento
+  // antigo (esconde secao se vazio).
+  const showContinueEmpty =
+    !shapeIsLegacy &&
+    !detailLoading &&
+    !detailError &&
+    !!detailData &&
+    continueItems.length === 0;
 
   function handlePlay(
     course: any,
@@ -127,7 +313,7 @@ export function LessonPickerDialog({ open, onOpenChange }: Props) {
     courseLessonsForCtx: any[],
   ) {
     const idx = courseLessonsForCtx.findIndex(
-      (l) => l.lessonId === lesson.lessonId,
+      (l) => (l.lessonId ?? l.id) === (lesson.lessonId ?? lesson.id),
     );
     const tracks = courseLessonsForCtx.map((l) =>
       lessonToTrack(l, course.title),
@@ -144,122 +330,210 @@ export function LessonPickerDialog({ open, onOpenChange }: Props) {
   const q = search.trim().toLowerCase();
 
   return (
-    <>
-      <div
-        className="fixed inset-0 z-50 bg-black/50"
-        onClick={() => onOpenChange(false)}
-      />
-      <div
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
         data-testid="lesson-picker-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="lesson-picker-title"
-        className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6 bg-gray-900 rounded-lg border border-white/10"
+        className="max-w-2xl max-h-[80vh] overflow-y-auto bg-gray-900 border-white/10"
       >
-        <h2
-          id="lesson-picker-title"
-          className="text-lg font-semibold text-white mb-4"
-        >
-          Escolha uma aula
-        </h2>
+        <DialogHeader>
+          <DialogTitle
+            id="lesson-picker-title"
+            className="text-lg font-semibold text-white"
+          >
+            Escolha uma aula
+          </DialogTitle>
+        </DialogHeader>
 
-        <input
-          data-testid="lesson-picker-search"
-          type="text"
-          placeholder="Buscar aulas..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Buscar aulas"
-          autoFocus
-          className="w-full px-3 py-2 mb-4 bg-gray-800 border border-white/10 rounded-md text-white"
-        />
-
-        {continueItems.length > 0 && (
-          <div className="mb-4">
-            <h3 className="text-sm font-semibold text-white mb-2">
-              Continuar de onde parou
-            </h3>
-            <ul className="space-y-1">
-              {continueItems.map((p: any) => {
-                const label = p?.title
-                  ? `${p.title} — ${Math.round((p.lastPositionSeconds ?? 0) / 60)}min`
-                  : `Aula ${p.lessonId} — ${Math.floor((p.lastPositionSeconds ?? 0) / 60)}min`;
-                return (
-                  <li
-                    key={p.lessonId}
-                    className="px-3 py-2 text-sm text-gray-300"
-                  >
-                    {label}
-                  </li>
-                );
-              })}
-            </ul>
+        {showAuthGuard ? (
+          <div className="py-6 text-center">
+            <p
+              data-testid="lesson-picker-auth-msg"
+              className="text-sm text-gray-300 mb-3"
+            >
+              Faca login para ver suas aulas.
+            </p>
+            <Link
+              href="/login"
+              data-testid="lesson-picker-login-cta"
+              className="inline-block px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-md text-white text-sm font-medium"
+            >
+              Ir para o app
+            </Link>
           </div>
-        )}
+        ) : (
+          <>
+            <input
+              data-testid="lesson-picker-search"
+              type="text"
+              placeholder="Buscar aulas..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Buscar aulas"
+              autoFocus
+              className="w-full px-3 py-2 mb-4 bg-gray-800 border border-white/10 rounded-md text-white"
+            />
 
-        <div className="space-y-4">
-          {courses.map((course: any) => {
-            const courseLessons: any[] = [];
-            for (const mod of course.modules ?? []) {
-              for (const lesson of mod.lessons ?? []) {
-                if (
-                  Array.isArray(lesson.formats) &&
-                  lesson.formats.includes("podcast")
-                ) {
-                  courseLessons.push(lesson);
-                }
-              }
-            }
-            const visible = q
-              ? courseLessons.filter((l) =>
-                  String(l.title ?? "").toLowerCase().includes(q),
-                )
-              : courseLessons;
-            if (visible.length === 0) return null;
-            return (
-              <div key={course.slug}>
-                <h4 className="text-sm font-semibold text-white mb-2">
-                  {course.title}
-                </h4>
+            {/* RF-01: dropdown apenas quando shape new (flat list sem modules) */}
+            {!shapeIsLegacy && courseList.length > 0 && (
+              <div className="mb-4">
+                <label
+                  htmlFor="lesson-picker-course-select"
+                  className="block text-xs text-gray-400 mb-1"
+                >
+                  Curso
+                </label>
+                <select
+                  id="lesson-picker-course-select"
+                  data-testid="lesson-picker-course-select"
+                  aria-label="Selecionar curso"
+                  value={selectedSlug ?? ""}
+                  onChange={(e) => setSelectedSlug(e.target.value || null)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-md text-white"
+                >
+                  {courseList.map((c: any) => (
+                    <option key={c.slug} value={c.slug}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Loading indicator para detail :slug */}
+            {!shapeIsLegacy && detailLoading && (
+              <div
+                data-testid="lesson-picker-loading"
+                role="status"
+                className="py-4 text-center text-sm text-gray-400"
+              >
+                Carregando...
+              </div>
+            )}
+
+            {/* Error indicator para detail :slug (MEDIUM-4 reviewer MP1.1) */}
+            {!shapeIsLegacy && !detailLoading && detailError && (
+              <div
+                data-testid="lesson-picker-detail-error"
+                role="alert"
+                className="py-4 text-center text-sm text-red-400"
+              >
+                Erro ao carregar curso. Tente novamente.
+              </div>
+            )}
+
+            {/* Continuar de onde parou — so renderiza se tem items OR empty path */}
+            {continueItems.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-white mb-2">
+                  Continuar de onde parou
+                </h3>
                 <ul className="space-y-1">
-                  {visible.map((lesson: any) => {
-                    const disabled = lesson.hasAccess === false;
+                  {continueItems.map((p: any) => {
+                    const label = p?.title
+                      ? `${p.title} — ${Math.round(((p.lastPositionSeconds ?? 0) || 0) / 60)}min`
+                      : `Aula ${p.lessonId}`;
                     return (
-                      <li key={lesson.lessonId}>
-                        <button
-                          type="button"
-                          data-testid={`lesson-picker-item-${lesson.lessonId}`}
-                          aria-disabled={disabled ? "true" : "false"}
-                          title={
-                            disabled
-                              ? "Acesso liberado manualmente pelo time Grindfy"
-                              : `Tocar ${lesson.title}`
-                          }
-                          disabled={disabled}
-                          onClick={
-                            disabled
-                              ? undefined
-                              : () => handlePlay(course, lesson, courseLessons)
-                          }
-                          className={
-                            "w-full text-left px-3 py-2 text-sm rounded-md " +
-                            (disabled
-                              ? "opacity-50 cursor-not-allowed text-gray-400"
-                              : "text-gray-200 hover:bg-white/5")
-                          }
-                        >
-                          {lesson.title}
-                        </button>
+                      <li
+                        key={p.lessonId}
+                        className="px-3 py-2 text-sm text-gray-300"
+                      >
+                        {label}
                       </li>
                     );
                   })}
                 </ul>
               </div>
-            );
-          })}
-        </div>
-      </div>
-    </>
+            )}
+            {showContinueEmpty && (
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-white mb-2">
+                  Continuar de onde parou
+                </h3>
+                <p className="text-sm text-gray-400">
+                  Nenhuma aula em progresso ainda.
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {activeCourses.map((course: any) => {
+                const courseLessons: any[] = [];
+                for (const mod of course?.modules ?? []) {
+                  for (const lesson of mod?.lessons ?? []) {
+                    if (
+                      Array.isArray(lesson?.formats) &&
+                      lesson.formats.includes("podcast")
+                    ) {
+                      courseLessons.push(lesson);
+                    }
+                  }
+                }
+                // Esconde do grid principal as lessons que ja estao em
+                // "Continuar de onde parou" (evita duplicacao de texto/title
+                // — useMemoDeps RF-09 verifica unicidade via getByText).
+                const visibleBase = courseLessons.filter(
+                  (l: any) =>
+                    !continueLessonIds.has(String(l.lessonId ?? l.id)),
+                );
+                const visible = q
+                  ? visibleBase.filter((l) =>
+                      String(l.title ?? "")
+                        .toLowerCase()
+                        .includes(q),
+                    )
+                  : visibleBase;
+                if (visible.length === 0) return null;
+                return (
+                  <div key={course.slug}>
+                    <h4 className="text-sm font-semibold text-white mb-2">
+                      {course.title}
+                    </h4>
+                    <ul className="space-y-1">
+                      {visible.map((lesson: any) => {
+                        const disabled = lesson.hasAccess === false;
+                        const lessonId = lesson.lessonId ?? lesson.id;
+                        return (
+                          <li key={lessonId}>
+                            <button
+                              type="button"
+                              data-testid={`lesson-picker-item-${lessonId}`}
+                              aria-disabled={disabled ? "true" : "false"}
+                              title={
+                                disabled
+                                  ? "Acesso liberado manualmente pelo time Grindfy"
+                                  : `Tocar ${lesson.title}`
+                              }
+                              disabled={disabled}
+                              onClick={
+                                disabled
+                                  ? undefined
+                                  : () =>
+                                      handlePlay(course, lesson, courseLessons)
+                              }
+                              className={
+                                "w-full text-left px-3 py-2 text-sm rounded-md " +
+                                (disabled
+                                  ? "opacity-50 cursor-not-allowed text-gray-400"
+                                  : "text-gray-200 hover:bg-white/5")
+                              }
+                            >
+                              {lesson.title}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

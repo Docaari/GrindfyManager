@@ -5,6 +5,7 @@
 import React from "react";
 import { ChevronDown, X } from "lucide-react";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
+import { sanitizeCoverUrl } from "@/lib/audio-engine/sanitizeCoverUrl";
 
 export function MiniPlayerExpanded() {
   const { activeTrack, displayMode, courseContext, setDisplayMode, close } =
@@ -12,8 +13,9 @@ export function MiniPlayerExpanded() {
 
   if (displayMode !== "expanded" || !activeTrack) return null;
 
-  const lessons: any[] = courseContext?.lessons ?? [];
-  const currentIndex: number = courseContext?.currentIndex ?? -1;
+  const lessons = courseContext?.lessons ?? [];
+  const currentIndex = courseContext?.currentIndex ?? -1;
+  const sanitizedCoverUrl = sanitizeCoverUrl(activeTrack.coverUrl);
 
   return (
     <>
@@ -27,7 +29,7 @@ export function MiniPlayerExpanded() {
         role="dialog"
         aria-modal="false"
         aria-label="Player expandido"
-        className="fixed left-0 right-0 bottom-[var(--mini-player-height,80px)] z-45 mx-auto max-w-3xl p-6 bg-gray-900/95 rounded-t-lg border border-white/10"
+        className="fixed left-0 right-0 bottom-[var(--mini-player-height,80px)] z-[45] mx-auto max-w-3xl p-6 bg-gray-900/95 rounded-t-lg border border-white/10"
         style={{
           backdropFilter: "blur(20px) saturate(180%)",
           WebkitBackdropFilter: "blur(20px) saturate(180%)",
@@ -62,9 +64,9 @@ export function MiniPlayerExpanded() {
         </div>
 
         <div className="flex gap-6">
-          {activeTrack.coverUrl ? (
+          {sanitizedCoverUrl ? (
             <img
-              src={activeTrack.coverUrl}
+              src={sanitizedCoverUrl}
               alt=""
               className="w-[120px] h-[120px] rounded-lg object-cover"
             />

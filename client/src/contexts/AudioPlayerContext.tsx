@@ -31,6 +31,7 @@ import {
   nextOnFullscreenExit as fsmNextOnFullscreenExit,
   nextOnPlayTrack as fsmNextOnPlayTrack,
 } from "@/lib/audio-engine/displayModeFsm";
+import { sanitizeCoverUrl } from "@/lib/audio-engine/sanitizeCoverUrl";
 import type {
   AudioTrack,
   AudioTrackSource,
@@ -440,11 +441,12 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     try {
       const MediaMetadataCtor: any = (globalThis as any).MediaMetadata;
       if (typeof MediaMetadataCtor === "function") {
+        const safeCover = sanitizeCoverUrl(current.coverUrl);
         ms.metadata = new MediaMetadataCtor({
           title: current.title,
           artist: current.courseTitle ?? "Grindfy",
-          artwork: current.coverUrl
-            ? [{ src: current.coverUrl, sizes: "512x512" }]
+          artwork: safeCover
+            ? [{ src: safeCover, sizes: "512x512" }]
             : [],
         });
       }

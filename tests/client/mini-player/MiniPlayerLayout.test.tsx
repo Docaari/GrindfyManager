@@ -43,7 +43,7 @@ function PlayInitiator() {
       data-testid="seed"
       onClick={() =>
         ctx.playTrack(
-          { source: 'library', trackId: 'a', title: 'A', coverUrl: '/c', audioUrl: '/a' },
+          { source: 'library', trackId: 'a', title: 'A', coverUrl: 'https://cdn.example.com/c.jpg', audioUrl: '/a' },
           { courseSlug: 'c1', lessons: [
             { source: 'library', trackId: 'a', title: 'A', audioUrl: '/a' },
             { source: 'library', trackId: 'b', title: 'B', audioUrl: '/b' },
