@@ -9,10 +9,11 @@
 // "Continuar de onde parou" no topo deriva o melhor progresso por aula
 // (progress map por format) ou consome /progress/batch legado (MP1).
 //
-// MP1.2 / RF-01 (HIGH-1): refactor `safeUseQuery` -> ErrorBoundary local
-// (lesson #29). Sub-componente `LessonPickerDialogFetcher` chama useQuery
-// direto (sem try/catch — Rules-of-Hooks safe). `LessonPickerErrorBoundary`
-// (classe) captura "No QueryClient set" e renderiza fallback `role="alert"`.
+// MP1.2 / RF-01 (HIGH-1): antes usava wrapper try/catch em useQuery;
+// migrado para ErrorBoundary classe local (lesson #29). Sub-componente
+// `LessonPickerDialogFetcher` chama useQuery direto (Rules-of-Hooks safe).
+// `LessonPickerErrorBoundary` captura render errors (ex: "No QueryClient
+// set" se provider ausente) e renderiza fallback `role="alert"`.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -157,9 +158,11 @@ function LessonPickerDialogFetcher({
   setSelectedSlug,
   onClose,
 }: FetcherProps) {
-  // useOptionalAudioPlayer: retorna null se nao houver provider (testes
-  // standalone, render isolado). Boundary local cuida de useQuery throw
-  // ("No QueryClient set") sem precisar engolir erros do AudioPlayerProvider.
+  // Boundary local captura apenas useQuery throw ("No QueryClient set").
+  // Ausencia de AudioPlayerProvider trata-se via useOptionalAudioPlayer
+  // (returns null sem throw) — preserva renderizacao em tests standalone
+  // sem provider de audio mountado. Em prod build, ctx null = bug (provider
+  // sempre montado); console.warn da visibilidade sem mascarar UX.
   const ctx = useOptionalAudioPlayer();
 
   function onPlay(
@@ -168,7 +171,12 @@ function LessonPickerDialogFetcher({
     courseLessonsForCtx: any[],
   ) {
     if (!ctx) {
-      // Sem provider mountado, no-op (acontece em tests standalone).
+      if (import.meta.env?.PROD) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[LessonPickerDialog] AudioPlayerProvider missing in prod — playback no-op. Verifique tree em MP2 refactor.",
+        );
+      }
       onClose();
       return;
     }
