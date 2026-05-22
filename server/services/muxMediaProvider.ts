@@ -153,14 +153,20 @@ export function createMuxProvider(): MuxProvider {
       // URLs (https://docs.mux.com/guides/upload-files-directly) que
       // permitem upload binario via PUT signed URL antes de criar o asset.
       //
-      // Por hora, este `client.video.assets.create` so eh exercitado por
-      // testes que mockam o SDK retornando `{ id, playback_ids: [{ id }] }`.
+      // Sprint MP3.2 / W-A1 (ADR-199): asset creation passa por
+      // `createMuxAssetWithSubtitles` para incluir `generated_subtitles`
+      // (auto-captioning Mux). Idioma default 'pt'; multi-lang via env CSV
+      // MUX_GENERATED_SUBTITLES_LANGS. Retry sem captions se Mux 400.
       const c = await client();
-      const created = await c.video.assets.create({
-        // TODO(Sprint Biblioteca-2): substituir tbd:// por signed URL real.
-        input: [{ url: "tbd://manifest-runtime" }],
-        metadata: { mime: mimeType, size: fileBuffer.length },
-      } as any);
+      const { createMuxAssetWithSubtitles } = await import("./muxAssetCreator");
+      const created = await createMuxAssetWithSubtitles(
+        {
+          inputUrl: "tbd://manifest-runtime",
+          playbackPolicy: ["public"],
+          metadata: { mime: mimeType, size: fileBuffer.length },
+        } as any,
+        { muxClient: c as any },
+      );
       const assetId = String(created?.id ?? "");
       const playbackId = String(created?.playback_ids?.[0]?.id ?? "");
       return { assetId, playbackId };

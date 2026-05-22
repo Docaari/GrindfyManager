@@ -1,7 +1,7 @@
 // Sprint MP3.1 Wave A / H1 — backfill helper para transcription_preview.
 // Lesson #36: lazy @shared/schema + fallback placeholder.
 
-import { eq, isNull, inArray, and } from "drizzle-orm";
+import { eq, isNull, inArray, and, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
   ingestPreviewFromMux,
@@ -127,3 +127,101 @@ export async function backfillTranscriptionPreviews(
 
 // Test/script helper expostos para teste unitario do orquestrador.
 export { listCandidates as _listCandidatesForTests, updatePreview as _updatePreviewForTests };
+
+// =============================================================================
+// Sprint Mini Player 3.2 / W-A4 (ADR-201) — Multi-lang preview storage.
+// =============================================================================
+
+export interface WriteTranscriptionPreviewOpts {
+  db?: any;
+}
+
+/**
+ * Escreve um preview de transcricao para uma lesson em um idioma especifico.
+ * Faz merge JSONB (preserva outros idiomas). Quando lang === 'pt', tambem
+ * espelha em `transcription_preview` (varchar legacy) pra back-compat.
+ *
+ * Lesson #34: aceita db opcional pra teste isolado sem mockar modulo inteiro.
+ * Lesson #36: lazy schema fallback.
+ */
+export async function writeTranscriptionPreview(
+  lessonId: string,
+  lang: string,
+  preview: string,
+  opts: WriteTranscriptionPreviewOpts = {},
+): Promise<void> {
+  const database = opts.db ?? db;
+  if (!database || typeof (database as any).update !== "function") return;
+  const tbl = await loadTable();
+  // Merge JSONB: COALESCE(existing, '{}'::jsonb) || jsonb_build_object(lang, preview).
+  // Quando db real (Drizzle), `sql` helper monta SQL. Em mock, o objeto
+  // passado para .set() so e inspecionado por shape (tem `transcriptionPreviews`).
+  const previewsExpr = sql`COALESCE(${tbl.transcriptionPreviews}, '{}'::jsonb) || ${JSON.stringify({ [lang]: preview })}::jsonb`;
+  const payload: Record<string, any> = {
+    transcriptionPreviews: previewsExpr,
+    updatedAt: new Date(),
+  };
+  // Espelha em varchar legacy apenas quando lang='pt' (back-compat).
+  if (lang === "pt") {
+    payload.transcriptionPreview = preview;
+  }
+  await database
+    .update(tbl)
+    .set(payload)
+    .where(eq(tbl.id, lessonId));
+}
+
+/**
+ * Resolve qual preview mostrar para um user dado preferredLanguage.
+ *
+ * Fallback chain:
+ *  1. previews[normalize(userLang)]
+ *  2. previews['pt']
+ *  3. previews['en']
+ *  4. primeira chave existente em previews
+ *  5. varchar legacy `transcriptionPreview`
+ *  6. null
+ *
+ * normalizeLang: 'pt-BR' -> 'pt', 'en-US' -> 'en', 'pt' -> 'pt'.
+ */
+export function resolveTranscriptionPreview(
+  lesson: {
+    transcriptionPreviews?: Record<string, string> | null;
+    transcriptionPreview?: string | null;
+  },
+  userLang: string | null | undefined,
+): string | null {
+  const norm = normalizeLang(userLang);
+  const previews = lesson?.transcriptionPreviews ?? null;
+  if (previews && typeof previews === "object") {
+    if (norm && typeof previews[norm] === "string" && previews[norm].length > 0) {
+      return previews[norm];
+    }
+    if (typeof previews.pt === "string" && previews.pt.length > 0) {
+      return previews.pt;
+    }
+    if (typeof previews.en === "string" && previews.en.length > 0) {
+      return previews.en;
+    }
+    const keys = Object.keys(previews);
+    for (const k of keys) {
+      const v = previews[k];
+      if (typeof v === "string" && v.length > 0) return v;
+    }
+  }
+  const legacy = lesson?.transcriptionPreview;
+  if (typeof legacy === "string" && legacy.length > 0) return legacy;
+  return null;
+}
+
+function normalizeLang(input: string | null | undefined): string | null {
+  if (!input || typeof input !== "string") return null;
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed) return null;
+  // 'pt-BR' -> 'pt', 'en-US' -> 'en'.
+  const dash = trimmed.indexOf("-");
+  return dash > 0 ? trimmed.slice(0, dash) : trimmed;
+}
+
+/** @internal Test-only export. */
+export const _normalizeLangForTests = normalizeLang;

@@ -1156,3 +1156,28 @@ ADR-159 (Daily Debrief event-driven + Monthly Report cron dia 1 7h tz + tier gat
 - #8 — testes do registry validam `getTool('bulk_query_dimensions')` (presença individual), nunca length de `coachTools`.
 - #19/#23/#13/#14/#26/#29/#30 — `ReportView` (generalizado de `WeeklyReportView`): CTAs `href` casam com rotas Wouter **registradas** (`grep "Route path" client/src/App.tsx`); Wouter v3 `<Link>`; `apiRequest` retorna JSON parseado; `await import` (nao `require`) em testes `.tsx`; `useQuery` dentro de provider (fetchers secundarios standalone → ErrorBoundary local); hook tests `.test.ts` → projeto jsdom (config-level).
 - #3 — mocks validam shape real do storage (`getGrindSessions`/`getSessionTournaments`/`getPerformanceByPeriod`[custom range `'YYYY-MM-DD to YYYY-MM-DD'`]/`getDashboardStats`[custom via `buildPeriodCondition('custom', { dateFrom, dateTo })` — NAO o string `'to'`]/`getBankrollSnapshots`/`getVarianceVsExpected`[retorna `null` hoje]/`findActiveLeakFocusList`/`getAiStructuredProfile` tem shapes especificos — reusar os shapes que `weeklyReportGenerator` ja documenta); tz-mocking com `now: Date` injetavel (fusos extremos UTC+14/UTC-11 + meses de borda jan↔dez / fevereiro 28-29 / mes 31 dias); ponta-a-ponta com storage que tem os metodos reais (`insertReportJobOnConflictDoNothing`, `claimReportJob`, `getReportForPeriod`, `upsertReport`, `getGrindSessions`, `getSessionTournaments`).
+
+---
+
+## Schema Delta — Sprint Mini Player 3.2 (`library_lessons.transcription_previews`)
+
+Migration: `migrations/0080_transcription_previews_jsonb.sql` + `_rollback.sql` (ADITIVA — sem breaking).
+
+| Campo | Tipo | Constraints | Notas |
+|---|---|---|---|
+| `library_lessons.transcription_preview` | varchar | nullable, **DEPRECATED** | Mantida MP3.2 para back-compat. Drop em MP3.3+ (migration 0081 planejada). Ingestor espelha em `transcription_previews.pt` writes. |
+| `library_lessons.transcription_previews` | jsonb | nullable | **NOVA (W-A4 / ADR-201)** — `{ [lang: string]: previewString }`. Default `NULL`. Index GIN `idx_lessons_transcription_previews_keys` para queries por lang futuras. |
+
+Backfill na migration: `UPDATE library_lessons SET transcription_previews = jsonb_build_object('pt', transcription_preview) WHERE transcription_preview IS NOT NULL`.
+
+Read fallback chain (storage layer `transcriptionPreviewStorage.ts`): `previews[userLang] ?? previews['pt'] ?? previews['en'] ?? Object.values(previews)[0] ?? transcription_preview (legacy) ?? null`.
+
+Endpoint impact: **ZERO breaking** — `GET /api/library/lessons/:slug` continua retornando `transcriptionPreview: string | null` (servidor resolve por user lang).
+
+ADRs relevantes:
+- **ADR-199** — Pipeline cron `0 4 * * *` UTC + webhook `POST /api/mux/webhooks` (HMAC `MUX_WEBHOOK_SECRET`) + `generated_subtitles` upload param. Substitui CLI manual da ADR-196.
+- **ADR-200** — Whisper local fallback DEFER (backlog, codepath modular). Ativar quando criterio emergir (>=3 lessons NULL >7d, ou >2 cursos com qualidade ruim).
+- **ADR-201** — Multi-lang JSONB schema (esta migration).
+- **ADR-202** — Logout cleanup contract: limpa SO `audio.resume.v1` + OAuth tokens; queue + onboarding persistem (decisao founder).
+
+Diagramas: `Docs/architecture/diagrams/mini-player-3-2/` — `transcription-pipeline-sequence.mermaid`, `whisper-fallback-decision.mermaid`, `multilang-lookup.mermaid`, `logout-audio-cleanup-sequence.mermaid`, `error-i18n-mapping.mermaid`.

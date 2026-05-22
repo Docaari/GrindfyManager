@@ -9502,6 +9502,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
                 isPublished: libraryLessons.isPublished,
                 // Sprint Mini Player 3 / RF-04.2 — transcription_preview (migration 0078).
                 transcriptionPreview: libraryLessons.transcriptionPreview,
+                // Sprint Mini Player 3.2 / W-A4 — multi-lang previews (migration 0080).
+                transcriptionPreviews: libraryLessons.transcriptionPreviews,
                 createdAt: libraryLessons.createdAt,
                 updatedAt: libraryLessons.updatedAt,
               })

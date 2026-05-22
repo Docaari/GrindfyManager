@@ -314,8 +314,22 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const [isBuffering, setIsBuffering] = useState(false);
   const retryCountRef = useRef<number>(0);
   const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Sprint MP3.2 / W-B1 (MEDIUM-1) — race lock para retryCurrent. Sincrono
+  // check-and-set via useRef (nao state — evita re-render + race entre render
+  // e click). Liberado em canplay/error/safety 30s.
+  const retryInProgressRef = useRef<boolean>(false);
+  const retrySafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const MAX_RETRIES = 3;
   const BUFFERING_TIMEOUT_MS = 10000;
+  const RETRY_SAFETY_TIMEOUT_MS = 30000;
+
+  const releaseRetryLock = useCallback(() => {
+    retryInProgressRef.current = false;
+    if (retrySafetyTimerRef.current) {
+      clearTimeout(retrySafetyTimerRef.current);
+      retrySafetyTimerRef.current = null;
+    }
+  }, []);
 
   const clearBufferingTimeout = useCallback(() => {
     if (bufferingTimeoutRef.current) {
@@ -342,11 +356,9 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   // a aula corrente apos OAuth redirect fallback.
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // NOTE: nao resetamos no unmount do Provider — OAuth redirect destroi o
+    // Provider mas o snapshot deve sobreviver pra restore pos-callback.
     (window as any).__audioPlayerActiveTrackId = activeTrack?.trackId ?? null;
-    return () => {
-      // Cleanup so quando track sai (nao no unmount do Provider, pra evitar
-      // reset durante OAuth redirect que destroi o Provider mas mantem snapshot).
-    };
   }, [activeTrack?.trackId]);
 
   // MP2 R2-H1: subscribe events do driver ativo para refletir state.
@@ -398,9 +410,18 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
           source: "driver",
           message: String(err?.message ?? err),
         });
+        // W-B1: libera retry lock no driver error.
+        releaseRetryLock();
       }),
     );
-  }, [clearBufferingTimeout]);
+    // Engine timeupdate ja chama clearBufferingTimeout — esse caminho cobre
+    // o canplay-equivalente do driver Spotify. Tambem libera retry lock.
+    engineUnsubscribersRef.current.push(
+      eng.on("timeupdate", () => {
+        releaseRetryLock();
+      }),
+    );
+  }, [clearBufferingTimeout, releaseRetryLock]);
 
   // Ref pra tryAutoplayNext (declarado depois — evita TDZ).
   const tryAutoplayNextRef = useRef<(() => void) | null>(null);
@@ -635,6 +656,17 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       // permanente; UI deve mostrar skip CTA
       return;
     }
+    // W-B1 race lock: 2x dispatch sincrono -> 2a chamada no-op.
+    if (retryInProgressRef.current) return;
+    retryInProgressRef.current = true;
+    // Safety net: libera lock apos 30s mesmo sem canplay/error.
+    if (retrySafetyTimerRef.current) {
+      clearTimeout(retrySafetyTimerRef.current);
+    }
+    retrySafetyTimerRef.current = setTimeout(() => {
+      retryInProgressRef.current = false;
+      retrySafetyTimerRef.current = null;
+    }, RETRY_SAFETY_TIMEOUT_MS);
     retryCountRef.current += 1;
     setLoadError(null);
     setIsBuffering(true);
@@ -1211,8 +1243,15 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     // "continuar de onde parou" via snapshot.trackId. Aqui restauramos
     // apenas currentSeconds quando a track for tocada novamente com mesmo id.
     // Estado expoe via leitura externa (window flag p/ debug; OAuth ja usa similar).
+    // W-B2: DEV-only — PROD nao expoe debug surface. Detecta via
+    // process.env.NODE_ENV (Vite injeta `import.meta.env.DEV`; node CJS test
+    // tem process.env). Em PROD build, ambos branches sao tree-shaken.
     try {
-      (window as any).__audioPlayerLastResumeSnapshot = snap;
+      const env = (typeof process !== "undefined" ? process.env : undefined) ?? ({} as any);
+      const isDev = env.NODE_ENV !== "production";
+      if (isDev) {
+        (window as any).__audioPlayerLastResumeSnapshot = snap;
+      }
     } catch {
       // ignore
     }
@@ -1430,6 +1469,8 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
           onCanPlay={() => {
             clearBufferingTimeout();
             setIsBuffering(false);
+            // W-B1: libera retry lock no sucesso.
+            releaseRetryLock();
           }}
           onWaiting={() => {
             setIsBuffering(true);
@@ -1445,6 +1486,8 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
               source: "html_audio",
               message: String(message),
             });
+            // W-B1: libera retry lock no erro.
+            releaseRetryLock();
           }}
           onTimeUpdate={(e) => {
             const a = e.currentTarget;

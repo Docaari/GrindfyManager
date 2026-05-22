@@ -1,0 +1,70 @@
+%% ADR-199 / W-A1 + W-A2 — Mux transcription pipeline automation
+%% Mux webhook + cron processor + generated_subtitles upload
+
+sequenceDiagram
+    actor Founder
+    participant Admin as Admin Upload Route
+    participant Mux as Mux API
+    participant Webhook as POST /api/mux/webhooks
+    participant Cron as Cron Runner<br/>(0 4 * * * UTC)
+    participant Ingestor as transcriptionIngestor.ts
+    participant Storage as transcriptionPreviewStorage
+    participant DB as PostgreSQL<br/>library_lessons
+
+    Note over Founder,Mux: W-A1 — Upload-time generated_subtitles
+
+    Founder->>Admin: POST /api/admin/lessons (mp4 file)
+    Admin->>Mux: POST /video/v1/assets<br/>{ input, generated_subtitles: [{language_code: 'pt'}] }
+    Mux-->>Admin: { asset_id, playback_id, status: 'preparing' }
+    Admin->>DB: INSERT lesson + mux_asset_id
+    Admin-->>Founder: 201 Created
+
+    Note over Mux: Mux processa video + gera caption auto<br/>(~5-30min)
+
+    Note over Mux,Webhook: W-A2 — Webhook real-time trigger
+
+    Mux->>Webhook: POST /api/mux/webhooks<br/>Mux-Signature: t=...,v1=hmac<br/>{ type: 'video.asset.track.ready', data: { asset_id, type:'text' } }
+
+    Webhook->>Webhook: Verify HMAC<br/>timingSafeEqual + 5min replay window
+    alt HMAC invalido
+        Webhook-->>Mux: 401 Unauthorized
+    else HMAC valido
+        Webhook->>DB: SELECT lesson WHERE mux_asset_id = ?
+        DB-->>Webhook: lesson
+        Webhook->>Ingestor: ingestPreviewFromMux({ assetId, playbackId })
+        Ingestor->>Mux: GET /video/v1/assets/:id
+        Mux-->>Ingestor: { tracks: [{ type:'text', status:'ready', language_code:'pt' }] }
+        Ingestor->>Mux: GET stream.mux.com/:pid/text/:tid.vtt
+        Mux-->>Ingestor: VTT raw
+        Ingestor->>Ingestor: extractTextFromVtt + truncate 80 chars + U+2026
+        Ingestor->>Storage: writeTranscriptionPreview(lessonId, 'pt', preview)
+        Storage->>DB: UPDATE library_lessons SET transcription_previews = jsonb_build_object('pt', $1)<br/>+ espelha em transcription_preview varchar (back-compat)
+        DB-->>Storage: ok
+        Storage-->>Ingestor: { ok: true }
+        Ingestor-->>Webhook: { ok: true }
+        Webhook-->>Mux: 200 OK
+    end
+
+    Note over Cron,Storage: W-A2 — Cron fallback (cobre webhook delivery failure)
+
+    Cron->>Cron: Check env<br/>TRANSCRIPTION_INGEST_ENABLED + MUX_TOKEN_ID
+    alt Env nao configurado
+        Cron->>Cron: log info once + skip
+    else Env ok
+        Cron->>DB: SELECT lessons WHERE transcription_preview IS NULL<br/>AND mux_asset_id IS NOT NULL<br/>ORDER BY created_at DESC LIMIT 100
+        DB-->>Cron: lessons[]
+        loop For each lesson (cap 100)
+            Cron->>Ingestor: ingestPreviewFromMux({ assetId, playbackId })
+            alt Track ready
+                Ingestor->>Storage: writeTranscriptionPreview
+                Storage->>DB: UPDATE
+            else No text tracks
+                Ingestor-->>Cron: { reason: 'no_text_tracks' }
+                Note over Cron: Lesson permanece NULL<br/>(re-tenta proximo cron — idempotente)
+            else Already populated
+                Ingestor-->>Cron: { reason: 'already_populated' }
+            end
+            Cron->>Cron: sleep(1000) — rate limit defensivo
+        end
+        Cron->>Cron: Pino structured log<br/>{ attempted, succeeded, failed_by_reason }
+    end

@@ -24,6 +24,8 @@ import {
   durationMinutesFromLesson,
   computeStartPositionForFormatSwitch as sharedComputeStartPositionForFormatSwitch,
 } from "../../shared/library-format-helpers";
+// Sprint MP3.2 / W-A4 (ADR-201) — multi-lang transcription preview serializer.
+import { serializeLessonForApi } from "../storage/libraryLessonStorage";
 
 function deriveFormats(lesson: any): Array<"video" | "podcast" | "article"> {
   const f: Array<"video" | "podcast" | "article"> = [];
@@ -141,20 +143,24 @@ export async function handleGetLibraryCourse(req: Request, res: Response) {
         title: m.title,
         description: m.description ?? null,
         coverUrl: assetUrl(m.coverKey),
-        lessons: (m.lessons ?? []).map((l: any) => ({
-          id: l.id,
-          slug: l.slug,
-          title: l.title,
-          subtitle: l.subtitle ?? null,
-          coverUrl: assetUrl(l.coverKey),
-          durationMinutes: durationMinutesFromLesson(l),
-          formats: deriveFormats(l),
-          hasAccess: !!accessMap.get(l.id),
-          displayOrder: l.displayOrder ?? 0,
-          progress: progressMap.get(l.id) ?? null,
-          // Sprint Mini Player 3 / RF-04.2 — transcription preview (80 chars + ellipsis).
-          transcriptionPreview: l.transcriptionPreview ?? null,
-        })),
+        lessons: (m.lessons ?? []).map((l: any) => {
+          // Sprint MP3.2 / W-A4 (ADR-201) — multi-lang preview lookup via user.preferredLanguage.
+          const serialized = serializeLessonForApi(l, (req as any).user ?? null);
+          return {
+            id: l.id,
+            slug: l.slug,
+            title: l.title,
+            subtitle: l.subtitle ?? null,
+            coverUrl: assetUrl(l.coverKey),
+            durationMinutes: durationMinutesFromLesson(l),
+            formats: deriveFormats(l),
+            hasAccess: !!accessMap.get(l.id),
+            displayOrder: l.displayOrder ?? 0,
+            progress: progressMap.get(l.id) ?? null,
+            // Sprint Mini Player 3 / RF-04.2 — transcription preview (80 chars + ellipsis).
+            transcriptionPreview: serialized.transcriptionPreview ?? null,
+          };
+        }),
       })),
     };
     res.status(200).json(out);
@@ -168,7 +174,9 @@ export async function handleGetLibraryCourse(req: Request, res: Response) {
 // GET /api/library/lessons/:id
 // -----------------------------------------------------------------------------
 
-function buildLessonPayload(lesson: any) {
+function buildLessonPayload(lesson: any, user?: any) {
+  // Sprint MP3.2 / W-A4 (ADR-201) — multi-lang preview lookup via user.preferredLanguage.
+  const serialized = serializeLessonForApi(lesson, user ?? null);
   const formats: any = {};
   if (lesson.videoMuxPlaybackId) {
     formats.video = {
@@ -199,6 +207,7 @@ function buildLessonPayload(lesson: any) {
     categoryId: lesson.categoryId,
     tags: lesson.tags ?? [],
     coverUrl: assetUrl(lesson.coverKey),
+    transcriptionPreview: serialized.transcriptionPreview ?? null,
     formats,
   };
 }
@@ -216,7 +225,7 @@ export async function handleGetLibraryLesson(req: Request, res: Response) {
     if (!lesson) return res.status(404).json({ message: "lesson_not_found" });
     if (!access) return res.status(401).json({ message: "access_denied" });
 
-    res.status(200).json(buildLessonPayload(lesson));
+    res.status(200).json(buildLessonPayload(lesson, (req as any).user));
   } catch (err) {
     console.error("[handleGetLibraryLesson] error", err);
     res.status(500).json({ message: "internal_error" });
@@ -241,7 +250,7 @@ export async function handleGetLibraryLessonBySlug(req: Request, res: Response) 
     const access = await storage.findLessonAccess({ userId, lessonId: lesson.id });
     if (!access) return res.status(401).json({ message: "access_denied" });
 
-    res.status(200).json(buildLessonPayload(lesson));
+    res.status(200).json(buildLessonPayload(lesson, (req as any).user));
   } catch (err) {
     console.error("[handleGetLibraryLessonBySlug] error", err);
     res.status(500).json({ message: "internal_error" });

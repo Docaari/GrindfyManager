@@ -4198,6 +4198,13 @@ export const libraryLessons = pgTable(
     // Primeiros 80 chars do transcription_full + ellipsis (NULL se transcricao
     // ausente). Pre-computado em ingestion para evitar N+1 no UI.
     transcriptionPreview: varchar("transcription_preview", { length: 120 }),
+    // Sprint Mini Player 3.2 / W-A4 (migration 0080). Multi-lang previews
+    // por language code, e.g.: { "pt": "...", "en": "..." }. Coluna varchar
+    // acima (transcriptionPreview) continua como espelho de back-compat
+    // para lang='pt' (drop deferred MP3.3+).
+    transcriptionPreviews: jsonb("transcription_previews").$type<
+      Record<string, string>
+    >(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

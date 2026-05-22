@@ -1,0 +1,39 @@
+%% ADR-201 / W-A4 — Multi-language transcription preview fallback chain
+%% UI lookup: transcription_previews[userLang] || pt || en || any || legacy varchar || null
+
+flowchart TD
+    Start(["GET /api/library/lessons/:slug"]) --> LoadLesson["SELECT lesson<br/>transcription_previews JSONB<br/>transcription_preview varchar (legacy)"]
+    LoadLesson --> NormLang["normalizeLang(req.user.preferredLanguage)<br/>'pt-BR' → 'pt'<br/>'en-US' → 'en'<br/>default → 'pt'"]
+
+    NormLang --> Check1{"previews[userLang]<br/>existe?"}
+
+    Check1 -->|"Sim"| Return1["return previews[userLang]"]
+    Check1 -->|"Nao"| Check2{"previews['pt']<br/>existe?"}
+
+    Check2 -->|"Sim"| Return2["return previews['pt']<br/>(fallback PT default)"]
+    Check2 -->|"Nao"| Check3{"previews['en']<br/>existe?"}
+
+    Check3 -->|"Sim"| Return3["return previews['en']<br/>(fallback EN)"]
+    Check3 -->|"Nao"| Check4{"Object.values(previews)<br/>tem item?"}
+
+    Check4 -->|"Sim"| Return4["return Object.values(previews)[0]<br/>(qualquer lang disponivel)"]
+    Check4 -->|"Nao (vazio ou null)"| Check5{"transcription_preview<br/>(legacy varchar) NOT NULL?"}
+
+    Check5 -->|"Sim"| Return5["return transcription_preview<br/>(back-compat lessons antigas<br/>pre-migration 0080)"]
+    Check5 -->|"Nao"| ReturnNull["return null<br/>(UI esconde slot)"]
+
+    Return1 --> Format
+    Return2 --> Format
+    Return3 --> Format
+    Return4 --> Format
+    Return5 --> Format
+    ReturnNull --> Format
+
+    Format["API response<br/>{ transcriptionPreview: string | null }"] --> End(["Cliente recebe string opaca<br/>(nao sabe qual lang)"])
+
+    style Return1 fill:#d1fae5
+    style Return2 fill:#bfdbfe
+    style Return3 fill:#bfdbfe
+    style Return4 fill:#fef3c7
+    style Return5 fill:#fde68a
+    style ReturnNull fill:#fee2e2

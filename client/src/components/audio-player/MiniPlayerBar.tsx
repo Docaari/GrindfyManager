@@ -7,6 +7,7 @@ import React, { useEffect, useState } from "react";
 import {
   AlertTriangle,
   ChevronUp,
+  HelpCircle,
   ListMusic,
   Loader2,
   Pause,
@@ -17,6 +18,8 @@ import {
   SkipForward,
   X,
 } from "lucide-react";
+// Sprint Mini Player 3.2 / W-B5 — PT-BR error message mapping.
+import { mapAudioErrorToMessage } from "@/lib/audio-engine/errorMessages";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
 import { useMiniPlayerHeight } from "@/hooks/useMiniPlayerHeight";
 import { sanitizeCoverUrl } from "@/lib/audio-engine/sanitizeCoverUrl";
@@ -346,6 +349,29 @@ export function MiniPlayerBar() {
             </span>
           ) : null}
         </button>
+        {/* MP3.2 / W-B3: help button (testid p/ onboarding interaction test). */}
+        <button
+          type="button"
+          data-testid="mini-player-help-button"
+          aria-label="Atalhos de teclado"
+          title="Atalhos (?)"
+          className="p-2 hover:bg-white/10 rounded-md text-white"
+          onClick={(e) => {
+            // W-B3 LOW-1: stopPropagation evita ghost focus do onboarding outside-click.
+            e.stopPropagation();
+            // Dismiss onboarding antes de abrir help (decisao founder: ambos efeitos).
+            try {
+              if (localStorage.getItem("audio.onboarding.seen.v1") !== "true") {
+                localStorage.setItem("audio.onboarding.seen.v1", "true");
+              }
+            } catch {
+              // ignore
+            }
+            setShortcutsHelpOpen((o) => !o);
+          }}
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
         <button
           type="button"
           data-testid="mini-player-expand"
@@ -376,7 +402,7 @@ export function MiniPlayerBar() {
         >
           <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
           <span className="flex-1">
-            Erro ao carregar — {String(loadError)}
+            {mapAudioErrorToMessage(loadError as any)}
           </span>
           <button
             type="button"

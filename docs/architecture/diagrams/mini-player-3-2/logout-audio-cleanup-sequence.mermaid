@@ -1,0 +1,53 @@
+%% ADR-202 / W-B2 — Audio player logout cleanup contract
+%% Founder decision: limpa SOMENTE audio.resume.v1 + OAuth tokens
+%% Persiste: audio.queue.v1 + audio.onboarding.seen.v1
+
+sequenceDiagram
+    actor User
+    participant UI as Logout Button<br/>OR 401 Handler
+    participant Hook as useLogout / auth flow
+    participant Cleanup as clearAudioOnLogout()<br/>(logoutCleanup.ts)
+    participant ResumeMod as resumeSession.ts
+    participant SpotDriver as SpotifyDriver
+    participant LS as localStorage
+    participant API as POST /api/auth/logout
+
+    User->>UI: Click logout<br/>OR refresh token expira (401)
+    UI->>Hook: logout()
+
+    Hook->>Cleanup: clearAudioOnLogout()
+
+    Note over Cleanup: ADR-202 — escopo restrito por design
+
+    Cleanup->>ResumeMod: clearResumeSnapshot()
+    ResumeMod->>LS: removeItem('audio.resume.v1')
+    LS-->>ResumeMod: ok
+    ResumeMod-->>Cleanup: ok
+
+    Note over Cleanup,LS: NAO chama clearQueue()<br/>NAO chama clearOnboardingSeen()<br/>(decisao founder MP3.2)
+
+    Cleanup->>SpotDriver: disconnect()<br/>(se conectado)
+    SpotDriver->>LS: removeItem('audio.spotify.oauth.snapshot.v1')
+    SpotDriver->>API: POST /api/audio/spotify/disconnect<br/>(server-side token revoke)
+    API-->>SpotDriver: ok
+    SpotDriver-->>Cleanup: ok
+
+    Cleanup-->>Hook: void (idempotente)
+
+    Hook->>API: POST /api/auth/logout
+    API-->>Hook: 200 OK<br/>+ clear cookies
+    Hook->>UI: redirect /login
+
+    Note over LS: Estado final localStorage:<br/>- audio.resume.v1 → REMOVIDO<br/>- audio.spotify.oauth.snapshot.v1 → REMOVIDO<br/>- audio.queue.v1 → PERSISTE (lessonIds publicos)<br/>- audio.onboarding.seen.v1 → PERSISTE (UX device-scope)
+
+    User->>UI: Re-login (futuro)
+    UI->>UI: Mount AudioPlayerProvider
+    UI->>LS: getItem('audio.queue.v1')
+    LS-->>UI: { lessonIds: [...] }
+    UI->>UI: Hidrata queue restaurada ✓
+    UI->>LS: getItem('audio.onboarding.seen.v1')
+    LS-->>UI: { seen: true }
+    UI->>UI: NAO mostra tooltip (UX preserved) ✓
+    UI->>LS: getItem('audio.resume.v1')
+    LS-->>UI: null
+    UI->>UI: Sem resume snapshot (clean state) ✓

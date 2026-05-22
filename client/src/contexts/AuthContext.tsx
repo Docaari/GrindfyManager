@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiRequest, initCsrf, getCsrfToken, queryClient } from '@/lib/queryClient';
+import { clearAudioOnLogout } from '@/lib/audio-engine/logoutCleanup';
 import { hasFullAccess, isSuperAdmin } from '../../../shared/permissions';
 
 interface User {
@@ -346,6 +347,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Clear stored data immediately
     clearStoredAuth();
     setUser(null);
+
+    // Sprint MP3.2 / W-B2 (ADR-202): limpar audio resume snapshot + Spotify OAuth
+    // tokens. Queue + onboarding.seen.v1 persistem (decisao founder).
+    clearAudioOnLogout();
   };
 
   const hasPermission = (permission: string): boolean => {

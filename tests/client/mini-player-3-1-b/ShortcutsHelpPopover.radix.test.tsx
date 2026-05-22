@@ -10,12 +10,17 @@ function loadModule() {
 }
 
 describe('<ShortcutsHelpPopover> Radix Dialog (Wave B INFO-1)', () => {
-  it('open=true renderiza data-testid e aria-label', () => {
+  it('open=true renderiza data-testid e label acessivel via Title (aria-labelledby)', () => {
+    // MP3.2 W-B7 / ADR-202 — Radix Dialog usa aria-labelledby (apontando para
+    // o DialogPrimitive.Title) em vez de aria-label literal. Aria-label
+    // redundante em Content seria double-announcement no screen reader
+    // (assertion antiga conflitava com tests/client/mini-player/dialog-aria-label-dedup.test.tsx).
     const { ShortcutsHelpPopover } = loadModule();
     render(<ShortcutsHelpPopover open={true} onOpenChange={() => {}} />);
     const pop = screen.getByTestId('shortcuts-help-popover');
     expect(pop).toBeInTheDocument();
-    expect(pop.getAttribute('aria-label')).toBe('Atalhos de teclado');
+    expect(pop.getAttribute('aria-labelledby')).toBeTruthy();
+    expect(pop.getAttribute('aria-label')).toBeNull();
   });
 
   it('open=false NAO renderiza popover no DOM (portal vazio)', () => {

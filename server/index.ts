@@ -5,6 +5,8 @@ import { setupVite, serveStatic, log } from "./vite";
 import { startSupremaAutoSync, stopSupremaAutoSync } from "./supremaAutoSync";
 import { startLibraryCleanup, stopLibraryCleanup } from "./libraryCleanup";
 import { startCoachCrons } from "./coach/cronRunner";
+import { startTranscriptionCron } from "./cron/transcriptionCronRunner";
+import { handleMuxWebhook } from "./routes/muxWebhooks";
 import { cleanupExpiredRefreshTokens } from "./refreshTokenStore";
 import { pool } from "./db";
 import cron from "node-cron";
@@ -16,6 +18,16 @@ const app = express();
 app.set('trust proxy', 1);
 // Stripe webhook needs raw body for signature verification — must be BEFORE express.json()
 app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
+// Sprint MP3.2 / W-A2 (ADR-199) — Mux webhook needs raw body for HMAC verification.
+// Must be BEFORE express.json() so req.body arrives as Buffer.
+app.use('/api/mux/webhooks', express.raw({ type: 'application/json' }));
+// Boot-fail: in production, if Mux webhook is registered, MUX_WEBHOOK_SECRET must be set.
+if (process.env.NODE_ENV === "production" && !process.env.MUX_WEBHOOK_SECRET) {
+  throw new Error("MUX_WEBHOOK_SECRET required in production (Mux webhook registered)");
+}
+app.post('/api/mux/webhooks', async (req, res) => {
+  await handleMuxWebhook(req, res);
+});
 // Wave C (Fase 3 perf): gzip compression. /api/home/overview + /api/dashboard/*
 // retornam JSON 20-80KB; gzip reduz ~60-70%. Apos express.raw (Stripe webhook
 // nao deve ser comprimido — assinatura quebraria) e antes de express.json.
@@ -112,6 +124,8 @@ app.use((req, res, next) => {
     startSupremaAutoSync();
     startLibraryCleanup();
     startCoachCrons();
+    // Sprint MP3.2 / W-A2 (ADR-199) — Transcription preview ingest cron (0 4 * * * UTC).
+    startTranscriptionCron();
     // ADR-143: prune refresh-token rows that have been expired for >30d.
     // Wave D (ADR-144): advisory lock cross-replica.
     const refreshTokenCleanup = async () => {

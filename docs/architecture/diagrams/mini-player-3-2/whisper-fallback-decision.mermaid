@@ -1,0 +1,51 @@
+%% ADR-200 — Whisper local fallback decision tree
+%% DEFER backlog — codepath modular permite ativar quando criterio emergir
+
+flowchart TD
+    Start(["Cron OR webhook trigger<br/>ingestPreviewFromMux(lesson)"]) --> CheckMux{"Mux configurado?<br/>MUX_TOKEN_ID set"}
+
+    CheckMux -->|"Nao"| SkipMux["reason: 'mux_not_configured'<br/>Lesson permanece NULL"]
+    CheckMux -->|"Sim"| FetchAsset["GET /video/v1/assets/:id"]
+
+    FetchAsset --> CheckTracks{"Tem track ready<br/>type=text?"}
+
+    CheckTracks -->|"Sim"| Download["GET stream.mux.com/:pid/text/:tid.vtt"]
+    Download --> Extract["extractTextFromVtt<br/>truncate 80 + U+2026"]
+    Extract --> WriteOk["writeTranscriptionPreview(lesson, lang, preview)"]
+    WriteOk --> EndOk(["reason: 'ok'"])
+
+    CheckTracks -->|"Nao"| CheckWhisperEnv{"WHISPER_FALLBACK_ENABLED<br/>=true ?"}
+
+    CheckWhisperEnv -->|"Nao (DEFAULT)"| NullPath["reason: 'no_text_tracks'<br/>Lesson permanece NULL"]
+    NullPath --> Retry(["Re-tentado proximo cron<br/>(idempotente)"])
+
+    CheckWhisperEnv -->|"Sim (criterio emergiu)"| CheckAge{"Lesson age >= 24h?<br/>(grace period Mux)"}
+
+    CheckAge -->|"Nao"| NullPath
+    CheckAge -->|"Sim"| WhisperRoute["tryWhisperFallback(lesson)"]
+
+    WhisperRoute --> CheckProvider{"WHISPER_PROVIDER"}
+
+    CheckProvider -->|"openai_api<br/>(recomendado)"| OpenAIAPI["POST api.openai.com/v1/audio/transcriptions<br/>file=stream.mux.com/:pid/audio.m4a"]
+    CheckProvider -->|"whisper_cpp<br/>(local binary)"| LocalBinary["spawn whisper.cpp<br/>--model small --lang pt<br/>timeout 5min"]
+
+    OpenAIAPI --> CheckQuality
+    LocalBinary --> CheckTimeout{"Timeout 5min?"}
+    CheckTimeout -->|"Sim"| KillProc["SIGKILL subprocess<br/>reason: 'whisper_timeout'"]
+    KillProc --> Retry
+    CheckTimeout -->|"Nao"| CheckQuality
+
+    CheckQuality{"Preview valido?<br/>len >= 10 chars<br/>+ ASCII ratio ok"}
+
+    CheckQuality -->|"Nao"| LowQuality["reason: 'whisper_low_quality'<br/>NAO grava"]
+    LowQuality --> Retry
+
+    CheckQuality -->|"Sim"| WriteWhisper["writeTranscriptionPreview(lesson, lang, preview)"]
+    WriteWhisper --> EndWhisper(["reason: 'whisper_ok'"])
+
+    style CheckWhisperEnv fill:#fef3c7
+    style NullPath fill:#fee2e2
+    style WhisperRoute fill:#dbeafe
+    style EndOk fill:#d1fae5
+    style EndWhisper fill:#d1fae5
+    style SkipMux fill:#fef3c7

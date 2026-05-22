@@ -1,0 +1,54 @@
+%% W-B5 — PT-BR error message mapping flow
+%% Codigo browser/HTTP tecnico → mensagem amigavel PT-BR no MiniPlayerBar banner
+%% Telemetria audio_track_error mantem reason tecnico (back-compat ADR-198)
+
+flowchart TD
+    Start(["AudioPlayerContext<br/>onError(error: AudioError)"]) --> Capture["Capture error metadata<br/>{ code, mediaErrorCode, httpStatus, reason }"]
+
+    Capture --> Telem["Telemetria audio_track_error<br/>{ reason: 'demuxer_error', ... }<br/>(tecnico, granular — back-compat)"]
+    Capture --> Map["mapAudioErrorToMessage(error)<br/>(audioErrorMessages.ts)"]
+
+    Map --> Demuxer{"error.code matches<br/>/^DEMUXER_ERROR_/ ?"}
+    Demuxer -->|"Sim"| MsgDemuxer["'Formato de audio nao suportado.'"]
+    Demuxer -->|"Nao"| MediaErr{"error.code ===<br/>'MEDIA_ELEMENT_ERROR_NETWORK' ?"}
+
+    MediaErr -->|"Sim"| MsgNetwork["'Falha de rede. Verifique sua conexao.'"]
+    MediaErr -->|"Nao"| Http404{"error.httpStatus === 404 ?"}
+
+    Http404 -->|"Sim"| Msg404["'Faixa nao encontrada.'"]
+    Http404 -->|"Nao"| Http403{"error.httpStatus === 403 ?"}
+
+    Http403 -->|"Sim"| Msg403["'Sem permissao para esta faixa.'"]
+    Http403 -->|"Nao"| Http5xx{"error.httpStatus in [500, 502, 503] ?"}
+
+    Http5xx -->|"Sim"| Msg5xx["'Servidor indisponivel.<br/>Tente novamente em instantes.'"]
+    Http5xx -->|"Nao"| Buffering{"error.reason ===<br/>'buffering_timeout' ?"}
+
+    Buffering -->|"Sim"| MsgBuf["'Audio demorou a carregar.<br/>Tente novamente.'"]
+    Buffering -->|"Nao"| MaxRetry{"error.reason ===<br/>'max_retries_exceeded' ?<br/>(ADR-198)"}
+
+    MaxRetry -->|"Sim"| MsgMax["'Maximo de tentativas excedido.'"]
+    MaxRetry -->|"Nao"| Default["'Erro ao carregar audio.<br/>Tente novamente.'<br/>(fallback generico)"]
+
+    MsgDemuxer --> Render
+    MsgNetwork --> Render
+    Msg404 --> Render
+    Msg403 --> Render
+    Msg5xx --> Render
+    MsgBuf --> Render
+    MsgMax --> Render
+    Default --> Render
+
+    Render["MiniPlayerBar error banner<br/>&lt;div role='alert'&gt;{message}&lt;/div&gt;"] --> End(["User ve mensagem PT-BR<br/>+ Retry CTA"])
+
+    Telem --> EndTelem(["audit log + metrics<br/>(reason tecnico preservado)"])
+
+    style MsgDemuxer fill:#fef3c7
+    style MsgNetwork fill:#fef3c7
+    style Msg404 fill:#fee2e2
+    style Msg403 fill:#fee2e2
+    style Msg5xx fill:#fee2e2
+    style MsgBuf fill:#fef3c7
+    style MsgMax fill:#fee2e2
+    style Default fill:#e5e7eb
+    style Render fill:#d1fae5

@@ -22,7 +22,6 @@ export function ShortcutsHelpPopover({ open, onOpenChange }: Props) {
         />
         <DialogPrimitive.Content
           data-testid="shortcuts-help-popover"
-          aria-label="Atalhos de teclado"
           className="fixed bottom-20 right-4 z-50 w-72 rounded-md border border-white/10 bg-gray-900 p-4 text-sm text-white shadow-lg focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
         >
           <div className="mb-2 flex items-center justify-between">
