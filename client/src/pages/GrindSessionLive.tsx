@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +47,14 @@ import { stopAlertById, stopAllAlerts } from "@/lib/tts/narrationQueue";
 
 // Sub-components
 import SessionHeader from "@/components/grind-session-live/SessionHeader";
+// Sprint Mini Player 1 / RF-08: botao "Estudar" no SessionHeader abre o
+// LessonPickerDialog (lazy-loaded).
+import { useOptionalAudioPlayer } from "@/contexts/AudioPlayerContext";
+const LessonPickerDialog = React.lazy(() =>
+  import("@/components/audio-player/LessonPickerDialog").then((m) => ({
+    default: m.LessonPickerDialog,
+  })),
+);
 import SessionDashboard from "@/components/grind-session-live/SessionDashboard";
 import AddTournamentDialog from "@/components/grind-session-live/AddTournamentDialog";
 import TournamentCard from "@/components/grind-session-live/TournamentCard";
@@ -117,6 +125,10 @@ export default function GrindSessionLive() {
 
   // RF-01: Session recovery banner
   const [showRecoveryBanner, setShowRecoveryBanner] = useState(false);
+
+  // Sprint Mini Player 1 / RF-08: LessonPickerDialog state + isAudioPlaying.
+  const [lessonPickerOpen, setLessonPickerOpen] = useState(false);
+  const audioCtx = useOptionalAudioPlayer();
 
   // RF-08: Tournament search
   const [tournamentSearch, setTournamentSearch] = useState("");
@@ -2468,7 +2480,20 @@ export default function GrindSessionLive() {
             enabled={breakAutoOpenEnabledFromSettings}
           />
         }
+        // Sprint Mini Player 1 / RF-08: botao "Estudar" abre LessonPickerDialog
+        onOpenLessonPicker={() => setLessonPickerOpen(true)}
+        isAudioPlaying={!!audioCtx?.isPlaying}
       />
+
+      {/* Sprint Mini Player 1 / RF-09: LessonPickerDialog lazy-loaded */}
+      {lessonPickerOpen && (
+        <Suspense fallback={null}>
+          <LessonPickerDialog
+            open={lessonPickerOpen}
+            onOpenChange={setLessonPickerOpen}
+          />
+        </Suspense>
+      )}
 
       {/* Spot screenshots — paste Ctrl+V em qualquer area da pagina (fora de
           inputs) ou clique em "Adicionar print" para file picker. Counter X/10

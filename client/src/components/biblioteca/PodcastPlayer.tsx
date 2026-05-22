@@ -37,7 +37,7 @@ export interface PodcastPlayerProps {
   title: string;
   coverUrl?: string | null;
   durationSeconds?: number;
-  /** F-A5.5: optional secondary line shown in StickyAudioBar */
+  /** F-A5.5: optional secondary line shown in the MiniPlayerBar */
   courseTitle?: string | null;
 }
 

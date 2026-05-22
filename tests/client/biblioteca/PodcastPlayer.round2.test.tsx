@@ -76,43 +76,10 @@ describe('<PodcastPlayer> Round 2 - keyboard a11y', () => {
   });
 });
 
-describe('<PodcastPlayer> Round 2 - courseTitle wiring', () => {
-  it('passa courseTitle pro context (StickyAudioBar pode mostrar)', async () => {
-    // Para validar, renderizamos PodcastPlayer dentro de Provider e checamos
-    // o context via StickyAudioBar (mobile mock).
-    const { StickyAudioBar } = await import(
-      '../../../client/src/components/biblioteca/StickyAudioBar'
-    );
-    Object.defineProperty(window, 'innerWidth', {
-      writable: true,
-      configurable: true,
-      value: 375,
-    });
-    (window as any).matchMedia = (query: string) => ({
-      matches: query.includes('max-width') || !query.includes('1024'),
-      media: query,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      addListener: () => {},
-      removeListener: () => {},
-      dispatchEvent: () => false,
-    });
-    render(
-      <AudioPlayerProvider>
-        <PodcastPlayer
-          lessonId="l1"
-          audioUrl="/x.mp3"
-          title="A1"
-          coverUrl="/c.jpg"
-          durationSeconds={1500}
-          courseTitle="Curso de Mentalidade"
-        />
-        <StickyAudioBar />
-      </AudioPlayerProvider>,
-    );
-    // Subtitle aparece com courseTitle
-    expect(screen.getByTestId('sticky-audio-bar-subtitle').textContent).toMatch(
-      /Curso de Mentalidade/,
-    );
-  });
-});
+// =============================================================================
+// Sprint Mini Player 1 (RF-14): describe '<PodcastPlayer> Round 2 -
+// courseTitle wiring' removido. O unico teste do bloco renderizava
+// `<StickyAudioBar />` (deletado por RF-14) para validar courseTitle no
+// subtitle. courseTitle continua coberto pelos testes de AudioPlayerContext
+// (playTrack/play(lesson)) e por renderizacao do MiniPlayerBar.
+// =============================================================================

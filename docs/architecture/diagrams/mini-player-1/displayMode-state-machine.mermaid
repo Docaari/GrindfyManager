@@ -1,0 +1,54 @@
+%% Mini Player 1 — displayMode FSM (ADR-188, RF-04 + RF-11 + RF-13)
+%% Estados validos: hidden | bar | expanded. Transicoes nomeadas alinhadas
+%% as pure functions em client/src/lib/audio-engine/displayModeFsm.ts.
+
+stateDiagram-v2
+    [*] --> hidden : boot / refresh / reload
+
+    hidden --> bar : playTrack(track)<br/>(nextOnPlayTrack)
+    hidden --> hidden : Esc / close (no-op)
+    hidden --> hidden : fullscreen exit + current===null
+
+    bar --> expanded : click cover<br/>OR chevron-up<br/>OR setDisplayMode('expanded')
+    bar --> hidden : close X<br/>OR Esc<br/>(nextOnClose / nextOnEsc)
+    bar --> hidden : onEnded sem proxima<br/>(RF-05 tryAutoplayNext)
+    bar --> hidden : fullscreen enter<br/>(LessonViewer requestFullscreen)<br/>(nextOnFullscreenEnter)
+    bar --> bar : playTrack(novaTrack)<br/>(D9 substitui sem confirmacao)
+
+    expanded --> bar : click chevron-down<br/>OR Esc<br/>OR click backdrop<br/>OR setDisplayMode('bar')<br/>(nextOnEsc)
+    expanded --> hidden : close X<br/>(direto — slide-down 200ms a partir do expanded)
+    expanded --> hidden : fullscreen enter
+    expanded --> expanded : playTrack(novaTrack) via LessonPicker<br/>(D9 + RF-09: preserva expanded)
+
+    hidden --> bar : fullscreen exit + current!==null<br/>(nextOnFullscreenExit restore)
+
+    note right of hidden
+        current === null (invariante)
+        MiniPlayerBar retorna null
+        MiniPlayerExpanded nao renderiza
+        --mini-player-height: 0px
+    end note
+
+    note right of bar
+        Surface principal — z-40
+        9 controles RF-02 conforme breakpoint RF-10
+        --mini-player-height: 64/72/80px
+        MiniChat (z-50) fica acima
+    end note
+
+    note right of expanded
+        Painel z-45 acima da bar
+        Cover 120x120 rotate (RF-12)
+        Lista readonly aulas do courseContext
+        Bar permanece visivel
+        Trap focus dentro do painel
+        Backdrop click minimiza
+    end note
+
+    note left of [*]
+        Sem persist cross-session
+        (D4 + D7 + D8: refresh = hidden)
+        State invalido prevenido:
+        setDisplayMode('expanded') com
+        current===null = no-op + console.warn
+    end note

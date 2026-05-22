@@ -1,6 +1,7 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect } from "react";
+import type { ReactNode } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Pause, Play, MoreVertical, StickyNote, Coffee, History } from "lucide-react";
+import { ArrowLeft, Pause, Play, MoreVertical, StickyNote, Coffee, History, Headphones } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -17,6 +18,12 @@ interface SessionHeaderProps {
   // Sprint Grind-Live Break Auto-Open (RF-01): slot opcional renderizado entre
   // o botao [Breaks] e [Pausar]. Recebe o BreakAutoOpenToggle do parent.
   autoBreakToggleSlot?: ReactNode;
+  // Sprint Mini Player 1 / RF-08: botao "Estudar" (headphones) abre o
+  // LessonPickerDialog. Quando undefined, o botao nao renderiza (back-compat).
+  onOpenLessonPicker?: () => void;
+  // Sprint Mini Player 1 / RF-08: pulsa o botao headphones quando ha audio
+  // tocando em background.
+  isAudioPlaying?: boolean;
 }
 
 export default function SessionHeader({
@@ -30,6 +37,8 @@ export default function SessionHeader({
   onPause,
   onResume,
   autoBreakToggleSlot,
+  onOpenLessonPicker,
+  isAudioPlaying = false,
 }: SessionHeaderProps) {
   const [, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -136,6 +145,27 @@ export default function SessionHeader({
               <TooltipContent side="bottom"><p>Historico de Breaks</p></TooltipContent>
             </Tooltip>
 
+            {/* Sprint Mini Player 1 / RF-08: botao "Estudar" entre [Breaks] e
+                autoBreakToggleSlot. Pulsa quando isAudioPlaying. */}
+            {onOpenLessonPicker && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    data-testid="session-header-study-button"
+                    className={
+                      "btn btn-study hidden md:inline-flex" +
+                      (isAudioPlaying ? " animate-pulse pulse-audio" : "")
+                    }
+                    onClick={onOpenLessonPicker}
+                    aria-label="Abrir biblioteca de podcasts"
+                  >
+                    <Headphones className="w-4 h-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom"><p>Estudar enquanto faz grind</p></TooltipContent>
+              </Tooltip>
+            )}
+
             {/* Sprint Grind-Live Break Auto-Open (RF-01): toggle clock-aligned
                 XX:54/XX:02 BRT. Renderizado pelo parent quando ha sessao ativa. */}
             {autoBreakToggleSlot && (
@@ -188,6 +218,16 @@ export default function SessionHeader({
                     <History className="w-4 h-4 text-green-400" />
                     Historico Breaks
                   </button>
+                  {/* Sprint Mini Player 1 / RF-08: item "Estudar" no Popover mobile */}
+                  {onOpenLessonPicker && (
+                    <button
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-200 hover:bg-gray-800 rounded-md transition-colors"
+                      onClick={() => { setMobileMenuOpen(false); onOpenLessonPicker(); }}
+                    >
+                      <Headphones className="w-4 h-4 text-emerald-400" />
+                      Estudar
+                    </button>
+                  )}
                   {/* MEDIUM-1 fix: slot do BreakAutoOpenToggle tambem disponivel
                       no Popover mobile. Mesmo handler/instance que o desktop —
                       parent renderiza apenas uma vez via autoBreakToggleSlot. */}

@@ -17,7 +17,7 @@ import { NotificationBanner } from "@/components/NotificationBanner";
 import { NotificationModals } from "@/components/NotificationModals";
 import Sidebar from "@/components/Sidebar";
 import { AudioPlayerProvider } from "@/contexts/AudioPlayerContext";
-import { StickyAudioBar } from "@/components/biblioteca/StickyAudioBar";
+import { MiniPlayerBar } from "@/components/audio-player/MiniPlayerBar";
 import { LogoLoader } from "@/components/LogoLoader";
 
 // Lazy-loaded pages for code splitting
@@ -192,7 +192,7 @@ function App() {
             <AudioPlayerProvider>
               <Toaster />
               <Router />
-              <StickyAudioBar />
+              <MiniPlayerBar />
             </AudioPlayerProvider>
           </TooltipProvider>
         </AuthProvider>

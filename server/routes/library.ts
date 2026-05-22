@@ -92,9 +92,40 @@ export async function handleGetLibraryCourse(req: Request, res: Response) {
         allLessonIds.push(l.id);
       }
     }
-    const accessMap: Map<string, boolean> = allLessonIds.length > 0
-      ? await storage.lessonAccessLookup(userId, allLessonIds)
-      : new Map();
+    // Sprint Mini Player 1 HIGH-4: hidratar progress por lesson direto no
+    // payload de courses/:slug em vez de criar endpoint batch dedicado.
+    // accessMap + progressRows em paralelo (independentes).
+    // `getLibraryProgressByLessonIds` é defensivo: alguns testes legacy mockam
+    // storage parcial sem essa key, então fallback explícito quando ausente.
+    const progressLookupFn =
+      typeof (storage as any).getLibraryProgressByLessonIds === "function"
+        ? (storage as any).getLibraryProgressByLessonIds.bind(storage)
+        : null;
+    const [accessMap, progressRows] = await Promise.all([
+      allLessonIds.length > 0
+        ? storage.lessonAccessLookup(userId, allLessonIds)
+        : Promise.resolve(new Map<string, boolean>()),
+      allLessonIds.length > 0 && userId && progressLookupFn
+        ? progressLookupFn(userId, allLessonIds).catch((err: any) => {
+            console.error("[handleGetLibraryCourse] progress lookup failed", err);
+            return [] as any[];
+          })
+        : Promise.resolve([] as any[]),
+    ]);
+
+    // Agrupar rows por lessonId -> { [format]: {...} }.
+    const progressMap = new Map<string, Record<string, any>>();
+    for (const r of progressRows ?? []) {
+      if (!r?.lessonId) continue;
+      const bucket = progressMap.get(r.lessonId) ?? {};
+      bucket[r.format] = {
+        lastPositionSeconds: r.lastPositionSeconds ?? 0,
+        totalDurationSeconds: r.totalDurationSeconds ?? null,
+        completedAt: r.completedAt ?? null,
+        updatedAt: r.updatedAt ?? null,
+      };
+      progressMap.set(r.lessonId, bucket);
+    }
 
     const out = {
       id: course.id,
@@ -120,6 +151,7 @@ export async function handleGetLibraryCourse(req: Request, res: Response) {
           formats: deriveFormats(l),
           hasAccess: !!accessMap.get(l.id),
           displayOrder: l.displayOrder ?? 0,
+          progress: progressMap.get(l.id) ?? null,
         })),
       })),
     };

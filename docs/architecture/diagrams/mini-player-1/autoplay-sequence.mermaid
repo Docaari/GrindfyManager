@@ -1,0 +1,49 @@
+%% Mini Player 1 — Autoplay sequencial (RF-05, ADR-187)
+%% Fluxo onEnded -> AudioSourceEngine -> AudioPlayerContext -> tryAutoplayNext
+%% courseContext lido via useRef (evita stale closure no handler).
+
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant A as &lt;audio&gt; element<br/>(HTMLAudioElement)
+    participant D as LibraryAudioDriver<br/>(IAudioSourceDriver)
+    participant E as AudioSourceEngine<br/>(facade singleton)
+    participant C as AudioPlayerContext<br/>(React state + useRef)
+    participant Q as TanStack Query cache<br/>(GET /api/library/courses/:slug)
+    participant T as Telemetry<br/>(POST /api/library/events)
+
+    Note over U,T: Cenario: aula 1 do curso X terminando<br/>courseContext setado via LessonPicker ou Biblioteca
+
+    A->>D: native 'ended' event
+    D->>E: emit 'ended' (forward via .on listener)
+    E->>C: forward 'ended' callback
+    C->>C: tryAutoplayNext()
+    C->>C: read courseContextRef.current<br/>(useRef evita stale closure)
+
+    alt courseContext === null
+        C->>C: setIsPlaying(false)
+        Note right of C: D9 + Q5: stop silencioso<br/>(sem courseContext, sem auto)
+    else nextIndex >= lessons.length
+        C->>C: setIsPlaying(false)
+        Note right of C: Fim do curso
+    else next.hasAccess === false
+        C->>C: setIsPlaying(false)
+        Note right of C: Sem acesso (Q5)<br/>NAO pula pra index+2
+    else success path
+        C->>Q: courseContext.lessons[nextIndex]<br/>(ja em memoria, sem fetch)
+        Q-->>C: next: AudioTrack
+        C->>E: playTrack(next)
+        E->>E: pickDriver(next.source)<br/>(activeDriver.source === 'library' -&gt; reuse)
+        E->>D: load(next)
+        D->>A: audioEl.src = next.audioUrl<br/>audioEl.load()
+        E->>D: play()
+        D->>A: audioEl.play()
+        A-->>D: Promise&lt;void&gt; resolve
+        D-->>E: ok
+        E-->>C: ok
+        C->>C: setActiveTrack(next)<br/>setCurrent(next)<br/>currentIndex = nextIndex<br/>setIsPlaying(true)
+        C->>T: emit event 'next'<br/>source='mini_player'<br/>trigger='autoplay'<br/>(sendBeacon best-effort)
+        Note over C,T: D13 + Q-G: telemetria via library_events<br/>(coluna metadata JSONB)
+    end
+
+    Note over U,T: Edge case: troca manual durante autoplay<br/>useRef garante leitura fresh do courseContext<br/>(mitiga race condition RF-05)

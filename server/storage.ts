@@ -1071,6 +1071,17 @@ export interface IStorage {
   countLibraryEventsForUserInWindow(args: { userId: string; windowSeconds: number }): Promise<number>;
   upsertLibraryProgress(progress: any): Promise<any>;
   getLibraryProgressForLesson(args: { userId: string; lessonId: string }): Promise<any[]>;
+  getLibraryProgressByLessonIds(
+    userId: string | undefined,
+    lessonIds: string[],
+  ): Promise<Array<{
+    lessonId: string;
+    format: "video" | "podcast" | "article";
+    lastPositionSeconds: number;
+    totalDurationSeconds: number | null;
+    completedAt: Date | null;
+    updatedAt: Date | null;
+  }>>;
   findLibraryLessonsByCategory(categoryId: string, opts?: any): Promise<any[]>;
   findLibraryLessonsByTag(tag: string, opts?: any): Promise<any[]>;
   libraryLessonProgressLookup(userId: string | undefined, lessonIds: string[]): Promise<Map<string, any>>;
@@ -10134,6 +10145,60 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       return rows ?? [];
     } catch (err) {
       console.error("[getLibraryProgressForLesson] query failed", err);
+      return [];
+    }
+  }
+
+  /**
+   * 15b. getLibraryProgressByLessonIds — Sprint Mini Player 1 HIGH-4.
+   *
+   * Batch lookup de progresso por lessonId, retornando 1 row por (lessonId, format).
+   * Usado para hidratar payload de `/api/library/courses/:slug` com `progress`
+   * por aula, alimentando "Continuar de onde parou" do LessonPickerDialog
+   * sem precisar de endpoint batch dedicado.
+   */
+  async getLibraryProgressByLessonIds(
+    userId: string | undefined,
+    lessonIds: string[],
+  ): Promise<Array<{
+    lessonId: string;
+    format: "video" | "podcast" | "article";
+    lastPositionSeconds: number;
+    totalDurationSeconds: number | null;
+    completedAt: Date | null;
+    updatedAt: Date | null;
+  }>> {
+    if (!userId || !Array.isArray(lessonIds) || lessonIds.length === 0) {
+      return [];
+    }
+    try {
+      const rows = await db
+        .select({
+          lessonId: libraryProgress.lessonId,
+          format: libraryProgress.format,
+          lastPositionSeconds: libraryProgress.lastPositionSeconds,
+          totalDurationSeconds: libraryProgress.totalDurationSeconds,
+          completedAt: libraryProgress.completedAt,
+          updatedAt: libraryProgress.updatedAt,
+        })
+        .from(libraryProgress)
+        .where(
+          and(
+            eq(libraryProgress.userId, userId),
+            inArray(libraryProgress.lessonId, lessonIds),
+          ),
+        );
+      return (rows ?? []).map((r: any) => ({
+        lessonId: String(r.lessonId),
+        format: r.format as "video" | "podcast" | "article",
+        lastPositionSeconds: Number(r.lastPositionSeconds ?? 0),
+        totalDurationSeconds:
+          r.totalDurationSeconds == null ? null : Number(r.totalDurationSeconds),
+        completedAt: r.completedAt ?? null,
+        updatedAt: r.updatedAt ?? null,
+      }));
+    } catch (err) {
+      console.error("[getLibraryProgressByLessonIds] query failed", err);
       return [];
     }
   }

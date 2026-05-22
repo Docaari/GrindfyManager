@@ -139,31 +139,63 @@ const originalResolveFilename = (Module as any)._resolveFilename;
 // LIMITACAO conhecida: bibliotecas ESM-only importadas pelo componente
 // (@tanstack/react-query) podem falhar em `require(esm-package)`.
 // Quando isso acontece, o test deveria migrar pra `await import(...)`.
+// =============================================================================
+// Sprint Mini Player 1 (lesson #14/#26 ROOT-CAUSE FIX):
+//
+// Vitest 4 + Node 24 has a subtle behaviour that broke `require()` of `.tsx`
+// files from test `.tsx` modules:
+//   - Node 24 natively strips TypeScript from `.ts` files (experimental-strip-types
+//     enabled by default) → `.ts` requires work even without our handler.
+//   - `.tsx` files have JSX that Node's stripper does NOT handle → fail with
+//     "Unexpected token '{'" because Node falls through to ESM-from-CJS loader
+//     which sees raw JSX as a syntax error.
+//   - Setup.ts esbuild handler registration on `Module._extensions['.tsx']` is
+//     RESET inside each Vitest worker — the handler does NOT survive into the
+//     test scope. (Proven via in-test diagnostic: `_extensions['.tsx']` is
+//     undefined when tests run.)
+//   - `require('esbuild')` from inside the jsdom worker fails with
+//     "Invariant violation: TextEncoder/Uint8Array" (esbuild's strict env check).
+//
+// FIX: Use `typescript` (which DOES work in jsdom workers) and register the
+// `.tsx`/`.ts` handler via a `beforeEach` hook that runs in every worker
+// before every test. This ensures the handler is always present when test
+// code calls `require('@/path/Component.tsx')`.
+// =============================================================================
+let _typescriptCompiler: any = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const esbuild = require('esbuild');
+  _typescriptCompiler = require('typescript');
+} catch {
+  // typescript not installed — fall through; legacy esbuild path will try.
+}
+
+function _installTsxRequireHandler() {
+  if (!_typescriptCompiler) return;
+  const Mod = Module as any;
+  if (typeof Mod._extensions['.tsx'] === 'function' && typeof Mod._extensions['.ts'] === 'function') {
+    return; // already installed in this worker
+  }
+  const ts = _typescriptCompiler;
   const handler = function (module: any, filename: string) {
     const src = fs.readFileSync(filename, 'utf8');
-    const result = esbuild.transformSync(src, {
-      loader: filename.endsWith('.tsx') ? 'tsx' : 'ts',
-      format: 'cjs',
-      target: 'node20',
-      jsx: 'automatic',
-      jsxImportSource: 'react',
-      sourcemap: 'inline',
+    const out = ts.transpileModule(src, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        jsx: ts.JsxEmit.ReactJSX,
+        target: ts.ScriptTarget.ES2020,
+        esModuleInterop: true,
+        allowJs: true,
+      },
+      fileName: filename,
     });
-    module._compile(result.code, filename);
+    module._compile(out.outputText, filename);
   };
-  // Sprint FX-1: forcar registro do handler tsx mesmo se algo (vite) ja
-  // registrou um — handlers existentes podem nao transpilar JSX corretamente
-  // para `require()` sincrono em testes jsdom.
-  (Module as any)._extensions['.tsx'] = handler;
-  if (!(Module as any)._extensions['.ts']) {
-    (Module as any)._extensions['.ts'] = handler;
-  }
-} catch {
-  // ok — vitest may handle this differently in some envs.
+  Mod._extensions['.tsx'] = handler;
+  Mod._extensions['.ts'] = handler;
 }
+
+// Initial install (covers files required from setup.ts itself + early bindings).
+_installTsxRequireHandler();
 
 // =============================================================================
 // localStorage polyfill (server/node env).
@@ -214,6 +246,37 @@ afterEach(() => {
   // foi movido para o `afterEach` do proprio `tests/integration/tickets-cron.test.ts`
   // (escopo correto). Vazava pra 8000+ testes que nunca tocaram em expireTickets.
 });
+
+// Sprint Mini Player 1: patch @testing-library/user-event `setup()` to
+// default to `advanceTimers: vi.advanceTimersByTime` when fake timers are
+// active. Without this, `userEvent.click()` waits forever on faked timers
+// (RTL internal asyncWrapper uses setTimeout). This avoids modifying tests
+// that follow the `vi.useFakeTimers(); userEvent.setup(); click()` pattern.
+//
+// Guard: only attempt in jsdom env (server/node has no window — user-event
+// imports clipboard polyfills that crash on require under node).
+if (typeof (globalThis as any).window !== 'undefined') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const userEventMod = require('@testing-library/user-event');
+    const original = userEventMod.default ?? userEventMod;
+    if (original && typeof original.setup === 'function' && !(original as any).__patchedSetup) {
+      const originalSetup = original.setup.bind(original);
+      (original as any).setup = function patchedSetup(options: any) {
+        const opts = options ?? {};
+        let isFake = false;
+        try { isFake = vi.isFakeTimers(); } catch { /* ignore */ }
+        if (isFake && opts.advanceTimers === undefined) {
+          opts.advanceTimers = (ms: number) => vi.advanceTimersByTime(ms);
+        }
+        return originalSetup(opts);
+      };
+      (original as any).__patchedSetup = true;
+    }
+  } catch {
+    // user-event not installed (unlikely) — skip
+  }
+}
 
 // Set required environment variables for tests
 process.env.JWT_SECRET = 'test-jwt-secret-for-vitest';
@@ -279,6 +342,22 @@ if (typeof (globalThis as any).window !== 'undefined') {
 (globalThis as any).__speechSynthesisMock = speechSynthesisMock;
 
 beforeEach(() => {
+  // Sprint Mini Player 1: re-install .tsx/.ts require handler. Vitest worker
+  // resets `Module._extensions` between setup and tests, so we re-register
+  // every beforeEach (no-op if already installed).
+  _installTsxRequireHandler();
+
+  // Defensive: ensure real timers between tests. Otherwise a failed test that
+  // left `vi.useFakeTimers()` active pollutes the next test's
+  // `userEvent.click()` (which internally awaits real timers).
+  try {
+    if (vi.isFakeTimers()) {
+      vi.useRealTimers();
+    }
+  } catch {
+    // ignore (older vitest may not have isFakeTimers)
+  }
+
   _resetLibraryStore();
   // B1 do reviewer: in-memory ticket store removido — testes de tickets
   // declaram seus proprios vi.mock('../../../server/db', ...) com Drizzle-shape.
