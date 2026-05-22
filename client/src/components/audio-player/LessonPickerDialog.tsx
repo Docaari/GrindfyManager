@@ -20,6 +20,7 @@
 import React, { Component, useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { ListPlus } from "lucide-react";
 import { useOptionalAudioPlayer } from "@/contexts/AudioPlayerContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
@@ -436,7 +437,7 @@ function LessonPickerDialogFetcher({
       <input
         data-testid="lesson-picker-search"
         type="text"
-        placeholder="Buscar aulas..."
+        placeholder="Buscar aulas…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         aria-label="Buscar aulas"
@@ -511,7 +512,7 @@ function LessonPickerDialogFetcher({
           role="status"
           className="py-4 text-center text-sm text-gray-400"
         >
-          Carregando...
+          Carregando…
         </div>
       )}
 
@@ -683,9 +684,9 @@ function LessonPickerDialogFetcher({
                               // best-effort
                             }
                           }}
-                          className="flex-shrink-0 px-2 text-gray-400 hover:bg-white/5 hover:text-white rounded-md"
+                          className="flex-shrink-0 px-2 flex items-center justify-center text-gray-400 hover:bg-white/5 hover:text-white rounded-md"
                         >
-                          +
+                          <ListPlus className="w-4 h-4" aria-hidden="true" />
                         </button>
                       ) : null}
                     </li>

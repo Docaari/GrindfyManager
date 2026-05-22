@@ -52,6 +52,12 @@ import { refreshAccessToken } from "@/lib/spotify/auth";
 // Sprint Mini Player 3 / RF-05 — queue state hook (MP3.1 R1 fix wave: CRITICAL-2).
 // Surface exposta via context para QueuePopover + add-to-queue em LessonPicker.
 import { useQueueState, type RepeatMode, type QueueItem, type AudioTrackLike } from "@/hooks/useQueueState";
+// Sprint Mini Player 3.1 Wave B / TIER 3 #4 — cross-reload resume snapshot.
+import {
+  writeResumeSnapshot,
+  readResumeSnapshot,
+  clearResumeSnapshot,
+} from "@/lib/audio-engine/resumeSession";
 
 export interface AudioPlayerLesson {
   lessonId: string;
@@ -117,6 +123,11 @@ interface AudioPlayerCtx {
   toggleShuffle: () => void;
   skipToQueueItem: (id: string) => void;
   reorderQueue: (fromIdx: number, toIdx: number) => void;
+  // === Sprint Mini Player 3.1 Wave B / TIER 3 #5 + #6 — Error + Buffering surface.
+  loadError: string | null;
+  retryCurrent: () => void;
+  clearLoadError: () => void;
+  isBuffering: boolean;
 }
 
 const Ctx = createContext<AudioPlayerCtx | null>(null);
@@ -298,6 +309,33 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   // bump version + persiste debounced.
   const queue = useQueueState();
 
+  // === Sprint Mini Player 3.1 Wave B / TIER 3 #5 + #6 — Error + Buffering state.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isBuffering, setIsBuffering] = useState(false);
+  const retryCountRef = useRef<number>(0);
+  const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const MAX_RETRIES = 3;
+  const BUFFERING_TIMEOUT_MS = 10000;
+
+  const clearBufferingTimeout = useCallback(() => {
+    if (bufferingTimeoutRef.current) {
+      clearTimeout(bufferingTimeoutRef.current);
+      bufferingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const armBufferingTimeout = useCallback(() => {
+    clearBufferingTimeout();
+    bufferingTimeoutRef.current = setTimeout(() => {
+      // TIER 3 #6 -> #5: timeout buffering = trata como erro.
+      setIsBuffering(false);
+      setLoadError("timeout");
+      emitAudioEvent("audio_track_error", {
+        reason: "buffering_timeout",
+      });
+    }, BUFFERING_TIMEOUT_MS);
+  }, [clearBufferingTimeout]);
+
   // === Sprint Mini Player 3 / RF-06.1 — sync __audioPlayerActiveTrackId.
   // MP3.1 R1 fix HIGH-2: oauthSnapshot.readActiveTrackId() le esta global.
   // Sem isso, snapshot.activeTrackId fica sempre null + restore nao recupera
@@ -327,7 +365,12 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     engineUnsubscribersRef.current.push(
       eng.on("timeupdate", (data: any) => {
         const t = data?.currentTime;
-        if (Number.isFinite(t)) setCurrentSeconds(t);
+        if (Number.isFinite(t)) {
+          setCurrentSeconds(t);
+          // TIER 3 #6: 1o timeupdate signala playback iniciou -> sai buffering.
+          clearBufferingTimeout();
+          setIsBuffering(false);
+        }
       }),
     );
     engineUnsubscribersRef.current.push(
@@ -347,9 +390,17 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         emitAudioEvent("audio_driver_error", {
           message: String(err?.message ?? err),
         });
+        // TIER 3 #5: surface error pra UI driver-agnostic.
+        clearBufferingTimeout();
+        setIsBuffering(false);
+        setLoadError(String(err?.message ?? "driver_error"));
+        emitAudioEvent("audio_track_error", {
+          source: "driver",
+          message: String(err?.message ?? err),
+        });
       }),
     );
-  }, []);
+  }, [clearBufferingTimeout]);
 
   // Ref pra tryAutoplayNext (declarado depois — evita TDZ).
   const tryAutoplayNextRef = useRef<(() => void) | null>(null);
@@ -504,6 +555,11 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     return () => {
       clearSleepTimers();
+      // Reviewer MEDIUM-2: limpar buffering timeout pra evitar setState pos-unmount.
+      if (bufferingTimeoutRef.current) {
+        clearTimeout(bufferingTimeoutRef.current);
+        bufferingTimeoutRef.current = null;
+      }
       // MP2 R2-H1: destruir Engine + unsubscribe events.
       for (const u of engineUnsubscribersRef.current) {
         try {
@@ -535,6 +591,11 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       setDisplayModeState((prev) => fsmNextOnPlayTrack(prev));
       // D8: user interaction (lesson pick) reseta timer.
       resetSleepTimer();
+      // TIER 3 #5 + #6: nova track -> reset error + arma buffering.
+      setLoadError(null);
+      retryCountRef.current = 0;
+      setIsBuffering(true);
+      armBufferingTimeout();
       // MP2 R2-H1: para Spotify, delegar playback real ao driver via Engine.
       // Library continua via <audio> HTML5 (sync state -> audio element abaixo).
       if (track.source === "spotify") {
@@ -563,8 +624,57 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         })();
       }
     },
-    [resetSleepTimer],
+    [resetSleepTimer, armBufferingTimeout],
   );
+
+  // === TIER 3 #5: retry + clear ===
+  const retryCurrent = useCallback(() => {
+    const track = activeTrackRef.current;
+    if (!track) return;
+    if (retryCountRef.current >= MAX_RETRIES) {
+      // permanente; UI deve mostrar skip CTA
+      return;
+    }
+    retryCountRef.current += 1;
+    setLoadError(null);
+    setIsBuffering(true);
+    armBufferingTimeout();
+    emitAudioEvent("audio_track_retry", {
+      attempt: retryCountRef.current,
+      trackId: track.trackId,
+    });
+    if (track.source === "library") {
+      const a = audioRef.current;
+      if (a) {
+        try {
+          a.load();
+          const p = a.play();
+          if (p && typeof p.then === "function") {
+            p.catch(() => {
+              setIsPlaying(false);
+            });
+          }
+        } catch {
+          // ignore
+        }
+      }
+    } else {
+      const eng = engineRef.current;
+      if (eng) {
+        (async () => {
+          try {
+            await eng.playTrack(track);
+          } catch (err) {
+            setLoadError(String((err as any)?.message ?? err));
+          }
+        })();
+      }
+    }
+  }, [armBufferingTimeout]);
+
+  const clearLoadError = useCallback(() => {
+    setLoadError(null);
+  }, []);
 
   // === play(lesson) legado (RF-14 back-compat wrapper) ===
   const play = useCallback(
@@ -614,7 +724,12 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     setDurationSeconds(0);
     setCourseContext(null);
     setDisplayModeState((prev) => fsmNextOnClose(prev));
-  }, []);
+    // TIER 3 #4/#5/#6: limpa snapshot + reset error/buffering.
+    clearResumeSnapshot();
+    setLoadError(null);
+    setIsBuffering(false);
+    clearBufferingTimeout();
+  }, [clearBufferingTimeout]);
 
   const seek = useCallback((seconds: number) => {
     // MP2 R2-H1: Spotify path -> driver.seek (REST PUT /me/player/seek).
@@ -1083,6 +1198,99 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     emitAudioEvent("spotify_disconnected", {});
   }, []);
 
+  // === TIER 3 #4 — Cross-reload resume snapshot ===
+  // Boot: tenta restaurar last session (no auto-play; user clica play).
+  const didRestoreRef = useRef(false);
+  useEffect(() => {
+    if (didRestoreRef.current) return;
+    didRestoreRef.current = true;
+    const snap = readResumeSnapshot();
+    if (!snap) return;
+    // NAO restaura activeTrack inteiro — apenas o trackId + segundos.
+    // Componentes que conhecem o catalogo (LessonPicker) podem oferecer
+    // "continuar de onde parou" via snapshot.trackId. Aqui restauramos
+    // apenas currentSeconds quando a track for tocada novamente com mesmo id.
+    // Estado expoe via leitura externa (window flag p/ debug; OAuth ja usa similar).
+    try {
+      (window as any).__audioPlayerLastResumeSnapshot = snap;
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Persist snapshot throttled durante playback (reviewer HIGH-1).
+  // Antes: debounce 2s reschedulado a cada timeupdate (~4x/s) -> nunca persistia
+  // durante playback continuo, so em pause/beforeunload. Crash sem beforeunload
+  // perdia tudo.
+  // Agora: setInterval 10s enquanto playing -> snapshot atualizado mesmo em
+  // playback longo. Pause/beforeunload continuam imediatos (efeitos abaixo).
+  const persistIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastPersistedSecondsRef = useRef<number>(0);
+  useEffect(() => {
+    if (persistIntervalRef.current) {
+      clearInterval(persistIntervalRef.current);
+      persistIntervalRef.current = null;
+    }
+    if (!activeTrack || !isPlaying) return;
+    persistIntervalRef.current = setInterval(() => {
+      const t = activeTrackRef.current;
+      if (!t) return;
+      // Skip write se posicao nao mudou (track parada por outro motivo).
+      if (Math.abs(currentSeconds - lastPersistedSecondsRef.current) < 1) {
+        return;
+      }
+      lastPersistedSecondsRef.current = currentSeconds;
+      writeResumeSnapshot({
+        trackId: t.trackId,
+        currentSeconds,
+        isPlaying: true,
+        timestamp: Date.now(),
+      });
+    }, 10000);
+    return () => {
+      if (persistIntervalRef.current) {
+        clearInterval(persistIntervalRef.current);
+        persistIntervalRef.current = null;
+      }
+    };
+  }, [activeTrack?.trackId, isPlaying, currentSeconds]);
+
+  // Persist on pause + beforeunload (immediate, bypass debounce).
+  useEffect(() => {
+    if (!activeTrack) return;
+    if (isPlaying) return; // pause-event window: persist immediate
+    try {
+      writeResumeSnapshot({
+        trackId: activeTrack.trackId,
+        currentSeconds,
+        isPlaying: false,
+        timestamp: Date.now(),
+      });
+    } catch {
+      // ignore
+    }
+  }, [isPlaying, activeTrack, currentSeconds]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onBeforeUnload = () => {
+      const t = activeTrackRef.current;
+      if (!t) return;
+      try {
+        writeResumeSnapshot({
+          trackId: t.trackId,
+          currentSeconds,
+          isPlaying,
+          timestamp: Date.now(),
+        });
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [currentSeconds, isPlaying]);
+
   // === Heartbeat (CRITICAL-4) — emit `audio_driver_active` a cada 60s ===
   useEffect(() => {
     if (!isPlaying || !activeTrack) return;
@@ -1144,6 +1352,11 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       toggleShuffle: queue.toggleShuffle,
       skipToQueueItem: queue.skipToQueueItem,
       reorderQueue: queue.reorderQueue,
+      // Sprint Mini Player 3.1 Wave B / TIER 3 #5 + #6.
+      loadError,
+      retryCurrent,
+      clearLoadError,
+      isBuffering,
     }),
     [
       current,
@@ -1188,6 +1401,10 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       queue.toggleShuffle,
       queue.skipToQueueItem,
       queue.reorderQueue,
+      loadError,
+      retryCurrent,
+      clearLoadError,
+      isBuffering,
     ],
   );
 
@@ -1209,6 +1426,25 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
             if (Number.isFinite(a.duration) && a.duration > 0) {
               setDurationSeconds(a.duration);
             }
+          }}
+          onCanPlay={() => {
+            clearBufferingTimeout();
+            setIsBuffering(false);
+          }}
+          onWaiting={() => {
+            setIsBuffering(true);
+            armBufferingTimeout();
+          }}
+          onError={(e) => {
+            const err: any = (e.currentTarget as HTMLAudioElement)?.error;
+            const message = err?.message ?? `code_${err?.code ?? "unknown"}`;
+            clearBufferingTimeout();
+            setIsBuffering(false);
+            setLoadError(String(message));
+            emitAudioEvent("audio_track_error", {
+              source: "html_audio",
+              message: String(message),
+            });
           }}
           onTimeUpdate={(e) => {
             const a = e.currentTarget;

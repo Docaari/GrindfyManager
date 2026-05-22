@@ -5,8 +5,10 @@
 
 import React, { useEffect, useState } from "react";
 import {
+  AlertTriangle,
   ChevronUp,
   ListMusic,
+  Loader2,
   Pause,
   Play,
   RotateCcw,
@@ -30,6 +32,8 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { ShortcutsHelpPopover } from "./ShortcutsHelpPopover";
 // Sprint Mini Player 3 (MP3.1 R1 fix CRITICAL-2) — Queue UI.
 import { QueuePopover } from "./QueuePopover";
+// Sprint Mini Player 3.1 Wave B / TIER 3 #7 — onboarding tooltip primeira vez.
+import { MiniPlayerOnboarding } from "./MiniPlayerOnboarding";
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
@@ -116,6 +120,11 @@ export function MiniPlayerBar() {
     toggleShuffle,
     skipToQueueItem,
     reorderQueue,
+    // MP3.1 Wave B / TIER 3 #5 + #6.
+    loadError,
+    retryCurrent,
+    clearLoadError,
+    isBuffering,
   } = useAudioPlayer();
 
   const vp = useViewport();
@@ -240,10 +249,19 @@ export function MiniPlayerBar() {
           data-testid="mini-player-toggle"
           aria-label={isPlaying ? "Pausar" : "Tocar"}
           title={isPlaying ? "Pausar (Espaco)" : "Tocar (Espaco)"}
-          className="p-2 hover:bg-white/10 rounded-md text-white"
+          className="p-2 hover:bg-white/10 rounded-md text-white relative"
           onClick={() => toggle()}
         >
           {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+          {isBuffering ? (
+            <span
+              data-testid="audio-buffering-spinner"
+              aria-label="Carregando"
+              className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-md"
+            >
+              <Loader2 className="w-4 h-4 animate-spin" />
+            </span>
+          ) : null}
         </button>
         <button
           type="button"
@@ -308,13 +326,14 @@ export function MiniPlayerBar() {
           onActivate={setSleepTimer}
           onCancel={cancelSleepTimer}
         />
-        {/* MP3.1 R1 fix CRITICAL-2: Queue button — abre QueuePopover. */}
+        {/* MP3.1 R1 fix CRITICAL-2: Queue button — abre QueuePopover.
+            MP3.1 Wave B / INFO-NEW-3: viewport gate — esconde <768px (mobile). */}
         <button
           type="button"
           data-testid="mini-player-queue-button"
           aria-label="Fila de reproducao"
           title="Fila"
-          className="p-2 hover:bg-white/10 rounded-md text-white relative"
+          className="p-2 hover:bg-white/10 rounded-md text-white relative hidden md:inline-flex items-center justify-center"
           onClick={() => setQueueOpen((o) => !o)}
         >
           <ListMusic className="w-4 h-4" />
@@ -348,11 +367,46 @@ export function MiniPlayerBar() {
           <X className="w-4 h-4" />
         </button>
       </div>
+      {/* MP3.1 Wave B / TIER 3 #5: error banner driver-agnostic. */}
+      {loadError ? (
+        <div
+          data-testid="audio-error-banner"
+          role="alert"
+          className="absolute bottom-full left-0 right-0 mb-1 mx-3 flex items-center gap-2 rounded-md bg-red-600/90 px-3 py-2 text-xs text-white"
+        >
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+          <span className="flex-1">
+            Erro ao carregar — {String(loadError)}
+          </span>
+          <button
+            type="button"
+            data-testid="audio-error-retry"
+            className="px-2 py-1 rounded-md bg-white/15 hover:bg-white/25"
+            onClick={() => retryCurrent()}
+          >
+            Tentar novamente
+          </button>
+          <button
+            type="button"
+            data-testid="audio-error-skip"
+            aria-label="Pular para proxima"
+            className="px-2 py-1 rounded-md bg-white/15 hover:bg-white/25"
+            onClick={() => {
+              clearLoadError();
+              playNext();
+            }}
+          >
+            Pular
+          </button>
+        </div>
+      ) : null}
       {/* MP3.1 R1 fix CRITICAL-1: ShortcutsHelpPopover toggla via tecla `?`. */}
       <ShortcutsHelpPopover
         open={shortcutsHelpOpen}
         onOpenChange={setShortcutsHelpOpen}
       />
+      {/* MP3.1 Wave B / TIER 3 #7: onboarding tooltip primeira vez. */}
+      <MiniPlayerOnboarding />
       {/* MP3.1 R1 fix CRITICAL-2: QueuePopover renderiza fila + controls. */}
       <QueuePopover
         open={queueOpen}
