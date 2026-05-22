@@ -3,10 +3,48 @@
 // Lazy storage injection (lesson #34) — handler aceita 3o arg p/ tests.
 
 import type { Express, Request, Response } from "express";
+import { z } from "zod";
 import { requireAuth } from "../auth";
 
-const VALID_REPEAT = new Set(["off", "all", "one"]);
 const MAX_QUEUE_ITEMS = 50;
+
+// MP3.1 M1: Zod per-item validation. Antes: validatePayload manual checava
+// apenas shape macro (queue array, repeatMode enum). Itens individuais
+// passavam livres — um cliente malicioso podia enviar title:10MB ou
+// trackId binario quebrando a UI alheia ao sincronizar. Schema strict + caps
+// alinhados com server limits (varchar 200 title, etc).
+const audioTrackSchema = z
+  .object({
+    source: z.enum(["library", "spotify"]),
+    trackId: z.string().min(1).max(128),
+    title: z.string().min(1).max(200),
+    audioUrl: z.string().max(2000).optional(),
+    coverUrl: z.string().max(500).nullable().optional(),
+    courseTitle: z.string().max(200).nullable().optional(),
+    durationSeconds: z.number().nonnegative().finite().optional(),
+    spotifyUri: z.string().max(200).optional(),
+  })
+  .strict();
+
+const queueItemSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    track: audioTrackSchema,
+    addedAt: z.number().nonnegative().finite(),
+  })
+  .strict();
+
+const audioQueueBodySchema = z
+  .object({
+    queue: z.array(queueItemSchema).max(MAX_QUEUE_ITEMS),
+    repeatMode: z.enum(["off", "all", "one"]),
+    shuffleEnabled: z.boolean(),
+    shuffledOrder: z.array(z.string().min(1).max(64)).nullable().optional(),
+    version: z.number().int().positive().finite(),
+  })
+  .strict();
+
+export type AudioQueueBody = z.infer<typeof audioQueueBodySchema>;
 
 interface InjectedDeps {
   storage?: {
@@ -20,20 +58,22 @@ async function resolveStorage(injected?: InjectedDeps["storage"]) {
   return await import("../storage/audioQueueSnapshotsStorage");
 }
 
-function validatePayload(body: any): { ok: true } | { ok: false; reason: string } {
-  if (!body || typeof body !== "object") return { ok: false, reason: "invalid_body" };
-  if (!Array.isArray(body.queue)) return { ok: false, reason: "queue_not_array" };
-  if (body.queue.length > MAX_QUEUE_ITEMS)
-    return { ok: false, reason: "queue_too_long" };
-  if (typeof body.repeatMode !== "string" || !VALID_REPEAT.has(body.repeatMode))
-    return { ok: false, reason: "invalid_repeat_mode" };
-  if (typeof body.shuffleEnabled !== "boolean")
-    return { ok: false, reason: "invalid_shuffle" };
-  if (body.shuffledOrder != null && !Array.isArray(body.shuffledOrder))
-    return { ok: false, reason: "invalid_shuffled_order" };
-  if (typeof body.version !== "number" || !Number.isFinite(body.version))
-    return { ok: false, reason: "invalid_version" };
-  return { ok: true };
+function validatePayload(
+  body: any,
+):
+  | { ok: true; data: AudioQueueBody }
+  | { ok: false; reason: string; details?: unknown } {
+  const parsed = audioQueueBodySchema.safeParse(body);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    const path = first?.path?.join(".") ?? "body";
+    return {
+      ok: false,
+      reason: `invalid_${path}`,
+      details: parsed.error.issues.slice(0, 5),
+    };
+  }
+  return { ok: true, data: parsed.data };
 }
 
 export async function handlePostAudioQueue(
@@ -50,15 +90,16 @@ export async function handlePostAudioQueue(
     const body = (req as any).body ?? {};
     const validation = validatePayload(body);
     if (!validation.ok) {
-      res.status(400).json({ message: validation.reason });
+      res.status(400).json({ message: validation.reason, issues: validation.details });
       return;
     }
 
+    const data = validation.data;
     const storage = await resolveStorage(deps?.storage);
 
     // Last-write-wins: server version >= client.version -> 409.
     const current = await storage.getAudioQueueSnapshot(userId);
-    if (current && current.version >= body.version) {
+    if (current && current.version >= data.version) {
       res.status(409).json({
         message: "version_conflict",
         version: current.version,
@@ -72,11 +113,11 @@ export async function handlePostAudioQueue(
 
     const result = await storage.upsertAudioQueueSnapshot({
       userId,
-      queue: body.queue,
-      repeatMode: body.repeatMode,
-      shuffleEnabled: body.shuffleEnabled,
-      shuffledOrder: body.shuffledOrder ?? null,
-      version: body.version,
+      queue: data.queue,
+      repeatMode: data.repeatMode,
+      shuffleEnabled: data.shuffleEnabled,
+      shuffledOrder: data.shuffledOrder ?? null,
+      version: data.version,
     });
 
     res.status(200).json({ accepted: true, version: result.version });

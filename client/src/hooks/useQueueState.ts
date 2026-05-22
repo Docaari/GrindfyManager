@@ -65,6 +65,19 @@ function safeParsePersist(raw: string | null): PersistShape | null {
 }
 
 function readInitial(): PersistShape {
+  // MP3.1 M4: SSR-safe — guard `typeof window` antes de tocar localStorage.
+  // Vite hidrata SSR snapshot? Hoje nao, mas garante contra futuros runners
+  // (Vitest node env, prerender, etc).
+  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    return {
+      version: 0,
+      queue: [],
+      repeatMode: "off",
+      shuffleEnabled: false,
+      shuffledOrder: null,
+      updatedAt: Date.now(),
+    };
+  }
   try {
     const parsed = safeParsePersist(localStorage.getItem(KEY));
     if (parsed) return parsed;
@@ -144,6 +157,8 @@ export function useQueueState() {
 
   // Cross-tab listener.
   useEffect(() => {
+    // MP3.1 M4: SSR-safe — useEffect so roda no client, mas garante guard.
+    if (typeof window === "undefined") return;
     function onStorage(ev: StorageEvent) {
       if (ev.key !== KEY) return;
       const parsed = safeParsePersist(ev.newValue ?? null);

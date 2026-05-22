@@ -2,7 +2,7 @@
 // ADR-195. Listener global em document.keydown.
 // Gates: isInteractiveTarget + isAdminRoute + displayMode='hidden'.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export interface UseKeyboardShortcutsOpts {
   toggle: () => void;
@@ -64,6 +64,19 @@ export function useKeyboardShortcuts(opts: UseKeyboardShortcutsOpts) {
     setShortcutsHelpOpen,
   } = opts;
 
+  // MP3.1 M3: volume + durationSeconds via ref para evitar re-binding do
+  // listener a cada mudanca (volume muda muito com ArrowUp/Down 0..1 em
+  // 0.1 steps). Antes: 10 mudancas = 10 addEventListener/removeEventListener.
+  // Agora: 1 listener vitalicio enquanto displayMode != 'hidden'.
+  const volumeRef = useRef(volume);
+  const durationRef = useRef(durationSeconds);
+  useEffect(() => {
+    volumeRef.current = volume;
+  }, [volume]);
+  useEffect(() => {
+    durationRef.current = durationSeconds;
+  }, [durationSeconds]);
+
   useEffect(() => {
     if (displayMode === "hidden") return;
 
@@ -115,12 +128,12 @@ export function useKeyboardShortcuts(opts: UseKeyboardShortcutsOpts) {
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setVolume(clamp01(volume + 0.1));
+        setVolume(clamp01(volumeRef.current + 0.1));
         return;
       }
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setVolume(clamp01(volume - 0.1));
+        setVolume(clamp01(volumeRef.current - 0.1));
         return;
       }
       if (e.key === "?") {
@@ -130,10 +143,11 @@ export function useKeyboardShortcuts(opts: UseKeyboardShortcutsOpts) {
       }
       // 0..9 numeric seek.
       if (/^[0-9]$/.test(e.key)) {
-        if (durationSeconds > 0) {
+        const d = durationRef.current;
+        if (d > 0) {
           e.preventDefault();
           const digit = parseInt(e.key, 10);
-          seek(durationSeconds * (digit / 10));
+          seek(d * (digit / 10));
         }
         return;
       }
@@ -147,10 +161,8 @@ export function useKeyboardShortcuts(opts: UseKeyboardShortcutsOpts) {
     skipBack,
     skipForward,
     setVolume,
-    volume,
     toggleMute,
     seek,
-    durationSeconds,
     setDisplayMode,
     close,
     setShortcutsHelpOpen,

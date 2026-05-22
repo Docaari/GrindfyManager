@@ -47,12 +47,17 @@ async function loadHandlers() {
   return await import('../../../server/routes/audioQueue');
 }
 
+// MP3.1 M1: Zod strict alinhado a `useQueueState.QueueItem` (`{ id, track, addedAt }`).
+// Antes deste sprint o validator manual aceitava shape flat — payload passava
+// porque ninguem inspecionava itens. Zod agora exige `track` nested.
 const sampleQueueItem = {
   id: 'q1',
-  trackId: 't1',
-  source: 'library',
-  title: 'Track A',
-  durationSeconds: 600,
+  track: {
+    trackId: 't1',
+    source: 'library' as const,
+    title: 'Track A',
+    durationSeconds: 600,
+  },
   addedAt: Date.now(),
 };
 

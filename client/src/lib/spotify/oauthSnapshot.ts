@@ -3,6 +3,19 @@
 // (popup blocked fallback). TTL 10min. ZERO secrets — apenas trackId
 // (publico), scrollY, queueVersion, timestamp, pathname.
 //
+// @security
+// Threat model: snapshot lives in sessionStorage and carries NO tokens,
+// NO PII, NO refresh_token, NO access_token. Payload is bounded to
+// publicly-known data: activeTrackId (already on screen), scrollY,
+// queueVersion (monotonic counter), pathname (current route), timestamp.
+// Spotify access/refresh tokens live SERVER-side, persisted via AES-256-GCM
+// in `oauth_tokens` (see ADR-190) and exchanged via httpOnly cookies — never
+// touched by client JS. An attacker with XSS on this origin can read the
+// snapshot but cannot escalate to Spotify access; the worst-case is forging
+// `scrollY`/`queueVersion`, which is cosmetic. Clock-skew mitigation
+// (MP3.1 M6): snapshots with future `timestamp` are discarded to limit
+// replay-style abuse via tampered system clocks.
+//
 // MP3 R1 fix wave 2 (HIGH-3 + HIGH-4):
 //   - HIGH-3: `pathname` capturado de `window.location.pathname` no save
 //     para o callback redirecionar de volta a rota original pos-OAuth.
@@ -13,6 +26,9 @@
 const SS_KEY = "spotify_oauth_snapshot";
 const LS_QUEUE_KEY = "audio.queue.v1";
 const TTL_MS = 10 * 60 * 1000;
+// MP3.1 M6: tolerate 1min of clock drift; discard snapshots whose
+// timestamp is further in the future (tampered clock / cross-device sync).
+const CLOCK_SKEW_TOLERANCE_MS = 60 * 1000;
 
 interface Snapshot {
   activeTrackId: string | null;
@@ -102,6 +118,14 @@ export function restoreOAuthSnapshot():
 
   // Validacao shape minima.
   if (!parsed || typeof parsed.timestamp !== "number") {
+    clearSnapshot();
+    return null;
+  }
+
+  // MP3.1 M6: clock-skew guard. Snapshots with timestamps further than
+  // CLOCK_SKEW_TOLERANCE_MS in the future are discarded — covers tampered
+  // system clocks and cross-device sessionStorage races.
+  if (parsed.timestamp > Date.now() + CLOCK_SKEW_TOLERANCE_MS) {
     clearSnapshot();
     return null;
   }
