@@ -17,6 +17,7 @@ import {
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
 import { useMiniPlayerHeight } from "@/hooks/useMiniPlayerHeight";
 import { sanitizeCoverUrl } from "@/lib/audio-engine/sanitizeCoverUrl";
+import { cn } from "@/lib/utils";
 import { VolumeControl } from "./VolumeControl";
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -185,10 +186,10 @@ export function MiniPlayerBar() {
           <img
             src={sanitizedCoverUrl}
             alt=""
-            className={
-              "w-12 h-12 rounded-md object-cover mini-player-cover" +
-              (isPlaying && !reducedMotion ? " animate-spin-slow" : "")
-            }
+            className={cn(
+              "w-12 h-12 rounded-md object-cover mini-player-cover",
+              isPlaying && !reducedMotion && "animate-spin-slow",
+            )}
           />
         ) : (
           <div className="w-12 h-12 rounded-md bg-gray-700 mini-player-cover" />

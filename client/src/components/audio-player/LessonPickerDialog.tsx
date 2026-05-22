@@ -1,4 +1,4 @@
-// LessonPickerDialog — Sprint Mini Player 1 + 1.1.
+// LessonPickerDialog — Sprint Mini Player 1 + 1.1 + 1.2.
 // Modal Radix Dialog com dropdown de cursos -> aulas (podcasts).
 // Click em aula acessivel: playTrack + fecha.
 //
@@ -8,13 +8,18 @@
 //     fetch /api/library/courses/:slug quando user seleciona o curso.
 // "Continuar de onde parou" no topo deriva o melhor progresso por aula
 // (progress map por format) ou consome /progress/batch legado (MP1).
+//
+// MP1.2 / RF-01 (HIGH-1): refactor `safeUseQuery` -> ErrorBoundary local
+// (lesson #29). Sub-componente `LessonPickerDialogFetcher` chama useQuery
+// direto (sem try/catch — Rules-of-Hooks safe). `LessonPickerErrorBoundary`
+// (classe) captura "No QueryClient set" e renderiza fallback `role="alert"`.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Component, useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
+import { useOptionalAudioPlayer } from "@/contexts/AudioPlayerContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -30,20 +35,40 @@ interface Props {
 }
 
 /**
- * Wrap useQuery: tolerate missing QueryClientProvider so the dialog renders
- * gracefully in isolated test environments (lesson #29 ErrorBoundary pattern).
+ * ErrorBoundary local que captura render errors do sub-componente fetcher
+ * (lesson #29). Caso tipico: useQuery throw "No QueryClient set" quando
+ * o provider estiver ausente (testes standalone, SSR/lazy boot, Strict Mode).
  *
- * WARNING (HIGH-1 reviewer MP1.1): viola Rules of Hooks se o provider mount
- * status mudar entre renders (useQuery passa a NAO throw → ordem de hooks
- * muda → React quebra). Seguro em prod porque QueryClientProvider e mounted
- * no topo do App.tsx e nunca remontado. Follow-up MP1.2: refactor para
- * ErrorBoundary local + sub-componente fetcher.
+ * Boundary minima: so captura render errors, NAO effect errors (useEffect
+ * throw nao chega aqui — escopo deliberado, ver Q-A da spec MP1.2).
+ *
+ * Loga no console.error antes do fallback (lesson #9 — nunca engolir erros
+ * silenciosamente; mascaramento dificulta debug futuro).
  */
-function safeUseQuery(args: any): any {
-  try {
-    return useQuery(args);
-  } catch {
-    return { data: undefined, isLoading: false, error: null };
+interface BoundaryProps {
+  children: React.ReactNode;
+  fallback: React.ReactNode;
+}
+
+class LessonPickerErrorBoundary extends Component<
+  BoundaryProps,
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error): void {
+    // Loga antes de mascarar (lesson #9). Distingue "No QueryClient set"
+    // de outros render errors p/ debug futuro.
+    // eslint-disable-next-line no-console
+    console.error("[LessonPickerErrorBoundary] captured render error:", error);
+  }
+
+  render(): React.ReactNode {
+    return this.state.hasError ? this.props.fallback : this.props.children;
   }
 }
 
@@ -106,31 +131,72 @@ function deriveBestProgress(lesson: any): {
   };
 }
 
-export function LessonPickerDialog({ open, onOpenChange }: Props) {
-  const ctx = useAudioPlayer();
-  const auth = useAuth();
-  const user = auth?.user ?? null;
-  const authLoading = !!(auth as any)?.isLoading;
-  // Mostra auth guard apenas quando explicitamente nao-logado (auth resolveu).
-  // Em testes legacy MP1 (sem AuthProvider mockado), useAuth retorna o
-  // safe-default com isLoading=true; preserva comportamento back-compat
-  // (segue como se fosse logged-in para nao quebrar smoke MP1).
-  const showAuthGuard = !user && !authLoading;
-  const [search, setSearch] = useState("");
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+interface FetcherProps {
+  open: boolean;
+  showAuthGuard: boolean;
+  search: string;
+  setSearch: (s: string) => void;
+  selectedSlug: string | null;
+  setSelectedSlug: (s: string | null) => void;
+  onClose: () => void;
+}
+
+/**
+ * Sub-componente fetcher — chama useQuery direto (sem try/catch wrapper).
+ *
+ * Se QueryClientProvider estiver ausente, useQuery throw "No QueryClient set"
+ * durante render -> LessonPickerErrorBoundary captura e mostra fallback.
+ * Rules-of-Hooks preservadas (hooks na mesma ordem entre renders).
+ */
+function LessonPickerDialogFetcher({
+  open,
+  showAuthGuard,
+  search,
+  setSearch,
+  selectedSlug,
+  setSelectedSlug,
+  onClose,
+}: FetcherProps) {
+  // useOptionalAudioPlayer: retorna null se nao houver provider (testes
+  // standalone, render isolado). Boundary local cuida de useQuery throw
+  // ("No QueryClient set") sem precisar engolir erros do AudioPlayerProvider.
+  const ctx = useOptionalAudioPlayer();
+
+  function onPlay(
+    course: any,
+    lesson: any,
+    courseLessonsForCtx: any[],
+  ) {
+    if (!ctx) {
+      // Sem provider mountado, no-op (acontece em tests standalone).
+      onClose();
+      return;
+    }
+    const idx = courseLessonsForCtx.findIndex(
+      (l) => (l.lessonId ?? l.id) === (lesson.lessonId ?? lesson.id),
+    );
+    const tracks = courseLessonsForCtx.map((l) =>
+      lessonToTrack(l, course.title),
+    );
+    const courseContext = {
+      courseSlug: course.slug,
+      lessons: tracks,
+      currentIndex: Math.max(0, idx),
+    };
+    ctx.playTrack(lessonToTrack(lesson, course.title), courseContext);
+    onClose();
+  }
 
   // Fetch lista de cursos. Backend pode retornar:
   //   - shape MP1 (back-compat): array de cursos com modules[].lessons[] inline
   //   - shape MP1.1: flat array com {id, slug, title, subtitle, lessonCount, ...}
-  const coursesQuery = safeUseQuery({
+  const coursesQuery = useQuery({
     queryKey: ["/api/library/courses"],
     queryFn: () => apiRequest("GET", "/api/library/courses"),
     enabled: open && !showAuthGuard,
   });
 
-  // Detail lazy fetch (MP1.1 RF-01). Dispara somente quando user selecionou
-  // um curso E o curso selecionado NAO ja tem modules inline (back-compat).
-  const courseList: any[] = Array.isArray(coursesQuery?.data)
+  const courseList: any[] = Array.isArray(coursesQuery.data)
     ? coursesQuery.data
     : [];
 
@@ -144,7 +210,7 @@ export function LessonPickerDialog({ open, onOpenChange }: Props) {
     return !hasInlineModules;
   }, [selectedSlug, courseList]);
 
-  const detailQuery = safeUseQuery({
+  const detailQuery = useQuery({
     queryKey: ["/api/library/courses", selectedSlug],
     queryFn: () =>
       selectedSlug
@@ -155,18 +221,18 @@ export function LessonPickerDialog({ open, onOpenChange }: Props) {
 
   // Legacy progress query (MP1 back-compat: tests originais mockam endpoint
   // dedicado /progress/batch retornando [{lessonId, lastPositionSeconds}, ...]).
-  const progressQuery = safeUseQuery({
+  const progressQuery = useQuery({
     queryKey: ["/api/library/lessons/progress/batch"],
     queryFn: async () => [] as any[],
     enabled: open && !showAuthGuard,
   });
 
   // Destructure explicito para deps estaveis (RF-09).
-  const progressData = progressQuery?.data;
-  const progressError = progressQuery?.error;
-  const detailData = detailQuery?.data;
-  const detailError = detailQuery?.error;
-  const detailLoading = !!detailQuery?.isLoading;
+  const progressData = progressQuery.data;
+  const progressError = progressQuery.error;
+  const detailData = detailQuery.data;
+  const detailError = detailQuery.error;
+  const detailLoading = !!detailQuery.isLoading;
 
   // Auto-select primeiro curso quando a lista carrega (UX: dropdown nao
   // pode ficar vazio se temos cursos). Tambem permite o caso "shape MP1"
@@ -188,7 +254,7 @@ export function LessonPickerDialog({ open, onOpenChange }: Props) {
     if (selectedSlug) return;
     if (courseList.length === 0) return;
     setSelectedSlug(courseList[0].slug);
-  }, [open, shapeIsLegacy, selectedSlug, courseList]);
+  }, [open, shapeIsLegacy, selectedSlug, courseList, setSelectedSlug]);
 
   // Resolve o curso "ativo" que vamos renderizar no grid + na aba Continuar.
   // Em shape legacy, ativamos TODOS os cursos. Em shape new, ativamos so o
@@ -307,27 +373,201 @@ export function LessonPickerDialog({ open, onOpenChange }: Props) {
     !!detailData &&
     continueItems.length === 0;
 
-  function handlePlay(
-    course: any,
-    lesson: any,
-    courseLessonsForCtx: any[],
-  ) {
-    const idx = courseLessonsForCtx.findIndex(
-      (l) => (l.lessonId ?? l.id) === (lesson.lessonId ?? lesson.id),
-    );
-    const tracks = courseLessonsForCtx.map((l) =>
-      lessonToTrack(l, course.title),
-    );
-    const courseContext = {
-      courseSlug: course.slug,
-      lessons: tracks,
-      currentIndex: Math.max(0, idx),
-    };
-    ctx.playTrack(lessonToTrack(lesson, course.title), courseContext);
-    onOpenChange(false);
-  }
-
   const q = search.trim().toLowerCase();
+
+  return (
+    <>
+      <input
+        data-testid="lesson-picker-search"
+        type="text"
+        placeholder="Buscar aulas..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        aria-label="Buscar aulas"
+        autoFocus
+        className="w-full px-3 py-2 mb-4 bg-gray-800 border border-white/10 rounded-md text-white"
+      />
+
+      {/* RF-01: dropdown apenas quando shape new (flat list sem modules) */}
+      {!shapeIsLegacy && courseList.length > 0 && (
+        <div className="mb-4">
+          <label
+            htmlFor="lesson-picker-course-select"
+            className="block text-xs text-gray-400 mb-1"
+          >
+            Curso
+          </label>
+          <select
+            id="lesson-picker-course-select"
+            data-testid="lesson-picker-course-select"
+            aria-label="Selecionar curso"
+            value={selectedSlug ?? ""}
+            onChange={(e) => setSelectedSlug(e.target.value || null)}
+            className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-md text-white"
+          >
+            {courseList.map((c: any) => (
+              <option key={c.slug} value={c.slug}>
+                {c.title}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Loading indicator para detail :slug */}
+      {!shapeIsLegacy && detailLoading && (
+        <div
+          data-testid="lesson-picker-loading"
+          role="status"
+          className="py-4 text-center text-sm text-gray-400"
+        >
+          Carregando...
+        </div>
+      )}
+
+      {/* Error indicator para detail :slug (MEDIUM-4 reviewer MP1.1) */}
+      {!shapeIsLegacy && !detailLoading && detailError && (
+        <div
+          data-testid="lesson-picker-detail-error"
+          role="alert"
+          className="py-4 text-center text-sm text-red-400"
+        >
+          Erro ao carregar curso. Tente novamente.
+        </div>
+      )}
+
+      {/* Continuar de onde parou — so renderiza se tem items OR empty path */}
+      {continueItems.length > 0 && (
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold text-white mb-2">
+            Continuar de onde parou
+          </h3>
+          <ul className="space-y-1">
+            {continueItems.map((p: any) => {
+              const label = p?.title
+                ? `${p.title} — ${Math.round(((p.lastPositionSeconds ?? 0) || 0) / 60)}min`
+                : `Aula ${p.lessonId}`;
+              return (
+                <li
+                  key={p.lessonId}
+                  className="px-3 py-2 text-sm text-gray-300"
+                >
+                  {label}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {showContinueEmpty && (
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold text-white mb-2">
+            Continuar de onde parou
+          </h3>
+          <p className="text-sm text-gray-400">
+            Nenhuma aula em progresso ainda.
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {activeCourses.map((course: any) => {
+          const courseLessons: any[] = [];
+          for (const mod of course?.modules ?? []) {
+            for (const lesson of mod?.lessons ?? []) {
+              if (
+                Array.isArray(lesson?.formats) &&
+                lesson.formats.includes("podcast")
+              ) {
+                courseLessons.push(lesson);
+              }
+            }
+          }
+          // Esconde do grid principal as lessons que ja estao em
+          // "Continuar de onde parou" (evita duplicacao de texto/title
+          // — useMemoDeps RF-09 verifica unicidade via getByText).
+          const visibleBase = courseLessons.filter(
+            (l: any) =>
+              !continueLessonIds.has(String(l.lessonId ?? l.id)),
+          );
+          const visible = q
+            ? visibleBase.filter((l) =>
+                String(l.title ?? "")
+                  .toLowerCase()
+                  .includes(q),
+              )
+            : visibleBase;
+          if (visible.length === 0) return null;
+          return (
+            <div key={course.slug}>
+              <h4 className="text-sm font-semibold text-white mb-2">
+                {course.title}
+              </h4>
+              <ul className="space-y-1">
+                {visible.map((lesson: any) => {
+                  const disabled = lesson.hasAccess === false;
+                  const lessonId = lesson.lessonId ?? lesson.id;
+                  return (
+                    <li key={lessonId}>
+                      <button
+                        type="button"
+                        data-testid={`lesson-picker-item-${lessonId}`}
+                        aria-disabled={disabled ? "true" : "false"}
+                        title={
+                          disabled
+                            ? "Acesso liberado manualmente pelo time Grindfy"
+                            : `Tocar ${lesson.title}`
+                        }
+                        disabled={disabled}
+                        onClick={
+                          disabled
+                            ? undefined
+                            : () => onPlay(course, lesson, courseLessons)
+                        }
+                        className={
+                          "w-full text-left px-3 py-2 text-sm rounded-md " +
+                          (disabled
+                            ? "opacity-50 cursor-not-allowed text-gray-400"
+                            : "text-gray-200 hover:bg-white/5")
+                        }
+                      >
+                        {lesson.title}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+export function LessonPickerDialog({ open, onOpenChange }: Props) {
+  const auth = useAuth();
+  const user = auth?.user ?? null;
+  const authLoading = !!(auth as any)?.isLoading;
+  // Mostra auth guard apenas quando explicitamente nao-logado (auth resolveu).
+  // Em testes legacy MP1 (sem AuthProvider mockado), useAuth retorna o
+  // safe-default com isLoading=true; preserva comportamento back-compat
+  // (segue como se fosse logged-in para nao quebrar smoke MP1).
+  const showAuthGuard = !user && !authLoading;
+  const [search, setSearch] = useState("");
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+
+  // Fallback do ErrorBoundary: mensagem role="alert" + lista vazia.
+  // Mantem dialog root montado (testes precisam do data-testid).
+  const errorFallback = (
+    <div
+      role="alert"
+      data-testid="lesson-picker-fetch-error"
+      className="py-6 text-center text-sm text-red-400"
+    >
+      Erro ao carregar — tente novamente.
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -364,173 +604,17 @@ export function LessonPickerDialog({ open, onOpenChange }: Props) {
             </Link>
           </div>
         ) : (
-          <>
-            <input
-              data-testid="lesson-picker-search"
-              type="text"
-              placeholder="Buscar aulas..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Buscar aulas"
-              autoFocus
-              className="w-full px-3 py-2 mb-4 bg-gray-800 border border-white/10 rounded-md text-white"
+          <LessonPickerErrorBoundary fallback={errorFallback}>
+            <LessonPickerDialogFetcher
+              open={open}
+              showAuthGuard={showAuthGuard}
+              search={search}
+              setSearch={setSearch}
+              selectedSlug={selectedSlug}
+              setSelectedSlug={setSelectedSlug}
+              onClose={() => onOpenChange(false)}
             />
-
-            {/* RF-01: dropdown apenas quando shape new (flat list sem modules) */}
-            {!shapeIsLegacy && courseList.length > 0 && (
-              <div className="mb-4">
-                <label
-                  htmlFor="lesson-picker-course-select"
-                  className="block text-xs text-gray-400 mb-1"
-                >
-                  Curso
-                </label>
-                <select
-                  id="lesson-picker-course-select"
-                  data-testid="lesson-picker-course-select"
-                  aria-label="Selecionar curso"
-                  value={selectedSlug ?? ""}
-                  onChange={(e) => setSelectedSlug(e.target.value || null)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-md text-white"
-                >
-                  {courseList.map((c: any) => (
-                    <option key={c.slug} value={c.slug}>
-                      {c.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Loading indicator para detail :slug */}
-            {!shapeIsLegacy && detailLoading && (
-              <div
-                data-testid="lesson-picker-loading"
-                role="status"
-                className="py-4 text-center text-sm text-gray-400"
-              >
-                Carregando...
-              </div>
-            )}
-
-            {/* Error indicator para detail :slug (MEDIUM-4 reviewer MP1.1) */}
-            {!shapeIsLegacy && !detailLoading && detailError && (
-              <div
-                data-testid="lesson-picker-detail-error"
-                role="alert"
-                className="py-4 text-center text-sm text-red-400"
-              >
-                Erro ao carregar curso. Tente novamente.
-              </div>
-            )}
-
-            {/* Continuar de onde parou — so renderiza se tem items OR empty path */}
-            {continueItems.length > 0 && (
-              <div className="mb-4">
-                <h3 className="text-sm font-semibold text-white mb-2">
-                  Continuar de onde parou
-                </h3>
-                <ul className="space-y-1">
-                  {continueItems.map((p: any) => {
-                    const label = p?.title
-                      ? `${p.title} — ${Math.round(((p.lastPositionSeconds ?? 0) || 0) / 60)}min`
-                      : `Aula ${p.lessonId}`;
-                    return (
-                      <li
-                        key={p.lessonId}
-                        className="px-3 py-2 text-sm text-gray-300"
-                      >
-                        {label}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-            {showContinueEmpty && (
-              <div className="mb-4">
-                <h3 className="text-sm font-semibold text-white mb-2">
-                  Continuar de onde parou
-                </h3>
-                <p className="text-sm text-gray-400">
-                  Nenhuma aula em progresso ainda.
-                </p>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              {activeCourses.map((course: any) => {
-                const courseLessons: any[] = [];
-                for (const mod of course?.modules ?? []) {
-                  for (const lesson of mod?.lessons ?? []) {
-                    if (
-                      Array.isArray(lesson?.formats) &&
-                      lesson.formats.includes("podcast")
-                    ) {
-                      courseLessons.push(lesson);
-                    }
-                  }
-                }
-                // Esconde do grid principal as lessons que ja estao em
-                // "Continuar de onde parou" (evita duplicacao de texto/title
-                // — useMemoDeps RF-09 verifica unicidade via getByText).
-                const visibleBase = courseLessons.filter(
-                  (l: any) =>
-                    !continueLessonIds.has(String(l.lessonId ?? l.id)),
-                );
-                const visible = q
-                  ? visibleBase.filter((l) =>
-                      String(l.title ?? "")
-                        .toLowerCase()
-                        .includes(q),
-                    )
-                  : visibleBase;
-                if (visible.length === 0) return null;
-                return (
-                  <div key={course.slug}>
-                    <h4 className="text-sm font-semibold text-white mb-2">
-                      {course.title}
-                    </h4>
-                    <ul className="space-y-1">
-                      {visible.map((lesson: any) => {
-                        const disabled = lesson.hasAccess === false;
-                        const lessonId = lesson.lessonId ?? lesson.id;
-                        return (
-                          <li key={lessonId}>
-                            <button
-                              type="button"
-                              data-testid={`lesson-picker-item-${lessonId}`}
-                              aria-disabled={disabled ? "true" : "false"}
-                              title={
-                                disabled
-                                  ? "Acesso liberado manualmente pelo time Grindfy"
-                                  : `Tocar ${lesson.title}`
-                              }
-                              disabled={disabled}
-                              onClick={
-                                disabled
-                                  ? undefined
-                                  : () =>
-                                      handlePlay(course, lesson, courseLessons)
-                              }
-                              className={
-                                "w-full text-left px-3 py-2 text-sm rounded-md " +
-                                (disabled
-                                  ? "opacity-50 cursor-not-allowed text-gray-400"
-                                  : "text-gray-200 hover:bg-white/5")
-                              }
-                            >
-                              {lesson.title}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                );
-              })}
-            </div>
-          </>
+          </LessonPickerErrorBoundary>
         )}
       </DialogContent>
     </Dialog>

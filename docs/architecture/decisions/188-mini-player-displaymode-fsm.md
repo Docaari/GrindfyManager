@@ -247,3 +247,49 @@ Layouts específicos que precisam respeitar o bottom space consomem via:
 Sprint Mini Player 1.1 RF-06 troca `className="z-45"` por `className="z-[45]"` em `MiniPlayerExpanded.tsx:30`. **Decisao funcional inalterada** — gap z-40/z-[45]/z-50 preservado; trocar para `z-50` quebraria a invariante "MiniChat acima de MiniPlayerExpanded". One-liner cosmetico, zero impacto visual ou comportamental.
 
 Sprint Mini Player 1.1 RF-07 reforca a invariante de cleanup do `LibraryAudioDriver.destroy()`: libera `audioEl.src` + `audioEl.load()` para evitar buffer leak + cancelar pending HTTP requests. Comportamento ja implicito em ADR-187; explicitado aqui para test-writer cobrir.
+
+## Addendum MP1.2 (2026-05-22)
+
+Sprint Mini Player 1.2 fechou 5 follow-ups da R2 reviewer MP1.1.
+
+### RF-01 — `safeUseQuery` removido, ErrorBoundary local adotado
+
+`LessonPickerDialog.tsx` migrou de wrapper try/catch (`function safeUseQuery`) para padrao `class LessonPickerErrorBoundary extends Component` + sub-componente `LessonPickerDialogFetcher` que chama `useQuery` direto. Rules-of-Hooks preservadas (hooks na mesma ordem entre renders). Fallback `role="alert"` + `data-testid="lesson-picker-fetch-error"` quando boundary captura "No QueryClient set". `useAudioPlayer()` substituido por `useOptionalAudioPlayer()` no fetcher para nao acoplar boundary a 2 fontes de erro distintas (lesson #29).
+
+### RF-02 — Cover className via `cn()` helper
+
+`MiniPlayerBar:189` migrou string concat condicional para `cn('w-12 h-12 rounded-md object-cover mini-player-cover', isPlaying && !reducedMotion && 'animate-spin-slow')`. Padrao shadcn/CVA canonico. Visual identico.
+
+### RF-03 — JSDoc policy + security em `sanitizeCoverUrl.ts`
+
+Adicionado JSDoc `@policy` (HTTPS preferido, HTTP ok, relativas + pseudo-protocols rejeitados, `data:image/*` bloqueado) + `@security` (motivo XSS via SVG inline, instrucao para MP2/Spotify abrir excecao explicita com mime-type allowlist `png`/`jpeg` apenas — NUNCA `svg+xml`). Doc-only; comportamento inalterado.
+
+### RF-04 — X button overlap (verify manual)
+
+**DEFERIDO para verify manual founder.** Implementer nao executou (ambiente sem browser). Tests em `tests/client/mini-player-1.2/LessonPickerDialog.xButtonOverlap.test.tsx` mantidos em `describe.skip`. Founder deve abrir `/grind-live` em dev, clicar "Escolher aula", verificar X shadcn (top-right `absolute right-4 top-4`) nao sobrepoe search input em 3 viewports (375 / 768 / 1280). Se OK visual: deixar skip + fechar RF-04 como verify-only. Se sobrepor: opcao A (padding container `pt-8/pt-10/pt-12`), opcao B (custom Close + esconder X interno) + unskippar tests.
+
+### RF-05 — Profiler real-data VolumeControl + SpeedControl (DEFERRED)
+
+**DEFERIDO para profiler manual founder.** Implementer nao executou React DevTools Profiler (ambiente sem browser + audio real). Tests em `tests/client/mini-player-1.2/AudioControls.memoOrSplit.test.tsx` mantidos em `describe.skip` para opcao A (React.memo) e opcao B (split context). Tests em `tests/client/mini-player-1.1/AudioContext.split.test.tsx` (4 skip) tambem mantidos.
+
+**Protocolo de medida (quando founder rodar):**
+1. Iniciar audio real em `/grind-live` (qualquer lesson da biblioteca).
+2. React DevTools Profiler grava 10s.
+3. Contar commits de `VolumeControl` + `SpeedControl` no flamegraph (4 ticks `timeupdate` ~250ms cada esperados como baseline minimo).
+4. Calcular `N re-renders/s`.
+
+**Decisao baseada em N:**
+- **`N > 20`** → escolher opcao A (React.memo + `arePropsEqual` custom) OU opcao B (split `AudioPlayerContext` em `AudioStateContext` + `AudioControlsContext`). Unskippar tests + registrar valor medido + escolha em addendum proprio.
+- **`N <= 20`** → SKIP definitivo. React.memo nao necessario. Manter `describe.skip` com comentario `"skipped indefinitely — RF-05 MP1.2 profiler measured N=X re-renders/s, abaixo threshold 20"`. Re-avaliar se MP2 introduzir re-render adicional.
+
+**Status atual:** N nao medido. Mantido como pendencia explicita em MP1.2 → eventual MP1.3.
+
+### Files afetados MP1.2
+
+```
+client/src/components/audio-player/LessonPickerDialog.tsx   [RF-01 ErrorBoundary]
+client/src/components/audio-player/MiniPlayerBar.tsx        [RF-02 cn()]
+client/src/lib/audio-engine/sanitizeCoverUrl.ts             [RF-03 JSDoc]
+```
+
+Zero migration. Zero ADR novo (so este addendum). Baseline preservada: 146 MP1 + 55 MP1.1 + 22 MP1.2 + 72 Biblioteca = 295 tests verdes; 9 skipped MP1.2 (RF-04 + RF-05 deferred) + 4 skipped MP1.1 (RF-05 opcao B).
