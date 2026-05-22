@@ -4194,6 +4194,10 @@ export const libraryLessons = pgTable(
       .default(sql`'[]'::jsonb`),
     displayOrder: integer("display_order").notNull().default(0),
     isPublished: boolean("is_published").notNull().default(false),
+    // Sprint Mini Player 3 / RF-04.2 (migration 0078).
+    // Primeiros 80 chars do transcription_full + ellipsis (NULL se transcricao
+    // ausente). Pre-computado em ingestion para evitar N+1 no UI.
+    transcriptionPreview: varchar("transcription_preview", { length: 120 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -4585,6 +4589,22 @@ export const userCoachPreferences = pgTable("user_coach_preferences", {
 // =============================================================================
 // Sprint Mini Player 2 (ADR-190) — spotify_tokens. Migration 0077.
 // =============================================================================
+// =============================================================================
+// Sprint Mini Player 3 (ADR-193) — audio_queue_snapshots. Migration 0078.
+// Queue persistence server-side opcional (local primario, server best-effort).
+// last-write-wins por `version` int incremental.
+// =============================================================================
+export const audioQueueSnapshots = pgTable("audio_queue_snapshots", {
+  userId: varchar("user_id").primaryKey()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  queue: jsonb("queue_jsonb").notNull().default(sql`'[]'::jsonb`),
+  repeatMode: varchar("repeat_mode", { length: 8 }).notNull().default("off"),
+  shuffleEnabled: boolean("shuffle_enabled").notNull().default(false),
+  shuffledOrder: jsonb("shuffled_order"),
+  version: integer("version").notNull().default(1),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const spotifyTokens = pgTable("spotify_tokens", {
   userId: varchar("user_id").primaryKey()
     .references(() => users.userPlatformId, { onDelete: "cascade" }),

@@ -1,0 +1,72 @@
+%% Sprint Mini Player 3 (MP3) - Queue UI component tree (RF-05 / ADR-193).
+%% Mostra hierarquia QueuePanel + dnd-kit SortableContext + persistencia hibrida.
+%% localStorage source-of-truth + server snapshot best-effort + cross-tab storage event.
+
+flowchart TB
+    subgraph AppRoot["App Root"]
+        Provider["AudioPlayerProvider<br/>(context global)"]
+    end
+
+    Provider --> Surface["AudioPlayerContext surface<br/>+ queue: QueueItem[]<br/>+ repeatMode: 'off'|'all'|'one'<br/>+ shuffleEnabled: boolean<br/>+ shuffledOrder: string[] | null<br/>+ addToQueue / removeFromQueue<br/>+ reorderQueue / clearQueue<br/>+ skipToQueueItem<br/>+ setRepeatMode / toggleShuffle"]
+
+    Provider --> KbdHook["useKeyboardShortcuts<br/>(ADR-195)"]
+
+    Provider --> Bar["MiniPlayerBar<br/>(persistent, bottom)"]
+
+    Bar --> Controls["Controles MP1 + MP2<br/>play/pause/seek/volume/speed<br/>SleepTimerControl<br/>FullscreenToggle"]
+
+    Bar --> QueueBtn["QueueButton<br/>data-testid=mini-player-queue-button"]
+
+    QueueBtn -->|Radix Popover trigger| QPanel["QueuePanel<br/>(Radix Popover, w=360px)"]
+
+    QPanel --> QHeader["QueueHeader<br/>+ titulo Fila + count<br/>+ ShuffleToggleButton<br/>+ RepeatToggleButton (off/all/one)<br/>+ ClearAllButton (confirm modal)"]
+
+    QPanel --> EB["ErrorBoundary local<br/>(lesson #29)"]
+
+    EB -->|dnd-kit OK| SortCtx["dnd-kit SortableContext<br/>(@dnd-kit/core + sortable)<br/>LAZY IMPORT - chunk separado"]
+
+    EB -->|dnd-kit fail load| FallbackList["Fallback QueueList<br/>(sem drag; skip+remove ainda funcionam)"]
+
+    SortCtx --> QList["QueueList<br/>(scrollable, max-h=50vh)"]
+
+    QList --> QRow1["QueueRow item 1<br/>+ DragHandle<br/>+ Cover (sanitizeCoverUrl)<br/>+ Titulo + Course<br/>+ Duracao formatted<br/>+ SkipButton (transparent)<br/>+ RemoveButton (X)"]
+    QList --> QRow2["QueueRow item 2"]
+    QList --> QRowN["QueueRow item N (cap 50)"]
+    QList --> EmptyState["EmptyState<br/>Fila vazia.<br/>Adicione aulas via biblioteca."]
+
+    subgraph PersistLayer["Persistence layer (ADR-193)"]
+        LS[("localStorage<br/>audio.queue.v1<br/>SOURCE OF TRUTH")]
+        Server[("audio_queue_snapshots<br/>user_id PK<br/>BEST-EFFORT SNAPSHOT")]
+    end
+
+    Surface -.->|mutation -> debounce 500ms| WriteLocal["Persist write<br/>localStorage.setItem<br/>+ version++"]
+    WriteLocal --> LS
+    WriteLocal -.->|background POST best-effort<br/>timeout 3s + swallow errors| Server
+
+    LS -.->|browser storage event| OtherTab["Other tab<br/>storage event listener<br/>+ version compare<br/>+ LWW reload state"]
+
+    LS -.->|boot: read local first| Surface
+    Server -.->|boot: GET fallback<br/>if local empty| Surface
+
+    QRow1 -->|skip click| Surface
+    QRow1 -->|remove click| Surface
+    QRow1 -->|drag-end| SortCtx
+    SortCtx -->|onDragEnd| Surface
+
+    subgraph EngineLink["AudioSourceEngine link (ADR-189)"]
+        Engine["AudioSourceEngine<br/>activeDriver"]
+        Engine --> Driver["HtmlAudio OR Spotify driver"]
+    end
+
+    Surface -->|tryAutoplayNext<br/>+ repeatMode + shuffleEnabled| Engine
+
+    LessonPicker["LessonPickerDialog<br/>(RF-04 enriched)<br/>+ add-to-queue button"] -->|add| Surface
+
+    style Surface fill:#fef3c7
+    style QPanel fill:#dbeafe
+    style EB fill:#fce7f3
+    style LS fill:#dcfce7
+    style Server fill:#e0e7ff
+    style EmptyState fill:#f3f4f6
+    style FallbackList fill:#fee2e2,stroke:#dc2626
+    style KbdHook fill:#fed7aa

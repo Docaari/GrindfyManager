@@ -1,0 +1,81 @@
+%% Sprint Mini Player 3 (MP3) - Keyboard shortcuts dispatch flow (RF-03 / ADR-195).
+%% Listener global em document.keydown + gates de target/rota + dispatch para AudioPlayerContext.
+%% MP1 shortcuts (Space/Arrows/M/Esc) preservados. MP3 adiciona J/L, 0-9, ArrowUp/Down, ?.
+
+flowchart TD
+    KeyEvent(["keydown event<br/>document level<br/>(useKeyboardShortcuts hook<br/>no AudioPlayerProvider scope)"]) --> GateTarget{"isInteractiveTarget(e.target)?"}
+
+    GateTarget -->|"target tag in<br/>INPUT, TEXTAREA, SELECT<br/>OR isContentEditable"| IgnoreTarget["IGNORE<br/>(no preventDefault,<br/>user digita normalmente)"]
+    GateTarget -->|"target nao-interactivo"| GateRoute{"isAdminRoute()?"}
+
+    GateRoute -->|"window.location.pathname<br/>.startsWith('/admin/')"| IgnoreRoute["IGNORE<br/>(admin combos preservados)"]
+    GateRoute -->|"fora de /admin/*"| Match{"key match?<br/>(switch e.key/e.code)"}
+
+    Match -->|"' ' (Space)"| ASpace["togglePlayPause()"]
+    Match -->|"'M' OR 'm'"| AMute["toggleMute()"]
+    Match -->|"'Escape'"| AEsc["collapseBar()"]
+    Match -->|"'ArrowLeft'"| ALeft["skipBack(15)<br/>MP1 mantido"]
+    Match -->|"'ArrowRight'"| ARight["skipForward(15)<br/>MP1 mantido"]
+
+    Match -->|"'J' OR 'j'<br/>MP3 RF-03 NOVO"| AJ["skipBack(10)<br/>paridade YouTube"]
+    Match -->|"'L' OR 'l'<br/>MP3 RF-03 NOVO"| AL["skipForward(10)<br/>paridade YouTube"]
+
+    Match -->|"'ArrowUp'<br/>MP3 RF-03 NOVO"| AUp{"volume + 0.1<br/>clamp [0..1]"}
+    Match -->|"'ArrowDown'<br/>MP3 RF-03 NOVO"| ADown{"volume - 0.1<br/>clamp [0..1]"}
+
+    Match -->|"'0'..'9'<br/>MP3 RF-03 NOVO"| ANum{"durationSeconds > 0?"}
+    ANum -->|sim| ASeek["seek(durationSeconds * digit / 10)"]
+    ANum -->|nao| Noop["NO-OP<br/>(ignora se sem duration)"]
+
+    Match -->|"'?'<br/>MP3 RF-03 NOVO"| AHelp["toggle local state<br/>shortcutsHelpOpen<br/>(NAO dispatch context)"]
+
+    AHelp --> Popover["ShortcutsHelpPopover<br/>Radix Popover<br/>5 linhas compact<br/>Space / Setas / J-L / 0-9 / M+UpDown"]
+
+    Match -->|"qualquer outra key"| NoMatch["NO-OP<br/>(NAO preventDefault)"]
+
+    ASpace --> Dispatch["dispatch -> AudioPlayerContext"]
+    AMute --> Dispatch
+    AEsc --> Dispatch
+    ALeft --> Dispatch
+    ARight --> Dispatch
+    AJ --> Dispatch
+    AL --> Dispatch
+    AUp --> SetVol["setVolume(clamp(v + 0.1))"]
+    ADown --> SetVol2["setVolume(clamp(v - 0.1))"]
+    ASeek --> Dispatch
+    SetVol --> Dispatch
+    SetVol2 --> Dispatch
+
+    Dispatch --> Engine["AudioSourceEngine<br/>activeDriver.play/pause/seek/setVolume<br/>(ADR-187 + ADR-189)"]
+
+    Dispatch -.->|"preventDefault()<br/>apenas para keys da tabela canonica"| PreventDefault["e.preventDefault()<br/>(apenas para matches da tabela)"]
+
+    subgraph CanonicalTable["Tabela canonica (ADR-195)"]
+        TableNote["Space toggle play/pause<br/>M toggle mute<br/>Esc collapse bar<br/>Arrow L/R -15s/+15s (MP1)<br/>J/L -10s/+10s (MP3, paridade YouTube)<br/>Arrow Up/Down volume +/-10% (MP3)<br/>0-9 seek N0% (MP3)<br/>? toggle help popover (MP3, local state)"]
+    end
+
+    subgraph Gates["Gates centralizados (helpers)"]
+        Helper1["isInteractiveTarget(t)<br/>checa tag INPUT/TEXTAREA/SELECT<br/>+ isContentEditable"]
+        Helper2["isAdminRoute()<br/>pathname.startsWith('/admin/')<br/>+ window guard SSR-safe"]
+    end
+
+    GateTarget -.- Helper1
+    GateRoute -.- Helper2
+
+    subgraph EdgeCases["Edge cases"]
+        E1["volume clamp em 0 / 1.0"]
+        E2["seek ignora se durationSeconds<=0"]
+        E3["? cobre layouts US e PT-BR (e.key resolve caractere)"]
+        E4["ArrowUp/Down podem conflitar com tabelas keyboard-navegaveis<br/>-> tabelas usam stopPropagation nos proprios handlers"]
+    end
+
+    style KeyEvent fill:#fef3c7
+    style IgnoreTarget fill:#fee2e2
+    style IgnoreRoute fill:#fee2e2
+    style Popover fill:#dbeafe
+    style Dispatch fill:#dcfce7
+    style Engine fill:#e0e7ff
+    style CanonicalTable fill:#f3f4f6
+    style Gates fill:#fed7aa
+    style EdgeCases fill:#fce7f3
+    style PreventDefault fill:#f0fdf4

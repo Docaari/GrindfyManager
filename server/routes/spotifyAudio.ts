@@ -470,14 +470,20 @@ export async function handlePostSpotifyRefresh(
       body,
     });
     if (!resp?.ok) {
-      // NOTA: MEDIUM-1 ("invalid_grant -> disconnect direto") foi DEFERIDO em
-      // R2 — teste existente
-      // `Spotify refresh endpoint 400 → incrementa failure_count + 502`
-      // (audio-spotify-refresh.test.ts:225) afirma o comportamento atual com
-      // body `{ error: 'invalid_grant' }`. Implementer NAO modifica testes;
-      // MEDIUM-1 era opcional ("se sobrar tempo"). Documentar para MP3.
-      //
-      // HIGH-2: usar retorno de incrementRefreshFailureCount em vez de
+      // Sprint Mini Player 3 / RF-01 + D1 + Q-M (ADR-195):
+      // `invalid_grant` -> disconnect direto. NAO incrementa failure_count.
+      // Distingue do path generico (502 + increment + >=3 disconnect).
+      const errJson = await resp.json().catch(() => null);
+      if (errJson?.error === "invalid_grant") {
+        await storage.markSpotifyDisconnected(userId, "invalid_grant");
+        clearSpotifySessionCookie(res);
+        res
+          .status(401)
+          .json({ message: "Spotify token revogado. Reconecte." });
+        return;
+      }
+      // Path generico: incrementa + 502 (ou 401 apos 3 fails).
+      // HIGH-2 (MP2): usar retorno de incrementRefreshFailureCount em vez de
       // ler row.refreshFailureCount + 1 (stale em requisicoes concorrentes).
       const newCount = await storage.incrementRefreshFailureCount(userId);
       const failureCount = Number.isFinite(newCount)

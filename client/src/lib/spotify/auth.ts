@@ -12,6 +12,7 @@
 //             SpotifyOAuthCancelledError
 
 import { apiRequest } from "@/lib/queryClient";
+import { saveOAuthSnapshot } from "@/lib/spotify/oauthSnapshot";
 
 // ============================================================================
 // Errors
@@ -116,6 +117,24 @@ export interface SpotifyAuthSuccess {
   productTier?: string;
 }
 
+/**
+ * Snapshot proativo + redirect full-page (ADR-194, MP3 RF-06.1).
+ * NAO retorna — page destroy. Promise pendente eh OK porque o callback
+ * vai recarregar a app.
+ */
+function fallbackRedirect(authUrl: string): void {
+  try {
+    saveOAuthSnapshot(authUrl);
+  } catch {
+    // ignore
+  }
+  try {
+    window.location.href = authUrl;
+  } catch {
+    // ignore
+  }
+}
+
 export async function initiateSpotifyAuth(): Promise<SpotifyAuthSuccess> {
   const init = await apiRequest("POST", "/api/audio/spotify/oauth-init");
   const authUrl = (init as any)?.authUrl;
@@ -126,13 +145,20 @@ export async function initiateSpotifyAuth(): Promise<SpotifyAuthSuccess> {
     "spotify-auth",
     "width=500,height=700,menubar=no,toolbar=no",
   );
+  // Sprint MP3 RF-06.1 (D15 + ADR-194): popup === null -> fallback automatico.
   if (!popup) {
-    throw new SpotifyPopupBlockedError();
+    fallbackRedirect(authUrl);
+    // Page redirect destroi React. Retorna promise pending.
+    return new Promise<SpotifyAuthSuccess>(() => {
+      /* never resolves — page navigates away */
+    });
   }
 
   return new Promise<SpotifyAuthSuccess>((resolve, reject) => {
     let resolved = false;
     const expectedOrigin = window.location.origin;
+    const startTs = Date.now();
+    const SAFARI_CLOSE_THRESHOLD_MS = 1500;
 
     const onMessage = (ev: MessageEvent) => {
       if (ev.origin !== expectedOrigin) return; // security: ignore foreign origins
@@ -170,12 +196,20 @@ export async function initiateSpotifyAuth(): Promise<SpotifyAuthSuccess> {
     window.addEventListener("message", onMessage);
 
     // Best-effort: detect popup closed by user (cancel).
+    // Sprint MP3 RF-06.1: popup.closed em <1.5s sem postMessage -> fallback
+    // automatico (Safari async-close threshold). Apos esse threshold,
+    // popup.closed = cancel manual normal.
     const popupRef = popup;
     const interval = setInterval(() => {
       try {
         if (popupRef && popupRef.closed && !resolved) {
           clearInterval(interval);
           window.removeEventListener("message", onMessage);
+          if (Date.now() - startTs < SAFARI_CLOSE_THRESHOLD_MS) {
+            // Safari async-close: fallback redirect.
+            fallbackRedirect(authUrl);
+            return;
+          }
           reject(new SpotifyOAuthCancelledError());
         } else if (resolved) {
           clearInterval(interval);

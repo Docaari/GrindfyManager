@@ -1,0 +1,89 @@
+%% Sprint Mini Player 3 (MP3) - Spotify OAuth popup fallback sequence (RF-06 / ADR-194).
+%% Happy path (popup OK) vs Fallback (popup blocked OR closed<1.5s) -> sessionStorage + full-page redirect.
+%% TTL 10min no snapshot. Restore via /spotify-callback page.
+
+sequenceDiagram
+    actor User
+    participant UI as Coach-AI Prefs<br/>(SpotifyConnectionPanel)
+    participant Auth as auth.ts<br/>initiateSpotifyAuth
+    participant Snap as oauthSnapshot.ts<br/>(novo)
+    participant SS as sessionStorage<br/>spotify_oauth_snapshot
+    participant Win as window.open
+    participant Spotify as accounts.spotify.com
+    participant Callback as /spotify-callback page
+    participant Server as POST /api/audio/spotify/oauth-callback
+    participant LS as localStorage<br/>audio.queue.v1
+
+    User->>UI: Click "Conectar Spotify"
+    UI->>Auth: initiateSpotifyAuth()
+
+    Note over Auth,Snap: Proactive snapshot save<br/>(antes de window.open<br/>para garantir state preservado<br/>se popup blocked)
+
+    Auth->>Snap: saveOAuthSnapshot(authUrl)
+    Snap->>LS: read queue.version
+    Snap->>SS: setItem('spotify_oauth_snapshot',<br/>{activeTrackId, scrollY,<br/>queueVersion, timestamp,<br/>authUrl})
+
+    Auth->>Win: window.open(authUrl, '_blank', 'popup')
+
+    alt Happy Path: popup nao-null + abriu OK
+        Win-->>Auth: popup Window object
+        Auth->>Auth: setTimeout(checkClosed, 1500)
+        User->>Spotify: autoriza (popup)
+        Spotify->>Callback: redirect ?code=...&state=...
+        Callback->>Server: POST /oauth-callback {code, state}
+        Server-->>Callback: 200 {success} + Set-Cookie spotify_session
+        Callback->>Win: window.opener.postMessage({type:'spotify_oauth_success'})
+        Win->>Auth: postMessage event (resolved=true)
+        Auth->>SS: removeItem('spotify_oauth_snapshot')
+        Auth->>UI: connectSpotify() (driver ready)
+        Win->>Win: window.close()
+
+    else Branch A: popup === null (Chrome blocker sync)
+        Win-->>Auth: null
+        Auth->>Auth: detect popup blocked
+        Auth->>Win: window.location.href = authUrl<br/>(FULL-PAGE REDIRECT)
+        Note over Win: React state lost.<br/>Queue local intact (ADR-193).<br/>Snapshot preserva activeTrack + scrollY.
+        User->>Spotify: autoriza (full page)
+        Spotify->>Callback: redirect ?code=...&state=...
+        Callback->>Server: POST /oauth-callback {code, state}
+        Server-->>Callback: 200 {success} + Set-Cookie spotify_session
+        Callback->>Callback: window.opener === null<br/>=> mode = 'redirect'
+        Callback->>Snap: restoreOAuthSnapshot()
+        Snap->>SS: getItem('spotify_oauth_snapshot')
+
+        alt TTL OK (< 10min)
+            SS-->>Snap: snapshot JSON
+            Snap->>SS: removeItem (consumed)
+            Snap-->>Callback: {scrollY, activeTrackId}
+            Callback->>Callback: setTimeout(<br/>  window.scrollTo(0, scrollY),<br/>  100ms)
+            Callback->>UI: redirect to "/" (home)
+            UI->>LS: AudioPlayerProvider boot<br/>re-hydrate queue
+            Note over UI: activeTrack NAO auto-play.<br/>User precisa clicar play (UX sanity).
+        else TTL expirou (> 10min)
+            SS-->>Snap: snapshot JSON (timestamp old)
+            Snap->>SS: removeItem (discarded)
+            Snap-->>Callback: null
+            Callback->>UI: redirect to "/" (sem restore)
+        end
+
+    else Branch B: popup Safari async-close (<1.5s)
+        Win-->>Auth: popup object (parecia OK)
+        Auth->>Auth: setTimeout 1500ms
+        Note over Win: Safari fechou popup<br/>sem postMessage.<br/>(user redirecionou pra Spotify<br/>mas backed out)
+        Auth->>Win: setTimeout callback:<br/>popup.closed && !resolved<br/>=> detect blocked
+        Auth->>Win: window.location.href = authUrl<br/>(FULL-PAGE REDIRECT)
+        Note over Win,Callback: Mesmo fluxo da Branch A<br/>restore via /spotify-callback
+
+    else Branch C: User cancela OAuth na Spotify
+        User->>Spotify: click "Cancel"
+        Spotify->>Callback: redirect ?error=access_denied
+        Callback->>Callback: detect query ?error=
+        Callback->>UI: render SpotifyOAuthErrorDialog<br/>data-testid=spotify-oauth-error-dialog<br/>mensagem PT-BR: "Voce cancelou a autorizacao."
+        Callback->>UI: telemetria spotify_oauth_error<br/>{reason: 'access_denied'}
+        User->>UI: click [Reconectar]
+        UI->>Auth: initiateSpotifyAuth() (loop)
+        User->>UI: OR click [Cancelar]
+        UI->>UI: redirect "/" (home)
+    end
+
+    Note over Auth,Callback: Snapshot fields:<br/>activeTrackId: string|null<br/>scrollY: number<br/>queueVersion: number (ADR-193)<br/>timestamp: number (ms)<br/>authUrl: string<br/>NAO contem secrets (sem tokens/JWT)

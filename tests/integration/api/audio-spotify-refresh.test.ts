@@ -199,7 +199,11 @@ describe('POST /api/audio/spotify/refresh (RF-01.4 / ADR-190)', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it('Spotify refresh endpoint 400 → incrementa failure_count + 502', async () => {
+  // -------------------------------------------------------------------------
+  // Sprint Mini Player 3 — RF-01 (semantica nova `invalid_grant` -> disconnect)
+  // ADRs: D1 + Q-M (body.error === 'invalid_grant' apos resp.json())
+  // -------------------------------------------------------------------------
+  it('Spotify refresh endpoint 400 invalid_grant -> mark disconnected + 401 + clearCookie (RF-01 / D1)', async () => {
     storageMock.getSpotifyToken.mockResolvedValue({
       userId: 'USER-0001',
       refreshTokenEncrypted: 'c',
@@ -222,11 +226,112 @@ describe('POST /api/audio/spotify/refresh (RF-01.4 / ADR-190)', () => {
       { storage: storageMock, fetchFn: fetchMock } as any,
     );
 
-    expect(res.statusCode).toBe(502);
-    expect(storageMock.incrementRefreshFailureCount).toHaveBeenCalledWith('USER-0001');
+    expect(res.statusCode).toBe(401);
+    expect(storageMock.markSpotifyDisconnected).toHaveBeenCalledWith(
+      'USER-0001',
+      'invalid_grant',
+    );
+    // Fast-path NAO incrementa failure_count.
+    expect(storageMock.incrementRefreshFailureCount).not.toHaveBeenCalled();
+    // Cookie clearCookie chamado (res.clearCookie -> cleared:true marker).
+    const cleared = res.cookies.find(
+      (c: any) => c.name === 'spotify_session' && c.opts?.cleared,
+    );
+    expect(cleared).toBeDefined();
   });
 
-  it('apos 3 falhas consecutivas: marca disconnected_at + 401 + clearCookie', async () => {
+  it('Spotify refresh endpoint 502 transient (sem invalid_grant) -> path generico: incrementa + 502 (RF-01 regressao)', async () => {
+    // Path generico continua incrementando e devolvendo 502.
+    storageMock.getSpotifyToken.mockResolvedValue({
+      userId: 'USER-0001',
+      refreshTokenEncrypted: 'c',
+      refreshTokenIv: 'iv',
+      refreshTokenAuthTag: 'tag',
+      disconnectedAt: null,
+      refreshFailureCount: 0,
+    });
+    storageMock.incrementRefreshFailureCount.mockResolvedValue(1);
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      json: async () => ({ error: 'server_error' }),
+    });
+
+    const handler = await loadHandler();
+    const res = makeRes();
+    await handler.handlePostSpotifyRefresh(
+      makeReq() as any,
+      res,
+      { storage: storageMock, fetchFn: fetchMock } as any,
+    );
+
+    expect(res.statusCode).toBe(502);
+    expect(storageMock.incrementRefreshFailureCount).toHaveBeenCalledWith('USER-0001');
+    expect(storageMock.markSpotifyDisconnected).not.toHaveBeenCalled();
+  });
+
+  it('Spotify refresh 400 sem body JSON parseavel -> cai no path generico (RF-01 edge)', async () => {
+    // resp.json() rejeita -> .catch(() => null) -> errJson?.error undefined -> NAO eh invalid_grant.
+    storageMock.getSpotifyToken.mockResolvedValue({
+      userId: 'USER-0001',
+      refreshTokenEncrypted: 'c',
+      refreshTokenIv: 'iv',
+      refreshTokenAuthTag: 'tag',
+      disconnectedAt: null,
+      refreshFailureCount: 0,
+    });
+    storageMock.incrementRefreshFailureCount.mockResolvedValue(1);
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => {
+        throw new Error('non-json body');
+      },
+    });
+
+    const handler = await loadHandler();
+    const res = makeRes();
+    await handler.handlePostSpotifyRefresh(
+      makeReq() as any,
+      res,
+      { storage: storageMock, fetchFn: fetchMock } as any,
+    );
+
+    expect(res.statusCode).toBe(502);
+    expect(storageMock.incrementRefreshFailureCount).toHaveBeenCalledWith('USER-0001');
+    expect(storageMock.markSpotifyDisconnected).not.toHaveBeenCalled();
+  });
+
+  it('Spotify refresh 400 com body.error_description (sem error: invalid_grant) -> path generico (RF-01 distinction)', async () => {
+    storageMock.getSpotifyToken.mockResolvedValue({
+      userId: 'USER-0001',
+      refreshTokenEncrypted: 'c',
+      refreshTokenIv: 'iv',
+      refreshTokenAuthTag: 'tag',
+      disconnectedAt: null,
+      refreshFailureCount: 0,
+    });
+    storageMock.incrementRefreshFailureCount.mockResolvedValue(1);
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => ({ error_description: 'something else' }),
+    });
+
+    const handler = await loadHandler();
+    const res = makeRes();
+    await handler.handlePostSpotifyRefresh(
+      makeReq() as any,
+      res,
+      { storage: storageMock, fetchFn: fetchMock } as any,
+    );
+
+    expect(res.statusCode).toBe(502);
+    expect(storageMock.markSpotifyDisconnected).not.toHaveBeenCalled();
+  });
+
+  it('apos 3 falhas consecutivas (path generico, NAO invalid_grant): marca disconnected_at + 401 + clearCookie', async () => {
+    // Cobre o accumulator generico (>=3). invalid_grant ja eh terminal direto na 1a (RF-01).
     storageMock.getSpotifyToken.mockResolvedValue({
       userId: 'USER-0001',
       refreshTokenEncrypted: 'c',
@@ -235,10 +340,11 @@ describe('POST /api/audio/spotify/refresh (RF-01.4 / ADR-190)', () => {
       disconnectedAt: null,
       refreshFailureCount: 2, // proxima falha = 3
     });
+    storageMock.incrementRefreshFailureCount.mockResolvedValue(3);
     fetchMock.mockResolvedValueOnce({
       ok: false,
-      status: 400,
-      json: async () => ({ error: 'invalid_grant' }),
+      status: 502,
+      json: async () => ({ error: 'server_error' }),
     });
 
     const handler = await loadHandler();

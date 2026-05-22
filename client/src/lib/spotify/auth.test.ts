@@ -95,16 +95,9 @@ describe('spotify/auth.initiateSpotifyAuth (RF-01.1)', () => {
     return popup;
   }
 
-  it('popup blocked (window.open retorna null) → throw SpotifyPopupBlockedError', async () => {
-    apiRequestMock.mockResolvedValueOnce({
-      authUrl: 'https://accounts.spotify.com/authorize?...',
-      state: 'abc',
-    });
-    (globalThis as any).window.open = vi.fn(() => null);
-
-    const mod = await loadModule();
-    await expect(mod.initiateSpotifyAuth()).rejects.toBeInstanceOf(mod.SpotifyPopupBlockedError);
-  });
+  // Obsoleto MP3 RF-06.1 ADR-194: popup blocked NAO throw mais — faz fallback automatico
+  // (saveOAuthSnapshot + window.location.href = authUrl). Cobertura nova em
+  // tests/client/mini-player-3/auth-popup-fallback.test.tsx.
 
   it('postMessage spotify-oauth-success → resolve com tokens', async () => {
     apiRequestMock.mockResolvedValueOnce({

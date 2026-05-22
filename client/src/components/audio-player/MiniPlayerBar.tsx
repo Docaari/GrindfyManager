@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ChevronUp,
+  ListMusic,
   Pause,
   Play,
   RotateCcw,
@@ -21,6 +22,14 @@ import { cn } from "@/lib/utils";
 import { VolumeControl } from "./VolumeControl";
 // Sprint Mini Player 2 (CRITICAL-2) — Sleep Timer control wired in mini player.
 import { SleepTimerControl } from "./SleepTimerControl";
+// Sprint Mini Player 3 (MP3.1 R1 fix CRITICAL-1) — useKeyboardShortcuts hook +
+// ShortcutsHelpPopover rendering. Antes (MP3 R1) o hook existia mas nunca era
+// montado; o handler inline MP1 ainda processava keys (sem J/L/0-9/?/setas
+// cima-baixo + sem gate /admin/). Agora unificado via hook (ADR-195).
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { ShortcutsHelpPopover } from "./ShortcutsHelpPopover";
+// Sprint Mini Player 3 (MP3.1 R1 fix CRITICAL-2) — Queue UI.
+import { QueuePopover } from "./QueuePopover";
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
@@ -70,15 +79,6 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-function isInteractiveTarget(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el || !el.tagName) return false;
-  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT") return true;
-  if (el.isContentEditable === true) return true;
-  const ce = typeof el.getAttribute === "function" ? el.getAttribute("contenteditable") : null;
-  return ce === "" || ce === "true";
-}
-
 export function MiniPlayerBar() {
   const {
     activeTrack,
@@ -103,6 +103,19 @@ export function MiniPlayerBar() {
     sleepTimerRemainingSeconds,
     setSleepTimer,
     cancelSleepTimer,
+    // MP3.1 R1 fix CRITICAL-1: volume + setVolume pra useKeyboardShortcuts.
+    volume,
+    setVolume,
+    // MP3.1 R1 fix CRITICAL-2: queue surface.
+    queueItems,
+    repeatMode,
+    shuffleEnabled,
+    removeFromQueue,
+    clearQueue,
+    setRepeatMode,
+    toggleShuffle,
+    skipToQueueItem,
+    reorderQueue,
   } = useAudioPlayer();
 
   const vp = useViewport();
@@ -111,43 +124,28 @@ export function MiniPlayerBar() {
   // via `padding-bottom: var(--mini-player-height)` (RF-11).
   useMiniPlayerHeight();
 
-  // === Keyboard shortcuts (RF-13) ===
-  useEffect(() => {
-    if (displayMode === "hidden") return;
-    const handler = (e: KeyboardEvent) => {
-      if (isInteractiveTarget(e.target)) return;
-      if (e.key === " " || e.code === "Space") {
-        e.preventDefault();
-        toggle();
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        skipBack(15);
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        skipForward(15);
-      } else if (e.key === "m" || e.key === "M") {
-        e.preventDefault();
-        toggleMute();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        if (displayMode === "expanded") {
-          setDisplayMode("bar");
-        } else {
-          close();
-        }
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [
-    displayMode,
+  // MP3.1 R1 fix CRITICAL-1: state local pro ShortcutsHelpPopover + QueuePopover.
+  const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
+
+  // MP3.1 R1 fix CRITICAL-1: useKeyboardShortcuts handler unico (substitui
+  // inline MP1). Adiciona J/L (-10s/+10s), 0-9 (% seek), ArrowUp/Down (volume),
+  // ? (toggle help) + gate /admin/* (ADR-195).
+  useKeyboardShortcuts({
     toggle,
     skipBack,
     skipForward,
+    setVolume,
+    volume,
     toggleMute,
-    setDisplayMode,
+    seek,
+    durationSeconds,
+    displayMode: displayMode as any,
+    setDisplayMode: setDisplayMode as any,
     close,
-  ]);
+    shortcutsHelpOpen,
+    setShortcutsHelpOpen,
+  });
 
   if (displayMode === "hidden" || !activeTrack) return null;
 
@@ -286,7 +284,8 @@ export function MiniPlayerBar() {
 
       <div className="flex items-center gap-1">
         {showVolume && <VolumeControl hideSlider={vp === "tablet"} />}
-        {showSpeed && (
+        {/* MP3 RF-02: Spotify SDK setSpeed no-op. Hide select para evitar UI mentirosa. */}
+        {showSpeed && activeTrack?.source !== "spotify" && (
           <select
             data-testid="mini-player-speed"
             aria-label={`Velocidade ${speed}x`}
@@ -309,6 +308,25 @@ export function MiniPlayerBar() {
           onActivate={setSleepTimer}
           onCancel={cancelSleepTimer}
         />
+        {/* MP3.1 R1 fix CRITICAL-2: Queue button — abre QueuePopover. */}
+        <button
+          type="button"
+          data-testid="mini-player-queue-button"
+          aria-label="Fila de reproducao"
+          title="Fila"
+          className="p-2 hover:bg-white/10 rounded-md text-white relative"
+          onClick={() => setQueueOpen((o) => !o)}
+        >
+          <ListMusic className="w-4 h-4" />
+          {queueItems && queueItems.length > 0 ? (
+            <span
+              data-testid="mini-player-queue-count"
+              className="absolute -top-1 -right-1 rounded-full bg-blue-500 px-1 text-[10px] text-white"
+            >
+              {queueItems.length}
+            </span>
+          ) : null}
+        </button>
         <button
           type="button"
           data-testid="mini-player-expand"
@@ -330,6 +348,25 @@ export function MiniPlayerBar() {
           <X className="w-4 h-4" />
         </button>
       </div>
+      {/* MP3.1 R1 fix CRITICAL-1: ShortcutsHelpPopover toggla via tecla `?`. */}
+      <ShortcutsHelpPopover
+        open={shortcutsHelpOpen}
+        onOpenChange={setShortcutsHelpOpen}
+      />
+      {/* MP3.1 R1 fix CRITICAL-2: QueuePopover renderiza fila + controls. */}
+      <QueuePopover
+        open={queueOpen}
+        onOpenChange={setQueueOpen}
+        queue={(queueItems ?? []) as any}
+        repeatMode={repeatMode}
+        shuffleEnabled={shuffleEnabled}
+        onRemove={removeFromQueue}
+        onReorder={reorderQueue}
+        onClear={clearQueue}
+        onSkip={skipToQueueItem}
+        onRepeatChange={setRepeatMode}
+        onToggleShuffle={toggleShuffle}
+      />
     </div>
   );
 }

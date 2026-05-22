@@ -43,12 +43,9 @@ describe('SpotifyCallbackPage (RF-01.1)', () => {
     expect(screen.getByText(/Concluindo/i)).toBeInTheDocument();
   });
 
-  it('quando ?error=access_denied: renderiza "Conexao cancelada"', async () => {
-    window.history.replaceState({}, '', '/spotify-callback?error=access_denied');
-    const { default: SpotifyCallbackPage } = await loadPage();
-    render(<SpotifyCallbackPage />);
-    expect(screen.getByText(/cancelada/i)).toBeInTheDocument();
-  });
+  // Obsoleto MP3 RF-06.2 D17: ?error=access_denied agora renderiza
+  // <SpotifyOAuthErrorDialog reason="access_denied" /> com "Voce cancelou a autorizacao".
+  // Cobertura nova em tests/client/mini-player-3/spotify-callback-errors.test.tsx (13 tests).
 
   it('chama window.opener.postMessage quando ha opener + code', async () => {
     window.history.replaceState({}, '', '/spotify-callback?code=abc&state=xyz');

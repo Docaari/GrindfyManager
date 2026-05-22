@@ -49,6 +49,9 @@ import {
 } from "@/lib/audio-engine/AudioSourceEngine";
 import { SpotifyAudioDriver } from "@/lib/audio-engine/SpotifyAudioDriver";
 import { refreshAccessToken } from "@/lib/spotify/auth";
+// Sprint Mini Player 3 / RF-05 — queue state hook (MP3.1 R1 fix wave: CRITICAL-2).
+// Surface exposta via context para QueuePopover + add-to-queue em LessonPicker.
+import { useQueueState, type RepeatMode, type QueueItem, type AudioTrackLike } from "@/hooks/useQueueState";
 
 export interface AudioPlayerLesson {
   lessonId: string;
@@ -103,6 +106,17 @@ interface AudioPlayerCtx {
   ) => void;
   disconnectSpotifyDriver: () => void;
   isSpotifyConnected: boolean;
+  // === Sprint Mini Player 3 (RF-05) — Queue surface (MP3.1 R1 fix wave CRITICAL-2).
+  queueItems: QueueItem[];
+  repeatMode: RepeatMode;
+  shuffleEnabled: boolean;
+  addToQueue: (track: AudioTrackLike) => boolean;
+  removeFromQueue: (id: string) => void;
+  clearQueue: () => void;
+  setRepeatMode: (mode: RepeatMode) => void;
+  toggleShuffle: () => void;
+  skipToQueueItem: (id: string) => void;
+  reorderQueue: (fromIdx: number, toIdx: number) => void;
 }
 
 const Ctx = createContext<AudioPlayerCtx | null>(null);
@@ -278,6 +292,24 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   // criada lazy somente quando connectSpotify habilita o driver Spotify.
   const engineRef = useRef<AudioSourceEngine | null>(null);
   const engineUnsubscribersRef = useRef<Array<() => void>>([]);
+
+  // === Sprint Mini Player 3 / RF-05 — Queue state (MP3.1 R1 fix wave CRITICAL-2).
+  // Hook gerencia localStorage `audio.queue.v1` + cross-tab sync. Toda mutacao
+  // bump version + persiste debounced.
+  const queue = useQueueState();
+
+  // === Sprint Mini Player 3 / RF-06.1 — sync __audioPlayerActiveTrackId.
+  // MP3.1 R1 fix HIGH-2: oauthSnapshot.readActiveTrackId() le esta global.
+  // Sem isso, snapshot.activeTrackId fica sempre null + restore nao recupera
+  // a aula corrente apos OAuth redirect fallback.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    (window as any).__audioPlayerActiveTrackId = activeTrack?.trackId ?? null;
+    return () => {
+      // Cleanup so quando track sai (nao no unmount do Provider, pra evitar
+      // reset durante OAuth redirect que destroi o Provider mas mantem snapshot).
+    };
+  }, [activeTrack?.trackId]);
 
   // MP2 R2-H1: subscribe events do driver ativo para refletir state.
   const bindEngineEvents = useCallback(() => {
@@ -722,28 +754,85 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   }, [playTrack]);
 
   // === Autoplay sequencial (RF-05) ===
+  // MP3.1 R1 fix CRITICAL-2: tambem respeita queue + repeatMode + shuffle.
+  //   1. repeatMode='one' -> replay current track via seek(0).
+  //   2. courseContext + nextIndex < length -> proxima aula do curso.
+  //   3. queue nao vazio -> shift head (skipToQueueItem do head equivale a pop).
+  //   4. repeatMode='all' + courseContext -> volta pra primeira do curso.
   const tryAutoplayNext = useCallback(() => {
+    // repeat one — replay.
+    if (queue.repeatMode === "one" && activeTrackRef.current) {
+      const a = audioRef.current;
+      if (a) {
+        try {
+          a.currentTime = 0;
+        } catch {
+          // ignore
+        }
+      }
+      setCurrentSeconds(0);
+      setIsPlaying(true);
+      return;
+    }
+
     const ctxArg = courseContextRef.current;
-    if (!ctxArg) {
-      setIsPlaying(false);
-      return;
+    if (ctxArg) {
+      const nextIndex = ctxArg.currentIndex + 1;
+      if (nextIndex < ctxArg.lessons.length) {
+        const next = ctxArg.lessons[nextIndex];
+        if (next.hasAccess === false) {
+          setIsPlaying(false);
+          return;
+        }
+        playTrack(next, { ...ctxArg, currentIndex: nextIndex });
+        emitTelemetry("next", {
+          lessonId: next.trackId,
+          trigger: "autoplay",
+        });
+        return;
+      }
+      // curso terminou — fallback queue + repeat-all.
+      if (queue.repeatMode === "all" && ctxArg.lessons.length > 0) {
+        const next = ctxArg.lessons[0];
+        if (next.hasAccess !== false) {
+          playTrack(next, { ...ctxArg, currentIndex: 0 });
+          return;
+        }
+      }
     }
-    const nextIndex = ctxArg.currentIndex + 1;
-    if (nextIndex >= ctxArg.lessons.length) {
-      setIsPlaying(false);
-      return;
+
+    // Fallback: pega proxima da fila (se existir).
+    // MP3 R2 MEDIUM-NEW-1: respeitar shuffledOrder quando shuffle on.
+    if (queue.queue && queue.queue.length > 0) {
+      let nextItem: (typeof queue.queue)[number] | undefined;
+      if (queue.shuffleEnabled && queue.shuffledOrder && queue.shuffledOrder.length > 0) {
+        // Itera shuffledOrder ate achar item ainda na queue (defensive contra dessincronizacao).
+        for (const sid of queue.shuffledOrder) {
+          const found = queue.queue.find((q) => q.id === sid);
+          if (found) {
+            nextItem = found;
+            break;
+          }
+        }
+      }
+      // Fallback linear (shuffle off, shuffledOrder vazio/stale, ou order ids fora da queue).
+      if (!nextItem) {
+        nextItem = queue.queue[0];
+      }
+      if (nextItem?.track) {
+        // Remove o item consumido -> proxima vira o novo head (e tambem limpa do shuffledOrder via removeFromQueue).
+        queue.removeFromQueue(nextItem.id);
+        playTrack(nextItem.track as AudioTrack);
+        emitTelemetry("next", {
+          lessonId: nextItem.track.trackId,
+          trigger: "autoplay_queue",
+        });
+        return;
+      }
     }
-    const next = ctxArg.lessons[nextIndex];
-    if (next.hasAccess === false) {
-      setIsPlaying(false);
-      return;
-    }
-    playTrack(next, { ...ctxArg, currentIndex: nextIndex });
-    emitTelemetry("next", {
-      lessonId: next.trackId,
-      trigger: "autoplay",
-    });
-  }, [playTrack]);
+
+    setIsPlaying(false);
+  }, [playTrack, queue]);
   // MP2 R2-H1: manter ref atualizada pro Engine `ended` handler chamar autoplay.
   tryAutoplayNextRef.current = tryAutoplayNext;
 
@@ -1044,6 +1133,17 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       connectSpotify,
       disconnectSpotifyDriver,
       isSpotifyConnected,
+      // Sprint Mini Player 3 (RF-05) MP3.1 R1 fix CRITICAL-2.
+      queueItems: queue.queue,
+      repeatMode: queue.repeatMode,
+      shuffleEnabled: queue.shuffleEnabled,
+      addToQueue: queue.addToQueue,
+      removeFromQueue: queue.removeFromQueue,
+      clearQueue: queue.clearQueue,
+      setRepeatMode: queue.setRepeatMode,
+      toggleShuffle: queue.toggleShuffle,
+      skipToQueueItem: queue.skipToQueueItem,
+      reorderQueue: queue.reorderQueue,
     }),
     [
       current,
@@ -1078,6 +1178,16 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       connectSpotify,
       disconnectSpotifyDriver,
       isSpotifyConnected,
+      queue.queue,
+      queue.repeatMode,
+      queue.shuffleEnabled,
+      queue.addToQueue,
+      queue.removeFromQueue,
+      queue.clearQueue,
+      queue.setRepeatMode,
+      queue.toggleShuffle,
+      queue.skipToQueueItem,
+      queue.reorderQueue,
     ],
   );
 

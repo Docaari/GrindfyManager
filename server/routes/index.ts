@@ -72,6 +72,9 @@ import { registerReentryRoutes } from "./reentry";
 // Sprint Mini Player 2 (ADR-190/191).
 import { registerSpotifyAudioRoutes } from "./spotifyAudio";
 import { registerUserActivityRoutes } from "./userActivity";
+// Sprint Mini Player 3 / RF-05.5+RF-05.6 — POST/GET /api/audio/queue (ADR-193).
+// MP3.1 R1 fix CRITICAL-3: handlers existiam mas rota nunca registrada.
+import { registerAudioQueueRoutes } from "./audioQueue";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Wave C (Fase 3 obs): split liveness vs readiness.
@@ -293,6 +296,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sprint Mini Player 2 (ADR-190/191).
   registerSpotifyAudioRoutes(app);
   registerUserActivityRoutes(app);
+  // Sprint Mini Player 3 (ADR-193) — MP3.1 R1 fix CRITICAL-3.
+  registerAudioQueueRoutes(app);
 
   registerMiscRoutes(app);
   await registerSupremaRoutes(app);

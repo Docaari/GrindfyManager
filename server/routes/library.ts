@@ -152,6 +152,8 @@ export async function handleGetLibraryCourse(req: Request, res: Response) {
           hasAccess: !!accessMap.get(l.id),
           displayOrder: l.displayOrder ?? 0,
           progress: progressMap.get(l.id) ?? null,
+          // Sprint Mini Player 3 / RF-04.2 — transcription preview (80 chars + ellipsis).
+          transcriptionPreview: l.transcriptionPreview ?? null,
         })),
       })),
     };

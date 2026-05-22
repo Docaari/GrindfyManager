@@ -23,12 +23,52 @@ import { useQuery } from "@tanstack/react-query";
 import { useOptionalAudioPlayer } from "@/contexts/AudioPlayerContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
+import { sanitizeCoverUrl } from "@/lib/audio-engine/sanitizeCoverUrl";
+import { formatDuration } from "@/lib/audio-engine/formatDuration";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+// Sprint Mini Player 3 / RF-04.3 — sort modes persisted in localStorage.
+type SortMode = "recente" | "alfabetico" | "duracao";
+const SORT_KEY = "lessonPicker.sortBy";
+const VALID_SORTS: SortMode[] = ["recente", "alfabetico", "duracao"];
+
+function readStoredSort(): SortMode {
+  try {
+    const v = localStorage.getItem(SORT_KEY);
+    if (v && VALID_SORTS.includes(v as SortMode)) return v as SortMode;
+  } catch {
+    // ignore
+  }
+  return "recente";
+}
+
+function writeStoredSort(v: SortMode): void {
+  try {
+    localStorage.setItem(SORT_KEY, v);
+  } catch {
+    // ignore
+  }
+}
+
+function sortLessons(lessons: any[], mode: SortMode): any[] {
+  if (mode === "recente") return lessons;
+  if (mode === "alfabetico") {
+    return [...lessons].sort((a, b) =>
+      String(a.title ?? "").toLowerCase().localeCompare(String(b.title ?? "").toLowerCase()),
+    );
+  }
+  // duracao: ascending; nulls go to end via Number.MAX_SAFE_INTEGER.
+  return [...lessons].sort((a, b) => {
+    const da = a.durationSeconds ?? Number.MAX_SAFE_INTEGER;
+    const db = b.durationSeconds ?? Number.MAX_SAFE_INTEGER;
+    return da - db;
+  });
+}
 
 interface Props {
   open: boolean;
@@ -241,6 +281,14 @@ function LessonPickerDialogFetcher({
   const detailData = detailQuery.data;
   const detailError = detailQuery.error;
   const detailLoading = !!detailQuery.isLoading;
+  const coursesLoading = !!coursesQuery.isLoading;
+
+  // Sprint MP3 RF-04.3 — sort mode persisted in localStorage.
+  const [sortMode, setSortModeState] = useState<SortMode>(() => readStoredSort());
+  const setSortMode = (m: SortMode) => {
+    setSortModeState(m);
+    writeStoredSort(m);
+  };
 
   // Auto-select primeiro curso quando a lista carrega (UX: dropdown nao
   // pode ficar vazio se temos cursos). Tambem permite o caso "shape MP1"
@@ -396,6 +444,40 @@ function LessonPickerDialogFetcher({
         className="w-full px-3 py-2 mb-4 bg-gray-800 border border-white/10 rounded-md text-white"
       />
 
+      {/* MP3 RF-04.3 — Sort dropdown. */}
+      <div className="mb-3 flex items-center gap-2">
+        <label
+          htmlFor="lesson-picker-sort"
+          className="text-xs text-gray-400"
+        >
+          Ordenar por
+        </label>
+        <select
+          id="lesson-picker-sort"
+          data-testid="lesson-picker-sort"
+          value={sortMode}
+          onChange={(e) => setSortMode(e.target.value as SortMode)}
+          className="bg-gray-800 border border-white/10 rounded px-2 py-1 text-xs text-white"
+        >
+          <option value="recente">Recente</option>
+          <option value="alfabetico">Alfabetico</option>
+          <option value="duracao">Duracao</option>
+        </select>
+      </div>
+
+      {/* MP3 RF-04.4 — Skeleton loading. */}
+      {coursesLoading && (
+        <div className="space-y-2">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              data-testid="lesson-picker-skeleton"
+              className="h-16 animate-pulse rounded bg-gray-700"
+            />
+          ))}
+        </div>
+      )}
+
       {/* RF-01: dropdown apenas quando shape new (flat list sem modules) */}
       {!shapeIsLegacy && courseList.length > 0 && (
         <div className="mb-4">
@@ -498,13 +580,15 @@ function LessonPickerDialogFetcher({
             (l: any) =>
               !continueLessonIds.has(String(l.lessonId ?? l.id)),
           );
-          const visible = q
+          const visibleFiltered = q
             ? visibleBase.filter((l) =>
                 String(l.title ?? "")
                   .toLowerCase()
                   .includes(q),
               )
             : visibleBase;
+          // MP3 RF-04.3 — Aplica sort mode.
+          const visible = sortLessons(visibleFiltered, sortMode);
           if (visible.length === 0) return null;
           return (
             <div key={course.slug}>
@@ -515,8 +599,20 @@ function LessonPickerDialogFetcher({
                 {visible.map((lesson: any) => {
                   const disabled = lesson.hasAccess === false;
                   const lessonId = lesson.lessonId ?? lesson.id;
+                  const sanitizedCover = sanitizeCoverUrl(lesson.coverUrl);
+                  const firstLetter =
+                    String(lesson.title ?? "?").trim().charAt(0).toUpperCase() ||
+                    "?";
+                  const durationLabel = formatDuration(
+                    lesson.durationSeconds ?? null,
+                  );
+                  const preview = lesson.transcriptionPreview ?? null;
                   return (
-                    <li key={lessonId}>
+                    <li
+                      key={lessonId}
+                      data-testid={`lesson-picker-row-${lessonId}`}
+                      className="flex items-stretch gap-1"
+                    >
                       <button
                         type="button"
                         data-testid={`lesson-picker-item-${lessonId}`}
@@ -533,14 +629,65 @@ function LessonPickerDialogFetcher({
                             : () => onPlay(course, lesson, courseLessons)
                         }
                         className={
-                          "w-full text-left px-3 py-2 text-sm rounded-md " +
+                          "flex-1 flex items-center gap-3 text-left px-3 py-2 text-sm rounded-md " +
                           (disabled
                             ? "opacity-50 cursor-not-allowed text-gray-400"
                             : "text-gray-200 hover:bg-white/5")
                         }
                       >
-                        {lesson.title}
+                        {sanitizedCover ? (
+                          <img
+                            src={sanitizedCover}
+                            alt={`Capa de ${lesson.title ?? ""}`}
+                            className="h-12 w-12 flex-shrink-0 rounded object-cover"
+                          />
+                        ) : (
+                          <div
+                            data-testid="lesson-picker-placeholder"
+                            aria-hidden="true"
+                            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-gray-700 text-base font-semibold text-gray-300"
+                          >
+                            {firstLetter}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate">{lesson.title}</div>
+                          <div className="line-clamp-1 text-xs text-gray-400">
+                            {preview ?? "—"}
+                          </div>
+                        </div>
+                        <div className="flex-shrink-0 text-xs text-gray-400">
+                          {durationLabel}
+                        </div>
                       </button>
+                      {/* MP3.1 R1 fix CRITICAL-2: Add-to-queue button. */}
+                      {!disabled && ctx && typeof (ctx as any).addToQueue === "function" ? (
+                        <button
+                          type="button"
+                          data-testid={`add-to-queue-${lessonId}`}
+                          aria-label={`Adicionar ${lesson.title} a fila`}
+                          title="Adicionar a fila"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            try {
+                              (ctx as any).addToQueue({
+                                source: "library",
+                                trackId: String(lessonId),
+                                title: String(lesson.title ?? ""),
+                                audioUrl: lesson.audioUrl,
+                                coverUrl: lesson.coverUrl ?? null,
+                                courseTitle: course.title ?? null,
+                                durationSeconds: lesson.durationSeconds,
+                              });
+                            } catch {
+                              // best-effort
+                            }
+                          }}
+                          className="flex-shrink-0 px-2 text-gray-400 hover:bg-white/5 hover:text-white rounded-md"
+                        >
+                          +
+                        </button>
+                      ) : null}
                     </li>
                   );
                 })}

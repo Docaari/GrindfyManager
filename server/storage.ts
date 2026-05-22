@@ -9500,6 +9500,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
                 learningObjectives: libraryLessons.learningObjectives,
                 displayOrder: libraryLessons.displayOrder,
                 isPublished: libraryLessons.isPublished,
+                // Sprint Mini Player 3 / RF-04.2 — transcription_preview (migration 0078).
+                transcriptionPreview: libraryLessons.transcriptionPreview,
                 createdAt: libraryLessons.createdAt,
                 updatedAt: libraryLessons.updatedAt,
               })
