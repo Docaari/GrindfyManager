@@ -24,6 +24,7 @@
 // ou de outro user => throw "tournament_not_found" (handler converte).
 // =============================================================================
 
+import { coerceFiniteNumber } from "@shared/numCoerce";
 import { computeTournamentScore } from "../scoring/tournamentScorer";
 import type { PlayerAnalyticsBundle } from "../scoring/tournamentScorer";
 import {
@@ -129,19 +130,14 @@ function signalConfidence(sampleSize: number): "low" | "medium" | "high" {
   return "low";
 }
 
-function num(v: any, fallback = 0): number {
-  const n = typeof v === "number" ? v : parseFloat(v ?? "");
-  return Number.isFinite(n) ? n : fallback;
-}
-
 function buildBreakdownFromSignals(signals: any): ScoreBreakdownSignal[] {
   const out: ScoreBreakdownSignal[] = [];
   for (const key of Object.keys(signals ?? {})) {
     const s = signals[key];
     if (!s) continue;
-    const weight = num(s.weight);
-    const value = num(s.score);
-    const sampleSize = num(s.sample);
+    const weight = coerceFiniteNumber(s.weight);
+    const value = coerceFiniteNumber(s.score);
+    const sampleSize = coerceFiniteNumber(s.sample);
     out.push({
       signalName: key,
       weight,

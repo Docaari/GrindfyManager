@@ -1,0 +1,109 @@
+%% Diagrama Mermaid - Sprint AI-3.2 / RF-D6 (ADR-205)
+%%
+%% Flow: retry chain com AbortController cap absoluto.
+%% Mitiga worst-case wall-clock ~182s/job em incidente Anthropic prolongado.
+%%
+%% Cap default 60s, configuravel via COACH_LLM_TIMEOUT_MS env.
+%% Quando dispara: degradedReason='llm_timeout' (NOVO) distinto de 'llm_failed_3x'.
+%%
+%% Lessons: #9 (log antes do fallback), #5/#35 (Anthropic ctor preservado).
+%% AbortController nativo Node 20 (sem polyfill).
+
+flowchart TD
+    START(["callReportLlm chamado<br/>{ systemPrompt, userPromptBuilder,<br/>model, maxTokens, parseOnError }"])
+    RESOLVE_CAP["resolveLlmTimeoutMs()<br/><i>env COACH_LLM_TIMEOUT_MS</i><br/><i>default 60_000ms</i><br/><i>invalido -> default</i>"]
+    CTRL["new AbortController()<br/>setTimeout(() => controller.abort(), cap)<br/>start = Date.now()"]
+
+    GETCLIENT{"getAnthropicClient()<br/><i>client OK?</i>"}
+    DEGRADED_KEY(["return degraded<br/>{ degradedReason: 'no_anthropic_key' }"])
+
+    LOOP_INIT["attempt = 1"]
+    SDK_CALL["client.messages.create({<br/>...args,<br/>signal: controller.signal<br/>})"]
+
+    SDK_RESPONSE{"SDK response<br/>status?"}
+    OK_200["200 OK<br/>rawText = response.content[0].text"]
+
+    PARSE_OK{"JSON.parse(rawText)<br/>OK?"}
+    COMPUTE_COST["computeReportCost(usage, ratecard)"]
+    RETURN_OK(["return { content, usage, rawText,<br/>costUsd, degradedReason: undefined }"])
+
+    PARSE_FAIL["LOG #9<br/>anthropicClient.parse_failed<br/>{ rawText (truncated 500ch),<br/>elapsedMs, attempt }"]
+    PARSE_BRANCH{"parseOnError"}
+    DEGRADED_PARSE(["return degraded<br/>{ degradedReason: 'llm_parse_error',<br/>rawText AI-3.2 RF-C10 }"])
+    THROW_PARSE(["throw ParseError"])
+
+    RETRYABLE{"isRetryableError(err)?<br/><i>429/500/529 OR<br/>network pattern</i>"}
+    NON_RETRY{"non-retryable<br/>error"}
+    LOG_RETRY["LOG #9<br/>anthropicClient.before_fallback<br/>{ reason, attempt, elapsedMs }"]
+
+    BACKOFF["sleep(100 * 4 ^ (attempt - 1))<br/><i>100ms / 400ms / 1600ms</i><br/><br/><i>sleep aborta se signal.aborted</i>"]
+
+    SIGNAL_CHECK{"controller.signal.aborted?<br/><i>cap disparou durante<br/>backoff ou attempt?</i>"}
+
+    INC["attempt++"]
+    ATTEMPT_CHECK{"attempt <= 3?"}
+
+    DEGRADED_3X(["return degraded<br/>{ degradedReason: 'llm_failed_3x' }"])
+
+    TIMEOUT_PATH["LOG #9<br/>anthropicClient.before_fallback<br/>{ reason: 'timeout',<br/>elapsedMs = Date.now() - start,<br/>cap }"]
+    DEGRADED_TIMEOUT(["return degraded<br/>{ degradedReason: 'llm_timeout' }<br/><br/><i>NOVO AI-3.2 RF-D6</i>"])
+
+    FINALLY["finally:<br/>clearTimeout(timeoutId)"]
+
+    START --> RESOLVE_CAP
+    RESOLVE_CAP --> CTRL
+    CTRL --> GETCLIENT
+    GETCLIENT -->|"null"| DEGRADED_KEY
+    DEGRADED_KEY --> FINALLY
+
+    GETCLIENT -->|"OK"| LOOP_INIT
+    LOOP_INIT --> SDK_CALL
+
+    SDK_CALL -->|"resolve"| SDK_RESPONSE
+    SDK_CALL -->|"reject + signal.aborted"| TIMEOUT_PATH
+    SDK_CALL -->|"reject + outro erro"| RETRYABLE
+
+    SDK_RESPONSE -->|"200"| OK_200
+    SDK_RESPONSE -->|"429/500/529"| RETRYABLE
+    SDK_RESPONSE -->|"non-retryable status<br/>400/401/403/404"| NON_RETRY
+
+    OK_200 --> PARSE_OK
+    PARSE_OK -->|"OK"| COMPUTE_COST
+    PARSE_OK -->|"fail"| PARSE_FAIL
+    PARSE_FAIL --> PARSE_BRANCH
+    PARSE_BRANCH -->|"fallback-degraded"| DEGRADED_PARSE
+    PARSE_BRANCH -->|"throw"| THROW_PARSE
+    DEGRADED_PARSE --> FINALLY
+    THROW_PARSE --> FINALLY
+    COMPUTE_COST --> RETURN_OK
+    RETURN_OK --> FINALLY
+
+    NON_RETRY --> LOG_RETRY
+    LOG_RETRY --> DEGRADED_3X
+    DEGRADED_3X --> FINALLY
+
+    RETRYABLE -->|"yes"| LOG_RETRY
+    LOG_RETRY --> BACKOFF
+    BACKOFF --> SIGNAL_CHECK
+    SIGNAL_CHECK -->|"aborted"| TIMEOUT_PATH
+    SIGNAL_CHECK -->|"OK"| INC
+    INC --> ATTEMPT_CHECK
+    ATTEMPT_CHECK -->|"yes"| SDK_CALL
+    ATTEMPT_CHECK -->|"no (3 exhaust)"| DEGRADED_3X
+
+    TIMEOUT_PATH --> DEGRADED_TIMEOUT
+    DEGRADED_TIMEOUT --> FINALLY
+
+    classDef happy fill:#d4edda,stroke:#155724;
+    classDef degraded fill:#f8d7da,stroke:#842029;
+    classDef timeout fill:#e2d9f3,stroke:#5a3d8f,stroke-width:3px;
+    classDef logging fill:#fff3cd,stroke:#856404;
+    classDef control fill:#cfe2ff,stroke:#084298;
+    classDef decision fill:#fde2e4,stroke:#933;
+
+    class RETURN_OK,OK_200,PARSE_OK,COMPUTE_COST happy;
+    class DEGRADED_KEY,DEGRADED_PARSE,DEGRADED_3X,THROW_PARSE,NON_RETRY degraded;
+    class TIMEOUT_PATH,DEGRADED_TIMEOUT timeout;
+    class LOG_RETRY,PARSE_FAIL logging;
+    class RESOLVE_CAP,CTRL,LOOP_INIT,BACKOFF,INC,FINALLY,SDK_CALL control;
+    class GETCLIENT,SDK_RESPONSE,PARSE_BRANCH,RETRYABLE,SIGNAL_CHECK,ATTEMPT_CHECK decision;

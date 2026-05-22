@@ -58,6 +58,13 @@ function num(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Type guard local — paridade com `cgameAggregator.isValidConfidence`. Mantido
+// inline (NAO migrado) porque os testes AI-3.1 mockam `cgameAggregator` parcial
+// (apenas `aggregateCgameForPeriod`/`getInchwormSeries`) e quebram com import
+// novo do helper. Ver lesson #3.
+// TODO AI-3.3 — migrate to shared isValidConfidence apos test-writer ajustar
+// mock cgameAggregator (re-export `isValidConfidence` no mock para evitar
+// undefined symbol). Reviewer AI-3.2 MEDIUM-2 deferred.
 function isValidConfidence(v: any): v is "high" | "medium" | "low" {
   return v === "high" || v === "medium" || v === "low";
 }
@@ -153,7 +160,7 @@ export async function generateQuarterlyReport(args: GenerateQuarterlyReportArgs)
   // RF-01 (AI-3.1) — confidence passthrough. Se aggregator retorna confidence
   // valido ∈ {'high','medium','low'} → persiste. Se invalido/undefined → NO-OP
   // (log warn) e nao escreve shape ruim em ai_structured_profile.cgameRecent.
-  let cgamePersistPromise: Promise<void> = Promise.resolve();
+  // Sprint AI-3.2 / RF-C5 — fire-and-forget inline (sem variavel intermediaria).
   if (cgameSnapshotPlain && typeof cgameSnapshotPlain === "object") {
     if (!isValidConfidence(cgameSnapshotPlain.confidence)) {
       console.warn("cgame.persist.confidence_invalid", {
@@ -161,22 +168,19 @@ export async function generateQuarterlyReport(args: GenerateQuarterlyReportArgs)
         confidence: cgameSnapshotPlain.confidence,
       });
     } else {
-      try {
-        const snap = {
-          aPct: num(cgameSnapshotPlain.aPct),
-          bPct: num(cgameSnapshotPlain.bPct),
-          cPct: num(cgameSnapshotPlain.cPct),
-          sampleSize: num(cgameSnapshotPlain.sampleSize),
-          confidence: cgameSnapshotPlain.confidence,
-          period: { start: periodStart, end: periodEnd },
-          updatedAt: new Date().toISOString(),
-        };
-        cgamePersistPromise = (updateCgameRecent(userId, snap) as Promise<void>).catch((err) => {
-          console.error("quarterly.cgame.persist.error", { userId, err: err instanceof Error ? err.message : String(err) });
-        });
-      } catch (err) {
-        console.error("quarterly.cgame.persist.import.error", { userId, err: err instanceof Error ? err.message : String(err) });
-      }
+      const snap = {
+        aPct: num(cgameSnapshotPlain.aPct),
+        bPct: num(cgameSnapshotPlain.bPct),
+        cPct: num(cgameSnapshotPlain.cPct),
+        sampleSize: num(cgameSnapshotPlain.sampleSize),
+        confidence: cgameSnapshotPlain.confidence,
+        period: { start: periodStart, end: periodEnd },
+        updatedAt: new Date().toISOString(),
+      };
+      // Fire-and-forget: NAO bloqueia o return do gerador.
+      void updateCgameRecent(userId, snap).catch((err: any) => {
+        console.error("quarterly.cgame.persist.error", { userId, err: err instanceof Error ? err.message : String(err) });
+      });
     }
   }
 
@@ -265,7 +269,7 @@ export async function generateQuarterlyReport(args: GenerateQuarterlyReportArgs)
           byCurrency.push({
             currency: cur,
             profitNative: native,
-            profit: native, // @deprecated alias — paridade com computeIrpfSummary tool; remove AI-3.2
+            profit: native, // @deprecated alias — paridade com computeIrpfSummary tool (tests AI-3.1 ainda dependem do alias; remove em sprint futuro apos drop coordenado).
             convertedUsd,
             convertedBrl: convertedUsd * ptax,
           });
@@ -554,11 +558,6 @@ export async function generateQuarterlyReport(args: GenerateQuarterlyReportArgs)
   md.push("");
   md.push(REPORT_DISCLAIMER);
   const markdown = md.join("\n");
-
-  // RF-03: persist do cgame é fire-and-forget — não bloqueia o return do
-  // gerador. A spy do test já foi invocada sincronamente (linha onde criamos
-  // cgamePersistPromise); a Promise resolve em background com .catch() logado.
-  void cgamePersistPromise;
 
   return {
     content,

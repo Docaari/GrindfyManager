@@ -1,0 +1,99 @@
+%% Diagrama Mermaid - Sprint AI-3.2 / RF-B1 + RF-B2 (ADR-203 sec 2.1/2.2)
+%%
+%% Final state: 5/5 generators lockstep consumindo callReportLlm unico (+ summarizer Haiku ao lado).
+%% Fecha consolidacao iniciada AI-3.1 (3/5 migrados; weekly + recommendLesson deferidos).
+%%
+%% Antes (AI-3.1):
+%%   - quarterly + monthly + daily -> callReportLlm (OK, migrados AI-3.1)
+%%   - reportSummarizer (Haiku) -> callReportLlm (OK, migrado AI-3.1)
+%%   - weekly -> SDK Anthropic direto (DEFER AI-3.2)
+%%   - recommendLesson -> SDK Anthropic direto (DEFER AI-3.2)
+%%
+%% Apos (AI-3.2):
+%%   - 5/5 generators principais consomem callReportLlm
+%%   - + summarizer indireto via maybeSummarizeBundle (chamado por monthly/quarterly quando bundle > 20K chars)
+%%
+%% Lessons: #3 (mock shape real), #5/#35 (new Anthropic ctor try/catch), #9 (log antes do fallback),
+%%          #10 (DRY prompt cache ephemeral), #38 (test modificado com justificativa).
+
+graph TB
+    subgraph generators["5 Generators (paridade lockstep)"]
+        WEEKLY["weeklyReportGenerator.ts<br/><i>RF-B1 migra AI-3.2</i><br/>Sonnet 4.6 narrative weekly"]
+        MONTHLY["monthlyReportGenerator.ts<br/><i>migrado AI-3.1</i><br/>Sonnet 4.6 narrative monthly + comparativos"]
+        DAILY["dailyDebriefGenerator.ts<br/><i>migrado AI-3.1</i><br/>Sonnet 4.6 narrative debrief"]
+        QUARTERLY["quarterlyReportGenerator.ts<br/><i>migrado AI-3 (LLM real) + AI-3.1</i><br/>Sonnet 4.6 narrative quarterly + cgame"]
+        RECOMMEND["recommendLessonForUser<br/><i>RF-B2 migra AI-3.2</i><br/>Sonnet 4.6 lesson recommendation"]
+    end
+
+    subgraph wrapper["server/coach/anthropicClient.ts (ADR-176 + AI-3.2 enhancements)"]
+        CALL["callReportLlm<br/>{ systemPrompt, userPromptBuilder, model,<br/>maxTokens, tone, level, parseOnError }<br/><br/>+ AI-3.2: AbortSignal.timeout(60s) RF-D6<br/>+ AI-3.2: rawText em degradedResult RF-C10"]
+        WHITELIST["WHITELISTED_TONES<br/>WHITELISTED_LEVELS<br/><i>validate sync</i>"]
+        GETCLIENT["getAnthropicClient<br/><i>lazy import + ctor</i><br/><i>lesson #5/#35</i>"]
+        RETRY["retry 3x exponencial<br/>100ms / 400ms / 1600ms<br/><i>RETRYABLE_STATUS = [429,500,529]</i><br/><i>+ network errors (ECONNRESET/ETIMEDOUT/...)</i>"]
+        PARSE["JSON.parse(rawText)<br/>parseOnError:<br/>- fallback-degraded -> degradedResult<br/>- throw -> ParseError"]
+        LOG["console.warn<br/>anthropicClient.before_fallback<br/><i>lesson #9</i>"]
+    end
+
+    subgraph cost["server/coach/reportCost.ts (ADR-176)"]
+        COMPUTE["computeReportCost(usage, ratecard)<br/>ratecard: 'sonnet46' | 'haiku45'<br/>pricing oficial 2026-01"]
+    end
+
+    subgraph summarizer["Summarizer (indireto)"]
+        SUMM["server/coach/reportSummarizer.ts<br/><i>chamado por monthly/quarterly</i><br/><i>quando bundle > 20K chars</i><br/><br/>+ AI-3.2: JSON.stringify SEM pretty-print RF-D7<br/><i>-25% a -30% tokens Haiku</i>"]
+        CALL_HAIKU["callReportLlm (mesmo wrapper)<br/><i>model: Haiku 4.5</i>"]
+    end
+
+    subgraph sdk["Anthropic SDK"]
+        ANT["@anthropic-ai/sdk<br/>messages.create({ signal })"]
+    end
+
+    subgraph degraded["Degraded reasons (discriminated union)"]
+        D1["no_anthropic_key<br/><i>chave ausente</i>"]
+        D2["llm_failed_3x<br/><i>retry esgotou</i>"]
+        D3["llm_parse_error<br/><i>JSON invalido</i><br/><i>+ rawText AI-3.2 RF-C10</i>"]
+        D4["llm_timeout<br/><i>AbortSignal cap AI-3.2 RF-D6</i><br/><i>NOVO</i>"]
+    end
+
+    WEEKLY -->|"RF-B1 AI-3.2"| CALL
+    MONTHLY -->|"AI-3.1"| CALL
+    DAILY -->|"AI-3.1"| CALL
+    QUARTERLY -->|"AI-3 + AI-3.1"| CALL
+    RECOMMEND -->|"RF-B2 AI-3.2"| CALL
+
+    MONTHLY -.->|"bundle > 20K"| SUMM
+    QUARTERLY -.->|"bundle > 20K"| SUMM
+    SUMM --> CALL_HAIKU
+    CALL_HAIKU --> CALL
+
+    CALL --> WHITELIST
+    CALL --> GETCLIENT
+    GETCLIENT --> ANT
+    CALL --> RETRY
+    RETRY --> ANT
+    ANT --> PARSE
+    PARSE --> COMPUTE
+    PARSE -.->|"fail"| LOG
+    RETRY -.->|"exhaust"| LOG
+    LOG --> D2
+    LOG --> D3
+    LOG --> D4
+    GETCLIENT -.->|"null"| D1
+
+    COMPUTE -->|"costUsd"| CALL
+    CALL -.->|"degraded"| WEEKLY
+    CALL -.->|"degraded"| MONTHLY
+    CALL -.->|"degraded"| DAILY
+    CALL -.->|"degraded"| QUARTERLY
+    CALL -.->|"degraded"| RECOMMEND
+
+    classDef migratedAi31 fill:#d4edda,stroke:#155724,stroke-width:2px;
+    classDef migratedAi32 fill:#fff3cd,stroke:#856404,stroke-width:3px;
+    classDef shared fill:#cfe2ff,stroke:#084298,stroke-width:2px;
+    classDef external fill:#f8d7da,stroke:#842029,stroke-width:1px;
+    classDef new fill:#e2d9f3,stroke:#5a3d8f,stroke-width:2px;
+
+    class MONTHLY,DAILY,QUARTERLY migratedAi31;
+    class WEEKLY,RECOMMEND migratedAi32;
+    class CALL,WHITELIST,GETCLIENT,RETRY,PARSE,LOG,COMPUTE,SUMM,CALL_HAIKU shared;
+    class ANT external;
+    class D4 new;

@@ -18,6 +18,17 @@
 
 export type CgameLevel = "A" | "B" | "C";
 
+// =============================================================================
+// Sprint AI-3.2 / RF-A2 (ADR-203) — confidence narrowing canonico shared.
+// Consolida 4 generators (quarterly cgame persist + insight-mapping).
+// =============================================================================
+export const CGAME_CONFIDENCE_VALUES = ["high", "medium", "low"] as const;
+export type CgameConfidence = typeof CGAME_CONFIDENCE_VALUES[number];
+
+export function isValidConfidence(value: unknown): value is CgameConfidence {
+  return value === "high" || value === "medium" || value === "low";
+}
+
 function getThresholds(): { a: number; c: number } {
   const aRaw = process.env.CGAME_A_THRESHOLD ?? process.env.COACH_CGAME_A_THRESHOLD;
   const cRaw = process.env.CGAME_C_THRESHOLD ?? process.env.COACH_CGAME_C_THRESHOLD;

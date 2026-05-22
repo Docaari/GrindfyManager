@@ -187,7 +187,8 @@ function buildMarkdown(c: ReportContent, sum: SessionAggregate): string {
 
 // AI-1C / RF-08 — followUp block (foco de leak ativo + metas em progresso).
 // Safe-deny por dep: erro em uma fonte nao impede o resto.
-async function gatherFollowUp(storage: any, userId: string): Promise<{
+// Sprint AI-3.2 / RF-D3 — recebe aiProfile pre-carregado (dedup DB hit).
+async function gatherFollowUp(storage: any, userId: string, aiProfile: any): Promise<{
   activeLeakFocus: Array<{ code: string; label: string; targetMonth: string; status: string; progressNote?: string }>;
   goalsInProgress: Array<{ goalId: string; texto: string; prazo: "mes" | "trimestre" | null }>;
 } | undefined> {
@@ -208,9 +209,7 @@ async function gatherFollowUp(storage: any, userId: string): Promise<{
     console.error("daily_debrief.followup.leaks.error", { userId, err });
   }
   try {
-    const { getAiStructuredProfile } = await import("../storage/aiStructuredProfile");
-    const profile = await getAiStructuredProfile(userId);
-    const metas = Array.isArray((profile as any)?.metas) ? (profile as any).metas : [];
+    const metas = Array.isArray((aiProfile as any)?.metas) ? (aiProfile as any).metas : [];
     // Daily: so metas mensais sao relevantes pro fechamento de loop pos-sessao.
     for (const m of metas) {
       if (m?.prazo === "mes") {
@@ -237,7 +236,19 @@ export async function generateDailyDebrief(args: GenerateDailyDebriefArgs): Prom
   const hasData = agg.sessionsCount > 0;
   const roi = agg.buyInUsd > 0 ? (agg.profitUsd / agg.buyInUsd) * 100 : null;
 
-  const followUp = await gatherFollowUp(storage, userId);
+  // Sprint AI-3.2 / RF-D3 (ADR-203) — dedup: 1 chamada `getUserProfile` ao inves
+  // de 2 calls a `getAiStructuredProfile` standalone.
+  let aiProfile: any = null;
+  try {
+    if (typeof storage.getUserProfile === "function") {
+      const userProfile = await storage.getUserProfile(userId);
+      aiProfile = (userProfile as any)?.aiStructuredProfile ?? null;
+    }
+  } catch (err) {
+    console.error("daily_debrief.profile.error", { userId, err: err instanceof Error ? err.message : String(err) });
+  }
+
+  const followUp = await gatherFollowUp(storage, userId, aiProfile);
 
   // Tom + nivel (perfil estruturado tem prioridade; fallback coachTone).
   let tone: "gentle" | "balanced" | "direct" = "balanced";
@@ -247,12 +258,8 @@ export async function generateDailyDebrief(args: GenerateDailyDebriefArgs): Prom
     const prefs = await getCoachPreferences(userId);
     if (prefs?.coachTone) tone = prefs.coachTone as any;
   } catch { /* default */ }
-  try {
-    const { getAiStructuredProfile } = await import("../storage/aiStructuredProfile");
-    const profile = await getAiStructuredProfile(userId);
-    if ((profile as any)?.tomPreferido) tone = (profile as any).tomPreferido;
-    if ((profile as any)?.nivel) level = (profile as any).nivel;
-  } catch { /* default */ }
+  if ((aiProfile as any)?.tomPreferido) tone = (aiProfile as any).tomPreferido;
+  if ((aiProfile as any)?.nivel) level = (aiProfile as any).nivel;
 
   // Tenta LLM narrative para enriquecer header.summaryLine + insights +
   // recommendedAction. Bundle pequeno (1 sessao) -> custo ~$0.013/debrief.

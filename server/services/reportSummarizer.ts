@@ -49,10 +49,12 @@ Remova/condense:
 Responda APENAS com o JSON condensado, sem texto antes ou depois.`.trim();
 
 function buildSummarizerPrompt(bundle: any): string {
+  // Sprint AI-3.2 / RF-D7 (ADR-203) — JSON.stringify sem pretty-print (drop
+  // indent). Tokens Haiku contam whitespace; economiza ~15-30% de input tokens.
   return [
     "Bundle a condensar (preserve numeros, agregue listas longas):",
     "```json",
-    JSON.stringify(bundle, null, 2),
+    JSON.stringify(bundle),
     "```",
     "",
     "Responda APENAS com o JSON condensado.",

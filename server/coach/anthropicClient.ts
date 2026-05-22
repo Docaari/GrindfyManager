@@ -23,6 +23,7 @@
 // =============================================================================
 
 import { sleep } from "../utils/sleep";
+import { isRetryableError } from "../utils/isRetryableError";
 
 // Whitelist tones — inclui as 3 do spec AI-3.1 + as 3 legacy que callsites
 // existentes (weekly/monthly/quarterly/dailyDebrief) ja usam. Reviewer pode
@@ -40,6 +41,9 @@ export const WHITELISTED_LEVELS = [
   "iniciante", "intermediario", "avancado",
   "sem_dados", "iniciando", "micro_ascensao", "mid_consistente", "high_stakes", "recreativo_serio",
   "alto_volume", "low_to_mid", "mid_to_high", "high",
+  // Sprint AI-3.2 — pre-existing AI-1B vocab (weekly uses 'pro' from older
+  // aiStructuredProfile.nivel values). Mantem back-compat.
+  "pro",
 ] as const;
 
 export type CallReportLlmInput = {
@@ -58,8 +62,34 @@ export type CallReportLlmResult = {
   content: any;
   usage: any;
   rawText: string;
-  degradedReason?: "no_anthropic_key" | "llm_failed_3x" | "llm_parse_error";
+  degradedReason?: "no_anthropic_key" | "llm_failed_3x" | "llm_parse_error" | "llm_timeout";
 };
+
+// Sprint AI-3.2 / RF-D6 (ADR-205) — cap absoluto wall-clock por job.
+// Default 60s; configurável via env COACH_LLM_TIMEOUT_MS.
+// Env inválido (NaN, <=0) cai pro default.
+const DEFAULT_LLM_TIMEOUT_MS = 60_000;
+function resolveLlmTimeoutMs(): number {
+  const raw = process.env.COACH_LLM_TIMEOUT_MS;
+  if (!raw) return DEFAULT_LLM_TIMEOUT_MS;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_LLM_TIMEOUT_MS;
+  return n;
+}
+
+// Trunca rawText a no máximo 500 chars (defesa contra log gigante em parse error).
+function truncateRawText(text: string): string {
+  if (!text) return "";
+  return text.length > 500 ? text.slice(0, 500) : text;
+}
+
+function isAbortError(err: unknown): boolean {
+  if (err == null || typeof err !== "object") return false;
+  const anyErr = err as any;
+  if (anyErr.name === "AbortError") return true;
+  const message = String(anyErr.message ?? "").toLowerCase();
+  return message.includes("abort");
+}
 
 /**
  * Lazy import + new AnthropicCtor try/catch + factory fallback (lessons #5/#35).
@@ -89,16 +119,6 @@ export async function getAnthropicClient(injected?: any): Promise<any | null> {
   }
   if (!client) return null;
   return client;
-}
-
-function isRetryableError(err: any): boolean {
-  const status = Number(err?.status ?? err?.statusCode ?? 0);
-  // 429 rate limit, 5xx server error, 529 Anthropic overloaded (docs.anthropic.com/errors).
-  if (status === 429 || status === 529) return true;
-  if (status >= 500 && status < 600) return true;
-  const code = String(err?.code ?? "").toUpperCase();
-  if (code === "ECONNRESET" || code === "ETIMEDOUT" || code === "ECONNREFUSED") return true;
-  return false;
 }
 
 export async function callReportLlm(input: CallReportLlmInput): Promise<CallReportLlmResult> {
@@ -140,72 +160,111 @@ export async function callReportLlm(input: CallReportLlmInput): Promise<CallRepo
 
   const userMsg = userPromptBuilder(bundle, { tone: tone ?? null, level: level ?? null });
 
-  const MAX_ATTEMPTS = 3;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      const response = await client.messages.create({
-        model,
-        max_tokens: maxTokens,
-        system: [
-          { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
-        ],
-        messages: [{ role: "user", content: userMsg }],
-      });
-      const text = Array.isArray(response?.content)
-        ? response.content.filter((b: any) => b?.type === "text").map((b: any) => b.text).join("")
-        : (typeof response?.content === "string" ? response.content : "");
-      let parsed: any;
+  // Sprint AI-3.2 / RF-D6 (ADR-205) — AbortSignal cap absoluto wall-clock.
+  // Pos-reviewer CRITICAL-1: `signal` vai no SEGUNDO arg (RequestOptions) do
+  // Anthropic SDK — passar no body é silentmente ignorado e cap nunca dispara.
+  const capMs = resolveLlmTimeoutMs();
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), capMs);
+  // Não segura o event-loop em testes/CLI long-running.
+  if (typeof (timeoutHandle as any).unref === "function") {
+    (timeoutHandle as any).unref();
+  }
+
+  try {
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const m = text.match(/\{[\s\S]*\}/);
-        parsed = m ? JSON.parse(m[0]) : JSON.parse(text);
-      } catch {
-        // parse error — lesson #9: log antes do fallback.
-        console.warn("anthropicClient.before_fallback", {
-          reason: "llm_parse_error",
-          model,
-          attempt,
-        });
-        if (parseOnError === "throw") {
-          throw new Error("anthropicClient: JSON parse error");
+        const response = await client.messages.create(
+          {
+            model,
+            max_tokens: maxTokens,
+            system: [
+              { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
+            ],
+            messages: [{ role: "user", content: userMsg }],
+          },
+          { signal: controller.signal },
+        );
+        const text = Array.isArray(response?.content)
+          ? response.content.filter((b: any) => b?.type === "text").map((b: any) => b.text).join("")
+          : (typeof response?.content === "string" ? response.content : "");
+        let parsed: any;
+        try {
+          const m = text.match(/\{[\s\S]*\}/);
+          parsed = m ? JSON.parse(m[0]) : JSON.parse(text);
+        } catch {
+          // parse error — lesson #9: log antes do fallback.
+          // Sprint AI-3.2 / RF-C10 (Q#15) — inclui rawText (truncado a 500 chars)
+          // pra debug em produção.
+          console.warn("anthropicClient.before_fallback", {
+            reason: "llm_parse_error",
+            model,
+            attempt,
+            rawText: truncateRawText(text),
+          });
+          if (parseOnError === "throw") {
+            throw new Error("anthropicClient: JSON parse error");
+          }
+          return {
+            content: {},
+            usage: response?.usage ?? null,
+            rawText: text,
+            degradedReason: "llm_parse_error",
+          };
         }
         return {
-          content: {},
+          content: parsed ?? {},
           usage: response?.usage ?? null,
           rawText: text,
-          degradedReason: "llm_parse_error",
         };
+      } catch (err) {
+        // Sprint AI-3.2 / RF-D6 — cap dispara → degradedReason='llm_timeout'
+        // (distinto de llm_failed_3x retry exhaust).
+        if (controller.signal.aborted || isAbortError(err)) {
+          console.warn("anthropicClient.before_fallback", {
+            reason: "timeout",
+            model,
+            attempt,
+            capMs,
+          });
+          if (parseOnError === "throw") {
+            throw err;
+          }
+          return {
+            content: {},
+            usage: null,
+            rawText: "",
+            degradedReason: "llm_timeout",
+          };
+        }
+        const retryable = isRetryableError(err) && attempt < MAX_ATTEMPTS;
+        // Lesson #9: log antes do fallback/retry.
+        console.warn("anthropicClient.before_fallback", {
+          reason: retryable ? "retry" : (attempt >= MAX_ATTEMPTS ? "llm_failed_3x" : "non_retryable"),
+          model,
+          attempt,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        if (retryable) {
+          const backoffMs = 100 * Math.pow(4, attempt - 1); // 100, 400, 1600
+          await sleep(backoffMs);
+          continue;
+        }
+        // Nao retryable OU exhausted -> sai do loop e retorna degraded.
+        if (parseOnError === "throw") {
+          throw err;
+        }
+        break;
       }
-      return {
-        content: parsed ?? {},
-        usage: response?.usage ?? null,
-        rawText: text,
-      };
-    } catch (err) {
-      const retryable = isRetryableError(err) && attempt < MAX_ATTEMPTS;
-      // Lesson #9: log antes do fallback/retry.
-      console.warn("anthropicClient.before_fallback", {
-        reason: retryable ? "retry" : (attempt >= MAX_ATTEMPTS ? "llm_failed_3x" : "non_retryable"),
-        model,
-        attempt,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      if (retryable) {
-        const backoffMs = 100 * Math.pow(4, attempt - 1); // 100, 400, 1600
-        await sleep(backoffMs);
-        continue;
-      }
-      // Nao retryable OU exhausted.
-      if (parseOnError === "throw") {
-        throw err;
-      }
-      // Continua para proxima iteracao se nao exhausted (mas como retryable=false, sai).
-      break;
     }
+    return {
+      content: {},
+      usage: null,
+      rawText: "",
+      degradedReason: "llm_failed_3x",
+    };
+  } finally {
+    clearTimeout(timeoutHandle);
   }
-  return {
-    content: {},
-    usage: null,
-    rawText: "",
-    degradedReason: "llm_failed_3x",
-  };
 }

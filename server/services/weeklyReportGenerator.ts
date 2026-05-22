@@ -30,11 +30,17 @@
 import { nanoid } from "nanoid";
 import type { ReportContent } from "@shared/schema";
 import { getCurrentWeekStartBRT } from "../coach/weekHelper";
+// Sprint AI-3.2 / RF-B3 (ADR-203) — computeReportCost shared (paridade 5/5
+// generators); pricing Sonnet 4.6 vem de server/coach/reportCost.ts.
+import { computeReportCost } from "../coach/reportCost";
+// Sprint AI-3.2 fix wave / HIGH-1 — top-level import (era lazy `await import`
+// dentro de `callLlm`). Path mismatch quebrava mocks `vi.doMock(
+// "../coach/anthropicClient")` em testes que escrevem o mock APOS o
+// resetModules. Manter top-level pra mock funcionar deterministicamente.
+import { callReportLlm } from "../coach/anthropicClient";
+import { WEEKLY_REPORT_SYSTEM, buildWeeklyReportPrompt } from "../coach/prompts/weeklyReport";
 
 const DEFAULT_REPORT_MODEL = "claude-sonnet-4-6";
-
-// Tabela de precos aproximada (USD por 1M tokens) — sonnet 4.6.
-const PRICE_PER_M = { input: 3, output: 15, cacheCreate: 3.75, cacheRead: 0.3 };
 
 // Hrefs de CTA/nextWeekPlan aceitos do LLM — rotas Wouter REGISTRADAS (lesson #19).
 // O LLM pode alucinar /grade-planner, /stats etc.; qualquer href fora dessa lista
@@ -106,16 +112,15 @@ async function resolveStorage(injected?: any): Promise<any> {
 
 function computeCost(usage: any): number {
   if (!usage) return 0;
-  const input = n(usage.input_tokens ?? usage.inputTokens);
-  const output = n(usage.output_tokens ?? usage.outputTokens);
-  const cacheCreate = n(usage.cache_creation_input_tokens ?? usage.cacheCreationInputTokens);
-  const cacheRead = n(usage.cache_read_input_tokens ?? usage.cacheReadInputTokens);
-  const cost =
-    (input * PRICE_PER_M.input +
-      output * PRICE_PER_M.output +
-      cacheCreate * PRICE_PER_M.cacheCreate +
-      cacheRead * PRICE_PER_M.cacheRead) /
-    1_000_000;
+  // Sprint AI-3.2 / RF-B3 — delega para computeReportCost (paridade 5/5).
+  // Aceita camelCase legacy (inputTokens etc) — normaliza pra snake_case.
+  const normalized = {
+    input_tokens: n(usage.input_tokens ?? usage.inputTokens),
+    output_tokens: n(usage.output_tokens ?? usage.outputTokens),
+    cache_creation_input_tokens: n(usage.cache_creation_input_tokens ?? usage.cacheCreationInputTokens),
+    cache_read_input_tokens: n(usage.cache_read_input_tokens ?? usage.cacheReadInputTokens),
+  };
+  const cost = computeReportCost(normalized, "sonnet46");
   return Math.round(cost * 1e6) / 1e6;
 }
 
@@ -575,63 +580,40 @@ async function runBackfills(
 
 // -----------------------------------------------------------------------------
 // LLM (sonnet 4.6) — narrativas + 3 insights + plano
+// Sprint AI-3.2 / RF-B1 (ADR-203) — delega para callReportLlm (paridade 5/5
+// generators: weekly + monthly + daily + quarterly + summarizer + recommendLesson).
 // -----------------------------------------------------------------------------
 async function callLlm(
   model: string,
   bundle: any,
   tone: string,
   level: string | null,
-): Promise<{ parsed: any; usage: any } | { clientUnavailable: true }> {
-  const { WEEKLY_REPORT_SYSTEM, buildWeeklyReportPrompt } = await import("../coach/prompts/weeklyReport");
-  let AnthropicCtor: any;
-  try {
-    const sdkMod = await import("@anthropic-ai/sdk");
-    AnthropicCtor = (sdkMod as any).default ?? sdkMod;
-  } catch {
-    return { clientUnavailable: true };
-  }
-
-  let client: any;
-  try {
-    client = new AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY });
-  } catch {
-    // mock arrow / nao-construtor (lesson #5/#35) — tenta como factory.
-    try {
-      client = AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY });
-    } catch {
-      client = null;
-    }
-  }
-  if (!client || !client.messages || typeof client.messages.create !== "function") {
-    return { clientUnavailable: true };
-  }
-
-  const userMsg = buildWeeklyReportPrompt({
+): Promise<{ parsed: any; usage: any } | { clientUnavailable: true; degradedReason?: string }> {
+  // Sprint AI-3.2 fix wave / HIGH-1 — imports movidos pro top-level (ver header).
+  const out = await callReportLlm({
+    systemPrompt: WEEKLY_REPORT_SYSTEM,
+    userPromptBuilder: (b, opts) => buildWeeklyReportPrompt({
+      tone: opts.tone ?? tone,
+      level: opts.level ?? level,
+      bundle: b,
+    } as any),
+    model,
+    bundle,
     tone,
     level,
-    bundle,
+    maxTokens: 3000,
+    parseOnError: "fallback-degraded",
   });
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: 3000,
-    system: [
-      { type: "text", text: WEEKLY_REPORT_SYSTEM, cache_control: { type: "ephemeral" } },
-    ],
-    messages: [{ role: "user", content: userMsg }],
-  });
-
-  const text = Array.isArray(response?.content)
-    ? response.content.filter((b: any) => b?.type === "text").map((b: any) => b.text).join("")
-    : (typeof response?.content === "string" ? response.content : "");
-  let parsed: any = {};
-  try {
-    const m = text.match(/\{[\s\S]*\}/);
-    parsed = m ? JSON.parse(m[0]) : JSON.parse(text);
-  } catch {
-    parsed = {};
+  if (out.degradedReason) {
+    // Lesson #9 — log error antes do fallback (paridade AI-1B).
+    console.error("report.weekly.llm.degraded", {
+      degradedReason: out.degradedReason,
+      model,
+    });
+    return { clientUnavailable: true, degradedReason: out.degradedReason };
   }
-  return { parsed, usage: response?.usage ?? null };
+  return { parsed: out.content ?? {}, usage: out.usage ?? null };
 }
 
 // -----------------------------------------------------------------------------
@@ -731,9 +713,12 @@ export async function generateWeeklyReport(args: GenerateWeeklyReportArgs): Prom
     try {
       const out = await callLlm(model, bundle, tone, level);
       if ((out as any).clientUnavailable) {
-        // SDK/cliente indisponivel (broken mock, sem dep) — retry nao resolve;
-        // cai pro deterministico direto, como "sem chave".
-        degradedReason = "no_anthropic_key";
+        // SDK/cliente indisponivel OU callReportLlm retornou degradedReason
+        // (Sprint AI-3.2 / RF-B1 — paridade monthly/quarterly).
+        // Traduz degradedReason direto para preservar a paridade do schema
+        // ('no_anthropic_key' | 'llm_failed_3x' | 'llm_parse_error' | 'llm_timeout').
+        const reason = (out as any).degradedReason;
+        degradedReason = (reason && typeof reason === "string") ? reason : "no_anthropic_key";
       } else {
         parsed = (out as any).parsed ?? {};
         usage = (out as any).usage ?? null;

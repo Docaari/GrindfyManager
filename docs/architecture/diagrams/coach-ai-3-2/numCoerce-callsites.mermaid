@@ -1,0 +1,63 @@
+%% Diagrama Mermaid - Sprint AI-3.2 / RF-A1 (ADR-204)
+%%
+%% DAG dos 6 callsites convergindo no shared helper.
+%% Helper local antes (safe/num/N/coerceFinite) -> coerceFiniteNumber compartilhado.
+%%
+%% Lesson #11 (default minimo): retorna fallback explicito em vez de throw.
+%% Aceita unknown (compat JSON.parse, Drizzle string|number, Anthropic usage opcional).
+%% Sem coerce automatico de string ('42' -> fallback).
+
+graph LR
+    subgraph callsitesBefore["Antes AI-3.2 (helpers locais duplicados)"]
+        C1["server/coach/reportCost.ts<br/><i>const safe = (n: unknown) =><br/>Number.isFinite(...) ? n : 0</i><br/><br/>uso: usage.input_tokens,<br/>output_tokens, cache_read,<br/>cache_creation"]
+        C2["server/services/quarterlyReportGenerator.ts<br/><i>const num = ...</i><br/><br/>uso: PrimeDope variance,<br/>IRPF byCurrency profitNative"]
+        C3["server/services/monthlyReportGenerator.ts<br/><i>const num = ...</i><br/><br/>uso: variance heuristica,<br/>comparativos -1/6m/12m"]
+        C4["server/services/dailyDebriefGenerator.ts<br/><i>const safe = ...</i><br/><br/>uso: session_tournaments<br/>FX-converted profits"]
+        C5["server/services/tournamentScoringService.ts<br/><i>const N = ...</i><br/><br/>uso: scoring 0-100,<br/>grade S/A/B/C/D"]
+        C6["server/services/fx/fxResolver.ts<br/><i>const safe = ...</i><br/><br/>uso: fallback heuristico<br/>cascade"]
+    end
+
+    subgraph shared["shared/numCoerce.ts (NOVO AI-3.2)"]
+        HELPER["coerceFiniteNumber(value: unknown,<br/>fallback: number = 0): number<br/><br/>return Number.isFinite(value as number)<br/>? (value as number)<br/>: fallback<br/><br/><i>lesson #11 default minimo</i>"]
+    end
+
+    subgraph tests["tests/shared/numCoerce.test.ts (NOVO)"]
+        T1["Happy: 42, 0, -3.14, MAX_SAFE_INTEGER"]
+        T2["NaN/Infinity -> fallback"]
+        T3["Non-numeric -> fallback<br/>'42', '', null, undefined, {}, [], true"]
+        T4["Custom fallback respeitado<br/>(NaN, -1) -> -1"]
+        T5["Edge: BigInt(42) -> 0<br/>(BigInt nao e finite Number)"]
+    end
+
+    subgraph future["Uso futuro desbloqueado"]
+        F1["client/src/lib/format.ts<br/><i>shared/ permite import client-side</i>"]
+        F2["Novos generators IA<br/><i>safe coerce de usage</i>"]
+        F3["Novos scoring features<br/><i>safe coerce de inputs Drizzle</i>"]
+    end
+
+    C1 -->|"RF-A1 migrate"| HELPER
+    C2 -->|"RF-A1 migrate"| HELPER
+    C3 -->|"RF-A1 migrate"| HELPER
+    C4 -->|"RF-A1 migrate"| HELPER
+    C5 -->|"RF-A1 migrate"| HELPER
+    C6 -->|"RF-A1 migrate"| HELPER
+
+    HELPER --> T1
+    HELPER --> T2
+    HELPER --> T3
+    HELPER --> T4
+    HELPER --> T5
+
+    HELPER -.->|"reuse"| F1
+    HELPER -.->|"reuse"| F2
+    HELPER -.->|"reuse"| F3
+
+    classDef before fill:#f8d7da,stroke:#842029,stroke-width:1px;
+    classDef sharedNode fill:#cfe2ff,stroke:#084298,stroke-width:3px;
+    classDef testNode fill:#d1e7dd,stroke:#0f5132,stroke-width:1px;
+    classDef futureNode fill:#fff3cd,stroke:#856404,stroke-width:1px,stroke-dasharray: 5 5;
+
+    class C1,C2,C3,C4,C5,C6 before;
+    class HELPER sharedNode;
+    class T1,T2,T3,T4,T5 testNode;
+    class F1,F2,F3 futureNode;

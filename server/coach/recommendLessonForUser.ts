@@ -11,8 +11,9 @@
 //   Tier 5  null
 //
 // Lessons aplicadas:
-//   #14 Anthropic eh constructor `new` (testes mockam via vi.hoisted).
 //   #9  try/catch granular: nunca propaga erro do LLM, sempre cai pro fallback.
+//   #10 (DRY) Sprint AI-3.2 / RF-B2: SDK Anthropic acessado via callReportLlm
+//       (paridade weekly/monthly/daily/quarterly/summarizer).
 // =============================================================================
 
 import { createHash } from "crypto";
@@ -22,6 +23,10 @@ import {
   getCoachLessonRecommendationSystemPrompt,
   formatLessonRecommendationCatalog,
 } from "./prompts/lessonRecommendation";
+// Sprint AI-3.2 fix wave / HIGH-1 — top-level import (era lazy `await import`
+// dentro de `tryCoachIA`). Path mismatch quebrava mocks
+// `vi.doMock("./anthropicClient")` quando escritos pos resetModules.
+import { callReportLlm } from "./anthropicClient";
 
 export interface CoachLeakSummaryInput {
   code: string;
@@ -136,47 +141,15 @@ function formatUserContext(input: RecommendInput): string {
   ].join("\n");
 }
 
-function parseCoachResponse(
-  raw: string,
-): { lesson_id: string; reason: string } | null {
-  try {
-    const trimmed = String(raw ?? "").trim();
-    const parsed = JSON.parse(trimmed);
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      typeof parsed.lesson_id === "string" &&
-      typeof parsed.reason === "string"
-    ) {
-      return { lesson_id: parsed.lesson_id, reason: parsed.reason };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 async function tryCoachIA(
   input: RecommendInput,
 ): Promise<RecommendResult | null> {
-  let AnthropicCtor: any;
-  try {
-    const mod: any = await import("@anthropic-ai/sdk");
-    AnthropicCtor = mod.default ?? mod.Anthropic;
-  } catch {
-    return null;
-  }
-  if (!AnthropicCtor) return null;
-
-  let client: any;
-  try {
-    client = new AnthropicCtor({ apiKey: process.env.ANTHROPIC_API_KEY ?? "" });
-  } catch {
-    return null;
-  }
+  // Sprint AI-3.2 / RF-B2 (ADR-203) — delega para callReportLlm (5/5 generators
+  // lockstep: weekly + monthly + daily + quarterly + summarizer + recommendLesson).
+  // Sprint AI-3.2 fix wave / HIGH-1 — import movido pro top-level (ver header).
 
   const eligible = excludeIds(
-    input.catalogLessons,
+    input.catalogLessons ?? [],
     input.lastConsumedLessonIds ?? [],
   );
   if (eligible.length === 0) return null;
@@ -186,31 +159,16 @@ async function tryCoachIA(
   const catalogText = formatLessonRecommendationCatalog(eligible);
   const userText = formatUserContext(input);
 
-  let response: any;
+  let out: Awaited<ReturnType<typeof callReportLlm>>;
   try {
-    response = await client.messages.create({
+    out = await callReportLlm({
+      systemPrompt,
+      // Combina catalog + user context num userPromptBuilder unico.
+      userPromptBuilder: () => `${catalogText}\n\n${userText}`,
       model,
-      max_tokens: 200,
-      system: [
-        {
-          type: "text",
-          text: systemPrompt,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: catalogText,
-              cache_control: { type: "ephemeral" },
-            },
-            { type: "text", text: userText },
-          ],
-        },
-      ],
+      bundle: {},
+      maxTokens: 200,
+      parseOnError: "fallback-degraded",
     });
   } catch (err) {
     console.error("coach.recommend.anthropic.error", {
@@ -220,27 +178,27 @@ async function tryCoachIA(
     return null;
   }
 
-  // Sprint home-reform-4 / Item 4 — token logging pos achado MEDIUM do reviewer.
-  // Mantem visibilidade de cache hit/miss + custo por user na cron weekly.
-  try {
-    console.info("coach.cron.weekly_rec.tokens", {
-      userId: input.userId,
-      model,
-      inputTokens: response?.usage?.input_tokens,
-      cacheCreationInputTokens: response?.usage?.cache_creation_input_tokens,
-      cacheReadInputTokens: response?.usage?.cache_read_input_tokens,
-      outputTokens: response?.usage?.output_tokens,
-    });
-  } catch {
-    // logging defensivo nunca quebra o fluxo principal
+  if (out.degradedReason) {
+    return null;
   }
 
-  const textBlock = (response?.content ?? []).find(
-    (b: any) => b?.type === "text",
-  );
-  const rawText: string = String(textBlock?.text ?? "");
-  const parsed = parseCoachResponse(rawText);
-  if (!parsed) return null;
+  // Sprint home-reform-4 / Item 4 — token logging pos achado MEDIUM do reviewer.
+  const usage: any = out.usage ?? {};
+  console.info("coach.cron.weekly_rec.tokens", {
+    userId: input.userId,
+    model,
+    inputTokens: usage.input_tokens,
+    cacheCreationInputTokens: usage.cache_creation_input_tokens,
+    cacheReadInputTokens: usage.cache_read_input_tokens,
+    outputTokens: usage.output_tokens,
+  });
+
+  // callReportLlm já fez JSON.parse — content vem como objeto ou {} se SDK ausente.
+  const parsedContent: any = out.content ?? {};
+  if (typeof parsedContent.lesson_id !== "string" || typeof parsedContent.reason !== "string") {
+    return null;
+  }
+  const parsed = { lesson_id: parsedContent.lesson_id, reason: parsedContent.reason };
 
   const validIds = new Set(eligible.map((l) => l.id));
   if (!validIds.has(parsed.lesson_id)) return null;

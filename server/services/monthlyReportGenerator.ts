@@ -110,7 +110,8 @@ async function safeGetVarianceVsExpected(storage: any, userId: string): Promise<
 }
 
 // AI-1C / RF-05.4 + RF-08 — gather followUp + goalsProgress for monthly.
-async function gatherFollowUpAndGoals(storage: any, userId: string): Promise<{
+// Sprint AI-3.2 / RF-D3 — recebe aiProfile pre-carregado (dedup DB hit).
+async function gatherFollowUpAndGoals(storage: any, userId: string, aiProfile: any): Promise<{
   followUp?: {
     activeLeakFocus: Array<{ code: string; label: string; targetMonth: string; status: string; progressNote?: string }>;
     goalsInProgress: Array<{ goalId: string; texto: string; prazo: "mes" | "trimestre" | null }>;
@@ -135,9 +136,7 @@ async function gatherFollowUpAndGoals(storage: any, userId: string): Promise<{
     console.error("monthly_report.followup.leaks.error", { userId, err });
   }
   try {
-    const { getAiStructuredProfile } = await import("../storage/aiStructuredProfile");
-    const profile = await getAiStructuredProfile(userId);
-    const metas = Array.isArray((profile as any)?.metas) ? (profile as any).metas : [];
+    const metas = Array.isArray((aiProfile as any)?.metas) ? (aiProfile as any).metas : [];
     for (const m of metas) {
       const prazo = (m?.prazo === "mes" || m?.prazo === "trimestre") ? m.prazo : null;
       goalsInProgress.push({
@@ -180,12 +179,21 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
     const prefs = await getCoachPreferences(userId);
     if ((prefs as any)?.coachTone) tone = (prefs as any).coachTone;
   } catch { /* default */ }
+
+  // Sprint AI-3.2 / RF-D3 (ADR-203) — dedup: 1 chamada `getUserProfile` ao inves
+  // de 2 calls a `getAiStructuredProfile` standalone. `aiStructuredProfile` vem
+  // como JSONB inline em users (lesson #36: lazy schema; shape compativel).
+  let aiProfile: any = null;
   try {
-    const { getAiStructuredProfile } = await import("../storage/aiStructuredProfile");
-    const profile = await getAiStructuredProfile(userId);
-    if ((profile as any)?.tomPreferido) tone = (profile as any).tomPreferido;
-    if ((profile as any)?.nivel) level = (profile as any).nivel;
-  } catch { /* default */ }
+    if (typeof storage.getUserProfile === "function") {
+      const userProfile = await storage.getUserProfile(userId);
+      aiProfile = (userProfile as any)?.aiStructuredProfile ?? null;
+    }
+  } catch (err) {
+    console.error("monthly_report.profile.error", { userId, err: err instanceof Error ? err.message : String(err) });
+  }
+  if ((aiProfile as any)?.tomPreferido) tone = (aiProfile as any).tomPreferido;
+  if ((aiProfile as any)?.nivel) level = (aiProfile as any).nivel;
 
   const rangeArg = `${periodStart} to ${periodEnd}`;
   const prev = previousMonthRange(periodStart);
@@ -194,7 +202,7 @@ export async function generateMonthlyReport(args: GenerateMonthlyReportArgs): Pr
   const [perfCurrent, perfPrev, extras, primedopeVariance] = await Promise.all([
     safePerf(storage, userId, rangeArg),
     safePerf(storage, userId, prevRangeArg),
-    gatherFollowUpAndGoals(storage, userId),
+    gatherFollowUpAndGoals(storage, userId, aiProfile),
     safeGetVarianceVsExpected(storage, userId),
   ]);
 

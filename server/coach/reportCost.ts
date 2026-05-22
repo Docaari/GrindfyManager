@@ -7,19 +7,13 @@
 // `cost_usd_estimate`).
 //
 // Pricing Anthropic (USD per 1M tokens) — https://docs.anthropic.com/pricing (as of 2026-01):
-//   Sonnet 4.6:
-//     input:      3.00
-//     output:    15.00
-//     cacheRead:  0.30
-//     cacheWrite: 3.75
-//   Haiku 4.5:
-//     input:      1.00
-//     output:     5.00
-//     cacheRead:  0.10
-//     cacheWrite: 1.25
+//   Sonnet 4.6:   input 3.00  / output 15.00 / cacheRead 0.30 / cacheWrite 3.75
+//   Haiku 4.5:    input 1.00  / output  5.00 / cacheRead 0.10 / cacheWrite 1.25
 //
 // Lessons: #10 (DRY).
 // =============================================================================
+
+import { coerceFiniteNumber } from "@shared/numCoerce";
 
 export const SONNET_46_PRICE_PER_M = {
   input: 3.00,
@@ -44,11 +38,6 @@ export type AnthropicUsage = {
 
 export type Ratecard = "sonnet46" | "haiku45";
 
-function safe(v: any): number {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
 /**
  * Calcula custo USD do uso Anthropic com base no ratecard escolhido.
  * Default ratecard = 'sonnet46'. Retorna number (alinhado com numeric column
@@ -56,9 +45,9 @@ function safe(v: any): number {
  */
 export function computeReportCost(usage: AnthropicUsage, ratecard: Ratecard = "sonnet46"): number {
   const card = ratecard === "haiku45" ? HAIKU_45_PRICE_PER_M : SONNET_46_PRICE_PER_M;
-  const i = safe(usage?.input_tokens);
-  const o = safe(usage?.output_tokens);
-  const cr = safe(usage?.cache_read_input_tokens);
-  const cw = safe(usage?.cache_creation_input_tokens);
+  const i = coerceFiniteNumber(usage?.input_tokens);
+  const o = coerceFiniteNumber(usage?.output_tokens);
+  const cr = coerceFiniteNumber(usage?.cache_read_input_tokens);
+  const cw = coerceFiniteNumber(usage?.cache_creation_input_tokens);
   return (i * card.input + o * card.output + cr * card.cacheRead + cw * card.cacheWrite) / 1_000_000;
 }
