@@ -140,7 +140,19 @@ describe('handleSpotifySearch (RF-03 / spec §6.1)', () => {
     const req = makeReq();
     const res = makeRes();
 
-    await handler(req, res, { storage, fetchFn: fetchStub, resolveUserTier, tokenBucket, cache });
+    const accessCache = {
+      get: () => 'fake-access-token-xyz',
+      set: () => {},
+      invalidate: () => {},
+    };
+    await handler(req, res, {
+      storage,
+      fetchFn: fetchStub,
+      resolveUserTier,
+      tokenBucket,
+      cache,
+      accessCache,
+    });
 
     expect(res.statusCode).toBe(200);
     expect(Array.isArray(res.body?.tracks)).toBe(true);
@@ -180,6 +192,14 @@ describe('handleSpotifySearch (RF-03 / spec §6.1)', () => {
       resolveUserTier: makeTierResolverPremium(),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 180 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: gateAndAccess sempre forca refresh em cache cold.
+      // Tests injetam accessCache pre-populado pra evitar refresh path
+      // (que exigiria fetchFn dual + tokenCrypto real).
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(400);
   });
@@ -194,6 +214,14 @@ describe('handleSpotifySearch (RF-03 / spec §6.1)', () => {
       resolveUserTier: makeTierResolverPremium(),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 180 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: gateAndAccess sempre forca refresh em cache cold.
+      // Tests injetam accessCache pre-populado pra evitar refresh path
+      // (que exigiria fetchFn dual + tokenCrypto real).
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(400);
   });
@@ -208,6 +236,14 @@ describe('handleSpotifySearch (RF-03 / spec §6.1)', () => {
       resolveUserTier: makeTierResolverPremium(),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 180 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: gateAndAccess sempre forca refresh em cache cold.
+      // Tests injetam accessCache pre-populado pra evitar refresh path
+      // (que exigiria fetchFn dual + tokenCrypto real).
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(400);
   });
@@ -224,6 +260,14 @@ describe('handleSpotifySearch (RF-03 / spec §6.1)', () => {
       resolveUserTier: makeTierResolverPremium(),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 180 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: gateAndAccess sempre forca refresh em cache cold.
+      // Tests injetam accessCache pre-populado pra evitar refresh path
+      // (que exigiria fetchFn dual + tokenCrypto real).
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(403);
     expect(String(res.body?.message ?? '')).toMatch(/spotify/i);
@@ -240,6 +284,14 @@ describe('handleSpotifySearch (RF-03 / spec §6.1)', () => {
       resolveUserTier: makeTierResolverPremium(),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 180 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: gateAndAccess sempre forca refresh em cache cold.
+      // Tests injetam accessCache pre-populado pra evitar refresh path
+      // (que exigiria fetchFn dual + tokenCrypto real).
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(403);
   });
@@ -255,6 +307,14 @@ describe('handleSpotifySearch (RF-03 / spec §6.1)', () => {
       resolveUserTier,
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 180 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: gateAndAccess sempre forca refresh em cache cold.
+      // Tests injetam accessCache pre-populado pra evitar refresh path
+      // (que exigiria fetchFn dual + tokenCrypto real).
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(403);
     expect(String(res.body?.message ?? '')).toMatch(/premium|pro|grindfy/i);
@@ -274,6 +334,14 @@ describe('handleSpotifySearch (RF-03 / spec §6.1)', () => {
       resolveUserTier,
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 180 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: gateAndAccess sempre forca refresh em cache cold.
+      // Tests injetam accessCache pre-populado pra evitar refresh path
+      // (que exigiria fetchFn dual + tokenCrypto real).
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(200);
     expect(fetchStub).toHaveBeenCalled();
@@ -297,12 +365,25 @@ describe('handleSpotifySearch (RF-03 / spec §6.1)', () => {
       }
       return { ok: true, status: 200, json: async () => ({ tracks: { items: [] } }), headers: { get: () => null } };
     });
+    // tokenCrypto stub minimo (decrypt retorna refresh_token plain).
+    const tokenCrypto = {
+      decryptRefreshToken: () => 'refresh_plain_xyz',
+      encryptRefreshToken: () => ({ ciphertext: 'c', iv: 'i', authTag: 't' }),
+    };
     await handler(makeReq(), res, {
       storage,
       fetchFn: refreshFetch,
       resolveUserTier: makeTierResolverPremium(),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 180 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: este teste exercita refresh path (invalid_grant) —
+      // accessCache vazio forca requireSpotifyAccess upstream.
+      accessCache: {
+        get: () => null,
+        set: () => {},
+        invalidate: () => {},
+      },
+      tokenCrypto,
     });
     expect(res.statusCode).toBe(401);
     expect(storage.markSpotifyDisconnected).toHaveBeenCalled();
@@ -324,6 +405,14 @@ describe('handleSpotifySearch (RF-03 / spec §6.1)', () => {
       resolveUserTier: makeTierResolverPremium(),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 50 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: gateAndAccess sempre forca refresh em cache cold.
+      // Tests injetam accessCache pre-populado pra evitar refresh path
+      // (que exigiria fetchFn dual + tokenCrypto real).
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(429);
     // Retry-After visivel no body ou header.
@@ -344,6 +433,14 @@ describe('handleSpotifySearch (RF-03 / spec §6.1)', () => {
       resolveUserTier: makeTierResolverPremium(),
       tokenBucket: { consume: vi.fn(() => ({ allowed: false, remaining: 0, retryAfterMs: 800 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: gateAndAccess sempre forca refresh em cache cold.
+      // Tests injetam accessCache pre-populado pra evitar refresh path
+      // (que exigiria fetchFn dual + tokenCrypto real).
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(429);
     expect(fetchStub).not.toHaveBeenCalled();
@@ -402,6 +499,14 @@ describe('handleSpotifySearch (RF-03 / spec §6.1)', () => {
       resolveUserTier: makeTierResolverPremium(),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 180 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: gateAndAccess sempre forca refresh em cache cold.
+      // Tests injetam accessCache pre-populado pra evitar refresh path
+      // (que exigiria fetchFn dual + tokenCrypto real).
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     const allLogs = [...spy.mock.calls, ...errSpy.mock.calls]
       .flat()

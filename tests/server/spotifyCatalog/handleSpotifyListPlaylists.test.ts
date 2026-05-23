@@ -104,6 +104,12 @@ describe('handleSpotifyListPlaylists (RF-03 / spec §6.2)', () => {
       resolveUserTier: vi.fn(async () => 'premium'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 179 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
 
     expect(res.statusCode).toBe(200);
@@ -143,6 +149,12 @@ describe('handleSpotifyListPlaylists (RF-03 / spec §6.2)', () => {
       resolveUserTier: vi.fn(async () => 'premium'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 100 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.body.truncated).toBe(true);
     expect(res.body.total).toBe(250);
@@ -167,6 +179,12 @@ describe('handleSpotifyListPlaylists (RF-03 / spec §6.2)', () => {
         resolveUserTier: vi.fn(async () => 'premium'),
         tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 100 })) },
         cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+        // R1 fix CRITICAL-2: accessCache hit.
+        accessCache: {
+          get: () => 'fake-access-token-xyz',
+          set: () => {},
+          invalidate: () => {},
+        },
       },
     );
     const url = String(fetchStub.mock.calls[0][0]);
@@ -183,6 +201,12 @@ describe('handleSpotifyListPlaylists (RF-03 / spec §6.2)', () => {
       resolveUserTier: vi.fn(async () => 'premium'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 180 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(400);
   });
@@ -197,6 +221,12 @@ describe('handleSpotifyListPlaylists (RF-03 / spec §6.2)', () => {
       resolveUserTier: vi.fn(async () => 'free'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 180 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(403);
   });
@@ -213,6 +243,12 @@ describe('handleSpotifyListPlaylists (RF-03 / spec §6.2)', () => {
       resolveUserTier: vi.fn(async () => 'premium'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 180 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(403);
   });
@@ -228,6 +264,12 @@ describe('handleSpotifyListPlaylists (RF-03 / spec §6.2)', () => {
       resolveUserTier: vi.fn(async () => 'premium'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: false, retryAfterMs: 500, remaining: 0 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(429);
     expect(fetchStub).not.toHaveBeenCalled();

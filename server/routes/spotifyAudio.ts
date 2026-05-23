@@ -15,6 +15,13 @@ import { createHash, randomBytes } from "node:crypto";
 import jwt from "jsonwebtoken";
 import type { Express, Request, Response } from "express";
 import { requireAuth } from "../auth";
+// HIGH-4 fix (lesson #37): import estatico em vez de require() runtime.
+// `defaultAccessTokenCache` eh singleton in-memory; importavel direto sem
+// quebrar bundle esbuild prod (ESM).
+import { defaultAccessTokenCache } from "../services/spotifyAccess";
+// CRITICAL-1 fix: resolveEligiblePlanTier mapeia subscription_plan='trial'
+// corretamente — resolveUserTier (coachAccess) trata trial como 'free'.
+import { resolveEligiblePlanTier } from "../coach/planEligibility";
 
 const SPOTIFY_OAUTH_SESSION_COOKIE = "spotify_oauth_session";
 const SPOTIFY_SESSION_COOKIE = "spotify_session";
@@ -626,21 +633,25 @@ async function getDefaultTokenBucket() {
 /**
  * Sprint SPOTIFY-DEEP / RF-03 — invalidacao explicita do cache de catalog.
  * Chamado em disconnect handler + disponivel pra testes/debugging.
+ *
+ * R1 fix HIGH-4 (lesson #37): import estatico de defaultAccessTokenCache via
+ * topo do arquivo — `require()` runtime nao resolve em bundle esbuild ESM
+ * prod. Logamos erros explicitamente (lesson #9) em vez de try/catch silenc.
  */
 export function invalidateSpotifyCache(userId: string): void {
   if (_catalogCacheSingleton) {
     try {
       _catalogCacheSingleton.invalidate(userId);
-    } catch {
-      // ignore
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("spotify.cache.invalidate.catalog_fail", { userId, err });
     }
   }
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const accessMod = require("../services/spotifyAccess");
-    accessMod?.defaultAccessTokenCache?.invalidate(userId);
-  } catch {
-    // ok
+    defaultAccessTokenCache.invalidate(userId);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("spotify.cache.invalidate.access_fail", { userId, err });
   }
 }
 
@@ -694,16 +705,38 @@ function normalizePlaylist(pl: any): any {
   };
 }
 
+/**
+ * R1 fix CRITICAL-1: usa resolveEligiblePlanTier (planEligibility.ts) em vez
+ * de resolveUserTier (coachAccess.ts). resolveUserTier mapeia
+ * subscription_plan='trial' -> 'free' (bug AI-1B latent), bloqueando todos os
+ * trials server-side. resolveEligiblePlanTier devolve 'trial'|'pro'|'premium'|
+ * 'admin'|null corretamente. `inject` (test override) preservado p/ compat.
+ *
+ * Passa `subscriptionPlanRaw` (req.user.subscriptionPlan) p/ short-circuit
+ * sincrono em 'trial'/'admin'/'pro'/'premium' sem hit DB. Em 'active' eh
+ * resolvido async via resolveUserTier internamente.
+ */
 async function resolveTier(
   userId: string,
+  subscriptionPlanRaw: string | null | undefined,
   inject?: (user: any) => Promise<string>,
 ): Promise<string> {
-  if (inject) return inject({ userPlatformId: userId } as any);
+  if (inject) {
+    return inject({
+      userPlatformId: userId,
+      subscriptionPlan: subscriptionPlanRaw,
+    } as any);
+  }
   try {
-    const mod = await import("../coachAccess");
-    return await (mod.resolveUserTier as any)({ userPlatformId: userId });
-  } catch {
-    return "free";
+    const tier = await resolveEligiblePlanTier(userId, subscriptionPlanRaw);
+    return tier ?? "free";
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("spotify.tier.resolve_fail", {
+      userId,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return "free"; // safe-deny (lesson #9)
   }
 }
 
@@ -716,6 +749,13 @@ interface CatalogDeps {
   tokenBucket?: { consume: (userId: string) => any };
   cache?: { get: any; set: any; invalidate: any };
   tokenCrypto?: any;
+  // R1 fix CRITICAL-2: accessCache injetavel p/ tests bypass refresh.
+  // Default = defaultAccessTokenCache singleton (in-memory cross-restart cold).
+  accessCache?: {
+    get: (userId: string) => string | null;
+    set: (userId: string, token: string, ttlMs: number) => void;
+    invalidate: (userId: string) => void;
+  };
 }
 
 async function resolveCatalogDeps(deps?: CatalogDeps) {
@@ -726,18 +766,23 @@ async function resolveCatalogDeps(deps?: CatalogDeps) {
   const cache = deps?.cache ?? (await getDefaultCatalogCache());
   const tokenCrypto =
     deps?.tokenCrypto ?? (await import("../services/spotifyTokenCrypto"));
-  return { fetchFn, storage, tokenBucket, cache, tokenCrypto };
+  // R1 fix CRITICAL-2: accessCache default = singleton in-memory.
+  const accessCache = deps?.accessCache ?? defaultAccessTokenCache;
+  return { fetchFn, storage, tokenBucket, cache, tokenCrypto, accessCache };
 }
 
 async function gateAndAccess(
   userId: string,
+  subscriptionPlanRaw: string | null | undefined,
   deps: Awaited<ReturnType<typeof resolveCatalogDeps>>,
   resolveTierFn?: (user: any) => Promise<string>,
 ): Promise<
   | { tokenOk: true; accessToken: string }
   | { tokenOk: false; status: number; message: string }
 > {
-  const tier = (await resolveTier(userId, resolveTierFn)).toLowerCase();
+  const tier = (
+    await resolveTier(userId, subscriptionPlanRaw, resolveTierFn)
+  ).toLowerCase();
   if (!ALLOWED_TIERS.has(tier)) {
     try {
       const row = await deps.storage.getSpotifyToken(userId);
@@ -768,31 +813,21 @@ async function gateAndAccess(
     return { tokenOk: false, status: 403, message: "Spotify nao conectado" };
   }
 
-  const accessMod = await import("../services/spotifyAccess");
-  const accessCacheSingleton = accessMod.defaultAccessTokenCache as any;
-
-  const cached = accessCacheSingleton.get(userId);
+  // R1 fix CRITICAL-2: SEMPRE refresh quando access cache cold. Branch
+  // placeholder `accessToken: ""` (que confiava no token DB) causava 502
+  // pos-restart porque access_token NAO eh persistido plaintext (so hash).
+  // Custo: ~200ms 1x por sessao. Cache cross-restart eh follow-up MP3.4.
+  const accessCache = deps.accessCache;
+  const cached = accessCache.get(userId);
   if (cached) return { tokenOk: true, accessToken: cached };
 
-  const expiresAtMs =
-    row.expiresAt instanceof Date
-      ? row.expiresAt.getTime()
-      : new Date(row.expiresAt).getTime();
-  const needsRefresh = expiresAtMs < Date.now() + 60_000;
-
-  if (!needsRefresh) {
-    // DB token valido > 60s + sem plaintext em cache. Devolve placeholder e
-    // confia no token DB. Producao primeira call apos restart -> 401 upstream
-    // (handler trata via 502 generico; follow-up MP3.4 trata 401 retry+refresh).
-    return { tokenOk: true, accessToken: "" };
-  }
-
   try {
+    const accessMod = await import("../services/spotifyAccess");
     const { accessToken } = await accessMod.requireSpotifyAccess(userId, {
       storage: deps.storage,
       fetchFn: deps.fetchFn,
       tokenCrypto: deps.tokenCrypto,
-      accessCache: accessCacheSingleton,
+      accessCache,
     });
     return { tokenOk: true, accessToken };
   } catch (err: any) {
@@ -846,7 +881,12 @@ export async function handleSpotifySearch(
       return;
     }
 
-    const gate = await gateAndAccess(userId, deps, injectedDeps?.resolveUserTier);
+    const gate = await gateAndAccess(
+      userId,
+      req.user?.subscriptionPlan ?? null,
+      deps,
+      injectedDeps?.resolveUserTier,
+    );
     if (!gate.tokenOk) {
       res.status(gate.status).json({ message: gate.message });
       return;
@@ -957,7 +997,12 @@ export async function handleSpotifyListPlaylists(
       return;
     }
 
-    const gate = await gateAndAccess(userId, deps, injectedDeps?.resolveUserTier);
+    const gate = await gateAndAccess(
+      userId,
+      req.user?.subscriptionPlan ?? null,
+      deps,
+      injectedDeps?.resolveUserTier,
+    );
     if (!gate.tokenOk) {
       res.status(gate.status).json({ message: gate.message });
       return;
@@ -1073,7 +1118,12 @@ export async function handleSpotifyPlaylistTracks(
       return;
     }
 
-    const gate = await gateAndAccess(userId, deps, injectedDeps?.resolveUserTier);
+    const gate = await gateAndAccess(
+      userId,
+      req.user?.subscriptionPlan ?? null,
+      deps,
+      injectedDeps?.resolveUserTier,
+    );
     if (!gate.tokenOk) {
       res.status(gate.status).json({ message: gate.message });
       return;

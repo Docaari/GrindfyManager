@@ -53,24 +53,82 @@ import { QueuePopover } from "./QueuePopover";
 // Sprint Mini Player 3.1 Wave B / TIER 3 #7 — onboarding tooltip primeira vez.
 import { MiniPlayerOnboarding } from "./MiniPlayerOnboarding";
 // Sprint SPOTIFY-DEEP / RF-04 — botao "Buscar Spotify" + dialog.
+// R1 fix HIGH-1 (lesson #1 + #29): substitui wrappers try/catch (violavam
+// Rules of Hooks — render N lancava, N+1 nao -> ordem inconsistente) por
+// padrao ErrorBoundary local. Hooks `useSpotifyStatus`/`useAuth` chamados em
+// sub-componente isolado; quando providers ausentes (test legacy sem
+// QueryClientProvider/AuthProvider), boundary captura e devolve defaults.
 import { Search as SearchIcon } from "lucide-react";
 import { useSpotifyStatus } from "@/hooks/useSpotifyStatus";
 import { useAuth } from "@/contexts/AuthContext";
 import { SpotifySearchDialog } from "./SpotifySearchDialog";
 const SEARCH_ELIGIBLE_TIERS = new Set(["pro", "premium", "admin", "trial"]);
-function useSafeSpotifyStatus(): ReturnType<typeof useSpotifyStatus> {
-  try {
-    return useSpotifyStatus();
-  } catch {
-    return { isConnected: false, productTier: null, displayName: null, isLoading: false };
+
+// =============================================================================
+// HIGH-1 fix: ErrorBoundary local — captura "No QueryClient set" / "useAuth
+// must be used within AuthProvider" em tests legacy sem providers, devolve
+// defaults safely. Hook chamado SEMPRE no mesmo sub-componente (Rules of
+// Hooks OK). Lesson #29.
+// =============================================================================
+type SpotifyAuthSnapshot = {
+  isConnected: boolean;
+  productTier: string | null;
+  tier: string;
+  isAdmin: boolean;
+  userId: string | null;
+};
+
+const DEFAULT_SPOTIFY_AUTH: SpotifyAuthSnapshot = {
+  isConnected: false,
+  productTier: null,
+  tier: "",
+  isAdmin: false,
+  userId: null,
+};
+
+class SpotifyAuthBoundary extends React.Component<
+  { onSnapshot: (s: SpotifyAuthSnapshot) => void; children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch() {
+    this.props.onSnapshot(DEFAULT_SPOTIFY_AUTH);
+  }
+  render() {
+    if (this.state.failed) return null;
+    return this.props.children as any;
   }
 }
-function useSafeAuth(): ReturnType<typeof useAuth> {
-  try {
-    return useAuth();
-  } catch {
-    return { user: null, isAuthenticated: false, isAdmin: false } as any;
-  }
+
+function SpotifyAuthReader({
+  onSnapshot,
+}: {
+  onSnapshot: (s: SpotifyAuthSnapshot) => void;
+}) {
+  // Hooks chamados sempre, no mesmo componente (Rules of Hooks ok).
+  const status = useSpotifyStatus();
+  const auth = useAuth();
+  React.useEffect(() => {
+    const tier = String((auth as any)?.user?.subscriptionPlan ?? "").toLowerCase();
+    onSnapshot({
+      isConnected: !!status?.isConnected,
+      productTier: status?.productTier ?? null,
+      tier,
+      isAdmin: !!(auth as any)?.isAdmin,
+      userId: (auth as any)?.user?.userPlatformId ?? null,
+    });
+  }, [
+    status?.isConnected,
+    status?.productTier,
+    (auth as any)?.user?.subscriptionPlan,
+    (auth as any)?.isAdmin,
+    (auth as any)?.user?.userPlatformId,
+    onSnapshot,
+  ]);
+  return null;
 }
 // Sprint MP-MODERN / RF-06 — empty state CTA quando !activeTrack.
 import { EmptyStateCTA } from "./EmptyStateCTA";
@@ -203,9 +261,33 @@ export function MiniPlayerBar() {
   const [spotifyConnecting, setSpotifyConnecting] = useState(false);
   // Sprint SPOTIFY-DEEP / RF-04 — state local SpotifySearchDialog.
   const [spotifySearchOpen, setSpotifySearchOpen] = useState(false);
-  const spotifyStatus = useSafeSpotifyStatus();
-  const authCtx = useSafeAuth();
-  const tierLower = String(authCtx?.user?.subscriptionPlan ?? "").toLowerCase();
+  // R1 fix HIGH-1 (lesson #29): hooks chamados via SpotifyAuthReader dentro
+  // de SpotifyAuthBoundary — quando providers ausentes (tests legacy sem
+  // QueryClientProvider/AuthProvider), boundary captura e devolve defaults.
+  // Render do MiniPlayerBar permanece consistente em hook count/order.
+  const [authSnapshot, setAuthSnapshot] = useState<SpotifyAuthSnapshot>(
+    DEFAULT_SPOTIFY_AUTH,
+  );
+  const handleAuthSnapshot = React.useCallback((s: SpotifyAuthSnapshot) => {
+    setAuthSnapshot((prev) => {
+      // shallow compare evita render loop.
+      if (
+        prev.isConnected === s.isConnected &&
+        prev.productTier === s.productTier &&
+        prev.tier === s.tier &&
+        prev.isAdmin === s.isAdmin &&
+        prev.userId === s.userId
+      ) {
+        return prev;
+      }
+      return s;
+    });
+  }, []);
+  const spotifyStatus = {
+    isConnected: authSnapshot.isConnected,
+    productTier: authSnapshot.productTier,
+  };
+  const tierLower = authSnapshot.tier;
   const tierEligibleForSearch = SEARCH_ELIGIBLE_TIERS.has(tierLower);
   // Sprint MP-MODERN / RF-02 — scrub preview tooltip state.
   const [scrubPreviewSec, setScrubPreviewSec] = useState<number | null>(null);
@@ -342,6 +424,10 @@ export function MiniPlayerBar() {
         WebkitBackdropFilter: "blur(20px) saturate(180%)",
       }}
     >
+      {/* HIGH-1 fix: hooks isolados em ErrorBoundary local — lesson #29. */}
+      <SpotifyAuthBoundary onSnapshot={handleAuthSnapshot}>
+        <SpotifyAuthReader onSnapshot={handleAuthSnapshot} />
+      </SpotifyAuthBoundary>
       <div className="flex items-center gap-3 min-w-0">
         {/* Sprint MP-MODERN / RF-01 — hero artwork responsive + pulse-subtle. */}
         {sanitizedCoverUrl ? (

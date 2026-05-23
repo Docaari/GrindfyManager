@@ -103,6 +103,12 @@ describe('handleSpotifyPlaylistTracks (RF-03 / spec §6.3)', () => {
       resolveUserTier: vi.fn(async () => 'premium'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 100 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(200);
     expect(res.body.tracks.length).toBe(50);
@@ -129,6 +135,12 @@ describe('handleSpotifyPlaylistTracks (RF-03 / spec §6.3)', () => {
       resolveUserTier: vi.fn(async () => 'premium'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 100 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.body.truncated).toBe(true);
     expect(res.body.total).toBe(120);
@@ -155,6 +167,12 @@ describe('handleSpotifyPlaylistTracks (RF-03 / spec §6.3)', () => {
       resolveUserTier: vi.fn(async () => 'premium'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 100 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.body.tracks.length).toBe(2);
     expect(res.body.total).toBe(3); // total reflete original
@@ -212,6 +230,12 @@ describe('handleSpotifyPlaylistTracks (RF-03 / spec §6.3)', () => {
       resolveUserTier: vi.fn(async () => 'premium'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 100 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(404);
     expect(String(res.body?.message ?? '')).toMatch(/playlist/i);
@@ -233,6 +257,12 @@ describe('handleSpotifyPlaylistTracks (RF-03 / spec §6.3)', () => {
       resolveUserTier: vi.fn(async () => 'premium'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 100 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(502);
   });
@@ -248,6 +278,12 @@ describe('handleSpotifyPlaylistTracks (RF-03 / spec §6.3)', () => {
       resolveUserTier: vi.fn(async () => 'premium'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 100 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(502);
   });
@@ -262,6 +298,12 @@ describe('handleSpotifyPlaylistTracks (RF-03 / spec §6.3)', () => {
       resolveUserTier: vi.fn(async () => 'free'),
       tokenBucket: { consume: vi.fn(() => ({ allowed: true, remaining: 100 })) },
       cache: { get: vi.fn(() => null), set: vi.fn(), invalidate: vi.fn() },
+      // R1 fix CRITICAL-2: accessCache hit pra evitar refresh path.
+      accessCache: {
+        get: () => 'fake-access-token-xyz',
+        set: () => {},
+        invalidate: () => {},
+      },
     });
     expect(res.statusCode).toBe(403);
   });
