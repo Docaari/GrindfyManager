@@ -7807,3 +7807,47 @@ body.studies-focus-mode [class*="main-content"] {
     50%      { opacity: 1; }
   }
 }
+
+/* =============================================================================
+ * Sprint MP-MODERN / ADR-209 D3+D12 — RF-02 progress bar gradient + thumb.
+ *
+ * Tailwind arbitrary classes nao cobrem pseudo-elements de range
+ * consistentemente (Safari iOS quebra). CSS dedicado + accent-color fallback.
+ * ============================================================================= */
+.mini-player-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: linear-gradient(to right, rgb(59, 130, 246) 0%, rgb(168, 85, 247) 100%);
+  border-radius: 9999px;
+  outline: none;
+  /* D12 fallback iOS Safari quando pseudo-elements nao renderizam gradient. */
+  accent-color: #6366f1;
+}
+.mini-player-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: transform 0.12s ease-out;
+}
+.mini-player-range::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+}
+.mini-player-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: #fff;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: transform 0.12s ease-out;
+}
+.mini-player-range::-moz-range-thumb:hover {
+  transform: scale(1.25);
+}

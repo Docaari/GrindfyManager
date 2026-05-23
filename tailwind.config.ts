@@ -115,11 +115,20 @@ export default {
           from: { transform: "rotate(0deg)" },
           to: { transform: "rotate(360deg)" },
         },
+        // Sprint MP-MODERN / ADR-209 D2 — pulse opacity 95↔100% (Spotify-like).
+        // Tailwind default `animate-pulse` oscila 100↔50% (agressivo). Reservar
+        // `animate-pulse` para skeleton/loading; `pulse-subtle` para "playing".
+        pulseSubtle: {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.95" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "spin-slow": "spin-slow 8s linear infinite",
+        // Sprint MP-MODERN / ADR-209 D2 — RF-01 cover playing indicator.
+        "pulse-subtle": "pulseSubtle 2s ease-in-out infinite",
       },
     },
   },

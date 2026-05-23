@@ -1,0 +1,95 @@
+%% Sprint MP-MODERN — Expanded mode flow (sequence)
+%% Usuário clica ChevronUp → ExpandedPlayerDialog abre (Radix portal) → hero + queue + transcript + coach hint
+%% → close (Esc ou X ou minimize) → bar volta ao normal
+%% Refs: spec §4 RF-05, ADR-209 D5/D11, ADR-188 z-index canon, lesson #29
+
+sequenceDiagram
+    actor User
+    participant Bar as MiniPlayerBar<br/>(z-40)
+    participant Ctx as AudioPlayerContext<br/>(displayMode state)
+    participant Dialog as ExpandedPlayerDialog<br/>(Radix Dialog.Root)
+    participant Portal as Dialog.Portal<br/>(z-50 overlay / z-51 content)
+    participant LS as localStorage<br/>(coach_hint.expanded.seen.v1)
+    participant Tel as activity-telemetry<br/>(mini_player.* events)
+    participant Coach as /coach-ai<br/>(Wouter Link)
+
+    Note over User,Tel: ABERTURA — User clica ChevronUp na bar
+
+    User->>Bar: click ChevronUp (data-testid=mini-player-expand)
+    Bar->>Ctx: setDisplayMode('expanded')
+    Ctx->>Dialog: open=true (controlled via displayMode === 'expanded')
+    Dialog->>Portal: mount Portal (focus trap nativo Radix)
+    Portal->>Portal: render Dialog.Overlay<br/>bg-black/60 backdrop-blur-sm z-50
+    Portal->>Portal: render Dialog.Content<br/>fixed inset-0 z-51 bg-gray-900/95<br/>aria-label="Player expandido"<br/>aria-modal="true"
+    Dialog->>Tel: emitAudioEvent('mini_player.expanded.open',<br/>{ track_id, source_driver })
+    Tel-->>Dialog: best-effort (try/catch + log lesson #9)
+    Dialog->>LS: read coach_hint.expanded.seen.v1
+    LS-->>Dialog: 'true' OR null
+    Dialog->>User: render hero + transcript + controls + queue + coach hint
+
+    Note over User,Tel: INTERAÇÃO — User explora conteúdo
+
+    alt Click item da queue (inline, até 10 + "Ver fila completa")
+        User->>Dialog: click queue item index N
+        Dialog->>Ctx: skipToQueueItem(N)
+        Ctx-->>Dialog: activeTrack atualiza
+        Dialog->>User: re-render hero com novo track
+    end
+
+    alt Dismiss coach hint card
+        User->>Dialog: click X no coach hint
+        Dialog->>LS: setItem('coach_hint.expanded.seen.v1', 'true')
+        Dialog->>User: coach hint unmount (state local)
+    end
+
+    alt Click link Coach IA (Wouter Link, lesson #23 v3 safe)
+        User->>Dialog: click "Abrir Coach IA →"
+        Dialog->>Tel: emitAudioEvent('mini_player.expanded.coach_hint.click', {})
+        Dialog->>Coach: setLocation('/coach-ai')
+        Note over Dialog: Dialog NÃO fecha automaticamente<br/>(rota muda; bar persiste cross-route via fixed)
+        Coach-->>User: navigate to /coach-ai
+    end
+
+    alt Controls (play/pause/seek/prev/next)
+        User->>Dialog: click toggle (h-12 w-12 maior que bar)
+        Dialog->>Ctx: toggle()
+        Ctx-->>Dialog: isPlaying atualiza
+        Note over Dialog,Ctx: Reuso AudioPlayerContext —<br/>ZERO mudança em lógica
+    end
+
+    Note over User,Tel: FECHAMENTO — 4 caminhos
+
+    alt Esc keydown (Radix nativo)
+        User->>Portal: keydown Escape
+        Portal->>Dialog: onOpenChange(false)
+        Dialog->>Tel: emitAudioEvent('mini_player.expanded.close',<br/>{ reason: 'esc' })
+        Dialog->>Ctx: setDisplayMode('bar')
+    end
+
+    alt Click overlay (click-outside Radix)
+        User->>Portal: click Dialog.Overlay
+        Portal->>Dialog: onOpenChange(false)
+        Dialog->>Tel: emitAudioEvent('mini_player.expanded.close',<br/>{ reason: 'overlay' })
+        Dialog->>Ctx: setDisplayMode('bar')
+    end
+
+    alt Minimize (ChevronDown header)
+        User->>Dialog: click minimize (ChevronDown)
+        Dialog->>Tel: emitAudioEvent('mini_player.expanded.close',<br/>{ reason: 'minimize' })
+        Dialog->>Ctx: setDisplayMode('bar')
+    end
+
+    alt Close X (mata track)
+        User->>Dialog: click close X
+        Dialog->>Tel: emitAudioEvent('mini_player.expanded.close',<br/>{ reason: 'close_x' })
+        Dialog->>Ctx: close() — mata track + setDisplayMode('hidden')
+        Note over Ctx,Bar: !activeTrack → EmptyStateCTA renderiza<br/>(se displayMode !== 'hidden')
+    end
+
+    Ctx->>Dialog: open=false (displayMode !== 'expanded')
+    Dialog->>Portal: unmount Portal (Radix cleanup automático)
+    Portal-->>Bar: focus retorna ao ChevronUp (focus trap restore)
+    Bar->>User: bar normal visível (h-16)
+
+    Note over User,Tel: REDUCED-MOTION (D11)
+    Note over Dialog,Portal: Quando matchMedia('prefers-reduced-motion: reduce').matches<br/>Dialog.Content tem motion-reduce:animate-none<br/>Sem fade-in/scale; UI snap instantâneo

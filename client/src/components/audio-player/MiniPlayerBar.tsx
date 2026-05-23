@@ -1,7 +1,14 @@
-// MiniPlayerBar — Sprint Mini Player 1 / RF-01..RF-13.
+// MiniPlayerBar — Sprint Mini Player 1 / RF-01..RF-13 + MP-MODERN.
 // Barra persistente cross-page (renderizada em App.tsx dentro do
 // AudioPlayerProvider). 9 controles + keyboard shortcuts + glassmorphism +
 // responsive 3 breakpoints (mobile <768 / tablet 768-1023 / desktop >=1024).
+//
+// Sprint MP-MODERN (ADR-209) — redesign visual + UX hardening:
+//   RF-01 hero artwork responsive + pulse-subtle (no spin)
+//   RF-02 progress bar gradient + mm:ss + scrub tooltip + thumb h-3
+//   RF-03 controls pill + toggle destacado bg-white
+//   RF-04 sidebar 3 dividers
+//   RF-06 EmptyStateCTA quando !activeTrack (early return removido)
 
 import React, { Suspense, useEffect, useState } from "react";
 import {
@@ -38,15 +45,19 @@ import { VolumeControl } from "./VolumeControl";
 // Sprint Mini Player 2 (CRITICAL-2) — Sleep Timer control wired in mini player.
 import { SleepTimerControl } from "./SleepTimerControl";
 // Sprint Mini Player 3 (MP3.1 R1 fix CRITICAL-1) — useKeyboardShortcuts hook +
-// ShortcutsHelpPopover rendering. Antes (MP3 R1) o hook existia mas nunca era
-// montado; o handler inline MP1 ainda processava keys (sem J/L/0-9/?/setas
-// cima-baixo + sem gate /admin/). Agora unificado via hook (ADR-195).
+// ShortcutsHelpPopover rendering.
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { ShortcutsHelpPopover } from "./ShortcutsHelpPopover";
 // Sprint Mini Player 3 (MP3.1 R1 fix CRITICAL-2) — Queue UI.
 import { QueuePopover } from "./QueuePopover";
 // Sprint Mini Player 3.1 Wave B / TIER 3 #7 — onboarding tooltip primeira vez.
 import { MiniPlayerOnboarding } from "./MiniPlayerOnboarding";
+// Sprint MP-MODERN / RF-06 — empty state CTA quando !activeTrack.
+import { EmptyStateCTA } from "./EmptyStateCTA";
+// Sprint MP-MODERN / RF-05 — expanded dialog co-localizado para testes RTL
+// que renderizam apenas <MiniPlayerBar /> (sem precisar montar tambem o
+// dialog em App.tsx).
+import { ExpandedPlayerDialog } from "./ExpandedPlayerDialog";
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
@@ -94,6 +105,15 @@ function usePrefersReducedMotion(): boolean {
     }
   }, []);
   return reduced;
+}
+
+// Sprint MP-MODERN / RF-02 — helper mm:ss (`00:00`, `05:42`, `60:00`).
+export function formatMmSs(sec: number | undefined | null): string {
+  if (typeof sec !== "number" || !isFinite(sec) || sec < 0) return "--:--";
+  const total = Math.floor(sec);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 export function MiniPlayerBar() {
@@ -161,11 +181,14 @@ export function MiniPlayerBar() {
   // Sprint UX-GLOBAL-BUTTONS — picker de aulas global + Spotify connecting state.
   const [pickerOpen, setPickerOpen] = useState(false);
   const [spotifyConnecting, setSpotifyConnecting] = useState(false);
+  // Sprint MP-MODERN / RF-02 — scrub preview tooltip state.
+  const [scrubPreviewSec, setScrubPreviewSec] = useState<number | null>(null);
+  const [scrubPreviewLeftPct, setScrubPreviewLeftPct] = useState<number>(0);
+
   const activeSource: string | null = ctxRaw?.activeSource ?? activeTrack?.source ?? null;
 
-  // MP3.1 R1 fix CRITICAL-1: useKeyboardShortcuts handler unico (substitui
-  // inline MP1). Adiciona J/L (-10s/+10s), 0-9 (% seek), ArrowUp/Down (volume),
-  // ? (toggle help) + gate /admin/* (ADR-195).
+  // MP3.1 R1 fix CRITICAL-1: useKeyboardShortcuts handler unico (lesson #1 —
+  // sempre roda antes do early return).
   useKeyboardShortcuts({
     toggle,
     skipBack,
@@ -182,7 +205,13 @@ export function MiniPlayerBar() {
     setShortcutsHelpOpen,
   });
 
-  if (displayMode === "hidden" || !activeTrack) return null;
+  // Sprint MP-MODERN / RF-06 — lesson #1 hooks order:
+  //   1. displayMode==='hidden' -> null (zero render)
+  //   2. !activeTrack -> EmptyStateCTA (RF-06)
+  //   3. else -> bar normal.
+  // Os hooks acima rodam SEMPRE; early return so DEPOIS.
+  if (displayMode === "hidden") return null;
+  if (!activeTrack) return <EmptyStateCTA />;
 
   const sanitizedCoverUrl = sanitizeCoverUrl(activeTrack.coverUrl);
   const hasPrev = !!(courseContext && courseContext.currentIndex > 0);
@@ -211,9 +240,37 @@ export function MiniPlayerBar() {
   const prevDisabled = navContextDefined && !hasPrev && currentSeconds <= 3;
   const nextDisabled = navContextDefined && !hasNext;
 
+  // Sprint MP-MODERN / RF-01 — cover state for data-attribute.
+  const coverState: "playing" | "idle" = isPlaying ? "playing" : "idle";
+  const coverResponsiveClasses =
+    "h-12 w-12 md:h-14 md:w-14 lg:h-16 lg:w-16 rounded-md object-cover mini-player-cover";
+
+  // Sprint MP-MODERN / RF-02 — handlers de scrub preview tooltip.
+  function handleProgressMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || rect.width <= 0) return;
+    const ratio = Math.min(
+      1,
+      Math.max(0, (e.clientX - rect.left) / rect.width),
+    );
+    const dur = typeof durationSeconds === "number" ? durationSeconds : 0;
+    if (dur <= 0) return;
+    setScrubPreviewSec(ratio * dur);
+    setScrubPreviewLeftPct(ratio * 100);
+  }
+
+  function handleProgressMouseLeave() {
+    setScrubPreviewSec(null);
+  }
+
+  const currentLabel = formatMmSs(currentSeconds);
+  const durationLabel = formatMmSs(durationSeconds);
+
   return (
     <div
       data-testid="mini-player-bar"
+      data-mini-player-mode="active"
       role="complementary"
       aria-label="Player de audio persistente"
       data-reduced-motion={reducedMotion ? "true" : "false"}
@@ -228,17 +285,31 @@ export function MiniPlayerBar() {
       }}
     >
       <div className="flex items-center gap-3 min-w-0">
+        {/* Sprint MP-MODERN / RF-01 — hero artwork responsive + pulse-subtle. */}
         {sanitizedCoverUrl ? (
           <img
             src={sanitizedCoverUrl}
             alt=""
+            data-cover-state={coverState}
             className={cn(
-              "w-12 h-12 rounded-md object-cover mini-player-cover",
-              isPlaying && !reducedMotion && "animate-spin-slow",
+              coverResponsiveClasses,
+              isPlaying && !reducedMotion && "animate-pulse-subtle",
+              isPlaying && "shadow-lg ring-1 ring-blue-500/30",
+              !isPlaying && "shadow-md",
             )}
           />
         ) : (
-          <div className="w-12 h-12 rounded-md bg-gray-700 mini-player-cover" />
+          <div
+            data-cover-state={coverState}
+            aria-hidden="true"
+            className={cn(
+              coverResponsiveClasses,
+              "bg-gray-700",
+              isPlaying && !reducedMotion && "animate-pulse-subtle",
+              isPlaying && "shadow-lg ring-1 ring-blue-500/30",
+              !isPlaying && "shadow-md",
+            )}
+          />
         )}
         <div className="min-w-0">
           <div className="text-sm text-white truncate">
@@ -252,16 +323,19 @@ export function MiniPlayerBar() {
         </div>
       </div>
 
-      <div className="flex items-center gap-1">
+      {/* Sprint MP-MODERN / RF-03 — controls pill wrapper bg-white/5 rounded-full. */}
+      <div
+        data-testid="mini-player-controls-pill"
+        className="flex items-center gap-1 bg-white/5 rounded-full px-2 py-1"
+      >
         {showPrevNext && (
           <button
             type="button"
             data-testid="mini-player-prev"
             aria-label="Aula anterior"
             title="Aula anterior"
-            className="p-2 hover:bg-white/10 rounded-md text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            className="h-8 w-8 flex items-center justify-center hover:bg-white/10 rounded-full text-white disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={() => {
-              // Sprint MP-VALIDATION / RF-01.
               try {
                 void emitAudioEvent("audio.prev", {
                   from_track_id: activeTrack?.trackId ?? activeTrack?.lessonId ?? null,
@@ -282,7 +356,7 @@ export function MiniPlayerBar() {
           data-testid="mini-player-back15"
           aria-label="Voltar 15 segundos"
           title="Voltar 15s"
-          className="p-2 hover:bg-white/10 rounded-md text-white"
+          className="h-8 w-8 flex items-center justify-center hover:bg-white/10 rounded-full text-white"
           onClick={() => skipBack(15)}
         >
           <RotateCcw className="w-4 h-4" />
@@ -292,9 +366,8 @@ export function MiniPlayerBar() {
           data-testid="mini-player-toggle"
           aria-label={isPlaying ? "Pausar" : "Tocar"}
           title={isPlaying ? "Pausar (Espaco)" : "Tocar (Espaco)"}
-          className="p-2 hover:bg-white/10 rounded-md text-white relative"
+          className="h-10 w-10 flex items-center justify-center bg-white text-gray-900 hover:bg-gray-100 rounded-full relative"
           onClick={() => {
-            // Sprint MP-VALIDATION / RF-01 — emit audio.play/audio.pause.
             try {
               void emitAudioEvent(
                 isPlaying ? "audio.pause" : "audio.play",
@@ -315,7 +388,7 @@ export function MiniPlayerBar() {
             <span
               data-testid="audio-buffering-spinner"
               aria-label="Carregando"
-              className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-md"
+              className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-full"
             >
               <Loader2 className="w-4 h-4 animate-spin" />
             </span>
@@ -326,7 +399,7 @@ export function MiniPlayerBar() {
           data-testid="mini-player-forward15"
           aria-label="Avancar 15 segundos"
           title="Avancar 15s"
-          className="p-2 hover:bg-white/10 rounded-md text-white"
+          className="h-8 w-8 flex items-center justify-center hover:bg-white/10 rounded-full text-white"
           onClick={() => skipForward(15)}
         >
           <RotateCw className="w-4 h-4" />
@@ -337,9 +410,8 @@ export function MiniPlayerBar() {
             data-testid="mini-player-next"
             aria-label="Proxima aula"
             title="Proxima aula"
-            className="p-2 hover:bg-white/10 rounded-md text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            className="h-8 w-8 flex items-center justify-center hover:bg-white/10 rounded-full text-white disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={() => {
-              // Sprint MP-VALIDATION / RF-01.
               try {
                 void emitAudioEvent("audio.next", {
                   from_track_id: activeTrack?.trackId ?? activeTrack?.lessonId ?? null,
@@ -348,7 +420,11 @@ export function MiniPlayerBar() {
               } catch {
                 // never throw
               }
-              try { playNext?.(); } catch { /* swallow */ }
+              try {
+                playNext?.();
+              } catch {
+                /* swallow */
+              }
             }}
             disabled={nextDisabled}
           >
@@ -357,113 +433,96 @@ export function MiniPlayerBar() {
         )}
       </div>
 
-      <input
-        data-testid="mini-player-seek"
-        aria-label="Posicao na aula"
-        type="range"
-        min={0}
-        max={Math.max(durationSeconds || 0, 1)}
-        step={1}
-        value={Math.min(currentSeconds || 0, durationSeconds || 0)}
-        onChange={(e) => seek(parseFloat(e.target.value))}
-        className="flex-1 mx-2"
-      />
-
-      <div className="flex items-center gap-1">
-        {showVolume && <VolumeControl hideSlider={vp === "tablet"} />}
-        {/* MP3 RF-02: Spotify SDK setSpeed no-op. Hide select para evitar UI mentirosa. */}
-        {showSpeed && activeTrack?.source !== "spotify" && (
-          <select
-            data-testid="mini-player-speed"
-            aria-label={`Velocidade ${speed}x`}
-            title={`Velocidade ${speed}x`}
-            className="bg-transparent text-white text-xs border border-white/20 rounded px-2 py-1"
-            value={String(speed)}
-            onChange={(e) => setSpeed(parseFloat(e.target.value))}
+      {/* Sprint MP-MODERN / RF-02 — progress bar wrapper com mm:ss + scrub tooltip.
+          Wrapper recebe testid `mini-player-progress` (matches h-1/mini-player-range
+          via classe inerte). Input interno mantem testid legado `mini-player-seek`
+          para back-compat com tests MiniPlayerControls / MiniPlayerLayout. */}
+      <div
+        data-testid="mini-player-progress"
+        className="mini-player-range h-1 flex-1 mx-2 flex flex-col justify-center relative"
+        onMouseMove={handleProgressMouseMove}
+        onMouseLeave={handleProgressMouseLeave}
+      >
+        {scrubPreviewSec !== null ? (
+          <span
+            data-testid="mini-player-scrub-tooltip"
+            className="absolute -top-7 -translate-x-1/2 bg-gray-900/90 text-white text-[10px] px-1.5 py-0.5 rounded shadow whitespace-nowrap pointer-events-none"
+            style={{ left: `${scrubPreviewLeftPct}%` }}
+            aria-hidden="true"
           >
-            {SPEEDS.map((s) => (
-              <option key={s} value={String(s)}>
-                {s}x
-              </option>
-            ))}
-          </select>
-        )}
-        {/* CRITICAL-2 + RF-NEW.1: Sleep Timer control entre velocidade e close. */}
-        <SleepTimerControl
-          activeMinutes={sleepTimerMinutes}
-          remainingSeconds={sleepTimerRemainingSeconds}
-          onActivate={setSleepTimer}
-          onCancel={cancelSleepTimer}
-        />
-        {/* Sprint UX-GLOBAL-BUTTONS — Botao Aulas: abre LessonPickerDialog global.
-            Antes so /grind-live tinha picker. Mini player vira hub.
-            Viewport gate paridade Queue: esconde <768px. */}
-        <button
-          type="button"
-          data-testid="mini-player-lessons-button"
-          aria-label="Abrir biblioteca de aulas"
-          title="Aulas"
-          className="p-2 hover:bg-white/10 rounded-md text-white hidden md:inline-flex items-center justify-center"
-          onClick={() => {
+            {formatMmSs(scrubPreviewSec)}
+          </span>
+        ) : null}
+        <input
+          data-testid="mini-player-seek"
+          aria-label="Posicao na aula"
+          aria-valuetext={`${currentLabel} de ${durationLabel}`}
+          type="range"
+          min={0}
+          max={Math.max(durationSeconds || 0, 1)}
+          step={1}
+          value={Math.min(currentSeconds || 0, durationSeconds || 0)}
+          onChange={(e) => {
             try {
-              void emitAudioEvent("audio.picker_open", {
-                source_driver: activeSource,
-              });
+              void emitAudioEvent(
+                "audio.seek",
+                {
+                  track_id: activeTrack?.trackId ?? activeTrack?.lessonId ?? null,
+                  to_seconds: parseFloat(e.target.value),
+                },
+              );
             } catch {
               // never throw
             }
-            setPickerOpen(true);
+            seek(parseFloat(e.target.value));
           }}
-        >
-          <BookOpen className="w-4 h-4" />
-        </button>
-        {/* Sprint UX-GLOBAL-BUTTONS — Spotify connect (condicional driver=internal)
-            OR badge (driver=spotify). Antes so /coach-ai SpotifyConnectionPanel. */}
-        {activeSource !== "spotify" ? (
-          <button
-            type="button"
-            data-testid="mini-player-spotify-connect"
-            aria-label="Conectar Spotify"
-            title={spotifyConnecting ? "Conectando..." : "Conectar Spotify"}
-            disabled={spotifyConnecting}
-            className="p-2 hover:bg-white/10 rounded-md text-white hidden md:inline-flex items-center justify-center disabled:opacity-40 disabled:cursor-wait"
-            onClick={async () => {
-              try {
-                void emitAudioEvent("audio.spotify_connect_click", {
-                  source_driver: activeSource,
-                });
-              } catch {
-                // never throw
-              }
-              setSpotifyConnecting(true);
-              try {
-                await initiateSpotifyAuth();
-              } catch (err) {
-                // eslint-disable-next-line no-console
-                console.warn("[MiniPlayerBar] Spotify connect falhou:", err);
-              } finally {
-                setSpotifyConnecting(false);
-              }
-            }}
-          >
-            {spotifyConnecting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Music className="w-4 h-4" />
-            )}
-          </button>
-        ) : (
-          <span
-            data-testid="mini-player-spotify-badge"
-            aria-label="Spotify conectado"
-            title="Tocando via Spotify"
-            className="p-2 text-green-400 hidden md:inline-flex items-center justify-center"
-          >
-            <Music className="w-4 h-4" />
+          className="mini-player-range w-full"
+        />
+        <div className="flex justify-between text-[10px] text-gray-400 mt-0.5 font-mono tabular-nums">
+          <span data-testid="mini-player-time-current">
+            {durationSeconds && durationSeconds > 0 ? currentLabel : "--:--"}
           </span>
-        )}
-        {/* MP3.1 R1 fix CRITICAL-2: Queue button — abre QueuePopover.
-            MP3.1 Wave B / INFO-NEW-3: viewport gate — esconde <768px (mobile). */}
+          <span data-testid="mini-player-time-duration">
+            {durationSeconds && durationSeconds > 0 ? durationLabel : "--:--"}
+          </span>
+        </div>
+      </div>
+
+      {/* Sprint MP-MODERN / RF-04 — sidebar 3 grupos com dividers aria-hidden. */}
+      <div className="flex items-center gap-1">
+        {/* Grupo 1 — audio adjust */}
+        <div className="flex items-center gap-1">
+          {showVolume && <VolumeControl hideSlider={vp === "tablet"} />}
+          <SleepTimerControl
+            activeMinutes={sleepTimerMinutes}
+            remainingSeconds={sleepTimerRemainingSeconds}
+            onActivate={setSleepTimer}
+            onCancel={cancelSleepTimer}
+          />
+          {/* MP3 RF-02: Spotify SDK setSpeed no-op. Hide select para evitar UI mentirosa. */}
+          {showSpeed && activeTrack?.source !== "spotify" && (
+            <select
+              data-testid="mini-player-speed"
+              aria-label={`Velocidade ${speed}x`}
+              title={`Velocidade ${speed}x`}
+              className="bg-transparent text-white text-xs border border-white/20 rounded px-2 py-1"
+              value={String(speed)}
+              onChange={(e) => setSpeed(parseFloat(e.target.value))}
+            >
+              {SPEEDS.map((s) => (
+                <option key={s} value={String(s)}>
+                  {s}x
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        <div
+          data-testid="mini-player-sidebar-divider-audio"
+          aria-hidden="true"
+          className="h-6 w-px bg-white/10 mx-1"
+        />
+        {/* Grupo 2 — queue */}
         <button
           type="button"
           data-testid="mini-player-queue-button"
@@ -482,30 +541,104 @@ export function MiniPlayerBar() {
             </span>
           ) : null}
         </button>
-        {/* MP3.2 / W-B3: help button (testid p/ onboarding interaction test). */}
-        <button
-          type="button"
-          data-testid="mini-player-help-button"
-          aria-label="Atalhos de teclado"
-          title="Atalhos (?)"
-          className="p-2 hover:bg-white/10 rounded-md text-white"
-          onClick={(e) => {
-            // W-B3 LOW-1: stopPropagation evita ghost focus do onboarding outside-click.
-            e.stopPropagation();
-            // Dismiss onboarding antes de abrir help (decisao founder: ambos efeitos).
-            try {
-              if (localStorage.getItem("audio.onboarding.seen.v1") !== "true") {
-                localStorage.setItem("audio.onboarding.seen.v1", "true");
-                window.dispatchEvent(new Event("audio.onboarding.dismiss"));
+        <div
+          data-testid="mini-player-sidebar-divider-queue"
+          aria-hidden="true"
+          className="h-6 w-px bg-white/10 mx-1"
+        />
+        {/* Grupo 3 — utils (help + lessons + spotify) */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            data-testid="mini-player-help-button"
+            aria-label="Atalhos de teclado"
+            title="Atalhos (?)"
+            className="p-2 hover:bg-white/10 rounded-md text-white"
+            onClick={(e) => {
+              // W-B3 LOW-1: stopPropagation evita ghost focus do onboarding outside-click.
+              e.stopPropagation();
+              try {
+                if (localStorage.getItem("audio.onboarding.seen.v1") !== "true") {
+                  localStorage.setItem("audio.onboarding.seen.v1", "true");
+                  window.dispatchEvent(new Event("audio.onboarding.dismiss"));
+                }
+              } catch {
+                // ignore
               }
-            } catch {
-              // ignore
-            }
-            setShortcutsHelpOpen((o) => !o);
-          }}
-        >
-          <HelpCircle className="w-4 h-4" />
-        </button>
+              setShortcutsHelpOpen((o) => !o);
+            }}
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            data-testid="mini-player-lessons-button"
+            aria-label="Abrir biblioteca de aulas"
+            title="Aulas"
+            className="p-2 hover:bg-white/10 rounded-md text-white hidden md:inline-flex items-center justify-center"
+            onClick={() => {
+              try {
+                void emitAudioEvent("audio.picker_open", {
+                  source_driver: activeSource,
+                });
+              } catch {
+                // never throw
+              }
+              setPickerOpen(true);
+            }}
+          >
+            <BookOpen className="w-4 h-4" />
+          </button>
+          {activeSource !== "spotify" ? (
+            <button
+              type="button"
+              data-testid="mini-player-spotify-connect"
+              aria-label="Conectar Spotify"
+              title={spotifyConnecting ? "Conectando..." : "Conectar Spotify"}
+              disabled={spotifyConnecting}
+              className="p-2 hover:bg-white/10 rounded-md text-white hidden md:inline-flex items-center justify-center disabled:opacity-40 disabled:cursor-wait"
+              onClick={async () => {
+                try {
+                  void emitAudioEvent("audio.spotify_connect_click", {
+                    source_driver: activeSource,
+                  });
+                } catch {
+                  // never throw
+                }
+                setSpotifyConnecting(true);
+                try {
+                  await initiateSpotifyAuth();
+                } catch (err) {
+                  // eslint-disable-next-line no-console
+                  console.warn("[MiniPlayerBar] Spotify connect falhou:", err);
+                } finally {
+                  setSpotifyConnecting(false);
+                }
+              }}
+            >
+              {spotifyConnecting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Music className="w-4 h-4" />
+              )}
+            </button>
+          ) : (
+            <span
+              data-testid="mini-player-spotify-badge"
+              aria-label="Spotify conectado"
+              title="Tocando via Spotify"
+              className="p-2 text-green-400 hidden md:inline-flex items-center justify-center"
+            >
+              <Music className="w-4 h-4" />
+            </span>
+          )}
+        </div>
+        <div
+          data-testid="mini-player-sidebar-divider-utils"
+          aria-hidden="true"
+          className="h-6 w-px bg-white/10 mx-1"
+        />
+        {/* Grupo 4 — window controls (expand + close) */}
         <button
           type="button"
           data-testid="mini-player-expand"
@@ -581,14 +714,13 @@ export function MiniPlayerBar() {
         onRepeatChange={setRepeatMode}
         onToggleShuffle={toggleShuffle}
       />
-      {/* Sprint UX-GLOBAL-BUTTONS — LessonPickerDialog lazy global.
-          Renderiza so quando aberto. Bem-comportado sem AudioPlayerProvider
-          via useOptionalAudioPlayer no fetcher. */}
       {pickerOpen ? (
         <Suspense fallback={null}>
           <LessonPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} />
         </Suspense>
       ) : null}
+      {/* Sprint MP-MODERN / RF-05 — expanded dialog. */}
+      <ExpandedPlayerDialog />
     </div>
   );
 }

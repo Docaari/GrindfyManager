@@ -176,6 +176,13 @@ function _installTsxRequireHandler() {
     return; // already installed in this worker
   }
   const ts = _typescriptCompiler;
+  // Sprint MP-MODERN harness fix: package.json `"type": "module"` causes Node 24
+  // to treat ALL .ts/.tsx files as ESM at load time. `module._compile(cjsText, filename)`
+  // throws `exports is not defined in ES module scope` because Node's loader
+  // already classified the module record as ESM. Fix: bypass _compile and run
+  // CJS output via `new Function(exports, require, module, ...)` wrapper which
+  // controls scope manually. Also shims `import.meta.env` since CJS scope has no
+  // import.meta (Vite production replaces it at build time).
   const handler = function (module: any, filename: string) {
     const src = fs.readFileSync(filename, 'utf8');
     const out = ts.transpileModule(src, {
@@ -188,7 +195,119 @@ function _installTsxRequireHandler() {
       },
       fileName: filename,
     });
-    module._compile(out.outputText, filename);
+    // Replace `import.meta` references with a CJS-friendly shim (Vite usually
+    // statically replaces `import.meta.env.X` at build time; in tests we provide
+    // a no-op env so feature flags read as falsy).
+    const patched = out.outputText.replace(/import\.meta/g, '({ env: { DEV: false, MODE: "test" } })');
+    const wrapper = new Function('exports', 'require', 'module', '__filename', '__dirname', patched);
+
+    // Sprint MP-MODERN — vi.mock-aware require shim. Vitest registers mocks
+    // via vi.mock() at file load (intercepts ES `import`), but `require()`
+    // from production code (compiled to CJS) bypasses the mock. Lesson #38
+    // mitigation: we walk Vitest's mock registries (MockerRegistry per test
+    // file) and, when a request matches a registered ManualMockedModule, we
+    // invoke its factory synchronously and return the exports. Falls back to
+    // Node's real require if no mock matches or factory throws.
+    const _mockableRequire = (req: string) => {
+      try {
+        const mocker = (globalThis as any).__vitest_mocker__;
+        if (!mocker) return module.require(req);
+
+        // 1) Fast path: check already-evaluated mock entries first.
+        const em = mocker.moduleRunner?.evaluator?._evaluatedModules;
+        const idMap = em?.idToModuleMap;
+        let normalized = req.replace(/\\/g, '/');
+        if (normalized.startsWith('@/')) {
+          normalized = normalized.replace(/^@\//, '/client/src/');
+        } else if (normalized.startsWith('@shared/')) {
+          normalized = normalized.replace(/^@shared\//, '/shared/');
+        } else if (normalized.startsWith('@assets/')) {
+          normalized = normalized.replace(/^@assets\//, '/attached_assets/');
+        }
+        const bare = req && !req.startsWith('.') && !req.startsWith('/') && !req.startsWith('@');
+        if (idMap && typeof idMap.entries === 'function') {
+          for (const [key, modRecord] of idMap.entries()) {
+            if (typeof key !== 'string' || !key.startsWith('mock:')) continue;
+            const keyNorm = key.replace(/\\/g, '/');
+            const isMockMatch =
+              keyNorm.includes(normalized) ||
+              keyNorm.includes(`${normalized}.ts`) ||
+              keyNorm.includes(`${normalized}.tsx`) ||
+              keyNorm.includes(`${normalized}.js`) ||
+              (bare && keyNorm.includes(`/node_modules/${req}/`));
+            if (isMockMatch) {
+              const exp = (modRecord as any)?.exports;
+              if (exp) return exp;
+            }
+          }
+        }
+
+        // 2) Slow path: walk registries for un-evaluated mocks, invoke factory.
+        const regs = mocker.registries;
+        if (regs instanceof Map) {
+          for (const [, fileReg] of regs.entries()) {
+            const byUrl = fileReg?.registryByUrl;
+            const byId = fileReg?.registryById;
+            // byId: full absolute paths.
+            if (byId instanceof Map) {
+              for (const [id, mm] of byId.entries()) {
+                if (typeof id !== 'string') continue;
+                const idNorm = id.replace(/\\/g, '/');
+                // Match raw request name vs node_modules/wouter/ etc.
+                const matchesAlias =
+                  idNorm.endsWith(normalized) ||
+                  idNorm.endsWith(`${normalized}.ts`) ||
+                  idNorm.endsWith(`${normalized}.tsx`) ||
+                  idNorm.endsWith(`${normalized}.js`) ||
+                  idNorm.endsWith(`${normalized}/index.ts`) ||
+                  idNorm.endsWith(`${normalized}/index.tsx`) ||
+                  (bare && idNorm.includes(`/node_modules/${req}/`)) ||
+                  (mm && (mm as any).raw === req);
+                if (matchesAlias && typeof (mm as any).factory === 'function') {
+                  try {
+                    const result = (mm as any).factory();
+                    if (result && typeof (result as any).then === 'function') {
+                      // Async factory — cannot resolve sync; bail to real require.
+                      break;
+                    }
+                    return result;
+                  } catch {
+                    // factory threw — bail out.
+                    break;
+                  }
+                }
+              }
+            }
+            // byUrl fallback.
+            if (byUrl instanceof Map) {
+              for (const [url, mm] of byUrl.entries()) {
+                if (typeof url !== 'string') continue;
+                if (mm && (mm as any).raw === req && typeof (mm as any).factory === 'function') {
+                  try {
+                    const result = (mm as any).factory();
+                    if (result && typeof (result as any).then === 'function') break;
+                    return result;
+                  } catch {
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // ignore mock-lookup errors, fall through to real require
+      }
+      return module.require(req);
+    };
+
+    wrapper(
+      module.exports,
+      _mockableRequire,
+      module,
+      filename,
+      path.dirname(filename),
+    );
   };
   Mod._extensions['.tsx'] = handler;
   Mod._extensions['.ts'] = handler;
