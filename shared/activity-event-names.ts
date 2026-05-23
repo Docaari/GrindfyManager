@@ -9,7 +9,7 @@
 export const EVENT_NAME_REGEX = /^[a-z]+(\.[a-z0-9_]+)+(\.v[0-9]+)?$/;
 
 export const CANONICAL_EVENT_NAMES: ReadonlyArray<string> = [
-  // audio (10 — +2 UX-GLOBAL-BUTTONS)
+  // audio (13 — +3 SPOTIFY-DEEP)
   "audio.play",
   "audio.pause",
   "audio.seek",
@@ -20,6 +20,10 @@ export const CANONICAL_EVENT_NAMES: ReadonlyArray<string> = [
   "audio.lesson_complete",
   "audio.picker_open",
   "audio.spotify_connect_click",
+  // Sprint SPOTIFY-DEEP / ADR-208 §7 — 3 events novos.
+  "audio.spotify_search_open",
+  "audio.spotify_track_add",
+  "audio.spotify_playlist_select",
   // lesson (6)
   "lesson.view",
   "lesson.play_start",

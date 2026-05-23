@@ -1,0 +1,71 @@
+%% Sprint SPOTIFY-DEEP — Playlist browser drill-in flow
+%% ADR-208 — RF-02
+%% Renders: GitHub Mermaid native
+flowchart TD
+    Start([User abre SpotifySearchDialog]) --> TabDefault{tab default?}
+    TabDefault -->|"Buscar (RF-01)"| SearchFlow[(ver search-sequence.mermaid)]
+    TabDefault -->|"Minhas Playlists"| LazyCheck{ja carregou<br/>playlists nesta<br/>sessao dialog?}
+
+    LazyCheck -->|sim cache TanStack| RenderList
+    LazyCheck -->|nao| Fetch[GET /api/audio/spotify/me/playlists?limit=50]
+
+    Fetch --> ServerGate{requireSpotifyAccess<br/>OK?}
+    ServerGate -->|nao 403/401| EmptyAuth["empty-state CTA<br/>SpotifyConnectButton<br/>OR upgrade Grindfy"]
+    EmptyAuth --> End([fim])
+
+    ServerGate -->|sim| CacheCheck{cache hit<br/>5min TTL?}
+    CacheCheck -->|sim| ReturnCached[response cached:true]
+    CacheCheck -->|nao| Bucket{token bucket<br/>180/min OK?}
+
+    Bucket -->|nao| Err429["429 retryAfterMs<br/>banner UI"]
+    Err429 --> End
+    Bucket -->|sim| Upstream[Spotify Web API<br/>/v1/me/playlists]
+
+    Upstream -->|200| Normalize["normalize SpotifyPlaylist[]<br/>+ sanitize coverUrl<br/>+ truncated=true se total>50"]
+    Normalize --> CacheSet[spotifyCatalogCache.set TTL 5min]
+    CacheSet --> ReturnCached
+
+    Upstream -->|"5xx / network"| Err502[502 indisponivel]
+    Err502 --> End
+
+    ReturnCached --> RenderList["render playlists<br/>cover + name + N tracks<br/>chevron drill-in"]
+
+    RenderList --> Empty{user tem<br/>0 playlists?}
+    Empty -->|sim| EmptyState["empty state<br/>'Crie playlists no app Spotify'"]
+    EmptyState --> End
+
+    Empty -->|nao| Truncated{total > 50?}
+    Truncated -->|sim| TruncBanner["banner 'Mostrando primeiras 50<br/>playlists' (no next-page)"]
+    Truncated -->|nao| ClickPlaylist
+    TruncBanner --> ClickPlaylist
+
+    ClickPlaylist[User click playlist row] --> Tel1[telemetria<br/>audio.spotify_playlist_select]
+    Tel1 --> DrillIn[GET /api/audio/spotify/playlists/:id/tracks?limit=50]
+
+    DrillIn --> SamePipeline[(mesmo pipeline:<br/>access -> cache -> bucket -> upstream)]
+    SamePipeline --> RenderTracks["view tracks playlist<br/>+ breadcrumb '← Playlists'<br/>+ botoes globais<br/>'▶ Tocar tudo' / '+ Adicionar tudo'"]
+
+    RenderTracks --> UserAction{user action}
+
+    UserAction -->|click row track| PlayNow["playNow(track)<br/>fecha dialog<br/>telemetria audio.spotify_track_add<br/>immediatePlay:true"]
+    UserAction -->|click '+' fila| AddQueue["addToQueue(track)<br/>toast 'Adicionado'<br/>telemetria<br/>immediatePlay:false"]
+    UserAction -->|"click 'Tocar tudo'"| PlayAll["playNow(tracks[0])<br/>+ addToQueue(tracks[1..49])<br/>cap 50<br/>50 events telemetria (Q5 default)"]
+    UserAction -->|"click 'Adicionar tudo'"| AddAll["addToQueue(tracks[0..49])<br/>cap 50<br/>truncation toast se >50"]
+    UserAction -->|click breadcrumb| Back[volta lista playlists<br/>SEM refetch cache TanStack]
+    UserAction -->|click preview| PreviewAudio["audio element<br/>src=track.preview_url<br/>30s MP3<br/>auto-pause main player"]
+
+    PlayNow --> EngineSwap
+    AddQueue --> End
+    PlayAll --> EngineSwap
+    AddAll --> End
+    Back --> ClickPlaylist
+    PreviewAudio --> RenderTracks
+
+    EngineSwap["AudioSourceEngine<br/>swap LibraryAudioDriver<br/>→ SpotifyAudioDriver"] --> End
+
+    classDef errorNode fill:#fee,stroke:#f66,color:#000
+    classDef cacheNode fill:#efe,stroke:#393,color:#000
+    classDef telNode fill:#eef,stroke:#66f,color:#000
+    class EmptyAuth,Err429,Err502 errorNode
+    class CacheCheck,CacheSet,ReturnCached cacheNode
+    class Tel1 telNode

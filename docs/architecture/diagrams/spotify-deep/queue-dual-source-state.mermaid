@@ -1,0 +1,61 @@
+%% Sprint SPOTIFY-DEEP — Queue dual-source state + driver switch
+%% ADR-208 — RF-05
+%% Renders: GitHub Mermaid native
+stateDiagram-v2
+    [*] --> QueueEmpty: Mount MiniPlayerBar
+
+    QueueEmpty --> QueueLibrary: addToQueue<br/>track.source='library'
+    QueueEmpty --> QueueSpotify: addToQueue<br/>track.source='spotify'
+
+    QueueLibrary --> QueueMixed: addToQueue<br/>track.source='spotify'
+    QueueSpotify --> QueueMixed: addToQueue<br/>track.source='library'
+
+    QueueLibrary --> QueueLibrary: addToQueue<br/>same source
+    QueueSpotify --> QueueSpotify: addToQueue<br/>same source
+    QueueMixed --> QueueMixed: addToQueue any
+
+    QueueLibrary --> QueueEmpty: clearQueue<br/>OR remove all
+    QueueSpotify --> QueueEmpty: clearQueue
+    QueueMixed --> QueueEmpty: clearQueue
+    QueueMixed --> QueueLibrary: remove all spotify
+    QueueMixed --> QueueSpotify: remove all library
+
+    state QueueMixed {
+        [*] --> RenderRow
+        RenderRow --> LibraryRow: track.source='library'
+        RenderRow --> SpotifyRow: track.source='spotify'
+
+        LibraryRow: 🎓 library row<br/>NO badge<br/>cover any host (sanitized)
+        SpotifyRow: 🎵 spotify row<br/>green chip "Spotify"<br/>cover i.scdn.co only
+
+        LibraryRow --> [*]: drag reorder<br/>remove<br/>click play
+        SpotifyRow --> [*]: drag reorder<br/>remove<br/>click play
+    }
+
+    note right of QueueMixed
+        useQueueState (MP3) unchanged.
+        Discriminated union AudioTrack
+        permite render heterogeneo.
+        Header counter agrega both.
+    end note
+
+    %% Driver switch state - paralelo
+    state DriverSwitch {
+        [*] --> DriverLibrary: initial track<br/>source='library'
+
+        DriverLibrary --> DriverSpotify: playNow(track)<br/>track.source='spotify'<br/>currentDriver.destroy()<br/>new SpotifyAudioDriver()
+
+        DriverSpotify --> DriverLibrary: playNow(track)<br/>track.source='library'<br/>currentDriver.destroy()<br/>new LibraryAudioDriver()
+
+        DriverLibrary --> DriverLibrary: playNow same source<br/>NO driver swap<br/>(reuse instance)
+        DriverSpotify --> DriverSpotify: playNow same source<br/>NO driver swap
+    }
+
+    note right of DriverSwitch
+        AudioSourceEngine._resolveDriver(track)
+        decisao 5 ADR-208.
+        MiniPlayerBar re-renderiza
+        activeSource em <Track />.
+        Library: HTMLAudioElement.
+        Spotify: Web Playback SDK device.
+    end note

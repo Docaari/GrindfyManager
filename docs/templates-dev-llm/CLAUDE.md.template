@@ -1,0 +1,192 @@
+# CLAUDE.md — [NOME DO PROJETO]
+
+> **Destino: `CLAUDE.md` na raiz do projeto do usuário.** Renomeie para `CLAUDE.md` ao copiar e preencha os campos `[PREENCHER]`. Este template segue o método do `Docs/DOC4` da base Dev LLM (11 seções obrigatórias).
+
+---
+
+## 1. Visão Geral
+
+- **Nome:** [PREENCHER]
+- **Propósito (1 frase):** [PREENCHER — qual problema resolve, para quem]
+- **Tipo:** [PREENCHER — SaaS web / API pública / CLI / mobile / bot]
+- **Status:** [PREENCHER — planejamento / MVP / produção / manutenção]
+- **Metodologia:** Anti-Vibe Coding + TDD (ver `docs/architecture/decisions/` para ADRs)
+- **Stage atual:** [PREENCHER — Fase X do workflow DOC4]
+
+---
+
+## 2. Arquitetura
+
+```
+[PREENCHER — diagrama textual da arquitetura]
+
+Exemplo:
+┌────────────┐    HTTPS    ┌────────────┐    SQL     ┌──────────┐
+│  Next.js   │────────────▶│  FastAPI   │───────────▶│ Postgres │
+│   (web)    │             │   (api)    │            │          │
+└────────────┘             └─────┬──────┘            └──────────┘
+                                 │ Redis pub/sub
+                                 ▼
+                          ┌─────────────┐
+                          │   Worker    │
+                          │  (jobs)     │
+                          └─────────────┘
+```
+
+- **Tipo:** [PREENCHER — monolito / monorepo / microsserviços]
+- **Comunicação entre serviços:** [PREENCHER — HTTP / gRPC / fila / event bus]
+- **Diagramas formais:** ver `docs/architecture/` (gerados pelo System-Architect)
+
+---
+
+## 3. Stack Completa
+
+| Componente | Tecnologia | Versão | Por quê |
+|---|---|---|---|
+| Linguagem backend | [PREENCHER] | [exata, não "latest"] | [PREENCHER — justificativa] |
+| Framework backend | [PREENCHER] | | |
+| ORM / Query builder | [PREENCHER] | | |
+| Banco de dados | [PREENCHER] | | |
+| Cache | [PREENCHER ou N/A] | | |
+| Fila / jobs | [PREENCHER ou N/A] | | |
+| Linguagem frontend | [PREENCHER] | | |
+| Framework frontend | [PREENCHER] | | |
+| Infra / deploy | [PREENCHER] | | |
+| CI/CD | [PREENCHER] | | |
+
+---
+
+## 4. Estrutura de Diretórios
+
+```
+[NOME-DO-PROJETO]/
+├── CLAUDE.md                 ← Este arquivo
+├── README.md
+├── .claude/
+│   ├── agents/               ← Agentes (cópia de Dev LLM/Agentes e Skills - Unificado/)
+│   ├── settings.json         ← Configs do Claude Code
+│   └── hooks/                ← Hooks customizados
+├── docker-compose.yml
+├── .env.example
+├── docs/
+│   ├── specs/                ← Specs (geradas pelo PM-Spec)
+│   ├── architecture/         ← Diagramas + ADRs (gerados pelo System-Architect)
+│   └── api/                  ← Documentação de endpoints
+├── services/                 ← [PREENCHER — backend / api / worker]
+│   └── api/
+│       ├── src/
+│       └── tests/
+└── web/                      ← [PREENCHER — frontend]
+    ├── src/
+    └── tests/
+```
+
+---
+
+## 5. Variáveis de Ambiente
+
+Ver `.env.example` para o template completo. Variáveis sensíveis em produção via secret manager — nunca no `.env` committado.
+
+| Variável | Serviço | Descrição | Exemplo |
+|---|---|---|---|
+| `DATABASE_URL` | api | Connection string Postgres | `postgresql://user:pass@host:5432/db` |
+| `REDIS_URL` | api, worker | Connection string Redis | `redis://localhost:6379` |
+| `JWT_SECRET` | api | Assinatura de tokens | `[gerar com openssl rand -hex 32]` |
+| [PREENCHER] | | | |
+
+---
+
+## 6. Features do MVP
+
+### Feature 1: [NOME]
+- **Descrição:** [PREENCHER]
+- **Serviço responsável:** [PREENCHER]
+- **Endpoints:** [PREENCHER — ex: POST /api/auth/register]
+- **Regras de negócio:** [PREENCHER]
+- **Testes:** [arquivo de teste / cobertura mínima]
+- **Spec:** `docs/specs/[nome].md`
+- **Flow:** `docs/architecture/flows/[nome]/`
+
+### Feature 2: ...
+
+---
+
+## 7. Modelos de Dados
+
+### User
+| Campo | Tipo | Constraints | Descrição |
+|---|---|---|---|
+| id | uuid | PK | Identificador |
+| email | string | unique, not null | Email do usuário |
+| password_hash | string | not null | Hash bcrypt |
+| created_at | timestamp | default now() | Criação |
+
+### [PREENCHER outros modelos]
+
+Modelo formal em `docs/architecture/data-model.mermaid`.
+
+---
+
+## 8. APIs Externas
+
+| API | Propósito | Autenticação | Doc |
+|---|---|---|---|
+| [PREENCHER — ex: Stripe] | Pagamentos | Bearer token | https://... |
+| [PREENCHER] | | | |
+
+---
+
+## 9. Convenções
+
+- **Naming arquivos:** `kebab-case.ext`
+- **Naming classes:** `PascalCase`
+- **Naming funções:** `camelCase`
+- **Naming banco:** `snake_case`
+- **Commits:** Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`)
+- **Branches:** `main` (produção), `develop` (integração), `feature/[nome]`, `fix/[nome]`
+- **Workflow do agente:** trabalha em `feature/[nome]`, nunca direto na `main`. Commit on green. PR para merge mesmo solo.
+
+---
+
+## 10. Erros Conhecidos da IA
+
+> Atualize esta seção sempre que o agente cometer um erro repetível. O CLAUDE.md é memória cumulativa.
+
+| Data | Erro | Contexto | Correto |
+|---|---|---|---|
+| YYYY-MM-DD | [exemplo: usou `latest` na versão] | [contexto] | [versão exata] |
+| | | | |
+
+---
+
+## 11. Comandos Úteis
+
+```bash
+# Setup
+[PREENCHER — ex: docker compose up -d]
+
+# Desenvolvimento
+[PREENCHER — ex: npm run dev]
+
+# Testes
+[PREENCHER — ex: npm test, pytest]
+
+# Lint / format
+[PREENCHER]
+
+# Migrações
+[PREENCHER]
+
+# Seed
+[PREENCHER]
+
+# Build
+[PREENCHER]
+
+# Deploy
+[PREENCHER]
+```
+
+---
+
+*Template baseado em DOC4 (workflow SaaS+IA) da base Dev LLM. Atualizado em Maio 2026.*

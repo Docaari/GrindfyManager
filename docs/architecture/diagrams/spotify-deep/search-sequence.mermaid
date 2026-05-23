@@ -1,0 +1,78 @@
+%% Sprint SPOTIFY-DEEP — Search end-to-end sequence
+%% ADR-208 — RF-01 + RF-03 + RF-04
+%% Renders: GitHub Mermaid native
+sequenceDiagram
+    actor User
+    participant Btn as MiniPlayerBar<br/>Search Button
+    participant Dialog as SpotifySearchDialog<br/>(Radix)
+    participant Tel as audio-telemetry<br/>(client lib)
+    participant Client as spotifyApiClient<br/>(TanStack Query)
+    participant Route as audioSpotifyCatalog<br/>handleSpotifySearch
+    participant Access as requireSpotifyAccess<br/>(server/services)
+    participant Cache as spotifyCatalogCache<br/>(in-memory 5min)
+    participant Bucket as spotifyRateLimit<br/>(token bucket 180/min)
+    participant Spotify as Spotify Web API<br/>/v1/search
+
+    User->>Btn: click "Buscar Spotify" (or Cmd+/)
+    Btn->>Tel: recordActivity("audio.spotify_search_open",<br/>{source, tier, spotifyConnected})
+    Note over Tel: ANTES do dialog render —<br/>capture mesmo se render falhar
+    Btn->>Dialog: setOpen(true)
+    Dialog-->>User: render empty state +<br/>input focused
+
+    User->>Dialog: type "lofi"
+    Note over Dialog: debounce 500ms<br/>min 2 chars
+    Dialog->>Client: useQuery(['spotify','search','lofi'])
+
+    Client->>Route: GET /api/audio/spotify/search?q=lofi&type=track&limit=20
+    Note over Route: Zod parse query<br/>(400 if invalid)
+
+    Route->>Access: requireSpotifyAccess(userId)
+    Note over Access: 1. SELECT spotify_tokens row<br/>2. tier check<br/>3. expiresAt check (refresh inline if <60s)<br/>4. product=='premium' check
+    Access-->>Route: {accessToken: "BQ..."}
+
+    Route->>Cache: get(`${userId}|search|hash({q,type,limit})`)
+
+    alt Cache HIT (segunda query identica em <5min)
+        Cache-->>Route: {tracks: [...]}
+        Note over Route: NAO consome bucket
+        Route-->>Client: 200 {tracks, cached: true}
+    else Cache MISS
+        Cache-->>Route: undefined
+        Route->>Bucket: consume(userId, 1)
+
+        alt Bucket exhausted (>180/min)
+            Bucket-->>Route: {ok: false, retryAfterMs}
+            Route-->>Client: 429 {message, retryAfterMs}
+            Client-->>Dialog: error state<br/>"Tente em N segundos"
+        else Bucket OK
+            Bucket-->>Route: {ok: true}
+            Route->>Spotify: GET /v1/search?q=lofi&type=track&limit=20&market=from_token<br/>Authorization: Bearer accessToken
+
+            alt Spotify 200
+                Spotify-->>Route: {tracks: {items: [raw]}}
+                Note over Route: normalize → SpotifyTrack[]<br/>(strip raw fields)<br/>sanitize coverUrl host whitelist
+                Route->>Cache: set(key, normalized, ttl=5min)
+                Route-->>Client: 200 {tracks, cached: false}
+                Client-->>Dialog: render 20 rows<br/>(cover/title/artist/duration/preview/add)
+                Dialog-->>User: see results
+            else Spotify 401 (token rejected)
+                Spotify-->>Route: 401
+                Route->>Access: refreshSpotifyAccessToken(userId)
+                Access-->>Route: {accessToken: "new..."}
+                Note over Route: retry once<br/>(if fail again → 401 client)
+            else Spotify 429
+                Spotify-->>Route: 429 Retry-After: N
+                Note over Route: log "spotify_api_quota_hit"<br/>NAO retenta
+                Route-->>Client: 429 {message, retryAfterMs}
+            else Spotify 5xx / Network
+                Spotify-->>Route: 502 / throw
+                Note over Route: console.error<br/>(lesson #9 log antes fallback)
+                Route-->>Client: 502 {message: "Spotify indisponivel"}
+            end
+        end
+    end
+
+    User->>Dialog: click track row
+    Dialog->>Tel: recordActivity("audio.spotify_track_add",<br/>{trackId, via:'search', immediatePlay:true})
+    Dialog->>Dialog: playNow(track)<br/>setOpen(false)
+    Note over Dialog: AudioSourceEngine<br/>swap pra SpotifyAudioDriver<br/>(decisao #5 ADR-208)

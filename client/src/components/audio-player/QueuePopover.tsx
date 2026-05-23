@@ -4,6 +4,10 @@
 
 import React, { Component } from "react";
 import { formatDuration } from "@/lib/audio-engine/formatDuration";
+import {
+  sanitizeCoverUrl,
+  sanitizeSpotifyCoverUrl,
+} from "@/lib/audio-engine/sanitizeCoverUrl";
 
 type RepeatMode = "off" | "all" | "one";
 
@@ -77,17 +81,33 @@ function QueueItemRow({
   onSkip: (id: string) => void;
 }) {
   const isSpotify = item.track.source === "spotify";
+  // Sprint SPOTIFY-DEEP / RF-05 — cover Spotify strict whitelist.
+  const coverUrlSanitized = isSpotify
+    ? sanitizeSpotifyCoverUrl(item.track.coverUrl ?? null)
+    : sanitizeCoverUrl(item.track.coverUrl ?? null);
   return (
     <li
       data-testid={`queue-item-${item.id}`}
       className="flex items-center gap-2 rounded px-2 py-1 hover:bg-white/5"
     >
+      {coverUrlSanitized ? (
+        <img
+          src={coverUrlSanitized}
+          alt=""
+          className="w-8 h-8 rounded object-cover flex-shrink-0"
+        />
+      ) : null}
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm text-white">{item.track.title}</div>
         <div className="text-xs text-gray-400">
           {formatDuration(item.track.durationSeconds ?? null)}
           {isSpotify ? (
-            <span className="ml-2 rounded bg-green-700/30 px-1 text-[10px] text-green-300">
+            <span
+              data-testid="queue-badge-spotify"
+              aria-label="Spotify"
+              title="Spotify"
+              className="ml-2 rounded bg-green-700/30 px-1 text-[10px] text-green-300"
+            >
               Spotify
             </span>
           ) : null}

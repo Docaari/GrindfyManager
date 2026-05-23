@@ -599,6 +599,574 @@ export async function handleGetSpotifyStatus(
 }
 
 // =============================================================================
+// Sprint SPOTIFY-DEEP / RF-03 + ADR-208 — Catalog proxy handlers (3 endpoints).
+// =============================================================================
+
+import { z } from "zod";
+
+const SPOTIFY_API_BASE = "https://api.spotify.com/v1";
+
+// Cache singleton (per-process) — pode ser invalidado via invalidateSpotifyCache.
+let _catalogCacheSingleton: any = null;
+async function getDefaultCatalogCache() {
+  if (_catalogCacheSingleton) return _catalogCacheSingleton;
+  const mod = await import("../services/spotifyCatalogCache");
+  _catalogCacheSingleton = mod.defaultSpotifyCatalogCache;
+  return _catalogCacheSingleton;
+}
+
+let _tokenBucketSingleton: any = null;
+async function getDefaultTokenBucket() {
+  if (_tokenBucketSingleton) return _tokenBucketSingleton;
+  const mod = await import("../services/spotifyRateLimit");
+  _tokenBucketSingleton = mod.defaultSpotifyTokenBucket;
+  return _tokenBucketSingleton;
+}
+
+/**
+ * Sprint SPOTIFY-DEEP / RF-03 — invalidacao explicita do cache de catalog.
+ * Chamado em disconnect handler + disponivel pra testes/debugging.
+ */
+export function invalidateSpotifyCache(userId: string): void {
+  if (_catalogCacheSingleton) {
+    try {
+      _catalogCacheSingleton.invalidate(userId);
+    } catch {
+      // ignore
+    }
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const accessMod = require("../services/spotifyAccess");
+    accessMod?.defaultAccessTokenCache?.invalidate(userId);
+  } catch {
+    // ok
+  }
+}
+
+// Allowed Spotify cover hosts (paridade client sanitize).
+const ALLOWED_COVER_HOSTS = new Set([
+  "i.scdn.co",
+  "mosaic.scdn.co",
+  "wrapped-images.spotifycdn.com",
+]);
+
+function sanitizeCoverFromSpotify(url: string | null | undefined): string | null {
+  if (!url || typeof url !== "string") return null;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return null;
+    if (!ALLOWED_COVER_HOSTS.has(u.hostname)) return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeTrack(track: any): any {
+  if (!track) return null;
+  const coverUrlRaw = track.album?.images?.[0]?.url ?? null;
+  return {
+    trackId: track.uri ?? (track.id ? `spotify:track:${track.id}` : ""),
+    title: track.name ?? "",
+    artists: Array.isArray(track.artists)
+      ? track.artists.map((a: any) => a?.name ?? "").filter(Boolean)
+      : [],
+    durationSec: Math.round((track.duration_ms ?? 0) / 1000),
+    previewUrl: track.preview_url ?? null,
+    coverUrl: sanitizeCoverFromSpotify(coverUrlRaw),
+    album: track.album?.name ?? "",
+  };
+}
+
+function normalizePlaylist(pl: any): any {
+  if (!pl) return null;
+  const coverUrlRaw =
+    Array.isArray(pl.images) && pl.images[0]?.url ? pl.images[0].url : null;
+  return {
+    playlistId: pl.id ?? "",
+    name: pl.name ?? "",
+    trackCount: pl.tracks?.total ?? 0,
+    coverUrl: sanitizeCoverFromSpotify(coverUrlRaw),
+    ownerName: pl.owner?.display_name ?? null,
+    isCollaborative: !!pl.collaborative,
+    isPublic: !!pl.public,
+  };
+}
+
+async function resolveTier(
+  userId: string,
+  inject?: (user: any) => Promise<string>,
+): Promise<string> {
+  if (inject) return inject({ userPlatformId: userId } as any);
+  try {
+    const mod = await import("../coachAccess");
+    return await (mod.resolveUserTier as any)({ userPlatformId: userId });
+  } catch {
+    return "free";
+  }
+}
+
+const ALLOWED_TIERS = new Set(["pro", "premium", "admin", "trial"]);
+
+interface CatalogDeps {
+  storage?: any;
+  fetchFn?: any;
+  resolveUserTier?: (user: any) => Promise<string>;
+  tokenBucket?: { consume: (userId: string) => any };
+  cache?: { get: any; set: any; invalidate: any };
+  tokenCrypto?: any;
+}
+
+async function resolveCatalogDeps(deps?: CatalogDeps) {
+  const fetchFn = deps?.fetchFn ?? (globalThis as any).fetch;
+  const storage =
+    deps?.storage ?? (await import("../storage/spotifyTokensStorage"));
+  const tokenBucket = deps?.tokenBucket ?? (await getDefaultTokenBucket());
+  const cache = deps?.cache ?? (await getDefaultCatalogCache());
+  const tokenCrypto =
+    deps?.tokenCrypto ?? (await import("../services/spotifyTokenCrypto"));
+  return { fetchFn, storage, tokenBucket, cache, tokenCrypto };
+}
+
+async function gateAndAccess(
+  userId: string,
+  deps: Awaited<ReturnType<typeof resolveCatalogDeps>>,
+  resolveTierFn?: (user: any) => Promise<string>,
+): Promise<
+  | { tokenOk: true; accessToken: string }
+  | { tokenOk: false; status: number; message: string }
+> {
+  const tier = (await resolveTier(userId, resolveTierFn)).toLowerCase();
+  if (!ALLOWED_TIERS.has(tier)) {
+    try {
+      const row = await deps.storage.getSpotifyToken(userId);
+      if (!row || row.disconnectedAt) {
+        return {
+          tokenOk: false,
+          status: 403,
+          message: "Spotify nao conectado",
+        };
+      }
+    } catch {
+      // best-effort
+    }
+    return {
+      tokenOk: false,
+      status: 403,
+      message: "Premium Grindfy necessario (spotify_deep_requires_pro_plus)",
+    };
+  }
+
+  let row: any;
+  try {
+    row = await deps.storage.getSpotifyToken(userId);
+  } catch {
+    row = null;
+  }
+  if (!row || row.disconnectedAt) {
+    return { tokenOk: false, status: 403, message: "Spotify nao conectado" };
+  }
+
+  const accessMod = await import("../services/spotifyAccess");
+  const accessCacheSingleton = accessMod.defaultAccessTokenCache as any;
+
+  const cached = accessCacheSingleton.get(userId);
+  if (cached) return { tokenOk: true, accessToken: cached };
+
+  const expiresAtMs =
+    row.expiresAt instanceof Date
+      ? row.expiresAt.getTime()
+      : new Date(row.expiresAt).getTime();
+  const needsRefresh = expiresAtMs < Date.now() + 60_000;
+
+  if (!needsRefresh) {
+    // DB token valido > 60s + sem plaintext em cache. Devolve placeholder e
+    // confia no token DB. Producao primeira call apos restart -> 401 upstream
+    // (handler trata via 502 generico; follow-up MP3.4 trata 401 retry+refresh).
+    return { tokenOk: true, accessToken: "" };
+  }
+
+  try {
+    const { accessToken } = await accessMod.requireSpotifyAccess(userId, {
+      storage: deps.storage,
+      fetchFn: deps.fetchFn,
+      tokenCrypto: deps.tokenCrypto,
+      accessCache: accessCacheSingleton,
+    });
+    return { tokenOk: true, accessToken };
+  } catch (err: any) {
+    const reason = err?.reason ?? "unknown";
+    if (reason === "not_connected") {
+      return { tokenOk: false, status: 403, message: "Spotify nao conectado" };
+    }
+    if (reason === "invalid_refresh") {
+      return {
+        tokenOk: false,
+        status: 401,
+        message: "Spotify token revogado. Reconecte.",
+      };
+    }
+    if (reason === "config_missing") {
+      return { tokenOk: false, status: 500, message: "Spotify config ausente" };
+    }
+    return { tokenOk: false, status: 502, message: "Spotify indisponivel" };
+  }
+}
+
+const SearchQuerySchema = z.object({
+  q: z.string().min(2).max(200),
+  type: z.literal("track").optional().default("track"),
+  limit: z.coerce.number().int().min(1).max(50).optional().default(20),
+});
+
+export async function handleSpotifySearch(
+  req: any,
+  res: any,
+  injectedDeps?: CatalogDeps,
+): Promise<void> {
+  try {
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: "Nao autenticado" });
+      return;
+    }
+    const parsed = SearchQuerySchema.safeParse(req.query ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ message: "Query invalido" });
+      return;
+    }
+    const { q, type, limit } = parsed.data;
+
+    const deps = await resolveCatalogDeps(injectedDeps);
+    const cacheKey = { q, type, limit };
+    const cached = deps.cache.get(userId, "search", cacheKey);
+    if (cached) {
+      res.status(200).json({ ...cached, cached: true });
+      return;
+    }
+
+    const gate = await gateAndAccess(userId, deps, injectedDeps?.resolveUserTier);
+    if (!gate.tokenOk) {
+      res.status(gate.status).json({ message: gate.message });
+      return;
+    }
+
+    const bucketRes = deps.tokenBucket.consume(userId);
+    if (!bucketRes?.allowed) {
+      res.status(429).json({
+        message: "Rate limit local",
+        retryAfterMs: bucketRes?.retryAfterMs ?? 1000,
+      });
+      return;
+    }
+
+    const upstream = new URL(`${SPOTIFY_API_BASE}/search`);
+    upstream.searchParams.set("q", q);
+    upstream.searchParams.set("type", type);
+    upstream.searchParams.set("limit", String(limit));
+    upstream.searchParams.set("market", "from_token");
+
+    let resp: any;
+    try {
+      resp = await deps.fetchFn(upstream.toString(), {
+        method: "GET",
+        headers: { Authorization: `Bearer ${gate.accessToken}` },
+      } as any);
+    } catch {
+      // eslint-disable-next-line no-console
+      console.error("[spotifyCatalog] search network fail");
+      res.status(502).json({ message: "Spotify indisponivel" });
+      return;
+    }
+
+    if (!resp?.ok) {
+      const status = resp?.status ?? 502;
+      if (status === 429) {
+        const retryAfterHeader =
+          (typeof resp.headers?.get === "function"
+            ? resp.headers.get("retry-after") ?? resp.headers.get("Retry-After")
+            : null) ?? null;
+        if (retryAfterHeader) {
+          try {
+            res.setHeader("Retry-After", String(retryAfterHeader));
+          } catch {
+            // ignore
+          }
+        }
+        res.status(429).json({
+          message: "Spotify rate-limit",
+          retryAfter: retryAfterHeader,
+          retryAfterMs:
+            retryAfterHeader && /^\d+$/.test(String(retryAfterHeader))
+              ? Number(retryAfterHeader) * 1000
+              : undefined,
+        });
+        return;
+      }
+      res.status(502).json({ message: "Spotify indisponivel" });
+      return;
+    }
+
+    let json: any;
+    try {
+      json = await resp.json();
+    } catch {
+      res.status(502).json({ message: "Spotify indisponivel" });
+      return;
+    }
+    const items = json?.tracks?.items ?? [];
+    const normalized = { tracks: items.map(normalizeTrack).filter(Boolean) };
+    deps.cache.set(userId, "search", cacheKey, normalized);
+    res.status(200).json({ ...normalized, cached: false });
+  } catch {
+    // eslint-disable-next-line no-console
+    console.error("[spotifyCatalog] search handler error");
+    res.status(500).json({ message: "Erro interno" });
+  }
+}
+
+const PlaylistsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).optional().default(50),
+  offset: z.coerce.number().int().min(0).max(100_000).optional().default(0),
+});
+
+export async function handleSpotifyListPlaylists(
+  req: any,
+  res: any,
+  injectedDeps?: CatalogDeps,
+): Promise<void> {
+  try {
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: "Nao autenticado" });
+      return;
+    }
+    const parsed = PlaylistsQuerySchema.safeParse(req.query ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ message: "Query invalido" });
+      return;
+    }
+    const { limit, offset } = parsed.data;
+
+    const deps = await resolveCatalogDeps(injectedDeps);
+    const cacheKey = { limit, offset };
+    const cached = deps.cache.get(userId, "playlists", cacheKey);
+    if (cached) {
+      res.status(200).json({ ...cached, cached: true });
+      return;
+    }
+
+    const gate = await gateAndAccess(userId, deps, injectedDeps?.resolveUserTier);
+    if (!gate.tokenOk) {
+      res.status(gate.status).json({ message: gate.message });
+      return;
+    }
+
+    const bucketRes = deps.tokenBucket.consume(userId);
+    if (!bucketRes?.allowed) {
+      res.status(429).json({
+        message: "Rate limit local",
+        retryAfterMs: bucketRes?.retryAfterMs ?? 1000,
+      });
+      return;
+    }
+
+    const upstream = new URL(`${SPOTIFY_API_BASE}/me/playlists`);
+    upstream.searchParams.set("limit", String(limit));
+    if (offset > 0) upstream.searchParams.set("offset", String(offset));
+
+    let resp: any;
+    try {
+      resp = await deps.fetchFn(upstream.toString(), {
+        method: "GET",
+        headers: { Authorization: `Bearer ${gate.accessToken}` },
+      } as any);
+    } catch {
+      // eslint-disable-next-line no-console
+      console.error("[spotifyCatalog] playlists network fail");
+      res.status(502).json({ message: "Spotify indisponivel" });
+      return;
+    }
+
+    if (!resp?.ok) {
+      const status = resp?.status ?? 502;
+      if (status === 429) {
+        const retryAfterHeader =
+          (typeof resp.headers?.get === "function"
+            ? resp.headers.get("retry-after") ?? resp.headers.get("Retry-After")
+            : null) ?? null;
+        if (retryAfterHeader) {
+          try {
+            res.setHeader("Retry-After", String(retryAfterHeader));
+          } catch {
+            // ignore
+          }
+        }
+        res.status(429).json({
+          message: "Spotify rate-limit",
+          retryAfter: retryAfterHeader,
+        });
+        return;
+      }
+      res.status(502).json({ message: "Spotify indisponivel" });
+      return;
+    }
+
+    let json: any;
+    try {
+      json = await resp.json();
+    } catch {
+      res.status(502).json({ message: "Spotify indisponivel" });
+      return;
+    }
+    const items = (json?.items ?? []).map(normalizePlaylist).filter(Boolean);
+    const total = json?.total ?? items.length;
+    const normalized = {
+      playlists: items,
+      total,
+      truncated: total > items.length,
+    };
+    deps.cache.set(userId, "playlists", cacheKey, normalized);
+    res.status(200).json({ ...normalized, cached: false });
+  } catch {
+    // eslint-disable-next-line no-console
+    console.error("[spotifyCatalog] playlists handler error");
+    res.status(500).json({ message: "Erro interno" });
+  }
+}
+
+const PlaylistIdSchema = z.string().regex(/^[a-zA-Z0-9]{22}$/);
+const PlaylistTracksQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).optional().default(50),
+});
+
+export async function handleSpotifyPlaylistTracks(
+  req: any,
+  res: any,
+  injectedDeps?: CatalogDeps,
+): Promise<void> {
+  try {
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: "Nao autenticado" });
+      return;
+    }
+    const idParsed = PlaylistIdSchema.safeParse(req.params?.id);
+    if (!idParsed.success) {
+      res.status(400).json({ message: "playlistId invalido" });
+      return;
+    }
+    const playlistId = idParsed.data;
+    const qParsed = PlaylistTracksQuerySchema.safeParse(req.query ?? {});
+    if (!qParsed.success) {
+      res.status(400).json({ message: "Query invalido" });
+      return;
+    }
+    const { limit } = qParsed.data;
+
+    const deps = await resolveCatalogDeps(injectedDeps);
+    const cacheKey = { playlistId, limit };
+    const cached = deps.cache.get(userId, "playlist_tracks", cacheKey);
+    if (cached) {
+      res.status(200).json({ ...cached, cached: true });
+      return;
+    }
+
+    const gate = await gateAndAccess(userId, deps, injectedDeps?.resolveUserTier);
+    if (!gate.tokenOk) {
+      res.status(gate.status).json({ message: gate.message });
+      return;
+    }
+
+    const bucketRes = deps.tokenBucket.consume(userId);
+    if (!bucketRes?.allowed) {
+      res.status(429).json({
+        message: "Rate limit local",
+        retryAfterMs: bucketRes?.retryAfterMs ?? 1000,
+      });
+      return;
+    }
+
+    const fields =
+      "items(track(id,name,uri,duration_ms,preview_url,album(name,images),artists(name))),total,limit";
+    const upstream = new URL(
+      `${SPOTIFY_API_BASE}/playlists/${playlistId}/tracks`,
+    );
+    upstream.searchParams.set("limit", String(limit));
+    upstream.searchParams.set("fields", fields);
+
+    let resp: any;
+    try {
+      resp = await deps.fetchFn(upstream.toString(), {
+        method: "GET",
+        headers: { Authorization: `Bearer ${gate.accessToken}` },
+      } as any);
+    } catch {
+      // eslint-disable-next-line no-console
+      console.error("[spotifyCatalog] playlist_tracks network fail");
+      res.status(502).json({ message: "Spotify indisponivel" });
+      return;
+    }
+
+    if (!resp?.ok) {
+      const status = resp?.status ?? 502;
+      if (status === 404) {
+        res
+          .status(404)
+          .json({ message: "Playlist nao encontrada ou sem acesso" });
+        return;
+      }
+      if (status === 429) {
+        const retryAfterHeader =
+          (typeof resp.headers?.get === "function"
+            ? resp.headers.get("retry-after") ?? resp.headers.get("Retry-After")
+            : null) ?? null;
+        if (retryAfterHeader) {
+          try {
+            res.setHeader("Retry-After", String(retryAfterHeader));
+          } catch {
+            // ignore
+          }
+        }
+        res.status(429).json({
+          message: "Spotify rate-limit",
+          retryAfter: retryAfterHeader,
+        });
+        return;
+      }
+      res.status(502).json({ message: "Spotify indisponivel" });
+      return;
+    }
+
+    let json: any;
+    try {
+      json = await resp.json();
+    } catch {
+      res.status(502).json({ message: "Spotify indisponivel" });
+      return;
+    }
+    const rawItems = json?.items ?? [];
+    const tracksNormalized = rawItems
+      .filter((it: any) => it && it.track) // spec §9.9
+      .map((it: any) => normalizeTrack(it.track))
+      .filter(Boolean);
+    const total = json?.total ?? tracksNormalized.length;
+    const normalized = {
+      tracks: tracksNormalized,
+      total,
+      truncated: total > tracksNormalized.length,
+    };
+    deps.cache.set(userId, "playlist_tracks", cacheKey, normalized);
+    res.status(200).json({ ...normalized, cached: false });
+  } catch {
+    // eslint-disable-next-line no-console
+    console.error("[spotifyCatalog] playlist_tracks handler error");
+    res.status(500).json({ message: "Erro interno" });
+  }
+}
+
+// =============================================================================
 // Route registration
 // =============================================================================
 export function registerSpotifyAudioRoutes(app: Express): void {
@@ -617,8 +1185,32 @@ export function registerSpotifyAudioRoutes(app: Express): void {
   });
   app.post("/api/audio/spotify/disconnect", requireAuth, async (req, res) => {
     await handlePostSpotifyDisconnect(req, res);
+    try {
+      const userId = req.user?.userPlatformId;
+      if (userId) invalidateSpotifyCache(userId);
+    } catch {
+      // ignore
+    }
   });
   app.get("/api/audio/spotify/status", requireAuth, async (req, res) => {
     await handleGetSpotifyStatus(req, res);
   });
+  // Sprint SPOTIFY-DEEP / RF-03.
+  app.get("/api/audio/spotify/search", requireAuth, async (req, res) => {
+    await handleSpotifySearch(req, res);
+  });
+  app.get(
+    "/api/audio/spotify/me/playlists",
+    requireAuth,
+    async (req, res) => {
+      await handleSpotifyListPlaylists(req, res);
+    },
+  );
+  app.get(
+    "/api/audio/spotify/playlists/:id/tracks",
+    requireAuth,
+    async (req, res) => {
+      await handleSpotifyPlaylistTracks(req, res);
+    },
+  );
 }

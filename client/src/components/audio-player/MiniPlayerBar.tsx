@@ -52,6 +52,26 @@ import { ShortcutsHelpPopover } from "./ShortcutsHelpPopover";
 import { QueuePopover } from "./QueuePopover";
 // Sprint Mini Player 3.1 Wave B / TIER 3 #7 — onboarding tooltip primeira vez.
 import { MiniPlayerOnboarding } from "./MiniPlayerOnboarding";
+// Sprint SPOTIFY-DEEP / RF-04 — botao "Buscar Spotify" + dialog.
+import { Search as SearchIcon } from "lucide-react";
+import { useSpotifyStatus } from "@/hooks/useSpotifyStatus";
+import { useAuth } from "@/contexts/AuthContext";
+import { SpotifySearchDialog } from "./SpotifySearchDialog";
+const SEARCH_ELIGIBLE_TIERS = new Set(["pro", "premium", "admin", "trial"]);
+function useSafeSpotifyStatus(): ReturnType<typeof useSpotifyStatus> {
+  try {
+    return useSpotifyStatus();
+  } catch {
+    return { isConnected: false, productTier: null, displayName: null, isLoading: false };
+  }
+}
+function useSafeAuth(): ReturnType<typeof useAuth> {
+  try {
+    return useAuth();
+  } catch {
+    return { user: null, isAuthenticated: false, isAdmin: false } as any;
+  }
+}
 // Sprint MP-MODERN / RF-06 — empty state CTA quando !activeTrack.
 import { EmptyStateCTA } from "./EmptyStateCTA";
 // Sprint MP-MODERN / RF-05 — expanded dialog co-localizado para testes RTL
@@ -181,11 +201,49 @@ export function MiniPlayerBar() {
   // Sprint UX-GLOBAL-BUTTONS — picker de aulas global + Spotify connecting state.
   const [pickerOpen, setPickerOpen] = useState(false);
   const [spotifyConnecting, setSpotifyConnecting] = useState(false);
+  // Sprint SPOTIFY-DEEP / RF-04 — state local SpotifySearchDialog.
+  const [spotifySearchOpen, setSpotifySearchOpen] = useState(false);
+  const spotifyStatus = useSafeSpotifyStatus();
+  const authCtx = useSafeAuth();
+  const tierLower = String(authCtx?.user?.subscriptionPlan ?? "").toLowerCase();
+  const tierEligibleForSearch = SEARCH_ELIGIBLE_TIERS.has(tierLower);
   // Sprint MP-MODERN / RF-02 — scrub preview tooltip state.
   const [scrubPreviewSec, setScrubPreviewSec] = useState<number | null>(null);
   const [scrubPreviewLeftPct, setScrubPreviewLeftPct] = useState<number>(0);
 
   const activeSource: string | null = ctxRaw?.activeSource ?? activeTrack?.source ?? null;
+
+  // Sprint SPOTIFY-DEEP / RF-04 — handler abre dialog + emite telemetria.
+  const openSpotifySearch = React.useCallback(
+    (source: "mini_player_button" | "keyboard_shortcut") => {
+      if (!spotifyStatus.isConnected || !tierEligibleForSearch) return;
+      try {
+        void emitAudioEvent("audio.spotify_search_open", {
+          source,
+          tier: tierLower || "unknown",
+          spotifyConnected: spotifyStatus.isConnected,
+        });
+      } catch {
+        // never throw
+      }
+      setSpotifySearchOpen(true);
+    },
+    [spotifyStatus.isConnected, tierEligibleForSearch, tierLower],
+  );
+
+  // Cmd/Ctrl+/ atalho global (Q4 default — ADR-208 §8).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "/" && (e.metaKey || e.ctrlKey)) {
+        if (!spotifyStatus.isConnected || !tierEligibleForSearch) return;
+        e.preventDefault();
+        openSpotifySearch("keyboard_shortcut");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [openSpotifySearch, spotifyStatus.isConnected, tierEligibleForSearch]);
 
   // MP3.1 R1 fix CRITICAL-1: useKeyboardShortcuts handler unico (lesson #1 —
   // sempre roda antes do early return).
@@ -589,6 +647,24 @@ export function MiniPlayerBar() {
           >
             <BookOpen className="w-4 h-4" />
           </button>
+          {/* Sprint SPOTIFY-DEEP / RF-04 — Buscar no Spotify (Cmd/Ctrl+/). */}
+          {spotifyStatus.isConnected ? (
+            <button
+              type="button"
+              data-testid="mini-player-spotify-search-btn"
+              aria-label="Buscar musica no Spotify"
+              title={
+                tierEligibleForSearch
+                  ? "Buscar no Spotify (Cmd/Ctrl+/)"
+                  : "Apenas Premium ou Trial Grindfy"
+              }
+              disabled={!tierEligibleForSearch}
+              onClick={() => openSpotifySearch("mini_player_button")}
+              className="p-2 hover:bg-white/10 rounded-md text-white items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <SearchIcon className="w-4 h-4" />
+            </button>
+          ) : null}
           {activeSource !== "spotify" ? (
             <button
               type="button"
@@ -718,6 +794,13 @@ export function MiniPlayerBar() {
         <Suspense fallback={null}>
           <LessonPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} />
         </Suspense>
+      ) : null}
+      {/* Sprint SPOTIFY-DEEP / RF-04 — SpotifySearchDialog state local. */}
+      {spotifySearchOpen ? (
+        <SpotifySearchDialog
+          open={spotifySearchOpen}
+          onOpenChange={setSpotifySearchOpen}
+        />
       ) : null}
       {/* Sprint MP-MODERN / RF-05 — expanded dialog. */}
       <ExpandedPlayerDialog />

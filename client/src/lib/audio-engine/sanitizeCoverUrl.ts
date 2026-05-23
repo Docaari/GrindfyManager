@@ -35,15 +35,36 @@ export function sanitizeCoverUrl(
   if (!url || typeof url !== "string") return null;
   try {
     const parsed = new URL(url);
-    // Aceita apenas http: / https:. URL parser ja normaliza data:/file:/ftp:/
-    // blob:/javascript: para seus protocolos especificos (sao rejeitados aqui).
-    // data:image/* cai nesse branch tambem (parsed.protocol === "data:").
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       return null;
     }
     return url;
   } catch {
-    // URL parser falha em relativas e malformadas — ambas bloqueadas.
+    return null;
+  }
+}
+
+// Sprint SPOTIFY-DEEP / RF-05 + ADR-208 §6 — Spotify cover whitelist.
+const SPOTIFY_COVER_HOSTS: ReadonlySet<string> = new Set([
+  "i.scdn.co",
+  "mosaic.scdn.co",
+  "wrapped-images.spotifycdn.com",
+]);
+
+/**
+ * Sanitize Spotify cover URL — STRICT whitelist (3 CDN hosts).
+ * HTTPS-only + hostname em SPOTIFY_COVER_HOSTS. Outros → null.
+ */
+export function sanitizeSpotifyCoverUrl(
+  url: string | null | undefined,
+): string | null {
+  if (!url || typeof url !== "string") return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return null;
+    if (!SPOTIFY_COVER_HOSTS.has(parsed.hostname)) return null;
+    return url;
+  } catch {
     return null;
   }
 }

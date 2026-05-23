@@ -1,0 +1,79 @@
+%% Sprint SPOTIFY-DEEP — Token refresh + rate-limit bucket inline
+%% ADR-208 — decisao 1 (requireSpotifyAccess) + decisao 2 (token bucket)
+%% Renders: GitHub Mermaid native
+flowchart TD
+    Start([handler invoca<br/>requireSpotifyAccess userId]) --> LookupRow[SELECT spotify_tokens<br/>WHERE userId]
+
+    LookupRow --> RowExists{row exists?}
+    RowExists -->|nao| ErrNotConn[/"return error:<br/>'not_connected'<br/>→ handler 403"/]
+    RowExists -->|sim| DisconnCheck{row.disconnectedAt<br/>!= null?}
+
+    DisconnCheck -->|sim| ErrNotConn
+    DisconnCheck -->|nao| TierCheck["resolveUserTier(userId)<br/>(server/coachAccess.ts)"]
+
+    TierCheck --> TierGate{tier in<br/>pro / premium / admin?}
+    Note1[Q1 default LIBERA Trial<br/>resolveUserTier ja trata<br/>Trial como pro AI-2A]
+    TierGate -.- Note1
+    TierGate -->|nao| ErrTierBlock[/"return error:<br/>'tier_blocked'<br/>→ handler 403"/]
+    TierGate -->|sim| ProductCheck{row.product<br/>== 'premium'?}
+
+    ProductCheck -->|nao| ErrNotPremium[/"return error:<br/>'not_premium'<br/>→ handler 403<br/>'Reconecte Premium Spotify'"/]
+    ProductCheck -->|sim| ExpiryCheck{row.expiresAt<br/>< now + 60s ?}
+
+    ExpiryCheck -->|nao expira ainda| ReturnToken[/"return<br/>accessToken: row.accessToken"/]
+    ExpiryCheck -->|sim refresh| Refresh["refreshSpotifyAccessToken(userId, deps)<br/>(extrair de handlePostSpotifyRefresh)"]
+
+    Refresh --> DecryptRT["decryptRefreshToken(row.refreshToken)<br/>(AES-256-GCM, ADR-190)<br/>SPOTIFY_TOKEN_ENCRYPTION_KEY"]
+    DecryptRT --> PostRefresh["POST accounts.spotify.com/api/token<br/>grant_type=refresh_token<br/>Basic auth CLIENT_ID:CLIENT_SECRET"]
+
+    PostRefresh --> RefreshResult{response status}
+    RefreshResult -->|200 OK| ParseResp["parse {access_token,<br/>expires_in,<br/>refresh_token?}"]
+
+    ParseResp --> NewRT{novo refresh_token<br/>retornado?}
+    NewRT -->|sim Spotify rotacionou| EncryptNew[encryptRefreshToken AES-256-GCM]
+    NewRT -->|nao reuse antigo| SkipEncrypt[manter refreshToken atual]
+    EncryptNew --> UpdateRow
+    SkipEncrypt --> UpdateRow
+
+    UpdateRow["UPDATE spotify_tokens<br/>SET accessToken=$new,<br/>expiresAt=now+expires_in,<br/>refreshToken=$encrypted?,<br/>updatedAt=now()"] --> ReturnNewToken[/"return<br/>accessToken: novo"/]
+
+    RefreshResult -->|400 invalid_grant| MarkDisconn["UPDATE spotify_tokens<br/>SET disconnectedAt=now()<br/>(user revogou no Spotify)"]
+    MarkDisconn --> InvalidCache["spotifyCatalogCache<br/>.invalidateUser(userId)<br/>(decisao 3 ADR-208)"]
+    InvalidCache --> ErrRefreshFail[/"return error:<br/>'refresh_failed'<br/>→ handler 401<br/>'Token revogado Reconecte'"/]
+
+    RefreshResult -->|"5xx / network"| LogErr["console.error<br/>spotify.refresh.upstream.fail<br/>(lesson #9 antes fallback)"]
+    LogErr --> ErrRefreshFail
+
+    %% Rate limit bucket — segundo subsistema, inline
+    ReturnToken --> BucketCheck
+    ReturnNewToken --> BucketCheck
+
+    BucketCheck["spotifyRateLimit.consume(userId, 1)<br/>(token bucket 180 cap, 3/s refill)"]
+    BucketCheck --> Refill["lazy refill:<br/>tokens += (now - lastRefillMs) * 3/1000<br/>clamp(0, 180)<br/>lastRefillMs = now"]
+
+    Refill --> Decrement{tokens >= 1?}
+    Decrement -->|sim| Consume["tokens -= 1<br/>return {ok: true,<br/>remaining: tokens}"]
+    Decrement -->|nao| Reject["return {ok: false,<br/>retryAfterMs: (1-tokens)*333}"]
+
+    Consume --> CacheLookup{cache hit?<br/>(decisao 3)}
+    Reject --> Err429[/"return 429<br/>'Rate limit local'<br/>retryAfterMs"/]
+
+    CacheLookup -->|sim| SkipUpstream["SKIP bucket consume<br/>(cache hit nao consome)<br/>return cached payload"]
+    CacheLookup -->|nao| Upstream[Spotify Web API call<br/>com accessToken]
+
+    SkipUpstream --> End([done])
+    Upstream --> End
+    Err429 --> End
+    ErrNotConn --> End
+    ErrTierBlock --> End
+    ErrNotPremium --> End
+    ErrRefreshFail --> End
+
+    classDef errNode fill:#fee,stroke:#f66,color:#000
+    classDef successNode fill:#efe,stroke:#393,color:#000
+    classDef cryptoNode fill:#fef6cc,stroke:#cc9933,color:#000
+    classDef bucketNode fill:#e6f0ff,stroke:#3366cc,color:#000
+    class ErrNotConn,ErrTierBlock,ErrNotPremium,ErrRefreshFail,Err429,LogErr,MarkDisconn errNode
+    class ReturnToken,ReturnNewToken,Consume successNode
+    class DecryptRT,EncryptNew,SkipEncrypt cryptoNode
+    class BucketCheck,Refill,Decrement,Reject bucketNode

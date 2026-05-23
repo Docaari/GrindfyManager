@@ -1,0 +1,65 @@
+# Destino: .github/workflows/ci.yml na raiz do PROJETO do usuário.
+# Maio 2026.
+#
+# Pipeline CI mínimo para projeto Node.js + Python. Adapte ao seu stack:
+# - Remova jobs não aplicáveis (se não tem frontend Node, remova o job node)
+# - Adicione passos do seu projeto (build, deploy, etc.)
+# - Veja DOC4 Fase 7 para o pipeline completo recomendado
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-and-test-node:
+    name: Lint + Test (Node)
+    runs-on: ubuntu-latest
+    if: hashFiles('package.json') != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  lint-and-test-python:
+    name: Lint + Test (Python)
+    runs-on: ubuntu-latest
+    if: hashFiles('pyproject.toml') != '' || hashFiles('requirements.txt') != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+      - run: ruff check .
+      - run: pytest
+
+  security-audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: npm audit
+        if: hashFiles('package.json') != ''
+        run: npm audit --audit-level=high
+        continue-on-error: false
+
+      - name: pip-audit
+        if: hashFiles('requirements.txt') != ''
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt

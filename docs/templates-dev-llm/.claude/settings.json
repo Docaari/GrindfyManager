@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "Destino: .claude/settings.json na raiz do PROJETO do usuário. Não usar como configuração da base Dev LLM. Maio 2026.",
+
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+
+  "permissions": {
+    "_comment": "Allowlist conservadora. Comandos read-only são liberados. Comandos destrutivos pedem permissão. Adicione os comandos do SEU workflow (ex: npm test, pytest) para reduzir prompts.",
+    "allow": [
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(pwd)",
+      "Bash(which:*)",
+      "Bash(node --version)",
+      "Bash(npm --version)",
+      "Bash(python --version)",
+      "Bash(npm test:*)",
+      "Bash(npm run test:*)",
+      "Bash(pytest:*)",
+      "Bash(go test:*)",
+      "Read(*)",
+      "Glob(*)",
+      "Grep(*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(npm publish:*)",
+      "Bash(pip install --user:*)",
+      "Bash(curl:* | sh)",
+      "Bash(curl:* | bash)",
+      "Bash(wget:* | sh)"
+    ]
+  },
+
+  "hooks": {
+    "_comment": "Hook que executa antes de qualquer Bash. Bloqueia padrões perigosos conhecidos. Veja .claude/hooks/README.md para adicionar mais.",
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": ".claude/hooks/block-destructive.sh" }
+        ]
+      }
+    ]
+  }
+}
