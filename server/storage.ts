@@ -10148,15 +10148,18 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           completedAt,
         } as any)
         .onConflictDoUpdate({
-          target: [libraryProgress.userId, libraryProgress.lessonId, libraryProgress.format],
+          // Sprint MP-VALIDATION: target como sql literal evita ref PgColumn
+          // circular (PgColumn->PgTable->PgColumn) que rompe JSON.stringify em
+          // test mocks (lesson #36 derivada — circular Drizzle objects).
+          target: sql.raw(`("user_id", "lesson_id", "format")`) as any,
           set: {
             lastPositionSeconds: progress.lastPositionSeconds,
             totalDurationSeconds: progress.totalDurationSeconds ?? null,
             // Preserva completedAt previo se ja foi marcado completo;
             // seta novo timestamp quando agora atingir threshold mas antes nao.
             completedAt: shouldComplete
-              ? sql`COALESCE(${libraryProgress.completedAt}, NOW())`
-              : libraryProgress.completedAt,
+              ? sql.raw(`COALESCE("library_progress"."completed_at", NOW())`)
+              : sql.raw(`"library_progress"."completed_at"`),
             updatedAt: new Date(),
           },
         })
