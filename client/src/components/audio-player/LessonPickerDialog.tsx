@@ -115,16 +115,30 @@ class LessonPickerErrorBoundary extends Component<
 }
 
 function lessonToTrack(lesson: any, courseTitle?: string | null): any {
+  // Fix bug: /api/library/courses/:slug retorna formats=["podcast"] (array)
+  // sem audioUrl top-level. Endpoint /api/library/lessons/:id retorna shape
+  // diferente (formats.podcast.audioUrl objeto). Derivar audioUrl deterministicamente
+  // do lessonId quando NAO vier no payload (back-compat ambos shapes).
+  const lessonId = lesson.lessonId ?? lesson.id;
+  const hasPodcastFormat = Array.isArray(lesson.formats)
+    ? lesson.formats.includes("podcast")
+    : !!(lesson.formats?.podcast || lesson.audioUrl);
+  const derivedAudioUrl = hasPodcastFormat && lessonId
+    ? `/api/library/lessons/${lessonId}/audio`
+    : undefined;
   return {
     source: "library",
-    trackId: lesson.lessonId ?? lesson.id,
+    trackId: lessonId,
     title: lesson.title,
     coverUrl: lesson.coverUrl ?? null,
     courseTitle: courseTitle ?? null,
     durationSeconds:
       lesson.durationSeconds ??
       (lesson.durationMinutes ? lesson.durationMinutes * 60 : undefined),
-    audioUrl: lesson.audioUrl,
+    audioUrl:
+      lesson.audioUrl
+      ?? lesson.formats?.podcast?.audioUrl
+      ?? derivedAudioUrl,
     hasAccess: lesson.hasAccess,
   };
 }
