@@ -12,6 +12,22 @@ import { emitCoachEvent } from "@/lib/activity-telemetry";
 
 const SESSION_FIRED_KEY = "coach.legacy_redirect.fired";
 
+function safeSessionGet(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSessionSet(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}
+
 function readPathSearchHash(): { pathname: string; search: string; hash: string } {
   if (typeof window === "undefined") return { pathname: "/coach", search: "", hash: "" };
   return {
@@ -39,45 +55,32 @@ export function CoachLegacyRedirect(): JSX.Element | null {
 
   // Telemetria + warn — uma vez por sessao via sessionStorage.
   useEffect(() => {
+    if (safeSessionGet(SESSION_FIRED_KEY) === "true") return;
+    safeSessionSet(SESSION_FIRED_KEY, "true");
+
     try {
-      let alreadyFired = false;
-      try {
-        alreadyFired = sessionStorage.getItem(SESSION_FIRED_KEY) === "true";
-      } catch {
-        // ignore
-      }
-      if (!alreadyFired) {
-        try {
-          sessionStorage.setItem(SESSION_FIRED_KEY, "true");
-        } catch {
-          // ignore
-        }
-        try {
-          void emitCoachEvent("coach.legacy_redirect.fired", {
-            from_path: pathname,
-            to_path: target,
-            referrer:
-              typeof document !== "undefined" ? document.referrer || null : null,
-          });
-        } catch {
-          // never throw
-        }
-        try {
-          if (
-            typeof process !== "undefined" &&
-            process.env?.NODE_ENV === "production"
-          ) {
-            // eslint-disable-next-line no-console
-            console.warn(
-              "[DEPRECATED] /coach foi consolidado em /coach-ai. Atualize bookmarks. Rota legacy sera removida em ~2026-08-22.",
-            );
-          }
-        } catch {
-          // ignore
-        }
-      }
+      void emitCoachEvent("coach.legacy_redirect.fired", {
+        from_path: pathname,
+        to_path: target,
+        referrer:
+          typeof document !== "undefined" ? document.referrer || null : null,
+      });
     } catch {
       // never throw
+    }
+
+    try {
+      if (
+        typeof process !== "undefined" &&
+        process.env?.NODE_ENV === "production"
+      ) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[DEPRECATED] /coach foi consolidado em /coach-ai. Atualize bookmarks. Rota legacy sera removida em ~2026-08-22.",
+        );
+      }
+    } catch {
+      // ignore
     }
   }, [pathname, target]);
 

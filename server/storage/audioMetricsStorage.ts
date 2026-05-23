@@ -66,6 +66,14 @@ function num(v: any, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function firstRow(res: any): any {
+  return (res as any)?.rows?.[0] ?? {};
+}
+
+function allRows(res: any): any[] {
+  return (res as any)?.rows ?? [];
+}
+
 export async function getAudioMetrics(
   range: AudioMetricsRange = "7d",
 ): Promise<AudioMetricsResult> {
@@ -188,17 +196,17 @@ export async function getAudioMetrics(
     ),
   ]);
 
-  const dauRow = (dauRes as any)?.rows?.[0] ?? {};
-  const wauRow = (wauRes as any)?.rows?.[0] ?? {};
-  const avgRow = (avgRes as any)?.rows?.[0] ?? {};
-  const queueRow = (queueRes as any)?.rows?.[0] ?? {};
-  const fallbackRow = (fallbackRes as any)?.rows?.[0] ?? {};
-  const totalPlaysRow = (totalPlaysRes as any)?.rows?.[0] ?? {};
-  const totalCompletionsRow = (totalCompletionsRes as any)?.rows?.[0] ?? {};
-  const topCompletionRows = (topCompletionRes as any)?.rows ?? [];
-  const topPlaysRows = (topPlaysRes as any)?.rows ?? [];
-  const canaryLegacyRow = (canaryLegacyRes as any)?.rows?.[0] ?? {};
-  const canaryDotRow = (canaryDotRes as any)?.rows?.[0] ?? {};
+  const dauRow = firstRow(dauRes);
+  const wauRow = firstRow(wauRes);
+  const avgRow = firstRow(avgRes);
+  const queueRow = firstRow(queueRes);
+  const fallbackRow = firstRow(fallbackRes);
+  const totalPlaysRow = firstRow(totalPlaysRes);
+  const totalCompletionsRow = firstRow(totalCompletionsRes);
+  const topCompletionRows = allRows(topCompletionRes);
+  const topPlaysRows = allRows(topPlaysRes);
+  const canaryLegacyRow = firstRow(canaryLegacyRes);
+  const canaryDotRow = firstRow(canaryDotRes);
 
   const legacyCount = num(canaryLegacyRow.legacy_count);
   const dotCount = num(canaryDotRow.dot_count);

@@ -23,6 +23,16 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { emitCoachEvent } from "@/lib/activity-telemetry";
 
+// Best-effort telemetria — NUNCA throws (lesson #9 swallow ok aqui pois ja
+// loga em activity-telemetry).
+function safeEmit(action: string, payload: Record<string, unknown>): void {
+  try {
+    void emitCoachEvent(action, payload);
+  } catch {
+    // never throw
+  }
+}
+
 export interface NudgeCardNudge {
   id: string;
   category: string;
@@ -64,14 +74,10 @@ export default function NudgeCard({ nudge, onDismiss: onDismissProp }: NudgeCard
   useEffect(() => {
     if (receivedEmittedRef.current) return;
     receivedEmittedRef.current = true;
-    try {
-      void emitCoachEvent("coach.nudge_received", {
-        nudge_id: nudge.id,
-        category: nudge.category,
-      });
-    } catch {
-      // never throw
-    }
+    safeEmit("coach.nudge_received", {
+      nudge_id: nudge.id,
+      category: nudge.category,
+    });
   }, [nudge.id, nudge.category]);
 
   const title = nudge.title ?? nudge.titleI18n ?? "Aviso do Grindfy AI";
@@ -95,15 +101,11 @@ export default function NudgeCard({ nudge, onDismiss: onDismissProp }: NudgeCard
 
   const emitDismissTelemetry = useCallback(
     (reason: string) => {
-      try {
-        void emitCoachEvent("coach.nudge_dismissed", {
-          nudge_id: nudge.id,
-          category: nudge.category,
-          reason,
-        });
-      } catch {
-        // never throw
-      }
+      safeEmit("coach.nudge_dismissed", {
+        nudge_id: nudge.id,
+        category: nudge.category,
+        reason,
+      });
     },
     [nudge.id, nudge.category],
   );
@@ -132,16 +134,12 @@ export default function NudgeCard({ nudge, onDismiss: onDismissProp }: NudgeCard
   }, [post, emitDismissTelemetry]);
 
   const onCta = useCallback(async () => {
-    try {
-      void emitCoachEvent("coach.nudge_cta_clicked", {
-        nudge_id: nudge.id,
-        category: nudge.category,
-        cta_label: nudge.ctaLabel ?? "Ver no chat",
-        target_url: nudge.targetUrl ?? `/coach-ai?tab=chat`,
-      });
-    } catch {
-      // never throw
-    }
+    safeEmit("coach.nudge_cta_clicked", {
+      nudge_id: nudge.id,
+      category: nudge.category,
+      cta_label: nudge.ctaLabel ?? "Ver no chat",
+      target_url: nudge.targetUrl ?? `/coach-ai?tab=chat`,
+    });
     if (usesSimpleShape && nudge.targetUrl) {
       setLocation(nudge.targetUrl);
       return;

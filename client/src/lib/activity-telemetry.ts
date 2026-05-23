@@ -12,6 +12,9 @@
 //   - Best-effort: NUNCA throws (lesson #9: log antes do swallow).
 // =============================================================================
 
+// Sprint MP-VALIDATION / ADR-207 §3 — single source of truth shared/pii-keys.
+import { PII_KEYS_DENYLIST as PII_KEYS } from "@shared/pii-keys";
+
 const BACKLOG_KEY = "activity_telemetry_backlog";
 const BACKLOG_CAP = 100;
 const SINGLE_ENDPOINT = "/api/user-activity";
@@ -19,28 +22,6 @@ const BATCH_ENDPOINT = "/api/user-activity/batch";
 
 const DEFAULT_THROTTLE_MS = 30_000;
 const AUDIO_SEEK_THROTTLE_MS = 1_000;
-
-const PII_KEYS = new Set([
-  "email",
-  "emailaddress",
-  "useremail",
-  "displayname",
-  "display_name",
-  "name",
-  "fullname",
-  "full_name",
-  "phone",
-  "phonenumber",
-  "phone_number",
-  "cpf",
-  "ssn",
-  "payment_card",
-  "paymentcard",
-  "credit_card",
-  "creditcard",
-  "address",
-  "street_address",
-]);
 
 const PAGE_BY_NAMESPACE: Record<string, string> = {
   audio: "mini_player",
