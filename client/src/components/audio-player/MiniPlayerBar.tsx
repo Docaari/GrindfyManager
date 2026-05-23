@@ -3,13 +3,15 @@
 // AudioPlayerProvider). 9 controles + keyboard shortcuts + glassmorphism +
 // responsive 3 breakpoints (mobile <768 / tablet 768-1023 / desktop >=1024).
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import {
   AlertTriangle,
+  BookOpen,
   ChevronUp,
   HelpCircle,
   ListMusic,
   Loader2,
+  Music,
   Pause,
   Play,
   RotateCcw,
@@ -23,6 +25,12 @@ import { mapAudioErrorToMessage } from "@/lib/audio-engine/errorMessages";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
 // Sprint MP-VALIDATION / RF-01 — emit dot-namespace audio.* events.
 import { emitAudioEvent } from "@/lib/activity-telemetry";
+// Sprint UX-GLOBAL-BUTTONS — Spotify connect global no mini player.
+import { initiateSpotifyAuth } from "@/lib/spotify/auth";
+// Sprint UX-GLOBAL-BUTTONS — LessonPickerDialog lazy global (antes so /grind-live).
+const LessonPickerDialog = React.lazy(() =>
+  import("./LessonPickerDialog").then((m) => ({ default: m.LessonPickerDialog })),
+);
 import { useMiniPlayerHeight } from "@/hooks/useMiniPlayerHeight";
 import { sanitizeCoverUrl } from "@/lib/audio-engine/sanitizeCoverUrl";
 import { cn } from "@/lib/utils";
@@ -150,6 +158,10 @@ export function MiniPlayerBar() {
   // MP3.1 R1 fix CRITICAL-1: state local pro ShortcutsHelpPopover + QueuePopover.
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+  // Sprint UX-GLOBAL-BUTTONS — picker de aulas global + Spotify connecting state.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [spotifyConnecting, setSpotifyConnecting] = useState(false);
+  const activeSource: string | null = ctxRaw?.activeSource ?? activeTrack?.source ?? null;
 
   // MP3.1 R1 fix CRITICAL-1: useKeyboardShortcuts handler unico (substitui
   // inline MP1). Adiciona J/L (-10s/+10s), 0-9 (% seek), ArrowUp/Down (volume),
@@ -383,6 +395,73 @@ export function MiniPlayerBar() {
           onActivate={setSleepTimer}
           onCancel={cancelSleepTimer}
         />
+        {/* Sprint UX-GLOBAL-BUTTONS — Botao Aulas: abre LessonPickerDialog global.
+            Antes so /grind-live tinha picker. Mini player vira hub.
+            Viewport gate paridade Queue: esconde <768px. */}
+        <button
+          type="button"
+          data-testid="mini-player-lessons-button"
+          aria-label="Abrir biblioteca de aulas"
+          title="Aulas"
+          className="p-2 hover:bg-white/10 rounded-md text-white hidden md:inline-flex items-center justify-center"
+          onClick={() => {
+            try {
+              void emitAudioEvent("audio.picker_open", {
+                source_driver: activeSource,
+              });
+            } catch {
+              // never throw
+            }
+            setPickerOpen(true);
+          }}
+        >
+          <BookOpen className="w-4 h-4" />
+        </button>
+        {/* Sprint UX-GLOBAL-BUTTONS — Spotify connect (condicional driver=internal)
+            OR badge (driver=spotify). Antes so /coach-ai SpotifyConnectionPanel. */}
+        {activeSource !== "spotify" ? (
+          <button
+            type="button"
+            data-testid="mini-player-spotify-connect"
+            aria-label="Conectar Spotify"
+            title={spotifyConnecting ? "Conectando..." : "Conectar Spotify"}
+            disabled={spotifyConnecting}
+            className="p-2 hover:bg-white/10 rounded-md text-white hidden md:inline-flex items-center justify-center disabled:opacity-40 disabled:cursor-wait"
+            onClick={async () => {
+              try {
+                void emitAudioEvent("audio.spotify_connect_click", {
+                  source_driver: activeSource,
+                });
+              } catch {
+                // never throw
+              }
+              setSpotifyConnecting(true);
+              try {
+                await initiateSpotifyAuth();
+              } catch (err) {
+                // eslint-disable-next-line no-console
+                console.warn("[MiniPlayerBar] Spotify connect falhou:", err);
+              } finally {
+                setSpotifyConnecting(false);
+              }
+            }}
+          >
+            {spotifyConnecting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Music className="w-4 h-4" />
+            )}
+          </button>
+        ) : (
+          <span
+            data-testid="mini-player-spotify-badge"
+            aria-label="Spotify conectado"
+            title="Tocando via Spotify"
+            className="p-2 text-green-400 hidden md:inline-flex items-center justify-center"
+          >
+            <Music className="w-4 h-4" />
+          </span>
+        )}
         {/* MP3.1 R1 fix CRITICAL-2: Queue button — abre QueuePopover.
             MP3.1 Wave B / INFO-NEW-3: viewport gate — esconde <768px (mobile). */}
         <button
@@ -502,6 +581,14 @@ export function MiniPlayerBar() {
         onRepeatChange={setRepeatMode}
         onToggleShuffle={toggleShuffle}
       />
+      {/* Sprint UX-GLOBAL-BUTTONS — LessonPickerDialog lazy global.
+          Renderiza so quando aberto. Bem-comportado sem AudioPlayerProvider
+          via useOptionalAudioPlayer no fetcher. */}
+      {pickerOpen ? (
+        <Suspense fallback={null}>
+          <LessonPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

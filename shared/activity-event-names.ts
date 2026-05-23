@@ -9,7 +9,7 @@
 export const EVENT_NAME_REGEX = /^[a-z]+(\.[a-z0-9_]+)+(\.v[0-9]+)?$/;
 
 export const CANONICAL_EVENT_NAMES: ReadonlyArray<string> = [
-  // audio (8)
+  // audio (10 — +2 UX-GLOBAL-BUTTONS)
   "audio.play",
   "audio.pause",
   "audio.seek",
@@ -18,6 +18,8 @@ export const CANONICAL_EVENT_NAMES: ReadonlyArray<string> = [
   "audio.queue_add",
   "audio.queue_remove",
   "audio.lesson_complete",
+  "audio.picker_open",
+  "audio.spotify_connect_click",
   // lesson (6)
   "lesson.view",
   "lesson.play_start",
