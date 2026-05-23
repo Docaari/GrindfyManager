@@ -1,0 +1,118 @@
+%%{init: {'theme':'neutral'}}%%
+sequenceDiagram
+    autonumber
+    actor A as Admin User
+    participant UI as AudioMetrics.tsx<br/>(client/src/pages/admin/)
+    participant RNG as RangeSelector<br/>(7d / 30d / 90d)
+    participant TQ as TanStack Query<br/>useQuery
+    participant API as GET /api/admin/<br/>audio-metrics?range=Xd
+    participant AUTH as requireAuth +<br/>requirePermission('admin')
+    participant HND as handleGetAudioMetrics<br/>(server/routes/adminAudioMetrics.ts)
+    participant CACHE as In-memory cache<br/>Map<range, {data, expiresAt}><br/>TTL 5min
+    participant ST as audioMetricsStorage.ts<br/>(server/storage/)
+    participant DB as PostgreSQL
+    participant UA as user_activity
+    participant LL as library_lessons
+    participant LE as library_events
+    participant LP as library_progress
+
+    Note over A,LP: Happy path — primeira request 7d (cache miss)
+
+    A->>UI: Navigate /admin/audio-metrics
+    UI->>RNG: Default range = '7d'
+    UI->>TQ: useQuery(['admin-audio-metrics', '7d'])
+    TQ->>API: GET /api/admin/audio-metrics?range=7d<br/>Authorization: Bearer JWT
+
+    API->>AUTH: Validate
+    alt unauthenticated
+        AUTH-->>API: 401
+        API-->>TQ: 401
+        TQ-->>UI: error state -> "Sessao expirada"
+    else non-admin role
+        AUTH-->>API: 403
+        API-->>TQ: 403
+        TQ-->>UI: error state -> "Acesso negado"
+    else admin ok
+        AUTH-->>API: req.user.role === 'admin'
+    end
+
+    API->>HND: handle({ range: '7d' })
+    HND->>CACHE: get('7d')
+    alt cache hit (within 5min TTL)
+        CACHE-->>HND: cached response
+        HND-->>API: 200 JSON (cached)
+        Note over CACHE: x-cache: HIT header
+    else cache miss OR expired
+        CACHE-->>HND: null
+        HND->>ST: getAudioMetrics({ range: '7d' })
+
+        par Parallel SQL queries (Promise.all)
+            ST->>DB: SELECT COUNT(DISTINCT user_id) AS dau<br/>FROM user_activity<br/>WHERE page='mini_player'<br/>AND created_at > NOW() - INTERVAL '1 day'
+            DB->>UA: scan + agg
+            UA-->>DB: rows
+            DB-->>ST: { dau: N }
+        and
+            ST->>DB: SELECT COUNT(DISTINCT user_id) AS wau<br/>FROM user_activity<br/>WHERE page='mini_player'<br/>AND created_at > NOW() - INTERVAL '7 days'
+            DB-->>ST: { wau: N }
+        and
+            ST->>DB: SELECT AVG(duration) AS avg_sec<br/>FROM user_activity<br/>WHERE action='audio_driver_active'<br/>AND duration > 0
+            DB-->>ST: { avg_listening_sec: N }
+        and
+            ST->>DB: SELECT PERCENTILE_CONT(0.5/0.95)<br/>FROM user_activity<br/>WHERE action IN ('audio_queue_add', 'audio.queue_add')<br/>(legacy + dot-namespace per ADR-207)
+            DB-->>ST: { queue_median, queue_p95 }
+        and
+            ST->>DB: SELECT COUNT FILTER (reason IN ...) / COUNT<br/>FROM user_activity<br/>WHERE action='audio_driver_switch'<br/>AND metadata->>'from'='spotify'
+            DB-->>ST: { fallback_rate }
+        and
+            ST->>DB: SELECT l.id, l.course_slug, l.slug,<br/>COUNT FILTER (action='lesson.play_start') AS plays,<br/>COUNT FILTER (action='lesson.completion_pct_100') / NULLIF(plays, 0) AS pct<br/>FROM library_lessons l<br/>LEFT JOIN user_activity ua ON ua.metadata->>'lesson_id' = l.id<br/>WHERE ua.created_at > NOW() - INTERVAL '7 days'<br/>GROUP BY l.id, l.course_slug, l.slug<br/>HAVING plays > 0<br/>ORDER BY completion_pct DESC NULLS LAST<br/>LIMIT 20
+            DB->>UA: scan
+            DB->>LL: JOIN
+            UA-->>DB: rows
+            LL-->>DB: rows
+            DB-->>ST: top20Completion[]
+        and
+            ST->>DB: SELECT (similar) ORDER BY plays DESC LIMIT 10
+            DB-->>ST: top10Plays[]
+        and
+            ST->>DB: RF-05 canary:<br/>SELECT<br/>(SELECT COUNT(*) FROM library_events WHERE event_type='play' AND created_at > NOW() - INTERVAL '7 days') AS plays,<br/>(SELECT COUNT(*) FROM user_activity WHERE action='library.progress.upsert' AND created_at > NOW() - INTERVAL '7 days') AS upserts
+            DB->>LE: count
+            DB->>UA: count
+            DB-->>ST: { drift_ratio: plays / upserts }
+        end
+
+        ST-->>HND: aggregated { kpis, topLessonsCompletion, topLessonsPlays, canary }
+
+        HND->>CACHE: set('7d', { data, expiresAt: now + 5min })
+        Note over CACHE: x-cache: MISS<br/>statement_timeout 10s per query
+        HND-->>API: 200 JSON
+    end
+
+    API-->>TQ: response
+    TQ-->>UI: data
+
+    UI->>UI: Render 4 KPI cards (DAU, WAU, avg listening, fallback rate)<br/>+ 2 tables (top20 completion + top10 plays)<br/>+ canary drift badge (warn if drift_ratio > 1.5)
+
+    Note over A,LP: Range change — user clicks 30d/90d
+
+    A->>RNG: Click "30d"
+    RNG->>TQ: useQuery(['admin-audio-metrics', '30d'])
+    TQ->>API: GET ?range=30d
+    Note over API,HND: Mesmo flow,<br/>cache miss em '30d' key (independente '7d')
+
+    Note over A,LP: Manual refresh button
+
+    A->>UI: Click Refresh
+    UI->>TQ: queryClient.invalidateQueries(['admin-audio-metrics', range])
+    TQ->>API: GET (re-fetch)
+    Note over API,CACHE: Cache server NAO invalida via HTTP — request entra novamente.<br/>Forcar bypass: header x-cache-bypass=true<br/>(implementer decide se expoe).
+
+    Note over A,LP: Failure — query timeout
+
+    ST->>DB: heavy aggregate query
+    DB-->>ST: ETIMEDOUT (statement_timeout 10s)
+    ST-->>HND: throw
+    HND->>HND: try/catch -> 500
+    HND-->>API: 500 { message: 'Metricas indisponiveis temporariamente' }
+    API-->>TQ: 500
+    TQ-->>UI: error state
+    UI->>UI: Render "Metricas indisponiveis"<br/>+ Retry button
