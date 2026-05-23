@@ -1,0 +1,74 @@
+%%{init: {'theme':'neutral'}}%%
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant LV as LessonViewer.tsx
+    participant PP as PodcastPlayer.tsx
+    participant MR as mediaRef (video / audio)
+    participant TH as Throttle 5s<br/>(useRef ts)
+    participant MUT as progressMutation<br/>(TanStack useMutation)
+    participant API as PATCH /api/library/<br/>lessons/:id/progress
+    participant H as handlePatchLibraryProgress<br/>(server/routes/library.ts:378)
+    participant ST as storage.upsertLibraryProgress<br/>(server/storage.ts:10126)
+    participant DB as PostgreSQL<br/>library_progress
+    participant TEL as emitLibraryEvent<br/>(activity-telemetry)
+
+    Note over U,DB: Happy path — video/audio timeupdate -> throttled PATCH
+
+    U->>LV: Play lesson (video format)
+    LV->>MR: querySelector('video, audio, mux-player')
+    MR-->>LV: HTMLMediaElement ref
+    LV->>MR: addEventListener('timeupdate', onTimeUpdate)
+
+    loop A cada timeupdate (browser ~250ms)
+        MR->>LV: onTimeUpdate(currentTime, duration)
+        LV->>TH: reportProgress(format, posSec, durSec)
+        alt now - lastTs < 5000ms
+            TH-->>LV: skip (throttled)
+        else now - lastTs >= 5000ms
+            TH->>TH: lastTs = now
+            TH->>MUT: mutate({ format, lastPositionSeconds, totalDurationSeconds })
+            MUT->>API: PATCH JSON body
+            API->>H: auth + Zod parse
+            H->>ST: upsertLibraryProgress(userId, lessonId, format, pos, dur)
+            ST->>DB: INSERT ... ON CONFLICT (user_id, lesson_id, format)<br/>DO UPDATE SET last_position_seconds, total_duration_seconds,<br/>completed_at = COALESCE(prev, NOW() if >= 95%)
+            DB-->>ST: RETURNING row
+            ST-->>H: { updated, completed }
+            H-->>API: 200 JSON { updated, completed }
+            API-->>MUT: response
+            MUT->>TEL: emitLibraryEvent('library.progress.upsert', { lesson_id, format, last_position_sec, total_duration_sec, completed })
+            alt data.completed === true
+                MUT->>MUT: queryClient.invalidateQueries(['library-progress', resolvedId])
+                Note over MUT: badge "Concluida" reacende<br/>LibraryResume reaparece<br/>MP picker mostra %
+            end
+        end
+    end
+
+    Note over U,DB: Edge — beforeunload / visibilitychange (best-effort flush, bypass throttle)
+
+    U->>U: Close tab / navigate away
+    LV->>LV: window.addEventListener('beforeunload', onUnload)<br/>document.addEventListener('visibilitychange', onUnload)
+    LV->>API: navigator.sendBeacon(<br/>  '/api/library/lessons/:id/progress',<br/>  Blob JSON { format, lastPositionSeconds, totalDurationSeconds }<br/>)
+    Note over API: sendBeacon = keepalive POST<br/>(spec aceita POST; PATCH via beacon nao garantido).<br/>Server aceita ambos via duplicate route OU<br/>handler comum (decisao implementer).
+    API->>H: handle (no body await needed)
+    H->>ST: upsertLibraryProgress(...)
+    ST->>DB: INSERT/UPDATE
+    Note over LV: NAO chama emitLibraryEvent no unload<br/>(unloaded — telemetry pipeline tambem flushed)
+
+    Note over U,DB: Edge — PodcastPlayer (formato audio)
+
+    U->>PP: Play podcast tab
+    PP->>PP: <audio onTimeUpdate={(e) => props.onTimeUpdate?.(<br/>  e.currentTarget.currentTime, e.currentTarget.duration)} />
+    PP->>LV: onTimeUpdate(cur, dur)
+    LV->>TH: reportProgress('podcast', floor(cur), floor(dur))
+    Note over LV,TH: mesma throttle 5s compartilhada<br/>entre video + podcast (Map<format, ts>)
+
+    Note over U,DB: Failure — PATCH 401/500
+
+    MUT->>API: PATCH
+    API-->>MUT: 401 OR 500
+    MUT->>MUT: onError handler (silent in prod)
+    alt import.meta.env.DEV
+        MUT->>MUT: console.warn('[library-progress PATCH] failed', err)
+    end
+    Note over MUT,TEL: NAO emite library.progress.upsert<br/>(so emite no success — canary mantem signal-only)

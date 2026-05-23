@@ -1,0 +1,56 @@
+%%{init: {'theme':'neutral'}}%%
+flowchart TD
+    START([User navega para /coach OR<br/>/coach/relatorio/abc123 OR<br/>/coach?tab=chat]) --> WOUTER{Wouter Route matcher}
+
+    WOUTER -->|path starts /coach-ai| CANONICAL[Render hub /coach-ai<br/>NO redirect]
+    CANONICAL --> END_OK([OK])
+
+    WOUTER -->|path starts /coach<br/>NOT /coach-ai| LEGACY[Match Route /coach*<br/>render CoachLegacyRedirect]
+
+    LEGACY --> USE_EFFECT[useEffect on mount:<br/>capture location.search + hash]
+
+    USE_EFFECT --> BUILD[Build target URL<br/>= '/coach-ai' + subpath<br/>+ search + hash]
+
+    BUILD --> SETLOC[setLocation target<br/>via Wouter useLocation hook]
+
+    SETLOC --> CHECK_FLAG{localStorage<br/>coach_legacy_warning_shown<br/>=== 'true'?}
+
+    CHECK_FLAG -->|Yes already shown| SKIP_TOAST[Skip toast<br/>silent redirect]
+    CHECK_FLAG -->|No first time| SHOW_TOAST[Show Radix Toast<br/>soft 8s self-dismiss<br/>'Coach foi movido para /coach-ai.<br/>Atualize seus bookmarks.']
+
+    SHOW_TOAST --> SET_FLAG[localStorage.setItem<br/>coach_legacy_warning_shown=true]
+
+    SKIP_TOAST --> WARN
+    SET_FLAG --> WARN
+
+    WARN{import.meta.env.PROD?}
+
+    WARN -->|true PROD| CONSOLE[console.warn<br/>'DEPRECATED /coach<br/>consolidado em /coach-ai.<br/>Rota legacy removida em<br/>2026-08-22 90d.']
+    WARN -->|false DEV| SKIP_WARN[Skip console warn<br/>dev noise reduction]
+
+    CONSOLE --> EMIT
+    SKIP_WARN --> EMIT
+
+    EMIT[emitCoachEvent<br/>'coach.legacy_redirect.fired'<br/>metadata: from_path, to_path, referrer]
+
+    EMIT --> SESSION_DEDUPE{Session-scoped<br/>dedupe via<br/>sessionStorage flag<br/>coach_legacy_emitted?}
+
+    SESSION_DEDUPE -->|Already emitted<br/>this session| SKIP_EMIT[Skip emit<br/>1x per session]
+    SESSION_DEDUPE -->|First emit| DO_EMIT[POST /api/user-activity<br/>via activity-telemetry.ts<br/>buffer batched]
+
+    DO_EMIT --> SET_SESS[sessionStorage<br/>coach_legacy_emitted=true]
+
+    SKIP_EMIT --> CANONICAL_FINAL
+    SET_SESS --> CANONICAL_FINAL
+
+    CANONICAL_FINAL[Browser navigates to<br/>/coach-ai + subpath<br/>+ search + hash<br/>Wouter matches canonical]
+
+    CANONICAL_FINAL --> END_REDIRECT([Render hub /coach-ai<br/>preservando params])
+
+    classDef telemetry fill:#fff4e6,stroke:#cc7a00
+    classDef storage fill:#e6f3ff,stroke:#0066cc
+    classDef terminal fill:#e6ffe6,stroke:#009900
+
+    class EMIT,DO_EMIT telemetry
+    class CHECK_FLAG,SET_FLAG,SESSION_DEDUPE,SET_SESS storage
+    class END_OK,END_REDIRECT terminal

@@ -8,26 +8,18 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { requireAuth } from "../auth";
+// Sprint MP-VALIDATION / ADR-207 §3 — single source of truth for PII keys.
+import { PII_KEYS_DENYLIST } from "../../shared/pii-keys";
 
 const MAX_BATCH = 10;
 const MAX_METADATA_BYTES = 10 * 1024;
-
-const PII_KEYS = new Set([
-  "email",
-  "emailAddress",
-  "userEmail",
-  "displayName",
-  "display_name",
-  "name",
-  "fullName",
-]);
 
 function stripPII(obj: any): any {
   if (!obj || typeof obj !== "object") return obj;
   if (Array.isArray(obj)) return obj.map(stripPII);
   const out: any = {};
   for (const [k, v] of Object.entries(obj)) {
-    if (PII_KEYS.has(k)) continue; // drop
+    if (PII_KEYS_DENYLIST.has(k.toLowerCase())) continue; // drop
     out[k] = stripPII(v);
   }
   return out;
@@ -109,7 +101,71 @@ export async function handlePostUserActivityBatch(
   }
 }
 
+/**
+ * Sprint MP-VALIDATION / RF-01 — single-event endpoint (POST /api/user-activity).
+ *
+ * Quando body inclui `events: [...]`, delega ao handler de batch (auto-detect).
+ * Caso contrario, valida + persiste 1 evento. PII strip + cap 10KB iguais ao
+ * batch handler.
+ */
+export async function handlePostUserActivity(
+  req: any,
+  res: any,
+  injectedStorage?: any,
+): Promise<void> {
+  try {
+    const body = req.body ?? {};
+    if (Array.isArray(body?.events)) {
+      return await handlePostUserActivityBatch(req, res, injectedStorage);
+    }
+
+    const userId = req.user?.userPlatformId;
+    if (!userId) {
+      res.status(401).json({ message: "Nao autenticado" });
+      return;
+    }
+    const parsed = eventSchema.safeParse(body);
+    if (!parsed.success) {
+      res
+        .status(400)
+        .json({ message: "event invalido", details: parsed.error.issues });
+      return;
+    }
+    const md = parsed.data.metadata
+      ? stripPII(parsed.data.metadata)
+      : parsed.data.metadata ?? null;
+    const mdSize = md ? JSON.stringify(md).length : 0;
+    if (mdSize > MAX_METADATA_BYTES) {
+      res
+        .status(400)
+        .json({ message: `metadata > ${MAX_METADATA_BYTES}B` });
+      return;
+    }
+
+    const storage =
+      injectedStorage ?? (await import("../storage")).storage;
+    await storage.logUserActivity({
+      userId,
+      action: parsed.data.action,
+      feature: parsed.data.feature ?? null,
+      duration: parsed.data.duration ?? null,
+      page: parsed.data.page,
+      metadata: md,
+      ipAddress: req.ip ?? null,
+      userAgent: req.get?.("User-Agent") ?? null,
+    });
+
+    res.status(200).json({ accepted: 1 });
+  } catch (err) {
+    console.error("user_activity.single.error", { err });
+    res.status(500).json({ message: "Erro interno" });
+  }
+}
+
 export function registerUserActivityRoutes(app: Express): void {
+  app.post("/api/user-activity", requireAuth, async (req, res) => {
+    await handlePostUserActivity(req, res);
+  });
   app.post("/api/user-activity/batch", requireAuth, async (req, res) => {
     await handlePostUserActivityBatch(req, res);
   });

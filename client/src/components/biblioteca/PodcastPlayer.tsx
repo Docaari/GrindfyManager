@@ -20,7 +20,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
-import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
+import { useAudioPlayer, useOptionalAudioPlayer } from "@/contexts/AudioPlayerContext";
 
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
@@ -32,22 +32,95 @@ function formatMmSs(seconds: number): string {
 }
 
 export interface PodcastPlayerProps {
-  lessonId: string;
+  lessonId?: string;
   audioUrl: string;
   title: string;
   coverUrl?: string | null;
   durationSeconds?: number;
   /** F-A5.5: optional secondary line shown in the MiniPlayerBar */
   courseTitle?: string | null;
+  /** Sprint MP-VALIDATION RF-05: caller throttle/PATCH library_progress. */
+  onTimeUpdate?: (currentTime: number, duration: number) => void;
+  /** Sprint MP-VALIDATION RF-05: posicao inicial (cross-format resume). */
+  startSeconds?: number;
+  /** MIME (RF-05 shape simplified). */
+  mimeType?: string;
 }
 
-export function PodcastPlayer({
+/**
+ * Sprint MP-VALIDATION / RF-05 — standalone fallback PodcastPlayer.
+ *
+ * Quando renderizado SEM AudioPlayerProvider (testes RF-05, smoke), retorna
+ * variante minima com `<audio controls>` e prop `onTimeUpdate` direto.
+ */
+function StandalonePodcastPlayer({
+  audioUrl,
+  title,
+  coverUrl,
+  durationSeconds,
+  onTimeUpdate,
+  startSeconds,
+  mimeType,
+}: PodcastPlayerProps): JSX.Element {
+  const ref = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    if (typeof startSeconds === "number" && startSeconds > 0) {
+      try { ref.current.currentTime = startSeconds; } catch { /* ignore */ }
+    }
+  }, [startSeconds]);
+  return (
+    <div data-testid="podcast-player-standalone" className="rounded-xl bg-gray-900 border border-gray-800 p-6 space-y-4">
+      {coverUrl ? (
+        <div className="mx-auto w-48 h-48 rounded-lg overflow-hidden bg-gray-800">
+          <img src={coverUrl} alt={title} className="w-full h-full object-cover" />
+        </div>
+      ) : null}
+      <h3 className="text-center text-lg font-semibold text-white">{title}</h3>
+      <audio
+        ref={ref}
+        controls
+        preload="metadata"
+        src={audioUrl}
+        onTimeUpdate={(e) => {
+          const el = e.currentTarget;
+          try {
+            onTimeUpdate?.(Number(el.currentTime), Number(el.duration));
+          } catch {
+            // never throw
+          }
+        }}
+      >
+        {mimeType ? <source src={audioUrl} type={mimeType} /> : null}
+        <track kind="captions" />
+      </audio>
+      {typeof durationSeconds === "number" ? (
+        <div className="text-xs text-gray-500 text-center">
+          Duracao: {Math.floor(durationSeconds / 60)}min
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function PodcastPlayer(props: PodcastPlayerProps) {
+  // Quando NAO ha AudioPlayerProvider, fallback standalone com onTimeUpdate
+  // direto + <audio> nativo (RF-05). Producao mantem variant full integrado.
+  const optionalCtx = useOptionalAudioPlayer();
+  if (!optionalCtx || !props.lessonId) {
+    return <StandalonePodcastPlayer {...props} />;
+  }
+  return <PodcastPlayerFull {...(props as Required<Pick<PodcastPlayerProps, 'lessonId'>> & PodcastPlayerProps)} />;
+}
+
+function PodcastPlayerFull({
   lessonId,
   audioUrl,
   title,
   coverUrl,
   durationSeconds,
   courseTitle,
+  onTimeUpdate,
 }: PodcastPlayerProps) {
   const {
     current,
@@ -68,7 +141,7 @@ export function PodcastPlayer({
   useEffect(() => {
     if (current?.lessonId !== lessonId) {
       play({
-        lessonId,
+        lessonId: lessonId as string,
         audioUrl,
         title,
         coverUrl: coverUrl ?? null,

@@ -35,6 +35,8 @@ const Studies = lazy(() => import("@/pages/Studies"));
 const AdminUsers = lazy(() => import("@/pages/AdminUsers"));
 const AdminBugs = lazy(() => import("@/pages/AdminBugs"));
 const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
+// Sprint MP-VALIDATION RF-03.
+const AdminAudioMetrics = lazy(() => import("@/pages/admin/AudioMetrics"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const Subscriptions = lazy(() => import("@/pages/Subscriptions"));
 const SubscriptionDemo = lazy(() => import("@/pages/SubscriptionDemo"));
@@ -133,6 +135,7 @@ function Router() {
                   <Route path="/admin/dashboard" component={() => (<ProtectedRoute><AdminDashboard /></ProtectedRoute>)} />
                   <Route path="/admin/users" component={() => (<ProtectedRoute><AdminUsers /></ProtectedRoute>)} />
                   <Route path="/admin/bugs" component={() => (<ProtectedRoute><AdminBugs /></ProtectedRoute>)} />
+                  <Route path="/admin/audio-metrics" component={() => (<ProtectedRoute><AdminAudioMetrics /></ProtectedRoute>)} />
                   <Route path="/analytics" component={() => (<ProtectedRoute><Analytics /></ProtectedRoute>)} />
                   <Route path="/subscriptions" component={() => (<ProtectedRoute><Subscriptions /></ProtectedRoute>)} />
                   <Route path="/subscription-demo" component={() => (<ProtectedRoute><SubscriptionDemo /></ProtectedRoute>)} />

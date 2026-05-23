@@ -125,6 +125,12 @@ export function registerLibraryRoutes(app: Express) {
     requireAuth,
     handlePatchLibraryProgress,
   );
+  // Sprint MP-VALIDATION / RF-05 — POST sendBeacon path (mesma logica).
+  app.post(
+    "/api/library/lessons/:id/progress",
+    requireAuth,
+    handlePatchLibraryProgress,
+  );
 
   // Rate limit assume requireAuth rodou antes — req.user sempre existe.
   const accessRequestRateLimit = rateLimit({

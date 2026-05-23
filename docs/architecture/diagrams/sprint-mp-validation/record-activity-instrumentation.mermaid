@@ -1,0 +1,75 @@
+%%{init: {'theme':'neutral'}}%%
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant UI as UI Components<br/>(MiniPlayerBar, QueueButton,<br/>LessonViewer, CoachInbox,<br/>NudgeCard, CoachChat)
+    participant LIB as activity-telemetry.ts<br/>(formerly audio-telemetry.ts)
+    participant THR as Throttle Map<br/>(in-memory)
+    participant DED as Dedupe Set<br/>(per session, React Context)
+    participant PII as PII Guard (client-side)
+    participant BAT as Batch Buffer<br/>(cap 10, flush 5s OR full)
+    participant BAK as Offline Backlog<br/>(localStorage cap 100)
+    participant BCN as navigator.sendBeacon<br/>(fallback fetch keepalive)
+    participant API as POST /api/user-activity/batch
+    participant SRV as userActivityRouter
+    participant SPI as stripPII (server)<br/>cap metadata 10KB
+    participant DB as PostgreSQL<br/>user_activity table
+
+    Note over U,DB: Happy path — emitAudioEvent('audio.play', payload)
+
+    U->>UI: Click play button
+    UI->>LIB: emitAudioEvent('audio.play', { track_id, source_driver, queue_position, queue_length })
+    LIB->>PII: Check metadata keys vs PROHIBITED Set<br/>(email, displayName, name, phone, cpf, paymentCard, address)
+    alt key prohibited detected
+        PII->>LIB: console.warn (dev) + DROP event
+        Note over PII,LIB: lesson #9: log antes do swallow
+        LIB-->>UI: return (best-effort, no throw)
+    else clean
+        PII-->>LIB: ok
+    end
+
+    LIB->>THR: check throttle(action, key)
+    Note over THR: Policies (ADR-207 §4):<br/>- audio.seek: 1s same trackId<br/>- library.progress.upsert: 5s same lessonId<br/>- default: 30s same (action, lessonId)
+    alt throttled (within window)
+        THR-->>LIB: skip silently
+        LIB-->>UI: return
+    else not throttled
+        THR->>THR: lastTs[key] = now
+    end
+
+    LIB->>DED: check dedupe(action, lessonId)
+    Note over DED: Eventos session-scoped:<br/>- lesson.completion_pct_25/50/75/100<br/>- audio.lesson_complete<br/>(1x per session+lessonId)
+    alt already emitted this session
+        DED-->>LIB: skip
+        LIB-->>UI: return
+    else first time
+        DED->>DED: set.add(`${action}:${lessonId}`)
+    end
+
+    LIB->>BAT: push event {<br/>  action, feature, page, duration, metadata: { ..., meta_v: 1 }<br/>}
+    Note over BAT: Buffer fills ate cap=10 OR<br/>setTimeout 5s OR pagehide
+    alt buffer full (10) OR pagehide trigger
+        BAT->>BCN: sendBeacon(<br/>  '/api/user-activity/batch',<br/>  Blob JSON { events: [...] }<br/>)
+        alt sendBeacon retorna false (size > 64KB OR offline)
+            BCN->>BAK: push events to localStorage backlog<br/>(cap 100, FIFO drop)
+            Note over BAK: Backlog drained no proximo mount<br/>via setTimeout 2s post-init
+        else sendBeacon ok
+            BCN->>API: POST batch
+        end
+    end
+
+    API->>SRV: route handler
+    SRV->>SPI: stripPII(events[].metadata)
+    alt key in PII_KEYS Set (email, displayName, name, +ADR-207 extensions)
+        SPI->>SPI: delete metadata[key]
+    end
+    SPI->>SPI: cap JSON.stringify(metadata).length <= 10KB<br/>(reject 400 if exceeded)
+    SPI-->>SRV: cleaned events[]
+    SRV->>DB: bulk INSERT user_activity (id, user_id, page, action, feature, duration, metadata, ip_address, user_agent, created_at)
+    DB-->>SRV: rows[]
+    SRV-->>API: 200 { inserted: N }
+    API-->>BCN: response (best-effort, ignored by sendBeacon caller)
+
+    Note over U,DB: 4 dominios cobertos: audio.* (8 events) + lesson.* (6) + coach.* (4) + library.* (1 canary RF-05)
+
+    Note over UI,LIB: PROHIBITED em metadata (ADR-207 §3):<br/>email, displayName, name, phone, cpf,<br/>payment_card, address, tokens, IPs,<br/>texto livre digitado.<br/>PERMITIDO: IDs (lessonId, courseSlug,<br/>nudgeId, trackId), flags (tier, driver,<br/>format, reason), counts (duration, tokens).
