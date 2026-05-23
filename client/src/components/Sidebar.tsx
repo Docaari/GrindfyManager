@@ -335,6 +335,7 @@ const Sidebar: React.FC = () => {
                     <li key={item.path}>
                       <Link href={item.path}>
                         <a
+                          href={item.path}
                           data-testid={linkTestId}
                           onClick={() => {
                             // F9: marca biblioteca como visitada para esconder
