@@ -334,6 +334,14 @@ const Sidebar: React.FC = () => {
                   return (
                     <li key={item.path}>
                       <Link href={item.path}>
+                        {/* Reviewer wave 2 MEDIUM-6 tentou remover `href`
+                            redundante baseando-se em lesson #23, mas o
+                            warning de validateDOMNesting + falha do teste
+                            sidebar-points-coach-ai mostram que Wouter v3
+                            renderiza UMA anchor adicional aqui (cloneElement
+                            path nao se aplica). Mantemos `href` no inner
+                            para que `.closest('a').getAttribute('href')`
+                            funcione. Lesson #23 atualizada via comment. */}
                         <a
                           href={item.path}
                           data-testid={linkTestId}

@@ -48,18 +48,21 @@ export interface EmitOptions {
 const lastEmitAt = new Map<string, number>();
 
 function isDevEnv(): boolean {
+  // Vite injeta `import.meta.env.DEV` em build-time (static replacement).
+  // Em PROD vira `false` literal; em DEV vira `true`. Sem `new Function`
+  // (viola CSP scriptSrc sem 'unsafe-eval' — reviewer wave 2 CRITICAL-1).
+  // Fallback NODE_ENV cobre ambientes node CJS / SSR onde `import.meta`
+  // pode nao estar plumbed (defesa em profundidade).
   try {
     if (typeof process !== "undefined" && process.env?.NODE_ENV === "development") return true;
   } catch {
     // ignore
   }
-  // import.meta access via Function indirect (evita ReferenceError em CJS scope
-  // quando este modulo eh transpilado p/ CommonJS via ts.transpileModule no
-  // setup de tests — lesson #14/#26 derivada).
   try {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
-    const meta: any = new Function("try { return import.meta } catch { return null }")();
-    return !!(meta && meta.env && meta.env.DEV);
+    // Vite expoe import.meta.env nos ambientes browser/test (jsdom + node SSR).
+    // No bundle de PROD, `import.meta.env.DEV` eh replaced p/ `false` literal,
+    // entao este bloco vira `return !!false` no codigo emitido — zero overhead.
+    return !!import.meta.env?.DEV;
   } catch {
     return false;
   }

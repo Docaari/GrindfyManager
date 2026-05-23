@@ -10,7 +10,9 @@ import { useEffect } from "react";
 import { Redirect } from "wouter";
 import { emitCoachEvent } from "@/lib/activity-telemetry";
 
-const SESSION_FIRED_KEY = "coach.legacy_redirect.fired";
+// Reviewer wave 2 LOW-1: storage key desacoplado do nome do evento para evitar
+// colisao caso alguma feature externa decida reusar a action label como key.
+const SESSION_FIRED_KEY = "coach_legacy_redirect_warned_v1";
 
 function safeSessionGet(key: string): string | null {
   try {

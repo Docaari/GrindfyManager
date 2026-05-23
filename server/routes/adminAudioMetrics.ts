@@ -4,8 +4,8 @@
 // Admin-only endpoint with in-memory cache 5min per range.
 // =============================================================================
 
-import type { Express } from "express";
-import { requireAuth } from "../auth";
+import type { Express, Request, Response } from "express";
+import { requireAuth, requirePermission } from "../auth";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const VALID_RANGES = new Set(["7d", "30d", "90d"]);
@@ -27,6 +27,11 @@ export function _resetCacheForTests(): void {
   _routeCache.clear();
 }
 
+// Defense-in-depth: handler ALSO checks admin status inline (paridade com o
+// padrao do tournamentSelectorCalibration.ts — primary gate eh
+// requirePermission('admin_full') middleware na registracao). Mantido para que
+// chamadas diretas ao handler em testes unitarios sem middleware ainda
+// rejeitem non-admins (reviewer wave 2 HIGH-1).
 function isAdminUser(user: any): boolean {
   if (!user) return false;
   if (user.subscriptionPlan === "admin") return true;
@@ -95,7 +100,17 @@ export async function handleGetAudioMetrics(
 }
 
 export function registerAdminAudioMetricsRoutes(app: Express): void {
-  app.get("/api/admin/audio-metrics", requireAuth, async (req, res) => {
-    await handleGetAudioMetrics(req, res);
-  });
+  // Sprint MP-VALIDATION reviewer wave 2 HIGH-1 (paridade com 5 outras rotas
+  // admin e tournamentSelectorCalibration.ts):
+  //   gate PRIMARIO: requirePermission('admin_full') — usa SUPER_ADMIN_EMAILS
+  //   allowlist + adminOnly[]; nega trial/active com role !== admin.
+  //   gate SECUNDARIO (defense-in-depth): isAdminUser dentro do handler.
+  app.get(
+    "/api/admin/audio-metrics",
+    requireAuth,
+    requirePermission("admin_full"),
+    async (req: Request, res: Response) => {
+      await handleGetAudioMetrics(req, res);
+    },
+  );
 }
