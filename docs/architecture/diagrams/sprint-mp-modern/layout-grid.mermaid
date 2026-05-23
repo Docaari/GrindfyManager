@@ -1,0 +1,89 @@
+%% Sprint MP-MODERN — MiniPlayerBar layout grid (responsive)
+%% Mostra a estrutura horizontal: hero (left) + center (progress + controls pill) + sidebar (3 grupos com dividers)
+%% Breakpoints: desktop >=1024px / tablet 768-1023px / mobile <768px
+%% Refs: spec §4 RF-01..RF-04, ADR-209 D3+D4, tokens canon
+
+flowchart LR
+    subgraph BAR["MiniPlayerBar (fixed bottom, z-40, glassmorphism)<br/><i>h-16 quando activeTrack | h-12 quando EmptyStateCTA</i>"]
+        direction LR
+
+        subgraph HERO["HERO (left)"]
+            direction TB
+            COVER["Cover img / placeholder<br/><b>h-12 w-12</b> mobile (&lt;768px)<br/><b>md:h-14 w-14</b> tablet (768-1023px)<br/><b>lg:h-16 w-16</b> desktop (≥1024px)<br/>RF-01: animate-pulse-subtle quando playing<br/>shadow-lg ring-blue-500/30 quando playing"]
+            META["TrackMeta<br/>title (text-sm font-semibold)<br/>courseTitle (text-xs text-gray-400)"]
+        end
+
+        subgraph CENTER["CENTER (flex-1 grow)"]
+            direction TB
+            PROGRESS["Progress bar (RF-02)<br/>input[type=range] h-1<br/>track: gradient blue-500 → purple-500<br/>thumb: h-3 w-3 rounded-full bg-white<br/>fallback Safari iOS: accent-color #6366f1<br/>hover scrub tooltip: absolute -top-7"]
+            MMSS["mm:ss labels<br/>font-mono tabular-nums<br/>text-xs text-gray-400"]
+            CONTROLS_PILL["Controls pill (RF-03)<br/><b>bg-white/5 rounded-full px-2 py-1</b><br/>prev | back15 | <b>TOGGLE</b> | fwd15 | next<br/>toggle: h-10 w-10 bg-white text-gray-900<br/>outros: h-8 w-8 rounded-full hover:bg-white/10<br/>mobile: 3 botões (back15 | TOGGLE | fwd15)"]
+        end
+
+        subgraph SIDEBAR["SIDEBAR (right, RF-04)"]
+            direction LR
+
+            subgraph G1["Grupo 1 — audio adjust"]
+                direction LR
+                VOL["VolumeControl<br/>(hidden &lt;768px)"]
+                SLEEP["SleepTimer"]
+                SPEED["select speed<br/>(hidden &lt;768px<br/>+ só driver=internal)"]
+            end
+
+            DIV1["divider<br/>h-6 w-px<br/>bg-white/10<br/>aria-hidden"]
+
+            subgraph G2["Grupo 2 — queue"]
+                QUEUE["Queue button<br/>(hidden &lt;768px)"]
+            end
+
+            DIV2["divider"]
+
+            subgraph G3["Grupo 3 — utils"]
+                direction LR
+                HELP["Help"]
+                LESSONS["Lessons<br/>(hidden &lt;768px)"]
+                SPOTIFY["Spotify connect<br/>OR badge<br/>(hidden &lt;768px)"]
+            end
+
+            DIV3["divider"]
+
+            subgraph G4["Grupo 4 — window"]
+                direction LR
+                EXPAND["Expand<br/>ChevronUp"]
+                CLOSE["Close X"]
+            end
+        end
+
+        HERO --> CENTER
+        CENTER --> SIDEBAR
+        G1 --> DIV1
+        DIV1 --> G2
+        G2 --> DIV2
+        DIV2 --> G3
+        G3 --> DIV3
+        DIV3 --> G4
+    end
+
+    subgraph EMPTY["EmptyStateCTA (RF-06) — alternativa quando !activeTrack"]
+        direction LR
+        EMPTY_BAR["Bar reduced<br/><b>h-12</b> (vs h-16)<br/>bg-gray-900/60 backdrop-blur-glass<br/>border-t border-white/10<br/>useMiniPlayerHeight retorna 48"]
+        CTA_LESSON["btn Escolher aula<br/>bg-blue-500<br/>abre LessonPickerDialog<br/>emite mini_player.empty_cta.choose_lesson"]
+        CTA_SPOTIFY["btn Conectar Spotify<br/>bg-green-500<br/>(só se activeSource !== spotify)<br/>chama initiateSpotifyAuth<br/>emite mini_player.empty_cta.spotify_connect"]
+
+        EMPTY_BAR --> CTA_LESSON
+        CTA_LESSON --> CTA_SPOTIFY
+    end
+
+    BAR -.->|"!activeTrack && displayMode !== 'hidden'"| EMPTY
+
+    classDef heroStyle fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    classDef centerStyle fill:#581c87,stroke:#a855f7,color:#fff
+    classDef sidebarStyle fill:#064e3b,stroke:#10b981,color:#fff
+    classDef divider fill:#374151,stroke:#6b7280,color:#9ca3af,stroke-dasharray: 3 3
+    classDef emptyStyle fill:#7c2d12,stroke:#ea580c,color:#fff
+
+    class COVER,META heroStyle
+    class PROGRESS,MMSS,CONTROLS_PILL centerStyle
+    class VOL,SLEEP,SPEED,QUEUE,HELP,LESSONS,SPOTIFY,EXPAND,CLOSE sidebarStyle
+    class DIV1,DIV2,DIV3 divider
+    class EMPTY_BAR,CTA_LESSON,CTA_SPOTIFY emptyStyle

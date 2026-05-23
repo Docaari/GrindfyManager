@@ -157,9 +157,10 @@ describe('AudioPlayerContext extension (RF-07)', () => {
       expect(screen.getByTestId('current-id').textContent).toBe('l2');
     });
 
-    it('playTrack auto-transita displayMode hidden -> bar', async () => {
+    it('playTrack mantem/transita displayMode para "bar" (Sprint MP-MODERN RF-06: default agora e "bar")', async () => {
       renderProbe();
-      expect(screen.getByTestId('displayMode').textContent).toBe('hidden');
+      // Sprint MP-MODERN RF-06: default agora "bar" (EmptyStateCTA visivel pre-track).
+      expect(screen.getByTestId('displayMode').textContent).toBe('bar');
       const user = userEvent.setup();
       await user.click(screen.getByTestId('playTrack-lib'));
       expect(screen.getByTestId('displayMode').textContent).toBe('bar');
@@ -197,9 +198,9 @@ describe('AudioPlayerContext extension (RF-07)', () => {
 
   // ===== displayMode FSM =====
   describe('displayMode', () => {
-    it('displayMode default = "hidden"', () => {
+    it('displayMode default = "bar" (Sprint MP-MODERN RF-06: EmptyStateCTA renderiza pre-track)', () => {
       renderProbe();
-      expect(screen.getByTestId('displayMode').textContent).toBe('hidden');
+      expect(screen.getByTestId('displayMode').textContent).toBe('bar');
     });
 
     it('setDisplayMode("expanded") COM current=null e no-op + console.warn (RF-07 acceptance)', async () => {

@@ -258,7 +258,12 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const [courseContext, setCourseContext] = useState<CourseContext | null>(
     null,
   );
-  const [displayMode, setDisplayModeState] = useState<DisplayMode>("hidden");
+  // Sprint MP-MODERN / RF-06 — default displayMode = 'bar' para que MiniPlayerBar
+  // renderize o EmptyStateCTA quando nao ha track ativo. Antes ('hidden') o bar
+  // simplesmente sumia sem track → "sem como entrar no mini player". Setters
+  // explicitos para 'hidden' (close button, setDisplayMode('hidden')) continuam
+  // escondendo o player completamente.
+  const [displayMode, setDisplayModeState] = useState<DisplayMode>("bar");
 
   // === Sprint Mini Player 2 (RF-NEW.3) — Sleep timer state ===
   const [sleepTimerMinutes, setSleepTimerMinutesState] = useState<number | null>(
@@ -603,6 +608,11 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const playTrack = useCallback(
     (track: AudioTrack, ctxArg?: CourseContext) => {
       setActiveTrack(track);
+      // Sprint MP-MODERN — atualiza ref imediatamente para que chamadas
+      // sincronas seguintes a `setDisplayMode("expanded")` (ex: tests do
+      // ExpandedPlayerDialog em useEffect unico) encontrem `activeTrackRef.current`
+      // populado mesmo antes do proximo render. Reentrante seguro (ref).
+      activeTrackRef.current = track;
       setIsPlaying(true);
       setCurrentSeconds(0);
       setDurationSeconds(track.durationSeconds ?? 0);

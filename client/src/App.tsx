@@ -18,6 +18,9 @@ import { NotificationModals } from "@/components/NotificationModals";
 import Sidebar from "@/components/Sidebar";
 import { AudioPlayerProvider } from "@/contexts/AudioPlayerContext";
 import { MiniPlayerBar } from "@/components/audio-player/MiniPlayerBar";
+// Sprint MP-MODERN / RF-05 — ExpandedPlayerDialog co-localizado dentro de
+// MiniPlayerBar (ver MiniPlayerBar.tsx). Nao importado aqui pra evitar
+// montagem duplicada.
 import { LogoLoader } from "@/components/LogoLoader";
 
 // Lazy-loaded pages for code splitting
