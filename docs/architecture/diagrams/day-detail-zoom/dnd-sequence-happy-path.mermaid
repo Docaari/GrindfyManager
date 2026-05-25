@@ -1,0 +1,63 @@
+sequenceDiagram
+    actor User
+    participant WG as WeekGrid
+    participant GP as GradePlanner
+    participant useDZ as useDayZoomState
+    participant DZ as DayDetailZoom
+    participant BE as BibliotecaEmbedded
+    participant DDC as DragDropContext
+    participant qc as queryClient
+    participant API as POST /api/planned-tournaments
+    participant uT as useUndoToast
+    participant tele as activity-telemetry
+
+    User->>WG: click "Detalhes" (Terca, perfil A)
+    WG->>GP: onShowDayDetails(2)
+    GP->>useDZ: setOpen(2, 'A')
+    useDZ->>GP: setLocation('/coach?day=Tue&profile=A')
+    GP->>DZ: render <DayDetailZoom open dayOfWeek=2/>
+    DZ->>tele: emit('coach.day_zoom_opened', {dayOfWeek:2, profile:'A', source:'WeekGrid', breakpoint:'lg'})
+    DZ->>BE: render painel direita
+    BE->>qc: useQuery(['/api/tournament-library']) cache hit
+    DZ-->>User: modal centro 90vw x 88vh visivel
+
+    Note over User,DZ: --- DnD biblioteca -> slot ---
+
+    User->>BE: drag LibraryCard "Sunday Million"
+    BE->>DDC: onDragStart (source=biblioteca-embedded)
+    User->>DZ: drop em zoom-cell-2-20:00
+    DDC->>GP: handleDragEnd({src, dest})
+    GP->>GP: detect dest=zoom-cell-2-20:00
+    GP->>GP: mapLibraryToPlanned(card, {dayOfWeek:2, time:'20:00', profile:'A'})
+    GP->>qc: setQueryData(['planned-tournaments', userId], prev => [...prev, optimisticCard]) (OTIMISTIC)
+    DZ-->>User: card aparece slot 20:00 instantaneo
+
+    GP->>API: apiRequest('POST', payload)
+
+    alt 2xx success
+        API-->>GP: { id, name, site, time:'20:00', ... }
+        GP->>qc: invalidateQueries(['planned-tournaments', userId])
+        GP->>tele: emit('coach.day_zoom_dnd_add', {dayOfWeek:2, libraryTournamentId, slot:'20:00', site, buyIn, source:'drag'})
+        GP->>uT: showUndoToast({label:'Adicionado Sunday Million', undoFn: () => DELETE /api/planned-tournaments/:id, durationMs:5000})
+        uT-->>User: toast "Adicionado - Desfazer" 5s
+        opt User clica Desfazer
+            User->>uT: click "Desfazer"
+            uT->>API: DELETE /api/planned-tournaments/:id
+            uT->>qc: rollback
+            uT->>tele: emit('coach.day_zoom_undo', {action:'add', tournamentId, dayOfWeek:2})
+        end
+    else 4xx/5xx erro
+        API-->>GP: { error }
+        GP->>qc: setQueryData(['planned-tournaments', userId], previousData) (ROLLBACK)
+        DZ-->>User: card desaparece do slot
+        GP->>uT: showErrorToast('Falha ao salvar - restaurado')
+        Note over GP,tele: NAO emite day_zoom_dnd_add (so emite em sucesso)
+    end
+
+    Note over User,DZ: --- Close modal ---
+
+    User->>DZ: aperta ESC
+    DZ->>useDZ: setOpen(null)
+    useDZ->>GP: setLocation('/coach')
+    DZ->>tele: emit('coach.day_zoom_closed', {dayOfWeek:2, profile:'A', reason:'esc', durationMs:48230})
+    DZ-->>User: modal fecha

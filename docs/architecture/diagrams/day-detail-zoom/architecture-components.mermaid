@@ -1,0 +1,54 @@
+graph TB
+    subgraph existing["Existente em /coach (NAO altera)"]
+        GP["GradePlanner.tsx<br/><i>page</i>"]
+        DDC["DragDropContext<br/><i>react-beautiful-dnd</i>"]
+        WG["WeekGrid.tsx<br/><i>grid 7 colunas</i>"]
+        BP["BibliotecaPanel.tsx<br/><i>847 LoC, reuso queryKey</i>"]
+        DDD["DayDetailDrawer.tsx<br/><i>legacy Sheet lateral</i>"]
+        LC["LibraryCard.tsx<br/><i>+prop showAddInlineButton</i>"]
+        useDD["useDayDetail<br/><i>GET day-detail/:prof/:day</i>"]
+        ddu["@shared/drag-drop-utils<br/><i>validateDrop / mapLibraryToPlanned</i>"]
+    end
+
+    subgraph novo["Novo Sprint day-detail-zoom-1"]
+        useDZ["useDayZoomState<br/><i>open/close + ?day=&profile= deep-link + mode</i>"]
+        useUT["useUndoToast<br/><i>5s action Desfazer</i>"]
+        DZ["DayDetailZoom.tsx<br/><i>Dialog central + PanelGroup</i>"]
+        BE["BibliotecaEmbedded.tsx<br/><i>wrapper magro 150 LoC</i>"]
+        DHT["DayHoverTooltip.tsx<br/><i>4 KPIs delay 800ms</i>"]
+        portalDiv["div#dnd-portal-container<br/><i>ref para DialogPortal</i>"]
+    end
+
+    subgraph backend["Backend (zero novo endpoint)"]
+        ep1["GET /api/grade/day-detail/:profile/:day"]
+        ep2["GET /api/tournament-library"]
+        ep3["POST/PUT/DELETE /api/planned-tournaments[/:id]"]
+    end
+
+    subgraph telemetria["Telemetria ADR-207"]
+        tele["activity-telemetry.ts<br/><i>coach.day_zoom_* x8</i>"]
+    end
+
+    GP -->|"envelopa"| DDC
+    DDC -->|"contem"| WG
+    DDC -->|"contem"| BP
+    DDC -->|"contem"| portalDiv
+    GP -->|"renderiza condicional mode"| DZ
+    GP -->|"renderiza condicional mode==drawer"| DDD
+    GP -->|"consome"| useDZ
+    WG -->|"envolve botao Detalhes em"| DHT
+    WG -->|"onShowDayDetails(day)"| useDZ
+    DHT -->|"lazy fetch enabled=hovering"| useDD
+    DZ -->|"DialogPortal container ref"| portalDiv
+    DZ -->|"painel esquerda fetch"| useDD
+    DZ -->|"painel direita"| BE
+    DZ -->|"toast undo"| useUT
+    BE -->|"queryKey compartilhada cache"| ep2
+    BE -->|"reusa"| LC
+    useDD -->|"fetch"| ep1
+    DZ -->|"DnD mutations otimistic"| ep3
+    DZ -->|"helpers"| ddu
+    useDZ -->|"setLocation parse search"| GP
+    DZ -.->|"emit fire-and-forget"| tele
+    BE -.->|"emit"| tele
+    useDZ -.->|"emit open/close"| tele

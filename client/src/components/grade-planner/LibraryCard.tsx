@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
 import { getPlannerSiteColor, getPlannerSpeedColor, getPlannerTypeColor } from "@/lib/poker-colors";
 import { formatBuyIn } from "@shared/platform-currency";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,13 @@ interface LibraryCardProps {
   dragHandleProps?: any;
   innerRef?: any;
   draggableProps?: any;
+  /**
+   * Sprint day-detail-zoom-1 §RF-04(c) — mobile click-to-add fallback.
+   * Quando true, renderiza botao "+" no canto. Default false (back-compat).
+   */
+  showAddInlineButton?: boolean;
+  /** Callback do botao "+" mobile. */
+  onAddInline?: () => void;
 }
 
 const SOURCE_ICONS: Record<string, string> = {
@@ -42,6 +49,8 @@ export function LibraryCard({
   dragHandleProps,
   innerRef,
   draggableProps,
+  showAddInlineButton = false,
+  onAddInline,
 }: LibraryCardProps) {
   const siteColor = getPlannerSiteColor(tournament.site);
   const parsedBuyIn = parseFloat(tournament.buyIn || "0");
@@ -91,6 +100,16 @@ export function LibraryCard({
         <span className="text-white text-xs truncate flex-1 min-w-0">
           {tournament.name || tournament.site}
         </span>
+        {showAddInlineButton && onAddInline && (
+          <button
+            type="button"
+            data-testid={`library-card-add-inline-${tournament.id}`}
+            onClick={(e) => { e.stopPropagation(); onAddInline(); }}
+            className="ml-auto flex-shrink-0 w-6 h-6 flex items-center justify-center rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs"
+          >
+            <Plus size={14} />
+          </button>
+        )}
       </div>
     );
   }
@@ -167,6 +186,22 @@ export function LibraryCard({
             title="Mover para lixeira"
           >
             <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {/* Sprint day-detail-zoom-1 §RF-04(c) — botao "+" inline mobile. */}
+        {showAddInlineButton && (
+          <button
+            type="button"
+            data-testid={`library-card-add-inline-${tournament.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onAddInline) onAddInline();
+            }}
+            className="p-1 rounded hover:bg-emerald-900/50 text-emerald-400 hover:text-emerald-300 transition-colors flex-shrink-0"
+            title="Adicionar ao primeiro slot livre"
+          >
+            <Plus className="w-4 h-4" />
           </button>
         )}
       </div>

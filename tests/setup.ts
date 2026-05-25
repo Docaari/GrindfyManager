@@ -27,16 +27,25 @@ if (typeof (globalThis as any).jest === 'undefined') {
   };
 }
 
-// Polyfills para Radix UI em jsdom: ResizeObserver, IntersectionObserver, scrollIntoView,
+// ---------------------------------------------------------------------------
+// ResizeObserver polyfill — instalado globalmente (independente de jsdom).
+// Sprint day-detail-zoom-1 / ADR-210 Q5: react-resizable-panels (v2.1.7) usa
+// ResizeObserver internamente; jsdom NAO tem por default. Instalamos global
+// (sem guard de window) porque tests .test.tsx rodam em jsdom mas hooks/.test.ts
+// rodam em jsdom tambem (config vitest projects). No env node puro, nao existe
+// window mas o polyfill nao trava (classe minima no-op).
+// ---------------------------------------------------------------------------
+if (typeof (globalThis as any).ResizeObserver === 'undefined') {
+  (globalThis as any).ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
+// Polyfills para Radix UI em jsdom: IntersectionObserver, scrollIntoView,
 // matchMedia, hasPointerCapture (jsdom nao implementa essas APIs).
 if (typeof globalThis !== 'undefined' && typeof (globalThis as any).window !== 'undefined') {
-  if (!(globalThis as any).ResizeObserver) {
-    (globalThis as any).ResizeObserver = class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    };
-  }
   if (!(globalThis as any).IntersectionObserver) {
     (globalThis as any).IntersectionObserver = class {
       observe() {}
@@ -355,6 +364,26 @@ if (typeof (globalThis as any).localStorage === 'undefined') {
 // pra deduplicar home_view; sem clear entre tests, segundo render no mesmo
 // arquivo nao emite (regressao silenciosa).
 import { afterEach } from 'vitest';
+
+// Sprint day-detail-zoom-1: garantir cleanup RTL via ESM import (mesmo modulo
+// que tests usam via `await import('@testing-library/react')`). Usar require()
+// gera modulo CJS DIFERENTE com mountedContainers separado (lesson #38).
+let _rtlCleanup: (() => void) | null = null;
+if (typeof (globalThis as any).window !== 'undefined') {
+  // Dynamic ESM import resolvido pelo mesmo loader que tests — sem mismatch
+  // CJS/ESM. Resolvido eager para registrar antes do primeiro afterEach.
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  import('@testing-library/react')
+    .then((rtl) => {
+      if (rtl && typeof (rtl as any).cleanup === 'function') {
+        _rtlCleanup = (rtl as any).cleanup;
+      }
+    })
+    .catch(() => {
+      // RTL not installed in this env — no-op.
+    });
+}
+
 afterEach(() => {
   try {
     if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
@@ -364,6 +393,16 @@ afterEach(() => {
   // NOTE Sprint D — fix wave reviewer MEDIUM-1: o `vi.doUnmock` que vivia aqui
   // foi movido para o `afterEach` do proprio `tests/integration/tickets-cron.test.ts`
   // (escopo correto). Vazava pra 8000+ testes que nunca tocaram em expireTickets.
+
+  // Sprint day-detail-zoom-1: cleanup RTL (idempotente). Resolve "Found multiple
+  // elements" quando tests usam Radix Portal (Dialog) e auto-cleanup nao
+  // dispara. Quando RTL ainda nao foi resolvido (import promise pending), no-op
+  // — primeiro afterEach pode pular mas subsequentes captam.
+  try {
+    if (_rtlCleanup) _rtlCleanup();
+  } catch {
+    // ignore
+  }
 });
 
 // Sprint Mini Player 1: patch @testing-library/user-event `setup()` to
