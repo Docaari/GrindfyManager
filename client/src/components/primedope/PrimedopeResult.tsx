@@ -1,195 +1,133 @@
 // =============================================================================
-// Sprint F4 W1 — PrimedopeResult (RF-04, RF-06, RF-07, RF-14, RF-23, RF-24)
+// Sprint VR-1 — PrimedopeResult (RF-03)
 //
-// 4 cards EV/ROI/SD/RoR + tabela CI + bankroll percentiles + source badge +
-// pin toggle + multiplier dropdown + skeleton loading + error block.
+// Updated for native VarianceSimulationResult format (ADR-211).
+// 4 KPI cards: EV, ROI (calculated), SD, Chance de Lucro (replaces RoR).
+// CI table: 3 bands (70%, 95%, 99.7%) from native percentiles.
+// Drawdown section: median, p95, worst.
+// Risk badge: red < 50%, green >= 90%, yellow otherwise.
 // =============================================================================
 
 import * as React from "react";
-import { Button } from "@/components/ui/button";
 
-export interface SimulationResultData {
-  ev?: number;
-  roiPct?: number;
-  stdDev?: number;
-  riskOfRuinPct?: number;
-  confidenceIntervals?: {
-    p70?: { low: number; high: number };
-    p95?: { low: number; high: number };
-    p997?: { low: number; high: number };
-  };
-  minBankroll?: { p50?: number; p15?: number; p05?: number; p01?: number };
-}
-
-export interface PrimedopeResultPayload {
-  source: "primedope" | "cache" | "fallback-stale";
-  data: SimulationResultData;
-  histogramUrl?: string;
-  randomRunsUrl?: string;
-  latencyMs: number;
-  inputHash?: string;
-  runId?: string;
-  pinned?: boolean;
-  cachedAtMs?: number;
-  staleAgeMs?: number;
-}
-
-export interface PrimedopeResultError {
-  statusCode: number;
-  errorType?: string;
-  retryAfterMs?: number;
-  inputHash?: string;
-  timestamp?: string;
-  message?: string;
-}
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
 
 interface PrimedopeResultProps {
-  result?: PrimedopeResultPayload;
+  result?: any;
   isLoading?: boolean;
-  error?: PrimedopeResultError;
+  error?: any;
   onTogglePin?: (runId: string, nextPinned: boolean) => void;
-  onMultiplierChange?: (multiplier: 1 | 4 | 12 | 52) => void;
-  multiplier?: 1 | 4 | 12 | 52;
 }
 
+// ---------------------------------------------------------------------------
+// Formatters
+// ---------------------------------------------------------------------------
+
 function formatUsd(v: number | undefined): string {
-  return `$${(v ?? 0).toFixed(2)}`;
+  if (v == null) return "$0";
+  const abs = Math.abs(v);
+  const formatted = abs.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  return v < 0 ? `-$${formatted}` : `$${formatted}`;
 }
 
 function formatPct(v: number | undefined): string {
-  return `${(v ?? 0).toFixed(2)}%`;
+  return `${(v ?? 0).toFixed(1)}%`;
 }
 
-const MULTIPLIERS = [1, 4, 12, 52] as const;
+// ---------------------------------------------------------------------------
+// Source Badge
+// ---------------------------------------------------------------------------
 
-function SourceBadge({
-  source,
-  cachedAtMs,
-  staleAgeMs,
-}: {
-  source: PrimedopeResultPayload["source"];
-  cachedAtMs?: number;
-  staleAgeMs?: number;
-}) {
-  if (source === "primedope") {
+function SourceBadge({ source }: { source?: string }) {
+  if (source === "native") {
     return (
       <span
         data-testid="primedope-source-badge"
         className="rounded bg-emerald-200 px-2 py-1 text-xs text-emerald-900"
       >
-        Recem-simulado
+        Nativo
       </span>
     );
   }
   if (source === "cache") {
-    const minutes = cachedAtMs
-      ? Math.max(0, Math.round((Date.now() - cachedAtMs) / 60_000))
-      : 0;
     return (
       <span
         data-testid="primedope-source-badge"
         className="rounded bg-slate-200 px-2 py-1 text-xs text-slate-900"
       >
-        Em cache ({minutes}min atras)
+        Em cache
       </span>
     );
   }
-  // fallback-stale
-  const hours = staleAgeMs ? Math.round(staleAgeMs / 3600_000) : 0;
   return (
     <span
       data-testid="primedope-source-badge"
-      className="rounded bg-amber-200 px-2 py-1 text-xs text-amber-900"
+      className="rounded bg-slate-200 px-2 py-1 text-xs text-slate-900"
     >
-      Dados de {hours}h atras (PrimeDope offline / fallback)
+      Simulado
     </span>
   );
 }
 
-function ErrorBlock({ error }: { error: PrimedopeResultError }) {
-  const [countdownMs, setCountdownMs] = React.useState(error.retryAfterMs ?? 0);
-  React.useEffect(() => {
-    if (!error.retryAfterMs) return;
-    setCountdownMs(error.retryAfterMs);
-    const t = setInterval(() => {
-      setCountdownMs((c) => Math.max(0, c - 1000));
-    }, 1000);
-    return () => clearInterval(t);
-  }, [error.retryAfterMs]);
+// ---------------------------------------------------------------------------
+// Risk Badge
+// ---------------------------------------------------------------------------
 
-  if (error.statusCode === 429) {
+function RiskBadge({ profitablePct }: { profitablePct: number }) {
+  if (profitablePct < 50) {
     return (
-      <div
-        data-testid="primedope-error-block"
-        className="rounded border border-amber-500 bg-amber-100/60 p-3 text-sm"
+      <span
+        data-testid="primedope-risk-badge"
+        className="rounded bg-red-200 px-2 py-1 text-xs font-medium text-red-900"
       >
-        <p>Aguarde antes de simular novamente.</p>
-        <p data-testid="primedope-error-rate-limit-countdown" className="mt-1 text-xs">
-          Tente novamente em {Math.ceil((countdownMs ?? 0) / 1000)}s
-        </p>
-      </div>
+        Alto risco
+      </span>
     );
   }
-  if (error.statusCode === 502 || error.errorType === "upstream_4xx_schema_change") {
-    const subject = encodeURIComponent("PrimeDope schema change detected");
-    const body = encodeURIComponent(
-      `inputHash: ${error.inputHash ?? "(n/a)"}\ntimestamp: ${error.timestamp ?? new Date().toISOString()}`,
-    );
+  if (profitablePct >= 90) {
     return (
-      <div
-        data-testid="primedope-error-block"
-        className="rounded border border-red-500 bg-red-100/60 p-3 text-sm"
+      <span
+        data-testid="primedope-risk-badge"
+        className="rounded bg-emerald-200 px-2 py-1 text-xs font-medium text-emerald-900"
       >
-        <p>PrimeDope retornou erro inesperado (provavel mudanca de schema).</p>
-        <p className="mt-1 text-xs">
-          Hash: {error.inputHash}
-          {" "}
-          - {error.timestamp}
-        </p>
-        <a
-          data-testid="primedope-error-mailto-cta"
-          href={`mailto:suporte@grindfy.com?subject=${subject}&body=${body}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 inline-block text-xs underline"
-        >
-          Avise o time (copiar detalhes tecnicos)
-        </a>
-      </div>
+        Baixo risco
+      </span>
     );
   }
-  // 503 or other
   return (
-    <div
-      data-testid="primedope-error-block"
-      className="rounded border border-red-500 bg-red-100/60 p-3 text-sm"
+    <span
+      data-testid="primedope-risk-badge"
+      className="rounded bg-yellow-200 px-2 py-1 text-xs font-medium text-yellow-900"
     >
-      <p>Servico indisponivel. PrimeDope offline no momento, sem fallback recente.</p>
-    </div>
+      Risco moderado
+    </span>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function PrimedopeResult({
   result,
   isLoading = false,
   error,
   onTogglePin,
-  onMultiplierChange,
-  multiplier,
 }: PrimedopeResultProps): React.ReactElement {
-  // Hooks ANTES de early-return
-  const [localMultiplier, setLocalMultiplier] = React.useState<1 | 4 | 12 | 52>(
-    multiplier ?? 1,
-  );
-  const debounceRef = React.useRef<any>(null);
-  React.useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
   if (error) {
-    return <ErrorBlock error={error} />;
+    return (
+      <div
+        data-testid="primedope-error-block"
+        className="rounded border border-red-500 bg-red-100/60 p-3 text-sm"
+      >
+        <p>{error?.message ?? "Erro na simulacao."}</p>
+      </div>
+    );
   }
 
   if (isLoading) {
@@ -199,8 +137,8 @@ export function PrimedopeResult({
           data-testid="primedope-result-skeleton"
           className="h-32 animate-pulse rounded bg-muted"
         />
-        <p data-testid="primedope-result-eta" className="text-xs text-muted-foreground">
-          Simulando... ~4s
+        <p className="text-xs text-muted-foreground">
+          Simulando...
         </p>
       </div>
     );
@@ -214,131 +152,122 @@ export function PrimedopeResult({
     );
   }
 
-  const data = result.data ?? {};
-  const ci = data.confidenceIntervals ?? {};
-  const mb = data.minBankroll ?? {};
+  const roi =
+    result.totalInvested > 0
+      ? (result.ev / result.totalInvested) * 100
+      : 0;
 
-  const handleMultiplierChange = (next: 1 | 4 | 12 | 52) => {
-    setLocalMultiplier(next);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      onMultiplierChange?.(next);
-    }, 2000);
-  };
+  const p = result.percentiles ?? {};
+  const dd = result.drawdown ?? {};
 
   return (
     <section data-testid="primedope-result" className="space-y-4">
       <header className="flex items-center justify-between">
-        <SourceBadge
-          source={result.source}
-          cachedAtMs={result.cachedAtMs}
-          staleAgeMs={result.staleAgeMs}
-        />
         <div className="flex items-center gap-2">
-          <select
-            data-testid="primedope-result-multiplier"
-            className="rounded border border-border bg-background p-1 text-xs"
-            value={localMultiplier}
-            onChange={(e) =>
-              handleMultiplierChange(Number(e.target.value) as 1 | 4 | 12 | 52)
-            }
-          >
-            {MULTIPLIERS.map((m) => (
-              <option key={m} value={m}>
-                {m}x
-              </option>
-            ))}
-          </select>
+          <SourceBadge source={result.source} />
+          <RiskBadge profitablePct={result.profitablePct ?? 0} />
+        </div>
+        {result.runId && onTogglePin && (
           <button
             type="button"
             data-testid="primedope-result-pin"
-            onClick={() => {
-              if (!result.runId || !onTogglePin) return;
-              onTogglePin(result.runId, !result.pinned);
-            }}
+            onClick={() => onTogglePin(result.runId, !result.pinned)}
             className="rounded border border-border px-2 py-1 text-xs"
             aria-pressed={result.pinned ? "true" : "false"}
           >
             {result.pinned ? "[Fixado]" : "[Fixar]"}
           </button>
-        </div>
+        )}
       </header>
 
+      {/* 4 KPI Cards */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <div
           data-testid="primedope-result-card-ev"
           className="rounded border border-border bg-card p-3"
         >
           <div className="text-xs text-muted-foreground">EV</div>
-          <div className="text-xl font-semibold">{formatUsd(data.ev)}</div>
+          <div className="text-xl font-semibold">{formatUsd(result.ev)}</div>
         </div>
         <div
           data-testid="primedope-result-card-roi"
           className="rounded border border-border bg-card p-3"
         >
           <div className="text-xs text-muted-foreground">ROI</div>
-          <div className="text-xl font-semibold">{formatPct(data.roiPct)}</div>
+          <div className="text-xl font-semibold">{formatPct(roi)}</div>
         </div>
         <div
           data-testid="primedope-result-card-sd"
           className="rounded border border-border bg-card p-3"
         >
           <div className="text-xs text-muted-foreground">SD</div>
-          <div className="text-xl font-semibold">{formatUsd(data.stdDev)}</div>
+          <div className="text-xl font-semibold">{formatUsd(result.stdDev)}</div>
         </div>
         <div
-          data-testid="primedope-result-card-ror"
+          data-testid="primedope-result-card-profit-chance"
           className="rounded border border-border bg-card p-3"
         >
-          <div className="text-xs text-muted-foreground">RoR</div>
-          <div className="text-xl font-semibold">{formatPct(data.riskOfRuinPct)}</div>
+          <div className="text-xs text-muted-foreground">Chance de Lucro</div>
+          <div className="text-xl font-semibold">
+            {formatPct(result.profitablePct)}
+          </div>
         </div>
       </div>
 
+      {/* CI Table */}
       <div
         data-testid="primedope-result-confidence-table"
         className="rounded border border-border bg-card p-3"
       >
-        <div className="mb-2 text-sm font-medium">Confidence intervals</div>
+        <div className="mb-2 text-sm font-medium">Intervalos de confianca</div>
         <table className="w-full text-xs">
           <thead>
             <tr className="text-muted-foreground">
               <th className="text-left">Faixa</th>
-              <th className="text-right">Low</th>
-              <th className="text-right">High</th>
+              <th className="text-right">Min</th>
+              <th className="text-right">Max</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
+            <tr data-testid="primedope-ci-band-70">
               <td>70%</td>
-              <td className="text-right">{formatUsd(ci.p70?.low)}</td>
-              <td className="text-right">{formatUsd(ci.p70?.high)}</td>
+              <td className="text-right">{formatUsd(p.p15)}</td>
+              <td className="text-right">{formatUsd(p.p85)}</td>
             </tr>
-            <tr>
+            <tr data-testid="primedope-ci-band-95">
               <td>95%</td>
-              <td className="text-right">{formatUsd(ci.p95?.low)}</td>
-              <td className="text-right">{formatUsd(ci.p95?.high)}</td>
+              <td className="text-right">{formatUsd(p.p2_5)}</td>
+              <td className="text-right">{formatUsd(p.p97_5)}</td>
             </tr>
-            <tr>
+            <tr data-testid="primedope-ci-band-997">
               <td>99.7%</td>
-              <td className="text-right">{formatUsd(ci.p997?.low)}</td>
-              <td className="text-right">{formatUsd(ci.p997?.high)}</td>
+              <td className="text-right">{formatUsd(p.p0_15)}</td>
+              <td className="text-right">{formatUsd(p.p99_85)}</td>
             </tr>
           </tbody>
         </table>
       </div>
 
+      {/* Drawdown Section */}
       <div
-        data-testid="primedope-result-bankroll-percentiles"
+        data-testid="primedope-result-drawdown"
         className="rounded border border-border bg-card p-3"
       >
-        <div className="mb-2 text-sm font-medium">Banca minima por RoR</div>
-        <ul className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
-          <li>P50%: {formatUsd(mb.p50)}</li>
-          <li>P15%: {formatUsd(mb.p15)}</li>
-          <li>P5%: {formatUsd(mb.p05)}</li>
-          <li>P1%: {formatUsd(mb.p01)}</li>
-        </ul>
+        <div className="mb-2 text-sm font-medium">Drawdown esperado</div>
+        <div className="space-y-1 text-xs">
+          <div data-testid="primedope-dd-median" className="flex justify-between">
+            <span>Tipico (mediano)</span>
+            <span>{formatUsd(dd.median)}</span>
+          </div>
+          <div data-testid="primedope-dd-p95" className="flex justify-between">
+            <span>Preparar (95%)</span>
+            <span>{formatUsd(dd.p95)}</span>
+          </div>
+          <div data-testid="primedope-dd-worst" className="flex justify-between">
+            <span>Pior raro</span>
+            <span>{formatUsd(dd.worst)}</span>
+          </div>
+        </div>
       </div>
     </section>
   );

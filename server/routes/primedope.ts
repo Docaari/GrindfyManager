@@ -1,28 +1,29 @@
 // =============================================================================
-// Sprint F4 W0/W1 — server/routes/primedope.ts
+// Sprint VR-1 — server/routes/primedope.ts (RF-02)
 //
-// Spec: Docs/specs/sprint-f4-primedope-grade-detail.md (RF-04..RF-15, RF-23, RF-24)
-// ADR-054: rate limit 1/10s/userId, cache hit nao consome rate limit.
-// ADR-055: tracker.emit telemetria.
+// Spec  : Docs/specs/sprint-variance-reform.md (RF-02)
+// ADR   : 211 (variance native monte carlo engine)
 //
 // Endpoints:
-//   POST   /api/primedope/simulate
-//   GET    /api/primedope/chart/:hash
+//   POST   /api/primedope/simulate  — backward-compat alias
+//   POST   /api/variance/simulate   — canonical (same handler, mounted twice)
 //   GET    /api/primedope/runs
 //   POST   /api/primedope/runs/:id/pin
 //   DELETE /api/primedope/runs/:id/pin
 //   GET    /api/primedope/buckets-prefill
+//
+// Removed (RF-05): chart proxy route, rate limiting, external fetch.
 // =============================================================================
 
-import { Router, type Request, type Response } from "express";
-import path from "path";
-import fs from "fs";
+import { Router, type Response } from "express";
 import { z } from "zod";
+import { nanoid } from "nanoid";
 import { requireAuth } from "../auth";
 import { storage } from "../storage";
+import { runMonteCarloSimulation } from "../services/varianceEngine";
 import {
-  runSimulation,
-  getChartFsPath,
+  computeInputHash,
+  buildHashableInput,
 } from "../services/primedopeIntegration";
 import { buildBucketsPrefill } from "../services/primedopeBucketsPrefill";
 import { emit as trackerEmit } from "../utils/tracker";
@@ -38,92 +39,134 @@ const router = Router();
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * CRITICAL fix (reviewer): Padrao do projeto eh `req.user.userPlatformId`
- * (USER-XXXX), NAO `req.user.id`. FKs em wallets, planned_tournaments,
- * tournaments etc. apontam para `users.user_platform_id`. Outras rotas usam
- * `req.user.userPlatformId` direto (wallets.ts, bankroll.ts).
- */
 function userIdFrom(req: any): string | null {
   return req?.user?.userPlatformId ?? null;
 }
 
 // ---------------------------------------------------------------------------
-// Rate limit em memoria (1 req / 10s / userId), skip em cache hits.
-// State scoped per-Express-app via WeakMap pra evitar leak cross-tests.
+// Schemas Zod — new native format (VarianceSimulationInput)
 // ---------------------------------------------------------------------------
 
-interface RateLimitState {
-  lastSimulateAt: Map<string, number>;
-}
-
-const rateLimitByApp = new WeakMap<object, RateLimitState>();
-
-function getRateLimitState(req: any): RateLimitState {
-  const app = req.app ?? req;
-  let s = rateLimitByApp.get(app);
-  if (!s) {
-    s = { lastSimulateAt: new Map<string, number>() };
-    rateLimitByApp.set(app, s);
-  }
-  return s;
-}
-
-function checkRateLimit(
-  req: any,
-  userId: string,
-): { ok: true } | { ok: false; retryAfterMs: number } {
-  const s = getRateLimitState(req);
-  const last = s.lastSimulateAt.get(userId);
-  if (!last) return { ok: true };
-  const elapsed = Date.now() - last;
-  if (elapsed >= PRIMEDOPE_LIMITS.RATE_LIMIT_PER_USER_MS) {
-    return { ok: true };
-  }
-  return {
-    ok: false,
-    retryAfterMs: PRIMEDOPE_LIMITS.RATE_LIMIT_PER_USER_MS - elapsed,
-  };
-}
-
-function noteSimulateCall(req: any, userId: string): void {
-  getRateLimitState(req).lastSimulateAt.set(userId, Date.now());
-}
-
-function clearSimulateCall(req: any, userId: string): void {
-  getRateLimitState(req).lastSimulateAt.delete(userId);
-}
-
-// ---------------------------------------------------------------------------
-// Schemas Zod
-// ---------------------------------------------------------------------------
-
-const bucketSchema = z.object({
-  name: z.string().min(1).optional().or(z.string()),
-  network: z.string().min(1),
-  count: z.number().int().positive(),
-  buyinOriginal: z.number().nonnegative(),
-  currency: z.string().min(2),
-  playersAvg: z.number().int().min(2),
-  placesPaid: z.number().int().min(1),
-  rakePct: z.number().min(0).max(50),
-  roiPct: z.number(),
-  walletMissing: z.boolean().optional(),
-}).passthrough();
-
-const simulateBodySchema = z.object({
-  profileLetter: z.enum(ALLOWED_PROFILE_LETTERS as unknown as [string, ...string[]]),
-  dayOfWeek: z.number().int().min(0).max(6),
-  multiplier: z
-    .number()
-    .int()
-    .refine((v) => (ALLOWED_MULTIPLIERS as readonly number[]).includes(v), {
-      message: "multiplier deve ser 1, 4, 12 ou 52",
-    }),
-  bankrollUsd: z.number().nonnegative(),
-  buckets: z.array(bucketSchema).min(1),
-  force: z.boolean().optional(),
+const groupSchema = z.object({
+  name: z.string().min(1),
+  buyIn: z.number().positive(),
+  field: z.number().int().min(2).max(100000),
+  roi: z.number(),
+  count: z.number().int().positive().max(50000),
+  isPKO: z.boolean(),
 });
+
+const varianceSimulateBodySchema = z.object({
+  groups: z.array(groupSchema).min(1).max(20),
+  weeks: z.number().int().refine((v) => [1, 4, 12, 52].includes(v), {
+    message: "weeks deve ser 1, 4, 12 ou 52",
+  }),
+  simulations: z.number().int().optional(),
+  seed: z.number().optional(),
+});
+
+// ---------------------------------------------------------------------------
+// POST /simulate — native Monte Carlo engine (RF-02)
+// ---------------------------------------------------------------------------
+
+router.post("/simulate", requireAuth, async (req: any, res: Response) => {
+  const userId = userIdFrom(req);
+  if (!userId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  let parsed: z.infer<typeof varianceSimulateBodySchema>;
+  try {
+    parsed = varianceSimulateBodySchema.parse(req.body);
+  } catch (err: any) {
+    return res
+      .status(400)
+      .json({ message: "Payload invalido.", issues: err?.issues ?? [] });
+  }
+
+  // Build hashable input and compute hash
+  const hashableInput = buildHashableInput(
+    { userId } as any,
+    parsed as any,
+    {},
+  );
+  const inputHash = computeInputHash(hashableInput);
+
+  // Cache lookup (5min TTL)
+  try {
+    const cached = await (storage as any).findRecentPrimedopeRunByHash(
+      inputHash,
+      PRIMEDOPE_LIMITS.CACHE_TTL_MS / 60_000,
+    );
+    if (cached) {
+      const resultJson = cached.resultJson ?? cached.result_json ?? {};
+      return res.status(200).json({
+        ...resultJson,
+        source: "cache",
+        inputHash,
+        runId: cached.id,
+        latencyMs: cached.latencyMs ?? 0,
+        pinned: cached.pinned ?? false,
+      });
+    }
+  } catch {
+    // Cache lookup failed — proceed to engine
+  }
+
+  // Run native engine
+  try {
+    const result = runMonteCarloSimulation(parsed);
+
+    // Persist to primedope_runs
+    const expiresAt = new Date(Date.now() + 90 * 86400_000);
+    const insertRow = {
+      id: `pdr_${nanoid(16)}`,
+      userId,
+      inputHash,
+      inputJson: hashableInput,
+      resultJson: result,
+      latencyMs: result.elapsedMs,
+      source: "native" as const,
+      pinned: false,
+      expiresAt,
+    };
+
+    let inserted: any;
+    try {
+      inserted = await (storage as any).insertPrimedopeRun(insertRow);
+    } catch (insertErr) {
+      console.error("[variance] insertPrimedopeRun failed", insertErr);
+      inserted = insertRow;
+    }
+
+    try {
+      trackerEmit("variance_simulation_run", {
+        userId,
+        source: "native",
+        inputHash,
+        latencyMs: result.elapsedMs,
+        simulationsRun: result.simulationsRun,
+      });
+    } catch {}
+
+    return res.status(200).json({
+      ...result,
+      source: "native",
+      inputHash,
+      runId: inserted?.id ?? insertRow.id,
+      pinned: false,
+    });
+  } catch (err: any) {
+    console.error("[variance] simulate failed", err);
+    return res.status(500).json({
+      message: err?.message ?? "Erro interno na simulacao",
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/primedope/runs
+// ---------------------------------------------------------------------------
 
 const runsQuerySchema = z.object({
   profileLetter: z
@@ -140,128 +183,6 @@ const runsQuerySchema = z.object({
     .pipe(z.number().int().positive().max(100))
     .optional(),
 });
-
-const SHA256_REGEX = /^[a-f0-9]{64}$/;
-
-// ---------------------------------------------------------------------------
-// POST /api/primedope/simulate
-// ---------------------------------------------------------------------------
-
-router.post("/simulate", requireAuth, async (req: any, res: Response) => {
-  const userId = userIdFrom(req);
-  if (!userId) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  let parsed: z.infer<typeof simulateBodySchema>;
-  try {
-    parsed = simulateBodySchema.parse(req.body);
-  } catch (err: any) {
-    return res
-      .status(400)
-      .json({ message: "Payload invalido.", issues: err?.issues ?? [] });
-  }
-
-  const rl = checkRateLimit(req, userId);
-  if (!("ok" in rl) || !rl.ok) {
-    const retryAfterMs = (rl as any).retryAfterMs ?? PRIMEDOPE_LIMITS.RATE_LIMIT_PER_USER_MS;
-    return res
-      .status(429)
-      .json({ message: "Rate limit excedido", retryAfterMs });
-  }
-
-  // Marca pre-execucao; se cache hit (source='cache'), revertemos abaixo.
-  noteSimulateCall(req, userId);
-
-  try {
-    const result = await runSimulation({
-      userId,
-      profileLetter: parsed.profileLetter as any,
-      dayOfWeek: parsed.dayOfWeek,
-      multiplier: parsed.multiplier as any,
-      bankrollUsd: parsed.bankrollUsd,
-      buckets: parsed.buckets as any,
-      force: parsed.force ?? false,
-    });
-
-    // Cache hit nao consome rate limit
-    if (result.source === "cache") {
-      clearSimulateCall(req, userId);
-    }
-
-    return res.status(200).json(result);
-  } catch (err: any) {
-    // 4xx upstream -> 502 schema change
-    if (
-      err?.code === "UPSTREAM_4XX" ||
-      err?.errorType === "upstream_4xx_schema_change"
-    ) {
-      // 4xx upstream nao deve consumir rate limit (erro nao por culpa do user)
-      clearSimulateCall(req, userId);
-      return res.status(502).json({
-        message: err?.message ?? "Upstream schema change",
-        errorType: err?.errorType ?? "upstream_4xx_schema_change",
-        statusCode: err?.statusCode ?? 502,
-        inputHash: err?.inputHash ?? null,
-        timestamp: new Date().toISOString(),
-      });
-    }
-    // 5xx unavailable -> 503
-    if (
-      err?.code === "PRIMEDOPE_UNAVAILABLE" ||
-      err?.errorType === "upstream_5xx_no_fallback"
-    ) {
-      clearSimulateCall(req, userId);
-      return res.status(503).json({
-        message: err?.message ?? "PrimeDope unavailable",
-        errorType: err?.errorType ?? "upstream_5xx_no_fallback",
-        inputHash: err?.inputHash ?? null,
-        timestamp: new Date().toISOString(),
-      });
-    }
-    // Outros erros
-    console.error("[primedope] simulate failed", err);
-    clearSimulateCall(req, userId);
-    return res.status(500).json({
-      message: err?.message ?? "Erro interno",
-      errorType: err?.errorType ?? "internal_error",
-    });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// GET /api/primedope/chart/:hash
-// ---------------------------------------------------------------------------
-
-// Reviewer fix HIGH #6: chart proxy precisa de auth — hash determinado a
-// partir de inputs e o histograma contem dados sensiveis (bankroll axis).
-router.get("/chart/:hash", requireAuth, async (req: Request, res: Response) => {
-  const hash = req.params.hash ?? "";
-  if (!SHA256_REGEX.test(hash)) {
-    return res.status(400).json({ message: "Hash invalido." });
-  }
-  // Path traversal ja e prevenido pelo regex sha256.
-  const fsPath = getChartFsPath(hash);
-  const absPath = path.isAbsolute(fsPath)
-    ? fsPath
-    : path.resolve(process.cwd(), fsPath);
-  return res.sendFile(absPath, (err: unknown) => {
-    if (err) {
-      try {
-        trackerEmit("primedope_chart_proxy_miss", { hash });
-      } catch {
-        // ignore tracker errors
-      }
-      if (!res.headersSent) {
-        res.status(404).json({ message: "Chart nao encontrado." });
-      }
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// GET /api/primedope/runs
-// ---------------------------------------------------------------------------
 
 router.get("/runs", requireAuth, async (req: any, res: Response) => {
   const userId = userIdFrom(req);

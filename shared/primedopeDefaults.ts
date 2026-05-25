@@ -82,17 +82,12 @@ export const FX_FALLBACK_CONSTANTS: Record<string, number> = {
 };
 
 /**
- * Limites operacionais do PrimeDope service (ADR-054).
+ * Limites operacionais do variance simulation service (ADR-211).
+ * VR-1: dead constants removed. CACHE_TTL_MS adjusted to 5min.
  */
 export const PRIMEDOPE_LIMITS = {
-  RATE_LIMIT_PER_USER_MS: 10_000, // 1 req / 10s / userId
-  CONCURRENT_FETCHES: 3, // semaphore inline max
-  CACHE_TTL_MS: 30 * 60 * 1000, // 30 min
-  FALLBACK_STALE_MS: 24 * 3600 * 1000, // 24h
+  CACHE_TTL_MS: 5 * 60 * 1000, // 5 min (native engine is cheap — short cache)
   RETENTION_DAYS: 90,
-  FETCH_TIMEOUT_MS: 15_000,
-  RETRY_BACKOFF_MS: 500,
-  RETRY_MAX_ATTEMPTS: 2, // 1 retry => 2 attempts
 };
 
 /**

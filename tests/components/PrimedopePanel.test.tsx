@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // Spec: Docs/specs/sprint-f4-primedope-grade-detail.md (Parte B + RF-22)
 //
 // Container layout:
-//   - Header com titulo + atribuicao "Powered by PrimeDope.com" (rodape link discreto)
+//   - Header com titulo
 //   - PrimedopeOnboardingCards (RF-16)
 //   - PrimedopeWizard (B.1, B.2)
 //   - PrimedopeResult (B.4) ou PrimedopeErrorBlock
@@ -19,7 +19,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 //
 // data-testid:
 //   - primedope-panel
-//   - primedope-panel-attribution
 //   - primedope-panel-empty-no-tournaments
 //   - primedope-panel-empty-no-bankroll
 // =============================================================================
@@ -42,7 +41,7 @@ function renderWithClient(ui: React.ReactElement) {
 }
 
 describe('<PrimedopePanel>', () => {
-  it('renderiza container + atribuicao "Powered by PrimeDope.com"', () => {
+  it('renderiza container', () => {
     fetchSpy.mockResolvedValue(
       new Response(JSON.stringify({ buckets: [], fxRatesUsed: {}, defaultsFlags: [] }), {
         status: 200,
@@ -51,9 +50,6 @@ describe('<PrimedopePanel>', () => {
     renderWithClient(<PrimedopePanel userId="USER-1" bankrollUsd={5000} />);
 
     expect(screen.getByTestId('primedope-panel')).toBeInTheDocument();
-    expect(screen.getByTestId('primedope-panel-attribution')).toBeInTheDocument();
-    const text = screen.getByTestId('primedope-panel-attribution').textContent || '';
-    expect(text).toMatch(/Powered by PrimeDope/i);
   });
 
   it('bankroll consolidated = 0 -> empty state "Cadastre wallets primeiro"', () => {

@@ -260,7 +260,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerLibraryRoutes(app);
 
   // Sprint F4 (PrimeDope variance simulation + drill-down) — routers default-export.
+  // Sprint VR-1: /api/variance is canonical; /api/primedope is backward-compat alias.
   app.use("/api/primedope", primedopeRouter);
+  app.use("/api/variance", primedopeRouter);
   app.use("/api/grade", gradeDayDetailRouter);
 
   // Sprint home-reform-1 (RF-01 + RF-02): /api/home/overview + /api/news.

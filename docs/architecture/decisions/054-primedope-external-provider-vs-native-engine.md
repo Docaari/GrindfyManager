@@ -2,7 +2,7 @@
 
 ## Status
 
-Aceito (interim — substituicao por engine nativo planejada para Sprint F5+)
+Substituido por ADR-211 (engine Monte Carlo nativo — Sprint VR-1, 2026-05-25)
 
 ## Data
 

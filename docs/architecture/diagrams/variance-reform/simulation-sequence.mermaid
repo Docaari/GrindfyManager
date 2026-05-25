@@ -1,0 +1,66 @@
+%% Sprint VR-1 — Sequence: client "Simular" click → engine → render
+%% ADR-211: native Monte Carlo engine replaces external PrimeDope fetch
+%% Covers RF-01 (engine), RF-02 (endpoint), RF-03 (result render), RF-04 (hook)
+
+sequenceDiagram
+    actor User as Jogador
+    participant UI as PrimedopePanel<br/>(PrimedopeWizard)
+    participant Hook as usePrimedopeSimulation<br/>(TanStack Mutation)
+    participant API as POST /api/variance/simulate<br/>(server/routes/primedope.ts)
+    participant Cache as storage.findRecentPrimedopeRunByHash<br/>(primedope_runs)
+    participant Engine as varianceEngine.ts<br/>(runMonteCarloSimulation)
+    participant DB as primedope_runs<br/>(PostgreSQL)
+    participant Result as PrimedopeResult.tsx
+
+    Note over User,Result: RF-04: Hook simplificado — sem AbortController, sem rate limit client-side
+
+    User->>UI: Clica "Simular"
+    UI->>Hook: mutation.mutate(input)
+    Note right of Hook: input: { groups[], weeks,<br/>simulations?, seed? }
+
+    Hook->>API: POST /api/variance/simulate<br/>JSON body + JWT + CSRF
+
+    Note over API: Zod validation:<br/>groups[].buyIn, field, roi, count, isPKO<br/>weeks ∈ {1,4,12,52}<br/>simulations clamp [1000, 50000]
+
+    API->>API: computeInputHash(body)
+
+    API->>Cache: findRecentPrimedopeRunByHash(hash, 5min)
+
+    alt Cache HIT (hash identico < 5 min)
+        Cache-->>API: cached row (resultJson)
+        API-->>Hook: 200 { source:'cache', ...result }
+    else Cache MISS
+        API->>Engine: runMonteCarloSimulation(input)
+
+        Note over Engine: Step 1: generatePayouts() per group<br/>placesPaid = round(field * 0.15)<br/>alpha by field size (2.0/1.7/1.5/1.3)<br/>PKO: alpha *= 0.65<br/>min cash 1.5x enforced
+
+        Note over Engine: Step 2: calibrateSkill() per group<br/>binary search 200 iterations<br/>pos = ceil(N * u^skill)<br/>target: EV = 1 + ROI
+
+        Note over Engine: Step 3: simulate N times<br/>for each sim:<br/>  for each group, each tournament:<br/>    pos = ceil(field * random()^skill)<br/>    profit = ITM ? (payout-1)*buyIn : -buyIn<br/>  aggregate weekly for drawdown
+
+        Note over Engine: Step 4: aggregate<br/>sort results → percentiles<br/>sort drawdowns → dd stats<br/>build histogram buckets<br/>compute groupContributions
+
+        Engine-->>API: VarianceSimulationResult<br/>(ev, stdDev, profitablePct,<br/>percentiles, drawdown,<br/>histogram, groupContributions,<br/>elapsedMs)
+
+        API->>DB: INSERT primedope_runs<br/>(source='native', inputHash,<br/>resultJson, latencyMs)
+
+        API-->>Hook: 200 { source:'native', ...result }
+    end
+
+    Hook->>Hook: queryClient.invalidateQueries<br/>(['home-overview'])
+
+    Hook->>Hook: toast({ title: 'Simulacao concluida',<br/>description: profitablePct + ev })
+
+    Hook-->>UI: mutation.data = result
+
+    UI->>Result: <PrimedopeResult result={data} />
+
+    Note over Result: RF-03: Render nativo<br/>Card EV: result.ev<br/>Card ROI: ev/totalInvested*100<br/>Card SD: result.stdDev<br/>Card Chance de Lucro: profitablePct<br/>(substitui RoR)
+
+    Note over Result: CI Table (3 faixas):<br/>70%: p15..p85<br/>95%: p2_5..p97_5<br/>99.7%: p0_15..p99_85
+
+    Note over Result: Drawdown Card:<br/>median, p95, worst
+
+    Note over Result: Risk Badge:<br/>profitablePct < 50 → "Alto risco" (red)<br/>profitablePct >= 90 → "Baixo risco" (green)<br/>else → "Risco moderado" (yellow)
+
+    Result-->>User: Resultado renderizado

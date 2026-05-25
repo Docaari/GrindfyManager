@@ -77,20 +77,7 @@ export function PrimedopePanel({
         </>
       )}
 
-      <footer
-        data-testid="primedope-panel-attribution"
-        className="border-t border-border pt-2 text-center text-[10px] text-muted-foreground"
-      >
-        Powered by{" "}
-        <a
-          href="https://www.primedope.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline"
-        >
-          PrimeDope.com
-        </a>
-      </footer>
+      {/* VR-1 RF-05: PrimeDope attribution footer removed (native engine) */}
     </section>
   );
 }

@@ -1,0 +1,57 @@
+%% Sprint VR-1 — Component diagram: files changed / added / removed
+%% ADR-211: native Monte Carlo engine replaces external PrimeDope
+%% Legend: green=NEW, blue=MODIFIED, red=REMOVED code within file
+
+flowchart TB
+    subgraph server_new["NOVO — server/services/"]
+        engine["varianceEngine.ts<br/><b>NEW FILE</b><br/><i>generatePayouts()<br/>calibrateSkill()<br/>simTournament()<br/>runMonteCarloSimulation()</i>"]
+    end
+
+    subgraph server_mod["MODIFICADO — server/"]
+        integration["services/primedopeIntegration.ts<br/><i>REMOVE: PRIMEDOPE_URL<br/>REMOVE: Semaphore class<br/>REMOVE: fetchPrimedopeOnce<br/>REMOVE: fetchPrimedopeWithRetry<br/>REMOVE: saveChartFromUrl<br/>REMOVE: getChartFsPath<br/>─────────────────────<br/>KEEP: resolveExchangeRates<br/>KEEP: nativeToUsd<br/>KEEP: computeInputHash<br/>KEEP: buildHashableInput<br/>ADD: import + call varianceEngine</i>"]
+
+        routes["routes/primedope.ts<br/><i>REMOVE: GET /chart/:hash<br/>REMOVE: checkRateLimit<br/>REMOVE: noteSimulateCall<br/>REMOVE: clearSimulateCall<br/>REMOVE: RateLimitState + WeakMap<br/>─────────────────────<br/>MODIFY: POST /simulate<br/>  → call engine nativo<br/>  → no rate limit check<br/>  → no semaphore<br/>  → no 502/503 upstream errors<br/>ADD: alias /api/variance/simulate<br/>KEEP: GET /runs<br/>KEEP: POST|DELETE /runs/:id/pin<br/>KEEP: GET /buckets-prefill</i>"]
+    end
+
+    subgraph shared_mod["MODIFICADO — shared/"]
+        defaults["primedopeDefaults.ts<br/><i>REMOVE: CONCURRENT_FETCHES<br/>REMOVE: FETCH_TIMEOUT_MS<br/>REMOVE: RETRY_BACKOFF_MS<br/>REMOVE: RETRY_MAX_ATTEMPTS<br/>REMOVE: RATE_LIMIT_PER_USER_MS<br/>─────────────────────<br/>MODIFY: CACHE_TTL_MS<br/>  30min → 5min<br/>KEEP: RETENTION_DAYS<br/>KEEP: NETWORK_DEFAULTS_*<br/>KEEP: FX_FALLBACK_CONSTANTS<br/>KEEP: ALLOWED_MULTIPLIERS<br/>KEEP: helpers</i>"]
+    end
+
+    subgraph client_mod["MODIFICADO — client/src/"]
+        hook["hooks/usePrimedopeSimulation.ts<br/><i>REMOVE: AbortController ref<br/>REMOVE: useEffect cleanup abort<br/>REMOVE: raw fetch + signal<br/>REMOVE: getCsrfToken manual<br/>─────────────────────<br/>MODIFY: mutationFn<br/>  → apiRequest('POST',<br/>    '/api/variance/simulate')<br/>MODIFY: onSuccess toast<br/>  → show profitablePct + ev<br/>MODIFY: SimulationResultPayload<br/>  → VarianceSimulationResult<br/>REMOVE: abort() return<br/>KEEP: invalidateQueries</i>"]
+
+        result["components/primedope/<br/>PrimedopeResult.tsx<br/><i>REMOVE: riskOfRuinPct card<br/>REMOVE: minBankroll section<br/>REMOVE: old SimulationResultData<br/>─────────────────────<br/>MODIFY: 4 KPI cards<br/>  EV: result.ev<br/>  ROI: ev/totalInvested*100<br/>  SD: result.stdDev<br/>  Chance de Lucro: profitablePct<br/>ADD: CI table (3 faixas)<br/>  70%: p15..p85<br/>  95%: p2_5..p97_5<br/>  99.7%: p0_15..p99_85<br/>ADD: Drawdown card<br/>  median, p95, worst<br/>ADD: Risk badge<br/>  profitablePct thresholds<br/>ADD: Loading skeleton<br/>ADD: source badge 'native'</i>"]
+
+        panel["components/primedope/<br/>PrimedopePanel.tsx<br/><i>REMOVE: footer<br/>  'Powered by PrimeDope.com'</i>"]
+    end
+
+    subgraph no_change["SEM ALTERACAO"]
+        prefill["services/<br/>primedopeBucketsPrefill.ts"]
+        schema["shared/schema.ts<br/><i>primedope_runs table<br/>(source varchar livre)</i>"]
+        wizard["components/primedope/<br/>PrimedopeWizard.tsx"]
+        runs["hooks/usePrimedopeRuns.ts"]
+        onboarding["components/primedope/<br/>PrimedopeOnboardingCards.tsx"]
+    end
+
+    %% Relationships
+    engine -->|"importado por"| integration
+    integration -->|"chamado por"| routes
+    routes -->|"registra alias"| alias["POST /api/variance/simulate<br/>POST /api/primedope/simulate<br/><i>mesmo handler</i>"]
+    hook -->|"chama"| alias
+    hook -->|"resultado para"| result
+    wizard -->|"props para"| result
+    defaults -->|"importado por"| integration
+    defaults -->|"importado por"| routes
+    prefill -->|"importado por"| routes
+
+    %% Styling
+    classDef newFile fill:#059669,color:#fff,stroke:#047857
+    classDef modified fill:#2563eb,color:#fff,stroke:#1d4ed8
+    classDef removed fill:#dc2626,color:#fff,stroke:#b91c1c
+    classDef unchanged fill:#6b7280,color:#fff,stroke:#4b5563
+    classDef endpoint fill:#7c3aed,color:#fff,stroke:#6d28d9
+
+    class engine newFile
+    class integration,routes,defaults,hook,result,panel modified
+    class prefill,schema,wizard,runs,onboarding unchanged
+    class alias endpoint
