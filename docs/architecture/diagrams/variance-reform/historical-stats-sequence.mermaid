@@ -1,0 +1,57 @@
+%% Sprint VR-2 — Sequence: GET /api/variance/historical-stats
+%% ADR-212: aggregate tournaments by tier x type with historical ROI
+%% Covers RF-06 (historical-stats endpoint)
+
+sequenceDiagram
+    actor User as Jogador
+    participant Wizard as PrimedopeWizard<br/>(Modo "Por periodo")
+    participant Hook as useHistoricalStats<br/>(TanStack Query)
+    participant API as GET /api/variance/historical-stats<br/>(server/routes/primedope.ts)
+    participant Cache as Server Cache<br/>(Map in-memory, TTL 1h)
+    participant DB as PostgreSQL<br/>(tournaments)
+
+    Note over User,DB: RF-06: ROI + field size por tier x tipo do historico real
+
+    User->>Wizard: Abre wizard de variancia<br/>(modo "Por periodo")
+    Wizard->>Hook: useQuery(['variance-historical-stats'])
+
+    Hook->>API: GET /api/variance/historical-stats<br/>JWT auth header
+
+    API->>API: Extract userId from JWT
+
+    API->>Cache: lookup(userId)
+
+    alt Cache HIT (< 1h desde ultima query)
+        Cache-->>API: cached HistoricalStats
+        API-->>Hook: 200 { tiers[], totals }
+    else Cache MISS
+        API->>DB: SQL dedup + aggregate query
+
+        Note over DB: WITH deduped AS (<br/>  SELECT DISTINCT ON<br/>    (name, site, buy_in, prize,<br/>     field_size, position,<br/>     date_played::date)<br/>    buy_in, prize, field_size, type<br/>  FROM tournaments<br/>  WHERE grind_session_id IS NULL<br/>    AND buy_in >= 10<br/>    AND currency = 'USD'<br/>    AND user_id = $1<br/>  ORDER BY name, site, buy_in, prize,<br/>    field_size, position,<br/>    date_played::date, date_played<br/>)
+
+        Note over DB: SELECT tier, type,<br/>  COUNT(*), AVG(buy_in),<br/>  AVG(field_size),<br/>  SUM(prize) /<br/>    NULLIF(<br/>      SUM(buy_in) +<br/>      SUM(GREATEST(0,<br/>        -(prize+buy_in))),<br/>    0) AS roi_adjusted<br/>FROM deduped<br/>GROUP BY tier, type
+
+        Note over DB: Tier classification:<br/>high: buy_in >= 100<br/>mid: 50 <= buy_in < 100<br/>low: 22 <= buy_in < 50<br/>entry: 10 <= buy_in < 22
+
+        DB-->>API: Rows: tier, type, count,<br/>avgBuyIn, avgField, roiAdjusted
+
+        API->>API: Post-process:<br/>1. Merge Satellite/Add-on into Vanilla<br/>2. Mark lowSample (count < 20)<br/>3. Compute totals + dateRange<br/>4. Compute duplicatesRemoved
+
+        API->>Cache: store(userId, result, ttl=1h)
+
+        API-->>Hook: 200 HistoricalStats
+    end
+
+    Hook-->>Wizard: data = HistoricalStats
+
+    Note over Wizard: Render tiers table:<br/>Badge "hist" (azul) for historical<br/>Badge "est" (amarelo) for defaults<br/>"lowSample" warning for count < 20
+
+    Wizard-->>User: Tiers table populated with<br/>real ROI + field size
+
+    Note over User,DB: Cache invalidation flow (triggered by CSV upload)
+
+    rect rgb(255, 245, 238)
+        User->>API: POST /api/upload (CSV import)
+        API->>Cache: invalidate(userId)
+        Note right of Cache: Next GET /api/variance/<br/>historical-stats will<br/>re-query from DB
+    end

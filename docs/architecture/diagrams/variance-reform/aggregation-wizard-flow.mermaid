@@ -1,0 +1,73 @@
+%% Sprint VR-2 — Flowchart: Aggregation wizard data flow
+%% ADR-212: aggregate tournaments by tier x type with historical ROI
+%% Covers RF-07 (aggregated wizard mode) + RF-08 (buckets-aggregate endpoint)
+
+flowchart TD
+    A["User opens Variance Wizard"] --> B{"Mode toggle?"}
+
+    B -->|"Por dia (legacy)"| LEGACY["Existing flow:<br/>GET /api/primedope/buckets-prefill<br/>profileLetter + dayOfWeek + multiplier<br/>→ per-tournament rows"]
+    LEGACY --> EDIT_LEGACY["User edits individual rows<br/>(263 rows, per-tournament)"]
+    EDIT_LEGACY --> SIM["POST /api/variance/simulate<br/>groups[] + weeks"]
+
+    B -->|"Por periodo (new default)"| C["User selects:<br/>1. Profile (A / B / C)<br/>2. Period selector"]
+
+    C --> D{"Period?"}
+    D -->|"1 Semana"| W1["weeks = 1"]
+    D -->|"1 Mes"| W4["weeks = 4"]
+    D -->|"1 Trimestre"| W12["weeks = 12"]
+    D -->|"1 Ano"| W52["weeks = 52"]
+
+    W1 --> FETCH
+    W4 --> FETCH
+    W12 --> FETCH
+    W52 --> FETCH
+
+    FETCH["GET /api/variance/buckets-aggregate<br/>?profileLetter=A&weeks=12"] --> BACKEND
+
+    subgraph BACKEND["Server: buckets-aggregate handler"]
+        direction TB
+        Q1["1. Query planned_tournaments<br/>WHERE profile = $profileLetter<br/>AND is_active = true<br/>(ALL days of week)"]
+        Q1 --> Q2{"Has tournaments<br/>in this profile?"}
+        Q2 -->|"No"| EMPTY_RESP["Return empty groups[]<br/>+ meta.daysInProfile = 0"]
+        Q2 -->|"Yes"| Q3["2. Count daysInProfile<br/>(distinct dayOfWeek values)"]
+        Q3 --> Q4["3. Group planned tournaments<br/>by tier x type"]
+        Q4 --> Q4b["Tier classification:<br/>high: buyIn >= $100<br/>mid: $50-99<br/>low: $22-49<br/>entry: $10-21"]
+        Q4b --> Q5["4. Merge Satellite + Add-on<br/>into Vanilla of same tier"]
+        Q5 --> Q6["5. GET historical-stats (cached)<br/>for ROI + field per tier x type"]
+        Q6 --> Q7{"Historical data<br/>for this tier x type?"}
+        Q7 -->|"Yes"| HIST["roi = historicalROI<br/>field = historicalField<br/>source = 'historical'<br/>lowSample = count < 20"]
+        Q7 -->|"No"| DEFAULT["roi = NETWORK_DEFAULTS_ROI<br/>field = DEFAULT_PLAYERS_AVG<br/>source = 'default'"]
+        HIST --> Q8
+        DEFAULT --> Q8
+        Q8["6. Compute per group:<br/>countPerWeek = groupCount / 7 * daysInProfile<br/>count = countPerWeek * weeks<br/>buyIn = avg buy-in USD"]
+        Q8 --> Q9["7. Build meta:<br/>profileLetter, weeks,<br/>daysInProfile,<br/>tournamentsPerWeek,<br/>weeklyInvestment"]
+        Q9 --> RESP["Return AggregatedBuckets<br/>{ groups[], meta }"]
+    end
+
+    EMPTY_RESP --> EMPTY_UI["Wizard shows empty state:<br/>'Adicione torneios na aba Grade<br/>para simular.'"]
+
+    RESP --> TABLE["Wizard renders aggregated table<br/>(~8 groups instead of 263 rows)"]
+
+    TABLE --> BADGES["Badges per field:<br/>hist (blue) = from historical data<br/>est (yellow) = from heuristic/default"]
+
+    BADGES --> EDITABLE["User can edit per group:<br/>- ROI (decimal)<br/>- Field size (integer)<br/>- Count (integer)"]
+
+    EDITABLE --> INVEST{"Daily investment<br/>field filled?"}
+
+    INVEST -->|"Yes"| SCALE["Scale buy-ins proportionally:<br/>scaleFactor = dailyInvestment /<br/>(sum of buyIn * countPerWeek / 7)<br/>Each group.buyIn *= scaleFactor"]
+    INVEST -->|"No"| NO_SCALE["Keep original buy-ins"]
+
+    SCALE --> BUILD_INPUT
+    NO_SCALE --> BUILD_INPUT
+
+    BUILD_INPUT["Build VarianceSimulationInput:<br/>groups = edited table rows<br/>mapped to { name, buyIn, field,<br/>roi, count, isPKO }<br/>weeks = selected period"]
+
+    BUILD_INPUT --> SIM
+
+    SIM --> ENGINE["varianceEngine.ts<br/>runMonteCarloSimulation()"]
+    ENGINE --> RESULT["PrimedopeResult.tsx<br/>renders simulation results"]
+
+    style BACKEND fill:#f0f4ff,stroke:#4a6fa5
+    style EMPTY_UI fill:#fff3cd,stroke:#856404
+    style BADGES fill:#e8f4fd,stroke:#0c5460
+    style SCALE fill:#d4edda,stroke:#155724

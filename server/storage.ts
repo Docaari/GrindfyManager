@@ -1131,6 +1131,11 @@ export interface IStorage {
     userId: string;
     pinned: boolean;
   }): Promise<any>;
+  getHistoricalStatsByUser(input: { userId: string }): Promise<any>;
+  listPlannedTournamentsByProfile(input: {
+    userId: string;
+    profileLetter: string;
+  }): Promise<any[]>;
   listPlannedTournamentsForDayDetail(input: {
     userId: string;
     profileLetter: string;
@@ -11726,6 +11731,124 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         "[storage] listPlannedTournamentsForBucketsPrefill failed",
         err,
       );
+      return [];
+    }
+  }
+
+  async getHistoricalStatsByUser(input: { userId: string }): Promise<any> {
+    try {
+      const rows = await db.execute(
+        sql`WITH deduped AS (
+              SELECT DISTINCT ON (name, site, buy_in, prize, field_size, position, date_played::date)
+                buy_in, prize, field_size, type, date_played
+              FROM tournaments
+              WHERE grind_session_id IS NULL
+                AND buy_in >= 10
+                AND currency = 'USD'
+                AND user_id = ${input.userId}
+              ORDER BY name, site, buy_in, prize, field_size, position,
+                       date_played::date, date_played
+            ),
+            total_before AS (
+              SELECT COUNT(*)::int AS cnt FROM tournaments
+              WHERE grind_session_id IS NULL AND buy_in >= 10 AND currency = 'USD'
+                AND user_id = ${input.userId}
+            ),
+            total_after AS (
+              SELECT COUNT(*)::int AS cnt FROM deduped
+            ),
+            date_range AS (
+              SELECT MIN(date_played)::date AS min_d, MAX(date_played)::date AS max_d FROM deduped
+            ),
+            classified AS (
+              SELECT
+                CASE
+                  WHEN buy_in >= 100 THEN 'high'
+                  WHEN buy_in >= 50 THEN 'mid'
+                  WHEN buy_in >= 22 THEN 'low'
+                  ELSE 'entry'
+                END AS tier,
+                CASE
+                  WHEN type IN ('Satellite', 'Add-on') THEN 'Vanilla'
+                  ELSE type
+                END AS norm_type,
+                buy_in, prize, field_size
+              FROM deduped
+            )
+            SELECT
+              c.tier,
+              c.norm_type AS type,
+              COUNT(*)::int AS count,
+              AVG(c.buy_in)::numeric AS avg_buy_in,
+              AVG(c.field_size)::numeric AS avg_field,
+              (SUM(c.prize) / NULLIF(SUM(c.buy_in) + SUM(GREATEST(0, -(c.prize + c.buy_in))), 0))::numeric AS roi_adjusted,
+              (SELECT cnt FROM total_before) AS total_before,
+              (SELECT cnt FROM total_after) AS total_after,
+              (SELECT min_d FROM date_range) AS date_from,
+              (SELECT max_d FROM date_range) AS date_to
+            FROM classified c
+            GROUP BY c.tier, c.norm_type
+            ORDER BY c.tier, c.norm_type`,
+      );
+      const raw: any[] = (rows as any).rows ?? rows;
+      const tiers = (raw ?? []).map((r: any) => ({
+        tier: r.tier,
+        type: r.type,
+        count: Number(r.count),
+        avg_buy_in: Number(r.avg_buy_in),
+        avg_field: Number(r.avg_field),
+        roi_adjusted: r.roi_adjusted != null ? Number(r.roi_adjusted) : 0,
+      }));
+
+      const totalBefore = raw.length > 0 ? Number(raw[0].total_before) : 0;
+      const totalAfter = raw.length > 0 ? Number(raw[0].total_after) : 0;
+      const dateFrom = raw.length > 0 && raw[0].date_from ? String(raw[0].date_from) : "";
+      const dateTo = raw.length > 0 && raw[0].date_to ? String(raw[0].date_to) : "";
+
+      return {
+        tiers,
+        totals: {
+          tournaments: totalAfter,
+          dateRange: { from: dateFrom, to: dateTo },
+          duplicatesRemoved: totalBefore - totalAfter,
+        },
+      };
+    } catch (err) {
+      console.error("[storage] getHistoricalStatsByUser failed", err);
+      return {
+        tiers: [],
+        totals: { tournaments: 0, dateRange: { from: "", to: "" }, duplicatesRemoved: 0 },
+      };
+    }
+  }
+
+  async listPlannedTournamentsByProfile(input: {
+    userId: string;
+    profileLetter: string;
+  }): Promise<any[]> {
+    try {
+      const rows = await db.execute(
+        sql`SELECT
+              id,
+              user_id AS "userId",
+              day_of_week AS "dayOfWeek",
+              profile,
+              site,
+              time,
+              type,
+              name,
+              buy_in AS "buyIn",
+              is_active AS "isActive"
+            FROM planned_tournaments
+            WHERE user_id = ${input.userId}
+              AND profile = ${input.profileLetter}
+              AND is_active = true
+            ORDER BY day_of_week, time`,
+      );
+      const raw: any[] = (rows as any).rows ?? rows;
+      return raw ?? [];
+    } catch (err) {
+      console.error("[storage] listPlannedTournamentsByProfile failed", err);
       return [];
     }
   }

@@ -42,6 +42,7 @@ import { registerTournamentSeriesRoutes } from "./tournament-series";
 import { registerAllJobs } from "../jobs";
 import { spotStorage } from "../lib/spotStorage";
 import primedopeRouter from "./primedope";
+import varianceRouter from "./variance";
 import gradeDayDetailRouter from "./grade-day-detail";
 // Sprint home-reform-1 (RF-01, RF-02): operations cockpit + news stub.
 import { registerHomeRoutes } from "./home";
@@ -263,6 +264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sprint VR-1: /api/variance is canonical; /api/primedope is backward-compat alias.
   app.use("/api/primedope", primedopeRouter);
   app.use("/api/variance", primedopeRouter);
+  app.use("/api/variance", varianceRouter);
   app.use("/api/grade", gradeDayDetailRouter);
 
   // Sprint home-reform-1 (RF-01 + RF-02): /api/home/overview + /api/news.

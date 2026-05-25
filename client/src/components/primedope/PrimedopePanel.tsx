@@ -7,6 +7,7 @@
 import * as React from "react";
 import { PrimedopeOnboardingCards } from "./PrimedopeOnboardingCards";
 import { PrimedopeWizard } from "./PrimedopeWizard";
+import AggregationWizard from "./AggregationWizard";
 import { PrimedopeResult } from "./PrimedopeResult";
 import { EmptyState } from "@/components/empty-state";
 import { usePrimedopeSimulation } from "@/hooks/usePrimedopeSimulation";
@@ -53,10 +54,8 @@ export function PrimedopePanel({
       ) : (
         <>
           <PrimedopeOnboardingCards />
-          <PrimedopeWizard
-            userId={userId}
+          <AggregationWizard
             profileLetter={profileLetter}
-            dayOfWeek={dayOfWeek}
             onRun={handleRun}
           />
           <PrimedopeResult
