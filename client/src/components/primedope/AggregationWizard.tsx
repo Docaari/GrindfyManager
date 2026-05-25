@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface AggGroup {
   name: string;
@@ -52,13 +53,11 @@ export default function AggregationWizard({ onRun, profileLetter: initialProfile
 
   const { data, isLoading } = useQuery<AggResponse>({
     queryKey: ["buckets-aggregate", profile, weeks],
-    queryFn: async () => {
-      const res = await fetch(
+    queryFn: () =>
+      apiRequest(
+        "GET",
         `/api/variance/buckets-aggregate?profileLetter=${profile}&weeks=${weeks}`,
-      );
-      if (!res.ok) throw new Error("Failed to fetch");
-      return res.json();
-    },
+      ),
     enabled: mode === "period",
   });
 

@@ -4,6 +4,7 @@ import { storage } from "../storage";
 import { db } from "../db";
 import { invalidateHomeOverviewCache } from "./home";
 import { invalidateDashboardQuickStatsCache } from "./dashboard";
+import { invalidateHistoricalStatsCache } from "./variance";
 import {
   tournaments,
   uploadHistory,
@@ -501,6 +502,7 @@ export function registerUploadRoutes(app: Express): void {
           });
         }
 
+        invalidateHistoricalStatsCache(userPlatformId);
 
         res.json({
           message: `${successCount} tournaments uploaded successfully${skippedCount > 0 ? `, ${skippedCount} duplicates skipped` : ''}${errorCount > 0 ? `, ${errorCount} failed to save` : ''}`,
@@ -1539,6 +1541,7 @@ export async function handlePostUploadHistory(
       } catch (historyErr) {
         console.error('upload_history.create_failed_sync', historyErr);
       }
+      invalidateHistoricalStatsCache(userPlatformId);
       res.status(200).json({
         message: `${successCount} tournaments uploaded successfully`,
         imported: successCount,
