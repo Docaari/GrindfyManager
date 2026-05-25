@@ -33,8 +33,8 @@ import { ProfileComparison } from '@/components/grade-planner/ProfileComparison'
 import { GradeSettings } from '@/components/grade-planner/GradeSettings';
 import { DeleteDialog } from '@/components/grade-planner/DeleteDialog';
 import { EditDialog } from '@/components/grade-planner/EditDialog';
-// Sprint F4 — drill-down + variance simulation integration (RF-01, RF-04).
-import { DayDetailDrawer } from '@/components/grade/DayDetailDrawer';
+// Sprint F4 → Sprint day-detail-zoom-1: DayDetailHost decide zoom vs drawer via ?detail=drawer.
+import { DayDetailHost } from '@/components/grade/DayDetailHost';
 import { PrimedopePanel } from '@/components/primedope/PrimedopePanel';
 import { useBankroll } from '@/hooks/useBankroll';
 // Sprint coach-page-reform-1.
@@ -98,10 +98,14 @@ export default function GradePlanner() {
   const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
 
   // ===========================================================================
-  // Sprint F4 — DayDetailDrawer + PrimedopePanel state (RF-01, RF-04)
+  // Sprint day-detail-zoom-1 — DayDetailHost (zoom vs drawer) + Portal ref
   // ===========================================================================
-  // dayDetailOpen: dayOfWeek (0..6) quando aberto, null quando fechado.
   const [dayDetailOpen, setDayDetailOpen] = useState<number | null>(null);
+  const dndPortalRef = useRef<HTMLDivElement | null>(null);
+  const [portalMounted, setPortalMounted] = useState(false);
+  useEffect(() => {
+    if (dndPortalRef.current) setPortalMounted(true);
+  }, []);
 
   // Sprint coach-page-reform-1 RF-01: tabs persistidas em URL ?tab=.
   const [activeTab, setActiveTab] = useTabFromUrl(COACH_TAB_LIST, 'planner');
@@ -996,11 +1000,12 @@ export default function GradePlanner() {
         {/* Profile Comparison — visivel apenas quando botão Comparar está ativo */}
         {showComparison && <ProfileComparison />}
 
-        {/* ============================================================= */}
-        {/* Sprint F4 — DayDetailDrawer (drill-down, RF-01)                 */}
-        {/* ============================================================= */}
-        {dayDetailOpen !== null && (
-          <DayDetailDrawer
+        {/* Sprint day-detail-zoom-1: Portal container inside DragDropContext */}
+        <div ref={dndPortalRef} id="dnd-portal-container" />
+
+        {/* Sprint day-detail-zoom-1: DayDetailHost (zoom default, drawer via ?detail=drawer) */}
+        {dayDetailOpen !== null && portalMounted && (
+          <DayDetailHost
             open={dayDetailOpen !== null}
             onOpenChange={(o) => {
               if (!o) setDayDetailOpen(null);
@@ -1010,6 +1015,8 @@ export default function GradePlanner() {
               return p && p !== 'OFF' ? p : 'A';
             })()}
             dayOfWeek={dayDetailOpen}
+            portalContainer={dndPortalRef.current}
+            dayProfileOff={getActiveProfile(dayDetailOpen) === 'OFF'}
           />
         )}
 

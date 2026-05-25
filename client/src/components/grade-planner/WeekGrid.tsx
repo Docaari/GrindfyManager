@@ -8,6 +8,7 @@ import { getCellDisplayInfo } from "@shared/grade-cell-overflow";
 import { groupBuyInsByCurrency, formatGroupedBuyIns, formatBuyIn, getCurrencyForSite } from "@shared/platform-currency";
 import { TournamentChip } from "./TournamentChip";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { DayHoverTooltip } from "@/components/grade/DayHoverTooltip";
 import {
   Popover,
   PopoverContent,
@@ -255,16 +256,24 @@ export function WeekGrid({
                             </div>
                           )}
                           {onShowDayDetails && (
-                            <button
-                              type="button"
-                              data-testid={`week-grid-day-detail-${day.id}`}
-                              onClick={() => onShowDayDetails(day.id)}
-                              className="inline-flex items-center justify-center gap-1 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                              title="Ver detalhes do dia"
+                            <DayHoverTooltip
+                              dayOfWeek={day.id}
+                              profileLetter={(() => {
+                                const p = getActiveProfile(day.id);
+                                return p && p !== 'OFF' ? p as 'A' | 'B' | 'C' : 'A';
+                              })()}
                             >
-                              <Eye className="h-3.5 w-3.5" />
-                              <span>Detalhes</span>
-                            </button>
+                              <button
+                                type="button"
+                                data-testid={`week-grid-day-detail-${day.id}`}
+                                onClick={() => onShowDayDetails(day.id)}
+                                className="inline-flex items-center justify-center gap-1 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                title="Ver detalhes do dia"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                <span>Detalhes</span>
+                              </button>
+                            </DayHoverTooltip>
                           )}
                         </div>
                       );
