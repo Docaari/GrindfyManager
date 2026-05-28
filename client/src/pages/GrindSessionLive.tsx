@@ -427,7 +427,7 @@ export default function GrindSessionLive() {
   const [showPendingTournamentsDialog, setShowPendingTournamentsDialog] = useState(false);
   const [newTournament, setNewTournament] = useState<NewTournamentForm>({
     site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal",
-    scheduledTime: "", registrationTime: undefined, fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming",
+    scheduledTime: "", registrationTime: undefined, guaranteed: "", rebuys: 0, result: "0", position: null, status: "upcoming",
     allowsAddOn: false, addOnCost: "", allowsReentry: false, maxReentries: null,
   });
 
@@ -1179,7 +1179,7 @@ export default function GrindSessionLive() {
   };
 
   const resetFilters = () => {
-    setNewTournament({ site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal", scheduledTime: "", registrationTime: undefined, fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming" });
+    setNewTournament({ site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal", scheduledTime: "", registrationTime: undefined, guaranteed: "", rebuys: 0, result: "0", position: null, status: "upcoming" });
     toast({ title: "Filtros Limpos", description: "Todos os campos foram resetados" });
   };
 
@@ -1207,7 +1207,7 @@ export default function GrindSessionLive() {
   const applySuggestion = (suggestion: any) => {
     setNewTournament(prev => ({
       ...prev, site: suggestion.site, type: suggestion.type, speed: suggestion.speed,
-      buyIn: suggestion.buyIn, fieldSize: suggestion.guaranteed || prev.fieldSize,
+      buyIn: suggestion.buyIn, guaranteed: suggestion.guaranteed || prev.guaranteed,
       scheduledTime: suggestion.time || prev.scheduledTime, name: ''
     }));
     toast({ title: "Sugestao Aplicada", description: `${suggestion.site} ${suggestion.type} $${suggestion.buyIn} ${suggestion.speed}` });
@@ -1595,7 +1595,7 @@ export default function GrindSessionLive() {
           buyIn: tournamentData.buyIn, rebuys: 0, result: "0", bounty: "0",
           status: tournamentData.status || "upcoming", fromPlannedTournament: tournamentData.fromPlannedTournament || false,
           plannedTournamentId: tournamentData.plannedTournamentId || null,
-          fieldSize: tournamentData.fieldSize ? parseInt(tournamentData.fieldSize) : null, position: null,
+          fieldSize: null, position: null,
           startTime: tournamentData.startTime || null, endTime: null,
           time: tournamentData.scheduledTime || tournamentData.time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
           registrationTime: tournamentData.registrationTime || null,
@@ -1617,7 +1617,7 @@ export default function GrindSessionLive() {
         queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
       }
       // RF-12: Keep modal open for adding more, show success toast
-      setNewTournament({ site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal", scheduledTime: "", registrationTime: undefined, fieldSize: "", rebuys: 0, result: "0", position: null, status: "upcoming", allowsAddOn: false, addOnCost: "", allowsReentry: false, maxReentries: null });
+      setNewTournament({ site: "", name: "", buyIn: "", type: "Vanilla", speed: "Normal", scheduledTime: "", registrationTime: undefined, guaranteed: "", rebuys: 0, result: "0", position: null, status: "upcoming", allowsAddOn: false, addOnCost: "", allowsReentry: false, maxReentries: null });
       const isRegistration = variables?.status === 'registered' && variables?.fromPlannedTournament;
       toast({
         title: isRegistration ? "Registrado no Torneio" : "Torneio Adicionado",
@@ -2071,12 +2071,20 @@ export default function GrindSessionLive() {
     }
   };
 
-  // 2026-04-30: delete agora e session-scoped. Para planned-X cria session_tournament
-  // shadow com status='deleted' (mascara via combineTournaments) — grade-planner
-  // permanece intacto. Para session_tournament real usa DELETE direto (evita
-  // merge-before-validate da rota PUT).
   const deleteTournamentMutation = useMutation({
-    mutationFn: async ({ id, plannedSource, sessionTournament }: { id: string; plannedSource?: any; sessionTournament?: any }) => {
+    mutationFn: async ({ id, plannedSource, sessionTournament, deleteFromGrade }: { id: string; plannedSource?: any; sessionTournament?: any; deleteFromGrade?: boolean }) => {
+      const plannedId = id.startsWith('planned-')
+        ? id.substring(8)
+        : sessionTournament?.plannedTournamentId || null;
+
+      if (deleteFromGrade && plannedId) {
+        await apiRequest('DELETE', `/api/planned-tournaments/${plannedId}`);
+        if (!id.startsWith('planned-')) {
+          return await apiRequest('DELETE', `/api/session-tournaments/${id}`);
+        }
+        return;
+      }
+
       if (id.startsWith('planned-') && plannedSource && activeSession?.id) {
         return await apiRequest('POST', '/api/session-tournaments', {
           userId: activeSession.userId,
@@ -2099,15 +2107,12 @@ export default function GrindSessionLive() {
           fieldSize: null,
         });
       }
-      // Session row originada de planned: soft-delete (PUT status='deleted')
-      // em vez de DELETE. Senao planned-X reaparece via combineTournaments
-      // na proxima invalidacao (precisava do shadow pra mascarar o planned).
       if (sessionTournament?.fromPlannedTournament && sessionTournament?.plannedTournamentId) {
         return await apiRequest('PUT', `/api/session-tournaments/${id}`, { status: 'deleted' });
       }
       return await apiRequest('DELETE', `/api/session-tournaments/${id}`);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       const currentDayOfWeek = new Date().getDay();
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments/by-day", currentDayOfWeek] });
@@ -2116,7 +2121,11 @@ export default function GrindSessionLive() {
       if (activeSession?.id) {
         queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments", activeSession.id] });
       }
-      toast({ title: "Torneio removido", description: "Removido apenas desta sessao. Grade permanece intacta." });
+      if (variables.deleteFromGrade) {
+        toast({ title: "Torneio removido da grade", description: "Removido permanentemente da grade planejada." });
+      } else {
+        toast({ title: "Torneio removido", description: "Removido apenas desta sessao. Grade permanece intacta." });
+      }
     },
     onError: (error: any) => {
       toast({ title: "Erro ao remover", description: error?.message || "Falha ao remover torneio.", variant: "destructive" });
@@ -2131,8 +2140,16 @@ export default function GrindSessionLive() {
   const handleDeleteTournament = (tournamentId: string) => {
     setDeleteTournamentId(tournamentId);
   };
-  const handleConfirmDeleteTournament = () => {
-    if (!deleteTournamentId) return;
+
+  const deleteTargetIsFromGrade = useMemo(() => {
+    if (!deleteTournamentId) return false;
+    if (deleteTournamentId.startsWith('planned-')) return true;
+    const st = sessionTournaments?.find(t => t.id === deleteTournamentId);
+    return !!(st?.fromPlannedTournament && st?.plannedTournamentId);
+  }, [deleteTournamentId, sessionTournaments]);
+
+  const resolveDeleteArgs = () => {
+    if (!deleteTournamentId) return null;
     let plannedSource: any = undefined;
     let sessionTournament: any = undefined;
     if (deleteTournamentId.startsWith('planned-')) {
@@ -2141,7 +2158,27 @@ export default function GrindSessionLive() {
     } else {
       sessionTournament = sessionTournaments?.find(t => t.id === deleteTournamentId);
     }
-    deleteTournamentMutation.mutate({ id: deleteTournamentId, plannedSource, sessionTournament });
+    return { id: deleteTournamentId, plannedSource, sessionTournament };
+  };
+
+  const handleDeleteFromDailyGrade = () => {
+    const args = resolveDeleteArgs();
+    if (!args) return;
+    deleteTournamentMutation.mutate({ ...args, deleteFromGrade: false });
+    setDeleteTournamentId(null);
+  };
+
+  const handleDeleteFromPlannedGrade = () => {
+    const args = resolveDeleteArgs();
+    if (!args) return;
+    deleteTournamentMutation.mutate({ ...args, deleteFromGrade: true });
+    setDeleteTournamentId(null);
+  };
+
+  const handleConfirmDeleteTournament = () => {
+    const args = resolveDeleteArgs();
+    if (!args) return;
+    deleteTournamentMutation.mutate(args);
     setDeleteTournamentId(null);
   };
   const handleCancelDeleteTournament = () => setDeleteTournamentId(null);
@@ -3152,36 +3189,73 @@ export default function GrindSessionLive() {
         }}
       />
 
-      {/* GL-H polish (UX-2 2026-04-25): AlertDialog para confirmar delete
-          de torneio. Substitui window.confirm() — mais acessivel, estilizado,
-          e nao bloqueia thread. */}
       <AlertDialog
         open={!!deleteTournamentId}
         onOpenChange={(open) => { if (!open) handleCancelDeleteTournament(); }}
       >
         <AlertDialogContent data-testid="delete-tournament-alert-dialog">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remover torneio da sessao?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acao remove o torneio da sessao atual. Voce pode adiciona-lo
-              novamente depois — historico de resultados nao e perdido.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              data-testid="delete-tournament-cancel"
-              onClick={handleCancelDeleteTournament}
-            >
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              data-testid="delete-tournament-confirm"
-              onClick={handleConfirmDeleteTournament}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Remover
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          {deleteTargetIsFromGrade ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Como deseja remover este torneio?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Este torneio faz parte da sua grade planejada. Escolha o tipo de exclusao.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="flex flex-col gap-2 mt-2">
+                <Button
+                  data-testid="delete-tournament-daily"
+                  variant="outline"
+                  onClick={handleDeleteFromDailyGrade}
+                  className="w-full justify-start border-yellow-600 text-yellow-200 hover:bg-yellow-900/30"
+                >
+                  Excluir da grade diaria
+                  <span className="ml-auto text-xs text-gray-400">So hoje</span>
+                </Button>
+                <Button
+                  data-testid="delete-tournament-planned"
+                  variant="outline"
+                  onClick={handleDeleteFromPlannedGrade}
+                  className="w-full justify-start border-red-600 text-red-200 hover:bg-red-900/30"
+                >
+                  Excluir da grade planejada
+                  <span className="ml-auto text-xs text-gray-400">Permanente</span>
+                </Button>
+                <AlertDialogCancel
+                  data-testid="delete-tournament-cancel"
+                  onClick={handleCancelDeleteTournament}
+                  className="w-full"
+                >
+                  Cancelar
+                </AlertDialogCancel>
+              </div>
+            </>
+          ) : (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remover torneio da sessao?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta acao remove o torneio da sessao atual. Voce pode adiciona-lo
+                  novamente depois — historico de resultados nao e perdido.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel
+                  data-testid="delete-tournament-cancel"
+                  onClick={handleCancelDeleteTournament}
+                >
+                  Cancelar
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  data-testid="delete-tournament-confirm"
+                  onClick={handleConfirmDeleteTournament}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Remover
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
         </AlertDialogContent>
       </AlertDialog>
 
