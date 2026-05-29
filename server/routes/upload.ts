@@ -1041,6 +1041,83 @@ export function registerUploadRoutes(app: Express): void {
   app.post('/api/upload/confirm-flights', requireAuth, handleConfirmFlights as any);
   // RF-02 (Backend-Sweep ADR-181): polling de progresso async.
   app.get('/api/upload-history/:id', requireAuth, (req: any, res) => handleGetUploadHistoryById(req, res) as any);
+
+  // === Sprint library-evolution Fase 5: modo Overview (efemero) + highlights ===
+
+  // Analise EFEMERA de um CSV grande (pool multi-jogador). NAO persiste nada —
+  // parseia em memoria, agrupa e devolve os melhores torneios por plataforma
+  // com os motivos do destaque. O CSV e descartado ao fim do request.
+  app.post('/api/library/overview/analyze', requireAuth, upload.single('file'), async (req: any, res) => {
+    try {
+      const userPlatformId = req.user?.userPlatformId;
+      const file = req.file;
+      if (!file) return res.status(400).json({ message: 'Nenhum arquivo enviado' });
+      const magicErr = validateUploadMagicBytes(file);
+      if (magicErr) return res.status(400).json({ message: magicErr });
+
+      const userSettings = await storage.getUserSettings(userPlatformId);
+      const exchangeRates = withExchangeRateDefaults(userSettings?.exchangeRates);
+      const fileContent = file.buffer.toString('utf-8');
+
+      let parsed: any[] = [];
+      try {
+        if (isCoinPokerFormat(fileContent)) {
+          parsed = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId, exchangeRates);
+        } else {
+          parsed = await PokerCSVParser.parseCSV(fileContent, userPlatformId, exchangeRates);
+        }
+      } catch (parseError) {
+        return res.status(400).json({ message: 'Erro ao processar arquivo', error: clientErrorDetail(parseError) ?? 'Erro desconhecido' });
+      }
+      if (!parsed || parsed.length === 0) {
+        return res.status(400).json({ message: 'Nenhum torneio válido encontrado no arquivo' });
+      }
+
+      const { analyzeOverview } = await import('../services/overviewAnalysis');
+      const result = analyzeOverview(parsed);
+      // Dado efemero — nada gravado no banco.
+      res.json(result);
+    } catch (error) {
+      console.error('overview.analyze failed:', error);
+      res.status(500).json({ message: 'Erro ao analisar o arquivo' });
+    }
+  });
+
+  app.get('/api/library/highlights', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const site = (req.query.site as string) || undefined;
+      res.json(await storage.listSavedHighlights(userId, site));
+    } catch (error) {
+      res.status(500).json({ message: 'Erro ao listar highlights' });
+    }
+  });
+
+  app.post('/api/library/highlights', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const { site, familyKey, groupName, buyInTier, type, metrics, reasons, source } = req.body ?? {};
+      if (!site || !familyKey) {
+        return res.status(400).json({ message: 'site e familyKey sao obrigatorios' });
+      }
+      const row = await storage.saveHighlight({ userId, site, familyKey, groupName, buyInTier, type, metrics, reasons, source });
+      res.json(row);
+    } catch (error) {
+      console.error('highlights.save failed:', error);
+      res.status(500).json({ message: 'Erro ao salvar highlight' });
+    }
+  });
+
+  app.delete('/api/library/highlights/:id', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const ok = await storage.deleteHighlight(userId, req.params.id);
+      if (!ok) return res.status(404).json({ message: 'Highlight nao encontrado' });
+      res.json({ message: 'Removido' });
+    } catch (error) {
+      res.status(500).json({ message: 'Erro ao remover highlight' });
+    }
+  });
 }
 
 // ============================================================================

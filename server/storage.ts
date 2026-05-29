@@ -203,6 +203,7 @@ import { ensureLibraryEntryForPlannedSafe } from "./services/libraryAutoPopulate
 import { groupTournaments, stripNameNoise, canonicalBuyIn, type GroupedFamily, type GroupedSpecific } from "./services/libraryGrouping";
 import { confidenceGradeForVolume, MIN_GROUP_VISIBLE, FAMILY_GROUP_FLOOR } from "@shared/library-grades";
 import { computeLibraryInsights, type DimensionBucket, type Insight } from "./insights/libraryInsights";
+import { savedTournamentHighlights } from "@shared/schema";
 
 // Utility function to build period conditions with custom date range support
 function buildPeriodCondition(period: string, filters: any) {
@@ -3801,6 +3802,72 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       enriched += counts.reduce((a, b) => a + b, 0);
     }
     return enriched;
+  }
+
+  // === Sprint library-evolution Fase 5: highlights salvos (familias fixadas) ===
+
+  async listSavedHighlights(userId: string, site?: string): Promise<any[]> {
+    try {
+      const conds: any[] = [eq(savedTournamentHighlights.userId, userId)];
+      if (site) conds.push(eq(savedTournamentHighlights.site, site));
+      return await db
+        .select()
+        .from(savedTournamentHighlights)
+        .where(and(...conds))
+        .orderBy(desc(savedTournamentHighlights.createdAt));
+    } catch (error) {
+      console.error("listSavedHighlights failed:", error);
+      return [];
+    }
+  }
+
+  async saveHighlight(input: {
+    userId: string;
+    site: string;
+    familyKey: string;
+    groupName?: string;
+    buyInTier?: string;
+    type?: string;
+    metrics?: any;
+    reasons?: any;
+    source?: string;
+  }): Promise<any> {
+    // Idempotente: dedup por (userId, familyKey) — atualiza o snapshot se ja existe.
+    const [row] = await db
+      .insert(savedTournamentHighlights)
+      .values({
+        id: nanoid(),
+        userId: input.userId,
+        site: input.site,
+        familyKey: input.familyKey,
+        groupName: input.groupName ?? null,
+        buyInTier: input.buyInTier ?? null,
+        type: input.type ?? null,
+        metrics: input.metrics ?? null,
+        reasons: input.reasons ?? null,
+        source: input.source ?? "overview",
+      })
+      .onConflictDoUpdate({
+        target: [savedTournamentHighlights.userId, savedTournamentHighlights.familyKey],
+        set: {
+          groupName: input.groupName ?? null,
+          metrics: input.metrics ?? null,
+          reasons: input.reasons ?? null,
+          site: input.site,
+          buyInTier: input.buyInTier ?? null,
+          type: input.type ?? null,
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  async deleteHighlight(userId: string, id: string): Promise<boolean> {
+    const deleted = await db
+      .delete(savedTournamentHighlights)
+      .where(and(eq(savedTournamentHighlights.id, id), eq(savedTournamentHighlights.userId, userId)))
+      .returning({ id: savedTournamentHighlights.id });
+    return deleted.length > 0;
   }
 
   // Planned tournament operations
