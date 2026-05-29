@@ -154,7 +154,7 @@ function MaxLateControl({
           ? 'flex items-center justify-center gap-1 w-full h-10 px-2 rounded text-xs font-semibold border-2 border-amber-500 bg-gradient-to-r from-amber-600/60 to-amber-700/60 text-amber-100 hover:from-amber-500/80 hover:to-amber-600/80 hover:text-white shadow-lg transition-all duration-200'
           : 'inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-medium border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 shrink-0'}
       >
-        <Hourglass className="w-3 h-3" />
+        <Hourglass className={block ? 'w-4 h-4 text-amber-300' : 'w-3 h-3'} />
         Max Late
       </button>
       {showPicker && (
@@ -169,13 +169,17 @@ function MaxLateControl({
               data-testid={`live-maxlate-picker-${id}`}
               value={pickerValue}
               onChange={(e) => setPickerValue(e.target.value)}
-              className="bg-gray-800 border border-gray-600 rounded text-[10px] text-white px-1 py-0.5"
+              className={block
+                ? 'bg-gray-700 border border-amber-500/60 rounded text-sm font-semibold text-white px-2 py-1 h-9 w-28 [color-scheme:dark]'
+                : 'bg-gray-700 border border-amber-500/60 rounded text-xs text-white px-1.5 py-1 [color-scheme:dark]'}
             />
             <button
               type="button"
               data-testid={`live-maxlate-confirm-${id}`}
               onClick={handleConfirm}
-              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-emerald-600 text-white hover:bg-emerald-500"
+              className={block
+                ? 'inline-flex items-center justify-center h-9 px-3 rounded text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-500'
+                : 'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-emerald-600 text-white hover:bg-emerald-500'}
             >
               OK
             </button>
