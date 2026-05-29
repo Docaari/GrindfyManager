@@ -124,6 +124,31 @@ function setupFetchMock(bucketsResponse = makeBucketsAggregateResponse()) {
         }),
       };
     }
+    if (typeof url === 'string' && url.includes('/api/variance/history-aggregate')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          groups: [
+            {
+              name: 'High PKO', tier: 'high', type: 'PKO',
+              buyIn: 215, field: 1800, roi: 0.09, countPerWeek: 4,
+              count: 48, isPKO: true, source: 'historical' as const, lowSample: false,
+            },
+            {
+              name: 'Mid Vanilla', tier: 'mid', type: 'Vanilla',
+              buyIn: 55, field: 800, roi: 0.13, countPerWeek: 8,
+              count: 96, isPKO: false, source: 'historical' as const, lowSample: false,
+            },
+          ],
+          meta: {
+            profileLetter: 'historical', weeks: 12, daysInProfile: 0,
+            tournamentsPerWeek: 12, weeklyInvestment: 7560,
+            from: '2026-02-28', to: '2026-05-29',
+          },
+        }),
+      };
+    }
     return { ok: true, status: 200, json: async () => ({}) };
   });
 }
@@ -649,6 +674,65 @@ describe('AggregationWizard (RF-07)', () => {
       const payload = onRun.mock.calls[0][0];
       expect(payload.groups[0].placesPaidPct).toBeCloseTo(0.20, 5);
       expect(payload.groups[0].rakePct).toBeCloseTo(0.07, 5);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // VR-CALC-2 — import do historico CSV (fonte alternativa)
+  // -------------------------------------------------------------------------
+
+  describe('fonte: grade planejada vs meu historico', () => {
+    it('deve renderizar toggle de fonte com "Grade planejada" default', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      expect(AggregationWizard).not.toBeNull();
+
+      const { render, screen } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard),
+        ),
+      );
+
+      expect(screen.getByTestId('aggregation-source-toggle')).toBeInTheDocument();
+      expect(screen.getByTestId('source-planned')).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByTestId('source-history')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('ao trocar para "Meu historico" deve buscar history-aggregate e exibir period chips', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      expect(AggregationWizard).not.toBeNull();
+
+      const { render, screen, fireEvent, waitFor } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard),
+        ),
+      );
+
+      fireEvent.click(screen.getByTestId('source-history'));
+
+      // period chips aparecem
+      await waitFor(() => {
+        expect(screen.getByTestId('hist-period-30')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('hist-period-7')).toBeInTheDocument();
+      expect(screen.getByTestId('hist-period-365')).toBeInTheDocument();
+
+      // tabela carrega do historico (High PKO / Mid Vanilla do mock)
+      await waitFor(() => {
+        expect(screen.getByTestId('aggregation-table')).toBeInTheDocument();
+      });
+      const histCall = mockFetch.mock.calls.find(
+        (c: any) => typeof c[0] === 'string' && c[0].includes('/api/variance/history-aggregate'),
+      );
+      expect(histCall).toBeTruthy();
+      expect(histCall[0]).toContain('lastDays=30');
     });
   });
 

@@ -5,6 +5,7 @@ import {
   ALLOWED_PROFILE_LETTERS,
   DEFAULT_PLAYERS_AVG,
 } from "../../shared/primedopeDefaults";
+import { buildHistoryAggregate } from "../services/historyAggregate";
 
 const router = Router();
 
@@ -273,6 +274,83 @@ router.get(
       });
     } catch (err) {
       console.error("[variance] buckets-aggregate failed", err);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /history-aggregate (VR-CALC-2) — import do histórico CSV por período
+//   Query: from=YYYY-MM-DD&to=YYYY-MM-DD  OU  lastDays=7|30|90|365
+// ---------------------------------------------------------------------------
+
+const ALLOWED_LAST_DAYS = [7, 30, 90, 365];
+const MAX_WINDOW_DAYS = 730;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function toIsoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+router.get(
+  "/history-aggregate",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const userId = userIdFrom(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const lastDaysStr = req.query.lastDays as string | undefined;
+    const fromStr = req.query.from as string | undefined;
+    const toStr = req.query.to as string | undefined;
+    const weeksStr = req.query.weeks as string | undefined;
+    const weeks = weeksStr && VALID_WEEKS.includes(Number(weeksStr))
+      ? Number(weeksStr)
+      : 12;
+
+    let from: string;
+    let to: string;
+
+    if (lastDaysStr) {
+      const n = Number(lastDaysStr);
+      if (!ALLOWED_LAST_DAYS.includes(n)) {
+        return res
+          .status(400)
+          .json({ message: "lastDays deve ser 7, 30, 90 ou 365" });
+      }
+      const now = new Date();
+      to = toIsoDate(now);
+      from = toIsoDate(new Date(now.getTime() - n * 86400_000));
+    } else if (fromStr && toStr) {
+      if (!DATE_RE.test(fromStr) || !DATE_RE.test(toStr)) {
+        return res
+          .status(400)
+          .json({ message: "from/to devem ser YYYY-MM-DD" });
+      }
+      if (fromStr > toStr) {
+        return res.status(400).json({ message: "from deve ser <= to" });
+      }
+      const spanDays =
+        (Date.parse(toStr) - Date.parse(fromStr)) / 86400_000;
+      if (spanDays > MAX_WINDOW_DAYS) {
+        return res
+          .status(400)
+          .json({ message: `janela máxima ${MAX_WINDOW_DAYS} dias` });
+      }
+      from = fromStr;
+      to = toStr;
+    } else {
+      return res.status(400).json({
+        message: "informe lastDays OU (from + to)",
+      });
+    }
+
+    try {
+      const result = await buildHistoryAggregate({ userId, from, to, weeks });
+      return res.json(result);
+    } catch (err) {
+      console.error("[variance] history-aggregate failed", err);
       return res.status(500).json({ message: "Internal server error" });
     }
   },
