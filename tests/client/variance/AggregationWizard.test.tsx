@@ -617,8 +617,8 @@ describe('AggregationWizard (RF-07)', () => {
       expect(screen.getByTestId('rake-input-0')).toBeInTheDocument();
       // ITM default 15%
       expect((screen.getByTestId('itm-input-0') as HTMLInputElement).value).toBe('15');
-      // Rake default 0%
-      expect((screen.getByTestId('rake-input-0') as HTMLInputElement).value).toBe('0');
+      // Rake default 7% (media MTT GGPoker — founder 2026-05-29)
+      expect((screen.getByTestId('rake-input-0') as HTMLInputElement).value).toBe('7');
     });
 
     it('deve converter percent da UI para decimal no payload de simulacao', async () => {

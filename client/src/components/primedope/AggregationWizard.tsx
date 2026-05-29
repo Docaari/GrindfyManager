@@ -44,7 +44,9 @@ interface AggGroup {
 }
 
 const DEFAULT_ITM = 0.15;
-const DEFAULT_RAKE = 0;
+// Rake default = média MTT da GGPoker (#1 site). GG cobra ~5-9% conforme buy-in
+// (maior buy-in = rake menor); 7% é o meio representativo. Founder 2026-05-29.
+const DEFAULT_RAKE = 0.07;
 
 interface AggMeta {
   profileLetter: string;
@@ -74,6 +76,9 @@ interface AggregationWizardProps {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const intFmt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+
+/** decimal (0.07) -> string percent ("7") sem ruido de float IEEE754. */
+const pctStr = (dec: number) => String(Math.round(dec * 1e6) / 1e4);
 
 function InfoTip({ text }: { text: string }) {
   return (
@@ -509,7 +514,7 @@ export default function AggregationWizard({
                     <th className="px-3 py-2.5 text-right font-medium">
                       <span className="inline-flex items-center justify-end">
                         Rake %
-                        <InfoTip text="Taxa do site sobre o buy-in (ex: $100+$9 = 9%). Entra no CUSTO real e na calibracao do edge (ADR-216). Prize pool = field x buy-in (rake fora). Default 0." />
+                        <InfoTip text="Taxa do site sobre o buy-in (ex: $100+$9 = 9%). Entra no CUSTO real e na calibracao do edge (ADR-216). Prize pool = field x buy-in (rake fora). Default 7% (media MTT GGPoker; GG cobra ~5-9% conforme buy-in)." />
                       </span>
                     </th>
                     <th className="px-3 py-2.5 text-right font-medium">
@@ -609,11 +614,11 @@ export default function AggregationWizard({
                               inputMode="decimal"
                               value={
                                 rawInputs[`rake-${i}`] ??
-                                (
-                                  (editedGroups?.[i]?.rakePct ??
+                                pctStr(
+                                  editedGroups?.[i]?.rakePct ??
                                     g.rakePct ??
-                                    DEFAULT_RAKE) * 100
-                                ).toString()
+                                    DEFAULT_RAKE,
+                                )
                               }
                               onChange={(e) =>
                                 handleGroupEdit(i, "rake", e.target.value)
@@ -655,11 +660,11 @@ export default function AggregationWizard({
                               inputMode="decimal"
                               value={
                                 rawInputs[`itm-${i}`] ??
-                                (
-                                  (editedGroups?.[i]?.placesPaidPct ??
+                                pctStr(
+                                  editedGroups?.[i]?.placesPaidPct ??
                                     g.placesPaidPct ??
-                                    DEFAULT_ITM) * 100
-                                ).toString()
+                                    DEFAULT_ITM,
+                                )
                               }
                               onChange={(e) =>
                                 handleGroupEdit(i, "itm", e.target.value)

@@ -52,7 +52,34 @@ Botão **"Importar do histórico"** na calculadora. Usa os torneios que o usuár
 - Falta: **filtro de período** (hoje agrega tudo) + agrupamento por **família** (hoje por tier×type) + `field` médio real por grupo.
 
 ### 1.5 Dependência crítica (BLOQUEIO)
-- A definição final de "família" e o shape dos dados de Torneios **ainda estão sendo ajustados** por agente paralelo. Não implementar Feature A até a página Torneios + upload estabilizarem o contrato de agrupamento.
+- A definição final de "família" e o shape dos dados de Torneios **ainda estão sendo ajustados** por agente paralelo. O motor `server/services/libraryGrouping.ts` (`groupTournaments()` → `GroupedFamily[]`, chave `site|buyInTier|type` + specifics aninhados) existe mas **NÃO está em main** (uncommitted). Não implementar Feature A até esse contrato landar em main.
+
+### 1.6 Design detalhado VR-CALC-2 (PRONTO — implementar quando os contratos alinharem)
+
+Plano concreto, decidido com founder 2026-05-29 ("só planejar agora"). Duas sessões em paralelo; esta calculadora entra **depois** que Torneios + Upload estabilizam.
+
+**Decisão de agrupamento (resolve Q em aberto §4.1):** interim usa `getHistoricalStatsByUser` (tier×type, **já em main**, estável) pra destravar sem depender do paralelo; quando `libraryGrouping.groupTournaments` landar em main, **trocar a fonte** pro agrupamento por família (site|tier|type) — contrato `GroupedFamily[]` já mapeia 1:1 pra `AggGroup`.
+
+**Decisão de UX (resolve Q §4.2):** import é **modo alternativo não-destrutivo** — toggle no topo do `AggregationWizard`: `[Grade planejada]` (atual, default) vs `[Meu histórico]`. Trocar pra "Meu histórico" troca a fonte dos buckets; edições inline (buy-in/rake/ITM/ROI) continuam por sessão.
+
+**Backend — novo endpoint** `GET /api/variance/history-aggregate`:
+- Query: `from?=YYYY-MM-DD` + `to?=YYYY-MM-DD` **OU** `lastDays?=7|30|90|365`. Sem período → erro 400 (forçar escolha explícita).
+- Auth: `requireAuth`. Fonte: `tournaments WHERE grind_session_id IS NULL` (regra §6.1 — histórico, não sessão) + `date BETWEEN from AND to`.
+- Agrupamento: interim tier×type (SQL existente + cláusula de período); futuro família via `groupTournaments`.
+- Por grupo computar: `buyIn` médio (USD; FX→USD antes — memory/feedback_grind_live_fx lesson #6), `field` médio real, `roi` ajustado (`SUM(prize)/NULLIF(SUM(buyIn)+downswing,0)`), `count` no período, `isPKO` (do type), `placesPaidPct`/`rakePct` defaults (15%/7% GG) — ou **derivar ITM real** do histórico (posições pagas observadas) como upgrade.
+- Resposta: mesmo shape `{ groups: AggGroup[], meta }` que `buckets-aggregate` (wizard consome sem mudança).
+- Cache: padrão `app.locals._varianceCache` + invalidação no upload (já existe `invalidateHistoricalStatsCache`).
+- Zod: reaproveitar ranges; período validado (from<=to, janela máx ex. 730 dias).
+
+**Frontend** (`AggregationWizard`): toggle de fonte + period picker (date range OU chips últimos N dias) quando "Meu histórico". `useQuery` key inclui `from/to/lastDays`. Empty state: "Nenhum torneio no período — importe CSV em /upload ou ajuste o período".
+
+**Amostra mínima (resolve Q §4.4):** reusar `lowSample` < 20 por grupo (badge "n baixo" já existe). Grupos abaixo do piso entram mas com aviso de baixa confiança no ROI.
+
+**Vantagem sobre PrimeDope:** ROI + field + buy-in vêm de **dados reais do upload** do jogador, não estimativa manual. É o diferencial central da ferramenta.
+
+**Testes previstos:** endpoint (período filtra corretamente, FX→USD, §6.1 exclui sessão, ROI por grupo, empty), UI (toggle troca fonte, period picker, empty state, payload mantém shape).
+
+**Não inclui (fica VR-CALC-3+):** família grouping fino (espera paralelo), payout real derivado do CSV, satélite/PKO bounty.
 
 ---
 
@@ -63,11 +90,11 @@ Founder: *"a ferramenta é muito fraca nesse aspecto sobre poker"*. A engine usa
 ### 2.1 Campos que faltam na UI (engine já suporta — quick win)
 | Campo | Estado | Ação |
 |-------|--------|------|
-| **Rake %** (`rakePct`, D7) | Existe na engine mas **só reportado**, NÃO subtraído do EV; ausente na UI | Expor input + decidir se entra no cálculo (ver 2.2) |
-| **ITM % / places paid** (`placesPaidPct`, D6) | Existe na engine, default fixo 0.15; ausente na UI | Expor input por grupo (slider 10–25%) |
+| ~~**Rake %**~~ ✅ ADR-216 | Editável por torneio na UI; entra no custo + calibração; default 7% (GG) | FEITO |
+| ~~**ITM % / places paid**~~ ✅ ADR-216 | Editável por torneio na UI; default 15% | FEITO |
 
 ### 2.2 Leaks de math reais (precisam pesquisa + correção)
-1. **Rake não reduz o prize pool.** A engine assume prize pool = `field × buyIn`. Real: prize pool = `field × (buyIn − rake)`. Ex.: $109 = $100 jogo + $9 rake → prize pool é 9% menor. Hoje o EV está **superestimado**. Decisão: `rakePct` deve abater o pool, não só virar relatório. **(LEAK confirmado)**
+1. ~~**Rake não reduz o prize pool.**~~ ✅ RESOLVIDO (ADR-216). Modelo PrimeDope/MTTDB: prize pool = `field × buyIn` (buyIn = contribuição ao pool), cost = `buyIn × (1+rake)`, calibração `target=(1+rake)(1+ROI)`. ROI segue líquido, sem double-count.
 2. **Satellite mapeado como Vanilla** (`normalizeType` em `variance.ts:68` faz `Satellite→Vanilla`). Satélite tem payout **flat** (N assentos de valor igual) — variância e EV completamente diferentes de payout power-law. **(LEAK confirmado)** — precisa modo de payout "satélite" (flat seats).
 3. **PKO/bounty cru.** Hoje só achata `alpha −0.3`. Real PKO: ~50% do buy-in vai pra pool de bounties; EV de bounty é fluxo separado (bounties coletados ∝ eliminações ∝ skill/stack), progressivo dobra a cada KO. Subestima upside e variância de PKO. Precisa modelar **bounty como componente de EV separado**.
 4. **Re-entry / rebuy / add-on não modelados.** Afetam: investimento real (multiplica buy-in), tamanho de field efetivo, variância. Add-on já é mapeado→Vanilla (perde info).
