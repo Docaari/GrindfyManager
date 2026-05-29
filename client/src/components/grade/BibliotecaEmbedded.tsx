@@ -57,8 +57,15 @@ class LocalErrorBoundary extends React.Component<
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-  componentDidCatch() {
-    // Swallow — biblioteca opcional. Producao: no-op; logs ja capturam.
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // MEDIUM-5: console.warn em vez de no-op silencioso. Biblioteca opcional
+    // (fallback null), mas debug em prod fica visivel sem quebrar UI.
+    try {
+      // eslint-disable-next-line no-console
+      console.warn("[BibliotecaEmbedded] ErrorBoundary caught:", error, info?.componentStack);
+    } catch {
+      /* ignore */
+    }
   }
   render() {
     if (this.state.hasError) return null;

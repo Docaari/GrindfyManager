@@ -453,6 +453,10 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
     [dayOfWeek, profileLetter, setErrorToast],
   );
 
+  // HIGH-5: pending mutation IDs por tournamentId. Monotonic counter resolve
+  // rapid clicks fora de ordem — so o request com ID mais alto persiste UI/emit.
+  // Falha ou stale (request mais antigo) e silenciosamente descartada.
+  const priorityDispatchIdRef = React.useRef<Record<string, number>>({});
   const mutatePriority = React.useCallback(
     async (tournamentId: string, newPriority: 1 | 2 | 3) => {
       // Optimistic — aplica imediato no UI.
@@ -460,10 +464,20 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
         ...prev,
         [tournamentId]: newPriority,
       }));
+      // HIGH-5: incrementa dispatch ID para este torneio + snapshot local.
+      const prevDispatch = priorityDispatchIdRef.current[tournamentId] ?? 0;
+      const myDispatch = prevDispatch + 1;
+      priorityDispatchIdRef.current[tournamentId] = myDispatch;
       try {
         await apiRequest("PUT", `/api/planned-tournaments/${tournamentId}`, {
           prioridade: newPriority,
         });
+        // HIGH-5: se um click mais recente ja disparou outro PUT (myDispatch
+        // nao e mais o mais alto), descartamos resultado (stale). UI fica com
+        // valor do click mais recente; refetch eventual confirma.
+        if (priorityDispatchIdRef.current[tournamentId] !== myDispatch) {
+          return;
+        }
         try {
           queryClient.invalidateQueries?.({
             queryKey: ["day-detail", profileLetter, dayOfWeek],
@@ -485,7 +499,11 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
           priority: newPriority,
         });
       } catch {
-        // Rollback overlay em caso de falha.
+        // HIGH-5: rollback apenas se este request ainda e o mais recente.
+        // Stale errors nao mexem em overrides (click mais novo ja sobrescreveu).
+        if (priorityDispatchIdRef.current[tournamentId] !== myDispatch) {
+          return;
+        }
         setPriorityOverrides((prev) => {
           const { [tournamentId]: _, ...rest } = prev;
           return rest;
