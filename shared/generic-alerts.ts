@@ -147,6 +147,18 @@ export class SessionAlertManager {
   }
 
   /**
+   * Get every alert currently in the manager (regardless of fired/dismissed),
+   * sorted by triggerAt ascending. Read-only snapshot — callers must not mutate
+   * the returned objects. Used by replaceMaxLateAlert (ADR-214 D4) to find and
+   * remove every `type==='tournament'` alert of a given tournamentId.
+   */
+  getAllAlerts(): SessionAlert[] {
+    return Array.from(this.alerts.values()).sort(
+      (a, b) => a.triggerAt.getTime() - b.triggerAt.getTime(),
+    );
+  }
+
+  /**
    * Get all active alerts (not fired, not dismissed), sorted by triggerAt ascending.
    */
   getActiveAlerts(): SessionAlert[] {

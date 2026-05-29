@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlayCircle, Clock, Coins, Edit, X, Undo2, UserPlus, Trophy, Bell, CheckCircle, Plus } from "lucide-react";
+import { PlayCircle, Clock, Coins, Edit, X, Undo2, UserPlus, Trophy, Bell, CheckCircle, Plus, Flame, Hourglass } from "lucide-react";
 import { calculateLateRegDeadline, formatStack, getLateRegColor } from "@/lib/lateRegUtils";
 import { formatBuyIn, getCurrencyForSite } from "@shared/platform-currency";
 import {
@@ -32,6 +32,157 @@ function getRegDeadlineLabel(time?: string | null, lateRegMinutes?: number | nul
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
+// =============================================================================
+// Sprint grind-live-detail-parity (ADR-214 D8) — sub-render compartilhado de
+// prioridade + chip Max Late + toggle/picker, consumido por Upcoming/Registered/
+// Completed. Fonte unica de verdade visual (zero JSX duplicado triplo).
+// =============================================================================
+
+// hh 00-23, mm 00-59 (rejeita "99:99", "24:00", "20:60").
+const HHMM_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * prioridade resolvida (default Media=2) + flags de border/opacity + borderClass
+ * pronto (Alta=barra vermelha esquerda, Baixa=opacity-90, Media=sem classe).
+ * Consumido por RegisteredCard + UpcomingCard (zero ternario duplicado).
+ */
+function resolvePriority(tournament: any): {
+  prioridade: number;
+  isHigh: boolean;
+  isLow: boolean;
+  borderClass: string;
+} {
+  const prioridade = Number(tournament?.prioridade) || 2;
+  const isHigh = prioridade === 1;
+  const isLow = prioridade === 3;
+  const borderClass = isHigh ? 'border-l-4 border-l-red-500' : isLow ? 'opacity-90' : '';
+  return { prioridade, isHigh, isLow, borderClass };
+}
+
+/** registrationTime como string nao-vazia, ou null. */
+function getMaxLateValue(tournament: any): string | null {
+  const v = tournament?.registrationTime;
+  return typeof v === 'string' && v.trim() !== '' ? v : null;
+}
+
+/** Badge de prioridade Alta (Flame "Alta") — paridade DayDetailZoom:1241-1250. */
+function PriorityBadge({ tournament }: { tournament: any }) {
+  const { isHigh } = resolvePriority(tournament);
+  if (!isHigh) return null;
+  return (
+    <span
+      data-testid={`live-tournament-priority-badge-${tournament.id}`}
+      className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-red-500/20 text-red-300 border border-red-500/40 shrink-0"
+      title="Prioridade alta"
+    >
+      <Flame className="w-2.5 h-2.5" />
+      Alta
+    </span>
+  );
+}
+
+/** Chip Max Late (Hourglass + registrationTime) — paridade DayDetailZoom:1270-1280. */
+function MaxLateChip({ tournament }: { tournament: any }) {
+  const value = getMaxLateValue(tournament);
+  if (!value) return null;
+  return (
+    <span
+      data-testid={`live-tournament-maxlate-${tournament.id}`}
+      className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono tabular-nums bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0"
+      title={`Reg final ${value}`}
+    >
+      <Hourglass className="w-2.5 h-2.5" />
+      {value}
+    </span>
+  );
+}
+
+/**
+ * Toggle + picker de Max Late (RF-03/RF-06). Montado apenas em Upcoming/Registered.
+ *
+ * - registrationTime presente -> toggle clica = OFF -> onMaxLateChange(id, null).
+ * - registrationTime ausente -> toggle clica = abre picker (input time) + confirm.
+ *   - confirm HH:MM valido -> onMaxLateChange(id, "HH:MM").
+ *   - confirm invalido -> erro inline (live-maxlate-error-{id}), nao chama.
+ */
+function MaxLateControl({
+  tournament,
+  onMaxLateChange,
+}: {
+  tournament: any;
+  onMaxLateChange: (id: string, value: string | null) => void;
+}) {
+  const id = tournament.id;
+  const hasMaxLate = getMaxLateValue(tournament) != null;
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerValue, setPickerValue] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleToggle = () => {
+    if (hasMaxLate) {
+      // OFF -> limpa (null explicito, lesson #43).
+      onMaxLateChange(id, null);
+      return;
+    }
+    // ON sem valor -> abre picker.
+    setError(null);
+    setPickerValue('');
+    setShowPicker(true);
+  };
+
+  const handleConfirm = () => {
+    if (!HHMM_RE.test(pickerValue)) {
+      setError('Horario invalido (use HH:MM)');
+      return;
+    }
+    setError(null);
+    setShowPicker(false);
+    onMaxLateChange(id, pickerValue);
+  };
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        data-testid={`live-maxlate-toggle-${id}`}
+        onClick={handleToggle}
+        title={hasMaxLate ? 'Desligar Max Late' : 'Definir Max Late'}
+        className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-medium border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 shrink-0"
+      >
+        <Hourglass className="w-2.5 h-2.5" />
+        Max Late
+      </button>
+      {showPicker && (
+        <span className="inline-flex items-center gap-1">
+          <input
+            type="time"
+            data-testid={`live-maxlate-picker-${id}`}
+            value={pickerValue}
+            onChange={(e) => setPickerValue(e.target.value)}
+            className="bg-gray-800 border border-gray-600 rounded text-[10px] text-white px-1 py-0.5"
+          />
+          <button
+            type="button"
+            data-testid={`live-maxlate-confirm-${id}`}
+            onClick={handleConfirm}
+            className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-medium bg-emerald-600 text-white hover:bg-emerald-500"
+          >
+            OK
+          </button>
+        </span>
+      )}
+      {error && (
+        <span
+          data-testid={`live-maxlate-error-${id}`}
+          className="text-[9px] text-red-400"
+        >
+          {error}
+        </span>
+      )}
+    </span>
+  );
+}
+
 interface TournamentCardRegisteredProps {
   mode: 'registered';
   tournament: any;
@@ -54,6 +205,8 @@ interface TournamentCardRegisteredProps {
   onToggleSelect?: (id: string) => void;
   // Add-on + Re-entry (ADR-014)
   onAddOnTaken?: (tournamentId: string, value: boolean) => void;
+  // Sprint grind-live-detail-parity (RF-06) — toggle/picker Max Late (rebuy).
+  onMaxLateChange?: (id: string, value: string | null) => void;
 }
 
 interface TournamentCardUpcomingProps {
@@ -70,6 +223,8 @@ interface TournamentCardUpcomingProps {
   onToggleSelect?: (id: string) => void;
   // Sprint Alarmes 2.0 — botao unico Alerta abre TournamentAlertDialog com torneio pre-selecionado.
   onOpenTournamentAlert?: (tournamentId: string) => void;
+  // Sprint grind-live-detail-parity (RF-03) — toggle/picker Max Late.
+  onMaxLateChange?: (id: string, value: string | null) => void;
 }
 
 interface TournamentCardCompletedProps {
@@ -102,10 +257,11 @@ function RegisteredCard({
   onPriorityClickCycle, onUpdatePriority, setEditingPriority,
   onSetRegistrationData, onSetMaxLateStates, updateIsPending,
   isSelected, onToggleSelect,
-  onAddOnTaken,
+  onAddOnTaken, onMaxLateChange,
 }: TournamentCardRegisteredProps) {
   const guaranteedValue = getGuaranteedValue(tournament);
   const [showResultDialog, setShowResultDialog] = useState(false);
+  const { isLow, borderClass: priorityBorder } = resolvePriority(tournament);
   const isSatellite = tournament?.type === 'Satellite';
   const currency = getCurrencyForSite(tournament.site || '');
   const addOnState = getAddOnButtonState(tournament, updateIsPending);
@@ -119,7 +275,7 @@ function RegisteredCard({
     : null;
 
   return (
-    <div className={`tournament-card tournament-registered pt-[2px] pb-[2px] ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
+    <div className={`tournament-card tournament-registered pt-[2px] pb-[2px] ${priorityBorder} ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
       {/* #2 + #43: Selection checkbox moved to right, with aria-label */}
       {onToggleSelect && (
         <input
@@ -157,10 +313,15 @@ function RegisteredCard({
                 <span className="text-red-400 text-xs ml-1">(sem horario)</span>
               )}
             </div>
-            <div className="font-medium text-white text-sm truncate ml-6">{generateTournamentName(tournament)}</div>
+            <div className={`font-medium text-sm truncate ml-6 ${isLow ? 'text-gray-400' : 'text-white'}`}>{generateTournamentName(tournament)}</div>
           </div>
           {/* Item 3: Badges in one line */}
-          <div className="flex gap-1 flex-wrap text-xs">
+          <div className="flex gap-1 flex-wrap text-xs items-center">
+            <PriorityBadge tournament={tournament} />
+            <MaxLateChip tournament={tournament} />
+            {onMaxLateChange && (
+              <MaxLateControl tournament={tournament} onMaxLateChange={onMaxLateChange} />
+            )}
             <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
               {tournament.site}
             </Badge>
@@ -452,9 +613,10 @@ function UpcomingCard({
   tournament, registered,
   onRegister, onRegisterWithTicket, onEdit, onDelete, queryClient,
   isSelected, onToggleSelect,
-  onOpenTournamentAlert,
+  onOpenTournamentAlert, onMaxLateChange,
 }: TournamentCardUpcomingProps) {
   const guaranteedValue = getGuaranteedValue(tournament);
+  const { isLow, borderClass: priorityBorder } = resolvePriority(tournament);
 
   // Sprint Tickets-2 (RF-05) — payment dialog state
   const ticketMatches = useTicketMatchesForTournament(tournament);
@@ -496,7 +658,7 @@ function UpcomingCard({
     : null;
 
   return (
-    <div className={`tournament-card tournament-upcoming mt-[6px] mb-[6px] ml-[0px] mr-[0px] pt-[0px] pb-[0px] relative ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
+    <div className={`tournament-card tournament-upcoming mt-[6px] mb-[6px] ml-[0px] mr-[0px] pt-[0px] pb-[0px] relative ${priorityBorder} ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
       {/* #2 + #43: Selection checkbox moved to right, with aria-label */}
       {onToggleSelect && (
         <input
@@ -527,9 +689,14 @@ function UpcomingCard({
                 <span className="text-red-400 text-xs ml-1">(sem horario)</span>
               )}
             </div>
-            <div className="font-semibold text-white ml-7 truncate">{generateTournamentName(tournament)}</div>
+            <div className={`font-semibold ml-7 truncate ${isLow ? 'text-gray-400' : 'text-white'}`}>{generateTournamentName(tournament)}</div>
           </div>
-          <div className="flex gap-1 text-xs mb-2 ml-7">
+          <div className="flex gap-1 text-xs mb-2 ml-7 flex-wrap items-center">
+            <PriorityBadge tournament={tournament} />
+            <MaxLateChip tournament={tournament} />
+            {onMaxLateChange && (
+              <MaxLateControl tournament={tournament} onMaxLateChange={onMaxLateChange} />
+            )}
             <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
               {tournament.site}
             </Badge>
@@ -723,7 +890,9 @@ function CompletedCard({
             </div>
             <div className="font-semibold text-white ml-7 truncate">{generateTournamentName(tournament)}</div>
           </div>
-          <div className="flex gap-1 text-xs mb-2 ml-7">
+          <div className="flex gap-1 text-xs mb-2 ml-7 flex-wrap items-center">
+            <PriorityBadge tournament={tournament} />
+            <MaxLateChip tournament={tournament} />
             <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
               {tournament.site}
             </Badge>

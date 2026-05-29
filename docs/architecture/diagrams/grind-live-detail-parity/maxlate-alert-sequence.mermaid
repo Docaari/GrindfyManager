@@ -1,0 +1,69 @@
+%% Sprint grind-live-detail-parity — Max Late alert sequence (ADR-214 D2/D3/D4/D5/D6/D7)
+%% Client-side, transiente por sessao. Reusa SessionAlertManager + tick checkAlerts 30s.
+sequenceDiagram
+    actor User as Jogador (sessao ao vivo)
+    participant Card as UpcomingCard / RegisteredCard
+    participant Helper as helpers.ts<br/>(resolveTournamentEndpoint)
+    participant Mut as useMutation<br/>(registrationTime)
+    participant Cache as React Query Cache
+    participant API as PUT /api/{session|planned}-tournaments/:id
+    participant Mgr as SessionAlertManager<br/>(shared/generic-alerts.ts)
+    participant Tick as setInterval checkAlerts 30s<br/>(GrindSessionLive.tsx)
+    participant TTS as fireAlert (Web Speech)
+
+    rect rgb(232, 245, 233)
+    Note over User,TTS: Branch ON — agenda alerta 2min antes do Max Late
+    User->>Card: Toggle Max Late ON
+    Card->>Card: Abre picker (input HH:MM)
+    User->>Card: Confirma "20:00"
+    Card->>Card: Valida regex ^\d{1,2}:\d{2}$
+    Card->>Helper: resolveTournamentEndpoint(id)
+    Helper-->>Card: "/api/session-tournaments/sess-1"<br/>(ou /planned-tournaments/abc se id planned-)
+    Card->>Mut: mutate({ registrationTime: "20:00" })
+    Mut->>Cache: onMutate — snapshot + setQueryData (optimistic, D6)
+    Mut->>API: PUT { registrationTime: "20:00" }
+    API-->>Mut: 200 OK
+    Mut->>Card: replaceMaxLateAlert(mgr, tournament, { now }) (D4)
+    Card->>Mgr: remove alertas type=tournament do tournamentId (dedup, Q-E)
+    Card->>Card: triggerAt = 20:00 - 2min = 19:58 (D5)
+    Card->>Mgr: addTournamentAlert({ tournamentId, triggerAt:19:58, label, narrationText })
+    Mut->>Cache: onSettled — invalidate ['/api/session-tournaments'] + ['/api/planned-tournaments'] (D6)
+    end
+
+    rect rgb(255, 248, 225)
+    Note over Tick,TTS: Disparo — reusa tick existente (30s)
+    Tick->>Mgr: getAlertsToFire()  (filtra !fired && !dismissed && triggerAt<=now)
+    Mgr-->>Tick: [alerta Max Late]  (quando relogio passa 19:58)
+    Tick->>TTS: fireAlert(narrationText)
+    TTS-->>User: Narracao TTS "Max Late: {nome} ({site})"
+    Tick->>Mgr: markFired(alertId)
+    end
+
+    rect rgb(255, 235, 238)
+    Note over User,Mgr: Branch OFF — limpa alerta (Q-D, D7)
+    User->>Card: Toggle Max Late OFF
+    Card->>Mut: mutate({ registrationTime: null })  (null explicito, lesson #43 / D7)
+    Mut->>Cache: onMutate — snapshot + setQueryData(null) (optimistic)
+    Mut->>API: PUT { registrationTime: null }
+    API-->>Mut: 200 OK
+    Mut->>Card: replaceMaxLateAlert(mgr, { registrationTime:null }) (D4)
+    Card->>Mgr: remove alertas type=tournament do tournamentId (so remove, nao agenda)
+    Mut->>Cache: onSettled — invalidate as duas query keys
+    end
+
+    rect rgb(236, 239, 241)
+    Note over Card,Mgr: Branch janela perdida — triggerAt no passado (D5)
+    User->>Card: Confirma "20:00" as 19:59 (faltam <2min)
+    Card->>Card: triggerAt = 19:58 <= now  -> janela perdida
+    Card->>Mgr: remove alertas antigos do tournamentId (so remove)
+    Card->>Card: NAO chama addTournamentAlert (nao agenda)
+    end
+
+    rect rgb(255, 224, 224)
+    Note over Mut,Cache: Branch PUT falha — rollback (D6)
+    Mut->>API: PUT { registrationTime: "20:00" }
+    API-->>Mut: 5xx / network error
+    Mut->>Cache: onError — restaura snapshot (rollback do optimistic)
+    Mut->>Card: erro inline; alerta NAO e agendado/alterado
+    Mut->>Cache: onSettled — invalidate as duas query keys
+    end
