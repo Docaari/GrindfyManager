@@ -252,6 +252,9 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
       }
     }, 0);
     return () => clearTimeout(t);
+    // libraryCollapsed intencional fora do deps — aplica SO no mount do modal
+    // (open false→true). Mudancas posteriores de collapsed sao handled pelo
+    // onCollapse/onExpand do Panel direto, sem precisar re-run deste effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -276,6 +279,13 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
       .map(([site, count]) => ({ site, count }))
       .sort((a, b) => b.count - a.count || a.site.localeCompare(b.site));
   }, [data?.list, data?.volume]);
+
+  // MEDIUM-4: estabiliza array de nomes pra props dos dialogs (evita re-render
+  // dispensavel — novo array a cada render mesmo com availableSites estavel).
+  const knownSites = React.useMemo(
+    () => availableSites.map((s) => s.site),
+    [availableSites],
+  );
 
   // Slot -> lista. Bucketing por hora cheia (truncar minutos). Horario original
   // preservado em item.time pro display. Torneios sem hora valida vao pro
@@ -439,7 +449,8 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
         return null;
       }
     },
-    [dayOfWeek, profileLetter],
+    // MEDIUM-3: setErrorToast incluso por disciplina (estavel via useCallback).
+    [dayOfWeek, profileLetter, setErrorToast],
   );
 
   const mutatePriority = React.useCallback(
@@ -486,25 +497,58 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
   );
 
   // Limpa overrides quando data nova reflete os valores ja persistidos.
+  // Short-circuit (D3): se NENHUMA chave precisar ser droppada, retorna prev
+  // (mesma identidade de objeto) — evita re-render desnecessario.
   React.useEffect(() => {
-    if (Object.keys(priorityOverrides).length === 0) return;
-    const list: any[] = Array.isArray(data?.list) ? data.list : [];
-    const next: Record<string, number> = {};
-    for (const [id, p] of Object.entries(priorityOverrides)) {
-      const found = list.find((x) => x?.id === id);
-      if (!found) {
-        next[id] = p;
-        continue;
+    if (!data?.list) return;
+    setPriorityOverrides((prev) => {
+      if (Object.keys(prev).length === 0) return prev;
+      const list: any[] = Array.isArray(data.list) ? data.list : [];
+      let changed = false;
+      const next: Record<string, number> = {};
+      for (const [id, p] of Object.entries(prev)) {
+        const found = list.find((x) => x?.id === id);
+        if (!found) {
+          next[id] = p;
+          continue;
+        }
+        if (Number(found.prioridade) !== p) {
+          next[id] = p;
+        } else {
+          changed = true; // server confirmou, drop
+        }
       }
-      if (Number(found.prioridade) !== p) next[id] = p;
-    }
-    if (Object.keys(next).length !== Object.keys(priorityOverrides).length) {
-      setPriorityOverrides(next);
-    }
-  }, [data?.list, priorityOverrides]);
+      return changed ? next : prev;
+    });
+  }, [data?.list]);
 
   const mutateMove = React.useCallback(
     async (tournamentId: string, fromSlot: string, toSlot: string) => {
+      // HIGH-3: snapshot pra rollback otimistico em erro.
+      // HIGH-2: invalidateQueries centralizado dentro do wrapper.
+      const queryKey = ["day-detail", profileLetter, dayOfWeek];
+      const snapshot = (() => {
+        try {
+          return queryClient.getQueryData?.(queryKey as any);
+        } catch {
+          return undefined;
+        }
+      })();
+      // Optimistic — atualiza time do item no cache day-detail.
+      try {
+        const cur: any = queryClient.getQueryData?.(queryKey as any);
+        if (cur && Array.isArray(cur?.list)) {
+          const nextList = cur.list.map((t: any) =>
+            t?.id === tournamentId ? { ...t, time: toSlot } : t,
+          );
+          queryClient.setQueryData?.(queryKey as any, {
+            ...cur,
+            list: nextList,
+          });
+        }
+      } catch {
+        /* ignore */
+      }
       try {
         await apiRequest("PUT", `/api/planned-tournaments/${tournamentId}`, {
           time: toSlot,
@@ -517,10 +561,31 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
           toSlot,
         });
       } catch {
+        // HIGH-3: rollback restaura snapshot anterior.
+        try {
+          if (snapshot !== undefined) {
+            queryClient.setQueryData?.(queryKey as any, snapshot);
+          }
+        } catch {
+          /* ignore */
+        }
         setErrorToast("Falha ao salvar — restaurado");
+      } finally {
+        // HIGH-2: invalidate canonico aqui (cobre DnD + menu Move inline).
+        try {
+          queryClient.invalidateQueries?.({ queryKey: queryKey as any });
+          queryClient.invalidateQueries?.({
+            queryKey: ["planned-tournaments"],
+          });
+          queryClient.invalidateQueries?.({
+            queryKey: ["/api/planned-tournaments"],
+          });
+        } catch {
+          /* ignore */
+        }
       }
     },
-    [dayOfWeek],
+    [dayOfWeek, profileLetter, setErrorToast],
   );
 
   const mutateRemove = React.useCallback(
@@ -616,19 +681,34 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
       if (srcId === "biblioteca-embedded" && dstId.startsWith("zoom-cell-")) {
         const slot = parseSlotFromDroppableId(dstId);
         if (!slot) return;
-        // Library cards: dragabbleId = lib-card-X — usamos placeholder
-        // (componente real teria reference ao libraryCard via state). Para
-        // testes apenas precisamos chamar POST + emitir evento.
-        await mutateAdd(
-          {
-            id: draggableId.replace(/^lib-card-/, "") || draggableId,
-            name: "Sunday Million",
-            site: "PokerStars",
-            buyIn: "5.50",
-          },
-          slot,
-          "drag",
-        );
+        // HIGH-1: resolver libraryCard REAL via cache em vez do hardcoded.
+        // Padrao alinhado com GradePlanner.handleDragEnd (linha ~648).
+        const cardId =
+          draggableId.replace(/^lib-card-/, "").replace(/^library-/, "") ||
+          draggableId;
+        let libraryCard: any = null;
+        try {
+          const lib = queryClient.getQueryData?.([
+            "/api/tournament-library",
+          ]) as any[] | undefined;
+          if (Array.isArray(lib)) {
+            libraryCard = lib.find((t: any) => t?.id === cardId) ?? null;
+          }
+        } catch {
+          /* ignore */
+        }
+        if (!libraryCard) {
+          // Fallback: cache vazio ou card nao encontrado (ex: testes que mockam
+          // queryClient = []). Usa shape minimo derivado do draggableId pra
+          // permitir POST nao trivial; backend valida campos minimos.
+          libraryCard = {
+            id: cardId,
+            name: "",
+            site: "",
+            buyIn: "0",
+          };
+        }
+        await mutateAdd(libraryCard, slot, "drag");
         return;
       }
 
@@ -1284,31 +1364,12 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                               onClick={async () => {
                                                 setMoveMenuId(null);
                                                 if (isCurrent) return;
+                                                // HIGH-2: mutateMove ja invalida queries internamente.
                                                 await mutateMove(
                                                   item.id,
                                                   slot,
                                                   targetSlot,
                                                 );
-                                                try {
-                                                  queryClient.invalidateQueries?.(
-                                                    {
-                                                      queryKey: [
-                                                        "day-detail",
-                                                        profileLetter,
-                                                        dayOfWeek,
-                                                      ],
-                                                    },
-                                                  );
-                                                  queryClient.invalidateQueries?.(
-                                                    {
-                                                      queryKey: [
-                                                        "planned-tournaments",
-                                                      ],
-                                                    },
-                                                  );
-                                                } catch {
-                                                  /* ignore */
-                                                }
                                               }}
                                               className={
                                                 "px-1.5 py-1 text-[10px] font-mono rounded transition-colors " +
@@ -1479,7 +1540,7 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
         suggestedSlot={
           findFirstFreeSlot(plannedSlots, timeSlots) ?? timeSlots[0] ?? "20:00"
         }
-        knownSites={availableSites.map((s) => s.site)}
+        knownSites={knownSites}
       />
 
       {/* Edit dialog (manage-2) */}
@@ -1491,7 +1552,7 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
         dayOfWeek={dayOfWeek}
         profileLetter={profileLetter}
         tournament={editTarget}
-        knownSites={availableSites.map((s) => s.site)}
+        knownSites={knownSites}
       />
     </DialogPrimitive.Root>
   );

@@ -1,0 +1,84 @@
+sequenceDiagram
+    actor User
+    participant Chip as TournamentChip
+    participant Menu as PriorityMenu<br/>(data-zoom-menu)
+    participant DZ as DayDetailZoom
+    participant State as priorityOverrides<br/>useState
+    participant TE as activity-telemetry
+    participant API as PUT /api/planned-tournaments/:id
+    participant QC as queryClient
+    participant Hook as useDayDetail
+    participant DB as PostgreSQL<br/>planned_tournaments
+
+    Note over User,DB: --- Fase 1: Click no badge abre menu ---
+
+    User->>Chip: click PriorityBadge (id=abc, prioridade atual=2)
+    Chip->>DZ: setOpenMenuId('priority-abc')
+    DZ->>Chip: re-render com className z-40 (D5)
+    DZ->>Menu: renderiza dropdown z-50 (D5)<br/>data-zoom-menu marker
+    Menu-->>User: 3 opcoes (1 Alta, 2 Media, 3 Baixa)
+
+    Note over User,DB: --- Fase 2: Optimistic overlay (D3) ---
+
+    User->>Menu: click target "1" (Alta)
+    Menu->>DZ: handlePrioritySet(id='abc', newPriority=1)
+    DZ->>State: setPriorityOverrides(prev => ({...prev, abc: 1}))
+    State-->>DZ: { abc: 1 }
+    DZ->>Chip: re-render com effectivePriority = overrides[abc] ?? item.prioridade = 1
+    Chip-->>User: badge VERMELHO (Alta) — optimistic instantaneo
+
+    DZ->>TE: safeEmit('coach.day_zoom_priority_set',<br/>{tournamentId:'abc', dayOfWeek:5, profileLetter:'A', prioridade:1})
+    DZ->>API: PUT /api/planned-tournaments/abc<br/>{ prioridade: 1 }
+
+    Note over User,DB: --- Fase 3: Click-away fecha menu (D4) ---
+
+    User->>DZ: mousedown fora do menu
+    DZ->>DZ: document.mousedown handler<br/>target.closest('[data-zoom-menu]') === null
+    DZ->>State: setOpenMenuId(null)
+    DZ->>Menu: unmount
+
+    Note over User,DB: --- Fase 4: Server responde + refetch ---
+
+    API->>DB: UPDATE planned_tournaments SET prioridade=1<br/>WHERE id='abc' RETURNING *
+    DB-->>API: row { id:'abc', prioridade:1, ... }
+    API-->>DZ: 200 OK
+    DZ->>QC: queryClient.invalidateQueries(['day-detail', 'A', 5])
+    QC->>Hook: re-fetch
+    Hook->>API: GET /api/grade/day-detail/A/5
+    API->>DB: SELECT pt.prioridade, pt.registration_time, ... (D2 + 6f0396bc)
+    DB-->>API: list [{id:'abc', prioridade:1, ...}, ...]
+    API-->>Hook: 200 { list: [...], volume: [...] }
+    Hook-->>DZ: data atualizado
+
+    Note over User,DB: --- Fase 5: Cleanup overlay quando server confirma (D3 short-circuit) ---
+
+    DZ->>DZ: useEffect dispara com deps [data?.list]
+    DZ->>State: setPriorityOverrides(prev => ...)
+    State->>State: for item in data.list:<br/>if item.id in prev && data.list[i].prioridade === prev[item.id]:<br/>delete next[item.id]
+    State->>State: changed=true → return next<br/>(short-circuit se changed=false — evita re-render — RF-SMELL-03 fix)
+    State-->>DZ: {} (overlay limpo)
+    DZ->>Chip: re-render com effectivePriority = item.prioridade = 1 (do server)
+    Chip-->>User: badge VERMELHO (Alta) — sem flash (mesmo valor)
+
+    Note over User,DB: --- Fase 6: Error path (PUT 4xx) ---
+
+    rect rgba(255,200,200,0.2)
+        Note over API,DZ: Se API retorna 4xx (validation, network, etc):
+        API-->>DZ: 400 { message: 'invalid priority' }
+        DZ->>State: setPriorityOverrides(prev => omit(prev, 'abc')) ROLLBACK
+        DZ->>Chip: re-render com item.prioridade = 2 (valor original)
+        DZ->>TE: toast erro
+    end
+
+    Note over User,DB: --- Fase 7: Reabrir modal (RF-FIX-01 — prioridade persiste) ---
+
+    User->>DZ: fecha modal (Esc)
+    User->>DZ: reabre (click Detalhes do mesmo dia)
+    DZ->>Hook: useDayDetail re-mount
+    Hook->>API: GET /api/grade/day-detail/A/5
+    API->>DB: SELECT pt.prioridade (D2 — agora vem no payload)
+    DB-->>API: { prioridade: 1, ... }
+    API-->>Hook: 200
+    Hook-->>DZ: data.list[i].prioridade = 1
+    DZ->>Chip: render badge VERMELHO (persistido — bug fix 6f0396bc validado por TDD)
+    Chip-->>User: prioridade preservada cross-reopen

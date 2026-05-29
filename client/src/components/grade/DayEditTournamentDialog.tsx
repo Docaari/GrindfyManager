@@ -12,6 +12,7 @@ import { X, Pencil } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { safeEmit } from "@/lib/safe-emit";
 import { DAYS_PT } from "@/lib/days-pt";
+import { useTournamentDialogForm } from "./useTournamentDialogForm";
 
 const TYPE_OPTIONS = ["Vanilla", "PKO", "Mystery", "Satellite", "Bounty"];
 const SPEED_OPTIONS = ["Normal", "Turbo", "Hyper"];
@@ -53,14 +54,9 @@ export function DayEditTournamentDialog(
     onSaved,
   } = props;
 
-  const [name, setName] = React.useState("");
-  const [site, setSite] = React.useState("");
-  const [buyIn, setBuyIn] = React.useState("");
-  const [time, setTime] = React.useState("");
-  const [maxLate, setMaxLate] = React.useState("");
-  const [guaranteed, setGuaranteed] = React.useState("");
-  const [type, setType] = React.useState("Vanilla");
-  const [speed, setSpeed] = React.useState("Normal");
+  // MEDIUM-1: form state consolidado via useTournamentDialogForm.
+  const { state: form, patch, reset } = useTournamentDialogForm();
+  const { name, site, buyIn, time, maxLate, guaranteed, type, speed } = form;
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const hydratedIdRef = React.useRef<string | null>(null);
@@ -68,30 +64,35 @@ export function DayEditTournamentDialog(
   React.useEffect(() => {
     if (open && tournament && hydratedIdRef.current !== tournament.id) {
       hydratedIdRef.current = tournament.id;
-      setName(tournament.name ?? "");
-      setSite(tournament.site ?? "");
       const initialBuyIn =
         tournament.buyinUsd != null
           ? String(tournament.buyinUsd)
           : tournament.buyIn != null
             ? String(tournament.buyIn)
             : "";
-      setBuyIn(initialBuyIn);
-      setTime(tournament.time ?? "");
-      setMaxLate(tournament.maxLate ?? tournament.registrationTime ?? "");
+      // guaranteedUsd (FX-converted) tem prioridade; fallback guaranteed (raw)
+      // se FX indisponivel. Payload PUT envia "guaranteed" sempre — server
+      // normaliza via nativeToUsd.
       const initialGtd =
         tournament.guaranteedUsd != null
           ? String(tournament.guaranteedUsd)
           : tournament.guaranteed != null
             ? String(tournament.guaranteed)
             : "";
-      setGuaranteed(initialGtd);
-      setType(tournament.type ?? "Vanilla");
-      setSpeed(tournament.speed ?? "Normal");
+      reset({
+        name: tournament.name ?? "",
+        site: tournament.site ?? "",
+        buyIn: initialBuyIn,
+        time: tournament.time ?? "",
+        maxLate: tournament.maxLate ?? tournament.registrationTime ?? "",
+        guaranteed: initialGtd,
+        type: tournament.type ?? "Vanilla",
+        speed: tournament.speed ?? "Normal",
+      });
       setError(null);
     }
     if (!open) hydratedIdRef.current = null;
-  }, [open, tournament]);
+  }, [open, tournament, reset]);
 
   const canSubmit =
     !!tournament &&
@@ -106,24 +107,27 @@ export function DayEditTournamentDialog(
     try {
       const buyInValue =
         buyIn.trim() === "" ? "0" : buyIn.replace(",", ".").trim();
-      const guaranteedValue =
-        guaranteed.trim() === ""
-          ? "0"
-          : guaranteed.replace(",", ".").trim();
+      // HIGH-4: PATCH semantic — quando user limpa o campo guaranteed, omitir
+      // do payload pra NAO sobrescrever valor existente com "0". Server trata
+      // ausencia de key como "nao mudar".
+      const guaranteedTrimmed = guaranteed.trim();
       const maxLateValue =
         maxLate.trim() !== "" && /^\d{1,2}:\d{1,2}$/.test(maxLate.trim())
           ? maxLate.trim()
           : null;
-      await apiRequest("PUT", `/api/planned-tournaments/${tournament.id}`, {
+      const payload: Record<string, unknown> = {
         name: name.trim(),
         site: site.trim(),
         time,
         buyIn: buyInValue,
-        guaranteed: guaranteedValue,
         registrationTime: maxLateValue,
         type,
         speed,
-      });
+      };
+      if (guaranteedTrimmed !== "") {
+        payload.guaranteed = guaranteedTrimmed.replace(",", ".");
+      }
+      await apiRequest("PUT", `/api/planned-tournaments/${tournament.id}`, payload);
       try {
         queryClient.invalidateQueries?.({
           queryKey: ["day-detail", profileLetter, dayOfWeek],
@@ -203,7 +207,7 @@ export function DayEditTournamentDialog(
                 type="text"
                 data-testid="day-zoom-edit-input-name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => patch({ name: e.target.value })}
                 placeholder="Ex: Sunday Million"
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40 outline-none transition"
                 autoFocus
@@ -219,7 +223,7 @@ export function DayEditTournamentDialog(
                   list="day-zoom-edit-sites"
                   data-testid="day-zoom-edit-input-site"
                   value={site}
-                  onChange={(e) => setSite(e.target.value)}
+                  onChange={(e) => patch({ site: e.target.value })}
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40 outline-none transition"
                 />
                 <datalist id="day-zoom-edit-sites">
@@ -237,7 +241,7 @@ export function DayEditTournamentDialog(
                   inputMode="decimal"
                   data-testid="day-zoom-edit-input-buyin"
                   value={buyIn}
-                  onChange={(e) => setBuyIn(e.target.value)}
+                  onChange={(e) => patch({ buyIn: e.target.value })}
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40 outline-none transition"
                 />
               </div>
@@ -251,7 +255,7 @@ export function DayEditTournamentDialog(
                   type="time"
                   data-testid="day-zoom-edit-input-maxlate"
                   value={maxLate}
-                  onChange={(e) => setMaxLate(e.target.value)}
+                  onChange={(e) => patch({ maxLate: e.target.value })}
                   placeholder="opcional"
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-amber-500 focus:ring-1 focus:ring-amber-500/40 outline-none transition"
                 />
@@ -265,7 +269,7 @@ export function DayEditTournamentDialog(
                   inputMode="decimal"
                   data-testid="day-zoom-edit-input-guaranteed"
                   value={guaranteed}
-                  onChange={(e) => setGuaranteed(e.target.value)}
+                  onChange={(e) => patch({ guaranteed: e.target.value })}
                   placeholder="0"
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40 outline-none transition"
                 />
@@ -280,7 +284,7 @@ export function DayEditTournamentDialog(
                   type="time"
                   data-testid="day-zoom-edit-input-time"
                   value={time}
-                  onChange={(e) => setTime(e.target.value)}
+                  onChange={(e) => patch({ time: e.target.value })}
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40 outline-none transition"
                 />
               </div>
@@ -289,7 +293,7 @@ export function DayEditTournamentDialog(
                 <select
                   data-testid="day-zoom-edit-input-type"
                   value={type}
-                  onChange={(e) => setType(e.target.value)}
+                  onChange={(e) => patch({ type: e.target.value })}
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40 outline-none transition"
                 >
                   {TYPE_OPTIONS.map((t) => (
@@ -306,7 +310,7 @@ export function DayEditTournamentDialog(
                 <select
                   data-testid="day-zoom-edit-input-speed"
                   value={speed}
-                  onChange={(e) => setSpeed(e.target.value)}
+                  onChange={(e) => patch({ speed: e.target.value })}
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40 outline-none transition"
                 >
                   {SPEED_OPTIONS.map((s) => (

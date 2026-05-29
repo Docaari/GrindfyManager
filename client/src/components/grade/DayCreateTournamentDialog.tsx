@@ -13,6 +13,7 @@ import { X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { safeEmit } from "@/lib/safe-emit";
 import { DAYS_PT } from "@/lib/days-pt";
+import { useTournamentDialogForm } from "./useTournamentDialogForm";
 
 const COMMON_SITES = [
   "PokerStars",
@@ -56,14 +57,12 @@ export function DayCreateTournamentDialog(
     onSaved,
   } = props;
 
-  const [name, setName] = React.useState("");
-  const [site, setSite] = React.useState(knownSites[0] ?? "");
-  const [buyIn, setBuyIn] = React.useState("");
-  const [time, setTime] = React.useState(suggestedSlot);
-  const [maxLate, setMaxLate] = React.useState("");
-  const [guaranteed, setGuaranteed] = React.useState("");
-  const [type, setType] = React.useState("Vanilla");
-  const [speed, setSpeed] = React.useState("Normal");
+  // MEDIUM-1: form state consolidado via useTournamentDialogForm.
+  const { state: form, patch, reset } = useTournamentDialogForm({
+    site: knownSites[0] ?? "",
+    time: suggestedSlot,
+  });
+  const { name, site, buyIn, time, maxLate, guaranteed, type, speed } = form;
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const openedRef = React.useRef(false);
@@ -72,14 +71,10 @@ export function DayCreateTournamentDialog(
   React.useEffect(() => {
     if (open && !openedRef.current) {
       openedRef.current = true;
-      setName("");
-      setSite(knownSites[0] ?? "");
-      setBuyIn("");
-      setTime(suggestedSlot);
-      setMaxLate("");
-      setGuaranteed("");
-      setType("Vanilla");
-      setSpeed("Normal");
+      reset({
+        site: knownSites[0] ?? "",
+        time: suggestedSlot,
+      });
       setError(null);
       safeEmit("coach.day_zoom_create_open", {
         feature: "day_zoom",
@@ -90,7 +85,7 @@ export function DayCreateTournamentDialog(
     } else if (!open) {
       openedRef.current = false;
     }
-  }, [open, dayOfWeek, profileLetter, suggestedSlot, knownSites]);
+  }, [open, dayOfWeek, profileLetter, suggestedSlot, knownSites, reset]);
 
   const sitesForList = React.useMemo(() => {
     const seen = new Set<string>();
@@ -221,7 +216,7 @@ export function DayCreateTournamentDialog(
                 type="text"
                 data-testid="day-zoom-create-input-name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => patch({ name: e.target.value })}
                 placeholder="Ex: Sunday Million"
                 className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-emerald-500 outline-none"
                 autoFocus
@@ -238,7 +233,7 @@ export function DayCreateTournamentDialog(
                   list="day-zoom-create-sites"
                   data-testid="day-zoom-create-input-site"
                   value={site}
-                  onChange={(e) => setSite(e.target.value)}
+                  onChange={(e) => patch({ site: e.target.value })}
                   placeholder="PokerStars"
                   className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-emerald-500 outline-none"
                 />
@@ -257,7 +252,7 @@ export function DayCreateTournamentDialog(
                   inputMode="decimal"
                   data-testid="day-zoom-create-input-buyin"
                   value={buyIn}
-                  onChange={(e) => setBuyIn(e.target.value)}
+                  onChange={(e) => patch({ buyIn: e.target.value })}
                   placeholder="11.00"
                   className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-emerald-500 outline-none"
                 />
@@ -273,7 +268,7 @@ export function DayCreateTournamentDialog(
                   type="time"
                   data-testid="day-zoom-create-input-time"
                   value={time}
-                  onChange={(e) => setTime(e.target.value)}
+                  onChange={(e) => patch({ time: e.target.value })}
                   className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-emerald-500 outline-none"
                 />
               </div>
@@ -282,7 +277,7 @@ export function DayCreateTournamentDialog(
                 <select
                   data-testid="day-zoom-create-input-type"
                   value={type}
-                  onChange={(e) => setType(e.target.value)}
+                  onChange={(e) => patch({ type: e.target.value })}
                   className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-emerald-500 outline-none"
                 >
                   {TYPE_OPTIONS.map((t) => (
@@ -299,7 +294,7 @@ export function DayCreateTournamentDialog(
                 <select
                   data-testid="day-zoom-create-input-speed"
                   value={speed}
-                  onChange={(e) => setSpeed(e.target.value)}
+                  onChange={(e) => patch({ speed: e.target.value })}
                   className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-emerald-500 outline-none"
                 >
                   {SPEED_OPTIONS.map((s) => (
@@ -320,7 +315,7 @@ export function DayCreateTournamentDialog(
                   type="time"
                   data-testid="day-zoom-create-input-maxlate"
                   value={maxLate}
-                  onChange={(e) => setMaxLate(e.target.value)}
+                  onChange={(e) => patch({ maxLate: e.target.value })}
                   placeholder="opcional"
                   className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-amber-500 outline-none"
                 />
@@ -334,7 +329,7 @@ export function DayCreateTournamentDialog(
                   inputMode="decimal"
                   data-testid="day-zoom-create-input-guaranteed"
                   value={guaranteed}
-                  onChange={(e) => setGuaranteed(e.target.value)}
+                  onChange={(e) => patch({ guaranteed: e.target.value })}
                   placeholder="0"
                   className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-emerald-500 outline-none"
                 />

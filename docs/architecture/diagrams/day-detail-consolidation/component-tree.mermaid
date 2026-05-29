@@ -1,0 +1,138 @@
+graph TB
+    subgraph page["/coach (GradePlanner)"]
+        GP["GradePlanner.tsx<br/><i>page raiz</i>"]
+        DDC["DragDropContext<br/><i>react-beautiful-dnd (heredado)</i>"]
+        WG["WeekGrid.tsx<br/><i>grid 7 colunas</i>"]
+        BP["BibliotecaPanel.tsx<br/><i>847 LoC reusado</i>"]
+        portalDiv["div#dnd-portal-container<br/><i>ref Radix Portal (ADR-210 D3)</i>"]
+    end
+
+    subgraph host["DayDetailHost"]
+        DDH["DayDetailHost.tsx<br/><i>switch ?detail=drawer/zoom</i>"]
+    end
+
+    subgraph zoom["DayDetailZoom (Radix Dialog central)"]
+        DZ["DayDetailZoom.tsx<br/><i>~1500 LoC modal central</i>"]
+
+        subgraph header["Header"]
+            HT["title <i>Sex, Perfil A</i>"]
+            CB["<b style='color:#10b981'>CreateButton (RF-01)</b><br/><i>+ icon, data-testid='day-zoom-create-button'</i>"]
+            XB["CloseButton (Esc)"]
+        end
+
+        subgraph panelLeft["PanelLeft (60% default)"]
+            subgraph kpis["5 KPI Cards"]
+                K1["total"]
+                K2["abi medio"]
+                K3["inv USD"]
+                K4["banca usada"]
+                K5["<b style='color:#10b981'>median-field (RF-09)</b><br/><i>data-testid='day-zoom-card-median-field'</i>"]
+            end
+
+            FC["<b style='color:#10b981'>DayPlannedFilterChips (RF-06)</b><br/><i>155 LoC, chip Todas + por site</i>"]
+
+            subgraph slots["Slots HH:00 (bucketing D1)"]
+                S1["13:00 (slot)"]
+                S2["14:00 (slot)"]
+                Sn["20:00 (slot)"]
+            end
+
+            subgraph chip["TournamentChip (group relative, z-40 quando menu aberto — D5)"]
+                CName["name + time<br/><i>display original D1</i>"]
+                CDX["<b style='color:#10b981'>DeleteX (RF-03)</b><br/><i>hover-reveal opacity-0 group-hover:opacity-100</i>"]
+                CEdit["<b style='color:#10b981'>EditButton (RF-02)</b><br/><i>Pencil icon</i>"]
+                CMove["<b style='color:#10b981'>MoveButton (RF-04)</b><br/><i>Arrow icon</i>"]
+                CPrio["<b style='color:#10b981'>PriorityBadge (RF-05)</b><br/><i>Star/Flag colorido</i>"]
+                CMaxL["<b style='color:#10b981'>MaxLateBadge (RF-08)</b><br/><i>Hourglass amber</i>"]
+                CGtd["<b style='color:#10b981'>GtdBadge (RF-09)</b><br/><i>GTD $X ~N</i>"]
+            end
+
+            subgraph menus["Menus (z-50 — D5)"]
+                PM["<b style='color:#10b981'>PriorityMenu (RF-05)</b><br/><i>data-zoom-menu, 3 opcoes 1/2/3</i>"]
+                MM["<b style='color:#10b981'>MoveMenu (RF-04)</b><br/><i>data-zoom-menu, HH:MM targets</i>"]
+            end
+        end
+
+        subgraph panelRight["PanelRight (40% default, COLAPSADA — D6)"]
+            BE["<b style='color:#10b981'>BibliotecaEmbedded (RF-07)</b><br/><i>wrapper 150 LoC, collapsible</i>"]
+            TZ["TrashZone DnD<br/><i>preservada (RF-03 redundancia)</i>"]
+            CollBtn["<b style='color:#10b981'>Collapse/Expand button</b><br/><i>localStorage dayZoom.library.collapsed</i>"]
+        end
+    end
+
+    subgraph overlays["Overlays (Radix Dialog aninhado)"]
+        CD["<b style='color:#10b981'>DayCreateTournamentDialog (RF-01)</b><br/><i>378 LoC, 9 campos</i>"]
+        ED["<b style='color:#10b981'>DayEditTournamentDialog (RF-02)</b><br/><i>353 LoC, hidrata via hydratedIdRef</i>"]
+    end
+
+    subgraph telemetria["activity-telemetry (ADR-207)"]
+        TE["safeEmit('coach.day_zoom_*')<br/><i>9 eventos shippados</i>"]
+    end
+
+    subgraph backend["Backend (zero novo — D2 reuse registration_time)"]
+        EP1["GET /api/grade/day-detail/:p/:d<br/><i>SELECT prioridade + registration_time (6f0396bc)</i>"]
+        EP2["POST /api/planned-tournaments<br/><i>payload.registrationTime = formData.maxLate</i>"]
+        EP3["PUT /api/planned-tournaments/:id<br/><i>Edit + Move + Priority</i>"]
+        EP4["DELETE /api/planned-tournaments/:id<br/><i>via mutateRemove</i>"]
+    end
+
+    GP -->|"envelopa"| DDC
+    DDC --> WG
+    DDC --> BP
+    DDC --> portalDiv
+    GP -->|"renderiza condicional ?detail"| DDH
+    DDH -->|"mode=zoom"| DZ
+
+    DZ --> header
+    DZ --> panelLeft
+    DZ --> panelRight
+
+    header --> HT
+    header --> CB
+    header --> XB
+
+    panelLeft --> kpis
+    panelLeft --> FC
+    panelLeft --> slots
+
+    slots --> S1
+    slots --> S2
+    slots --> Sn
+
+    S1 --> chip
+    S2 --> chip
+    Sn --> chip
+
+    chip --> CName
+    chip --> CDX
+    chip --> CEdit
+    chip --> CMove
+    chip --> CPrio
+    chip --> CMaxL
+    chip --> CGtd
+
+    chip --> menus
+    menus --> PM
+    menus --> MM
+
+    panelRight --> BE
+    panelRight --> TZ
+    BE --> CollBtn
+
+    CB -->|"click abre"| CD
+    CEdit -->|"click abre"| ED
+
+    CB -.->|"telemetria"| TE
+    CDX -.->|"telemetria"| TE
+    CEdit -.->|"telemetria"| TE
+    CMove -.->|"telemetria"| TE
+    CPrio -.->|"telemetria"| TE
+    FC -.->|"telemetria"| TE
+    BE -.->|"telemetria search (D7)"| TE
+
+    CD -->|"POST"| EP2
+    ED -->|"PUT"| EP3
+    CMove -->|"PUT startTime"| EP3
+    CPrio -->|"PUT prioridade"| EP3
+    CDX -->|"DELETE"| EP4
+    DZ -->|"GET (useDayDetail)"| EP1

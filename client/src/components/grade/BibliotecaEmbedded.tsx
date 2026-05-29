@@ -16,6 +16,7 @@
 // =============================================================================
 
 import * as React from "react";
+import { flushSync } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { X, Filter } from "lucide-react";
 import { safeEmit } from "@/lib/safe-emit";
@@ -92,41 +93,59 @@ function BibliotecaEmbeddedInner({
     contextFilters.format,
   ]);
 
-  // Debounce search 300ms. Emit `coach.day_zoom_search` direto no timer (NAO
-  // via useEffect derivado) para garantir captura sincrona em tests com
-  // vi.useFakeTimers (`advanceTimersByTime` nao aguarda reflow do React).
+  // Debounce search 300ms. Timer SO atualiza `debouncedQuery`; emit acontece
+  // num useEffect derivado de `debouncedQuery` (D7 — evita ref stale com
+  // vi.useFakeTimers + setState dentro do timer callback).
   const allRef = React.useRef<any[]>([]);
   const chipsRef = React.useRef(chips);
   chipsRef.current = chips;
   const lastEmittedQueryRef = React.useRef<string>("");
   React.useEffect(() => {
     const t = setTimeout(() => {
-      setDebouncedQuery(query);
-      if (query.length === 0 && lastEmittedQueryRef.current === "") return;
-      if (query === lastEmittedQueryRef.current) return;
-      lastEmittedQueryRef.current = query;
-      // Compute count inline para evitar stale ref (reviewer HIGH-2 debounce fix).
-      const c = chipsRef.current;
-      let out = allRef.current;
-      if (c.site) out = out.filter((t) => (t.site ?? "").toLowerCase() === String(c.site).toLowerCase());
-      if (typeof c.buyInMin === "number") out = out.filter((t) => parseFloat(t.buyIn ?? "0") >= (c.buyInMin as number));
-      if (typeof c.buyInMax === "number") out = out.filter((t) => parseFloat(t.buyIn ?? "0") <= (c.buyInMax as number));
-      if (c.format) out = out.filter((t) => (t.type ?? "").toLowerCase() === String(c.format).toLowerCase());
-      if (query.trim().length > 0) {
-        const q = query.trim().toLowerCase();
-        out = out.filter((t) => (t.name ?? t.site ?? "").toLowerCase().includes(q));
+      // flushSync garante que o useEffect derivado (que emite safeEmit) rode
+      // sincronicamente dentro do mesmo tick do timer — compat com tests que
+      // usam vi.useFakeTimers + vi.advanceTimersByTime sem await act().
+      try {
+        flushSync(() => {
+          setDebouncedQuery(query);
+        });
+      } catch {
+        // flushSync pode reclamar dentro de render lifecycle — fallback async.
+        setDebouncedQuery(query);
       }
-      safeEmit("coach.day_zoom_search", {
-        feature: "day_zoom",
-        dayOfWeek,
-        profileLetter,
-        query,
-        resultCount: out.length,
-      });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
+
+  // Emit `coach.day_zoom_search` ao confirmar debouncedQuery. Skip emissao
+  // inicial vazia (mount) + repeticao identica. Filtros computados aqui usam
+  // os valores atuais (chipsRef/allRef) — captura sincrona pos-render.
+  React.useEffect(() => {
+    if (debouncedQuery === lastEmittedQueryRef.current) return;
+    if (debouncedQuery.length === 0 && lastEmittedQueryRef.current === "") {
+      lastEmittedQueryRef.current = debouncedQuery;
+      return;
+    }
+    lastEmittedQueryRef.current = debouncedQuery;
+    const c = chipsRef.current;
+    let out = allRef.current;
+    if (c.site) out = out.filter((t) => (t.site ?? "").toLowerCase() === String(c.site).toLowerCase());
+    if (typeof c.buyInMin === "number") out = out.filter((t) => parseFloat(t.buyIn ?? "0") >= (c.buyInMin as number));
+    if (typeof c.buyInMax === "number") out = out.filter((t) => parseFloat(t.buyIn ?? "0") <= (c.buyInMax as number));
+    if (c.format) out = out.filter((t) => (t.type ?? "").toLowerCase() === String(c.format).toLowerCase());
+    if (debouncedQuery.trim().length > 0) {
+      const q = debouncedQuery.trim().toLowerCase();
+      out = out.filter((t) => (t.name ?? t.site ?? "").toLowerCase().includes(q));
+    }
+    safeEmit("coach.day_zoom_search", {
+      feature: "day_zoom",
+      dayOfWeek,
+      profileLetter,
+      query: debouncedQuery,
+      resultCount: out.length,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQuery]);
 
   const libQuery = useQuery<any[], Error>({
     queryKey: ["/api/tournament-library"],
