@@ -308,6 +308,20 @@ export function registerUploadRoutes(app: Express): void {
                 return acc;
               }, {} as Record<string, number>);
 
+              // Fase 3 (library-evolution): re-import com enriquecimento. Mesmo
+              // sendo duplicatas, se a planilha agora traz duracao/stack-depth
+              // que faltavam, enriquece as linhas existentes (COALESCE — nao
+              // sobrescreve). Best-effort; nunca bloqueia o fluxo de dedup.
+              let enrichedCount = 0;
+              try {
+                enrichedCount = await storage.enrichExistingTournaments(
+                  userPlatformId,
+                  parseResult.duplicateTournaments,
+                );
+              } catch (enrichErr) {
+                console.error('upload.enrich_existing_failed', enrichErr);
+              }
+
               return res.json({
                 status: 'duplicates_found',
                 validTournaments: parseResult.validTournaments,
@@ -315,7 +329,10 @@ export function registerUploadRoutes(app: Express): void {
                 duplicateCount: parseResult.duplicateCount,
                 totalProcessed: parseResult.totalProcessed,
                 duplicatesBySite,
-                message: `Encontrados ${parseResult.duplicateCount} torneios duplicados de ${parseResult.totalProcessed} torneios processados`
+                enrichedCount,
+                message: enrichedCount > 0
+                  ? `Encontrados ${parseResult.duplicateCount} torneios duplicados de ${parseResult.totalProcessed} processados. ${enrichedCount} atualizados com novos dados (duração/stack).`
+                  : `Encontrados ${parseResult.duplicateCount} torneios duplicados de ${parseResult.totalProcessed} torneios processados`
               });
             }
 
@@ -389,6 +406,14 @@ export function registerUploadRoutes(app: Express): void {
             prizePool: tournament.prizePool?.toString() || null,
             reentries: tournament.reentries || 0,
             tournamentId: tournament.tournamentId || null,
+            // Fase 3 (library-evolution): campos novos. deepStack/startingStackBb
+            // vem do enrich (nome); duracao/mesa/estrutura/jogo vem do parser.
+            durationSeconds: tournament.durationSeconds ?? null,
+            playersPerTable: tournament.playersPerTable ?? null,
+            structure: tournament.structure ?? null,
+            gameType: tournament.gameType ?? null,
+            startingStackBb: tournament.startingStackBb ?? enriched.startingStackBb ?? null,
+            deepStack: tournament.deepStack ?? enriched.deepStack ?? false,
           };
         });
 

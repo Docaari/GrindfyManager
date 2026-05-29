@@ -44,6 +44,32 @@ export interface DetectedTypeFields {
   isFlight: boolean;
   allowsAddOn: boolean;
   allowsReentry: boolean;
+  // Sprint library-evolution Fase 3 — profundidade de stack.
+  startingStackBb: number | null;
+  deepStack: boolean;
+}
+
+// >= esse valor de BB inicial conta como deepstack (alem da keyword "deep").
+export const DEEP_STACK_BB_THRESHOLD = 50;
+
+/**
+ * Detecta a profundidade de stack inicial a partir do nome do torneio.
+ * Reconhece "[10BB]", "10 BB", "100bb" e a keyword "deep"/"deepstack".
+ * Tolera null/undefined. startingStackBb = null quando nao ha numero no nome.
+ */
+export function detectStackDepthFromName(
+  name: string | null | undefined,
+): { startingStackBb: number | null; deepStack: boolean } {
+  if (!name || typeof name !== "string") {
+    return { startingStackBb: null, deepStack: false };
+  }
+  const m = name.match(/\[?\s*(\d{1,3})\s*bb\b\s*\]?/i);
+  const startingStackBb = m ? parseInt(m[1], 10) : null;
+  const deepKeyword = /\bdeep\s?stack\b|\bdeep\b/i.test(name);
+  const deepStack =
+    deepKeyword ||
+    (startingStackBb !== null && startingStackBb >= DEEP_STACK_BB_THRESHOLD);
+  return { startingStackBb, deepStack };
 }
 
 /**
@@ -110,10 +136,14 @@ export function enrichTournamentTypeFields(input: TypeDetectionInput): DetectedT
   // Coerencia semantica: type=Add-on -> allowsAddOn=true
   const allowsAddOn = reaFlags.allowsAddOn || type === 'Add-on';
 
+  const { startingStackBb, deepStack } = detectStackDepthFromName(name);
+
   return {
     type,
     isFlight,
     allowsAddOn,
     allowsReentry: reaFlags.allowsReentry,
+    startingStackBb,
+    deepStack,
   };
 }

@@ -204,6 +204,21 @@ export function registerTournamentRoutes(app: Express): void {
     }
   });
 
+  // Fase 2 (library-evolution): insights "Destaques e Vazamentos" — dimensoes
+  // (site/buyIn/type/speed/fieldSize/dia + conjuncoes) vs baseline do jogador.
+  app.get('/api/tournament-library-insights', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const period = req.query.period as string || "all";
+      const filters = parseFiltersParam(req.query.filters);
+
+      const result = await storage.getTournamentLibraryInsights(userId, period, filters);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch tournament library insights" });
+    }
+  });
+
   // Tournament template routes
   app.get('/api/tournament-templates', requireAuth, async (req: any, res) => {
     try {

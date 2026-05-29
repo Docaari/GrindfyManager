@@ -4,7 +4,7 @@ import csv from "csv-parser";
 // prototype-pollution + ReDoS advisories. exceljs is lazy-loaded in parseBodogXLSX
 // (the only .xlsx path) to keep it out of the hot import graph.
 import { detectAddonReaFromName } from "../shared/addon-rea-detector";
-import { detectSatelliteFromName, detectIsFlightFromName } from "../shared/tournament-type-detector";
+import { detectSatelliteFromName, detectIsFlightFromName, detectStackDepthFromName } from "../shared/tournament-type-detector";
 
 export interface ParsedTournament {
   userId: string; // 🎯 ETAPA 2.2: Este campo é preenchido pelo contexto de autenticação, nunca pelos dados CSV
@@ -32,6 +32,73 @@ export interface ParsedTournament {
   addOnCost?: number | null;
   allowsReentry?: boolean;
   maxReentries?: number | null;
+  // Sprint library-evolution Fase 3 — campos antes descartados do Sharkscope.
+  durationSeconds?: number | null;
+  playersPerTable?: number | null;
+  structure?: string | null; // 'NL' | 'PL'
+  gameType?: string | null; // 'Holdem' | 'Omaha'
+  startingStackBb?: number | null;
+  deepStack?: boolean;
+}
+
+/**
+ * Converte uma string de duracao do Sharkscope em segundos. Aceita:
+ *   "4980" (ja em segundos), "1h 23m", "01:23:00" (h:m:s), "83m", "83:00" (m:s).
+ * Retorna null para vazio/invalido (null = desconhecido, distinto de 0).
+ */
+export function parseDurationToSeconds(raw: any): number | null {
+  if (raw === null || raw === undefined) return null;
+  const s = String(raw).trim().toLowerCase();
+  if (s === "") return null;
+
+  // hh:mm:ss ou mm:ss
+  if (/^\d{1,3}(:\d{1,2}){1,2}$/.test(s)) {
+    const parts = s.split(":").map((p) => parseInt(p, 10));
+    if (parts.some((n) => Number.isNaN(n))) return null;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return parts[0] * 60 + parts[1]; // mm:ss
+  }
+
+  // "1h 23m 45s" / "1h23m" / "83m"
+  if (/[hms]/.test(s)) {
+    const h = s.match(/(\d+)\s*h/);
+    const m = s.match(/(\d+)\s*m/);
+    const sec = s.match(/(\d+)\s*s/);
+    if (!h && !m && !sec) return null;
+    return (
+      (h ? parseInt(h[1], 10) * 3600 : 0) +
+      (m ? parseInt(m[1], 10) * 60 : 0) +
+      (sec ? parseInt(sec[1], 10) : 0)
+    );
+  }
+
+  // numero puro = segundos
+  if (/^\d+$/.test(s)) {
+    const n = parseInt(s, 10);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/** Normaliza a estrutura ("No Limit" -> 'NL', "Pot Limit" -> 'PL'). */
+export function normalizeStructure(raw: any): string | null {
+  if (!raw) return null;
+  const s = String(raw).trim().toLowerCase();
+  if (s === "") return null;
+  if (s.includes("pot")) return "PL";
+  if (s.includes("no limit") || s === "nl" || s.includes("no-limit")) return "NL";
+  if (s.includes("fixed") || s.includes("limit")) return "FL";
+  return null;
+}
+
+/** Normaliza o jogo ("H"/"Holdem" -> 'Holdem', "O"/"Omaha" -> 'Omaha'). */
+export function normalizeGame(raw: any): string | null {
+  if (!raw) return null;
+  const s = String(raw).trim().toLowerCase();
+  if (s === "") return null;
+  if (s === "h" || s.includes("hold")) return "Holdem";
+  if (s === "o" || s.includes("omaha") || s.includes("plo")) return "Omaha";
+  return null;
 }
 
 export class PokerCSVParser {
@@ -1130,6 +1197,13 @@ export class PokerCSVParser {
     // Date: prefer "Start Date" (Data de Início), fallback to "Date"
     const dateStr = g('Start Date') || g('Data de Início') || g('Date') || g('Data');
 
+    // Fase 3 (library-evolution): campos antes descartados do Sharkscope.
+    const durationSeconds = parseDurationToSeconds(g('Duration') || g('Duração'));
+    const playersPerTable = this.parseIntSafe(g('Players Per Table') || g('Jogadores por mesa')) || null;
+    const structure = normalizeStructure(g('Structure') || g('Estrutura'));
+    const gameType = normalizeGame(g('Game') || g('Jogo'));
+    const { startingStackBb, deepStack } = detectStackDepthFromName(finalName);
+
     return {
       userId,
       tournamentId: gameId?.toString().trim() || undefined,
@@ -1151,6 +1225,12 @@ export class PokerCSVParser {
       rake,
       convertedToUSD,
       bountyPrize: bountyPrize || undefined,
+      durationSeconds,
+      playersPerTable,
+      structure,
+      gameType,
+      startingStackBb,
+      deepStack,
     };
   }
 

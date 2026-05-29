@@ -364,6 +364,16 @@ export const tournaments = pgTable("tournaments", {
   playersAvg: integer("players_avg"),
   placesPaidAvg: integer("places_paid_avg"),
   rakePct: decimal("rake_pct", { precision: 5, scale: 2 }),
+  // Sprint library-evolution Fase 3 (Migration 0081). Tudo nullable/default —
+  // back-compat: linhas antigas + parsers que nao setam ficam null. null =
+  // "nao veio no CSV" (distinto de 0). duracao habilita $/hora-mesa (Fase 4);
+  // deepStack/startingStackBb sao insights de profundidade.
+  durationSeconds: integer("duration_seconds"),
+  playersPerTable: integer("players_per_table"),
+  structure: varchar("structure"), // 'NL' | 'PL' | null
+  gameType: varchar("game_type"), // 'Holdem' | 'Omaha' | null
+  startingStackBb: integer("starting_stack_bb"),
+  deepStack: boolean("deep_stack").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   templateId: varchar("template_id"),
