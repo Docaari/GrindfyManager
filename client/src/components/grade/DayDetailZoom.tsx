@@ -204,11 +204,14 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
   const libraryPanelRef = React.useRef<ImperativePanelHandle | null>(null);
   const [libraryCollapsed, setLibraryCollapsed] = React.useState<boolean>(
     () => {
-      if (typeof window === "undefined") return false;
+      if (typeof window === "undefined") return true;
       try {
-        return window.localStorage.getItem("dayZoom.libraryCollapsed") === "1";
+        // Default minimizada quando sem preferencia persistida.
+        const v = window.localStorage.getItem("dayZoom.libraryCollapsed");
+        if (v === "0") return false;
+        return true;
       } catch {
-        return false;
+        return true;
       }
     },
   );
@@ -234,14 +237,21 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
     }
   }, [libraryCollapsed, persistLibraryCollapsed]);
 
-  // Aplicar estado collapsed persistido no mount do modal.
+  // Aplicar estado collapsed persistido no mount do modal — defer pra apos
+  // o Panel registrar size interno.
   React.useEffect(() => {
     if (!open) return;
-    const panel = libraryPanelRef.current;
-    if (!panel) return;
-    if (libraryCollapsed) panel.collapse();
-    else panel.expand();
-    // Roda 1x por open=true; ignorar mudanca subsequente do state (toggle ja chama panel direto).
+    const t = setTimeout(() => {
+      const panel = libraryPanelRef.current;
+      if (!panel) return;
+      try {
+        if (libraryCollapsed) panel.collapse();
+        else panel.expand();
+      } catch {
+        /* ignore — panel size nao registrado ainda */
+      }
+    }, 0);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -827,7 +837,7 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
             autoSaveId="dayZoom.split"
             className="flex-1 overflow-hidden"
           >
-            <Panel defaultSize={60} minSize={45} maxSize={75}>
+            <Panel defaultSize={60} minSize={45}>
               <div
                 data-testid="day-zoom-panel-left"
                 className="h-full overflow-y-auto p-5 space-y-4 scroll-smooth"
@@ -1072,12 +1082,12 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                   <span className="text-xs font-bold text-emerald-300 tabular-nums shrink-0">
                                     {formatUsd(item.buyinUsd ?? 0)}
                                   </span>
-                                  {/* Garantido + field estimado */}
+                                  {/* Garantido + field estimado — sempre exibido quando > 0 */}
                                   {typeof item.guaranteedUsd === "number" &&
                                     item.guaranteedUsd > 0 && (
                                       <span
                                         data-testid={`day-zoom-tournament-gtd-${item.id ?? tid}`}
-                                        className="hidden sm:inline-flex items-center gap-0.5 text-[10px] tabular-nums text-amber-200 shrink-0"
+                                        className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] tabular-nums bg-amber-500/10 text-amber-200 border border-amber-500/20 shrink-0"
                                         title={
                                           item.estimatedField
                                             ? `Garantido ${formatUsd(item.guaranteedUsd)} · ~${item.estimatedField} jogadores`
@@ -1086,7 +1096,7 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                       >
                                         GTD {formatUsd(item.guaranteedUsd)}
                                         {item.estimatedField ? (
-                                          <span className="text-gray-500 ml-0.5">
+                                          <span className="text-amber-300/80 ml-0.5">
                                             · ~{item.estimatedField}
                                           </span>
                                         ) : null}
@@ -1336,8 +1346,8 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
             />
             <Panel
               ref={libraryPanelRef}
-              defaultSize={libraryCollapsed ? 4 : 40}
-              minSize={4}
+              defaultSize={40}
+              minSize={20}
               maxSize={55}
               collapsible
               collapsedSize={4}
@@ -1352,20 +1362,21 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
             >
               {libraryCollapsed ? (
                 <div
-                  data-testid="day-zoom-panel-right-collapsed"
-                  className="h-full flex flex-col items-center py-3 bg-gray-950/60 border-l border-gray-800"
+                  data-testid="day-zoom-panel-right"
+                  data-collapsed="true"
+                  className="h-full flex flex-col items-center justify-center gap-4 bg-gray-950/60 border-l border-gray-800"
                 >
                   <button
                     type="button"
                     data-testid="day-zoom-library-expand"
                     onClick={toggleLibrary}
-                    className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-emerald-300 transition-colors"
+                    className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-400 text-emerald-300 hover:text-emerald-200 transition-all duration-150 shadow-md shadow-emerald-900/20 hover:scale-105"
                     aria-label="Expandir biblioteca"
                     title="Expandir biblioteca"
                   >
-                    <PanelRightOpen className="w-4 h-4" />
+                    <PanelRightOpen className="w-5 h-5" />
                   </button>
-                  <div className="mt-3 text-[9px] uppercase tracking-wider text-gray-600 [writing-mode:vertical-rl] rotate-180">
+                  <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold [writing-mode:vertical-rl] rotate-180">
                     Biblioteca
                   </div>
                 </div>
