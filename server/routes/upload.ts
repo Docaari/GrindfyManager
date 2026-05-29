@@ -1118,6 +1118,22 @@ export function registerUploadRoutes(app: Express): void {
       res.status(500).json({ message: 'Erro ao remover highlight' });
     }
   });
+
+  // Fase 6: drill-down — re-deriva ultimos resultados + metricas atuais do
+  // historico do user para a familia salva (reconciliacao via `found`).
+  app.get('/api/library/highlights/:id/details', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const list = await storage.listSavedHighlights(userId);
+      const hl = list.find((h: any) => h.id === req.params.id);
+      if (!hl) return res.status(404).json({ message: 'Highlight nao encontrado' });
+      const details = await storage.getFamilyDetails(userId, hl.familyKey);
+      res.json({ highlight: hl, ...details });
+    } catch (error) {
+      console.error('highlights.details failed:', error);
+      res.status(500).json({ message: 'Erro ao carregar detalhes' });
+    }
+  });
 }
 
 // ============================================================================

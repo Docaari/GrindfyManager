@@ -3870,6 +3870,69 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return deleted.length > 0;
   }
 
+  /**
+   * Fase 6: drill-down de um highlight salvo. Re-deriva do HISTORICO do proprio
+   * jogador (recentResults nao e persistido — vem efemero do Overview) a familia
+   * de `familyKey` e devolve metricas atuais + ultimos resultados (nome, nick,
+   * posicao, field, prize). `found=false` => familia so existe no pool do
+   * Overview, nao no historico do user (card vira informativo — reconciliacao).
+   */
+  async getFamilyDetails(
+    userId: string,
+    familyKey: string,
+  ): Promise<{ found: boolean; metrics: any; recentResults: any[] }> {
+    try {
+      const site = String(familyKey).split("|")[0];
+      const rows = await db
+        .select()
+        .from(tournaments)
+        .where(and(
+          eq(tournaments.userId, userId),
+          isNull(tournaments.grindSessionId),
+          eq(tournaments.site, site),
+        ))
+        .orderBy(desc(tournaments.datePlayed));
+
+      const fam = groupTournaments(rows).find((f) => f.familyKey === familyKey);
+      if (!fam) return { found: false, metrics: null, recentResults: [] };
+
+      const list = fam.tournaments;
+      const num = (v: any) => { const n = parseFloat(String(v ?? 0)); return Number.isFinite(n) ? n : 0; };
+      const volume = list.length;
+      const totalBuyins = list.reduce((s, t) => s + num(t.buyIn), 0);
+      const totalInvested = totalBuyins + list.reduce((s, t) => s + (Number(t.reentries) || 0) * num(t.buyIn), 0);
+      const totalProfit = list.reduce((s, t) => s + num(t.prize), 0);
+      const withDur = list.filter((t) => t.durationSeconds != null && Number(t.durationSeconds) > 0);
+      const totalDur = withDur.reduce((s, t) => s + Number(t.durationSeconds), 0);
+      const profitWithDur = withDur.reduce((s, t) => s + num(t.prize), 0);
+
+      const recentResults = list.slice(0, 15).map((t) => ({
+        name: (t.name ?? "").toString(),
+        playerNick: (t.playerNick ?? null) || null,
+        datePlayed: t.datePlayed ? new Date(t.datePlayed).toISOString() : null,
+        position: t.position ?? null,
+        fieldSize: t.fieldSize ?? null,
+        prize: num(t.prize),
+      }));
+
+      return {
+        found: true,
+        metrics: {
+          volume,
+          roi: totalInvested > 0 ? parseFloat(((totalProfit / totalInvested) * 100).toFixed(2)) : 0,
+          totalProfit: parseFloat(totalProfit.toFixed(2)),
+          avgBuyin: volume > 0 ? parseFloat((totalBuyins / volume).toFixed(2)) : 0,
+          profitPerTableHour: totalDur > 0 ? parseFloat((profitWithDur / (totalDur / 3600)).toFixed(2)) : null,
+          durationCoverage: volume > 0 ? parseFloat((withDur.length / volume).toFixed(2)) : 0,
+        },
+        recentResults,
+      };
+    } catch (error) {
+      console.error("getFamilyDetails failed:", error);
+      return { found: false, metrics: null, recentResults: [] };
+    }
+  }
+
   // Planned tournament operations
   async getPlannedTournaments(userId: string, dayOfWeek?: number): Promise<PlannedTournament[]> {
     
