@@ -11,6 +11,7 @@ import {
   Bookmark,
   Sparkles,
   Repeat,
+  Clock,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -28,6 +29,14 @@ export const STUDIES_NAV_ITEMS: StudiesNavItem[] = [
   { view: 'temas', path: '/estudos/temas', label: 'Temas', icon: BookOpen },
   { view: 'stats', path: '/estudos/stats', label: 'Stats', icon: BarChart3 },
   { view: 'spots', path: '/estudos/spots', label: 'Spots', icon: Bookmark },
+  // Sprint Estudos-Fixes GAP-2: historico de sessoes de estudo.
+  {
+    view: 'sessoes',
+    path: '/estudos/sessoes',
+    label: 'Sessões',
+    shortLabel: 'Sess.',
+    icon: Clock,
+  },
   // Sprint Spot-Anki-Reentry-3 RF-3: rota nova /estudos/reentry.
   {
     view: 'reentry',

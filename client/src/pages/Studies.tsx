@@ -35,6 +35,8 @@ import ThemeDetailView from '@/components/studies/ThemeDetailView';
 import StudySessionPage from '@/components/studies/StudySessionPage';
 import { StatsView } from '@/components/studies/StatsView';
 import { SpotsView } from '@/components/studies/SpotsView';
+// Sprint Estudos-Fixes GAP-2: lista de sessoes de estudo.
+import { SessionsView } from '@/components/studies/SessionsView';
 import { StudiesDashboard } from '@/components/studies/dashboard/StudiesDashboard';
 import { RecommendationsView } from '@/components/studies/recommendations/RecommendationsView';
 // Sprint Spot-Anki-Reentry-3 RF-3: pagina de revisao espacada (Anki-style).
@@ -47,6 +49,7 @@ type ViewKey =
   | 'temas'
   | 'tema-detail'
   | 'sessao-detail'
+  | 'sessoes'
   | 'stats'
   | 'spots'
   | 'recomendacoes'
@@ -107,6 +110,7 @@ function viewFromPath(path: string): ViewKey {
   if (stripped.startsWith('/estudos/temas')) {
     return extractThemeIdFromPath(stripped) ? 'tema-detail' : 'temas';
   }
+  if (stripped.startsWith('/estudos/sessoes')) return 'sessoes';
   if (stripped.startsWith('/estudos/sessao')) {
     return extractSessionIdFromPath(stripped) ? 'sessao-detail' : 'unknown';
   }
@@ -224,6 +228,12 @@ export default function Studies() {
         );
       case 'spots':
         return <SpotsView />;
+      case 'sessoes':
+        return (
+          <div data-testid="studies-view-sessoes-wrap">
+            <SessionsView />
+          </div>
+        );
       case 'recomendacoes':
         return <RecommendationsView />;
       case 'reentry':

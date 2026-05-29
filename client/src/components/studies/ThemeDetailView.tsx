@@ -22,7 +22,7 @@
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { ThemeStatsFocoSection } from '@/components/study-themes/ThemeStatsFocoSection';
@@ -31,6 +31,17 @@ import {
   Collapsible,
   CollapsibleContent,
 } from '@/components/ui/collapsible';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { ThemeFormDialog, type ThemeFormValues } from './ThemeFormDialog';
 
 interface ThemeRow {
   id: string;
@@ -71,6 +82,9 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
   const { toast } = useToast();
   // CRITICAL-1 reviewer: drawer de configuracao de stats foco linkadas ao tema.
   const [pickerOpen, setPickerOpen] = useState(false);
+  // GAP-1 fix: editar (PUT) + deletar (DELETE) tema na nova UI.
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data: themes = [], isLoading } = useQuery<ThemeRow[]>({
     queryKey: ['/api/study-themes'],
@@ -112,6 +126,38 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
     qc.invalidateQueries({ queryKey: ['/api/study-themes'] });
     qc.invalidateQueries({ queryKey: [`/api/themes/${themeId}/stats-summary`] });
   };
+
+  // GAP-1: editar tema via PUT (name/color/emoji). PATCH eh so linkedStats.
+  const editMutation = useMutation({
+    mutationFn: (values: ThemeFormValues) =>
+      apiRequest('PUT', `/api/study-themes/${themeId}`, values),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/api/study-themes'] });
+      // Nome/emoji do tema aparece na lista de sessoes — revalida.
+      qc.invalidateQueries({ queryKey: ['/api/study-sessions'] });
+      toast({ title: 'Tema atualizado' });
+    },
+  });
+
+  async function handleEdit(values: ThemeFormValues) {
+    await editMutation.mutateAsync(values);
+  }
+
+  // GAP-1: deletar tema (cascade tabs no backend).
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest('DELETE', `/api/study-themes/${themeId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/api/study-themes'] });
+      // Backend faz themeId -> SET NULL nas sessoes; revalida pra refletir.
+      qc.invalidateQueries({ queryKey: ['/api/study-sessions'] });
+      toast({ title: 'Tema removido' });
+      navigate('/estudos/temas');
+    },
+    onError: () => {
+      toast({ title: 'Erro ao remover tema', variant: 'destructive' });
+      setDeleteOpen(false);
+    },
+  });
 
   const startSessionMutation = useMutation({
     mutationFn: async () => {
@@ -180,14 +226,36 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
 
   return (
     <div data-testid="theme-detail-view" className="p-6 max-w-3xl mx-auto">
-      <button
-        type="button"
-        onClick={() => navigate('/estudos/temas')}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
-        data-testid="theme-detail-back"
-      >
-        <ArrowLeft className="w-4 h-4" /> Voltar para temas
-      </button>
+      <div className="flex items-center justify-between mb-4">
+        <button
+          type="button"
+          onClick={() => navigate('/estudos/temas')}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          data-testid="theme-detail-back"
+        >
+          <ArrowLeft className="w-4 h-4" /> Voltar para temas
+        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            data-testid="theme-detail-edit"
+            onClick={() => setEditOpen(true)}
+            aria-label="Editar tema"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <Pencil className="w-4 h-4" /> Editar
+          </button>
+          <button
+            type="button"
+            data-testid="theme-detail-delete"
+            onClick={() => setDeleteOpen(true)}
+            aria-label="Remover tema"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10"
+          >
+            <Trash2 className="w-4 h-4" /> Remover
+          </button>
+        </div>
+      </div>
 
       <div className="rounded-lg border border-border bg-card p-6 space-y-4">
         <div className="flex items-center gap-3">
@@ -295,6 +363,49 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
           </button>
         </div>
       </div>
+
+      <ThemeFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        mode="edit"
+        initial={{
+          name: theme.name,
+          color: theme.color ?? undefined,
+          emoji: theme.emoji ?? undefined,
+        }}
+        onSubmit={handleEdit}
+      />
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent data-testid="theme-delete-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover este tema?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O tema <strong>{theme.name}</strong> e todas as suas abas serão
+              removidos. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="theme-delete-confirm-action"
+              disabled={deleteMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                deleteMutation.mutate();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

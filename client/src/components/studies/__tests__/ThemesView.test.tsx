@@ -142,3 +142,48 @@ describe('RF-03 ThemesView', () => {
     expect(String(navigateMock.mock.calls[0][0])).toMatch(/^\/estudos\/temas\/thm_1/);
   });
 });
+
+// Sprint Estudos-Fixes — FASE 1 (BUG-1): criacao de tema.
+describe('BUG-1 ThemesView — criacao de tema', () => {
+  it('botao "Novo tema" navega para /estudos/temas/novo', async () => {
+    render(withClient(<ThemesView />));
+    const btn = await screen.findByTestId('themes-create-button');
+    await userEvent.click(btn);
+    expect(navigateMock).toHaveBeenCalledWith('/estudos/temas/novo');
+  });
+
+  it('em /estudos/temas/novo abre ThemeFormDialog', async () => {
+    locationStateMock.path = '/estudos/temas/novo';
+    render(withClient(<ThemesView />));
+    await waitFor(() => {
+      expect(screen.getByTestId('theme-form-dialog')).toBeInTheDocument();
+    });
+  });
+
+  it('submit chama POST /api/study-themes e navega para o tema criado', async () => {
+    locationStateMock.path = '/estudos/temas/novo';
+    apiRequestMock.mockImplementation(async (a: string, b?: string) => {
+      // apiRequest(method,url,body): a=method. fetch wrapper: a=urlString.
+      if (a === 'POST') return { id: 'thm_new', name: 'Novo' };
+      if (String(a).includes('/api/study-themes')) return themesFixture;
+      if (String(a).includes('/api/dashboard/leaks/delta')) return {};
+      return null;
+    });
+    render(withClient(<ThemesView />));
+    const name = await screen.findByTestId('theme-form-name');
+    await userEvent.type(name, 'Squeeze spots');
+    await userEvent.click(screen.getByTestId('theme-form-submit'));
+    await waitFor(() => {
+      const postCall = apiRequestMock.mock.calls.find((c) => c[0] === 'POST');
+      expect(postCall).toBeTruthy();
+      expect(postCall![1]).toBe('/api/study-themes');
+      expect(postCall![2]).toMatchObject({ name: 'Squeeze spots' });
+    });
+    // HIGH-1 guard: o ULTIMO navigate deve ser o detalhe do tema criado,
+    // nao a lista (auto-close do dialog nao pode sobrescrever).
+    await waitFor(() => {
+      const last = navigateMock.mock.calls.at(-1)?.[0];
+      expect(String(last)).toBe('/estudos/temas/thm_new');
+    });
+  });
+});

@@ -7,14 +7,18 @@
  *  #11 sem actions decorativas
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
-import { useQuery } from '@tanstack/react-query';
-import { Search, X } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Search, X, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import { parseSearch } from '@/lib/url';
 import { EmptyState } from './EmptyState';
+import { ThemeFormDialog, type ThemeFormValues } from './ThemeFormDialog';
 
 interface ThemeRow {
   id: string;
@@ -36,10 +40,15 @@ const SUGGESTED_THRESHOLD = -5;
 
 export function ThemesView() {
   const [location, navigate] = useLocation();
+  const qc = useQueryClient();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
 
   const params = useMemo(() => parseSearch(location), [location]);
   const fromStats = params.get('fromStats') === 'leaks';
+  // BUG-1 fix: /estudos/temas/novo abre o dialog de criacao (antes caia de
+  // volta na lista sem form — CTA morto).
+  const createOpen = location.split('?')[0].replace(/\/+$/, '') === '/estudos/temas/novo';
 
   const { data: themes = [] } = useQuery<ThemeRow[]>({
     queryKey: ['/api/study-themes'],
@@ -49,6 +58,42 @@ export function ThemesView() {
       return await res.json();
     },
   });
+
+  // HIGH-1 fix (reviewer): o ThemeFormDialog chama onOpenChange(false) DEPOIS
+  // do onSubmit resolver. Como mutateAsync resolve apos o onSuccess, sem o guard
+  // o closeCreate -> navigate('/estudos/temas') venceria o navigate pro tema
+  // criado. Esse ref sinaliza "ja naveguei pro detalhe, nao volte pra lista".
+  const navigatedToDetailRef = useRef(false);
+
+  const createMutation = useMutation({
+    mutationFn: (values: ThemeFormValues) =>
+      apiRequest('POST', '/api/study-themes', values),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/api/study-themes'] });
+      qc.invalidateQueries({ queryKey: ['/api/study-sessions'] });
+      toast({ title: 'Tema criado' });
+    },
+  });
+
+  async function handleCreate(values: ThemeFormValues) {
+    // Navega APOS o resolve (vence o auto-close do dialog).
+    const created: any = await createMutation.mutateAsync(values);
+    navigatedToDetailRef.current = true;
+    navigate(created?.id ? `/estudos/temas/${created.id}` : '/estudos/temas');
+  }
+
+  function openCreate() {
+    navigate('/estudos/temas/novo');
+  }
+
+  function closeCreate() {
+    // Se o create acabou de redirecionar pro detalhe, nao sobrescreve com a lista.
+    if (navigatedToDetailRef.current) {
+      navigatedToDetailRef.current = false;
+      return;
+    }
+    navigate('/estudos/temas');
+  }
 
   const { data: leakDelta = {} } = useQuery<LeakDelta>({
     queryKey: ['/api/dashboard/leaks/delta'],
@@ -85,6 +130,14 @@ export function ThemesView() {
     <div data-testid="studies-view-temas" className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-semibold text-white">Temas</h2>
+        <Button
+          data-testid="themes-create-button"
+          onClick={openCreate}
+          className="bg-poker-accent text-black font-semibold hover:bg-poker-accent/90"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Novo tema
+        </Button>
       </div>
 
       {fromStats && (
@@ -126,7 +179,7 @@ export function ThemesView() {
                 : 'Comece criando "IP vs BB" — o tema mais comum entre profissionais.'
             }
             ctaLabel="Criar primeiro tema"
-            ctaAction={() => navigate('/estudos/temas/novo')}
+            ctaAction={openCreate}
           />
           <div data-testid="themes-empty" className="hidden" aria-hidden />
         </>
@@ -170,6 +223,13 @@ export function ThemesView() {
           })}
         </div>
       )}
+
+      <ThemeFormDialog
+        open={createOpen}
+        onOpenChange={(o) => (o ? openCreate() : closeCreate())}
+        mode="create"
+        onSubmit={handleCreate}
+      />
     </div>
   );
 }

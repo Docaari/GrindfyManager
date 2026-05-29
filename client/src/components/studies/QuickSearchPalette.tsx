@@ -83,7 +83,8 @@ export function QuickSearchPalette({ open, onOpenChange }: QuickSearchPalettePro
         label: 'Criar tema',
         group: 'acoes',
         run: () => {
-          navigate('/estudos/temas');
+          // BUG-1 fix: abre o dialog de criacao (antes caia na lista sem form).
+          navigate('/estudos/temas/novo');
           onOpenChange(false);
         },
       },
@@ -102,6 +103,33 @@ export function QuickSearchPalette({ open, onOpenChange }: QuickSearchPalettePro
         group: 'acoes',
         run: () => {
           navigate('/estudos/spots');
+          onOpenChange(false);
+        },
+      },
+      {
+        id: 'ver-sessoes',
+        label: 'Ver sessões de estudo',
+        group: 'acoes',
+        run: () => {
+          navigate('/estudos/sessoes');
+          onOpenChange(false);
+        },
+      },
+      {
+        id: 'revisao-espacada',
+        label: 'Revisão espaçada (cards)',
+        group: 'acoes',
+        run: () => {
+          navigate('/estudos/reentry');
+          onOpenChange(false);
+        },
+      },
+      {
+        id: 'recomendacoes',
+        label: 'Ver recomendações',
+        group: 'acoes',
+        run: () => {
+          navigate('/estudos/recomendacoes');
           onOpenChange(false);
         },
       },
@@ -200,7 +228,7 @@ export function QuickSearchPalette({ open, onOpenChange }: QuickSearchPalettePro
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleInputKeyDown}
-            placeholder="Buscar temas, abas, spots... (Esc para fechar)"
+            placeholder="Buscar temas e ações... (Esc para fechar)"
             className="w-full bg-transparent text-white placeholder:text-gray-500 outline-none text-sm"
           />
         </div>

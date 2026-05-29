@@ -203,3 +203,72 @@ describe('<ThemeDetailView> RF-09 — redirect apos iniciar sessao', () => {
     expect(sessionRedirects.length).toBe(0);
   });
 });
+
+// =============================================================================
+// Sprint Estudos-Fixes FASE 1 — GAP-1: editar + deletar tema
+// =============================================================================
+describe('<ThemeDetailView> GAP-1 — editar tema', () => {
+  it('click "Editar" abre dialog e submit chama PUT /api/study-themes/:id', async () => {
+    apiRequestMock.mockImplementation(async (method: string, url: string) => {
+      if (method === 'GET' && url === '/api/study-themes') return [baseTheme];
+      if (method === 'GET' && url.includes('/stats-summary')) return { themeId: 'thm_1', stats: [] };
+      if (method === 'PUT' && url === '/api/study-themes/thm_1') return { ...baseTheme, name: 'Editado' };
+      return null;
+    });
+
+    const View = await loadView();
+    renderWithClient(<View themeId="thm_1" />);
+
+    const editBtn = await screen.findByTestId('theme-detail-edit');
+    const user = userEvent.setup();
+    await user.click(editBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('theme-form-dialog')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('theme-form-submit'));
+
+    await waitFor(() => {
+      const putCalls = apiRequestMock.mock.calls.filter(
+        (c) => c[0] === 'PUT' && c[1] === '/api/study-themes/thm_1',
+      );
+      expect(putCalls.length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe('<ThemeDetailView> GAP-1 — deletar tema', () => {
+  it('click "Remover" -> confirma -> DELETE -> navigate("/estudos/temas")', async () => {
+    apiRequestMock.mockImplementation(async (method: string, url: string) => {
+      if (method === 'GET' && url === '/api/study-themes') return [baseTheme];
+      if (method === 'GET' && url.includes('/stats-summary')) return { themeId: 'thm_1', stats: [] };
+      if (method === 'DELETE' && url === '/api/study-themes/thm_1') return { message: 'ok' };
+      return null;
+    });
+
+    const View = await loadView();
+    renderWithClient(<View themeId="thm_1" />);
+
+    const delBtn = await screen.findByTestId('theme-detail-delete');
+    const user = userEvent.setup();
+    await user.click(delBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('theme-delete-confirm-action')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('theme-delete-confirm-action'));
+
+    await waitFor(() => {
+      const delCalls = apiRequestMock.mock.calls.filter(
+        (c) => c[0] === 'DELETE' && c[1] === '/api/study-themes/thm_1',
+      );
+      expect(delCalls.length).toBeGreaterThan(0);
+    });
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/estudos/temas');
+    });
+  });
+});

@@ -164,12 +164,12 @@ export function StudiesDashboard() {
           title="Comece sua jornada de estudos"
           description="Crie seu primeiro tema para comecar a organizar seu conhecimento."
           ctaLabel="Criar primeiro tema"
-          ctaAction={() => navigate('/estudos/temas')}
+          ctaAction={() => navigate('/estudos/temas/novo')}
         />
         <button
           type="button"
           data-testid="studies-dashboard-empty-cta"
-          onClick={() => navigate('/estudos/temas')}
+          onClick={() => navigate('/estudos/temas/novo')}
           className="hidden"
         >
           Criar primeiro tema
