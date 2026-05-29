@@ -41,6 +41,10 @@ export interface FocusStatItem {
   deltaDirection: "improving" | "degrading" | "neutral" | null;
   theme: FocusStatThemeView | null;
   studyMinutesMonth: number;
+  // Qtd de maos da ultima amostragem (sampleSize do snapshot do mes corrente)
+  // e quando foi capturado. null quando nao ha snapshot do mes com o statId.
+  currentSampleSize: number | null;
+  currentCheckedAt: string | null;
 }
 
 export interface FocusStatsForHomeResult {
@@ -176,6 +180,14 @@ export async function getFocusStatsForHome(input: {
       currentSnap && currentSnap.value !== undefined && currentSnap.value !== null
         ? Number(currentSnap.value)
         : null;
+    const currentSampleSize =
+      currentSnap && currentSnap.sampleSize !== undefined && currentSnap.sampleSize !== null
+        ? Number(currentSnap.sampleSize)
+        : null;
+    const currentCheckedAt =
+      currentSnap && currentSnap.capturedAt
+        ? new Date(currentSnap.capturedAt).toISOString()
+        : null;
     const previousValue =
       previousSnap && previousSnap.value !== undefined && previousSnap.value !== null
         ? Number(previousSnap.value)
@@ -208,6 +220,8 @@ export async function getFocusStatsForHome(input: {
       deltaDirection: deltaDir,
       theme: themeView,
       studyMinutesMonth: Number(minutes ?? 0),
+      currentSampleSize,
+      currentCheckedAt,
     });
   }
 

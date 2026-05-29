@@ -27,6 +27,10 @@ export interface FocusStatsHeaderItem {
   deltaDirection?: "improving" | "degrading" | "neutral";
   theme?: { id: string; name: string; color: string; emoji?: string; progress?: number } | null;
   studyMinutesMonth?: number;
+  // Qtd de maos da ultima amostragem + data da ultima verificacao (snapshot
+  // do mes corrente que contem este statId). null quando nao ha snapshot.
+  currentSampleSize?: number | null;
+  currentCheckedAt?: string | null;
 }
 
 export interface FocusStatsHeaderProps {
@@ -35,6 +39,18 @@ export interface FocusStatsHeaderProps {
   onAutoSuggest?: () => void;
   onManualSelect?: () => void;
   onLinkTheme?: (item: FocusStatsHeaderItem) => void;
+}
+
+function formatCheckedAt(iso?: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function formatHands(n?: number | null): string | null {
+  if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) return null;
+  return `${n.toLocaleString("pt-BR")} ${n === 1 ? "mao" : "maos"}`;
 }
 
 function deltaTone(direction?: string): string {
@@ -96,6 +112,9 @@ export function FocusStatsHeader({
       <div className="grid gap-3 md:grid-cols-3">
         {items.map((item) => {
           const hasTheme = !!item.theme;
+          const hasValue = item.currentValue !== null && item.currentValue !== undefined;
+          const checkedAt = formatCheckedAt(item.currentCheckedAt);
+          const hands = formatHands(item.currentSampleSize);
           return (
             <div
               key={item.statId}
@@ -103,17 +122,45 @@ export function FocusStatsHeader({
               className="border border-border rounded-lg p-3 bg-background"
             >
               <div className="text-xs text-muted-foreground">{item.statLabel}</div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-semibold">
-                  {item.currentValue ?? "-"}
-                  {item.statUnit ?? ""}
-                </span>
-                {typeof item.delta === "number" && item.delta !== 0 && (
-                  <span className={`text-sm ${deltaTone(item.deltaDirection)}`}>
-                    {item.delta > 0 ? "+" : ""}{item.delta}%
+              {hasValue ? (
+                <>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-2xl font-semibold">
+                      {item.currentValue}
+                      {item.statUnit ?? ""}
+                    </span>
+                    {typeof item.delta === "number" && item.delta !== 0 && (
+                      <span className={`text-sm ${deltaTone(item.deltaDirection)}`}>
+                        {item.delta > 0 ? "+" : ""}{item.delta}%
+                      </span>
+                    )}
+                  </div>
+                  {/* Linha de contexto: data da ultima verificacao + qtd de maos. */}
+                  {(checkedAt || hands) && (
+                    <div
+                      data-testid={`focus-stats-card-${item.statId}-meta`}
+                      className="mt-1 text-[11px] text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5"
+                    >
+                      {checkedAt && <span>Verificado em {checkedAt}</span>}
+                      {checkedAt && hands && <span aria-hidden>·</span>}
+                      {hands && <span>{hands}</span>}
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Sem snapshot do mes corrente com este statId. */
+                <div
+                  data-testid={`focus-stats-card-${item.statId}-no-data`}
+                  className="mt-1"
+                >
+                  <span className="text-base font-medium text-muted-foreground">
+                    Sem dado este mes
                   </span>
-                )}
-              </div>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Capture um snapshot HUD para ver {item.statLabel}.
+                  </p>
+                </div>
+              )}
               <div className="mt-2 text-xs">
                 {hasTheme ? (
                   <span className="text-muted-foreground">
