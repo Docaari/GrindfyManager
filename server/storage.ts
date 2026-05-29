@@ -200,6 +200,9 @@ import { nanoid } from "nanoid";
 import { normalizeTournamentTypePayload } from "./storage/normalizeTournamentTypePayload";
 import { getDisplayRegistrationTime } from "@shared/grade-time";
 import { ensureLibraryEntryForPlannedSafe } from "./services/libraryAutoPopulate";
+import { groupTournaments, stripNameNoise, canonicalBuyIn, type GroupedFamily, type GroupedSpecific } from "./services/libraryGrouping";
+import { confidenceGradeForVolume, MIN_GROUP_VISIBLE, FAMILY_GROUP_FLOOR } from "@shared/library-grades";
+import { computeLibraryInsights, type DimensionBucket, type Insight } from "./insights/libraryInsights";
 
 // Utility function to build period conditions with custom date range support
 function buildPeriodCondition(period: string, filters: any) {
@@ -3333,15 +3336,71 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .where(whereCondition)
       .orderBy(tournaments.datePlayed);
 
-    // Group tournaments intelligently by similarity
-    const groups = this.groupTournamentsBySimilarity(allTournaments);
+    // Sprint library-evolution Fase 1: agrupamento deterministico 2 niveis
+    // (familia coarse -> especificos fine). Substitui o matcher guloso O(n^2)
+    // order-dependent + o piso rigido de 50. Ver server/services/libraryGrouping.ts.
+    const families = groupTournaments(allTournaments);
 
-    // Filter groups to only show those with 50+ tournaments
-    const significantGroups = groups.filter(group => group.tournaments.length >= 50);
+    // Familias visiveis: >= FAMILY_GROUP_FLOOR torneios (lowConfidence se
+    // < MIN_GROUP_VISIBLE). Antes da reforma um grinder com milhares de
+    // torneios via ~zero grupos.
+    const libraryGroups = families
+      .map((fam: GroupedFamily) => {
+        const famMetrics = this.computeGroupMetrics(fam.tournaments, {
+          id: fam.familyKey,
+          groupName: this.generateFamilyName(fam),
+          representativeTournament: fam.representative,
+          site: fam.site,
+          category: fam.type,
+          speed: "Todos",
+          format: fam.representative?.format ?? "MTT",
+          buyInTier: fam.buyInTier,
+        });
+        // Especificos: todos retornados (sao o drill-down); flag lowConfidence
+        // herdada de computeGroupMetrics. Ordenado por volume desc.
+        const specifics = fam.specifics
+          .map((spec: GroupedSpecific) =>
+            this.computeGroupMetrics(spec.tournaments, {
+              id: spec.fineKey,
+              groupName: this.generateSpecificName(spec.representative),
+              representativeTournament: spec.representative,
+              site: fam.site,
+              category: fam.type,
+              speed: spec.speed,
+              format: spec.representative?.format ?? "MTT",
+              buyInTier: fam.buyInTier,
+              parentFamilyKey: fam.familyKey,
+            }),
+          )
+          .sort((a: any, b: any) => b.volume - a.volume);
+        return { ...famMetrics, isFamily: true, specifics };
+      })
+      .filter((fam: any) => fam.volume >= FAMILY_GROUP_FLOOR)
+      .sort((a: any, b: any) => b.volume - a.volume);
 
-    // Calculate metrics for each group
-    const libraryGroups = significantGroups.map(group => {
-      const tournamentsList = group.tournaments;
+    return libraryGroups;
+  }
+
+  /**
+   * Calcula as ~20 metricas de um grupo de torneios (familia ou especifico).
+   * Extraido de getTournamentLibrary na Sprint library-evolution Fase 1 para
+   * reuso nos dois niveis. `identity` traz os campos de identificacao do grupo.
+   */
+  private computeGroupMetrics(
+    tournamentsList: any[],
+    identity: {
+      id: string;
+      groupName: string;
+      representativeTournament: any;
+      site: string;
+      category: string;
+      speed: string;
+      format: string;
+      buyInTier?: string;
+      parentFamilyKey?: string;
+    },
+  ): any {
+    {
       const volume = tournamentsList.length;
 
       // Financial metrics
@@ -3382,13 +3441,38 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         ? tournsWithPos.reduce((sum: number, t: any) => sum + t.position, 0) / tournsWithPos.length
         : 0;
 
+      // Fase 4 (library-evolution): $/hora-MESA. Soma da duracao das mesas (nao
+      // wall-clock — multi-tabling faz o /hora real ser MAIOR). So sobre linhas
+      // com durationSeconds nao-null; durationCoverage avisa a UI quando a
+      // cobertura e baixa (dado so vem de re-import pos-Migration 0081).
+      const tournsWithDuration = tournamentsList.filter(
+        (t: any) => t.durationSeconds != null && Number(t.durationSeconds) > 0,
+      );
+      const totalDurationSeconds = tournsWithDuration.reduce(
+        (sum: number, t: any) => sum + Number(t.durationSeconds),
+        0,
+      );
+      // HIGH-1 fix: numerador e denominador DEVEM cobrir o mesmo subconjunto
+      // (so as linhas com duracao), senao o $/h infla atribuindo o lucro das
+      // linhas sem duracao as horas das que tem.
+      const profitWithDuration = tournsWithDuration.reduce(
+        (sum: number, t: any) => sum + parseFloat(String(t.prize || 0)),
+        0,
+      );
+      const durationCoverage = volume > 0 ? tournsWithDuration.length / volume : 0;
+      const profitPerTableHour = totalDurationSeconds > 0
+        ? profitWithDuration / (totalDurationSeconds / 3600)
+        : null;
+      const deepStackCount = tournamentsList.filter((t: any) => t.deepStack === true).length;
+
       // Best and worst results
       // prize já é net profit (lucro líquido), não precisa subtrair buyIn
       const bestResult = Math.max(...tournamentsList.map((t: any) => parseFloat(String(t.prize || 0))));
       const worstResult = Math.min(...tournamentsList.map((t: any) => parseFloat(String(t.prize || 0))));
 
-      // Confidence Grade (based on volume)
-      const confidenceGrade = volume >= 2000 ? 'A' : volume >= 1000 ? 'B' : volume >= 500 ? 'C' : volume >= 200 ? 'D' : 'F';
+      // Confidence Grade (recalibrado — shared/library-grades.ts SSoT).
+      const confidenceGrade = confidenceGradeForVolume(volume);
+      const lowConfidence = volume < MIN_GROUP_VISIBLE;
 
       // Standard Deviation in buy-ins
       const prizes = tournamentsList.map((t: any) => parseFloat(String(t.prize || 0)));
@@ -3423,13 +3507,16 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       }
 
       return {
-        id: group.groupKey,
-        groupName: group.groupName,
-        representativeTournament: group.representative,
-        site: group.site,
-        category: group.category,
-        speed: group.speed,
-        format: group.format,
+        id: identity.id,
+        groupName: identity.groupName,
+        representativeTournament: identity.representativeTournament,
+        site: identity.site,
+        category: identity.category,
+        speed: identity.speed,
+        format: identity.format,
+        buyInTier: identity.buyInTier,
+        parentFamilyKey: identity.parentFamilyKey,
+        lowConfidence,
 
         // Volume metrics
         volume,
@@ -3456,6 +3543,12 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         bestResult: parseFloat(bestResult.toFixed(2)),
         worstResult: parseFloat(worstResult.toFixed(2)),
 
+        // Fase 4: $/hora-mesa + deepstack
+        profitPerTableHour: profitPerTableHour !== null ? parseFloat(profitPerTableHour.toFixed(2)) : null,
+        durationCoverage: parseFloat(durationCoverage.toFixed(2)),
+        deepStackCount,
+        deepStackRate: volume > 0 ? parseFloat(((deepStackCount / volume) * 100).toFixed(1)) : 0,
+
         // Statistical metrics
         confidenceGrade,
         sdBuyins: parseFloat(sdBuyins.toFixed(2)),
@@ -3470,119 +3563,244 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         tournamentCount: tournamentsList.length,
         tournaments: tournamentsList
       };
-    });
-
-    return libraryGroups;
+    }
   }
 
-  // Helper function to group tournaments by similarity
-  private groupTournamentsBySimilarity(tournaments: any[]): any[] {
-    const groups: any[] = [];
+  // Nome amigavel da familia: tier + tipo + site (ex. "PKO $22-54.99 · PokerStars").
+  // fam.type nunca e vazio (typePrimary cai em "Vanilla").
+  private generateFamilyName(fam: GroupedFamily): string {
+    return `${fam.type} ${fam.buyInTier} · ${fam.site}`;
+  }
 
-    for (const tournament of tournaments) {
-      // Find existing group with similar characteristics
-      let matchingGroup = groups.find(group => 
-        this.tournamentsAreSimilar(tournament, group.representative)
-      );
+  // Nome amigavel do torneio especifico: usa stripNameNoise (mesma base da
+  // assinatura de agrupamento) + fallback generico + sufixo de buy-in.
+  private generateSpecificName(tournament: any): string {
+    const buyin = canonicalBuyIn(parseFloat(String(tournament?.buyIn ?? 0)));
+    let baseName = stripNameNoise(tournament?.name ?? "");
 
-      if (matchingGroup) {
-        // Add to existing group
-        matchingGroup.tournaments.push(tournament);
+    if (baseName.length < 4 || /^(mtt|tournament|torneio)$/i.test(baseName)) {
+      baseName = `${tournament?.category ?? "MTT"} Tournament`;
+    }
+
+    return buyin > 0 ? `${baseName} ($${buyin})` : baseName;
+  }
+
+  // === Sprint library-evolution Fase 2: insights "Destaques e Vazamentos" ===
+
+  // SQL CASE expressions reutilizadas (alinhadas a BUYIN_BUCKETS/FIELD_BUCKETS).
+  private buyinTierCaseExpr() {
+    return sql<string>`
+      CASE
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 2 THEN '$0-1.99'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 5 THEN '$2-4.99'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 11 THEN '$5-10.99'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 22 THEN '$11-21.99'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 55 THEN '$22-54.99'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 110 THEN '$55-109.99'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 220 THEN '$110-219.99'
+        ELSE '$220+'
+      END`;
+  }
+  private fieldBucketCaseExpr() {
+    return sql<string>`
+      CASE
+        WHEN ${tournaments.fieldSize} < 100 THEN 'pequeno'
+        WHEN ${tournaments.fieldSize} < 500 THEN 'medio'
+        WHEN ${tournaments.fieldSize} < 2000 THEN 'grande'
+        ELSE 'massivo'
+      END`;
+  }
+
+  /**
+   * Roda UMA query de dimensao retornando buckets no shape uniforme exigido pelo
+   * insights engine (sample/roi%/profit/sdProfit/avgBuyin). `groupExpr` e a
+   * expressao SQL de agrupamento; `extra` sao condicoes adicionais (ex.
+   * isNotNull(fieldSize)).
+   */
+  private async getInsightDimension(
+    userId: string,
+    period: string,
+    filters: any,
+    dimension: string,
+    groupExpr: any,
+    extra: any[] = [],
+  ): Promise<DimensionBucket[]> {
+    try {
+      const baseConditions: any[] = [
+        eq(tournaments.userId, userId),
+        isNull(tournaments.grindSessionId),
+        ...extra,
+      ];
+      baseConditions.push(...buildPeriodCondition(period, filters));
+      const dashboardFilters = buildFilters(filters);
+      if (dashboardFilters) baseConditions.push(dashboardFilters);
+
+      const rows = await db
+        .select({
+          bucketLabel: groupExpr,
+          sample: sql<number>`COUNT(*)`,
+          profit: sql<number>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)`,
+          buyins: sql<number>`COALESCE(SUM(CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
+          sdProfit: sql<number>`COALESCE(STDDEV_SAMP(CAST(${tournaments.prize} AS DECIMAL)), 0)`,
+          avgBuyin: sql<number>`COALESCE(AVG(CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
+        })
+        .from(tournaments)
+        .where(and(...baseConditions))
+        .groupBy(groupExpr);
+
+      return rows.map((r: any) => {
+        const profit = Number(r.profit) || 0;
+        const buyins = Number(r.buyins) || 0;
+        return {
+          dimension,
+          bucketLabel: String(r.bucketLabel ?? ""),
+          sample: Number(r.sample) || 0,
+          roi: buyins > 0 ? (profit / buyins) * 100 : 0,
+          profit,
+          sdProfit: Number(r.sdProfit) || 0,
+          avgBuyin: Number(r.avgBuyin) || 0,
+        } as DimensionBucket;
+      });
+    } catch (error) {
+      console.error(`getInsightDimension(${dimension}) failed:`, error);
+      return [];
+    }
+  }
+
+  async getTournamentLibraryInsights(
+    userId: string,
+    period: string = "all",
+    filters: any = {},
+  ): Promise<{ baseline: { roi: number; sample: number }; insights: Insight[] }> {
+    // Baseline do jogador (mesmo escopo das dimensoes).
+    const baseConditions: any[] = [
+      eq(tournaments.userId, userId),
+      isNull(tournaments.grindSessionId),
+    ];
+    baseConditions.push(...buildPeriodCondition(period, filters));
+    const df = buildFilters(filters);
+    if (df) baseConditions.push(df);
+
+    let baseline = { roi: 0, sample: 0 };
+    try {
+      const [b] = await db
+        .select({
+          sample: sql<number>`COUNT(*)`,
+          profit: sql<number>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)`,
+          buyins: sql<number>`COALESCE(SUM(CAST(${tournaments.buyIn} AS DECIMAL)), 0)`,
+        })
+        .from(tournaments)
+        .where(and(...baseConditions));
+      const profit = Number(b?.profit) || 0;
+      const buyins = Number(b?.buyins) || 0;
+      baseline = {
+        roi: buyins > 0 ? (profit / buyins) * 100 : 0,
+        sample: Number(b?.sample) || 0,
+      };
+    } catch (error) {
+      console.error("getTournamentLibraryInsights baseline failed:", error);
+    }
+
+    const typeExpr = sql<string>`COALESCE(NULLIF(${tournaments.type}, ''), ${tournaments.category})`;
+    const compositeExpr = sql<string>`CONCAT(COALESCE(NULLIF(${tournaments.type}, ''), ${tournaments.category}), ' de field ', ${this.fieldBucketCaseExpr()})`;
+
+    const dims = await Promise.all([
+      this.getInsightDimension(userId, period, filters, "site", tournaments.site),
+      this.getInsightDimension(userId, period, filters, "buyIn", this.buyinTierCaseExpr()),
+      this.getInsightDimension(userId, period, filters, "type", typeExpr),
+      this.getInsightDimension(userId, period, filters, "speed", tournaments.speed),
+      this.getInsightDimension(userId, period, filters, "fieldSize", this.fieldBucketCaseExpr(), [isNotNull(tournaments.fieldSize)]),
+      this.getInsightDimension(userId, period, filters, "dayOfWeek", sql<string>`CAST(EXTRACT(DOW FROM ${tournaments.datePlayed}) AS INTEGER)`),
+      this.getInsightDimension(userId, period, filters, "deepStack", sql<string>`CASE WHEN ${tournaments.deepStack} THEN 'deep' ELSE 'normal' END`),
+      this.getInsightDimension(userId, period, filters, "composite", compositeExpr, [isNotNull(tournaments.fieldSize)]),
+    ]);
+
+    const buckets = dims.flat();
+    const insights = computeLibraryInsights({ baseline, buckets });
+    return { baseline, insights };
+  }
+
+  /**
+   * Fase 3 (library-evolution): re-import com enriquecimento. Para cada torneio
+   * que o dedup marcou como DUPLICATA mas que agora traz dados novos (duracao,
+   * players-por-mesa, estrutura, jogo, stack-depth), atualiza a linha existente
+   * SET col = COALESCE(col, novo) — NUNCA sobrescreve dado ja presente. So conta/
+   * toca linhas que estavam sem duracao (duration_seconds IS NULL), evitando
+   * no-ops. Retorna quantas linhas foram efetivamente enriquecidas.
+   */
+  async enrichExistingTournaments(
+    userId: string,
+    duplicates: Array<any>,
+  ): Promise<number> {
+    // So processa duplicatas que trazem dado novo enriquecivel.
+    const targets = duplicates.filter(
+      (t) =>
+        t.durationSeconds != null ||
+        t.playersPerTable != null ||
+        t.structure != null ||
+        t.gameType != null ||
+        t.startingStackBb != null ||
+        t.deepStack === true,
+    );
+    if (targets.length === 0) return 0;
+
+    const enrichOne = async (t: any): Promise<number> => {
+      const matchConds: any[] = [eq(tournaments.userId, userId)];
+      if (t.tournamentId && String(t.tournamentId).trim() !== "") {
+        matchConds.push(eq(tournaments.tournamentId, String(t.tournamentId).trim()));
+      } else if (t.datePlayed) {
+        // HIGH-2 fix: espelhar o predicado TOLERANTE do dedup
+        // (findExistingTournamentsByFields) — match exato de datePlayed/buyIn
+        // diverge (skew de TZ < 60s; decimal "5.50" vs "5.5") e nao enriquecia
+        // nada silenciosamente.
+        const dateIso = t.datePlayed.toISOString();
+        matchConds.push(
+          eq(tournaments.site, t.site),
+          eq(tournaments.name, String(t.name).trim()),
+          sql`ABS(EXTRACT(EPOCH FROM (${tournaments.datePlayed} - ${dateIso}::timestamp))) < 60`,
+          sql`ABS(CAST(${tournaments.buyIn} AS DECIMAL) - ${Number(t.buyIn)}) < 0.01`,
+        );
       } else {
-        // Create new group
-        const groupKey = this.generateGroupKey(tournament);
-        groups.push({
-          groupKey,
-          groupName: this.generateGroupName(tournament),
-          representative: tournament,
-          site: tournament.site,
-          category: tournament.category,
-          speed: tournament.speed,
-          format: tournament.format,
-          tournaments: [tournament]
-        });
+        return 0; // sem identificador confiavel
       }
+      // Gate: so enriquece quando a duracao esta faltando — evita no-op e da
+      // contagem honesta. Limitacao documentada: linha que ja tem duracao nao
+      // recebe stack/structure novos (backfill de stack roda pelo script).
+      matchConds.push(isNull(tournaments.durationSeconds));
+
+      try {
+        const updated = await db
+          .update(tournaments)
+          .set({
+            // COALESCE: nunca sobrescreve valor ja presente.
+            durationSeconds: sql`COALESCE(${tournaments.durationSeconds}, ${t.durationSeconds ?? null})`,
+            playersPerTable: sql`COALESCE(${tournaments.playersPerTable}, ${t.playersPerTable ?? null})`,
+            structure: sql`COALESCE(${tournaments.structure}, ${t.structure ?? null})`,
+            gameType: sql`COALESCE(${tournaments.gameType}, ${t.gameType ?? null})`,
+            startingStackBb: sql`COALESCE(${tournaments.startingStackBb}, ${t.startingStackBb ?? null})`,
+            deepStack: sql`(${tournaments.deepStack} OR ${t.deepStack === true})`,
+            updatedAt: new Date(),
+          })
+          .where(and(...matchConds))
+          .returning({ id: tournaments.id });
+        return updated.length;
+      } catch (error) {
+        console.error("enrichExistingTournaments row failed:", error);
+        return 0;
+      }
+    };
+
+    // MEDIUM perf fix: chunks paralelos (concorrencia limitada) em vez de N
+    // awaits sequenciais — corta o wall-clock de re-imports grandes (~4000) sem
+    // sobrecarregar o pool de conexoes.
+    const CONCURRENCY = 20;
+    let enriched = 0;
+    for (let i = 0; i < targets.length; i += CONCURRENCY) {
+      const chunk = targets.slice(i, i + CONCURRENCY);
+      const counts = await Promise.all(chunk.map(enrichOne));
+      enriched += counts.reduce((a, b) => a + b, 0);
     }
-
-    return groups;
-  }
-
-  // Check if two tournaments are similar (50% name similarity + exact buyin/type/speed/site)
-  private tournamentsAreSimilar(t1: any, t2: any): boolean {
-    // Must be exact same site
-    if (t1.site !== t2.site) return false;
-
-    // Must be exact same buy-in
-    const buyin1 = parseFloat(String(t1.buyIn));
-    const buyin2 = parseFloat(String(t2.buyIn));
-    if (buyin1 !== buyin2) return false;
-
-    // Must be exact same category (type)
-    if (t1.category !== t2.category) return false;
-
-    // Must be exact same speed
-    if (t1.speed !== t2.speed) return false;
-
-    // Check name similarity (50% threshold)
-    const name1 = this.normalizeTitle(t1.name);
-    const name2 = this.normalizeTitle(t2.name);
-
-    const similarity = this.calculateStringSimilarity(name1, name2);
-    return similarity >= 0.5; // 50% similarity threshold
-  }
-
-  // Normalize tournament name for better comparison
-  private normalizeTitle(name: string): string {
-    return name
-      .toLowerCase()
-      .replace(/\$[\d,]+\s*(gtd|guaranteed)?/gi, '') // Remove prize amounts
-      .replace(/\$[\d.]+(k|m)?/gi, '') // Remove dollar amounts
-      .replace(/\b(gtd|guaranteed|turbo|hyper|super|progressive|knockout|pko|bounty|mystery|mtt)\b/gi, '') // Remove common terms
-      .replace(/\b\d+\s*(re|rebuy|addon|add-on|max|6-max|9-max|heads-up|hu)\b/gi, '') // Remove structural terms
-      .replace(/[^\w\s]/g, ' ') // Replace special chars with spaces
-      .replace(/\s+/g, ' ') // Normalize whitespace
-      .trim();
-  }
-
-  // Calculate string similarity using Jaccard similarity
-  private calculateStringSimilarity(str1: string, str2: string): number {
-    const words1 = new Set(str1.split(' ').filter(w => w.length > 2));
-    const words2 = new Set(str2.split(' ').filter(w => w.length > 2));
-
-    const words1Array = Array.from(words1);
-    const words2Array = Array.from(words2);
-    const intersectionArray = words1Array.filter(x => words2.has(x));
-    const unionArray = Array.from(new Set([...words1Array, ...words2Array]));
-
-    return unionArray.length === 0 ? 0 : intersectionArray.length / unionArray.length;
-  }
-
-  // Generate a unique key for the group
-  private generateGroupKey(tournament: any): string {
-    const normalizedName = this.normalizeTitle(tournament.name);
-    const buyin = Math.round(parseFloat(String(tournament.buyIn)));
-    return `${tournament.site}-${buyin}-${normalizedName.replace(/\s+/g, '-')}`.toLowerCase();
-  }
-
-  // Generate a friendly name for the group
-  private generateGroupName(tournament: any): string {
-    const name = tournament.name;
-    const buyin = parseFloat(String(tournament.buyIn));
-
-    // Extract meaningful parts from tournament name
-    let baseName = name
-      .replace(/\$[\d,]+\s*(gtd|guaranteed)?/gi, '') // Remove specific prize amounts
-      .replace(/\b(episode|day|fase|phase)\s*\d+[a-z]?(\s*[-:]\s*)?/gi, '') // Remove episode/day numbers
-      .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/gi, '') // Remove times
-      .replace(/\s*[-–—]\s*\d+-day\s+event/gi, '') // Remove "2-Day Event" etc
-      .trim();
-
-    // If name is too generic, use site + category + buyin
-    if (baseName.length < 10 || /^(mtt|tournament|torneio)$/i.test(baseName)) {
-      baseName = `${tournament.category} Tournament`;
-    }
-
-    return `${baseName} ($${buyin})`;
+    return enriched;
   }
 
   // Planned tournament operations

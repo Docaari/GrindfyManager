@@ -20,6 +20,7 @@ import { getLibrarySiteColor, getLibraryCategoryColor, getLibrarySpeedColor } fr
 import { formatPercentage } from "@/lib/formatting";
 import { buildCSVContent, formatCSVRow, getExportFilename } from "@/lib/export-helpers";
 import { tokens } from "@/lib/ui-tokens";
+import { GRADE_COLORS, GRADE_ORDER } from "@shared/library-grades";
 
 // Tipo para os filtros (definindo aqui para remover dependência externa)
 type TournamentLibraryFiltersType = {
@@ -68,23 +69,34 @@ interface TournamentGroup {
   roiWithoutOutliers: number | null;
   outlierDependent: boolean;
   tournaments: any[];
+  // Sprint library-evolution Fase 1: agrupamento 2 niveis.
+  isFamily?: boolean;
+  parentFamilyKey?: string;
+  buyInTier?: string;
+  lowConfidence?: boolean;
+  specifics?: TournamentGroup[];
+  // Fase 4: $/hora-mesa + deepstack
+  profitPerTableHour?: number | null;
+  durationCoverage?: number;
+  deepStackRate?: number;
 }
 
-const confidenceGradeOrder: Record<string, number> = { A: 5, B: 4, C: 3, D: 2, F: 1 };
-const confidenceGradeColors: Record<string, string> = {
-  A: 'bg-emerald-600',
-  B: 'bg-blue-600',
-  C: 'bg-yellow-600',
-  D: 'bg-orange-600',
-  F: 'bg-red-600',
-};
-const confidenceGradeTooltips: Record<string, string> = {
-  A: 'A — 2000+ torneios, altamente confiavel',
-  B: 'B — 1000-1999 torneios, confiavel',
-  C: 'C — 500-999 torneios, moderado',
-  D: 'D — 200-499 torneios, baixa confiabilidade',
-  F: 'F — 50-199 torneios, dados insuficientes',
-};
+interface LibraryInsight {
+  kind: 'highlight' | 'leak';
+  dimension: string;
+  bucketLabel: string;
+  roi: number;
+  baselineRoi: number;
+  delta: number;
+  sample: number;
+  confidence: 'high' | 'medium' | 'low';
+  reason: 'roi' | 'low_variance';
+  message: string;
+}
+
+// Grades centralizadas em shared/library-grades.ts (SSoT server+client).
+const confidenceGradeOrder = GRADE_ORDER as Record<string, number>;
+const confidenceGradeColors = GRADE_COLORS as Record<string, string>;
 
 // --- Pure helper functions ---
 
@@ -358,6 +370,70 @@ function GroupDetailDialogContent({ group }: GroupDetailDialogContentProps) {
         </div>
       </div>
 
+      {/* Fase 4: $/hora-mesa — so quando ha cobertura de duracao razoavel (>=60%).
+          Rotulo honesto: e tempo-de-mesa, nao wall-clock (multi-tabling). */}
+      {group.profitPerTableHour != null && (group.durationCoverage ?? 0) >= 0.6 && (
+        <div className="mb-6">
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <div className="inline-flex items-center gap-2 bg-gray-800/50 rounded-lg px-3 py-2 cursor-help">
+                <span className="text-xs text-gray-400">$/hora-mesa</span>
+                <span className={`font-bold ${group.profitPerTableHour >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {formatCurrency(group.profitPerTableHour)}/h
+                </span>
+                <span className="text-[10px] text-gray-500">
+                  ({Math.round((group.durationCoverage ?? 0) * 100)}% cobertura)
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs">
+              Lucro por hora de mesa. Não é lucro por hora real — se você joga várias
+              mesas ao mesmo tempo, seu lucro/hora real é maior.
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
+
+      {/* Variações (Fase 1): torneios especificos dentro da familia. So aparece
+          quando a familia tem mais de uma variacao (nomes/velocidades distintos). */}
+      {group.isFamily && (group.specifics?.length ?? 0) > 1 && (
+        <div className="mb-6">
+          <div className="text-sm font-semibold text-gray-300 mb-2">
+            Variações ({group.specifics!.length})
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {group.specifics!.map((spec) => (
+              <div
+                key={spec.id}
+                className="flex items-center justify-between bg-gray-800/40 rounded-lg px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="text-white text-sm font-medium truncate">
+                    {spec.groupName}
+                  </div>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <Badge className={`text-[10px] ${getSpeedColor(spec.speed)}`}>
+                      {spec.speed}
+                    </Badge>
+                    <span className="text-xs text-gray-400">
+                      {spec.volume.toLocaleString()} torneios
+                    </span>
+                    {spec.lowConfidence && (
+                      <span className="text-[10px] text-amber-400">amostra baixa</span>
+                    )}
+                  </div>
+                </div>
+                <div
+                  className={`text-sm font-bold shrink-0 ml-2 ${spec.roi >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                >
+                  {formatPercentage(spec.roi)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Tournament List */}
       <ScrollArea className="h-96">
         <Table>
@@ -523,6 +599,28 @@ export default function TournamentLibraryNew() {
       });
 
       return await apiRequest('GET', `/api/tournament-library-grouped?${params}`) as TournamentGroup[];
+    },
+  });
+
+  // Fase 2: insights "Destaques e Vazamentos" (endpoint dedicado, cacheavel).
+  const { data: insightsData } = useQuery({
+    queryKey: ["/api/tournament-library-insights", filters],
+    queryFn: async () => {
+      const filterParams = {
+        sites: filters.sites,
+        categories: filters.categories,
+        speeds: filters.speeds,
+        buyinRange: filters.buyinRange,
+        roiFilter: filters.roiFilter,
+      };
+      const params = new URLSearchParams({
+        period: filters.period,
+        filters: JSON.stringify(filterParams),
+      });
+      return await apiRequest('GET', `/api/tournament-library-insights?${params}`) as {
+        baseline: { roi: number; sample: number };
+        insights: LibraryInsight[];
+      };
     },
   });
 
@@ -828,6 +926,46 @@ export default function TournamentLibraryNew() {
           </div>
         </div>
       </div>
+
+      {/* Fase 2 (library-evolution): Destaques e Vazamentos — onde voce ganha/
+          perde acima/abaixo da sua media, com significancia estatistica. */}
+      {insightsData && insightsData.insights.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-lg font-bold mb-3">Destaques e Vazamentos</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {insightsData.insights.map((ins, i) => {
+              const isHi = ins.kind === 'highlight';
+              const confColor =
+                ins.confidence === 'high' ? 'bg-emerald-400'
+                  : ins.confidence === 'medium' ? 'bg-yellow-400'
+                  : 'bg-gray-500';
+              return (
+                <div
+                  key={`${ins.dimension}-${ins.bucketLabel}-${i}`}
+                  className={`rounded-lg p-3 border flex items-start gap-3 ${
+                    isHi
+                      ? 'bg-emerald-900/30 border-emerald-600/40'
+                      : 'bg-red-900/30 border-red-600/40'
+                  }`}
+                >
+                  <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${confColor}`} title={`Confiança: ${ins.confidence}`} />
+                  <div className="min-w-0">
+                    {/* Motivo do destaque (alinha com cards salvos — Fase 5/6) */}
+                    {ins.reason === 'low_variance' && (
+                      <span className="inline-block mb-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-sky-900/60 text-sky-300 border border-sky-600/40">
+                        Baixa variância
+                      </span>
+                    )}
+                    <p className={`text-sm ${isHi ? 'text-emerald-200' : 'text-red-200'}`}>
+                      {ins.message}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {/* RF-01 (L1): Filtros uniformes — sem 7 gradientes ad-hoc.
           Estilo neutro padrao + cor so no chip ATIVO via tokens.color.
           Header da pagina e secoes internas usam mesmo background. */}
@@ -1042,11 +1180,11 @@ export default function TournamentLibraryNew() {
                 <div className="flex flex-wrap gap-2">
                   {[
                     { key: null, label: 'Todos' },
-                    { key: 50, label: '50+' },
-                    { key: 200, label: '200+ (D)' },
-                    { key: 500, label: '500+ (C)' },
-                    { key: 1000, label: '1000+ (B)' },
-                    { key: 2000, label: '2000+ (A)' },
+                    { key: 30, label: '30+' },
+                    { key: 50, label: '50+ (D)' },
+                    { key: 100, label: '100+ (C)' },
+                    { key: 200, label: '200+ (B)' },
+                    { key: 500, label: '500+ (A)' },
                   ].map((opt) => {
                     const active = filters.minimumVolume === opt.key;
                     return (
@@ -1226,7 +1364,7 @@ export default function TournamentLibraryNew() {
               <EmptyState
                 icon={<Trophy className="w-full h-full" />}
                 title="Nenhum grupo encontrado"
-                description="Grupos sao criados automaticamente quando voce tem 50+ torneios similares. Importe mais historico para ver a biblioteca."
+                description="Grupos sao criados automaticamente quando voce tem 10+ torneios similares. Importe mais historico para ver a biblioteca."
                 ctaLabel="Importar torneios"
                 ctaAction={() => setLocation('/upload')}
                 area="library-no-groups"
@@ -1241,7 +1379,7 @@ export default function TournamentLibraryNew() {
             const volatilityColor = group.volatilityLevel === 'low' ? 'text-emerald-400' : group.volatilityLevel === 'medium' ? 'text-yellow-400' : 'text-red-400';
             const posColor = group.normalizedPosition !== null ? (group.normalizedPosition < 0.5 ? 'text-emerald-400' : 'text-red-400') : 'text-gray-500';
             const gradeColor = confidenceGradeColors[group.confidenceGrade] || 'bg-gray-600';
-            const gradeTooltip = confidenceGradeTooltips[group.confidenceGrade] || '';
+            const variationCount = group.specifics?.length ?? 0;
 
             return (
               <Dialog key={group.id}>
@@ -1266,9 +1404,21 @@ export default function TournamentLibraryNew() {
                       <CardTitle className="text-white text-base font-bold line-clamp-2 leading-tight mb-1">
                         {group.groupName}
                       </CardTitle>
-                      <Badge className={`text-xs font-medium ${getSiteColor(group.site)}`}>
-                        {group.site}
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Badge className={`text-xs font-medium ${getSiteColor(group.site)}`}>
+                          {group.site}
+                        </Badge>
+                        {variationCount > 1 && (
+                          <Badge className="text-xs font-medium bg-gray-700 text-gray-200">
+                            {variationCount} variações
+                          </Badge>
+                        )}
+                        {group.lowConfidence && (
+                          <Badge className="text-xs font-medium bg-amber-900/60 text-amber-300 border border-amber-600/40">
+                            amostra baixa
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </CardHeader>

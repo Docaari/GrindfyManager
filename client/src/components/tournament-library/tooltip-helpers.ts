@@ -1,13 +1,7 @@
-const confidenceTooltips: Record<string, string> = {
-  A: 'A — 2000+ torneios, altamente confiavel',
-  B: 'B — 1000-1999 torneios, confiavel',
-  C: 'C — 500-999 torneios, moderado',
-  D: 'D — 200-499 torneios, baixa confiabilidade',
-  F: 'F — 50-199 torneios, dados insuficientes',
-};
+import { GRADE_TOOLTIPS } from "@shared/library-grades";
 
 export function getConfidenceTooltip(grade: string): string {
-  return confidenceTooltips[grade] || '';
+  return GRADE_TOOLTIPS[grade as keyof typeof GRADE_TOOLTIPS] || '';
 }
 
 export function getVolatilityTooltip(): string {

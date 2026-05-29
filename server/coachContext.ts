@@ -387,10 +387,21 @@ export async function buildTournamentContext(userId: string): Promise<any> {
       storage.getTournamentLibrary(userId, 'all'),
     ]);
 
-    // Separate top and worst templates from library
+    // Separate top and worst templates from library. Projetar shape ENXUTO:
+    // pos-Fase-1 cada item de familia carrega tournaments[] + specifics[] (cada
+    // um com tournaments[]) — embutir isso no prompt do Coach inflaria tokens.
+    const leanTemplate = (g: any) => ({
+      groupName: g.groupName,
+      site: g.site,
+      category: g.category,
+      roi: g.roi,
+      volume: g.volume,
+      avgBuyin: g.avgBuyin,
+      confidenceGrade: g.confidenceGrade,
+    });
     const sorted = (library || []).sort((a: any, b: any) => (b.roi || 0) - (a.roi || 0));
-    const topTemplates = sorted.slice(0, 5);
-    const worstTemplates = sorted.slice(-5).reverse();
+    const topTemplates = sorted.slice(0, 5).map(leanTemplate);
+    const worstTemplates = sorted.slice(-5).reverse().map(leanTemplate);
 
     // Load planned tournaments and profile states
     let planned: any[] = [];
