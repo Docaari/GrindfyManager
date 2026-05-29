@@ -591,6 +591,91 @@ describe('AggregationWizard (RF-07)', () => {
   });
 
   // -------------------------------------------------------------------------
+  // ITM% + Rake% (ADR-216 / VR-CALC-1 — fidelidade poker)
+  // -------------------------------------------------------------------------
+
+  describe('ITM% e Rake% por grupo', () => {
+    it('deve renderizar inputs de ITM% e Rake% por grupo', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      expect(AggregationWizard).not.toBeNull();
+
+      const { render, screen, waitFor } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard),
+        ),
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('aggregation-table')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('itm-input-0')).toBeInTheDocument();
+      expect(screen.getByTestId('rake-input-0')).toBeInTheDocument();
+      // ITM default 15%
+      expect((screen.getByTestId('itm-input-0') as HTMLInputElement).value).toBe('15');
+      // Rake default 0%
+      expect((screen.getByTestId('rake-input-0') as HTMLInputElement).value).toBe('0');
+    });
+
+    it('deve converter percent da UI para decimal no payload de simulacao', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      expect(AggregationWizard).not.toBeNull();
+
+      const { render, screen, fireEvent, waitFor } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      const onRun = (await import('vitest')).vi.fn();
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard, { onRun }),
+        ),
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('aggregation-table')).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByTestId('itm-input-0'), { target: { value: '20' } });
+      fireEvent.change(screen.getByTestId('rake-input-0'), { target: { value: '7' } });
+      fireEvent.click(screen.getByTestId('simulate-button'));
+
+      expect(onRun).toHaveBeenCalledTimes(1);
+      const payload = onRun.mock.calls[0][0];
+      expect(payload.groups[0].placesPaidPct).toBeCloseTo(0.20, 5);
+      expect(payload.groups[0].rakePct).toBeCloseTo(0.07, 5);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Leaks conhecidos visiveis na pagina (founder feedback)
+  // -------------------------------------------------------------------------
+
+  describe('leaks conhecidos na pagina', () => {
+    it('deve exibir o banner de leaks/limitacoes conhecidas', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      expect(AggregationWizard).not.toBeNull();
+
+      const { render, screen } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard),
+        ),
+      );
+
+      expect(screen.getByTestId('known-leaks-banner')).toBeInTheDocument();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Simulate button
   // -------------------------------------------------------------------------
 

@@ -98,7 +98,7 @@ PrimeDope deixa colar a estrutura de payout real. Grindfy tem vantagem: pode **d
 
 | Fase | Escopo | Depende de | Esforço |
 |------|--------|-----------|---------|
-| **VR-CALC-1** | Quick wins: expor `rakePct` + `placesPaidPct` na UI (engine já suporta); **rake abate prize pool** (leak #1); defaults de rake/ITM por tipo | Pesquisa 2.4 (rake/ITM defaults) | S–M |
+| ~~**VR-CALC-1**~~ ✅ SHIPPED (ADR-216, 2026-05-29) | Rake% + ITM% editáveis por torneio na UI; **rake entra no custo + calibração** (modelo PrimeDope/MTTDB `target=(1+rake)(1+ROI)`, sem double-count); leaks conhecidos visíveis na página | — | S–M |
 | **VR-CALC-2** | **Import do histórico CSV** (Feature A): endpoint `history-aggregate` + filtro período + agrupamento família + UI "Importar do histórico" | Torneios + Upload estáveis (BLOQUEIO) | M–L |
 | **VR-CALC-3** | Satellite flat-payout (leak #2) + PKO bounty como EV separado (leak #3) | Pesquisa math bounty/satélite | L |
 | **VR-CALC-4** | Payout real derivado do CSV (2.3) + incerteza de ROI por bootstrap (leak #7) | VR-CALC-2 + pesquisa | L |

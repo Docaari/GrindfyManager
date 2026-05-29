@@ -657,4 +657,80 @@ describe('varianceEngine — calibrateSkill', () => {
     // Should be very close to 1 (break-even)
     expect(Math.abs(skill - 1)).toBeLessThan(0.05);
   });
+
+  // ADR-216: rake entra no target de calibracao (target=(1+rake)(1+ROI)).
+  it('rakePct raises the calibration target (skill higher than no-rake at same ROI)', () => {
+    const payouts = generatePayouts(1000, false);
+    const skillNoRake = calibrateSkill(1000, payouts, 0.15, 0);
+    const skillRake = calibrateSkill(1000, payouts, 0.15, 0.1);
+    // Maior target exige finalizar melhor (skill maior) pra cobrir custo+rake.
+    expect(skillRake).toBeGreaterThan(skillNoRake);
+  });
+
+  it('rakePct=0 is identical to omitting it (back-compat)', () => {
+    const payouts = generatePayouts(1000, false);
+    expect(calibrateSkill(1000, payouts, 0.12, 0)).toBe(
+      calibrateSkill(1000, payouts, 0.12),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ADR-216: Rake explicito no custo + calibracao (net ROI preservado)
+// ---------------------------------------------------------------------------
+
+describe('varianceEngine — rake explicito (ADR-216)', () => {
+  it('totalInvested inclui rake: buyIn*(1+rake)*count', () => {
+    const input: VarianceSimulationInput = {
+      groups: [
+        { name: 'R', buyIn: 100, field: 1000, roi: 0.1, count: 200, isPKO: false, rakePct: 0.09 },
+      ],
+      weeks: 4,
+      simulations: 5000,
+    };
+    const result = runMonteCarloSimulation(input);
+    // 100 * 1.09 * 200 = 21800
+    expect(result.totalInvested).toBeCloseTo(21800, 0);
+  });
+
+  it('net ROI preservado: ev/totalInvested ~ roi mesmo com rake', () => {
+    const input: VarianceSimulationInput = {
+      groups: [
+        { name: 'R', buyIn: 100, field: 800, roi: 0.15, count: 400, isPKO: false, rakePct: 0.08 },
+      ],
+      weeks: 12,
+      simulations: 10000,
+      seed: 42,
+    };
+    const result = runMonteCarloSimulation(input);
+    const netRoi = result.ev / result.totalInvested;
+    expect(netRoi).toBeGreaterThan(0.10);
+    expect(netRoi).toBeLessThan(0.20);
+  });
+
+  it('rake>0 reduz EV vs rake=0 ao mesmo ROI bruto declarado? Nao — ROI eh net; EV escala com custo', () => {
+    // Mesmo ROI net declarado, rake>0 tem custo maior -> EV (lucro liquido) maior em USD
+    // porque ROI eh aplicado sobre uma base de custo maior. Documenta a semantica.
+    const base: VarianceSimulationInput = {
+      groups: [
+        { name: 'A', buyIn: 100, field: 1000, roi: 0.1, count: 200, isPKO: false },
+      ],
+      weeks: 4,
+      simulations: 8000,
+      seed: 7,
+    };
+    const withRake: VarianceSimulationInput = {
+      groups: [
+        { name: 'A', buyIn: 100, field: 1000, roi: 0.1, count: 200, isPKO: false, rakePct: 0.1 },
+      ],
+      weeks: 4,
+      simulations: 8000,
+      seed: 7,
+    };
+    const r0 = runMonteCarloSimulation(base);
+    const r1 = runMonteCarloSimulation(withRake);
+    expect(r1.totalInvested).toBeGreaterThan(r0.totalInvested);
+    // ambos net ROI ~0.1
+    expect(r1.ev / r1.totalInvested).toBeCloseTo(r0.ev / r0.totalInvested, 1);
+  });
 });

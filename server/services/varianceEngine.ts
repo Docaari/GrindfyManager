@@ -188,10 +188,15 @@ export function calibrateSkill(
   fieldSize: number,
   payouts: Float64Array,
   targetROI: number,
+  rakePct: number = 0,
 ): number {
   const N = fieldSize;
   const P = payouts.length;
-  const target = 1 + targetROI;
+  // ADR-216: target de expected-payout (em unidades de buy-in / pool) precisa
+  // cobrir o custo COM rake. Net ROI = (E[payout]-cost)/cost, cost=(1+rake).
+  // Logo E[payout] = (1+rake)(1+ROI). PrimeDope/MTTDB usam o mesmo fator α.
+  // rakePct=0 -> target = (1+ROI) (identico ao comportamento anterior).
+  const target = (1 + rakePct) * (1 + targetROI);
 
   function computeEV(s: number): number {
     let ev = 0;
@@ -274,14 +279,18 @@ export function runMonteCarloSimulation(
 
   const prepared = input.groups.map((g) => {
     const placesPaidPct = g.placesPaidPct ?? 0.15;
+    const rakePct = g.rakePct ?? 0;
     const payouts = generatePayouts(g.field, g.isPKO, placesPaidPct);
-    const skill = calibrateSkill(g.field, payouts, g.roi);
-    return { ...g, payouts, skill, rakePct: g.rakePct ?? 0 };
+    // ADR-216: rake entra na calibracao (target = (1+rake)(1+ROI)).
+    const skill = calibrateSkill(g.field, payouts, g.roi, rakePct);
+    return { ...g, payouts, skill, rakePct };
   });
 
   const totalTournaments = input.groups.reduce((s, g) => s + g.count, 0);
-  const totalInvested = input.groups.reduce(
-    (s, g) => s + g.buyIn * g.count,
+  // ADR-216: totalInvested = custo REAL incluindo rake (buyIn*(1+rake)*count).
+  // ROI liquido = ev/totalInvested. rake=0 -> = buyIn*count (back-compat).
+  const totalInvested = prepared.reduce(
+    (s, g) => s + g.buyIn * (1 + g.rakePct) * g.count,
     0,
   );
   const totalRakeUsd = prepared.reduce(
@@ -305,12 +314,14 @@ export function runMonteCarloSimulation(
         const base = Math.floor(p.count / weeks);
         const extra = p.count % weeks;
         const tournsThisWeek = base + (w < extra ? 1 : 0);
+        // ADR-216: custo por torneio inclui rake. Bustar = perde buyIn+rake.
+        const cost = 1 + p.rakePct;
         for (let t = 0; t < tournsThisWeek; t++) {
           const pos = Math.ceil(p.field * Math.pow(random(), p.skill));
           const profit =
             pos <= p.payouts.length
-              ? (p.payouts[pos - 1] - 1) * p.buyIn
-              : -p.buyIn;
+              ? (p.payouts[pos - 1] - cost) * p.buyIn
+              : -cost * p.buyIn;
           total += profit;
           groupProfit += profit;
           weekProfits[w] += profit;
@@ -390,7 +401,8 @@ export function runMonteCarloSimulation(
   const groupContributions = input.groups.map((g, i) => ({
     name: g.name,
     count: g.count,
-    invested: g.buyIn * g.count,
+    // ADR-216: invested = custo com rake (soma == totalInvested).
+    invested: g.buyIn * (1 + (g.rakePct ?? 0)) * g.count,
     expectedProfit: groupProfitSums[i] / simCount,
   }));
 

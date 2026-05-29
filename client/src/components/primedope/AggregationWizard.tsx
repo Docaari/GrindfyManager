@@ -39,7 +39,12 @@ interface AggGroup {
   isPKO: boolean;
   source: "historical" | "default";
   lowSample: boolean;
+  placesPaidPct?: number; // ADR-215 D6 — ITM% (decimal, default 0.15)
+  rakePct?: number; // ADR-216 — rake (decimal, default 0)
 }
+
+const DEFAULT_ITM = 0.15;
+const DEFAULT_RAKE = 0;
 
 interface AggMeta {
   profileLetter: string;
@@ -112,6 +117,16 @@ function sanitizeForSimulate(g: AggGroup): AggGroup {
   const count = Math.max(1, Math.min(50000, Math.round(Number(g.count) || 1)));
   const buyIn = Math.max(0.01, Number(g.buyIn) || 0.01);
   const roi = Number.isFinite(Number(g.roi)) ? Number(g.roi) : 0;
+  // ITM% (decimal): zod backend exige [0.05, 0.5]
+  const itm = Math.max(
+    0.05,
+    Math.min(0.5, Number(g.placesPaidPct ?? DEFAULT_ITM) || DEFAULT_ITM),
+  );
+  // Rake (decimal): zod backend exige [0, 0.5]
+  const rake = Math.max(
+    0,
+    Math.min(0.5, Number(g.rakePct ?? DEFAULT_RAKE) || 0),
+  );
   return {
     ...g,
     name: (g.name || "Grupo").trim() || "Grupo",
@@ -120,6 +135,8 @@ function sanitizeForSimulate(g: AggGroup): AggGroup {
     count,
     roi,
     isPKO: !!g.isPKO,
+    placesPaidPct: itm,
+    rakePct: rake,
   };
 }
 
@@ -157,14 +174,21 @@ export default function AggregationWizard({
 
   const handleGroupEdit = (
     index: number,
-    field: "name" | "buyIn" | "roi" | "field" | "count",
+    field: "name" | "buyIn" | "roi" | "field" | "count" | "itm" | "rake",
     value: string,
   ) => {
     setRawInputs((prev) => ({ ...prev, [`${field}-${index}`]: value }));
     setEditedGroups((prev) => {
       const next = [...(prev ?? groups)];
-      const parsed = field === "name" ? value : Number(value) || 0;
-      next[index] = { ...next[index], [field]: parsed };
+      // itm/rake sao digitados em PERCENT na UI, guardados em DECIMAL (engine).
+      if (field === "itm") {
+        next[index] = { ...next[index], placesPaidPct: (Number(value) || 0) / 100 };
+      } else if (field === "rake") {
+        next[index] = { ...next[index], rakePct: (Number(value) || 0) / 100 };
+      } else {
+        const parsed = field === "name" ? value : Number(value) || 0;
+        next[index] = { ...next[index], [field]: parsed };
+      }
       return next;
     });
   };
@@ -184,6 +208,8 @@ export default function AggregationWizard({
         isPKO: false,
         source: "default",
         lowSample: false,
+        placesPaidPct: DEFAULT_ITM,
+        rakePct: DEFAULT_RAKE,
       };
       return [...base, newGroup];
     });
@@ -229,30 +255,100 @@ export default function AggregationWizard({
           <button
             type="button"
             onClick={() => setShowDisclaimer((v) => !v)}
-            className="shrink-0 text-sm text-muted-foreground hover:text-foreground underline"
+            className="shrink-0 text-sm text-amber-600 dark:text-amber-500 hover:underline"
           >
-            {showDisclaimer ? "Ocultar" : "Como funciona?"}
+            {showDisclaimer ? "Ocultar" : "Como funciona / limitações"}
           </button>
         </div>
 
+        {/* Aviso de leaks sempre visivel (founder: leaks devem aparecer na pagina) */}
+        <button
+          type="button"
+          data-testid="known-leaks-banner"
+          onClick={() => setShowDisclaimer(true)}
+          className="flex w-full items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-500/15"
+        >
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            <strong>Modelo aproximado:</strong> tem leaks conhecidos (rake, ITM,
+            satélite, PKO, estrutura de payout). Clique para ver o que ainda não
+            é modelado com precisão.
+          </span>
+        </button>
+
         {showDisclaimer ? (
-          <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground space-y-1.5">
-            <p>
-              <strong className="text-foreground">Monte Carlo:</strong> rodamos
-              10.000 simulacoes do seu volume planejado. Cada torneio sorteia
-              uma posicao (distribuicao calibrada por ROI alvo) e calcula o
-              payout pela tabela power-law tipica do field.
-            </p>
-            <p>
-              Os percentis (P15/P85, P2.5/P97.5) mostram <em>onde 70% / 95%</em>{" "}
-              dos cenarios caem — nao predicao, mas distribuicao da variancia
-              esperada dado seu edge declarado.
-            </p>
-            <p>
-              <strong className="text-foreground">Limitacoes:</strong> assume
-              independencia entre torneios, ITM fixo em 15% do field, sem skill
-              drift no periodo. Use como referencia de risco, nao garantia.
-            </p>
+          <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground space-y-2.5">
+            <div className="space-y-1.5">
+              <p>
+                <strong className="text-foreground">Monte Carlo:</strong> rodamos
+                10.000 simulacoes do seu volume planejado. Cada torneio sorteia
+                uma posicao (distribuicao calibrada pelo ROI liquido alvo) e
+                calcula o payout pela tabela power-law tipica do field.
+              </p>
+              <p>
+                Os percentis (P15/P85, P2.5/P97.5) mostram{" "}
+                <em>onde 70% / 95%</em> dos cenarios caem — nao predicao, mas
+                distribuicao da variancia esperada dado seu edge declarado.
+              </p>
+              <p>
+                <strong className="text-foreground">Rake + ITM</strong> agora sao
+                editaveis por torneio. Rake entra no custo real e na calibracao
+                do edge (prize pool = field × buy-in, rake fora — modelo
+                PrimeDope/MTTDB). ITM% controla quantas posicoes pagam.
+              </p>
+            </div>
+
+            <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2.5">
+              <p className="mb-1 font-semibold text-amber-700 dark:text-amber-400">
+                Leaks conhecidos (o que o modelo AINDA nao captura com
+                precisao):
+              </p>
+              <ul className="list-disc space-y-1 pl-4">
+                <li>
+                  <strong>Payout sintético:</strong> usa curva power-law por
+                  faixa de field, não a estrutura real de pagamentos de cada
+                  torneio.
+                </li>
+                <li>
+                  <strong>PKO/bounty simplificado:</strong> achata a curva, mas
+                  não modela o pool de bounty como fluxo de EV separado
+                  (subestima upside/variância de PKO).
+                </li>
+                <li>
+                  <strong>Satélite:</strong> tratado como torneio normal —
+                  payout flat de assentos (todos ganham o mesmo) ainda não é
+                  modelado.
+                </li>
+                <li>
+                  <strong>Sem re-entry / rebuy / add-on:</strong> não multiplica
+                  custo nem ajusta field efetivo.
+                </li>
+                <li>
+                  <strong>Sem late registration / ICM / deals</strong> de mesa
+                  final.
+                </li>
+                <li>
+                  <strong>Field fixo (média):</strong> usa o tamanho médio, não
+                  a variação real de field por torneio.
+                </li>
+                <li>
+                  <strong>ROI como ponto fixo:</strong> assume o ROI declarado
+                  exato, sem a incerteza própria da amostra.
+                </li>
+                <li>
+                  <strong>Independência entre torneios</strong> e drawdown só
+                  com granularidade semanal (swings intra-dia subestimados).
+                </li>
+              </ul>
+              <p className="mt-1.5 text-[11px]">
+                Use como referência de risco, não garantia. Roadmap de
+                melhorias:{" "}
+                <span className="font-mono">
+                  docs/specs/sprint-variance-calculator-poker-fidelity.md
+                </span>
+                .
+              </p>
+            </div>
           </div>
         ) : null}
 
@@ -407,7 +503,13 @@ export default function AggregationWizard({
                     <th className="px-3 py-2.5 text-right font-medium">
                       <span className="inline-flex items-center justify-end">
                         Buy-in (USD)
-                        <InfoTip text="Buy-in medio USD do bucket. Editavel — ajuste para simular subida/descida de stake." />
+                        <InfoTip text="Buy-in medio USD do bucket (parte que vai pro prize pool). Editavel — ajuste para simular subida/descida de stake." />
+                      </span>
+                    </th>
+                    <th className="px-3 py-2.5 text-right font-medium">
+                      <span className="inline-flex items-center justify-end">
+                        Rake %
+                        <InfoTip text="Taxa do site sobre o buy-in (ex: $100+$9 = 9%). Entra no CUSTO real e na calibracao do edge (ADR-216). Prize pool = field x buy-in (rake fora). Default 0." />
                       </span>
                     </th>
                     <th className="px-3 py-2.5 text-right font-medium">
@@ -418,8 +520,14 @@ export default function AggregationWizard({
                     </th>
                     <th className="px-3 py-2.5 text-right font-medium">
                       <span className="inline-flex items-center justify-end">
+                        ITM %
+                        <InfoTip text="% do field que entra no dinheiro (places paid). Standard ~15%, Flat ~20%, Turbo/Steep ~10-12%. Mais ITM = payouts menores porem mais frequentes. Default 15%." />
+                      </span>
+                    </th>
+                    <th className="px-3 py-2.5 text-right font-medium">
+                      <span className="inline-flex items-center justify-end">
                         ROI (decimal)
-                        <InfoTip text="ROI em formato decimal: 0.10 = 10%, 0.20 = 20%. Para ROI negativo use sinal: -0.05 = -5%." />
+                        <InfoTip text="ROI LIQUIDO (ja descontado rake) em decimal: 0.10 = 10%, 0.20 = 20%. Negativo: -0.05 = -5%." />
                       </span>
                     </th>
                     <th className="px-3 py-2.5 text-right font-medium">
@@ -494,6 +602,33 @@ export default function AggregationWizard({
                           </div>
                         </td>
                         <td className="px-3 py-2.5 text-right">
+                          <div className="relative inline-block">
+                            <input
+                              data-testid={`rake-input-${i}`}
+                              type="text"
+                              inputMode="decimal"
+                              value={
+                                rawInputs[`rake-${i}`] ??
+                                (
+                                  (editedGroups?.[i]?.rakePct ??
+                                    g.rakePct ??
+                                    DEFAULT_RAKE) * 100
+                                ).toString()
+                              }
+                              onChange={(e) =>
+                                handleGroupEdit(i, "rake", e.target.value)
+                              }
+                              className={cn(
+                                inputBase,
+                                "w-16 pr-5 text-right font-mono",
+                              )}
+                            />
+                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                              %
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
                           <input
                             data-testid={`field-input-${i}`}
                             type="text"
@@ -511,6 +646,33 @@ export default function AggregationWizard({
                               "w-24 text-right font-mono",
                             )}
                           />
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="relative inline-block">
+                            <input
+                              data-testid={`itm-input-${i}`}
+                              type="text"
+                              inputMode="decimal"
+                              value={
+                                rawInputs[`itm-${i}`] ??
+                                (
+                                  (editedGroups?.[i]?.placesPaidPct ??
+                                    g.placesPaidPct ??
+                                    DEFAULT_ITM) * 100
+                                ).toString()
+                              }
+                              onChange={(e) =>
+                                handleGroupEdit(i, "itm", e.target.value)
+                              }
+                              className={cn(
+                                inputBase,
+                                "w-16 pr-5 text-right font-mono",
+                              )}
+                            />
+                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                              %
+                            </span>
+                          </div>
                         </td>
                         <td className="px-3 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
