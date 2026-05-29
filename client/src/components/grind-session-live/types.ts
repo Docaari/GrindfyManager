@@ -207,7 +207,7 @@ export interface NewTournamentForm {
   // Horario de registro intencional (HH:MM). Opcional. Quando preenchido,
   // grind-live ordena/exibe por este valor; senao usa scheduledTime (start).
   registrationTime?: string;
-  fieldSize: string;
+  guaranteed: string;
   rebuys: number;
   result: string;
   position: null;

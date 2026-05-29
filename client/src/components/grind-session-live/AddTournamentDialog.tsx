@@ -216,8 +216,8 @@ export default function AddTournamentDialog({
                   <Label className="text-[#00ff88] font-medium">Guaranteed (opcional)</Label>
                   <Input
                     type="number"
-                    value={newTournament.fieldSize}
-                    onChange={(e) => setNewTournament({...newTournament, fieldSize: e.target.value})}
+                    value={newTournament.guaranteed}
+                    onChange={(e) => setNewTournament({...newTournament, guaranteed: e.target.value})}
                     className="bg-[#1a1a1a] border-[#333333] text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
                     placeholder="0"
                   />

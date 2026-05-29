@@ -9,6 +9,11 @@
 // =============================================================================
 
 import * as React from "react";
+import { ScenarioCards } from "./ScenarioCards";
+import { DrawdownCard } from "./DrawdownCard";
+import { VarianceHistogram } from "./VarianceHistogram";
+import { GroupContributions } from "./GroupContributions";
+import { EquityCurves } from "./EquityCurves";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -248,27 +253,35 @@ export function PrimedopeResult({
         </table>
       </div>
 
-      {/* Drawdown Section */}
-      <div
-        data-testid="primedope-result-drawdown"
-        className="rounded border border-border bg-card p-3"
-      >
-        <div className="mb-2 text-sm font-medium">Drawdown esperado</div>
-        <div className="space-y-1 text-xs">
-          <div data-testid="primedope-dd-median" className="flex justify-between">
-            <span>Tipico (mediano)</span>
-            <span>{formatUsd(dd.median)}</span>
-          </div>
-          <div data-testid="primedope-dd-p95" className="flex justify-between">
-            <span>Preparar (95%)</span>
-            <span>{formatUsd(dd.p95)}</span>
-          </div>
-          <div data-testid="primedope-dd-worst" className="flex justify-between">
-            <span>Pior raro</span>
-            <span>{formatUsd(dd.worst)}</span>
-          </div>
-        </div>
-      </div>
+      {/* VR-3: Scenario Cards (pessimista / mediana / otimista) */}
+      <ScenarioCards
+        percentiles={p}
+        weeks={result.weeks ?? 12}
+      />
+
+      {/* VR-3: Drawdown Card (visual bars) */}
+      <DrawdownCard drawdown={dd} />
+
+      {/* VR-3: Histogram */}
+      {Array.isArray(result.histogram) && result.histogram.length > 0 && (
+        <VarianceHistogram
+          histogram={result.histogram}
+          medianValue={p.p50 ?? 0}
+        />
+      )}
+
+      {/* VR-3: Equity Curves */}
+      {result.equityCurves && (
+        <EquityCurves
+          equityCurves={result.equityCurves}
+          weeks={result.weeks ?? 12}
+        />
+      )}
+
+      {/* VR-3: Group Contributions */}
+      {Array.isArray(result.groupContributions) && result.groupContributions.length > 0 && (
+        <GroupContributions groupContributions={result.groupContributions} />
+      )}
     </section>
   );
 }
