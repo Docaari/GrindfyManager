@@ -47,6 +47,7 @@ function userIdFrom(req: any): string | null {
 // Schemas Zod — new native format (VarianceSimulationInput)
 // ---------------------------------------------------------------------------
 
+// ADR-215 D6/D7: placesPaidPct + rakePct opcionais por grupo
 const groupSchema = z.object({
   name: z.string().min(1),
   buyIn: z.number().positive(),
@@ -54,6 +55,8 @@ const groupSchema = z.object({
   roi: z.number(),
   count: z.number().int().positive().max(50000),
   isPKO: z.boolean(),
+  placesPaidPct: z.number().min(0.05).max(0.5).optional(),
+  rakePct: z.number().min(0).max(0.5).optional(),
 });
 
 const varianceSimulateBodySchema = z.object({
@@ -63,6 +66,7 @@ const varianceSimulateBodySchema = z.object({
   }),
   simulations: z.number().int().optional(),
   seed: z.number().optional(),
+  bankrollUsd: z.number().positive().optional(), // ADR-215 D2: habilita RoR
 });
 
 // ---------------------------------------------------------------------------

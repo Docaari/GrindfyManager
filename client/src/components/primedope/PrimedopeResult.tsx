@@ -157,13 +157,21 @@ export function PrimedopeResult({
     );
   }
 
-  const roi =
-    result.totalInvested > 0
+  // ADR-215 D4: backend agora retorna roi.mean + roi.median. Fallback ao calculo
+  // antigo se o payload for de cache antigo (sem campo roi).
+  const roiMeanPct =
+    result.roi?.mean != null
+      ? result.roi.mean * 100
+      : result.totalInvested > 0
       ? (result.ev / result.totalInvested) * 100
       : 0;
+  const roiMedianPct =
+    result.roi?.median != null ? result.roi.median * 100 : null;
 
   const p = result.percentiles ?? {};
   const dd = result.drawdown ?? {};
+  const evCi = result.evCi95; // ADR-215 D3
+  const ror = result.riskOfRuin; // ADR-215 D2
 
   return (
     <section data-testid="primedope-result" className="space-y-4">
@@ -190,20 +198,41 @@ export function PrimedopeResult({
         <div
           data-testid="primedope-result-card-ev"
           className="rounded border border-border bg-card p-3"
+          title="Valor esperado medio (mean das simulacoes)"
         >
           <div className="text-xs text-muted-foreground">EV</div>
           <div className="text-xl font-semibold">{formatUsd(result.ev)}</div>
+          {evCi ? (
+            <div
+              data-testid="primedope-result-card-ev-ci"
+              className="mt-1 text-[10px] text-muted-foreground"
+              title="Intervalo de confianca 95% do estimador Monte Carlo (CLT)"
+            >
+              ±{formatUsd(1.96 * evCi.stdErr)} (95% CI)
+            </div>
+          ) : null}
         </div>
         <div
           data-testid="primedope-result-card-roi"
           className="rounded border border-border bg-card p-3"
+          title="ROI medio (mean). Distribuicao MTT eh skewed, veja tambem ROI mediana abaixo."
         >
-          <div className="text-xs text-muted-foreground">ROI</div>
-          <div className="text-xl font-semibold">{formatPct(roi)}</div>
+          <div className="text-xs text-muted-foreground">ROI medio</div>
+          <div className="text-xl font-semibold">{formatPct(roiMeanPct)}</div>
+          {roiMedianPct != null ? (
+            <div
+              data-testid="primedope-result-card-roi-median"
+              className="mt-1 text-[10px] text-muted-foreground"
+              title="Mediana — cenario tipico. Gap mean>median revela long-tail."
+            >
+              mediana {formatPct(roiMedianPct)}
+            </div>
+          ) : null}
         </div>
         <div
           data-testid="primedope-result-card-sd"
           className="rounded border border-border bg-card p-3"
+          title="Desvio padrao da distribuicao de profit USD"
         >
           <div className="text-xs text-muted-foreground">SD</div>
           <div className="text-xl font-semibold">{formatUsd(result.stdDev)}</div>
@@ -211,6 +240,7 @@ export function PrimedopeResult({
         <div
           data-testid="primedope-result-card-profit-chance"
           className="rounded border border-border bg-card p-3"
+          title="% de simulacoes que terminaram com profit > 0"
         >
           <div className="text-xs text-muted-foreground">Chance de Lucro</div>
           <div className="text-xl font-semibold">
@@ -218,6 +248,32 @@ export function PrimedopeResult({
           </div>
         </div>
       </div>
+
+      {/* ADR-215 D2: Risk of Ruin card (so quando bankrollUsd informado) */}
+      {ror ? (
+        <div
+          data-testid="primedope-result-card-ror"
+          className="rounded border border-border bg-card p-3"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">
+                Risk of Ruin (MC empirico)
+              </div>
+              <div className="text-xl font-semibold">
+                {formatPct(ror.pct)}
+              </div>
+            </div>
+            <div className="text-right text-[11px] text-muted-foreground">
+              <div>Bankroll: {formatUsd(ror.bankrollUsd)}</div>
+              <div>
+                {ror.ruinSims.toLocaleString("pt-BR")} de{" "}
+                {ror.totalSims.toLocaleString("pt-BR")} sims tocaram o piso
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* CI Table */}
       <div
