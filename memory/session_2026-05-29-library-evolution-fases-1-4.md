@@ -39,7 +39,17 @@ Field pequeno(<100)/médio(100-500) destaque → `reason='low_variance'` + dica 
 ## Status
 tsc 0. ~189 testes adjacentes + 52 novos verde. Zero regressão. **NÃO commitado** (working tree tinha trabalho paralelo do founder VR-3 — AggregationWizard/GradePlanner/WeekGrid; usar `git add` EXPLÍCITO só dos meus arquivos, nunca -A).
 
+## Fase 5 — Overview (SHIPPED main 9268d2b9) + fixes pós-merge
+Tudo em **main** (não mais feature). Sequência de commits em main: `5cf9eb2b` (Fases 1-4) → `30caa7bd` (fix limpeza granular cap 5000→100k + erro real) → `e7d599af` (fix parser: header Sharkscope com sufixo TZ "Data de Início (America/Sao_Paulo)" → 0 torneios; normalizePortugueseHeaders agora match exato senão tira "(...)") → `9268d2b9` (Fase 5 Overview). Integração via worktree isolado B:/grindfy-integrate + junction node_modules + cherry-pick (NÃO merge da feature — feature carrega 4 commits paralelos grind-live/coach do founder que conflitam com main).
+- **Overview** (`server/services/overviewAnalysis.ts` puro, 6 testes): upload CSV grande multi-jogador EFÊMERO (não persiste) → analyzeOverview agrupa (reusa groupTournaments) + métricas pool-level + reasons (ROI médio do field / baixa variância field<500 / $/hora-mesa) + recentResults (nome+nick+pos+prize). Rank top N por plataforma, minVolume 20.
+- Parser: captura `playerNick` (coluna Jogador). Schema + Migration 0082 `saved_tournament_highlights` (UNIQUE user+familyKey, upsert onConflictDoUpdate). storage list/save/delete. Endpoints POST /api/library/overview/analyze (multipart efêmero) + GET/POST/DELETE /api/library/highlights.
+- UI: OverviewPanel (dialog) + SavedHighlightsStrip (cards fixados topo /library, badge motivo, remover). Botão Overview no header.
+- **Migrations 0081 + 0082 aplicadas no DB LOCAL** (psql localhost:5433). Re-import do CSV (4) feito programaticamente (USER-0001): 3461 enriquecidos duração + 496 novos = 19110 total, 3893 com duração, 1097 deepstack.
+- Reviewer Fases 2-4 fixes aplicados: HIGH-1 ($/h numerador=denominador subset), HIGH-2 (enrich match tolerante = dedup), MEDIUM perf (chunks paralelos cc=20).
+
 ## Pendências
+- **Deploy prod:** aplicar migrations 0081 + 0082 no Neon (só rodadas no local).
+- **Fase 6 polish (task #6):** drill-down de card salvo (re-derivar recentResults+nick do histórico — não é persistido), reconciliação família salva↔atual, coach awareness.
 - **Migração 0081 via psql** (founder) + re-upload CSV pra duração popular + rodar backfill deepstack.
 - Fases 5 (Overview: CSV efêmero pool multi-jogador, tabela `saved_tournament_highlights`, captura nick) + 6 (adaptar engine: famílias fixadas no topo, salvar/abrir card com drill-down de resultados+nick) — sprints próprios, documentados no plano.
 - Test follow-up: regressão de cobertura parcial do $/h + match tolerante do enrich (computeGroupMetrics é private; via integração).

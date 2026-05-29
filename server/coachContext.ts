@@ -378,14 +378,23 @@ export async function buildTournamentContext(userId: string): Promise<any> {
       };
     }
 
-    const [roiBySite, roiByBuyin, roiByCategory, roiBySpeed, roiByDay, library] = await Promise.all([
+    const [roiBySite, roiByBuyin, roiByCategory, roiBySpeed, roiByDay, library, savedHl] = await Promise.all([
       storage.getAnalyticsBySite(userId, 'all'),
       storage.getAnalyticsByBuyinRange(userId, 'all'),
       storage.getAnalyticsByCategory(userId, 'all'),
       storage.getAnalyticsBySpeed(userId, 'all'),
       storage.getAnalyticsByDayOfWeek(userId, 'all'),
       storage.getTournamentLibrary(userId, 'all'),
+      storage.listSavedHighlights(userId).catch(() => []),
     ]);
+
+    // Fase 6: familias que o jogador SALVOU como destaque = sinal de intencao
+    // (o que ele quer priorizar na grade). Shape enxuto pro prompt.
+    const savedHighlights = (savedHl || []).map((h: any) => ({
+      groupName: h.groupName,
+      site: h.site,
+      reasons: Array.isArray(h.reasons) ? h.reasons.map((r: any) => r.label) : [],
+    }));
 
     // Separate top and worst templates from library. Projetar shape ENXUTO:
     // pos-Fase-1 cada item de familia carrega tournaments[] + specifics[] (cada
@@ -422,6 +431,7 @@ export async function buildTournamentContext(userId: string): Promise<any> {
       roiByDay: roiByDay || [],
       topTemplates: topTemplates || [],
       worstTemplates: worstTemplates || [],
+      savedHighlights,
       plannedTournaments: planned,
       profileStates: profiles,
     };
@@ -435,6 +445,7 @@ export async function buildTournamentContext(userId: string): Promise<any> {
       roiByDay: [],
       topTemplates: [],
       worstTemplates: [],
+      savedHighlights: [],
       plannedTournaments: [],
       profileStates: [],
     };
