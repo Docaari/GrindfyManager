@@ -270,7 +270,7 @@ export function BibliotecaPanel({
   // =========================================================================
   if (collapsed) {
     return (
-      <div className="w-full bg-gray-900 border border-gray-700 rounded-lg flex flex-col overflow-hidden">
+      <div className="w-full h-full bg-gray-900 border border-gray-700 rounded-lg flex flex-col overflow-hidden">
         {/* Header */}
         <div className="p-3 border-b border-gray-700 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white">Biblioteca</h3>
