@@ -187,10 +187,38 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
   const [priorityOverrides, setPriorityOverrides] = React.useState<
     Record<string, number>
   >({});
+  // Optimistic Max Late overrides — chave id → "HH:MM" | null (null = limpo).
+  // Aplicado em plannedSlots + earliestPlannedHour antes do refetch.
+  const [maxLateOverrides, setMaxLateOverrides] = React.useState<
+    Record<string, string | null>
+  >({});
+  // Estado do picker inline de Max Late (menu aberto por torneio + valor digitado).
+  const [maxLateMenuId, setMaxLateMenuId] = React.useState<string | null>(null);
+  const [maxLatePickerValue, setMaxLatePickerValue] = React.useState<string>("");
+  const [maxLatePickerError, setMaxLatePickerError] = React.useState<
+    string | null
+  >(null);
+
+  // hh 00-23, mm 00-59 (rejeita "99:99", "24:00", "20:60") — paridade grind-live.
+  const HHMM_RE = React.useMemo(() => /^([01]?\d|2[0-3]):[0-5]\d$/, []);
+
+  // Max Late efetivo (override-aware): retorna "HH:MM" ou null.
+  const getEffectiveMaxLate = React.useCallback(
+    (item: any): string | null => {
+      const id = typeof item?.id === "string" ? item.id : null;
+      if (id && Object.prototype.hasOwnProperty.call(maxLateOverrides, id)) {
+        return maxLateOverrides[id];
+      }
+      return typeof item?.maxLate === "string" && item.maxLate.length > 0
+        ? item.maxLate
+        : null;
+    },
+    [maxLateOverrides],
+  );
 
   // Click-away handler: fecha priority/move menus ao clicar fora.
   React.useEffect(() => {
-    if (!priorityMenuId && !moveMenuId) return;
+    if (!priorityMenuId && !moveMenuId && !maxLateMenuId) return;
     const onDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
@@ -198,10 +226,11 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
       if (target.closest("[data-zoom-menu-trigger]")) return;
       setPriorityMenuId(null);
       setMoveMenuId(null);
+      setMaxLateMenuId(null);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [priorityMenuId, moveMenuId]);
+  }, [priorityMenuId, moveMenuId, maxLateMenuId]);
   const libraryPanelRef = React.useRef<ImperativePanelHandle | null>(null);
   const [libraryCollapsed, setLibraryCollapsed] = React.useState<boolean>(
     () => {
@@ -334,17 +363,19 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
       if (filterActive && !filterSet.has(item?.site)) continue;
       // Bucketing prioriza maxLate (reg final). Quando ativo, torneio sobe
       // para o bloco do horario do max late, nao do start time.
-      const bucketRef = item?.maxLate || item?.time;
+      // Max Late efetivo (override-aware) — reflete toggle otimista antes do refetch.
+      const effMaxLate = getEffectiveMaxLate(item);
+      const bucketRef = effMaxLate || item?.time;
       const h = parseHour(bucketRef);
       const slotKey =
         h !== null ? h.toString().padStart(2, "0") + ":00" : fallbackSlot;
       if (!out[slotKey]) out[slotKey] = [];
-      // Optimistic priority overlay
+      // Optimistic overlays — prioridade + maxLate (efetivo).
       const override =
         typeof item?.id === "string" ? priorityOverrides[item.id] : undefined;
-      out[slotKey].push(
-        override !== undefined ? { ...item, prioridade: override } : item,
-      );
+      const overlaid = { ...item, maxLate: effMaxLate };
+      if (override !== undefined) overlaid.prioridade = override;
+      out[slotKey].push(overlaid);
     }
     const timeToMinutes = (t: unknown): number => {
       if (typeof t !== "string") return 0;
@@ -366,7 +397,14 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
       });
     }
     return out;
-  }, [data?.list, timeSlots, filterSelected, parseHour, priorityOverrides]);
+  }, [
+    data?.list,
+    timeSlots,
+    filterSelected,
+    parseHour,
+    priorityOverrides,
+    getEffectiveMaxLate,
+  ]);
 
   // Total filtrado (para empty state + telemetria filter_apply).
   const filteredCount = React.useMemo(() => {
@@ -545,6 +583,112 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
     },
     [dayOfWeek, profileLetter, setErrorToast],
   );
+
+  // Toggle/picker de Max Late (paridade grind-live MaxLateControl). PUT
+  // registrationTime no planned tournament — value="HH:MM" liga, null limpa.
+  // Optimistic via maxLateOverrides; rollback em 4xx. Bucketing + chip ja
+  // consomem o valor efetivo (getEffectiveMaxLate).
+  const mutateMaxLate = React.useCallback(
+    async (tournamentId: string, value: string | null) => {
+      setMaxLateOverrides((prev) => ({ ...prev, [tournamentId]: value }));
+      try {
+        await apiRequest("PUT", `/api/planned-tournaments/${tournamentId}`, {
+          registrationTime: value,
+        });
+        try {
+          queryClient.invalidateQueries?.({
+            queryKey: ["day-detail", profileLetter, dayOfWeek],
+          });
+          queryClient.invalidateQueries?.({
+            queryKey: ["planned-tournaments"],
+          });
+          queryClient.invalidateQueries?.({
+            queryKey: ["/api/planned-tournaments"],
+          });
+        } catch {
+          /* ignore */
+        }
+        safeEmit("coach.day_zoom_maxlate_set", {
+          feature: "day_zoom",
+          tournamentId,
+          dayOfWeek,
+          profileLetter,
+          maxLate: value,
+        });
+      } catch {
+        // Rollback — remove override (volta ao valor persistido).
+        setMaxLateOverrides((prev) => {
+          const { [tournamentId]: _, ...rest } = prev;
+          return rest;
+        });
+        setErrorToast("Falha ao atualizar Max Late");
+      }
+    },
+    [dayOfWeek, profileLetter, setErrorToast],
+  );
+
+  // Handler do toggle inline: maxLate presente -> limpa (null); ausente ->
+  // abre picker. Confirm valida HH:MM antes de chamar mutateMaxLate.
+  // NOTA: `item` DEVE vir de plannedSlots (overlaid com maxLate efetivo). Se
+  // chamado com item de outra fonte (ex: data.list cru), o override otimista
+  // seria ignorado — getEffectiveMaxLate reconcilia, mas o call-site canonico
+  // sempre passa o item overlaid.
+  const handleMaxLateToggle = React.useCallback(
+    (item: any) => {
+      const current = getEffectiveMaxLate(item);
+      if (current) {
+        mutateMaxLate(item.id, null);
+        return;
+      }
+      setMaxLatePickerError(null);
+      setMaxLatePickerValue("");
+      setMaxLateMenuId(item.id);
+      setPriorityMenuId(null);
+      setMoveMenuId(null);
+    },
+    [getEffectiveMaxLate, mutateMaxLate],
+  );
+
+  const handleMaxLateConfirm = React.useCallback(
+    (tournamentId: string) => {
+      if (!HHMM_RE.test(maxLatePickerValue)) {
+        setMaxLatePickerError("Horario invalido (HH:MM)");
+        return;
+      }
+      setMaxLatePickerError(null);
+      setMaxLateMenuId(null);
+      mutateMaxLate(tournamentId, maxLatePickerValue);
+    },
+    [HHMM_RE, maxLatePickerValue, mutateMaxLate],
+  );
+
+  // Limpa overrides de Max Late quando data nova reflete o valor persistido.
+  React.useEffect(() => {
+    if (!data?.list) return;
+    setMaxLateOverrides((prev) => {
+      if (Object.keys(prev).length === 0) return prev;
+      const list: any[] = Array.isArray(data.list) ? data.list : [];
+      let changed = false;
+      const next: Record<string, string | null> = {};
+      for (const [id, v] of Object.entries(prev)) {
+        const found = list.find((x) => x?.id === id);
+        if (!found) {
+          next[id] = v;
+          continue;
+        }
+        const persisted =
+          typeof found.maxLate === "string" && found.maxLate.length > 0
+            ? found.maxLate
+            : null;
+        if (persisted !== v) {
+          next[id] = v;
+        } else {
+          changed = true; // server confirmou, drop
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [data?.list]);
 
   // Limpa overrides quando data nova reflete os valores ja persistidos.
   // Short-circuit (D3): se NENHUMA chave precisar ser droppada, retorna prev
@@ -1222,7 +1366,11 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                   : "border-gray-800";
                               const menuOpen =
                                 priorityMenuId === item.id ||
-                                moveMenuId === item.id;
+                                moveMenuId === item.id ||
+                                maxLateMenuId === item.id;
+                              const hasMaxLate =
+                                typeof item.maxLate === "string" &&
+                                item.maxLate.length > 0;
                               return (
                                 <div
                                   key={tid}
@@ -1295,24 +1443,35 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                   <span className="text-xs font-bold text-emerald-300 tabular-nums shrink-0">
                                     {formatUsd(item.buyinUsd ?? 0)}
                                   </span>
-                                  {/* Garantido + field estimado — sempre exibido quando > 0 */}
+                                  {/* Garantido — chip dedicado: icone + label GTD + valor bold */}
                                   {typeof item.guaranteedUsd === "number" &&
                                     item.guaranteedUsd > 0 && (
                                       <span
                                         data-testid={`day-zoom-tournament-gtd-${item.id ?? tid}`}
-                                        className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] tabular-nums bg-amber-500/10 text-amber-200 border border-amber-500/20 shrink-0"
-                                        title={
-                                          item.estimatedField
-                                            ? `Garantido ${formatUsd(item.guaranteedUsd)} · ~${item.estimatedField} jogadores`
-                                            : `Garantido ${formatUsd(item.guaranteedUsd)}`
-                                        }
+                                        className="inline-flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 shrink-0"
+                                        title={`Garantido ${formatUsd(item.guaranteedUsd)}`}
                                       >
-                                        GTD {formatUsd(item.guaranteedUsd)}
-                                        {item.estimatedField ? (
-                                          <span className="text-amber-300/80 ml-0.5">
-                                            · ~{item.estimatedField}
-                                          </span>
-                                        ) : null}
+                                        <Coins className="w-2.5 h-2.5 text-amber-400/80" />
+                                        <span className="text-[8px] uppercase tracking-wider text-amber-400/70 font-semibold leading-none">
+                                          GTD
+                                        </span>
+                                        <span className="text-[11px] font-bold tabular-nums text-amber-100 leading-none">
+                                          {formatUsd(item.guaranteedUsd)}
+                                        </span>
+                                      </span>
+                                    )}
+                                  {/* Field estimado (media de participantes) — chip cyan separado */}
+                                  {typeof item.estimatedField === "number" &&
+                                    item.estimatedField > 0 && (
+                                      <span
+                                        data-testid={`day-zoom-tournament-field-${item.id ?? tid}`}
+                                        className="inline-flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/20 shrink-0"
+                                        title={`Field estimado ~${item.estimatedField.toLocaleString("pt-BR")} jogadores`}
+                                      >
+                                        <Users className="w-2.5 h-2.5 text-cyan-400/75" />
+                                        <span className="text-[11px] font-semibold tabular-nums text-cyan-100 leading-none">
+                                          ~{item.estimatedField.toLocaleString("pt-BR")}
+                                        </span>
                                       </span>
                                     )}
                                   {/* Type/Speed chip */}
@@ -1386,6 +1545,27 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                         className="p-1 rounded-md text-gray-400 hover:text-blue-300 hover:bg-blue-900/30 transition-colors"
                                       >
                                         <ArrowRightLeft className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        data-zoom-menu-trigger="maxlate"
+                                        data-testid={`day-zoom-maxlate-toggle-${item.id}`}
+                                        onClick={() => handleMaxLateToggle(item)}
+                                        aria-label={`Max Late ${displayName}`}
+                                        aria-pressed={hasMaxLate ? "true" : "false"}
+                                        title={
+                                          hasMaxLate
+                                            ? "Desligar Max Late"
+                                            : "Definir Max Late (reg final)"
+                                        }
+                                        className={
+                                          "p-1 rounded-md transition-colors " +
+                                          (hasMaxLate
+                                            ? "text-amber-300 bg-amber-500/15 hover:bg-amber-500/25"
+                                            : "text-gray-400 hover:text-amber-300 hover:bg-amber-900/30")
+                                        }
+                                      >
+                                        <Hourglass className="w-3 h-3" />
                                       </button>
                                       <button
                                         type="button"
@@ -1516,6 +1696,55 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                           );
                                         })}
                                       </div>
+                                    </div>
+                                  )}
+                                  {/* Max Late picker inline */}
+                                  {maxLateMenuId === item.id && canManage && (
+                                    <div
+                                      data-zoom-menu="maxlate"
+                                      data-testid={`day-zoom-maxlate-menu-${item.id}`}
+                                      className="absolute right-2 top-full mt-1 z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 w-52"
+                                    >
+                                      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-amber-300/80 mb-1.5 px-0.5">
+                                        <Hourglass className="w-3 h-3" />
+                                        Max Late (reg final)
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <input
+                                          type="time"
+                                          data-testid={`day-zoom-maxlate-picker-${item.id}`}
+                                          value={maxLatePickerValue}
+                                          onChange={(e) =>
+                                            setMaxLatePickerValue(
+                                              e.target.value,
+                                            )
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter")
+                                              handleMaxLateConfirm(item.id);
+                                          }}
+                                          autoFocus
+                                          className="flex-1 bg-gray-800 border border-amber-500/50 rounded-md px-2 py-1 text-sm font-mono tabular-nums text-white [color-scheme:dark] focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40 outline-none"
+                                        />
+                                        <button
+                                          type="button"
+                                          data-testid={`day-zoom-maxlate-confirm-${item.id}`}
+                                          onClick={() =>
+                                            handleMaxLateConfirm(item.id)
+                                          }
+                                          className="px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
+                                        >
+                                          OK
+                                        </button>
+                                      </div>
+                                      {maxLatePickerError && (
+                                        <p
+                                          data-testid={`day-zoom-maxlate-error-${item.id}`}
+                                          className="mt-1 text-[10px] text-red-400"
+                                        >
+                                          {maxLatePickerError}
+                                        </p>
+                                      )}
                                     </div>
                                   )}
                                 </div>
