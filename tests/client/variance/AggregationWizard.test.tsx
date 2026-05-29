@@ -777,6 +777,100 @@ describe('AggregationWizard (RF-07)', () => {
   });
 
   // -------------------------------------------------------------------------
+  // ADR-217 — painel avançado: estrutura de payout + re-entries
+  // -------------------------------------------------------------------------
+
+  describe('painel avançado (estrutura + re-entries)', () => {
+    it('renderiza select de estrutura + input de re-entries por grupo', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      const { render, screen, waitFor } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard),
+        ),
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('aggregation-table')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('structure-select-0')).toBeInTheDocument();
+      expect(screen.getByTestId('entries-input-0')).toBeInTheDocument();
+      // re-entries default 1
+      expect((screen.getByTestId('entries-input-0') as HTMLInputElement).value).toBe('1');
+    });
+
+    it('toggle avançado alterna aria-expanded', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      const { render, screen, fireEvent, waitFor } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard),
+        ),
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('advanced-toggle-0')).toBeInTheDocument();
+      });
+      const toggle = screen.getByTestId('advanced-toggle-0');
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('trocar estrutura para Satélite ajusta o ITM% default para 10', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      const { render, screen, fireEvent, waitFor } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard),
+        ),
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('structure-select-0')).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByTestId('structure-select-0'), { target: { value: 'satellite' } });
+      await waitFor(() => {
+        expect((screen.getByTestId('itm-input-0') as HTMLInputElement).value).toBe('10');
+      });
+    });
+
+    it('estrutura + re-entries fluem para o payload de simulação', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      const { render, screen, fireEvent, waitFor } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const onRun = (await import('vitest')).vi.fn();
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard, { onRun }),
+        ),
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('structure-select-0')).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByTestId('structure-select-0'), { target: { value: 'topheavy' } });
+      fireEvent.change(screen.getByTestId('entries-input-0'), { target: { value: '1.6' } });
+      fireEvent.click(screen.getByTestId('simulate-button'));
+
+      expect(onRun).toHaveBeenCalledTimes(1);
+      const g0 = onRun.mock.calls[0][0].groups[0];
+      expect(g0.payoutStructure).toBe('topheavy');
+      expect(g0.avgEntries).toBeCloseTo(1.6, 5);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Leaks conhecidos visiveis na pagina (founder feedback)
   // -------------------------------------------------------------------------
 

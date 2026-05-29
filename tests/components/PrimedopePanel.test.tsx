@@ -52,14 +52,17 @@ describe('<PrimedopePanel>', () => {
     expect(screen.getByTestId('primedope-panel')).toBeInTheDocument();
   });
 
-  it('bankroll consolidated = 0 -> empty state "Cadastre wallets primeiro"', () => {
+  it('bankroll = 0 -> calculadora ainda funciona + hint de RoR (nao bloqueia)', () => {
     fetchSpy.mockResolvedValue(
       new Response(JSON.stringify({ buckets: [], fxRatesUsed: {}, defaultsFlags: [] }), {
         status: 200,
       })
     );
     renderWithClient(<PrimedopePanel userId="USER-1" bankrollUsd={0} />);
-    expect(screen.getByTestId('primedope-panel-empty-no-bankroll')).toBeInTheDocument();
+    // ADR-217: sem bankroll a calculadora NAO eh mais escondida — so o Risk of
+    // Ruin fica indisponivel. O wizard continua montado + hint aparece.
+    expect(screen.getByTestId('primedope-panel-no-bankroll-hint')).toBeInTheDocument();
+    expect(screen.getByTestId('aggregation-wizard')).toBeInTheDocument();
   });
 
   it('bankroll > 0 mas 0 buckets prefilled -> empty state "Adicione torneios"', async () => {

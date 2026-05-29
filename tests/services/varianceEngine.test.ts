@@ -636,6 +636,69 @@ describe('varianceEngine — PKO alpha subtraction (ADR-215 D8)', () => {
     const pko = generatePayouts(5000, true);
     expect(pko[0]).toBeGreaterThan(pko[pko.length - 1]); // still top > min cash
   });
+
+  // ADR-217: payout structure (satellite/flat/topheavy)
+  it('satellite = payout FLAT (todos os assentos pagos valem igual)', () => {
+    const sat = generatePayouts(1000, false, 0.15, 'satellite');
+    const first = sat[0];
+    for (let i = 0; i < sat.length; i++) {
+      expect(sat[i]).toBeCloseTo(first, 6);
+    }
+    // soma ~ fieldSize (conservação do pool)
+    const sum = Array.from(sat).reduce((s, v) => s + v, 0);
+    expect(sum).toBeCloseTo(1000, 0);
+  });
+
+  it('topheavy concentra mais no topo que standard; flat menos', () => {
+    const std = generatePayouts(1000, false, 0.15, 'standard');
+    const top = generatePayouts(1000, false, 0.15, 'topheavy');
+    const flat = generatePayouts(1000, false, 0.15, 'flat');
+    expect(top[0]).toBeGreaterThan(std[0]);
+    expect(flat[0]).toBeLessThan(std[0]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ADR-217: payout structure + re-entry (avgEntries) na simulação
+// ---------------------------------------------------------------------------
+
+describe('varianceEngine — structure + re-entry (ADR-217)', () => {
+  it('satélite produz stdDev menor que standard (payout flat = menos variância)', () => {
+    const mk = (structure: any): VarianceSimulationInput => ({
+      groups: [
+        { name: 'S', buyIn: 50, field: 1000, roi: 0.1, count: 200, isPKO: false, payoutStructure: structure },
+      ],
+      weeks: 4, simulations: 8000, seed: 11,
+    });
+    const sat = runMonteCarloSimulation(mk('satellite'));
+    const std = runMonteCarloSimulation(mk('standard'));
+    expect(sat.stdDev).toBeLessThan(std.stdDev);
+  });
+
+  it('avgEntries=2 dobra o totalInvested (custo real com re-entries)', () => {
+    const out = runMonteCarloSimulation({
+      groups: [
+        { name: 'R', buyIn: 100, field: 1000, roi: 0.1, count: 200, isPKO: false, avgEntries: 2 },
+      ],
+      weeks: 4, simulations: 5000,
+    });
+    // 100 * 2 * 200 = 40000
+    expect(out.totalInvested).toBeCloseTo(40000, 0);
+  });
+
+  it('net ROI preservado com avgEntries + rake combinados', () => {
+    const out = runMonteCarloSimulation({
+      groups: [
+        { name: 'R', buyIn: 100, field: 800, roi: 0.15, count: 400, isPKO: false, rakePct: 0.07, avgEntries: 1.5 },
+      ],
+      weeks: 12, simulations: 10000, seed: 5,
+    });
+    const netRoi = out.ev / out.totalInvested;
+    expect(netRoi).toBeGreaterThan(0.10);
+    expect(netRoi).toBeLessThan(0.20);
+    // custo = 100 * (1.07*1.5) * 400 = 64200
+    expect(out.totalInvested).toBeCloseTo(64200, 0);
+  });
 });
 
 describe('varianceEngine — calibrateSkill', () => {
@@ -656,6 +719,14 @@ describe('varianceEngine — calibrateSkill', () => {
     const skill = calibrateSkill(1000, payouts, 0);
     // Should be very close to 1 (break-even)
     expect(Math.abs(skill - 1)).toBeLessThan(0.05);
+  });
+
+  // ADR-217: avgEntries (re-entry) entra no target junto com rake.
+  it('avgEntries > 1 sobe o target de calibração', () => {
+    const payouts = generatePayouts(1000, false);
+    const s1 = calibrateSkill(1000, payouts, 0.15, 0, 1);
+    const s2 = calibrateSkill(1000, payouts, 0.15, 0, 2);
+    expect(s2).toBeGreaterThan(s1);
   });
 
   // ADR-216: rake entra no target de calibracao (target=(1+rake)(1+ROI)).

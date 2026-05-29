@@ -14,9 +14,9 @@
 // (groups + weeks). data-testids estaveis preservados (lesson #2).
 // =============================================================================
 
-import { useState, useEffect } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Info, Loader2, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Info, Loader2, Plus, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,13 +40,33 @@ interface AggGroup {
   source: "historical" | "default";
   lowSample: boolean;
   placesPaidPct?: number; // ADR-215 D6 — ITM% (decimal, default 0.15)
-  rakePct?: number; // ADR-216 — rake (decimal, default 0)
+  rakePct?: number; // ADR-216 — rake (decimal, default 0.07)
+  payoutStructure?: PayoutStructure; // ADR-217
+  avgEntries?: number; // ADR-217 — re-entry (bullets médios; default 1)
 }
+
+type PayoutStructure = "standard" | "flat" | "topheavy" | "satellite";
 
 const DEFAULT_ITM = 0.15;
 // Rake default = média MTT da GGPoker (#1 site). GG cobra ~5-9% conforme buy-in
 // (maior buy-in = rake menor); 7% é o meio representativo. Founder 2026-05-29.
 const DEFAULT_RAKE = 0.07;
+const DEFAULT_STRUCTURE: PayoutStructure = "standard";
+
+// ADR-217: ITM% default por estrutura (consenso indústria). Satélite ~10%.
+const ITM_BY_STRUCTURE: Record<PayoutStructure, number> = {
+  standard: 0.15,
+  flat: 0.2,
+  topheavy: 0.12,
+  satellite: 0.1,
+};
+
+const STRUCTURE_OPTIONS: { value: PayoutStructure; label: string }[] = [
+  { value: "standard", label: "Padrão" },
+  { value: "flat", label: "Flat" },
+  { value: "topheavy", label: "Top-Heavy" },
+  { value: "satellite", label: "Satélite" },
+];
 
 interface AggMeta {
   profileLetter: string;
@@ -132,6 +152,8 @@ function sanitizeForSimulate(g: AggGroup): AggGroup {
     0,
     Math.min(0.5, Number(g.rakePct ?? DEFAULT_RAKE) || 0),
   );
+  const structure: PayoutStructure = g.payoutStructure ?? DEFAULT_STRUCTURE;
+  const entries = Math.max(1, Math.min(10, Number(g.avgEntries ?? 1) || 1));
   return {
     ...g,
     name: (g.name || "Grupo").trim() || "Grupo",
@@ -142,6 +164,8 @@ function sanitizeForSimulate(g: AggGroup): AggGroup {
     isPKO: !!g.isPKO,
     placesPaidPct: itm,
     rakePct: rake,
+    payoutStructure: structure,
+    avgEntries: entries,
   };
 }
 
@@ -164,6 +188,7 @@ export default function AggregationWizard({
   const [editedGroups, setEditedGroups] = useState<AggGroup[] | null>(null);
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
   const { data, isLoading } = useQuery<AggResponse>({
     queryKey: ["buckets-aggregate", profile, weeks],
@@ -207,7 +232,7 @@ export default function AggregationWizard({
 
   const handleGroupEdit = (
     index: number,
-    field: "name" | "buyIn" | "roi" | "field" | "count" | "itm" | "rake",
+    field: "name" | "buyIn" | "roi" | "field" | "count" | "itm" | "rake" | "entries",
     value: string,
   ) => {
     setRawInputs((prev) => ({ ...prev, [`${field}-${index}`]: value }));
@@ -218,11 +243,37 @@ export default function AggregationWizard({
         next[index] = { ...next[index], placesPaidPct: (Number(value) || 0) / 100 };
       } else if (field === "rake") {
         next[index] = { ...next[index], rakePct: (Number(value) || 0) / 100 };
+      } else if (field === "entries") {
+        next[index] = { ...next[index], avgEntries: Number(value) || 1 };
       } else {
         const parsed = field === "name" ? value : Number(value) || 0;
         next[index] = { ...next[index], [field]: parsed };
       }
       return next;
+    });
+  };
+
+  // ADR-217: trocar estrutura ajusta o ITM% default da estrutura (a menos que
+  // o usuário já tenha customizado o ITM nesta linha via rawInputs).
+  const handleStructureChange = (index: number, structure: PayoutStructure) => {
+    setEditedGroups((prev) => {
+      const next = [...(prev ?? groups)];
+      const itmTouched = rawInputs[`itm-${index}`] !== undefined;
+      next[index] = {
+        ...next[index],
+        payoutStructure: structure,
+        ...(itmTouched ? {} : { placesPaidPct: ITM_BY_STRUCTURE[structure] }),
+      };
+      return next;
+    });
+  };
+
+  const toggleRow = (index: number) => {
+    setExpandedRows((prev) => {
+      const n = new Set(prev);
+      if (n.has(index)) n.delete(index);
+      else n.add(index);
+      return n;
     });
   };
 
@@ -243,6 +294,8 @@ export default function AggregationWizard({
         lowSample: false,
         placesPaidPct: DEFAULT_ITM,
         rakePct: DEFAULT_RAKE,
+        payoutStructure: DEFAULT_STRUCTURE,
+        avgEntries: 1,
       };
       return [...base, newGroup];
     });
@@ -737,6 +790,12 @@ export default function AggregationWizard({
                         <InfoTip text="Quantos torneios desse bucket entram na simulacao durante o periodo escolhido." />
                       </span>
                     </th>
+                    <th className="px-2 py-2.5 text-center font-medium">
+                      <span className="inline-flex items-center justify-center">
+                        Avançado
+                        <InfoTip text="Estrutura de payout (Padrão/Flat/Top-Heavy/Satélite) + re-entries (bullets médios por torneio). Afeta variância e custo." />
+                      </span>
+                    </th>
                     <th className="px-3 py-2.5 text-center font-medium">Fonte</th>
                     <th className="px-2 py-2.5 text-center font-medium sr-only">
                       Remover
@@ -753,9 +812,13 @@ export default function AggregationWizard({
                       ? `${(roiNum * 100).toFixed(1)}%`
                       : "—";
 
+                    const structure: PayoutStructure =
+                      editedGroups?.[i]?.payoutStructure ??
+                      g.payoutStructure ??
+                      DEFAULT_STRUCTURE;
                     return (
+                      <Fragment key={`${g.tier}-${g.type}-${i}`}>
                       <tr
-                        key={`${g.tier}-${g.type}-${i}`}
                         data-testid={`group-row-${i}`}
                         className="hover:bg-muted/20"
                       >
@@ -924,6 +987,24 @@ export default function AggregationWizard({
                             )}
                           />
                         </td>
+                        <td className="px-2 py-2.5 text-center">
+                          <button
+                            type="button"
+                            data-testid={`advanced-toggle-${i}`}
+                            onClick={() => toggleRow(i)}
+                            aria-expanded={expandedRows.has(i) ? "true" : "false"}
+                            aria-label="Opções avançadas"
+                            title="Estrutura + re-entries"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                          >
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 transition-transform",
+                                expandedRows.has(i) ? "rotate-180" : "",
+                              )}
+                            />
+                          </button>
+                        </td>
                         <td className="px-3 py-2.5 text-center">
                           {g.source === "historical" ? (
                             <span
@@ -964,6 +1045,76 @@ export default function AggregationWizard({
                           </button>
                         </td>
                       </tr>
+                      {/* Painel avançado (ADR-217): estrutura + re-entries.
+                          Sempre montado (CSS-hidden) — testids acessíveis. */}
+                      <tr
+                        data-testid={`advanced-panel-${i}`}
+                        className={cn(
+                          "bg-muted/10",
+                          expandedRows.has(i) ? "" : "hidden",
+                        )}
+                      >
+                        <td colSpan={10} className="px-4 py-3">
+                          <div className="flex flex-wrap items-end gap-4">
+                            <div className="space-y-1">
+                              <label
+                                htmlFor={`structure-${i}`}
+                                className="block text-xs font-medium text-muted-foreground"
+                              >
+                                Estrutura de payout
+                              </label>
+                              <select
+                                id={`structure-${i}`}
+                                data-testid={`structure-select-${i}`}
+                                value={structure}
+                                onChange={(e) =>
+                                  handleStructureChange(
+                                    i,
+                                    e.target.value as PayoutStructure,
+                                  )
+                                }
+                                className={cn(inputBase, "w-40")}
+                              >
+                                {STRUCTURE_OPTIONS.map((o) => (
+                                  <option key={o.value} value={o.value}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label
+                                htmlFor={`entries-${i}`}
+                                className="flex items-center text-xs font-medium text-muted-foreground"
+                              >
+                                Re-entries (bullets médios)
+                                <InfoTip text="Média de buy-ins gastos por torneio devido a re-entry/rebuy. 1 = sem re-entry; 1.6 = re-entra ~60% das vezes. Aumenta o custo real e a calibração do edge." />
+                              </label>
+                              <input
+                                id={`entries-${i}`}
+                                data-testid={`entries-input-${i}`}
+                                type="text"
+                                inputMode="decimal"
+                                value={
+                                  rawInputs[`entries-${i}`] ??
+                                  (editedGroups?.[i]?.avgEntries ?? 1).toString()
+                                }
+                                onChange={(e) =>
+                                  handleGroupEdit(i, "entries", e.target.value)
+                                }
+                                className={cn(inputBase, "w-24 text-right font-mono")}
+                              />
+                            </div>
+                            {structure === "satellite" ? (
+                              <p className="text-[11px] text-muted-foreground max-w-[260px]">
+                                Satélite: payout flat (todos os assentos valem
+                                igual). Variância muito menor — só cashar ou não.
+                              </p>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                      </Fragment>
                     );
                   })}
                 </tbody>

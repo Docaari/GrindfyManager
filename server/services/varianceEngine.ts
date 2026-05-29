@@ -20,6 +20,8 @@
 // Types
 // ---------------------------------------------------------------------------
 
+export type PayoutStructure = "standard" | "flat" | "topheavy" | "satellite";
+
 export interface VarianceSimulationInput {
   groups: Array<{
     name: string;
@@ -29,7 +31,9 @@ export interface VarianceSimulationInput {
     count: number;          // total tournaments in period
     isPKO: boolean;
     placesPaidPct?: number; // ADR-215 D6 — override default 0.15
-    rakePct?: number;       // ADR-215 D7 — informativo
+    rakePct?: number;       // ADR-216 — rake no custo + calibração
+    payoutStructure?: PayoutStructure; // ADR-217 — standard|flat|topheavy|satellite
+    avgEntries?: number;    // ADR-217 — re-entry: bullets médios por torneio (default 1)
   }>;
   weeks: number;            // 1 | 4 | 12 | 52
   simulations?: number;     // default 10000, clamp [1000, 50000]
@@ -135,15 +139,29 @@ export function generatePayouts(
   fieldSize: number,
   isPKO: boolean,
   placesPaidPct: number = 0.15,
+  structure: PayoutStructure = "standard",
 ): Float64Array {
   const safePct = Math.min(0.5, Math.max(0.05, placesPaidPct));
   const placesPaid = Math.max(1, Math.round(fieldSize * safePct));
+
+  // ADR-217: Satélite = payout FLAT — todos os assentos pagos valem igual
+  // (pool / nº assentos). Variância vem só de cashar ou não; sem long-tail.
+  if (structure === "satellite") {
+    const seat = fieldSize / placesPaid;
+    const flat = new Float64Array(placesPaid);
+    flat.fill(seat);
+    return flat; // soma = fieldSize (conservação do pool)
+  }
 
   let alpha: number;
   if (fieldSize < 300) alpha = 2.0;
   else if (fieldSize < 1000) alpha = 1.7;
   else if (fieldSize < 3000) alpha = 1.5;
   else alpha = 1.3;
+  // ADR-217: estrutura ajusta o expoente (flat = mais achatado / mais ITM
+  // efetivo; topheavy = mais concentrado no topo). MTTDB steepness análogo.
+  if (structure === "flat") alpha *= 0.6;
+  else if (structure === "topheavy") alpha *= 1.35;
   // ADR-215 D8: PKO achata expoente subtraindo, com floor 0.8
   if (isPKO) alpha = Math.max(0.8, alpha - 0.3);
 
@@ -189,14 +207,16 @@ export function calibrateSkill(
   payouts: Float64Array,
   targetROI: number,
   rakePct: number = 0,
+  avgEntries: number = 1,
 ): number {
   const N = fieldSize;
   const P = payouts.length;
-  // ADR-216: target de expected-payout (em unidades de buy-in / pool) precisa
-  // cobrir o custo COM rake. Net ROI = (E[payout]-cost)/cost, cost=(1+rake).
-  // Logo E[payout] = (1+rake)(1+ROI). PrimeDope/MTTDB usam o mesmo fator α.
-  // rakePct=0 -> target = (1+ROI) (identico ao comportamento anterior).
-  const target = (1 + rakePct) * (1 + targetROI);
+  // ADR-216/217: target de expected-payout (em unidades de buy-in / pool)
+  // precisa cobrir o custo real = (1+rake)*avgEntries. Net ROI =
+  // (E[payout]-cost)/cost. Logo E[payout] = (1+rake)*avgEntries*(1+ROI).
+  // rakePct=0 + avgEntries=1 -> target = (1+ROI) (back-compat).
+  const safeEntries = avgEntries > 0 ? avgEntries : 1;
+  const target = (1 + rakePct) * safeEntries * (1 + targetROI);
 
   function computeEV(s: number): number {
     let ev = 0;
@@ -280,21 +300,24 @@ export function runMonteCarloSimulation(
   const prepared = input.groups.map((g) => {
     const placesPaidPct = g.placesPaidPct ?? 0.15;
     const rakePct = g.rakePct ?? 0;
-    const payouts = generatePayouts(g.field, g.isPKO, placesPaidPct);
-    // ADR-216: rake entra na calibracao (target = (1+rake)(1+ROI)).
-    const skill = calibrateSkill(g.field, payouts, g.roi, rakePct);
-    return { ...g, payouts, skill, rakePct };
+    const avgEntries = g.avgEntries && g.avgEntries > 0 ? g.avgEntries : 1;
+    const structure: PayoutStructure = g.payoutStructure ?? "standard";
+    const payouts = generatePayouts(g.field, g.isPKO, placesPaidPct, structure);
+    // ADR-216/217: custo real = (1+rake)*avgEntries; entra na calibração.
+    const costFactor = (1 + rakePct) * avgEntries;
+    const skill = calibrateSkill(g.field, payouts, g.roi, rakePct, avgEntries);
+    return { ...g, payouts, skill, rakePct, avgEntries, costFactor };
   });
 
   const totalTournaments = input.groups.reduce((s, g) => s + g.count, 0);
-  // ADR-216: totalInvested = custo REAL incluindo rake (buyIn*(1+rake)*count).
-  // ROI liquido = ev/totalInvested. rake=0 -> = buyIn*count (back-compat).
+  // ADR-216/217: totalInvested = custo REAL (buyIn*costFactor*count), onde
+  // costFactor = (1+rake)*avgEntries. Tudo default -> buyIn*count (back-compat).
   const totalInvested = prepared.reduce(
-    (s, g) => s + g.buyIn * (1 + g.rakePct) * g.count,
+    (s, g) => s + g.buyIn * g.costFactor * g.count,
     0,
   );
   const totalRakeUsd = prepared.reduce(
-    (s, g) => s + g.rakePct * g.buyIn * g.count,
+    (s, g) => s + g.rakePct * g.buyIn * g.avgEntries * g.count,
     0,
   );
 
@@ -314,8 +337,8 @@ export function runMonteCarloSimulation(
         const base = Math.floor(p.count / weeks);
         const extra = p.count % weeks;
         const tournsThisWeek = base + (w < extra ? 1 : 0);
-        // ADR-216: custo por torneio inclui rake. Bustar = perde buyIn+rake.
-        const cost = 1 + p.rakePct;
+        // ADR-216/217: custo por torneio = (1+rake)*avgEntries. Bustar perde o custo.
+        const cost = p.costFactor;
         for (let t = 0; t < tournsThisWeek; t++) {
           const pos = Math.ceil(p.field * Math.pow(random(), p.skill));
           const profit =
@@ -398,13 +421,16 @@ export function runMonteCarloSimulation(
     worst: ddSorted[ddSorted.length - 1],
   };
 
-  const groupContributions = input.groups.map((g, i) => ({
-    name: g.name,
-    count: g.count,
-    // ADR-216: invested = custo com rake (soma == totalInvested).
-    invested: g.buyIn * (1 + (g.rakePct ?? 0)) * g.count,
-    expectedProfit: groupProfitSums[i] / simCount,
-  }));
+  const groupContributions = input.groups.map((g, i) => {
+    const cf = (1 + (g.rakePct ?? 0)) * (g.avgEntries && g.avgEntries > 0 ? g.avgEntries : 1);
+    return {
+      name: g.name,
+      count: g.count,
+      // ADR-216/217: invested = custo real (soma == totalInvested).
+      invested: g.buyIn * cf * g.count,
+      expectedProfit: groupProfitSums[i] / simCount,
+    };
+  });
 
   // ADR-215 D5: histogram Freedman-Diaconis (index-based, evita drift FP)
   const minResult = sorted[0];

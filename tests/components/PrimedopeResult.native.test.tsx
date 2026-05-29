@@ -164,21 +164,22 @@ describe('<PrimedopeResult> — native output format (RF-03)', () => {
     it('renders drawdown card with median, p95, worst', () => {
       render(<PrimedopeResult result={nativeResultPayload as any} />);
 
-      const ddSection = screen.getByTestId('primedope-result-drawdown');
+      // DrawdownCard usa testids drawdown-card + drawdown-{tipico|preparar|pior}.
+      const ddSection = screen.getByTestId('drawdown-card');
       expect(ddSection).toBeInTheDocument();
 
-      // Median drawdown
-      const ddMedian = screen.getByTestId('primedope-dd-median');
+      // Median drawdown (nivel "tipico")
+      const ddMedian = screen.getByTestId('drawdown-tipico');
       expect(ddMedian).toBeInTheDocument();
       expect(ddMedian.textContent).toContain('2.787');
 
-      // p95 drawdown
-      const ddP95 = screen.getByTestId('primedope-dd-p95');
+      // p95 drawdown (nivel "preparar")
+      const ddP95 = screen.getByTestId('drawdown-preparar');
       expect(ddP95).toBeInTheDocument();
       expect(ddP95.textContent).toContain('6.737');
 
-      // Worst drawdown
-      const ddWorst = screen.getByTestId('primedope-dd-worst');
+      // Worst drawdown (nivel "pior")
+      const ddWorst = screen.getByTestId('drawdown-pior');
       expect(ddWorst).toBeInTheDocument();
       expect(ddWorst.textContent).toContain('18.273');
     });

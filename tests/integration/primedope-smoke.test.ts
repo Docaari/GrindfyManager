@@ -141,22 +141,20 @@ async function buildApp() {
 describe('PrimeDope smoke E2E', () => {
   it('full flow: simulate -> persist -> list -> pin', async () => {
     const app = await buildApp();
+    // Formato NATIVO (ADR-211/216/217) — engine Monte Carlo local.
     const payload = {
-      profileLetter: 'A',
-      dayOfWeek: 2,
-      multiplier: 4,
       bankrollUsd: 5000,
-      buckets: [
+      weeks: 1,
+      groups: [
         {
           name: 'GG MTT',
-          network: 'GGNetwork',
+          buyIn: 5,
+          field: 1000,
+          roi: 0.12,
           count: 1,
-          buyinOriginal: 5,
-          currency: 'USD',
-          playersAvg: 1000,
-          placesPaid: 150,
-          rakePct: 10,
-          roiPct: 12,
+          isPKO: false,
+          placesPaidPct: 0.15,
+          rakePct: 0.1,
         },
       ],
     };
@@ -164,7 +162,7 @@ describe('PrimeDope smoke E2E', () => {
     // STEP 1 — simulate
     const sim = await supertest(app).post('/api/primedope/simulate').send(payload);
     expect(sim.status).toBe(200);
-    expect(sim.body.source).toBe('primedope');
+    expect(sim.body.source).toBe('native');
     expect(storageMock.insertPrimedopeRun).toHaveBeenCalledTimes(1);
 
     // STEP 2 — list runs
@@ -182,7 +180,7 @@ describe('PrimeDope smoke E2E', () => {
 
     // tracker emitiu eventos esperados
     const events = trackerEmit.mock.calls.map((c) => c[0]);
-    expect(events).toContain('primedope_simulation_run');
+    expect(events).toContain('variance_simulation_run');
     expect(events).toContain('primedope_run_pinned');
 
     (globalThis as any).fetch = originalFetch;

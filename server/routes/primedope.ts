@@ -57,6 +57,11 @@ const groupSchema = z.object({
   isPKO: z.boolean(),
   placesPaidPct: z.number().min(0.05).max(0.5).optional(),
   rakePct: z.number().min(0).max(0.5).optional(),
+  // ADR-217: estrutura de payout + re-entry (bullets médios por torneio)
+  payoutStructure: z
+    .enum(["standard", "flat", "topheavy", "satellite"])
+    .optional(),
+  avgEntries: z.number().min(1).max(10).optional(),
 });
 
 const varianceSimulateBodySchema = z.object({

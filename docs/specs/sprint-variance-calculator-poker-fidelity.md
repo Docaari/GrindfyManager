@@ -127,9 +127,10 @@ PrimeDope deixa colar a estrutura de payout real. Grindfy tem vantagem: pode **d
 |------|--------|-----------|---------|
 | ~~**VR-CALC-1**~~ ✅ SHIPPED (ADR-216, 2026-05-29) | Rake% + ITM% editáveis por torneio na UI; **rake entra no custo + calibração** (modelo PrimeDope/MTTDB `target=(1+rake)(1+ROI)`, sem double-count); leaks conhecidos visíveis na página | — | S–M |
 | ~~**VR-CALC-2**~~ ✅ SHIPPED interim (2026-05-29) | Endpoint `GET /api/variance/history-aggregate` (from/to OU lastDays) + `server/services/historyAggregate.ts` (agrupa `tournaments grind_session_id IS NULL` por **tier×type** com ROI ajustado real) + UI toggle "Grade planejada"/"Meu histórico" + period chips + **date-range custom (from/to)**. Único upgrade futuro: tier×type → **família** (`libraryGrouping`) quando landar em main (deliberado, não débito) | — | M–L |
-| **VR-CALC-3** | Satellite flat-payout (leak #2) + PKO bounty como EV separado (leak #3) | Pesquisa math bounty/satélite | L |
+| ~~**VR-CALC-3**~~ 🟡 PARCIAL (ADR-217, 2026-05-29) | ✅ **Satélite flat-payout** (leak #2 resolvido) + estrutura de payout (Padrão/Flat/Top-Heavy) escolhível por grupo + calculadora usável **sem bankroll** + test debt pré-existente corrigido. ⏳ PKO bounty como EV separado (leak #3) ainda interim (alpha-flatten) — research-gated | Pesquisa math bounty | L |
+| ~~**VR-CALC-5** (re-entry)~~ ✅ PARCIAL (ADR-217) | **Re-entry/rebuy** via `avgEntries` (custo real + calibração). ⏳ Late reg, field variável, ICM ainda research-gated | — | — |
 | **VR-CALC-4** | Payout real derivado do CSV (2.3) + incerteza de ROI por bootstrap (leak #7) | VR-CALC-2 + pesquisa | L |
-| **VR-CALC-5** (avançado) | Re-entry/rebuy/add-on, late reg, field size variável, ICM | Pesquisa + decisão de escopo | XL |
+| **VR-CALC-5b** (avançado) | Late reg, field size variável (regen payout caro), ICM/deals | Pesquisa + decisão de escopo | XL |
 
 ---
 
