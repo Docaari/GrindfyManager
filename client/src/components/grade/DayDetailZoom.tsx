@@ -31,11 +31,17 @@ import {
   TrendingUp,
   Clock,
   CalendarDays,
+  PanelRightClose,
+  PanelRightOpen,
+  Flame,
+  Minus,
+  ChevronDown,
 } from "lucide-react";
 import {
   Panel,
   PanelGroup,
   PanelResizeHandle,
+  type ImperativePanelHandle,
 } from "react-resizable-panels";
 import { useDayDetail } from "@/hooks/useDayDetail";
 import { useUndoToast } from "@/hooks/useUndoToast";
@@ -118,10 +124,47 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
     mobileTimerRef.current = setTimeout(() => setMobileAddToastRaw(null), 5000);
   }, []);
 
-  // Slots horarios.
+  // Helper — parse "HH:MM" → hora cheia (HH) ou null. Garante que torneios com
+  // minutos arbitrarios (ex: "13:30", "20:45") sejam mapeados pro slot HH:00.
+  const parseHour = React.useCallback((t: unknown): number | null => {
+    if (typeof t !== "string") return null;
+    const m = /^(\d{1,2}):(\d{1,2})/.exec(t);
+    if (!m) return null;
+    const h = parseInt(m[1], 10);
+    if (!Number.isFinite(h) || h < 0 || h > 23) return null;
+    return h;
+  }, []);
+
+  // Slots horarios — start = min(DEFAULT_START_HOUR, earliest planned hour).
+  // Garante que torneios planejados antes das 14h fiquem visiveis.
+  const earliestPlannedHour = React.useMemo<number | null>(() => {
+    const list: any[] = Array.isArray((query as any)?.data?.list)
+      ? (query as any).data.list
+      : [];
+    let min: number | null = null;
+    for (const item of list) {
+      const h = parseHour(item?.time);
+      if (h === null) continue;
+      if (min === null || h < min) min = h;
+    }
+    return min;
+  }, [(query as any)?.data?.list, parseHour]);
+
+  const effectiveStartHour = React.useMemo(() => {
+    if (earliestPlannedHour === null) return DEFAULT_START_HOUR;
+    // Se o mais cedo esta na madrugada (0-3h) e end=04h, manter default
+    // (torneio madrugada cai no wrap, fim do grid).
+    if (
+      earliestPlannedHour >= 0 &&
+      earliestPlannedHour < DEFAULT_END_HOUR
+    )
+      return DEFAULT_START_HOUR;
+    return Math.min(DEFAULT_START_HOUR, earliestPlannedHour);
+  }, [earliestPlannedHour]);
+
   const timeSlots = React.useMemo(
-    () => generateTimeSlots(DEFAULT_START_HOUR, DEFAULT_END_HOUR),
-    [],
+    () => generateTimeSlots(effectiveStartHour, DEFAULT_END_HOUR),
+    [effectiveStartHour],
   );
 
   // Filtro plataforma (RF-03) + estado modais Criar/Editar/Mover.
@@ -132,6 +175,52 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editTarget, setEditTarget] = React.useState<any | null>(null);
   const [moveMenuId, setMoveMenuId] = React.useState<string | null>(null);
+  const [priorityMenuId, setPriorityMenuId] = React.useState<string | null>(
+    null,
+  );
+  const libraryPanelRef = React.useRef<ImperativePanelHandle | null>(null);
+  const [libraryCollapsed, setLibraryCollapsed] = React.useState<boolean>(
+    () => {
+      if (typeof window === "undefined") return false;
+      try {
+        return window.localStorage.getItem("dayZoom.libraryCollapsed") === "1";
+      } catch {
+        return false;
+      }
+    },
+  );
+  const persistLibraryCollapsed = React.useCallback((v: boolean) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("dayZoom.libraryCollapsed", v ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const toggleLibrary = React.useCallback(() => {
+    const panel = libraryPanelRef.current;
+    if (!panel) return;
+    if (libraryCollapsed) {
+      panel.expand();
+      setLibraryCollapsed(false);
+      persistLibraryCollapsed(false);
+    } else {
+      panel.collapse();
+      setLibraryCollapsed(true);
+      persistLibraryCollapsed(true);
+    }
+  }, [libraryCollapsed, persistLibraryCollapsed]);
+
+  // Aplicar estado collapsed persistido no mount do modal.
+  React.useEffect(() => {
+    if (!open) return;
+    const panel = libraryPanelRef.current;
+    if (!panel) return;
+    if (libraryCollapsed) panel.collapse();
+    else panel.expand();
+    // Roda 1x por open=true; ignorar mudanca subsequente do state (toggle ja chama panel direto).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Sites disponiveis para chips: dedup de volume + list ordenado desc por count.
   const availableSites = React.useMemo<
@@ -155,21 +244,46 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
       .sort((a, b) => b.count - a.count || a.site.localeCompare(b.site));
   }, [data?.list, data?.volume]);
 
-  // Slot -> lista (a partir de useDayDetail.list) com filtro plataforma aplicado.
+  // Slot -> lista. Bucketing por hora cheia (truncar minutos). Horario original
+  // preservado em item.time pro display. Torneios sem hora valida vao pro
+  // primeiro slot do grid (fallback visivel).
+  // Sort: prioridade ASC (1=Alta topo) → time ASC → buyin DESC.
   const plannedSlots = React.useMemo<Record<string, any[]>>(() => {
     const out: Record<string, any[]> = {};
     for (const s of timeSlots) out[s] = [];
+    const fallbackSlot = timeSlots[0] ?? "00:00";
     const list: any[] = Array.isArray(data?.list) ? data.list : [];
     const filterSet = new Set(filterSelected);
     const filterActive = filterSet.size > 0;
     for (const item of list) {
       if (filterActive && !filterSet.has(item?.site)) continue;
-      const slot = item.time ?? "00:00";
-      if (!out[slot]) out[slot] = [];
-      out[slot].push(item);
+      const h = parseHour(item?.time);
+      const slotKey =
+        h !== null ? h.toString().padStart(2, "0") + ":00" : fallbackSlot;
+      if (!out[slotKey]) out[slotKey] = [];
+      out[slotKey].push(item);
+    }
+    const timeToMinutes = (t: unknown): number => {
+      if (typeof t !== "string") return 0;
+      const m = /^(\d{1,2}):(\d{1,2})/.exec(t);
+      if (!m) return 0;
+      return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+    };
+    for (const slot of Object.keys(out)) {
+      out[slot].sort((a, b) => {
+        const pa = Number(a?.prioridade) || 2;
+        const pb = Number(b?.prioridade) || 2;
+        if (pa !== pb) return pa - pb;
+        const ta = timeToMinutes(a?.time);
+        const tb = timeToMinutes(b?.time);
+        if (ta !== tb) return ta - tb;
+        const ba = parseFloat(String(a?.buyinUsd ?? a?.buyIn ?? 0)) || 0;
+        const bb = parseFloat(String(b?.buyinUsd ?? b?.buyIn ?? 0)) || 0;
+        return bb - ba;
+      });
     }
     return out;
-  }, [data?.list, timeSlots, filterSelected]);
+  }, [data?.list, timeSlots, filterSelected, parseHour]);
 
   // Total filtrado (para empty state + telemetria filter_apply).
   const filteredCount = React.useMemo(() => {
@@ -285,6 +399,39 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
       }
     },
     [dayOfWeek, profileLetter],
+  );
+
+  const mutatePriority = React.useCallback(
+    async (tournamentId: string, newPriority: 1 | 2 | 3) => {
+      try {
+        await apiRequest("PUT", `/api/planned-tournaments/${tournamentId}`, {
+          prioridade: newPriority,
+        });
+        try {
+          queryClient.invalidateQueries?.({
+            queryKey: ["day-detail", profileLetter, dayOfWeek],
+          });
+          queryClient.invalidateQueries?.({
+            queryKey: ["planned-tournaments"],
+          });
+          queryClient.invalidateQueries?.({
+            queryKey: ["/api/planned-tournaments"],
+          });
+        } catch {
+          /* ignore */
+        }
+        safeEmit("coach.day_zoom_priority_set", {
+          feature: "day_zoom",
+          tournamentId,
+          dayOfWeek,
+          profileLetter,
+          priority: newPriority,
+        });
+      } catch {
+        setErrorToast("Falha ao atualizar prioridade");
+      }
+    },
+    [dayOfWeek, profileLetter, setErrorToast],
   );
 
   const mutateMove = React.useCallback(
@@ -766,15 +913,39 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                               const displayName = item.name ?? item.site;
                               const siteColors = getSiteColors(item.site);
                               const canManage = !!item.id && !dayProfileOff;
+                              const prioridade =
+                                Number(item?.prioridade) || 2;
+                              const isHigh = prioridade === 1;
+                              const isLow = prioridade === 3;
+                              const priorityBorder = isHigh
+                                ? "border-l-4 border-l-red-500 border-y-red-900/40 border-r-red-900/40"
+                                : isLow
+                                  ? "border-gray-800/70 opacity-90"
+                                  : "border-gray-800";
                               return (
                                 <div
                                   key={tid}
                                   data-testid={`day-zoom-tournament-${tid}`}
+                                  data-priority={prioridade}
                                   className={
-                                    "group relative flex items-center gap-2 rounded-lg px-2 py-1.5 bg-gray-900/80 border transition-all duration-150 " +
-                                    "border-gray-800 hover:border-emerald-500/30 hover:bg-gray-900 hover:shadow-md hover:-translate-y-px"
+                                    "group relative flex items-center gap-2 rounded-lg px-2 py-1.5 bg-gray-900/80 border transition-all duration-150 hover:bg-gray-900 hover:shadow-md hover:-translate-y-px " +
+                                    priorityBorder +
+                                    (isHigh
+                                      ? " bg-gradient-to-r from-red-950/30 via-gray-900/80 to-gray-900/80 shadow-sm shadow-red-900/20"
+                                      : "")
                                   }
                                 >
+                                  {/* Priority badge — only Alta visible inline */}
+                                  {isHigh && (
+                                    <span
+                                      data-testid={`day-zoom-tournament-priority-badge-${item.id ?? tid}`}
+                                      className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-red-500/20 text-red-300 border border-red-500/40 shrink-0"
+                                      title="Prioridade alta"
+                                    >
+                                      <Flame className="w-2.5 h-2.5" />
+                                      Alta
+                                    </span>
+                                  )}
                                   {/* Site badge */}
                                   <span
                                     className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border shrink-0 ${siteColors.bg} ${siteColors.text} ${siteColors.border}`}
@@ -785,9 +956,26 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                     {item.site}
                                   </span>
                                   {/* Name */}
-                                  <span className="text-xs text-white truncate flex-1 font-medium">
+                                  <span
+                                    className={
+                                      "text-xs truncate flex-1 font-medium " +
+                                      (isHigh
+                                        ? "text-white"
+                                        : isLow
+                                          ? "text-gray-400"
+                                          : "text-white")
+                                    }
+                                  >
                                     {displayName}
                                   </span>
+                                  {/* Horario real (se diferente do slot HH:00) */}
+                                  {typeof item.time === "string" &&
+                                    item.time !== slot && (
+                                      <span className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono tabular-nums text-gray-400 shrink-0">
+                                        <Clock className="w-2.5 h-2.5" />
+                                        {item.time}
+                                      </span>
+                                    )}
                                   {/* Buy-in */}
                                   <span className="text-xs font-bold text-emerald-300 tabular-nums shrink-0">
                                     {formatUsd(item.buyinUsd ?? 0)}
@@ -812,6 +1000,34 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                         className="p-1 rounded-md text-gray-400 hover:text-emerald-300 hover:bg-emerald-900/30 transition-colors"
                                       >
                                         <Pencil className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        data-testid={`day-zoom-tournament-priority-${item.id}`}
+                                        onClick={() =>
+                                          setPriorityMenuId(
+                                            priorityMenuId === item.id
+                                              ? null
+                                              : item.id,
+                                          )
+                                        }
+                                        aria-label={`Prioridade ${displayName}`}
+                                        aria-expanded={
+                                          priorityMenuId === item.id
+                                            ? "true"
+                                            : "false"
+                                        }
+                                        title="Alterar prioridade"
+                                        className={
+                                          "p-1 rounded-md transition-colors " +
+                                          (isHigh
+                                            ? "text-red-300 hover:bg-red-900/30"
+                                            : isLow
+                                              ? "text-gray-500 hover:text-gray-300 hover:bg-gray-800"
+                                              : "text-gray-400 hover:text-amber-300 hover:bg-amber-900/30")
+                                        }
+                                      >
+                                        <Flame className="w-3 h-3" />
                                       </button>
                                       <button
                                         type="button"
@@ -846,6 +1062,81 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                       >
                                         <Trash2 className="w-3 h-3" />
                                       </button>
+                                    </div>
+                                  )}
+                                  {/* Priority menu inline */}
+                                  {priorityMenuId === item.id && canManage && (
+                                    <div
+                                      data-testid={`day-zoom-tournament-priority-menu-${item.id}`}
+                                      className="absolute right-2 top-full mt-1 z-10 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 w-44"
+                                      onMouseLeave={() =>
+                                        setPriorityMenuId(null)
+                                      }
+                                    >
+                                      <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1 px-1">
+                                        Prioridade
+                                      </div>
+                                      <div className="flex flex-col gap-0.5">
+                                        {[
+                                          {
+                                            value: 1 as const,
+                                            label: "Alta",
+                                            icon: Flame,
+                                            cls: "text-red-300 hover:bg-red-900/30",
+                                            active: prioridade === 1,
+                                          },
+                                          {
+                                            value: 2 as const,
+                                            label: "Media",
+                                            icon: Minus,
+                                            cls: "text-amber-200 hover:bg-amber-900/30",
+                                            active: prioridade === 2,
+                                          },
+                                          {
+                                            value: 3 as const,
+                                            label: "Baixa",
+                                            icon: ChevronDown,
+                                            cls: "text-gray-400 hover:bg-gray-800",
+                                            active: prioridade === 3,
+                                          },
+                                        ].map(
+                                          ({
+                                            value,
+                                            label,
+                                            icon: Icon,
+                                            cls,
+                                            active,
+                                          }) => (
+                                            <button
+                                              key={value}
+                                              type="button"
+                                              data-testid={`day-zoom-tournament-priority-target-${item.id}-${value}`}
+                                              onClick={() => {
+                                                setPriorityMenuId(null);
+                                                mutatePriority(
+                                                  item.id,
+                                                  value,
+                                                );
+                                              }}
+                                              className={
+                                                "flex items-center gap-2 px-2 py-1 rounded text-xs " +
+                                                cls +
+                                                (active
+                                                  ? " ring-1 ring-emerald-500/40"
+                                                  : "")
+                                              }
+                                            >
+                                              <Icon className="w-3 h-3" />
+                                              {label}
+                                              {active && (
+                                                <span className="ml-auto text-[9px] opacity-70">
+                                                  atual
+                                                </span>
+                                              )}
+                                            </button>
+                                          ),
+                                        )}
+                                      </div>
                                     </div>
                                   )}
                                   {/* Move menu inline */}
@@ -924,38 +1215,95 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
             </Panel>
             <PanelResizeHandle
               data-testid="day-zoom-resize-handle"
-              className="w-1 bg-gray-800/60 hover:bg-emerald-500/60 transition-colors cursor-col-resize"
+              className={
+                "transition-colors cursor-col-resize " +
+                (libraryCollapsed
+                  ? "w-0"
+                  : "w-1 bg-gray-800/60 hover:bg-emerald-500/60")
+              }
             />
-            <Panel defaultSize={40} minSize={25} maxSize={55}>
-              <div
-                data-testid="day-zoom-panel-right"
-                className="h-full overflow-y-auto p-4 bg-gray-950/40"
-              >
-                {/* Trash zone */}
+            <Panel
+              ref={libraryPanelRef}
+              defaultSize={libraryCollapsed ? 4 : 40}
+              minSize={4}
+              maxSize={55}
+              collapsible
+              collapsedSize={4}
+              onCollapse={() => {
+                setLibraryCollapsed(true);
+                persistLibraryCollapsed(true);
+              }}
+              onExpand={() => {
+                setLibraryCollapsed(false);
+                persistLibraryCollapsed(false);
+              }}
+            >
+              {libraryCollapsed ? (
                 <div
-                  data-testid="zoom-biblioteca-trash"
-                  className="flex items-center justify-center gap-1.5 border-2 border-dashed border-red-900/40 hover:border-red-700/60 hover:bg-red-950/20 rounded-xl p-2.5 mb-3 text-center text-[11px] text-red-300 transition-colors"
+                  data-testid="day-zoom-panel-right-collapsed"
+                  className="h-full flex flex-col items-center py-3 bg-gray-950/60 border-l border-gray-800"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Arraste aqui para remover
+                  <button
+                    type="button"
+                    data-testid="day-zoom-library-expand"
+                    onClick={toggleLibrary}
+                    className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-emerald-300 transition-colors"
+                    aria-label="Expandir biblioteca"
+                    title="Expandir biblioteca"
+                  >
+                    <PanelRightOpen className="w-4 h-4" />
+                  </button>
+                  <div className="mt-3 text-[9px] uppercase tracking-wider text-gray-600 [writing-mode:vertical-rl] rotate-180">
+                    Biblioteca
+                  </div>
                 </div>
-                <BibliotecaEmbedded
-                  contextFilters={{
-                    site: data?.volume?.[0]?.site,
-                    buyInMin:
-                      data?.cards?.abiUsd != null
-                        ? data.cards.abiUsd * 0.5
-                        : undefined,
-                    buyInMax:
-                      data?.cards?.abiUsd != null
-                        ? data.cards.abiUsd * 1.5
-                        : undefined,
-                    format: undefined,
-                  }}
-                  dayOfWeek={dayOfWeek}
-                  profileLetter={profileLetter}
-                />
-              </div>
+              ) : (
+                <div
+                  data-testid="day-zoom-panel-right"
+                  className="h-full overflow-y-auto p-4 bg-gray-950/40"
+                >
+                  {/* Header com toggle collapse */}
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs uppercase tracking-wider text-gray-400 font-semibold">
+                      Biblioteca
+                    </h3>
+                    <button
+                      type="button"
+                      data-testid="day-zoom-library-collapse"
+                      onClick={toggleLibrary}
+                      className="p-1 rounded hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                      aria-label="Colapsar biblioteca"
+                      title="Colapsar biblioteca"
+                    >
+                      <PanelRightClose className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {/* Trash zone */}
+                  <div
+                    data-testid="zoom-biblioteca-trash"
+                    className="flex items-center justify-center gap-1.5 border-2 border-dashed border-red-900/40 hover:border-red-700/60 hover:bg-red-950/20 rounded-xl p-2.5 mb-3 text-center text-[11px] text-red-300 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Arraste aqui para remover
+                  </div>
+                  <BibliotecaEmbedded
+                    contextFilters={{
+                      site: data?.volume?.[0]?.site,
+                      buyInMin:
+                        data?.cards?.abiUsd != null
+                          ? data.cards.abiUsd * 0.5
+                          : undefined,
+                      buyInMax:
+                        data?.cards?.abiUsd != null
+                          ? data.cards.abiUsd * 1.5
+                          : undefined,
+                      format: undefined,
+                    }}
+                    dayOfWeek={dayOfWeek}
+                    profileLetter={profileLetter}
+                  />
+                </div>
+              )}
             </Panel>
           </PanelGroup>
 
