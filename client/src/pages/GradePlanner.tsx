@@ -100,12 +100,14 @@ export default function GradePlanner() {
   // ===========================================================================
   // Sprint day-detail-zoom-1 — DayDetailHost (zoom vs drawer) + Portal ref
   // ===========================================================================
+  // FIX day-detail-manage hotfix: removido gate portalMounted — useEffect [] no
+  // mount rodava enquanto GradePlanner retornava <LoadingScreen /> (profile
+  // states ainda carregando), portanto dndPortalRef.current era null naquele
+  // momento e nunca virava true depois (deps []). Modal nao abria pos-load.
+  // Sem gate: portalContainer cai pra body default quando ref ainda null,
+  // funciona; quando ja montado, DnD cross-portal preservado.
   const [dayDetailOpen, setDayDetailOpen] = useState<number | null>(null);
   const dndPortalRef = useRef<HTMLDivElement | null>(null);
-  const [portalMounted, setPortalMounted] = useState(false);
-  useEffect(() => {
-    if (dndPortalRef.current) setPortalMounted(true);
-  }, []);
 
   // Sprint coach-page-reform-1 RF-01: tabs persistidas em URL ?tab=.
   const [activeTab, setActiveTab] = useTabFromUrl(COACH_TAB_LIST, 'planner');
@@ -1004,7 +1006,7 @@ export default function GradePlanner() {
         <div ref={dndPortalRef} id="dnd-portal-container" />
 
         {/* Sprint day-detail-zoom-1: DayDetailHost (zoom default, drawer via ?detail=drawer) */}
-        {dayDetailOpen !== null && portalMounted && (
+        {dayDetailOpen !== null && (
           <DayDetailHost
             open={dayDetailOpen !== null}
             onOpenChange={(o) => {
@@ -1015,7 +1017,7 @@ export default function GradePlanner() {
               return p && p !== 'OFF' ? p : 'A';
             })()}
             dayOfWeek={dayDetailOpen}
-            portalContainer={dndPortalRef.current}
+            portalContainer={dndPortalRef.current ?? undefined}
             dayProfileOff={getActiveProfile(dayDetailOpen) === 'OFF'}
           />
         )}
