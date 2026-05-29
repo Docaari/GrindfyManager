@@ -83,7 +83,6 @@ import { useTTSVoices } from "@/lib/ttsVoices";
 // Bankroll (RF-08)
 import { useBankroll } from "@/hooks/useBankroll";
 import {
-  decideBankrollAction,
   shouldWarnAccumulator,
   normalizeBuyInToUSD as normalizeBuyInToUSDPure,
   SESSION_BANKROLL_WARNING_PCT,
@@ -292,26 +291,17 @@ export default function GrindSessionLive() {
   }, [exchangeRatesData, bankroll?.maxBuyInUSD, bankroll?.maxBuyInDisplay?.BRL]);
 
   const [sessionAccumulatorUSD, setSessionAccumulatorUSD] = useState(0);
-  const [bankrollShotModalOpen, setBankrollShotModalOpen] = useState(false);
-  const [bankrollShotPendingData, setBankrollShotPendingData] = useState<any | null>(null);
-  const [bankrollShotBuyInUSD, setBankrollShotBuyInUSD] = useState<number>(0);
   const lastAccumulatorWarnedRef = useRef<number>(0);
 
   // Check antes de `addTournamentMutation.mutate`. Aplica:
-  // - Modal bloqueante se buyInUSD > hardLimit (RF-08 Cenario C)
   // - Toast warning se accumulator ultrapassa 10% da banca (RF-08 Q5)
   // Nao muda comportamento se bankroll.configured === false (feature transparente).
+  // NOTA (sprint bankroll-toggle-audit-and-shot-removal): o bloqueio rigido
+  // "block-hard" (Bankroll Shot Modal) foi removido — torneios acima do hard
+  // limit sao adicionados direto. So o accumulator warning toast (warn-soft)
+  // permanece.
   function tryAddTournamentWithBankrollCheck(data: any) {
-    const decision = decideBankrollAction(data?.buyIn, data?.site ?? "", bankroll);
-
-    if (decision.kind === "block-hard") {
-      setBankrollShotPendingData(data);
-      setBankrollShotBuyInUSD(decision.buyInUSD);
-      setBankrollShotModalOpen(true);
-      return;
-    }
-
-    // Pass / warn-soft: adiciona normal
+    // Adiciona normal (sem bloqueio por hard limit)
     addTournamentMutation.mutate(data);
 
     // RF-08 Q5: accumulator check — usa buyInUSD quando banca configurada
@@ -339,88 +329,6 @@ export default function GrindSessionLive() {
       }
     }
   }
-
-  // Confirma "shot" — registra torneio com flag aboveBankrollRule=true
-  function handleConfirmBankrollShot() {
-    if (!bankrollShotPendingData) return;
-    const data = { ...bankrollShotPendingData, aboveBankrollRule: true };
-    addTournamentMutation.mutate(data);
-
-    if (bankroll?.configured) {
-      const { newAccumulator, pctExposed } = shouldWarnAccumulator(
-        sessionAccumulatorUSD,
-        bankrollShotBuyInUSD,
-        bankroll.amount,
-      );
-      setSessionAccumulatorUSD(newAccumulator);
-      // GL-E: throttle por tiers [10,15,25,50]
-      const { shouldWarn, newTier } = shouldWarnForTier(
-        pctExposed,
-        lastAccumulatorWarnedRef.current,
-      );
-      if (shouldWarn) {
-        lastAccumulatorWarnedRef.current = newTier;
-        toast({
-          title: `Exposicao elevada (${newTier}% da banca)`,
-          description: `Voce ja exposto ${(pctExposed * 100).toFixed(1)}% da banca hoje`,
-          duration: 10000,
-        });
-      }
-    }
-
-    setBankrollShotModalOpen(false);
-    setBankrollShotPendingData(null);
-  }
-
-  function handleCancelBankrollShot() {
-    setBankrollShotModalOpen(false);
-    setBankrollShotPendingData(null);
-  }
-
-  // GL-A (UX 2026-04-24): keyboard shortcut no bankroll shot modal — Enter
-  // confirma, Esc cancela. Handler global porque o modal e custom (nao
-  // Radix Dialog), entao nao temos bubbling de keydown pelo DialogContent.
-  // GL-A polish (UX-2 2026-04-25): focus trap + guard contra captura fora do
-  // modal. Antes, o listener global capturava Enter/Esc mesmo quando outro
-  // input fora do modal estava em foco — causando submit/cancel acidental.
-  useEffect(() => {
-    if (!bankrollShotModalOpen) return;
-    const handler = (e: KeyboardEvent) => {
-      const modalEl = document.querySelector('[data-testid="bankroll-shot-modal"]');
-      if (!modalEl) return;
-      const active = document.activeElement;
-      // Guard: so reage se foco esta dentro do modal ou em document.body
-      // (caso onde nada explicitamente esta focado).
-      const focusOutsideModal = active && active !== document.body && !modalEl.contains(active);
-      if (focusOutsideModal) return;
-
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleConfirmBankrollShot();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        handleCancelBankrollShot();
-      } else if (e.key === 'Tab') {
-        // Focus trap: cicla entre os 2 botoes do modal (Cancelar / Confirmar)
-        const focusables = modalEl.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        );
-        if (focusables.length === 0) return;
-        const first = focusables[0];
-        const last = focusables[focusables.length - 1];
-        if (e.shiftKey && active === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && active === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bankrollShotModalOpen, bankrollShotPendingData, bankrollShotBuyInUSD]);
 
   // Tournament states and dialogs
   const [editingTournament, setEditingTournament] = useState<any>(null);
@@ -3258,46 +3166,6 @@ export default function GrindSessionLive() {
           )}
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* RF-08: Bankroll Shot Modal — buyIn acima do hardLimit */}
-      {bankrollShotModalOpen && bankroll?.configured && (
-        <div
-          data-testid="bankroll-shot-modal"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-md w-full shadow-xl">
-            <h2 className="text-lg font-semibold text-red-400 mb-2">Torneio acima da sua regra de banca</h2>
-            <p className="text-sm text-gray-300 mb-3">
-              Este torneio custa ${bankrollShotBuyInUSD.toFixed(2)} USD, acima do limite
-              da sua regra ({bankroll.rule ?? "1pct"} de ${(bankroll.amount ?? 0).toFixed(2)} =
-              {" "}${(bankroll.hardLimitUSD ?? bankroll.maxBuyInUSD ?? 0).toFixed(2)} com tolerancia).
-            </p>
-            <p className="text-xs text-gray-500 mb-4">
-              Quer registrar mesmo assim como "shot"?
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={handleCancelBankrollShot}
-                data-testid="bankroll-shot-cancel"
-                className="border-gray-600 text-gray-300"
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleConfirmBankrollShot}
-                data-testid="bankroll-shot-confirm"
-                className="bg-red-600 hover:bg-red-700 text-white"
-                autoFocus
-              >
-                Registrar como shot
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Spot Notes (RF-01) + Viewer (RF-02) — Sprint Grind-Live Spot Notes */}
       <QuickNoteDialog

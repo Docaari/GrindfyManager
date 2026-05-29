@@ -221,3 +221,39 @@ describe('SessionSummaryModal Sprint B2 (M2) — setting=true + 0 wallets ativas
     expect(screen.queryByTestId('bankroll-reconcile-section')).toBeNull();
   });
 });
+
+// =============================================================================
+// Sprint bankroll-toggle-audit-and-shot-removal — RF-01 (Q-A)
+// Gate `bankrollManagementEnabled !== false`: undefined = ON (back-compat),
+// false = OFF. Contrato explicito do default; complementa o cenario 1 (false).
+// =============================================================================
+
+describe('SessionSummaryModal RF-01 (Q-A) — gate `!== false` (undefined=ON, false=OFF)', () => {
+  it('bankrollManagementEnabled=undefined (default) -> secao bankroll-reconcile-section RENDERIZA (back-compat ON)', () => {
+    render(
+      wrap(
+        <SessionSummaryModal
+          {...baseProps}
+          bankrollManagementEnabled={undefined}
+          reconcilableWallets={wallets}
+          missingPlatforms={[]}
+        />,
+      ),
+    );
+    expect(screen.queryByTestId('bankroll-reconcile-section')).not.toBeNull();
+  });
+
+  it('bankrollManagementEnabled=false -> secao bankroll-reconcile-section AUSENTE (mesmo com wallets ativas)', () => {
+    render(
+      wrap(
+        <SessionSummaryModal
+          {...baseProps}
+          bankrollManagementEnabled={false}
+          reconcilableWallets={wallets}
+          missingPlatforms={[]}
+        />,
+      ),
+    );
+    expect(screen.queryByTestId('bankroll-reconcile-section')).toBeNull();
+  });
+});

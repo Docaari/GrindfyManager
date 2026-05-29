@@ -48,6 +48,12 @@ export type BankrollDecision =
 /**
  * Aplica regra de banca a um buy-in. Retorna decisao para o UI renderizar.
  * Se bankroll nao configurado, sempre 'pass' (feature transparente).
+ *
+ * @deprecated O ultimo consumer (Bankroll Shot Modal em GrindSessionLive) foi
+ * removido no sprint bankroll-toggle-audit-and-shot-removal. A funcao permanece
+ * exportada apenas por back-compat (Q-E, deprecacao gradual — lesson §10.7) e
+ * candidata a delecao quando os testes de helper forem reavaliados. Nao adicionar
+ * novos consumers: o bloqueio rigido por hard limit (`block-hard`) foi descontinuado.
  */
 export function decideBankrollAction(
   buyIn: number | string,

@@ -178,10 +178,6 @@ describe('RF-08: normalizeBuyInToUSD', () => {
 // plannedTournaments, suprema etc.) sao custosos. Sprint 2.5 podera refatorar
 // em subcomponents + testa-los isoladamente.
 describe('GrindSessionLive.tsx - integracao completa (componentes)', () => {
-  it.todo('submit de form com buyIn $20 em banca $1000 -> abre bankroll-shot-modal');
-  it.todo('modal Cancelar -> addTournamentMutation NAO eh chamada');
-  it.todo('modal Confirmar shot -> addTournamentMutation eh chamada com aboveBankrollRule=true');
-  it.todo('submit $5 em banca $1000 -> addTournamentMutation chamada direto, sem modal');
   it.todo('3 torneios de $50 em banca $1000 -> toast dispara apos o 3o (>10%)');
   it.todo('encerrar sessao -> sessionAccumulatorUSD reseta para 0');
   it.todo('banca configured=false -> feature transparente (zero mudanca UI)');
