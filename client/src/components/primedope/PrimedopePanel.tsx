@@ -28,9 +28,10 @@ export function PrimedopePanel({
   const sim = usePrimedopeSimulation();
 
   const handleRun = (input: any) => {
+    // ADR-215 D2: bankrollUsd habilita Risk of Ruin no engine
     sim.mutate({
       ...input,
-      bankrollUsd,
+      bankrollUsd: bankrollUsd > 0 ? bankrollUsd : undefined,
     });
   };
 

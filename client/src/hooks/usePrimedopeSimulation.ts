@@ -20,10 +20,13 @@ export interface VarianceSimulationInput {
     roi: number;
     count: number;
     isPKO: boolean;
+    placesPaidPct?: number; // ADR-215 D6
+    rakePct?: number;       // ADR-215 D7
   }>;
   weeks: 1 | 4 | 12 | 52;
   simulations?: number;
   seed?: number;
+  bankrollUsd?: number; // ADR-215 D2: habilita RoR
 }
 
 export function usePrimedopeSimulation() {
