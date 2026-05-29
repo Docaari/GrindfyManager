@@ -108,11 +108,14 @@ function MaxLateChip({ tournament }: { tournament: any }) {
 function MaxLateControl({
   tournament,
   onMaxLateChange,
+  variant = 'inline',
 }: {
   tournament: any;
   onMaxLateChange: (id: string, value: string | null) => void;
+  variant?: 'inline' | 'block';
 }) {
   const id = tournament.id;
+  const block = variant === 'block';
   const hasMaxLate = getMaxLateValue(tournament) != null;
   const [showPicker, setShowPicker] = useState(false);
   const [pickerValue, setPickerValue] = useState('');
@@ -141,25 +144,29 @@ function MaxLateControl({
   };
 
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className={block ? 'flex flex-col gap-1 w-full' : 'inline-flex items-center gap-1'}>
       <button
         type="button"
         data-testid={`live-maxlate-toggle-${id}`}
         onClick={handleToggle}
         title={hasMaxLate ? 'Desligar Max Late' : 'Definir Max Late'}
-        className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-medium border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 shrink-0"
+        className={block
+          ? 'flex items-center justify-center gap-1 w-full h-6 rounded text-[10px] font-medium border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+          : 'inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-medium border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 shrink-0'}
       >
         <Hourglass className="w-2.5 h-2.5" />
         Max Late
       </button>
       {showPicker && (
-        <span className="inline-flex items-center gap-1">
+        <span className={block ? 'flex items-center gap-1 w-full' : 'inline-flex items-center gap-1'}>
           <input
             type="time"
             data-testid={`live-maxlate-picker-${id}`}
             value={pickerValue}
             onChange={(e) => setPickerValue(e.target.value)}
-            className="bg-gray-800 border border-gray-600 rounded text-[10px] text-white px-1 py-0.5"
+            className={block
+              ? 'flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded text-[10px] text-white px-1 py-0.5'
+              : 'bg-gray-800 border border-gray-600 rounded text-[10px] text-white px-1 py-0.5'}
           />
           <button
             type="button"
@@ -694,9 +701,6 @@ function UpcomingCard({
           <div className="flex gap-1 text-xs mb-2 ml-7 flex-wrap items-center">
             <PriorityBadge tournament={tournament} />
             <MaxLateChip tournament={tournament} />
-            {onMaxLateChange && (
-              <MaxLateControl tournament={tournament} onMaxLateChange={onMaxLateChange} />
-            )}
             <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
               {tournament.site}
             </Badge>
@@ -772,7 +776,8 @@ function UpcomingCard({
           </div>
         </div>
         {/* Grid 3x2 Layout — Fix 9 (apos remocao Horario + AlertBellPopover) */}
-        <div className="grid grid-cols-[1fr_1.3fr] grid-rows-3 gap-2 w-64 max-w-64">
+        <div className="flex flex-col gap-2 w-64 max-w-64">
+        <div className="grid grid-cols-[1fr_1.3fr] grid-rows-3 gap-2">
           {/* Editar */}
           <Button
             size="sm"
@@ -841,6 +846,11 @@ function UpcomingCard({
             <X className="w-3 h-3 mr-1" />
             Excluir
           </Button>
+        </div>
+        {/* Max Late — pequeno, abaixo do REGISTRAR (RF-03) */}
+        {onMaxLateChange && (
+          <MaxLateControl tournament={tournament} onMaxLateChange={onMaxLateChange} variant="block" />
+        )}
         </div>
       </div>
     </div>
