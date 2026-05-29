@@ -1,6 +1,8 @@
 // Helper functions for tournament categorization and colors
 import { getTypeColor, TOURNAMENT_PRIMARY_TYPES, type TournamentPrimaryType } from "@shared/tournamentTypes";
 import { detectAddonReaFromName } from "@shared/addon-rea-detector";
+import { buildTournamentNarration } from "@/lib/tournamentNarration";
+import type { SessionAlertManager } from "@shared/generic-alerts";
 
 /**
  * Resolve add-on / re-entry fields for an "Add Tournament" payload.
@@ -212,6 +214,23 @@ export const normalizeDecimalInput = (value: string): string => {
   }
 
   return normalized;
+};
+
+/**
+ * Parse de buy-in tolerante a formato BR ("1.250,00"), internacional ("1,250.00"),
+ * decimal simples ("20", "20.00", "20,00") e Number cru. Reusa normalizeDecimalInput
+ * (que ja trata milhares + virgula/ponto) e devolve um Number (0 quando invalido).
+ *
+ * Substitui o antigo `.replace(',', '.')` ingenuo de bucketUpcomingByHour/combineTournaments
+ * que quebrava "1.250,00" (virava 1.250 ao trocar so a 1a virgula / mantendo o ponto de milhar).
+ */
+export const parseBuyInValue = (v: any): number => {
+  if (v == null) return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const normalized = normalizeDecimalInput(String(v));
+  if (normalized === '') return 0;
+  const n = parseFloat(normalized);
+  return Number.isNaN(n) ? 0 : n;
 };
 
 export const generateTournamentName = (tournament: any): string => {
@@ -478,11 +497,8 @@ export const combineTournaments = (sessionTournaments: any[], plannedTournaments
     combinedTournaments.set(tournament.id, tournament);
   });
 
-  // Normaliza buyIn pra tolerar '20' vs '20.00' vs 20 vs '20,00' em comparacoes.
-  const normBuyIn = (v: any) => {
-    const n = parseFloat(String(v ?? '0').replace(',', '.'));
-    return isNaN(n) ? 0 : n;
-  };
+  // Normaliza buyIn pra tolerar '20' vs '20.00' vs 20 vs '20,00' vs '1.250,00'.
+  const normBuyIn = (v: any) => parseBuyInValue(v);
   // Normaliza name/site/time pra tolerar whitespace/casing inconsistente.
   const normStr = (v: any) => String(v ?? '').trim().toLowerCase();
 
@@ -789,5 +805,165 @@ export const getTimeDifference = (targetTime: string) => {
     return 'Agora';
   } else {
     return `Em ${diffMinutes} minutos`;
+  }
+};
+
+// =============================================================================
+// Sprint grind-live-detail-parity (ADR-214) — helpers puros
+// =============================================================================
+
+/**
+ * Resolve o endpoint PUT correto para um card de torneio, por prefixo do id (D2).
+ *
+ * - id com prefixo `planned-` -> `/api/planned-tournaments/{id.slice(8)}`
+ *   ('planned-'.length === 8 — mesma convencao de organizeTournaments).
+ * - caso contrario -> `/api/session-tournaments/{id}`.
+ */
+export const resolveTournamentEndpoint = (id: string): string => {
+  if (id.startsWith('planned-')) {
+    return `/api/planned-tournaments/${id.slice(8)}`;
+  }
+  return `/api/session-tournaments/${id}`;
+};
+
+/**
+ * Agrupa torneios upcoming por hora cheia (HH:00) usando registrationTime || time (D1 / RF-05).
+ *
+ * Paridade DayDetailZoom plannedSlots (bucketRef = maxLate ?? time, aqui
+ * registrationTime ?? time). NAO reusa organizeTournamentsByBreaks (HH:55).
+ *
+ * - bucketRef = registrationTime || time.
+ * - slotKey = "${HH.padStart(2,'0')}:00".
+ * - Torneio sem hora valida cai no PRIMEIRO bucket / fallback (nunca some).
+ * - Sort intra-bucket: prioridade ASC (1=Alta no topo) -> time ASC -> buyIn DESC.
+ * - Buckets ordenados por hora ASC.
+ */
+export const bucketUpcomingByHour = (
+  tournaments: any[],
+): Array<{ hour: string; tournaments: any[] }> => {
+  if (!tournaments || tournaments.length === 0) return [];
+
+  const FALLBACK = '__fallback__';
+  const buckets = new Map<string, any[]>();
+
+  const slotKeyFor = (t: any): string => {
+    const bucketRef = t?.registrationTime || t?.time;
+    if (!bucketRef || typeof bucketRef !== 'string') return FALLBACK;
+    const [hh] = String(bucketRef).split(':');
+    if (hh == null || hh === '' || Number.isNaN(Number(hh))) return FALLBACK;
+    return `${hh.padStart(2, '0')}:00`;
+  };
+
+  tournaments.forEach((t) => {
+    const key = slotKeyFor(t);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(t);
+  });
+
+  const buyInOf = (t: any): number => parseBuyInValue(t?.buyIn);
+  const sortIntraBucket = (a: any, b: any): number => {
+    const pa = Number(a?.prioridade) || 2;
+    const pb = Number(b?.prioridade) || 2;
+    if (pa !== pb) return pa - pb;
+    const ta = parseTime(a?.registrationTime || a?.time);
+    const tb = parseTime(b?.registrationTime || b?.time);
+    if (ta !== tb) return ta - tb;
+    return buyInOf(b) - buyInOf(a);
+  };
+
+  const realBuckets = Array.from(buckets.entries())
+    .filter(([hour]) => hour !== FALLBACK)
+    .map(([hour, list]) => ({ hour, tournaments: [...list].sort(sortIntraBucket) }))
+    .sort((a, b) => a.hour.localeCompare(b.hour));
+
+  const fallback = buckets.get(FALLBACK);
+  if (fallback && fallback.length > 0) {
+    const fallbackSorted = [...fallback].sort(sortIntraBucket);
+    if (realBuckets.length === 0) {
+      // Sem hora valida em nenhum torneio: bucket fallback unico.
+      return [{ hour: '00:00', tournaments: fallbackSorted }];
+    }
+    // Mescla os sem-hora no primeiro bucket (fallback = primeiro bucket).
+    realBuckets[0].tournaments = [...fallbackSorted, ...realBuckets[0].tournaments];
+  }
+
+  return realBuckets;
+};
+
+export interface ReplaceMaxLateAlertOptions {
+  /** Relogio base injetavel para teste deterministico (default new Date()). */
+  now?: Date;
+  /** Quando true, narrationText nao narra o buy-in. */
+  redactBuyIn?: boolean;
+}
+
+/**
+ * Substitui (dedup por tournamentId) o alerta de Max Late de um torneio (D3/D4/D5).
+ *
+ * 1. Remove TODOS os alertas type==='tournament' do tournament.id (cleanup garantido).
+ * 2. registrationTime null/empty -> so remove (toggle OFF / sem reg).
+ * 3. triggerAt = registrationTime - 2min, base now; cross-midnight: se target<=now -> +1d.
+ * 4. triggerAt <= now (janela perdida <2min) -> NAO agenda (so removeu).
+ * 5. Caso futuro -> manager.addTournamentAlert com label "Max Late: {name} ({site})"
+ *    + narrationText via buildTournamentNarration (respeita redactBuyIn).
+ */
+export const replaceMaxLateAlert = (
+  manager: SessionAlertManager,
+  tournament: any,
+  opts?: ReplaceMaxLateAlertOptions,
+): void => {
+  const now = opts?.now ?? new Date();
+
+  // 1. Remove todos os alertas tournament do mesmo tournamentId (cleanup garantido).
+  const existing = manager
+    .getAllAlerts()
+    .filter((a) => a.type === 'tournament' && a.tournamentId === tournament.id);
+  existing.forEach((a) => manager.removeAlert(a.id));
+
+  // 2. Sem registrationTime -> so remove.
+  const registrationTime = tournament?.registrationTime;
+  if (
+    typeof registrationTime !== 'string' ||
+    registrationTime.trim() === ''
+  ) {
+    return;
+  }
+
+  const [hh, mm] = registrationTime.split(':').map(Number);
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return;
+
+  // 3. triggerAt = registrationTime - 2min, com rollover cross-midnight.
+  const target = new Date(now);
+  target.setHours(hh, mm, 0, 0);
+  if (target.getTime() <= now.getTime()) {
+    target.setDate(target.getDate() + 1);
+  }
+  const triggerAt = new Date(target.getTime() - 2 * 60_000);
+
+  // 4. Janela perdida.
+  if (triggerAt.getTime() <= now.getTime()) return;
+
+  // 5. Agenda. addTournamentAlert pode lancar quando MAX_ALERTS (50) e atingido
+  // (generic-alerts.ts). Log antes (lesson #9) e segue sem agendar — nao propaga
+  // pro useEffect/onSuccess que chamam este helper.
+  try {
+    manager.addTournamentAlert({
+      tournamentId: tournament.id,
+      triggerAt,
+      label: `Max Late: ${tournament.name} (${tournament.site})`,
+      narrationText: buildTournamentNarration(
+        {
+          site: tournament.site ?? '',
+          name: tournament.name ?? '',
+          buyIn: String(tournament.buyIn ?? ''),
+        },
+        { redactBuyIn: !!opts?.redactBuyIn },
+      ),
+    });
+  } catch (err) {
+    console.warn(
+      `[replaceMaxLateAlert] falha ao agendar alerta Max Late (${tournament?.id}):`,
+      err,
+    );
   }
 };

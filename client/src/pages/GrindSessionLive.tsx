@@ -93,7 +93,8 @@ import {
 import type { GrindSession, NewTournamentForm, RegistrationData, QuickNote } from "@/components/grind-session-live/types";
 import {
   normalizeDecimalInput, generateTournamentName, parseTime,
-  organizeTournaments, organizeTournamentsByBreaks, combineTournaments,
+  organizeTournaments, combineTournaments,
+  bucketUpcomingByHour, resolveTournamentEndpoint, replaceMaxLateAlert,
   getSiteColor,
   shouldShowReentryModal, buildReentryPayload,
   resolveAddonReaPayload,
@@ -1404,6 +1405,40 @@ export default function GrindSessionLive() {
     return () => clearInterval(interval);
   }, [activeSession, plannedTournaments, sessionTournaments, userAlertSettings, userTTSSettings, toast]);
 
+  // Sprint grind-live-detail-parity (RF-04 / ADR-214 D4) — reconciliacao idempotente.
+  // Para cada torneio upcoming/registered com registrationTime definido, agenda
+  // (ou re-agenda via dedup) o alerta de Max Late 2min antes. Idempotente: o helper
+  // replaceMaxLateAlert remove o alerta antigo do tournamentId antes de adicionar,
+  // entao re-rodar nao acumula duplicatas. So re-roda quando a lista/registrationTime
+  // muda (NAO a cada tick) — a assinatura nas deps captura id+status+registrationTime.
+  // HIGH-1: usar combineTournaments (mesma fonte que o render) dedup planned-vs-shadow
+  // — antes a lista inline somava planned-X + sess-N pro mesmo torneio efetivo,
+  // agendando 2 alertas -> dupla narracao TTS. combineTournaments deixa 1 row por
+  // torneio efetivo, entao reconcile (e onSuccess) agendam 1 alerta cada.
+  const reconcileCombined = useMemo(
+    () => combineTournaments(sessionTournaments || [], plannedTournaments || []),
+    [sessionTournaments, plannedTournaments],
+  );
+  // Assinatura compacta: so muda quando algum id/status/registrationTime muda.
+  const reconcileSignature = useMemo(
+    () =>
+      reconcileCombined
+        .map((t: any) => `${t.id}:${t.status ?? ''}:${t.registrationTime ?? ''}`)
+        .join('|'),
+    [reconcileCombined],
+  );
+  useEffect(() => {
+    if (!activeSession) return;
+    const mgr = sessionAlertManagerRef.current;
+    for (const t of reconcileCombined) {
+      if (t.status !== 'upcoming' && t.status !== 'registered') continue;
+      if (typeof t.registrationTime === 'string' && t.registrationTime.trim() !== '') {
+        replaceMaxLateAlert(mgr, t, { now: new Date(), redactBuyIn: userTTSSettings.redactBuyIn });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSession?.id, userTTSSettings.redactBuyIn, reconcileSignature]);
+
   // ===== MUTATIONS =====
   // Atualiza screenCap da sessao em curso e memoriza como default p/ proxima sessao.
   // Optimistic: atualiza activeSession local e cache de /api/grind-sessions.
@@ -1560,6 +1595,68 @@ export default function GrindSessionLive() {
     },
     onError: (error: any) => { toast({ title: "Erro ao Atualizar Torneio", description: error.message ? `Falha ao atualizar torneio: ${error.message}` : "Falha ao atualizar torneio", variant: "destructive" }); },
   });
+
+  // Sprint grind-live-detail-parity (RF-03/RF-06 / ADR-214 D6/D7).
+  // Mutation de Max Late (registrationTime) — optimistic + rollback + invalidate
+  // centralizado no onSettled das duas query keys (session + planned).
+  const SESSION_TOURNAMENTS_KEY = ["/api/session-tournaments", activeSession?.id];
+  const PLANNED_TOURNAMENTS_KEY = ["/api/session-tournaments/by-day", currentDayOfWeek];
+  const maxLateChangeMutation = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: string | null }) => {
+      // D7: OFF envia registrationTime: null EXPLICITO (nao omitir a chave).
+      return await apiRequest("PUT", resolveTournamentEndpoint(id), { registrationTime: value });
+    },
+    onMutate: async ({ id, value }: { id: string; value: string | null }) => {
+      await queryClient.cancelQueries({ queryKey: SESSION_TOURNAMENTS_KEY });
+      await queryClient.cancelQueries({ queryKey: PLANNED_TOURNAMENTS_KEY });
+      const prevSession = queryClient.getQueryData<any[]>(SESSION_TOURNAMENTS_KEY);
+      const prevPlanned = queryClient.getQueryData<any[]>(PLANNED_TOURNAMENTS_KEY);
+      if (id.startsWith('planned-')) {
+        const realId = id.slice(8);
+        queryClient.setQueryData<any[]>(PLANNED_TOURNAMENTS_KEY, (old) =>
+          Array.isArray(old) ? old.map((t) => (t.id === realId ? { ...t, registrationTime: value } : t)) : old,
+        );
+      } else {
+        queryClient.setQueryData<any[]>(SESSION_TOURNAMENTS_KEY, (old) =>
+          Array.isArray(old) ? old.map((t) => (t.id === id ? { ...t, registrationTime: value } : t)) : old,
+        );
+      }
+      return { prevSession, prevPlanned };
+    },
+    onError: (error: any, _vars, context: any) => {
+      // Rollback do snapshot otimista.
+      if (context?.prevSession !== undefined) queryClient.setQueryData(SESSION_TOURNAMENTS_KEY, context.prevSession);
+      if (context?.prevPlanned !== undefined) queryClient.setQueryData(PLANNED_TOURNAMENTS_KEY, context.prevPlanned);
+      toast({ title: "Erro ao atualizar Max Late", description: error?.message || "Falha ao salvar Max Late", variant: "destructive" });
+    },
+    onSettled: () => {
+      // Invalidate centralizado das duas query keys (card pode ser de qualquer tabela).
+      queryClient.invalidateQueries({ queryKey: ["/api/session-tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+      queryClient.invalidateQueries({ queryKey: PLANNED_TOURNAMENTS_KEY });
+    },
+  });
+
+  const handleMaxLateChange = (id: string, value: string | null) => {
+    maxLateChangeMutation.mutate(
+      { id, value },
+      {
+        onSuccess: () => {
+          // RF-04: agenda/atualiza/remove o alerta apos salvar.
+          // HIGH-1: usar combineTournaments (dedup planned-vs-shadow) — mesma fonte
+          // que o render e o reconcile useEffect, garantindo 1 alerta por torneio
+          // efetivo (id resolve pro row deduplicado).
+          const allTournaments = combineTournaments(sessionTournaments || [], plannedTournaments || []);
+          const target = allTournaments.find((t: any) => t.id === id);
+          replaceMaxLateAlert(
+            sessionAlertManagerRef.current,
+            { ...(target || {}), id, registrationTime: value },
+            { now: new Date(), redactBuyIn: userTTSSettings.redactBuyIn },
+          );
+        },
+      },
+    );
+  };
 
   const breakFeedbackMutation = useMutation({
     mutationFn: async (feedback: any) => {
@@ -2653,6 +2750,7 @@ export default function GrindSessionLive() {
                       isSelected={selectedTournaments.has(tournament.id)}
                       onToggleSelect={toggleTournamentSelection}
                       onAddOnTaken={handleAddOnTaken}
+                      onMaxLateChange={handleMaxLateChange}
                     />
                   )) : <div className="category-empty">Nenhum torneio em andamento</div>}
                 </div>
@@ -2666,11 +2764,18 @@ export default function GrindSessionLive() {
             <div className="tournaments-list">
               {filteredUpcoming.length > 0 ? (
                 <div className="space-y-4">
-                  {organizeTournamentsByBreaks(filteredUpcoming).map((breakBlock) => (
-                    <div key={breakBlock.breakTime} className="break-block">
-                      <div className="break-header"><div className="break-line"></div><div className="break-title">Break {breakBlock.breakTime} ({breakBlock.tournaments.length})</div><div className="break-line"></div></div>
+                  {bucketUpcomingByHour(filteredUpcoming).map((bucket) => (
+                    <div key={bucket.hour} className="break-block">
+                      <div
+                        className="break-header"
+                        data-testid={`live-bucket-header-${bucket.hour.slice(0, 2)}`}
+                      >
+                        <div className="break-line"></div>
+                        <div className="break-title">{bucket.hour} — {bucket.tournaments.length} torneio(s)</div>
+                        <div className="break-line"></div>
+                      </div>
                       <div className="space-y-2">
-                        {breakBlock.tournaments.map((tournament: any) => (
+                        {bucket.tournaments.map((tournament: any) => (
                           <TournamentCard key={tournament.id} mode="upcoming"
                             tournament={tournament} registered={registered}
                             onRegister={handleRegisterTournament}
@@ -2680,6 +2785,7 @@ export default function GrindSessionLive() {
                             isSelected={selectedTournaments.has(tournament.id)}
                             onToggleSelect={toggleTournamentSelection}
                             onOpenTournamentAlert={openTournamentAlertFor}
+                            onMaxLateChange={handleMaxLateChange}
                           />
                         ))}
                       </div>

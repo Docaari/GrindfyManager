@@ -1,0 +1,40 @@
+%% Sprint grind-live-detail-parity — card render flow (ADR-214 D1/D2/D8)
+%% Como TournamentCard (Upcoming/Registered/Completed) consome prioridade + registrationTime,
+%% e como bucketUpcomingByHour (HH:00) agrupa SOMENTE a secao upcoming.
+flowchart TD
+    Q["GrindSessionLive — query<br/>tournaments + plannedTournaments"]
+    Q -->|"organizeTournaments(tournaments, planned)"| ORG["organizeTournaments<br/>(helpers.ts:333)"]
+
+    ORG -->|"status=upcoming"| UP["upcoming[]"]
+    ORG -->|"status=registered"| REG["registered[] (flat, sort atual)"]
+    ORG -->|"status=completed/finished"| COMP["completed[] (flat)"]
+
+    UP -->|"bucketUpcomingByHour(upcoming) — D1"| BUCKET["bucketUpcomingByHour<br/>(helper NOVO, helpers.ts)"]
+    BUCKET -->|"bucketRef = registrationTime || time"| SLOT["slotKey = HH:00<br/>(NAO HH:55 de organizeTournamentsByBreaks)"]
+    SLOT -->|"sort intra-bucket:<br/>prioridade ASC -> time ASC -> buyIn DESC"| BLOCKS["Array&lt;{ hour:'HH:00', tournaments[] }&gt;<br/>ordenado por hora ASC"]
+    BLOCKS -->|"header data-testid=live-bucket-header-{HH}<br/>'HH:00 — N torneio(s)'"| HDR["Bucket header"]
+    BLOCKS -->|"para cada torneio do bucket"| UCARD["UpcomingCard"]
+
+    REG -->|"para cada torneio (sem bucket)"| RCARD["RegisteredCard"]
+    COMP -->|"para cada torneio (sem bucket)"| CCARD["CompletedCard"]
+
+    UCARD -->|"consome prioridade + registrationTime"| META["TournamentCardMeta<br/>(sub-render compartilhado — D8)"]
+    RCARD -->|"consome prioridade + registrationTime"| META
+    CCARD -->|"consome prioridade + registrationTime (read-only)"| META
+
+    META -->|"prioridade = Number(t.prioridade) || 2"| PRIO{"prioridade?"}
+    PRIO -->|"1 (Alta)"| HIGH["border-l-4 border-l-red-500 +<br/>badge Flame 'Alta' (1o elemento)<br/>data-testid=live-tournament-priority-badge-{id}"]
+    PRIO -->|"2 (Media)"| MED["sem badge inline, border padrao"]
+    PRIO -->|"3 (Baixa)"| LOW["opacity-90 + nome text-gray-400"]
+
+    META -->|"registrationTime string nao-vazia?"| MAXLATE{"registrationTime?"}
+    MAXLATE -->|"sim"| CHIP["chip Hourglass ambar<br/>bg-amber-500/15 text-amber-300<br/>data-testid=live-tournament-maxlate-{id}"]
+    MAXLATE -->|"null / vazio"| NOCHIP["chip ausente"]
+
+    UCARD -->|"toggle/picker (RF-03)"| TOGGLE["live-maxlate-toggle-{id}<br/>+ live-maxlate-picker-{id}"]
+    RCARD -->|"toggle/picker (RF-06 rebuy)"| TOGGLE
+    CCARD -.->|"read-only — SEM toggle/picker"| RO["apenas chip Max Late"]
+
+    TOGGLE -->|"resolveTournamentEndpoint(id) — D2"| EP{"id startsWith 'planned-'?"}
+    EP -->|"sim"| PEP["PUT /api/planned-tournaments/{id.slice(8)}"]
+    EP -->|"nao"| SEP["PUT /api/session-tournaments/{id}"]
