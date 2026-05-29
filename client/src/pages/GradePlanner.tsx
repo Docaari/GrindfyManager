@@ -13,13 +13,13 @@ import { Panel, PanelGroup, PanelResizeHandle, type ImperativePanelHandle } from
 import { validateDrop, mapLibraryToPlanned, calculateMove } from "@shared/drag-drop-utils";
 import { checkOffToggleWarning, getAffectedTournaments, shouldShowOffDialog } from "@shared/grade-off-toggle";
 import { shouldShowGrindCTA, getGrindCTAData, getTodayDayOfWeek } from "@/components/grade-planner/grind-cta-helpers";
-import { Maximize2, Minimize2, BarChart3, Zap, X, Plus, Keyboard } from "lucide-react";
+import { Maximize2, Minimize2, BarChart3, Zap, X, Plus, Keyboard, Calendar, Trophy, Plane, Calculator } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// Sprint coach-page-reform-1: importamos de grade-planner/SelectorPanel (re-export)
-// para que testes possam mockar via @/components/grade-planner/SelectorPanel.
-import { SelectorPanel } from "@/components/grade-planner/SelectorPanel";
+// Sprint tournament-selector-reform: a aba "Torneios" agora reflete a pagina
+// /library (TournamentLibraryNew). SelectorPanel (scoring) saiu da UI.
+import TournamentLibraryNew from "@/pages/TournamentLibraryNew";
 
 import { tournamentSchema, type TournamentForm, weekDays } from '@/components/grade-planner/types';
 import { computeDayStats, buildOffDayToastPayload } from '@/components/grade-planner/helpers';
@@ -42,11 +42,15 @@ import { useTabFromUrl } from '@/hooks/useTabFromUrl';
 // Sprint Estudos-Habito-1 (RF-4): FocusStatsBar placement="coach".
 import { FocusStatsBar } from '@/components/study/FocusStatsBar';
 import { useFocusStatsBar } from '@/hooks/useFocusStatsBar';
-import { CoachPendingBanner } from '@/components/grade-planner/CoachPendingBanner';
 import { FlightsPanel } from '@/components/grade-planner/FlightsPanel';
 
 const COACH_TABS = ['planner', 'selector', 'flights', 'variance'] as const;
 const COACH_TAB_LIST: string[] = [...COACH_TABS];
+
+// Sprint tournament-selector-reform: cada aba e um card clicavel (TabsTrigger
+// estilizado). A className e identica nos 4 cards — extraida p/ DRY.
+const CARD_TRIGGER_CLS =
+  'flex flex-col items-start gap-1 h-auto rounded-xl border border-gray-700 bg-gray-800/60 p-4 text-left whitespace-normal transition-colors hover:border-emerald-500/60 data-[state=active]:border-emerald-500 data-[state=active]:bg-emerald-500/10 data-[state=active]:shadow-none';
 
 export default function GradePlanner() {
   // Sprint Estudos-Habito-1 (RF-4): FocusStatsBar placement="coach".
@@ -876,50 +880,57 @@ export default function GradePlanner() {
           );
         })()}
 
-        {/* Sprint coach-page-reform-1 RF-04: banner de pendencias para founder. */}
-        <CoachPendingBanner onJump={(target) => setActiveTab(target)} />
-
-        {/* Sprint coach-page-reform-1 RF-01: 4 abas peer (planner/selector/flights/variance).
-            URL persistida via useTabFromUrl. RF-07.5: alias legado grade-tab-selector
-            via wrapper display:contents para nao quebrar testes existentes.
-            Adicionamos onClick redundante em cada trigger porque Radix Tabs reage
-            apenas a onMouseDown — testes RTL com fireEvent.click precisam do click. */}
+        {/* Sprint tournament-selector-reform: cards substituem as abas textuais.
+            Cada card e um TabsTrigger (Radix preservado) estilizado como cartao
+            clicavel — acesso mais facil as 4 ferramentas: Grade / Torneios /
+            Flights / Calculadora MTTs. testids legados (coach-tab-*) + alias
+            grade-tab-selector (display:contents) mantidos p/ testes.
+            onClick redundante: Radix Tabs reage a onMouseDown; RTL fireEvent.click
+            precisa do click explicito (lesson #27). */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)} className="w-full">
-          <TabsList className="bg-gray-800 border border-gray-700 mb-4 flex flex-wrap">
+          <TabsList className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 h-auto bg-transparent p-0">
             <TabsTrigger
               value="planner"
-              className="text-sm"
               data-testid="coach-tab-planner"
               onClick={() => setActiveTab('planner')}
+              className={CARD_TRIGGER_CLS}
             >
-              Biblioteca + Grade
+              <Calendar className="h-5 w-5 text-emerald-400" />
+              <span className="text-sm font-semibold text-white">Grade</span>
+              <span className="text-xs text-gray-400">Biblioteca + grade semanal</span>
             </TabsTrigger>
-            {/* RF-07.5: wrapper display:contents preserva testid legado. */}
+            {/* alias legado grade-tab-selector via wrapper display:contents. */}
             <div data-testid="grade-tab-selector" style={{ display: 'contents' }}>
               <TabsTrigger
                 value="selector"
-                className="text-sm"
                 data-testid="coach-tab-selector"
                 onClick={() => setActiveTab('selector')}
+                className={CARD_TRIGGER_CLS}
               >
-                Tournament Selector
+                <Trophy className="h-5 w-5 text-yellow-400" />
+                <span className="text-sm font-semibold text-white">Torneios</span>
+                <span className="text-xs text-gray-400">Biblioteca de torneios</span>
               </TabsTrigger>
             </div>
             <TabsTrigger
               value="flights"
-              className="text-sm"
               data-testid="coach-tab-flights"
               onClick={() => setActiveTab('flights')}
+              className={CARD_TRIGGER_CLS}
             >
-              Flights
+              <Plane className="h-5 w-5 text-sky-400" />
+              <span className="text-sm font-semibold text-white">Flights</span>
+              <span className="text-xs text-gray-400">Reentradas e flights</span>
             </TabsTrigger>
             <TabsTrigger
               value="variance"
-              className="text-sm"
               data-testid="coach-tab-variance"
               onClick={() => setActiveTab('variance')}
+              className={CARD_TRIGGER_CLS}
             >
-              Variance Calculator
+              <Calculator className="h-5 w-5 text-purple-400" />
+              <span className="text-sm font-semibold text-white">Calculadora MTTs</span>
+              <span className="text-xs text-gray-400">Simulador de variancia</span>
             </TabsTrigger>
           </TabsList>
 
@@ -960,9 +971,11 @@ export default function GradePlanner() {
             )}
           </TabsContent>
 
-          {/* Aba Tournament Selector. */}
+          {/* Aba Torneios — reflete a pagina /library (TournamentLibraryNew).
+              Sprint tournament-selector-reform: SelectorPanel (scoring + cold-start
+              "importe 50 torneios") substituido pela biblioteca de torneios. */}
           <TabsContent value="selector" className="mt-0">
-            <SelectorPanel />
+            <TournamentLibraryNew />
           </TabsContent>
 
           {/* Aba Flights — conteudo migrado de /flight (RF-02). */}

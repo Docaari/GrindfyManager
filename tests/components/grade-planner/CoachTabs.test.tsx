@@ -50,9 +50,10 @@ vi.mock('@/lib/queryClient', () => ({
 }));
 
 // Mock dos sub-componentes pesados — testamos a casca de tabs, nao internals.
-vi.mock('@/components/grade-planner/SelectorPanel', () => ({
-  SelectorPanel: () => React.createElement('div', { 'data-testid': 'mock-selector-panel' }, 'Selector'),
-  default: () => React.createElement('div', { 'data-testid': 'mock-selector-panel' }, 'Selector'),
+// Sprint tournament-selector-reform: a aba "Torneios" (value=selector) agora
+// renderiza a pagina /library (TournamentLibraryNew), nao mais o SelectorPanel.
+vi.mock('@/pages/TournamentLibraryNew', () => ({
+  default: () => React.createElement('div', { 'data-testid': 'mock-library-page' }, 'Library'),
 }));
 
 vi.mock('@/components/grade-planner/FlightsPanel', () => ({
@@ -222,14 +223,14 @@ describe('GradePlanner — switching de abas via click', () => {
     expect(screen.getByTestId('mock-flights-panel')).toBeInTheDocument();
   });
 
-  it('click em selector renderiza SelectorPanel mock', async () => {
+  it('click em selector (Torneios) renderiza a pagina Library', async () => {
     const GradePlanner = await loadGradePlanner();
     render(withClient(<GradePlanner />));
 
     const tabSelector = screen.getByTestId('coach-tab-selector');
     fireEvent.click(tabSelector);
 
-    expect(screen.getByTestId('mock-selector-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('mock-library-page')).toBeInTheDocument();
   });
 });
 

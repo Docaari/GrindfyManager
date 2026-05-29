@@ -487,10 +487,12 @@ export default function TournamentLibraryNew() {
     }
   }, [sortBy, sortOrder]);
   
-  // RF-08 (L10): default periodo = 90d (era "all"). Usuario novo nao ve dados
-  // mortos de 2 anos misturados com performance recente. "Tudo" continua disponivel.
+  // Sprint tournament-selector-reform: default periodo = "all" (Tudo). Founder
+  // tem 15k+ torneios importados; "Tudo" e a visao desejada por padrao tanto na
+  // pagina /library quanto na aba Torneios que reflete ela. (Revertido o RF-08/L10
+  // que usava 90d.)
   const [filters, setFilters] = useState<TournamentLibraryFiltersType>({
-    period: "90d",
+    period: "all",
     sites: [],
     categories: [],
     speeds: [],
@@ -595,9 +597,9 @@ export default function TournamentLibraryNew() {
   const filtersActive = hasActiveFilters(filters, searchTerm);
 
   const handleClearFilters = useCallback(() => {
-    // RF-08: clear filters volta ao default "90d" (nao "all")
+    // Clear filters volta ao default "all" (Tudo).
     setFilters({
-      period: "90d", sites: [], categories: [], speeds: [],
+      period: "all", sites: [], categories: [], speeds: [],
       buyinRange: { min: null, max: null },
       roiFilter: "all", profitFilter: "all", volumeFilter: "all", minimumVolume: null,
     });
