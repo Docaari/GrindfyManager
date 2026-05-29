@@ -11648,6 +11648,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
               pt.bounty,
               pt.position,
               pt.result,
+              pt.prioridade,
+              pt.registration_time AS "registrationTime",
               t.currency,
               t.players_avg,
               t.places_paid_avg,
