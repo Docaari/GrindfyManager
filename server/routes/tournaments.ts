@@ -37,12 +37,12 @@ export function registerTournamentRoutes(app: Express): void {
 
       // Validate confirmation
       if (confirmation !== 'CONFIRMAR') {
-        return res.status(400).json({ error: 'Confirmation required. Type "CONFIRMAR" to proceed.' });
+        return res.status(400).json({ message: 'Confirmação obrigatória: digite "CONFIRMAR" para prosseguir.' });
       }
 
       // Validate at least one filter is provided
       if (!sites?.length && !dateFrom && !dateTo) {
-        return res.status(400).json({ error: 'At least one filter (site or date range) is required.' });
+        return res.status(400).json({ message: 'Selecione ao menos um filtro (site ou período). Para apagar TUDO use Configurações > Limpar Histórico.' });
       }
 
       // Get preview count first
@@ -52,11 +52,14 @@ export function registerTournamentRoutes(app: Express): void {
         dateTo: dateTo ? new Date(dateTo) : null
       });
 
-      // Safety limit
-      const MAX_DELETE_LIMIT = 5000;
+      // Safety limit. Subido de 5000 -> 100000: contas reais de grinder passam
+      // de 30k torneios e o cap antigo travava qualquer limpeza ampla com 400
+      // (founder reportou "Falha na limpeza" com 34k). DELETE unico aguenta —
+      // todas as FKs que referenciam tournaments sao ON DELETE SET NULL.
+      const MAX_DELETE_LIMIT = 100000;
       if (previewCount > MAX_DELETE_LIMIT) {
         return res.status(400).json({
-          error: `Cannot delete more than ${MAX_DELETE_LIMIT} tournaments at once. Found ${previewCount} tournaments matching criteria.`
+          message: `Não é possível apagar mais de ${MAX_DELETE_LIMIT} torneios de uma vez. Encontrados ${previewCount} no filtro.`
         });
       }
 
@@ -79,7 +82,8 @@ export function registerTournamentRoutes(app: Express): void {
         }
       });
     } catch (error) {
-      res.status(500).json({ error: 'Internal server error during bulk deletion' });
+      console.error('bulk-delete failed:', error);
+      res.status(500).json({ message: 'Erro interno ao remover torneios.' });
     }
   });
 
@@ -97,7 +101,8 @@ export function registerTournamentRoutes(app: Express): void {
 
       res.json({ count });
     } catch (error) {
-      res.status(500).json({ error: 'Internal server error' });
+      console.error('bulk-delete preview failed:', error);
+      res.status(500).json({ message: 'Erro ao calcular a prévia.' });
     }
   });
 

@@ -427,10 +427,10 @@ function GranularDataCleanup() {
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Erro na limpeza",
-        description: "Falha ao remover torneios",
+        description: error?.message || "Falha ao remover torneios",
         variant: "destructive",
       });
     },
