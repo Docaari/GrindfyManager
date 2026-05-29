@@ -144,45 +144,51 @@ function MaxLateControl({
   };
 
   return (
-    <span className={block ? 'flex flex-col gap-1 w-full' : 'inline-flex items-center gap-1'}>
+    <span className={block ? 'relative flex w-full' : 'inline-flex items-center gap-1'}>
       <button
         type="button"
         data-testid={`live-maxlate-toggle-${id}`}
         onClick={handleToggle}
         title={hasMaxLate ? 'Desligar Max Late' : 'Definir Max Late'}
         className={block
-          ? 'flex items-center justify-center gap-1 w-full h-6 rounded text-[10px] font-medium border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+          ? 'flex items-center justify-center gap-1 w-full h-10 px-2 rounded text-xs font-semibold border-2 border-amber-500 bg-gradient-to-r from-amber-600/60 to-amber-700/60 text-amber-100 hover:from-amber-500/80 hover:to-amber-600/80 hover:text-white shadow-lg transition-all duration-200'
           : 'inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-medium border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 shrink-0'}
       >
-        <Hourglass className="w-2.5 h-2.5" />
+        <Hourglass className="w-3 h-3" />
         Max Late
       </button>
       {showPicker && (
-        <span className={block ? 'flex items-center gap-1 w-full' : 'inline-flex items-center gap-1'}>
-          <input
-            type="time"
-            data-testid={`live-maxlate-picker-${id}`}
-            value={pickerValue}
-            onChange={(e) => setPickerValue(e.target.value)}
-            className={block
-              ? 'flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded text-[10px] text-white px-1 py-0.5'
-              : 'bg-gray-800 border border-gray-600 rounded text-[10px] text-white px-1 py-0.5'}
-          />
-          <button
-            type="button"
-            data-testid={`live-maxlate-confirm-${id}`}
-            onClick={handleConfirm}
-            className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-medium bg-emerald-600 text-white hover:bg-emerald-500"
-          >
-            OK
-          </button>
+        <span
+          className={block
+            ? 'absolute left-0 top-full mt-1 z-30 flex flex-col gap-1 bg-gray-900 border border-gray-700 rounded p-1.5 shadow-xl'
+            : 'inline-flex items-center gap-1'}
+        >
+          <span className={block ? 'flex items-center gap-1' : 'contents'}>
+            <input
+              type="time"
+              data-testid={`live-maxlate-picker-${id}`}
+              value={pickerValue}
+              onChange={(e) => setPickerValue(e.target.value)}
+              className="bg-gray-800 border border-gray-600 rounded text-[10px] text-white px-1 py-0.5"
+            />
+            <button
+              type="button"
+              data-testid={`live-maxlate-confirm-${id}`}
+              onClick={handleConfirm}
+              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-emerald-600 text-white hover:bg-emerald-500"
+            >
+              OK
+            </button>
+          </span>
+          {block && error && (
+            <span data-testid={`live-maxlate-error-${id}`} className="text-[9px] text-red-400">
+              {error}
+            </span>
+          )}
         </span>
       )}
-      {error && (
-        <span
-          data-testid={`live-maxlate-error-${id}`}
-          className="text-[9px] text-red-400"
-        >
+      {!block && error && (
+        <span data-testid={`live-maxlate-error-${id}`} className="text-[9px] text-red-400">
           {error}
         </span>
       )}
@@ -776,8 +782,7 @@ function UpcomingCard({
           </div>
         </div>
         {/* Grid 3x2 Layout — Fix 9 (apos remocao Horario + AlertBellPopover) */}
-        <div className="flex flex-col gap-2 w-64 max-w-64">
-        <div className="grid grid-cols-[1fr_1.3fr] grid-rows-3 gap-2">
+        <div className="grid grid-cols-[1fr_1.3fr] grid-rows-3 gap-2 w-64 max-w-64">
           {/* Editar */}
           <Button
             size="sm"
@@ -789,12 +794,12 @@ function UpcomingCard({
             Editar
           </Button>
 
-          {/* REGISTRAR (3 rows span) */}
+          {/* REGISTRAR (2 rows span — r3c2 fica para o Max Late) */}
           <Button
             size="sm"
             onClick={handleRegisterClick}
             data-testid={`btn-register-${tournament.id}`}
-            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white row-span-3 h-[136px] px-2 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-blue-400/50 relative"
+            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white row-span-2 h-[88px] px-2 text-sm font-bold shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-blue-400/50 relative"
           >
             <div className="flex flex-col items-center justify-center">
               <UserPlus className="w-4 h-4 mb-1" />
@@ -846,11 +851,12 @@ function UpcomingCard({
             <X className="w-3 h-3 mr-1" />
             Excluir
           </Button>
-        </div>
-        {/* Max Late — pequeno, abaixo do REGISTRAR (RF-03) */}
-        {onMaxLateChange && (
-          <MaxLateControl tournament={tournament} onMaxLateChange={onMaxLateChange} variant="block" />
-        )}
+
+          {/* Max Late — col2 r3: abaixo do REGISTRAR, ao lado do Excluir (RF-03).
+              Largura proporcional ao REGISTRAR (mesma coluna), sem aumentar a altura do card. */}
+          {onMaxLateChange && (
+            <MaxLateControl tournament={tournament} onMaxLateChange={onMaxLateChange} variant="block" />
+          )}
         </div>
       </div>
     </div>
