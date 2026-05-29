@@ -308,7 +308,14 @@ describe('AggregationWizard (RF-07)', () => {
 
       const firstRow = screen.getByTestId('group-row-0');
       expect(firstRow).toBeInTheDocument();
-      expect(firstRow.textContent).toMatch(/High Vanilla|Mid Vanilla|Mid PKO|Low Vanilla|Entry Vanilla/);
+      // Nome agora e um input editavel (founder feedback) — le o value, nao textContent.
+      const nameInput = screen.getByTestId('name-input-0') as HTMLInputElement;
+      expect(nameInput.value).toMatch(/High Vanilla|Mid Vanilla|Mid PKO|Low Vanilla|Entry Vanilla/);
+      // buyIn/field/ROI/count continuam como inputs com testid estavel.
+      expect(screen.getByTestId('buyin-input-0')).toBeInTheDocument();
+      expect(screen.getByTestId('field-input-0')).toBeInTheDocument();
+      expect(screen.getByTestId('roi-input-0')).toBeInTheDocument();
+      expect(screen.getByTestId('count-input-0')).toBeInTheDocument();
     });
   });
 
@@ -473,33 +480,11 @@ describe('AggregationWizard (RF-07)', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Daily investment scaling
+  // Buy-in editing (founder feedback 2026-05-29: buy-in deve ser editavel)
   // -------------------------------------------------------------------------
 
-  describe('daily investment', () => {
-    it('deve exibir campo "Investimento diario"', async () => {
-      const AggregationWizard = await tryLoadComponent();
-      expect(AggregationWizard).not.toBeNull();
-
-      const { render, screen, waitFor } = await import('@testing-library/react');
-      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
-      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-
-      render(
-        React.createElement(QueryClientProvider, { client: qc },
-          React.createElement(AggregationWizard),
-        ),
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId('aggregation-table')).toBeInTheDocument();
-      });
-
-      const dailyInput = screen.getByTestId('daily-investment-input');
-      expect(dailyInput).toBeInTheDocument();
-    });
-
-    it('deve escalar buy-ins proporcionalmente quando investimento diario preenchido', async () => {
+  describe('buy-in editing', () => {
+    it('deve permitir editar o buy-in de um grupo', async () => {
       const AggregationWizard = await tryLoadComponent();
       expect(AggregationWizard).not.toBeNull();
 
@@ -517,19 +502,90 @@ describe('AggregationWizard (RF-07)', () => {
         expect(screen.getByTestId('aggregation-table')).toBeInTheDocument();
       });
 
-      const buyInDisplay = screen.getByTestId('buyin-display-0');
-      const initialBuyIn = parseFloat(buyInDisplay.textContent ?? '0');
+      const buyInInput = screen.getByTestId('buyin-input-0') as HTMLInputElement;
+      expect(buyInInput).toBeInTheDocument();
+      fireEvent.change(buyInInput, { target: { value: '215' } });
+      expect(buyInInput.value).toBe('215');
+    });
 
-      const dailyInput = screen.getByTestId('daily-investment-input') as HTMLInputElement;
-      fireEvent.change(dailyInput, { target: { value: '2000' } });
+    it('NAO deve exibir o campo "Investimento diario" (removido)', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      expect(AggregationWizard).not.toBeNull();
+
+      const { render, screen, waitFor } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard),
+        ),
+      );
 
       await waitFor(() => {
-        const updatedBuyIn = parseFloat(
-          (screen.getByTestId('buyin-display-0') as HTMLElement).textContent ?? '0',
-        );
-        if (initialBuyIn > 0) {
-          expect(updatedBuyIn).not.toBe(initialBuyIn);
-        }
+        expect(screen.getByTestId('aggregation-table')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId('daily-investment-input')).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Add / remove tournament type (founder feedback 2026-05-29)
+  // -------------------------------------------------------------------------
+
+  describe('add / remove tournament type', () => {
+    it('deve adicionar uma nova linha ao clicar em "Adicionar tipo"', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      expect(AggregationWizard).not.toBeNull();
+
+      const { render, screen, fireEvent, waitFor } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard),
+        ),
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('aggregation-table')).toBeInTheDocument();
+      });
+
+      const before = screen.getAllByTestId(/^group-row-/).length;
+      fireEvent.click(screen.getByTestId('add-group-button'));
+
+      await waitFor(() => {
+        const after = screen.getAllByTestId(/^group-row-/).length;
+        expect(after).toBe(before + 1);
+      });
+    });
+
+    it('deve remover uma linha ao clicar no botao de remover', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      expect(AggregationWizard).not.toBeNull();
+
+      const { render, screen, fireEvent, waitFor } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard),
+        ),
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('aggregation-table')).toBeInTheDocument();
+      });
+
+      const before = screen.getAllByTestId(/^group-row-/).length;
+      fireEvent.click(screen.getByTestId('remove-group-0'));
+
+      await waitFor(() => {
+        const after = screen.getAllByTestId(/^group-row-/).length;
+        expect(after).toBe(before - 1);
       });
     });
   });

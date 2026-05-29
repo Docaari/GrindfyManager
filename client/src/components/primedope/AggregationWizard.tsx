@@ -1,23 +1,22 @@
 // =============================================================================
-// AggregationWizard — UX refactor 2026-05-29
+// AggregationWizard — UX refactor 2026-05-29 (v2)
 //
-// Mudancas (sem quebrar contrato de testes — data-testids preservados):
-//   - Design tokens (bg-card/bg-background/text-foreground) p/ contraste dark+light
-//   - Mode toggle + profile + period como chips visuais (active=primary)
-//   - Inputs com bg-background + text-foreground + foco accent
-//   - Tooltips Info (Lucide) explicando ROI decimal/Field/Count/Buy-in USD
-//   - Helper inline mostrando "ROI X% = decimal Y" lado a lado
-//   - Daily investment com prefixo USD$ + placeholder claro
-//   - Disclaimer Monte Carlo collapsible
-//   - Loading skeleton enquanto query roda
-//   - Simulate via componente Button (estilo consistente)
+// Mudancas v2 (founder feedback — calculadora MTT):
+//   - Buy-in agora EDITAVEL (input com prefixo $) — antes era so display
+//   - Nome do grupo editavel + adicionar/remover tipos de torneio (linhas)
+//   - Removido "Investimento diario" (founder: nao deve aparecer)
+//   - Payload sanitizado antes de simular: field arredondado p/ int >= 2,
+//     count clamp >= 1, buyIn > 0 (corrige "Payload invalido" do backend zod)
+//   - Tipografia maior (text-sm) + inputs mais largos p/ leitura/navegacao
+//   - Resumo formatado (Intl pt-BR) de total de torneios + investimento
 //
-// Math/contrato com backend NAO muda — input shape p/ onRun preservado.
+// Math/contrato com backend NAO muda — input shape p/ onRun preservado
+// (groups + weeks). data-testids estaveis preservados (lesson #2).
 // =============================================================================
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Info, Loader2 } from "lucide-react";
+import { Info, Loader2, Plus, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,6 +68,8 @@ interface AggregationWizardProps {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+const intFmt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+
 function InfoTip({ text }: { text: string }) {
   return (
     <Tooltip>
@@ -90,14 +91,37 @@ function InfoTip({ text }: { text: string }) {
 }
 
 const chipBase =
-  "rounded-full px-3 py-1.5 text-xs font-medium transition-colors border";
+  "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors border";
 const chipActive =
   "bg-primary text-primary-foreground border-primary shadow-sm";
 const chipIdle =
   "bg-background text-muted-foreground border-border hover:bg-muted hover:text-foreground";
 
 const inputBase =
-  "rounded-md border border-input bg-background text-foreground px-2 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "rounded-md border border-input bg-background text-foreground px-2 py-1.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/**
+ * Sanitiza um grupo para o contrato zod do backend (primedope.ts):
+ *   field  -> inteiro >= 2 (avg historico vem float; zod exige .int())
+ *   count  -> inteiro >= 1 (round pode dar 0; zod exige .positive())
+ *   buyIn  -> > 0 (zod exige .positive())
+ * Corrige o erro "Payload invalido" que aparecia ao simular.
+ */
+function sanitizeForSimulate(g: AggGroup): AggGroup {
+  const field = Math.max(2, Math.min(100000, Math.round(Number(g.field) || 2)));
+  const count = Math.max(1, Math.min(50000, Math.round(Number(g.count) || 1)));
+  const buyIn = Math.max(0.01, Number(g.buyIn) || 0.01);
+  const roi = Number.isFinite(Number(g.roi)) ? Number(g.roi) : 0;
+  return {
+    ...g,
+    name: (g.name || "Grupo").trim() || "Grupo",
+    buyIn,
+    field,
+    count,
+    roi,
+    isPKO: !!g.isPKO,
+  };
+}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -108,7 +132,6 @@ export default function AggregationWizard({
   const [mode, setMode] = useState<"period" | "day">("period");
   const [profile, setProfile] = useState(initialProfile ?? "A");
   const [weeks, setWeeks] = useState(12);
-  const [dailyInvestment, setDailyInvestment] = useState("");
   const [editedGroups, setEditedGroups] = useState<AggGroup[] | null>(null);
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
   const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -132,58 +155,81 @@ export default function AggregationWizard({
 
   const groups = editedGroups ?? data?.groups ?? [];
 
-  const scaledGroups = useCallback(() => {
-    if (!dailyInvestment || !data?.meta) return groups;
-    const target = Number(dailyInvestment);
-    if (!target || target <= 0) return groups;
-
-    const currentDaily =
-      data.meta.weeklyInvestment / Math.max(data.meta.daysInProfile, 1);
-    if (currentDaily <= 0) return groups;
-
-    const factor = target / currentDaily;
-    return groups.map((g) => ({
-      ...g,
-      buyIn: Math.round(g.buyIn * factor * 100) / 100,
-    }));
-  }, [groups, dailyInvestment, data])();
-
   const handleGroupEdit = (
     index: number,
-    field: "roi" | "field" | "count",
+    field: "name" | "buyIn" | "roi" | "field" | "count",
     value: string,
   ) => {
     setRawInputs((prev) => ({ ...prev, [`${field}-${index}`]: value }));
     setEditedGroups((prev) => {
       const next = [...(prev ?? groups)];
-      next[index] = { ...next[index], [field]: Number(value) || 0 };
+      const parsed = field === "name" ? value : Number(value) || 0;
+      next[index] = { ...next[index], [field]: parsed };
       return next;
     });
   };
 
+  const addGroup = () => {
+    setEditedGroups((prev) => {
+      const base = prev ?? groups;
+      const newGroup: AggGroup = {
+        name: "Novo torneio",
+        tier: "mid",
+        type: "Vanilla",
+        buyIn: 50,
+        field: 500,
+        roi: 0.1,
+        countPerWeek: 0,
+        count: Math.max(1, weeks),
+        isPKO: false,
+        source: "default",
+        lowSample: false,
+      };
+      return [...base, newGroup];
+    });
+  };
+
+  const removeGroup = (index: number) => {
+    setEditedGroups((prev) => {
+      const base = prev ?? groups;
+      const next = base.filter((_, i) => i !== index);
+      return next;
+    });
+    // limpa rawInputs do indice removido (reindexa visualmente no proximo render)
+    setRawInputs({});
+  };
+
   const isEmpty = !groups.length && !isLoading && mode === "period";
+
+  // Resumo formatado
+  const totalCount = groups.reduce((s, g) => s + (Number(g.count) || 0), 0);
+  const totalInvest = groups.reduce(
+    (s, g) => s + (Number(g.buyIn) || 0) * (Number(g.count) || 0),
+    0,
+  );
 
   return (
     <TooltipProvider delayDuration={150}>
       <div
         data-testid="aggregation-wizard"
-        className="space-y-4 rounded-lg border border-border bg-card p-4 text-foreground"
+        className="space-y-5 rounded-lg border border-border bg-card p-5 text-foreground"
       >
         {/* Header + disclaimer */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold">
-              Configuracao da simulacao
+            <h2 className="text-base font-semibold">
+              Configuração da simulação
             </h2>
-            <p className="text-xs text-muted-foreground">
-              Escolha perfil, periodo e ajuste ROI/Field/Count antes de simular.
-              Valores em <span className="font-medium text-foreground">USD</span>.
+            <p className="text-sm text-muted-foreground">
+              Escolha perfil, período e ajuste buy-in/ROI/field/quantidade antes
+              de simular. Valores em{" "}
+              <span className="font-medium text-foreground">USD</span>.
             </p>
           </div>
           <button
             type="button"
             onClick={() => setShowDisclaimer((v) => !v)}
-            className="shrink-0 text-xs text-muted-foreground hover:text-foreground underline"
+            className="shrink-0 text-sm text-muted-foreground hover:text-foreground underline"
           >
             {showDisclaimer ? "Ocultar" : "Como funciona?"}
           </button>
@@ -198,21 +244,21 @@ export default function AggregationWizard({
               payout pela tabela power-law tipica do field.
             </p>
             <p>
-              Os percentis (P15/P85, P2.5/P97.5) mostram <em>onde 70% / 95%</em> dos
-              cenarios caem — nao predicao, mas distribuicao da variancia
+              Os percentis (P15/P85, P2.5/P97.5) mostram <em>onde 70% / 95%</em>{" "}
+              dos cenarios caem — nao predicao, mas distribuicao da variancia
               esperada dado seu edge declarado.
             </p>
             <p>
               <strong className="text-foreground">Limitacoes:</strong> assume
-              independencia entre torneios, ITM fixo em 15% do field, sem
-              skill drift no periodo. Use como referencia de risco, nao garantia.
+              independencia entre torneios, ITM fixo em 15% do field, sem skill
+              drift no periodo. Use como referencia de risco, nao garantia.
             </p>
           </div>
         ) : null}
 
         {/* Mode toggle */}
-        <div className="space-y-1.5">
-          <div className="flex items-center text-xs font-medium text-muted-foreground">
+        <div className="space-y-2">
+          <div className="flex items-center text-sm font-medium text-muted-foreground">
             Modo
             <InfoTip text="'Por periodo' agrega torneios do seu historico nesse perfil. 'Por dia' (legacy) filtra so o dia da semana." />
           </div>
@@ -228,7 +274,7 @@ export default function AggregationWizard({
               aria-pressed={mode === "period" ? "true" : "false"}
               onClick={() => setMode("period")}
               className={cn(
-                "rounded px-3 py-1 text-xs transition-colors",
+                "rounded px-3.5 py-1.5 text-sm transition-colors",
                 mode === "period"
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
@@ -243,7 +289,7 @@ export default function AggregationWizard({
               aria-pressed={mode === "day" ? "true" : "false"}
               onClick={() => setMode("day")}
               className={cn(
-                "rounded px-3 py-1 text-xs transition-colors",
+                "rounded px-3.5 py-1.5 text-sm transition-colors",
                 mode === "day"
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
@@ -255,13 +301,13 @@ export default function AggregationWizard({
         </div>
 
         {/* Profile + period in same row on md+ */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <div className="flex items-center text-xs font-medium text-muted-foreground">
+        <div className="grid gap-5 md:grid-cols-2">
+          <div className="space-y-2">
+            <div className="flex items-center text-sm font-medium text-muted-foreground">
               Perfil do dia
               <InfoTip text="A = volume alto (~6 dias/sem). B = misto. C = leve. Vem da configuracao da Grade." />
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {(["A", "B", "C"] as const).map((p) => (
                 <button
                   key={p}
@@ -277,12 +323,12 @@ export default function AggregationWizard({
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center text-xs font-medium text-muted-foreground">
-              Periodo simulado
+          <div className="space-y-2">
+            <div className="flex items-center text-sm font-medium text-muted-foreground">
+              Período simulado
               <InfoTip text="Quantas semanas de grind agregar. Periodos longos suavizam variancia (mais torneios = distribuicao mais centrada)." />
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {PERIODS.map((pd) => (
                 <button
                   key={pd.weeks}
@@ -304,8 +350,8 @@ export default function AggregationWizard({
 
         {/* Loading state */}
         {isLoading && mode === "period" ? (
-          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
             Carregando agregacao de torneios...
           </div>
         ) : null}
@@ -319,80 +365,80 @@ export default function AggregationWizard({
             <p className="mt-1 text-xs">
               Sem grade salva, nao conseguimos agregar buckets por perfil.
             </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={addGroup}
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              Adicionar tipo manualmente
+            </Button>
           </div>
         ) : null}
 
         {/* Aggregated table */}
-        {scaledGroups.length > 0 && (
+        {groups.length > 0 && (
           <div className="space-y-3">
-            {/* Daily investment input */}
-            <div className="space-y-1.5">
-              <label
-                htmlFor="agg-daily-investment"
-                className="flex items-center text-xs font-medium text-muted-foreground"
-              >
-                Investimento diario (opcional)
-                <InfoTip text="Reescala todos os buy-ins proporcionalmente para bater esse alvo diario USD. Util pra simular 'e se eu subir/descer de stake'." />
-              </label>
-              <div className="relative max-w-[220px]">
-                <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                  USD$
+            {/* Resumo */}
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+              <span className="text-muted-foreground">
+                Total de torneios:{" "}
+                <span className="font-semibold text-foreground">
+                  {intFmt.format(totalCount)}
                 </span>
-                <input
-                  id="agg-daily-investment"
-                  data-testid="daily-investment-input"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  value={dailyInvestment}
-                  onChange={(e) => setDailyInvestment(e.target.value)}
-                  placeholder="Ex: 1500"
-                  className={cn(inputBase, "w-full pl-12")}
-                />
-              </div>
+              </span>
+              <span className="text-muted-foreground">
+                Investimento total:{" "}
+                <span className="font-semibold text-foreground">
+                  ${intFmt.format(Math.round(totalInvest))}
+                </span>
+              </span>
             </div>
 
             <div className="overflow-x-auto rounded-md border border-border">
               <table
                 data-testid="aggregation-table"
-                className="w-full text-xs"
+                className="w-full text-sm"
               >
                 <thead className="bg-muted/40 text-muted-foreground">
                   <tr>
-                    <th className="px-2 py-2 text-left font-medium">Grupo</th>
-                    <th className="px-2 py-2 text-right font-medium">
+                    <th className="px-3 py-2.5 text-left font-medium">Torneio</th>
+                    <th className="px-3 py-2.5 text-right font-medium">
                       <span className="inline-flex items-center justify-end">
-                        Buy-in
-                        <InfoTip text="Buy-in medio USD do bucket. Reescala automaticamente quando 'investimento diario' eh preenchido." />
+                        Buy-in (USD)
+                        <InfoTip text="Buy-in medio USD do bucket. Editavel — ajuste para simular subida/descida de stake." />
                       </span>
                     </th>
-                    <th className="px-2 py-2 text-right font-medium">
+                    <th className="px-3 py-2.5 text-right font-medium">
                       <span className="inline-flex items-center justify-end">
                         Field
                         <InfoTip text="Tamanho medio do field (jogadores). Afeta variancia: campo maior = top-heavy = upside maior porem rarefeito." />
                       </span>
                     </th>
-                    <th className="px-2 py-2 text-right font-medium">
+                    <th className="px-3 py-2.5 text-right font-medium">
                       <span className="inline-flex items-center justify-end">
                         ROI (decimal)
                         <InfoTip text="ROI em formato decimal: 0.10 = 10%, 0.20 = 20%. Para ROI negativo use sinal: -0.05 = -5%." />
                       </span>
                     </th>
-                    <th className="px-2 py-2 text-right font-medium">
+                    <th className="px-3 py-2.5 text-right font-medium">
                       <span className="inline-flex items-center justify-end">
-                        Count
+                        Quantidade
                         <InfoTip text="Quantos torneios desse bucket entram na simulacao durante o periodo escolhido." />
                       </span>
                     </th>
-                    <th className="px-2 py-2 text-center font-medium">Fonte</th>
+                    <th className="px-3 py-2.5 text-center font-medium">Fonte</th>
+                    <th className="px-2 py-2.5 text-center font-medium sr-only">
+                      Remover
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {scaledGroups.map((g, i) => {
+                  {groups.map((g, i) => {
                     const roiRaw =
                       rawInputs[`roi-${i}`] ??
-                      (editedGroups?.[i]?.roi?.toString() ??
-                        g.roi.toString());
+                      (editedGroups?.[i]?.roi?.toString() ?? g.roi.toString());
                     const roiNum = Number(roiRaw);
                     const roiPctDisplay = Number.isFinite(roiNum)
                       ? `${(roiNum * 100).toFixed(1)}%`
@@ -400,25 +446,54 @@ export default function AggregationWizard({
 
                     return (
                       <tr
-                        key={`${g.tier}-${g.type}`}
+                        key={`${g.tier}-${g.type}-${i}`}
                         data-testid={`group-row-${i}`}
                         className="hover:bg-muted/20"
                       >
-                        <td className="px-2 py-2 text-foreground">
-                          <div className="font-medium">{g.name}</div>
+                        <td className="px-3 py-2.5 text-foreground">
+                          <input
+                            data-testid={`name-input-${i}`}
+                            type="text"
+                            value={
+                              rawInputs[`name-${i}`] ??
+                              (editedGroups?.[i]?.name ?? g.name)
+                            }
+                            onChange={(e) =>
+                              handleGroupEdit(i, "name", e.target.value)
+                            }
+                            className={cn(inputBase, "w-full min-w-[120px]")}
+                          />
                           {g.isPKO ? (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="mt-0.5 inline-block text-[10px] text-muted-foreground">
                               PKO
                             </span>
                           ) : null}
                         </td>
-                        <td
-                          data-testid={`buyin-display-${i}`}
-                          className="px-2 py-2 text-right font-mono text-foreground"
-                        >
-                          {g.buyIn.toFixed(0)}
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="relative inline-block">
+                            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                              $
+                            </span>
+                            <input
+                              data-testid={`buyin-input-${i}`}
+                              type="text"
+                              inputMode="decimal"
+                              value={
+                                rawInputs[`buyIn-${i}`] ??
+                                (editedGroups?.[i]?.buyIn?.toString() ??
+                                  g.buyIn.toString())
+                              }
+                              onChange={(e) =>
+                                handleGroupEdit(i, "buyIn", e.target.value)
+                              }
+                              className={cn(
+                                inputBase,
+                                "w-24 pl-5 text-right font-mono",
+                              )}
+                            />
+                          </div>
                         </td>
-                        <td className="px-2 py-2 text-right">
+                        <td className="px-3 py-2.5 text-right">
                           <input
                             data-testid={`field-input-${i}`}
                             type="text"
@@ -431,10 +506,13 @@ export default function AggregationWizard({
                             onChange={(e) =>
                               handleGroupEdit(i, "field", e.target.value)
                             }
-                            className={cn(inputBase, "w-20 text-right font-mono")}
+                            className={cn(
+                              inputBase,
+                              "w-24 text-right font-mono",
+                            )}
                           />
                         </td>
-                        <td className="px-2 py-2 text-right">
+                        <td className="px-3 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <input
                               data-testid={`roi-input-${i}`}
@@ -452,19 +530,19 @@ export default function AggregationWizard({
                             <span
                               data-testid={`roi-pct-display-${i}`}
                               className={cn(
-                                "min-w-[44px] text-right text-[10px]",
+                                "min-w-[48px] text-right text-xs",
                                 roiNum > 0
                                   ? "text-emerald-500"
                                   : roiNum < 0
-                                  ? "text-red-500"
-                                  : "text-muted-foreground",
+                                    ? "text-red-500"
+                                    : "text-muted-foreground",
                               )}
                             >
                               {roiPctDisplay}
                             </span>
                           </div>
                         </td>
-                        <td className="px-2 py-2 text-right">
+                        <td className="px-3 py-2.5 text-right">
                           <input
                             data-testid={`count-input-${i}`}
                             type="text"
@@ -477,10 +555,13 @@ export default function AggregationWizard({
                             onChange={(e) =>
                               handleGroupEdit(i, "count", e.target.value)
                             }
-                            className={cn(inputBase, "w-20 text-right font-mono")}
+                            className={cn(
+                              inputBase,
+                              "w-24 text-right font-mono",
+                            )}
                           />
                         </td>
-                        <td className="px-2 py-2 text-center">
+                        <td className="px-3 py-2.5 text-center">
                           {g.source === "historical" ? (
                             <span
                               data-testid={`badge-hist-${i}`}
@@ -507,6 +588,18 @@ export default function AggregationWizard({
                             </div>
                           ) : null}
                         </td>
+                        <td className="px-2 py-2.5 text-center">
+                          <button
+                            type="button"
+                            data-testid={`remove-group-${i}`}
+                            onClick={() => removeGroup(i)}
+                            aria-label={`Remover ${g.name}`}
+                            title="Remover este tipo de torneio"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -514,28 +607,37 @@ export default function AggregationWizard({
               </table>
             </div>
 
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[11px] text-muted-foreground">
+            {/* Adicionar tipo */}
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="add-group-button"
+                onClick={addGroup}
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Adicionar tipo de torneio
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground">
                 Edicoes ficam ativas so nesta sessao — nao alteram o historico.
               </p>
               <Button
                 data-testid="simulate-button"
-                disabled={scaledGroups.length === 0}
+                disabled={groups.length === 0}
                 onClick={() => {
-                  if (onRun && scaledGroups.length > 0) {
+                  if (onRun && groups.length > 0) {
                     onRun({
-                      groups: scaledGroups.map((g) => ({
-                        ...g,
-                        roi: g.roi,
-                        field: g.field,
-                        count: g.count,
-                      })),
+                      groups: groups.map(sanitizeForSimulate),
                       weeks,
                     });
                   }
                 }}
               >
-                Simular variancia
+                Simular variância
               </Button>
             </div>
           </div>

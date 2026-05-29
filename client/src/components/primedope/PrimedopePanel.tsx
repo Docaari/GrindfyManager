@@ -41,7 +41,7 @@ export function PrimedopePanel({
       className="space-y-4 rounded-lg border border-border bg-card p-4"
     >
       <header>
-        <h1 className="text-xl font-semibold">PrimeDope variance simulation</h1>
+        <h1 className="text-xl font-semibold">Simulador de Variância MTT</h1>
       </header>
 
       {bankrollUsd <= 0 ? (

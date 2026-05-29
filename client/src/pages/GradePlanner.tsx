@@ -1060,14 +1060,14 @@ export default function GradePlanner() {
               const todayProfile = getActiveProfile(today);
               const profileLetter = todayProfile && todayProfile !== 'OFF' ? todayProfile : 'A';
               return (
-                <div data-testid="coach-variance-panel" className="flex h-full flex-col">
-                  <div className="flex items-center gap-2 rounded-t-lg bg-gray-900/60 px-4 py-2 mb-2">
-                    <h2 className="text-sm font-semibold text-white">Simulador PrimeDope</h2>
-                    <span className="text-[10px] text-gray-400">
-                      Estima variancia esperada via Monte Carlo (PrimeDope.com)
+                <div data-testid="coach-variance-panel" className="flex flex-col">
+                  <div className="flex flex-wrap items-center gap-2 rounded-t-lg bg-gray-900/60 px-4 py-3 mb-3">
+                    <h2 className="text-base font-semibold text-white">Calculadora de Variância MTT</h2>
+                    <span className="text-xs text-gray-400">
+                      Estima a variância esperada do seu volume via Monte Carlo (10.000 simulações)
                     </span>
                   </div>
-                  <div className="min-h-0 flex-1 overflow-auto">
+                  <div>
                     <PrimedopePanel
                       userId={user?.userPlatformId ?? ''}
                       bankrollUsd={bankrollUsd}
