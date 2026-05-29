@@ -66,7 +66,16 @@ export default function GradePlanner() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'compact' | 'expanded'>('compact');
-  const [libraryCollapsed, setLibraryCollapsed] = useState(false);
+  // Biblioteca minimizada por default (espelha o modal Detalhe do Dia —
+  // dayZoom.libraryCollapsed). Preferencia persistida em localStorage.
+  const [libraryCollapsed, setLibraryCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      return window.localStorage.getItem("gradePlanner.libraryCollapsed") !== "0";
+    } catch {
+      return true;
+    }
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<string>("grade");
   const [showComparison, setShowComparison] = useState(false);
@@ -80,6 +89,19 @@ export default function GradePlanner() {
   // (react-resizable-panels expõe collapse/expand via ref).
   const libraryPanelRef = useRef<ImperativePanelHandle>(null);
 
+  const persistLibraryCollapsed = useCallback((v: boolean) => {
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          "gradePlanner.libraryCollapsed",
+          v ? "1" : "0",
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const handleToggleLibrary = useCallback(() => {
     const panel = libraryPanelRef.current;
     if (!panel) return;
@@ -88,6 +110,24 @@ export default function GradePlanner() {
     } else {
       panel.collapse();
     }
+  }, []);
+
+  // Aplica o estado colapsado default no mount do desktop (Panel collapsible
+  // monta expandido salvo se forçarmos — mesma técnica do DayDetailZoom).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const panel = libraryPanelRef.current;
+      if (!panel) return;
+      try {
+        if (libraryCollapsed) panel.collapse();
+        else panel.expand();
+      } catch {
+        /* ignore — panel size nao registrado ainda */
+      }
+    }, 0);
+    return () => clearTimeout(t);
+    // Só no mount — mudanças posteriores via onCollapse/onExpand do Panel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // FP-04: Off toggle dialog state
@@ -946,26 +986,55 @@ export default function GradePlanner() {
                   <div className="h-[calc(100vh-280px)]">{bibliotecaContent}</div>
                 </TabsContent>
                 <TabsContent value="grade" className="mt-0">
-                  {gradeContent}
+                  <div className="h-[calc(100vh-280px)] flex flex-col overflow-hidden">
+                    {gradeContent}
+                  </div>
                 </TabsContent>
               </Tabs>
             ) : (
-              <PanelGroup direction="horizontal" className="min-h-[800px]">
+              <PanelGroup
+                direction="horizontal"
+                className="h-[calc(100vh-240px)] min-h-[480px]"
+              >
+                {/* Grade à ESQUERDA (espelha o modal Detalhe do Dia). Painel
+                    com altura de viewport → scroll interno (vertical horarios +
+                    horizontal dias) em vez de esticar a pagina. */}
+                <Panel
+                  defaultSize={70}
+                  minSize={45}
+                  className={libraryCollapsed ? "" : "pr-2"}
+                >
+                  <div className="h-full flex flex-col overflow-hidden pb-2">
+                    {gradeContent}
+                  </div>
+                </Panel>
+                <PanelResizeHandle
+                  className={
+                    "transition-colors cursor-col-resize rounded " +
+                    (libraryCollapsed
+                      ? "w-0"
+                      : "w-1.5 bg-gray-700/50 hover:bg-emerald-500/50")
+                  }
+                />
+                {/* Biblioteca à DIREITA, colapsivel, default minimizada. */}
                 <Panel
                   ref={libraryPanelRef}
                   defaultSize={30}
                   minSize={20}
+                  maxSize={55}
                   collapsible
                   collapsedSize={3}
-                  onCollapse={() => setLibraryCollapsed(true)}
-                  onExpand={() => setLibraryCollapsed(false)}
-                  className={libraryCollapsed ? "" : "pr-2"}
+                  onCollapse={() => {
+                    setLibraryCollapsed(true);
+                    persistLibraryCollapsed(true);
+                  }}
+                  onExpand={() => {
+                    setLibraryCollapsed(false);
+                    persistLibraryCollapsed(false);
+                  }}
+                  className={libraryCollapsed ? "" : "pl-2"}
                 >
                   {bibliotecaContent}
-                </Panel>
-                <PanelResizeHandle className="w-1.5 bg-gray-700/50 hover:bg-emerald-500/50 rounded transition-colors cursor-col-resize" />
-                <Panel defaultSize={70} className="pl-2">
-                  <div className="h-full overflow-auto pb-2">{gradeContent}</div>
                 </Panel>
               </PanelGroup>
             )}

@@ -189,13 +189,13 @@ export function WeekGrid({
   }
 
   return (
-    <div className="flex-1 overflow-x-auto scroll-smooth">
+    <div className="flex-1 min-h-0 overflow-auto scroll-smooth">
       <div className="min-w-[800px]">
         <table className="w-full border-collapse">
           {/* Header */}
           <thead>
             <tr>
-              <th className="w-20 bg-gray-900 border border-gray-700 p-2 text-base text-gray-400 text-center sticky left-0 z-10">
+              <th className="w-20 bg-gray-900 border border-gray-700 p-2 text-base text-gray-400 text-center sticky left-0 top-0 z-20">
                 <div className="flex items-center justify-center gap-1">
                   <span>Hora</span>
                   {onOpenSettings && (
@@ -215,7 +215,7 @@ export function WeekGrid({
                 return (
                   <th
                     key={day.id}
-                    className={`bg-gray-900 border border-gray-700 p-2 text-center ${isOff ? "opacity-50" : ""}`}
+                    className={`bg-gray-900 border border-gray-700 p-2 text-center sticky top-0 z-10 ${isOff ? "opacity-50" : ""}`}
                   >
                     <div className="text-lg font-semibold text-white mb-1">{day.short}</div>
                     <div className="flex justify-center gap-1">
