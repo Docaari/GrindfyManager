@@ -154,6 +154,10 @@ export default function AggregationWizard({
   // VR-CALC-2: fonte dos buckets — grade planejada (default) vs histórico CSV.
   const [source, setSource] = useState<"planned" | "history">("planned");
   const [lastDays, setLastDays] = useState(30);
+  // Período do histórico: atalho "últimos N dias" OU intervalo personalizado.
+  const [histMode, setHistMode] = useState<"lastDays" | "range">("lastDays");
+  const [histFrom, setHistFrom] = useState("");
+  const [histTo, setHistTo] = useState("");
   const [mode, setMode] = useState<"period" | "day">("period");
   const [profile, setProfile] = useState(initialProfile ?? "A");
   const [weeks, setWeeks] = useState(12);
@@ -172,14 +176,21 @@ export default function AggregationWizard({
   });
 
   // VR-CALC-2: agregação do histórico real (uploads CSV) por período.
+  // Intervalo personalizado só dispara quando from<=to preenchidos.
+  const histRangeReady =
+    histMode === "lastDays" || (!!histFrom && !!histTo && histFrom <= histTo);
+  const histQueryParam =
+    histMode === "lastDays"
+      ? `lastDays=${lastDays}`
+      : `from=${histFrom}&to=${histTo}`;
   const { data: histData, isLoading: histLoading } = useQuery<AggResponse>({
-    queryKey: ["history-aggregate", lastDays, weeks],
+    queryKey: ["history-aggregate", histMode, lastDays, histFrom, histTo, weeks],
     queryFn: () =>
       apiRequest(
         "GET",
-        `/api/variance/history-aggregate?lastDays=${lastDays}&weeks=${weeks}`,
+        `/api/variance/history-aggregate?${histQueryParam}&weeks=${weeks}`,
       ),
-    enabled: source === "history",
+    enabled: source === "history" && histRangeReady,
   });
 
   const activeData = source === "history" ? histData : data;
@@ -499,28 +510,98 @@ export default function AggregationWizard({
                 Período do histórico
                 <InfoTip text="Só torneios com data dentro desse período entram. Importa do seu histórico real upado via CSV (/upload)." />
               </div>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { d: 7, label: "7 dias" },
-                  { d: 30, label: "30 dias" },
-                  { d: 90, label: "90 dias" },
-                  { d: 365, label: "1 ano" },
-                ].map((opt) => (
-                  <button
-                    key={opt.d}
-                    type="button"
-                    data-testid={`hist-period-${opt.d}`}
-                    onClick={() => setLastDays(opt.d)}
-                    aria-pressed={lastDays === opt.d ? "true" : "false"}
-                    className={cn(
-                      chipBase,
-                      lastDays === opt.d ? chipActive : chipIdle,
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+              {/* Sub-toggle: atalho últimos N dias vs intervalo personalizado */}
+              <div
+                data-testid="hist-mode-toggle"
+                role="tablist"
+                className="inline-flex rounded-md border border-border bg-background p-0.5"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  data-testid="hist-mode-lastdays"
+                  aria-pressed={histMode === "lastDays" ? "true" : "false"}
+                  onClick={() => setHistMode("lastDays")}
+                  className={cn(
+                    "rounded px-3 py-1 text-xs transition-colors",
+                    histMode === "lastDays"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Últimos N dias
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  data-testid="hist-mode-range"
+                  aria-pressed={histMode === "range" ? "true" : "false"}
+                  onClick={() => setHistMode("range")}
+                  className={cn(
+                    "rounded px-3 py-1 text-xs transition-colors",
+                    histMode === "range"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Intervalo
+                </button>
               </div>
+
+              {histMode === "lastDays" ? (
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { d: 7, label: "7 dias" },
+                    { d: 30, label: "30 dias" },
+                    { d: 90, label: "90 dias" },
+                    { d: 365, label: "1 ano" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.d}
+                      type="button"
+                      data-testid={`hist-period-${opt.d}`}
+                      onClick={() => setLastDays(opt.d)}
+                      aria-pressed={lastDays === opt.d ? "true" : "false"}
+                      className={cn(
+                        chipBase,
+                        lastDays === opt.d ? chipActive : chipIdle,
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    data-testid="hist-from"
+                    value={histFrom}
+                    max={histTo || undefined}
+                    onChange={(e) => setHistFrom(e.target.value)}
+                    className={cn(inputBase, "w-[150px]")}
+                    aria-label="Data inicial"
+                  />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <input
+                    type="date"
+                    data-testid="hist-to"
+                    value={histTo}
+                    min={histFrom || undefined}
+                    onChange={(e) => setHistTo(e.target.value)}
+                    className={cn(inputBase, "w-[150px]")}
+                    aria-label="Data final"
+                  />
+                  {histMode === "range" && (!histFrom || !histTo) ? (
+                    <span
+                      data-testid="hist-range-hint"
+                      className="text-[11px] text-amber-600 dark:text-amber-500"
+                    >
+                      Escolha início e fim
+                    </span>
+                  ) : null}
+                </div>
+              )}
             </div>
           )}
 

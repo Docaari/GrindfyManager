@@ -126,7 +126,7 @@ PrimeDope deixa colar a estrutura de payout real. Grindfy tem vantagem: pode **d
 | Fase | Escopo | Depende de | Esforço |
 |------|--------|-----------|---------|
 | ~~**VR-CALC-1**~~ ✅ SHIPPED (ADR-216, 2026-05-29) | Rake% + ITM% editáveis por torneio na UI; **rake entra no custo + calibração** (modelo PrimeDope/MTTDB `target=(1+rake)(1+ROI)`, sem double-count); leaks conhecidos visíveis na página | — | S–M |
-| ~~**VR-CALC-2**~~ 🟡 INTERIM SHIPPED (2026-05-29) | Endpoint `GET /api/variance/history-aggregate` (from/to OU lastDays) + `server/services/historyAggregate.ts` (agrupa `tournaments grind_session_id IS NULL` por **tier×type** com ROI ajustado real) + UI toggle "Grade planejada"/"Meu histórico" + period chips. **Interim** = tier×type; trocar pra **família** (`libraryGrouping.groupTournaments`) quando landar em main | (família ainda uncommitted) | M–L |
+| ~~**VR-CALC-2**~~ ✅ SHIPPED interim (2026-05-29) | Endpoint `GET /api/variance/history-aggregate` (from/to OU lastDays) + `server/services/historyAggregate.ts` (agrupa `tournaments grind_session_id IS NULL` por **tier×type** com ROI ajustado real) + UI toggle "Grade planejada"/"Meu histórico" + period chips + **date-range custom (from/to)**. Único upgrade futuro: tier×type → **família** (`libraryGrouping`) quando landar em main (deliberado, não débito) | — | M–L |
 | **VR-CALC-3** | Satellite flat-payout (leak #2) + PKO bounty como EV separado (leak #3) | Pesquisa math bounty/satélite | L |
 | **VR-CALC-4** | Payout real derivado do CSV (2.3) + incerteza de ROI por bootstrap (leak #7) | VR-CALC-2 + pesquisa | L |
 | **VR-CALC-5** (avançado) | Re-entry/rebuy/add-on, late reg, field size variável, ICM | Pesquisa + decisão de escopo | XL |
@@ -138,7 +138,9 @@ PrimeDope deixa colar a estrutura de payout real. Grindfy tem vantagem: pode **d
 2. ~~Import substitui ou modo alternativo?~~ ✅ RESOLVIDO — **modo alternativo** (toggle não-destrutivo, VR-CALC-2 interim).
 3. ~~ITM%/rake por grupo ou global?~~ ✅ RESOLVIDO — **por grupo** com defaults (ITM 15%, rake 7% GG).
 4. ~~Amostra mínima?~~ ✅ RESOLVIDO — reusa `lowSample` < 20 (badge "n baixo").
-5. (NOVO) Custom date-range (from/to manual) na UI — hoje só lastDays chips; endpoint já aceita from/to. Adicionar date picker quando founder pedir.
+5. ~~Custom date-range (from/to) na UI?~~ ✅ RESOLVIDO — sub-toggle "Últimos N dias" / "Intervalo" (date inputs from/to; só busca quando from<=to).
+
+**VR-CALC-2 100% completo no escopo interim.** Único upgrade futuro: trocar agrupamento tier×type → família (`libraryGrouping.groupTournaments`) quando o motor landar em main — decisão deliberada, não débito (tier×type é granularidade adequada pra variância; família evitaria fragmentação em grupos low-sample).
 
 ---
 

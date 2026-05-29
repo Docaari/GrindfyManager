@@ -734,6 +734,46 @@ describe('AggregationWizard (RF-07)', () => {
       expect(histCall).toBeTruthy();
       expect(histCall[0]).toContain('lastDays=30');
     });
+
+    it('modo "Intervalo" usa from/to e só busca quando ambos preenchidos', async () => {
+      const AggregationWizard = await tryLoadComponent();
+      expect(AggregationWizard).not.toBeNull();
+
+      const { render, screen, fireEvent, waitFor } = await import('@testing-library/react');
+      const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        React.createElement(QueryClientProvider, { client: qc },
+          React.createElement(AggregationWizard),
+        ),
+      );
+
+      fireEvent.click(screen.getByTestId('source-history'));
+      await waitFor(() => {
+        expect(screen.getByTestId('hist-mode-range')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByTestId('hist-mode-range'));
+
+      // só from preenchido -> ainda não busca por range (hint visível)
+      fireEvent.change(screen.getByTestId('hist-from'), { target: { value: '2026-01-01' } });
+      await waitFor(() => {
+        expect(screen.getByTestId('hist-range-hint')).toBeInTheDocument();
+      });
+
+      // ambos preenchidos -> busca com from/to
+      fireEvent.change(screen.getByTestId('hist-to'), { target: { value: '2026-03-01' } });
+
+      await waitFor(() => {
+        const rangeCall = mockFetch.mock.calls.find(
+          (c: any) => typeof c[0] === 'string'
+            && c[0].includes('/api/variance/history-aggregate')
+            && c[0].includes('from=2026-01-01')
+            && c[0].includes('to=2026-03-01'),
+        );
+        expect(rangeCall).toBeTruthy();
+      });
+    });
   });
 
   // -------------------------------------------------------------------------
