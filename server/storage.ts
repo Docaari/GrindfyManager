@@ -4119,7 +4119,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         startTime: p.startTime,
         endTime: null,
         prize: null,
-        prioridade: 0,
+        // Inherit priority set in /grade-planner (DayDetailZoom). Antes hardcoded
+        // 0 -> prioridade perdida ao promover planned->session no /grind-live.
+        prioridade: (p as any).prioridade ?? 2,
         fromPlannedTournament: true,
         plannedTournamentId: p.id,
         createdAt: new Date(),

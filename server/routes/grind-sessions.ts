@@ -1167,6 +1167,11 @@ export function registerGrindSessionRoutes(app: Express): void {
               gameType: planned.gameType ?? null,
               blindLevelMinutes: planned.blindLevelMinutes ?? null,
               alertMinutesBefore: planned.alertMinutesBefore ?? null,
+              // Inherit priority + Max Late (registrationTime) set in /grade-planner
+              // (DayDetailZoom) — para que o torneio ja inicie na live session com
+              // a prioridade e o Max Late definidos no plano.
+              prioridade: (planned as any).prioridade ?? 2,
+              registrationTime: (planned as any).registrationTime ?? null,
             };
 
             await storage.createSessionTournament(sessionTournament as any);
@@ -1476,6 +1481,8 @@ export function registerGrindSessionRoutes(app: Express): void {
         endTime: req.body.endTime || null,
         time: req.body.time,
         registrationTime: req.body.registrationTime ?? null,
+        // Inherit priority do planned ao promover/registrar (antes so registrationTime).
+        prioridade: req.body.prioridade ?? 2,
         type: req.body.type,
         speed: req.body.speed,
         guaranteed: req.body.guaranteed,

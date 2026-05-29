@@ -1430,12 +1430,17 @@ export default function GrindSessionLive() {
   useEffect(() => {
     if (!activeSession) return;
     const mgr = sessionAlertManagerRef.current;
+    let touched = false;
     for (const t of reconcileCombined) {
       if (t.status !== 'upcoming' && t.status !== 'registered') continue;
       if (typeof t.registrationTime === 'string' && t.registrationTime.trim() !== '') {
         replaceMaxLateAlert(mgr, t, { now: new Date(), redactBuyIn: userTTSSettings.redactBuyIn });
+        touched = true;
       }
     }
+    // BUGFIX: replaceMaxLateAlert muta o manager (ref); sem refreshAlertState o
+    // alerta agendado nao aparece no AlertsPanel (que renderiza genericAlerts).
+    if (touched) refreshAlertState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSession?.id, userTTSSettings.redactBuyIn, reconcileSignature]);
 
@@ -1542,6 +1547,7 @@ export default function GrindSessionLive() {
           startTime: tournamentData.startTime || null, endTime: null,
           time: tournamentData.scheduledTime || tournamentData.time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
           registrationTime: tournamentData.registrationTime || null,
+          prioridade: (tournamentData as any).prioridade ?? 2,
           type: tournamentData.type || 'Vanilla', speed: tournamentData.speed || 'Normal',
           guaranteed: tournamentData.guaranteed || null,
           addOnTaken: false,
@@ -1653,6 +1659,8 @@ export default function GrindSessionLive() {
             { ...(target || {}), id, registrationTime: value },
             { now: new Date(), redactBuyIn: userTTSSettings.redactBuyIn },
           );
+          // BUGFIX: reflete o alerta novo/removido no AlertsPanel (genericAlerts).
+          refreshAlertState();
         },
       },
     );
@@ -1946,6 +1954,8 @@ export default function GrindSessionLive() {
     if (!tournamentId.startsWith('planned-')) {
       if (isSuprema) {
         addTournamentMutation.mutate({ sessionId: activeSession.id, site: targetTournament.site, name: targetTournament.name, buyIn: targetTournament.buyIn || '0', type: targetTournament.type || 'Vanilla', speed: targetTournament.speed || 'Normal', time: targetTournament.time || '20:00', guaranteed: targetTournament.guaranteed || null, status: 'registered', startTime: new Date().toISOString(), rebuys: 0, result: '0', bounty: '0', position: null, fieldSize: null, fromPlannedTournament: false, plannedTournamentId: null,
+          prioridade: (targetTournament as any).prioridade ?? 2,
+          registrationTime: (targetTournament as any).registrationTime ?? null,
           // ADR-014 copy-on-promote
           allowsAddOn: (targetTournament as any).allowsAddOn ?? false,
           addOnCost: (targetTournament as any).addOnCost ?? null,
@@ -1992,6 +2002,9 @@ export default function GrindSessionLive() {
 
     if (plannedTournament) {
       addTournamentMutation.mutate({ sessionId: activeSession.id, site: plannedTournament.site || 'PokerStars', name: plannedTournament.name, buyIn: plannedTournament.buyIn || '0', type: plannedTournament.type || 'Vanilla', speed: plannedTournament.speed || 'Normal', time: plannedTournament.time || '20:00', guaranteed: plannedTournament.guaranteed || null, status: 'registered', startTime: new Date().toISOString(), rebuys: 0, result: '0', bounty: '0', position: null, fieldSize: null, fromPlannedTournament: true, plannedTournamentId: actualId, lateRegMinutes: plannedTournament.lateRegMinutes ?? null, startingStack: plannedTournament.startingStack ?? null, maxPlayers: plannedTournament.maxPlayers ?? null, gameType: plannedTournament.gameType ?? null, blindLevelMinutes: plannedTournament.blindLevelMinutes ?? null, alertMinutesBefore: plannedTournament.alertMinutesBefore ?? null,
+        // Inherit prioridade + Max Late (registrationTime) do plano (grade-planner) ao registrar.
+        prioridade: (plannedTournament as any).prioridade ?? 2,
+        registrationTime: (plannedTournament as any).registrationTime ?? null,
         // ADR-014 copy-on-promote
         allowsAddOn: (plannedTournament as any).allowsAddOn ?? false,
         addOnCost: (plannedTournament as any).addOnCost ?? null,
