@@ -664,29 +664,30 @@ export class PokerCSVParser {
     };
 
     const normalizedRow: any = {};
-    
+
     // Copy all existing keys first
     for (const key in row) {
       normalizedRow[key] = row[key];
     }
-    
-    // Add Portuguese mappings with leading spaces support
-    for (const [portuguese, english] of Object.entries(headerMap)) {
-      // Check for both normal and space-prefixed versions
-      const normalKey = portuguese;
-      const spaceKey = ` ${portuguese}`;
-      
-      if (row[normalKey] !== undefined) {
-        normalizedRow[english] = row[normalKey];
-        normalizedRow[` ${english}`] = row[normalKey]; // Also add space-prefixed version
+
+    // Map cada coluna do CSV para o nome ingles. Tolerante a:
+    //   1. espaco a esquerda (separador ", " do Sharkscope) -> trim
+    //   2. sufixo de timezone tipo "Data de Início (America/Sao_Paulo)" -> tenta
+    //      match exato primeiro (preserva "Resultado (incluindo Rake)"), depois
+    //      remove o "(...)" final e tenta de novo.
+    for (const rawKey in row) {
+      const trimmed = rawKey.trim();
+      let english = headerMap[trimmed];
+      if (!english) {
+        const stripped = trimmed.replace(/\s*\([^)]*\)\s*$/, "").trim();
+        english = headerMap[stripped];
       }
-      
-      if (row[spaceKey] !== undefined) {
-        normalizedRow[english] = row[spaceKey];
-        normalizedRow[` ${english}`] = row[spaceKey]; // Also add space-prefixed version
+      if (english && normalizedRow[english] === undefined) {
+        normalizedRow[english] = row[rawKey];
+        normalizedRow[` ${english}`] = row[rawKey]; // space-prefixed tambem
       }
     }
-    
+
     return normalizedRow;
   }
 
