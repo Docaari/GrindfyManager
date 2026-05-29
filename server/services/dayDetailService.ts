@@ -26,6 +26,7 @@ export interface DayDetailListItem {
   buyinUsd: number;
   count: number;
   time?: string;
+  prioridade?: number;
 }
 
 export interface DayDetailVolumeItem {
@@ -186,6 +187,10 @@ export async function getDayDetail(
       buyinUsd: Number(usd.toFixed(4)),
       count: cnt,
       time: pt.time,
+      prioridade:
+        typeof pt.prioridade === "number" && pt.prioridade >= 1 && pt.prioridade <= 3
+          ? pt.prioridade
+          : 2,
     });
   }
 

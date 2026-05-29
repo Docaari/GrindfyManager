@@ -178,6 +178,26 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
   const [priorityMenuId, setPriorityMenuId] = React.useState<string | null>(
     null,
   );
+  // Optimistic priority overrides — chave id → prioridade. Aplicado em
+  // plannedSlots ANTES do refetch chegar, suaviza percepcao.
+  const [priorityOverrides, setPriorityOverrides] = React.useState<
+    Record<string, number>
+  >({});
+
+  // Click-away handler: fecha priority/move menus ao clicar fora.
+  React.useEffect(() => {
+    if (!priorityMenuId && !moveMenuId) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-zoom-menu]")) return;
+      if (target.closest("[data-zoom-menu-trigger]")) return;
+      setPriorityMenuId(null);
+      setMoveMenuId(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [priorityMenuId, moveMenuId]);
   const libraryPanelRef = React.useRef<ImperativePanelHandle | null>(null);
   const [libraryCollapsed, setLibraryCollapsed] = React.useState<boolean>(
     () => {
@@ -261,7 +281,12 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
       const slotKey =
         h !== null ? h.toString().padStart(2, "0") + ":00" : fallbackSlot;
       if (!out[slotKey]) out[slotKey] = [];
-      out[slotKey].push(item);
+      // Optimistic priority overlay
+      const override =
+        typeof item?.id === "string" ? priorityOverrides[item.id] : undefined;
+      out[slotKey].push(
+        override !== undefined ? { ...item, prioridade: override } : item,
+      );
     }
     const timeToMinutes = (t: unknown): number => {
       if (typeof t !== "string") return 0;
@@ -283,7 +308,7 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
       });
     }
     return out;
-  }, [data?.list, timeSlots, filterSelected, parseHour]);
+  }, [data?.list, timeSlots, filterSelected, parseHour, priorityOverrides]);
 
   // Total filtrado (para empty state + telemetria filter_apply).
   const filteredCount = React.useMemo(() => {
@@ -403,6 +428,11 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
 
   const mutatePriority = React.useCallback(
     async (tournamentId: string, newPriority: 1 | 2 | 3) => {
+      // Optimistic — aplica imediato no UI.
+      setPriorityOverrides((prev) => ({
+        ...prev,
+        [tournamentId]: newPriority,
+      }));
       try {
         await apiRequest("PUT", `/api/planned-tournaments/${tournamentId}`, {
           prioridade: newPriority,
@@ -428,11 +458,34 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
           priority: newPriority,
         });
       } catch {
+        // Rollback overlay em caso de falha.
+        setPriorityOverrides((prev) => {
+          const { [tournamentId]: _, ...rest } = prev;
+          return rest;
+        });
         setErrorToast("Falha ao atualizar prioridade");
       }
     },
     [dayOfWeek, profileLetter, setErrorToast],
   );
+
+  // Limpa overrides quando data nova reflete os valores ja persistidos.
+  React.useEffect(() => {
+    if (Object.keys(priorityOverrides).length === 0) return;
+    const list: any[] = Array.isArray(data?.list) ? data.list : [];
+    const next: Record<string, number> = {};
+    for (const [id, p] of Object.entries(priorityOverrides)) {
+      const found = list.find((x) => x?.id === id);
+      if (!found) {
+        next[id] = p;
+        continue;
+      }
+      if (Number(found.prioridade) !== p) next[id] = p;
+    }
+    if (Object.keys(next).length !== Object.keys(priorityOverrides).length) {
+      setPriorityOverrides(next);
+    }
+  }, [data?.list, priorityOverrides]);
 
   const mutateMove = React.useCallback(
     async (tournamentId: string, fromSlot: string, toSlot: string) => {
@@ -955,6 +1008,14 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                     />
                                     {item.site}
                                   </span>
+                                  {/* Horario real — SEMPRE visivel, direita do site badge */}
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] font-mono tabular-nums text-gray-300 shrink-0">
+                                    <Clock className="w-2.5 h-2.5 text-gray-500" />
+                                    {typeof item.time === "string" &&
+                                    /^\d{1,2}:\d{1,2}/.test(item.time)
+                                      ? item.time
+                                      : "—"}
+                                  </span>
                                   {/* Name */}
                                   <span
                                     className={
@@ -968,14 +1029,6 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                   >
                                     {displayName}
                                   </span>
-                                  {/* Horario real (se diferente do slot HH:00) */}
-                                  {typeof item.time === "string" &&
-                                    item.time !== slot && (
-                                      <span className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono tabular-nums text-gray-400 shrink-0">
-                                        <Clock className="w-2.5 h-2.5" />
-                                        {item.time}
-                                      </span>
-                                    )}
                                   {/* Buy-in */}
                                   <span className="text-xs font-bold text-emerald-300 tabular-nums shrink-0">
                                     {formatUsd(item.buyinUsd ?? 0)}
@@ -988,9 +1041,9 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                         .join(" · ")}
                                     </span>
                                   )}
-                                  {/* Action buttons */}
+                                  {/* Action buttons — visiveis sempre (60%), 100% hover/focus */}
                                   {canManage && (
-                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+                                    <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
                                       <button
                                         type="button"
                                         data-testid={`day-zoom-tournament-edit-${item.id}`}
@@ -1003,6 +1056,7 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                       </button>
                                       <button
                                         type="button"
+                                        data-zoom-menu-trigger="priority"
                                         data-testid={`day-zoom-tournament-priority-${item.id}`}
                                         onClick={() =>
                                           setPriorityMenuId(
@@ -1031,6 +1085,7 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                       </button>
                                       <button
                                         type="button"
+                                        data-zoom-menu-trigger="move"
                                         data-testid={`day-zoom-tournament-move-${item.id}`}
                                         onClick={() =>
                                           setMoveMenuId(
@@ -1067,11 +1122,9 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                   {/* Priority menu inline */}
                                   {priorityMenuId === item.id && canManage && (
                                     <div
+                                      data-zoom-menu="priority"
                                       data-testid={`day-zoom-tournament-priority-menu-${item.id}`}
-                                      className="absolute right-2 top-full mt-1 z-10 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 w-44"
-                                      onMouseLeave={() =>
-                                        setPriorityMenuId(null)
-                                      }
+                                      className="absolute right-2 top-full mt-1 z-20 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 w-44"
                                     >
                                       <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1 px-1">
                                         Prioridade
@@ -1142,9 +1195,9 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                   {/* Move menu inline */}
                                   {moveMenuId === item.id && canManage && (
                                     <div
+                                      data-zoom-menu="move"
                                       data-testid={`day-zoom-tournament-move-menu-${item.id}`}
-                                      className="absolute right-2 top-full mt-1 z-10 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto w-48"
-                                      onMouseLeave={() => setMoveMenuId(null)}
+                                      className="absolute right-2 top-full mt-1 z-20 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto w-48"
                                     >
                                       <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1 px-1">
                                         Mover para

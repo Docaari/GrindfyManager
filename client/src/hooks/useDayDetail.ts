@@ -50,6 +50,7 @@ export interface DayDetailListItem {
   buyinUsd: number;
   count: number;
   time?: string;
+  prioridade?: number;
 }
 
 export interface DayDetailResponse {
