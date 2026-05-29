@@ -7,6 +7,8 @@
 // =============================================================================
 
 import * as React from "react";
+import { Filter } from "lucide-react";
+import { getSiteColors } from "@/components/grade/siteColors";
 
 const STORAGE_PREFIX = "dayZoom.filter";
 
@@ -78,22 +80,27 @@ export function DayPlannedFilterChips(
       role="group"
       aria-label="Filtrar torneios planejados por plataforma"
     >
+      <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-gray-500 mr-1">
+        <Filter className="w-3 h-3" />
+        Filtrar
+      </span>
       <button
         type="button"
         data-testid="day-zoom-filter-chip-all"
         onClick={clearAll}
         aria-pressed={allActive ? "true" : "false"}
         className={
-          "px-2.5 py-1 text-xs rounded-full border transition-colors " +
+          "px-2.5 py-1 text-xs rounded-full border transition-all duration-150 " +
           (allActive
-            ? "bg-emerald-600/30 border-emerald-500 text-emerald-200"
-            : "bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600")
+            ? "bg-emerald-500/20 border-emerald-400/60 text-emerald-200 shadow-sm shadow-emerald-900/30"
+            : "bg-gray-800/80 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-200")
         }
       >
         Todas
       </button>
       {availableSites.map(({ site, count }) => {
         const active = selected.includes(site);
+        const colors = getSiteColors(site);
         return (
           <button
             key={site}
@@ -102,14 +109,17 @@ export function DayPlannedFilterChips(
             onClick={() => toggleSite(site)}
             aria-pressed={active ? "true" : "false"}
             className={
-              "px-2.5 py-1 text-xs rounded-full border transition-colors " +
+              "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border transition-all duration-150 " +
               (active
-                ? "bg-emerald-600/30 border-emerald-500 text-emerald-200"
-                : "bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600")
+                ? `${colors.bg} ${colors.border} ${colors.text} shadow-sm`
+                : "bg-gray-800/80 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-200")
             }
           >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${active ? colors.dot : "bg-gray-500"}`}
+            />
             {site}
-            <span className="ml-1 text-[10px] text-gray-400">{count}</span>
+            <span className="text-[10px] opacity-70">{count}</span>
           </button>
         );
       })}

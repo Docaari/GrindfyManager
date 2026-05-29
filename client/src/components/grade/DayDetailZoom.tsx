@@ -19,7 +19,19 @@
 
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X, Plus } from "lucide-react";
+import {
+  X,
+  Plus,
+  Pencil,
+  ArrowRightLeft,
+  Trash2,
+  Trophy,
+  Coins,
+  Wallet,
+  TrendingUp,
+  Clock,
+  CalendarDays,
+} from "lucide-react";
 import {
   Panel,
   PanelGroup,
@@ -43,6 +55,8 @@ import {
   useDayPlannedFilter,
 } from "@/components/grade/DayPlannedFilterChips";
 import { DayCreateTournamentDialog } from "@/components/grade/DayCreateTournamentDialog";
+import { DayEditTournamentDialog } from "@/components/grade/DayEditTournamentDialog";
+import { getSiteColors } from "@/components/grade/siteColors";
 import { generateTimeSlots } from "@shared/grade-hours";
 
 const DEFAULT_START_HOUR = 14;
@@ -110,12 +124,14 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
     [],
   );
 
-  // Filtro plataforma (RF-03) + estado modal Criar (RF-01).
+  // Filtro plataforma (RF-03) + estado modais Criar/Editar/Mover.
   const [filterSelected, setFilterSelected] = useDayPlannedFilter(
     profileLetter,
     dayOfWeek,
   );
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [editTarget, setEditTarget] = React.useState<any | null>(null);
+  const [moveMenuId, setMoveMenuId] = React.useState<string | null>(null);
 
   // Sites disponiveis para chips: dedup de volume + list ordenado desc por count.
   const availableSites = React.useMemo<
@@ -537,30 +553,52 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
           onPointerDownOutside={() => {
             closeReasonRef.current = "backdrop";
           }}
-          className="fixed left-[50%] top-[50%] z-50 grid translate-x-[-50%] translate-y-[-50%] gap-0 border border-gray-800 bg-gray-950 shadow-xl sm:max-w-[1280px] w-[90vw] h-[88vh] rounded-lg p-0 overflow-hidden"
+          className="fixed left-[50%] top-[50%] z-50 flex flex-col translate-x-[-50%] translate-y-[-50%] border border-gray-800/80 bg-gradient-to-br from-gray-950 via-gray-950 to-gray-900 shadow-2xl shadow-emerald-900/10 sm:max-w-[1280px] w-[92vw] h-[90vh] rounded-2xl p-0 overflow-hidden"
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900/60">
+          {/* Header — gradient + day icon + profile pill */}
+          <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800/70 bg-gradient-to-r from-emerald-900/20 via-gray-900/60 to-gray-900/40">
             <DialogPrimitive.Title asChild>
-              <h2
-                data-testid="day-zoom-header-title"
-                className="text-lg font-semibold text-white"
-              >
-                {titleText}
-              </h2>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30">
+                  <CalendarDays className="w-4.5 h-4.5 text-emerald-300" />
+                </div>
+                <div>
+                  <h2
+                    data-testid="day-zoom-header-title"
+                    className="text-lg font-semibold text-white leading-tight"
+                  >
+                    {titleText}
+                  </h2>
+                  <p className="text-[11px] text-gray-400 leading-none mt-0.5">
+                    {data?.cards?.totalTournaments != null
+                      ? `${data.cards.totalTournaments} torneio${data.cards.totalTournaments === 1 ? "" : "s"} planejado${data.cards.totalTournaments === 1 ? "" : "s"}`
+                      : "Carregando..."}
+                  </p>
+                </div>
+                <span
+                  className={
+                    "ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide border " +
+                    (dayProfileOff
+                      ? "bg-gray-700/40 text-gray-400 border-gray-600/40"
+                      : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30")
+                  }
+                >
+                  {dayProfileOff ? "OFF" : `Perfil ${profileLetter}`}
+                </span>
+              </div>
             </DialogPrimitive.Title>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 data-testid="day-zoom-create-button"
                 onClick={() => setCreateOpen(true)}
                 disabled={dayProfileOff}
-                className="flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-900/40 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none hover:scale-[1.02]"
                 aria-label="Criar torneio"
                 title={dayProfileOff ? "Dia OFF — sem criacao" : "Criar torneio"}
               >
                 <Plus className="w-3.5 h-3.5" />
-                Criar
+                Criar torneio
               </button>
               <button
                 type="button"
@@ -569,7 +607,7 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                   closeReasonRef.current = "cta";
                   handleOpenChange(false);
                 }}
-                className="p-1 rounded hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
                 aria-label="Fechar"
               >
                 <X className="w-4 h-4" />
@@ -586,25 +624,35 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
             <Panel defaultSize={60} minSize={45} maxSize={75}>
               <div
                 data-testid="day-zoom-panel-left"
-                className="h-full overflow-y-auto p-4 space-y-4"
+                className="h-full overflow-y-auto p-5 space-y-4 scroll-smooth"
               >
-                {/* 4 cards KPI */}
+                {/* 4 cards KPI — modernos com icons + gradient */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <div
                     data-testid="day-zoom-card-total"
-                    className="bg-gray-900 border border-gray-800 rounded-md p-3"
+                    className="group relative bg-gradient-to-br from-gray-900 to-gray-900/50 border border-gray-800 hover:border-emerald-500/40 rounded-xl p-3 transition-all duration-200"
                   >
-                    <div className="text-xs text-gray-400">Total</div>
-                    <div className="text-xl font-semibold text-white">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">
+                        Total
+                      </div>
+                      <Trophy className="w-3.5 h-3.5 text-emerald-500/70" />
+                    </div>
+                    <div className="text-2xl font-bold text-white tabular-nums">
                       {data?.cards?.totalTournaments ?? "—"}
                     </div>
                   </div>
                   <div
                     data-testid="day-zoom-card-abi"
-                    className="bg-gray-900 border border-gray-800 rounded-md p-3"
+                    className="group relative bg-gradient-to-br from-gray-900 to-gray-900/50 border border-gray-800 hover:border-blue-500/40 rounded-xl p-3 transition-all duration-200"
                   >
-                    <div className="text-xs text-gray-400">ABI</div>
-                    <div className="text-xl font-semibold text-white">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">
+                        ABI
+                      </div>
+                      <TrendingUp className="w-3.5 h-3.5 text-blue-500/70" />
+                    </div>
+                    <div className="text-2xl font-bold text-white tabular-nums">
                       {data?.cards?.abiUsd != null
                         ? formatUsd(data.cards.abiUsd)
                         : "—"}
@@ -612,10 +660,15 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                   </div>
                   <div
                     data-testid="day-zoom-card-investment"
-                    className="bg-gray-900 border border-gray-800 rounded-md p-3"
+                    className="group relative bg-gradient-to-br from-gray-900 to-gray-900/50 border border-gray-800 hover:border-amber-500/40 rounded-xl p-3 transition-all duration-200"
                   >
-                    <div className="text-xs text-gray-400">Investimento</div>
-                    <div className="text-xl font-semibold text-white">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">
+                        Investimento
+                      </div>
+                      <Coins className="w-3.5 h-3.5 text-amber-500/70" />
+                    </div>
+                    <div className="text-2xl font-bold text-white tabular-nums">
                       {data?.cards?.investmentUsd != null
                         ? formatUsd(data.cards.investmentUsd)
                         : "—"}
@@ -623,10 +676,15 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                   </div>
                   <div
                     data-testid="day-zoom-card-bankroll"
-                    className="bg-gray-900 border border-gray-800 rounded-md p-3"
+                    className="group relative bg-gradient-to-br from-gray-900 to-gray-900/50 border border-gray-800 hover:border-purple-500/40 rounded-xl p-3 transition-all duration-200"
                   >
-                    <div className="text-xs text-gray-400">Banca</div>
-                    <div className="text-xl font-semibold text-white">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">
+                        Banca
+                      </div>
+                      <Wallet className="w-3.5 h-3.5 text-purple-500/70" />
+                    </div>
+                    <div className="text-2xl font-bold text-white tabular-nums">
                       {data?.cards?.bankrollNeeded != null
                         ? formatUsd(data.cards.bankrollNeeded)
                         : "—"}
@@ -665,54 +723,199 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                   </div>
                 )}
 
-                {/* Slots */}
+                {/* Slots — modernos com chip horario + chips de torneio coloridos */}
                 <div
                   data-dnd-disabled={dayProfileOff ? "true" : "false"}
-                  className="space-y-2"
+                  className="space-y-1.5"
                 >
                   {timeSlots.map((slot) => {
                     const items = plannedSlots[slot] ?? [];
+                    const isEmpty = items.length === 0;
                     return (
                       <div
                         key={slot}
                         data-testid={`day-zoom-slot-${slot}`}
-                        className="bg-gray-900/40 border border-gray-800 rounded-md p-2"
+                        className={
+                          "rounded-xl p-2.5 transition-colors " +
+                          (isEmpty
+                            ? "bg-gray-900/20 border border-dashed border-gray-800/60"
+                            : "bg-gray-900/50 border border-gray-800/80 hover:border-gray-700")
+                        }
                       >
-                        <div className="text-[11px] text-gray-500 mb-1">
-                          {slot}
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gray-800 border border-gray-700/60 text-[10px] font-mono tabular-nums text-emerald-300">
+                            <Clock className="w-2.5 h-2.5" />
+                            {slot}
+                          </span>
+                          {isEmpty && (
+                            <span className="text-[10px] text-gray-600 italic">
+                              vazio
+                            </span>
+                          )}
+                          {!isEmpty && (
+                            <span className="text-[10px] text-gray-500">
+                              {items.length} torneio
+                              {items.length === 1 ? "" : "s"}
+                            </span>
+                          )}
                         </div>
-                        <div className="space-y-1">
-                          {items.map((item: any, idx: number) => {
-                            const tid = item.id ?? `${slot}-${idx}`;
-                            const displayName = item.name ?? item.site;
-                            return (
-                              <div
-                                key={tid}
-                                data-testid={`day-zoom-tournament-${tid}`}
-                                className="group flex items-center justify-between gap-2 text-xs text-white bg-gray-800 hover:bg-gray-700/80 rounded px-2 py-1 transition-colors"
-                              >
-                                <span className="truncate">
-                                  {displayName} —{" "}
-                                  {formatUsd(item.buyinUsd ?? 0)}
-                                </span>
-                                {item.id && !dayProfileOff && (
-                                  <button
-                                    type="button"
-                                    data-testid={`day-zoom-tournament-delete-${item.id}`}
-                                    onClick={() =>
-                                      mutateRemove(item.id, slot, "inline")
-                                    }
-                                    aria-label={`Remover torneio ${displayName}`}
-                                    title="Remover"
-                                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-0.5 rounded text-gray-400 hover:text-red-300 hover:bg-red-900/30 transition-opacity"
+                        {!isEmpty && (
+                          <div className="space-y-1">
+                            {items.map((item: any, idx: number) => {
+                              const tid = item.id ?? `${slot}-${idx}`;
+                              const displayName = item.name ?? item.site;
+                              const siteColors = getSiteColors(item.site);
+                              const canManage = !!item.id && !dayProfileOff;
+                              return (
+                                <div
+                                  key={tid}
+                                  data-testid={`day-zoom-tournament-${tid}`}
+                                  className={
+                                    "group relative flex items-center gap-2 rounded-lg px-2 py-1.5 bg-gray-900/80 border transition-all duration-150 " +
+                                    "border-gray-800 hover:border-emerald-500/30 hover:bg-gray-900 hover:shadow-md hover:-translate-y-px"
+                                  }
+                                >
+                                  {/* Site badge */}
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border shrink-0 ${siteColors.bg} ${siteColors.text} ${siteColors.border}`}
                                   >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
+                                    <span
+                                      className={`w-1 h-1 rounded-full ${siteColors.dot}`}
+                                    />
+                                    {item.site}
+                                  </span>
+                                  {/* Name */}
+                                  <span className="text-xs text-white truncate flex-1 font-medium">
+                                    {displayName}
+                                  </span>
+                                  {/* Buy-in */}
+                                  <span className="text-xs font-bold text-emerald-300 tabular-nums shrink-0">
+                                    {formatUsd(item.buyinUsd ?? 0)}
+                                  </span>
+                                  {/* Type/Speed chip */}
+                                  {(item.type || item.speed) && (
+                                    <span className="hidden sm:inline text-[9px] text-gray-500 uppercase tracking-wide shrink-0">
+                                      {[item.type, item.speed]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </span>
+                                  )}
+                                  {/* Action buttons */}
+                                  {canManage && (
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+                                      <button
+                                        type="button"
+                                        data-testid={`day-zoom-tournament-edit-${item.id}`}
+                                        onClick={() => setEditTarget(item)}
+                                        aria-label={`Editar ${displayName}`}
+                                        title="Editar"
+                                        className="p-1 rounded-md text-gray-400 hover:text-emerald-300 hover:bg-emerald-900/30 transition-colors"
+                                      >
+                                        <Pencil className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        data-testid={`day-zoom-tournament-move-${item.id}`}
+                                        onClick={() =>
+                                          setMoveMenuId(
+                                            moveMenuId === item.id
+                                              ? null
+                                              : item.id,
+                                          )
+                                        }
+                                        aria-label={`Mover ${displayName}`}
+                                        aria-expanded={
+                                          moveMenuId === item.id
+                                            ? "true"
+                                            : "false"
+                                        }
+                                        title="Mover para outro horario"
+                                        className="p-1 rounded-md text-gray-400 hover:text-blue-300 hover:bg-blue-900/30 transition-colors"
+                                      >
+                                        <ArrowRightLeft className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        data-testid={`day-zoom-tournament-delete-${item.id}`}
+                                        onClick={() =>
+                                          mutateRemove(item.id, slot, "inline")
+                                        }
+                                        aria-label={`Remover ${displayName}`}
+                                        title="Remover"
+                                        className="p-1 rounded-md text-gray-400 hover:text-red-300 hover:bg-red-900/30 transition-colors"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                  {/* Move menu inline */}
+                                  {moveMenuId === item.id && canManage && (
+                                    <div
+                                      data-testid={`day-zoom-tournament-move-menu-${item.id}`}
+                                      className="absolute right-2 top-full mt-1 z-10 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto w-48"
+                                      onMouseLeave={() => setMoveMenuId(null)}
+                                    >
+                                      <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1 px-1">
+                                        Mover para
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-1">
+                                        {timeSlots.map((targetSlot) => {
+                                          const isCurrent =
+                                            targetSlot === slot;
+                                          return (
+                                            <button
+                                              key={targetSlot}
+                                              type="button"
+                                              data-testid={`day-zoom-tournament-move-target-${item.id}-${targetSlot}`}
+                                              disabled={isCurrent}
+                                              onClick={async () => {
+                                                setMoveMenuId(null);
+                                                if (isCurrent) return;
+                                                await mutateMove(
+                                                  item.id,
+                                                  slot,
+                                                  targetSlot,
+                                                );
+                                                try {
+                                                  queryClient.invalidateQueries?.(
+                                                    {
+                                                      queryKey: [
+                                                        "day-detail",
+                                                        profileLetter,
+                                                        dayOfWeek,
+                                                      ],
+                                                    },
+                                                  );
+                                                  queryClient.invalidateQueries?.(
+                                                    {
+                                                      queryKey: [
+                                                        "planned-tournaments",
+                                                      ],
+                                                    },
+                                                  );
+                                                } catch {
+                                                  /* ignore */
+                                                }
+                                              }}
+                                              className={
+                                                "px-1.5 py-1 text-[10px] font-mono rounded transition-colors " +
+                                                (isCurrent
+                                                  ? "bg-emerald-500/20 text-emerald-300 cursor-not-allowed"
+                                                  : "bg-gray-800 text-gray-300 hover:bg-emerald-600/30 hover:text-emerald-200")
+                                              }
+                                            >
+                                              {targetSlot}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -721,18 +924,19 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
             </Panel>
             <PanelResizeHandle
               data-testid="day-zoom-resize-handle"
-              className="w-1.5 bg-gray-800 hover:bg-emerald-600 transition-colors cursor-col-resize"
+              className="w-1 bg-gray-800/60 hover:bg-emerald-500/60 transition-colors cursor-col-resize"
             />
             <Panel defaultSize={40} minSize={25} maxSize={55}>
               <div
                 data-testid="day-zoom-panel-right"
-                className="h-full overflow-y-auto p-3"
+                className="h-full overflow-y-auto p-4 bg-gray-950/40"
               >
                 {/* Trash zone */}
                 <div
                   data-testid="zoom-biblioteca-trash"
-                  className="border-2 border-dashed border-red-900/40 rounded-md p-2 mb-2 text-center text-[11px] text-red-300"
+                  className="flex items-center justify-center gap-1.5 border-2 border-dashed border-red-900/40 hover:border-red-700/60 hover:bg-red-950/20 rounded-xl p-2.5 mb-3 text-center text-[11px] text-red-300 transition-colors"
                 >
+                  <Trash2 className="w-3.5 h-3.5" />
                   Arraste aqui para remover
                 </div>
                 <BibliotecaEmbedded
@@ -804,6 +1008,18 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
         suggestedSlot={
           findFirstFreeSlot(plannedSlots, timeSlots) ?? timeSlots[0] ?? "20:00"
         }
+        knownSites={availableSites.map((s) => s.site)}
+      />
+
+      {/* Edit dialog (manage-2) */}
+      <DayEditTournamentDialog
+        open={editTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditTarget(null);
+        }}
+        dayOfWeek={dayOfWeek}
+        profileLetter={profileLetter}
+        tournament={editTarget}
         knownSites={availableSites.map((s) => s.site)}
       />
     </DialogPrimitive.Root>
