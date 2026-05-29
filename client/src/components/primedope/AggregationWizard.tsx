@@ -151,6 +151,13 @@ export default function AggregationWizard({
   onRun,
   profileLetter: initialProfile,
 }: AggregationWizardProps = {}) {
+  // VR-CALC-2: fonte dos buckets — grade planejada (default) vs histórico CSV.
+  const [source, setSource] = useState<"planned" | "history">("planned");
+  const [lastDays, setLastDays] = useState(30);
+  // Período do histórico: atalho "últimos N dias" OU intervalo personalizado.
+  const [histMode, setHistMode] = useState<"lastDays" | "range">("lastDays");
+  const [histFrom, setHistFrom] = useState("");
+  const [histTo, setHistTo] = useState("");
   const [mode, setMode] = useState<"period" | "day">("period");
   const [profile, setProfile] = useState(initialProfile ?? "A");
   const [weeks, setWeeks] = useState(12);
@@ -165,17 +172,38 @@ export default function AggregationWizard({
         "GET",
         `/api/variance/buckets-aggregate?profileLetter=${profile}&weeks=${weeks}`,
       ),
-    enabled: mode === "period",
+    enabled: source === "planned" && mode === "period",
   });
 
+  // VR-CALC-2: agregação do histórico real (uploads CSV) por período.
+  // Intervalo personalizado só dispara quando from<=to preenchidos.
+  const histRangeReady =
+    histMode === "lastDays" || (!!histFrom && !!histTo && histFrom <= histTo);
+  const histQueryParam =
+    histMode === "lastDays"
+      ? `lastDays=${lastDays}`
+      : `from=${histFrom}&to=${histTo}`;
+  const { data: histData, isLoading: histLoading } = useQuery<AggResponse>({
+    queryKey: ["history-aggregate", histMode, lastDays, histFrom, histTo, weeks],
+    queryFn: () =>
+      apiRequest(
+        "GET",
+        `/api/variance/history-aggregate?${histQueryParam}&weeks=${weeks}`,
+      ),
+    enabled: source === "history" && histRangeReady,
+  });
+
+  const activeData = source === "history" ? histData : data;
+  const activeLoading = source === "history" ? histLoading : isLoading;
+
   useEffect(() => {
-    if (data?.groups) {
-      setEditedGroups(data.groups.map((g) => ({ ...g })));
+    if (activeData?.groups) {
+      setEditedGroups(activeData.groups.map((g) => ({ ...g })));
       setRawInputs({});
     }
-  }, [data]);
+  }, [activeData]);
 
-  const groups = editedGroups ?? data?.groups ?? [];
+  const groups = editedGroups ?? activeData?.groups ?? [];
 
   const handleGroupEdit = (
     index: number,
@@ -230,7 +258,10 @@ export default function AggregationWizard({
     setRawInputs({});
   };
 
-  const isEmpty = !groups.length && !isLoading && mode === "period";
+  const isEmpty =
+    !groups.length &&
+    !activeLoading &&
+    (source === "history" || mode === "period");
 
   // Resumo formatado
   const totalCount = groups.reduce((s, g) => s + (Number(g.count) || 0), 0);
@@ -357,72 +388,222 @@ export default function AggregationWizard({
           </div>
         ) : null}
 
-        {/* Mode toggle */}
+        {/* VR-CALC-2: Fonte dos buckets — grade planejada vs histórico CSV */}
         <div className="space-y-2">
           <div className="flex items-center text-sm font-medium text-muted-foreground">
-            Modo
-            <InfoTip text="'Por periodo' agrega torneios do seu historico nesse perfil. 'Por dia' (legacy) filtra so o dia da semana." />
+            Fonte dos dados
+            <InfoTip text="'Grade planejada' usa a grade que voce montou. 'Meu historico' importa os torneios reais que voce upou (CSV) no periodo escolhido — ROI/field/buy-in vem dos seus numeros reais." />
           </div>
           <div
-            data-testid="aggregation-mode-toggle"
+            data-testid="aggregation-source-toggle"
             role="tablist"
             className="inline-flex rounded-md border border-border bg-background p-0.5"
           >
             <button
               type="button"
               role="tab"
-              data-testid="mode-por-periodo"
-              aria-pressed={mode === "period" ? "true" : "false"}
-              onClick={() => setMode("period")}
+              data-testid="source-planned"
+              aria-pressed={source === "planned" ? "true" : "false"}
+              onClick={() => setSource("planned")}
               className={cn(
                 "rounded px-3.5 py-1.5 text-sm transition-colors",
-                mode === "period"
+                source === "planned"
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              Por período
+              Grade planejada
             </button>
             <button
               type="button"
               role="tab"
-              data-testid="mode-por-dia"
-              aria-pressed={mode === "day" ? "true" : "false"}
-              onClick={() => setMode("day")}
+              data-testid="source-history"
+              aria-pressed={source === "history" ? "true" : "false"}
+              onClick={() => setSource("history")}
               className={cn(
                 "rounded px-3.5 py-1.5 text-sm transition-colors",
-                mode === "day"
+                source === "history"
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              Por dia
+              Meu histórico
             </button>
           </div>
         </div>
 
-        {/* Profile + period in same row on md+ */}
-        <div className="grid gap-5 md:grid-cols-2">
+        {/* Mode toggle — só na grade planejada (legacy) */}
+        {source === "planned" ? (
           <div className="space-y-2">
             <div className="flex items-center text-sm font-medium text-muted-foreground">
-              Perfil do dia
-              <InfoTip text="A = volume alto (~6 dias/sem). B = misto. C = leve. Vem da configuracao da Grade." />
+              Modo
+              <InfoTip text="'Por periodo' agrega torneios do seu historico nesse perfil. 'Por dia' (legacy) filtra so o dia da semana." />
             </div>
-            <div className="flex flex-wrap gap-2">
-              {(["A", "B", "C"] as const).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  data-testid={`profile-selector-${p}`}
-                  onClick={() => setProfile(p)}
-                  aria-pressed={profile === p ? "true" : "false"}
-                  className={cn(chipBase, profile === p ? chipActive : chipIdle)}
-                >
-                  Perfil {p}
-                </button>
-              ))}
+            <div
+              data-testid="aggregation-mode-toggle"
+              role="tablist"
+              className="inline-flex rounded-md border border-border bg-background p-0.5"
+            >
+              <button
+                type="button"
+                role="tab"
+                data-testid="mode-por-periodo"
+                aria-pressed={mode === "period" ? "true" : "false"}
+                onClick={() => setMode("period")}
+                className={cn(
+                  "rounded px-3.5 py-1.5 text-sm transition-colors",
+                  mode === "period"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Por período
+              </button>
+              <button
+                type="button"
+                role="tab"
+                data-testid="mode-por-dia"
+                aria-pressed={mode === "day" ? "true" : "false"}
+                onClick={() => setMode("day")}
+                className={cn(
+                  "rounded px-3.5 py-1.5 text-sm transition-colors",
+                  mode === "day"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Por dia
+              </button>
             </div>
           </div>
+        ) : null}
+
+        {/* Profile/Período-histórico + período simulado in same row on md+ */}
+        <div className="grid gap-5 md:grid-cols-2">
+          {source === "planned" ? (
+            <div className="space-y-2">
+              <div className="flex items-center text-sm font-medium text-muted-foreground">
+                Perfil do dia
+                <InfoTip text="A = volume alto (~6 dias/sem). B = misto. C = leve. Vem da configuracao da Grade." />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(["A", "B", "C"] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    data-testid={`profile-selector-${p}`}
+                    onClick={() => setProfile(p)}
+                    aria-pressed={profile === p ? "true" : "false"}
+                    className={cn(
+                      chipBase,
+                      profile === p ? chipActive : chipIdle,
+                    )}
+                  >
+                    Perfil {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center text-sm font-medium text-muted-foreground">
+                Período do histórico
+                <InfoTip text="Só torneios com data dentro desse período entram. Importa do seu histórico real upado via CSV (/upload)." />
+              </div>
+              {/* Sub-toggle: atalho últimos N dias vs intervalo personalizado */}
+              <div
+                data-testid="hist-mode-toggle"
+                role="tablist"
+                className="inline-flex rounded-md border border-border bg-background p-0.5"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  data-testid="hist-mode-lastdays"
+                  aria-pressed={histMode === "lastDays" ? "true" : "false"}
+                  onClick={() => setHistMode("lastDays")}
+                  className={cn(
+                    "rounded px-3 py-1 text-xs transition-colors",
+                    histMode === "lastDays"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Últimos N dias
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  data-testid="hist-mode-range"
+                  aria-pressed={histMode === "range" ? "true" : "false"}
+                  onClick={() => setHistMode("range")}
+                  className={cn(
+                    "rounded px-3 py-1 text-xs transition-colors",
+                    histMode === "range"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Intervalo
+                </button>
+              </div>
+
+              {histMode === "lastDays" ? (
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { d: 7, label: "7 dias" },
+                    { d: 30, label: "30 dias" },
+                    { d: 90, label: "90 dias" },
+                    { d: 365, label: "1 ano" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.d}
+                      type="button"
+                      data-testid={`hist-period-${opt.d}`}
+                      onClick={() => setLastDays(opt.d)}
+                      aria-pressed={lastDays === opt.d ? "true" : "false"}
+                      className={cn(
+                        chipBase,
+                        lastDays === opt.d ? chipActive : chipIdle,
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    data-testid="hist-from"
+                    value={histFrom}
+                    max={histTo || undefined}
+                    onChange={(e) => setHistFrom(e.target.value)}
+                    className={cn(inputBase, "w-[150px]")}
+                    aria-label="Data inicial"
+                  />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <input
+                    type="date"
+                    data-testid="hist-to"
+                    value={histTo}
+                    min={histFrom || undefined}
+                    onChange={(e) => setHistTo(e.target.value)}
+                    className={cn(inputBase, "w-[150px]")}
+                    aria-label="Data final"
+                  />
+                  {histMode === "range" && (!histFrom || !histTo) ? (
+                    <span
+                      data-testid="hist-range-hint"
+                      className="text-[11px] text-amber-600 dark:text-amber-500"
+                    >
+                      Escolha início e fim
+                    </span>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2">
             <div className="flex items-center text-sm font-medium text-muted-foreground">
@@ -450,22 +631,37 @@ export default function AggregationWizard({
         </div>
 
         {/* Loading state */}
-        {isLoading && mode === "period" ? (
+        {activeLoading ? (
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Carregando agregacao de torneios...
+            {source === "history"
+              ? "Carregando seu histórico no período..."
+              : "Carregando agregacao de torneios..."}
           </div>
         ) : null}
 
         {/* Empty state */}
         {isEmpty ? (
           <div className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-center text-sm text-muted-foreground">
-            <p data-testid="empty-state">
-              Adicione torneios na aba Grade para simular.
-            </p>
-            <p className="mt-1 text-xs">
-              Sem grade salva, nao conseguimos agregar buckets por perfil.
-            </p>
+            {source === "history" ? (
+              <>
+                <p data-testid="empty-state">
+                  Nenhum torneio no período selecionado.
+                </p>
+                <p className="mt-1 text-xs">
+                  Importe seu histórico em /upload (CSV) ou amplie o período.
+                </p>
+              </>
+            ) : (
+              <>
+                <p data-testid="empty-state">
+                  Adicione torneios na aba Grade para simular.
+                </p>
+                <p className="mt-1 text-xs">
+                  Sem grade salva, nao conseguimos agregar buckets por perfil.
+                </p>
+              </>
+            )}
             <Button
               variant="outline"
               size="sm"
