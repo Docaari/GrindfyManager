@@ -36,6 +36,8 @@ import {
   Flame,
   Minus,
   ChevronDown,
+  Users,
+  Hourglass,
 } from "lucide-react";
 import {
   Panel,
@@ -136,14 +138,15 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
   }, []);
 
   // Slots horarios — start = min(DEFAULT_START_HOUR, earliest planned hour).
-  // Garante que torneios planejados antes das 14h fiquem visiveis.
+  // Quando maxLate definido, usa maxLate (torneio sobe pra esse bloco).
   const earliestPlannedHour = React.useMemo<number | null>(() => {
     const list: any[] = Array.isArray((query as any)?.data?.list)
       ? (query as any).data.list
       : [];
     let min: number | null = null;
     for (const item of list) {
-      const h = parseHour(item?.time);
+      const ref = item?.maxLate || item?.time;
+      const h = parseHour(ref);
       if (h === null) continue;
       if (min === null || h < min) min = h;
     }
@@ -277,7 +280,10 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
     const filterActive = filterSet.size > 0;
     for (const item of list) {
       if (filterActive && !filterSet.has(item?.site)) continue;
-      const h = parseHour(item?.time);
+      // Bucketing prioriza maxLate (reg final). Quando ativo, torneio sobe
+      // para o bloco do horario do max late, nao do start time.
+      const bucketRef = item?.maxLate || item?.time;
+      const h = parseHour(bucketRef);
       const slotKey =
         h !== null ? h.toString().padStart(2, "0") + ":00" : fallbackSlot;
       if (!out[slotKey]) out[slotKey] = [];
@@ -826,8 +832,8 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                 data-testid="day-zoom-panel-left"
                 className="h-full overflow-y-auto p-5 space-y-4 scroll-smooth"
               >
-                {/* 4 cards KPI — modernos com icons + gradient */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* 5 cards KPI — modernos com icons + gradient */}
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                   <div
                     data-testid="day-zoom-card-total"
                     className="group relative bg-gradient-to-br from-gray-900 to-gray-900/50 border border-gray-800 hover:border-emerald-500/40 rounded-xl p-3 transition-all duration-200"
@@ -887,6 +893,22 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                     <div className="text-2xl font-bold text-white tabular-nums">
                       {data?.cards?.bankrollNeeded != null
                         ? formatUsd(data.cards.bankrollNeeded)
+                        : "—"}
+                    </div>
+                  </div>
+                  <div
+                    data-testid="day-zoom-card-median-field"
+                    className="group relative bg-gradient-to-br from-gray-900 to-gray-900/50 border border-gray-800 hover:border-cyan-500/40 rounded-xl p-3 transition-all duration-200"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">
+                        Mediana Field
+                      </div>
+                      <Users className="w-3.5 h-3.5 text-cyan-500/70" />
+                    </div>
+                    <div className="text-2xl font-bold text-white tabular-nums">
+                      {data?.cards?.medianFieldSize
+                        ? data.cards.medianFieldSize.toLocaleString("pt-BR")
                         : "—"}
                     </div>
                   </div>
@@ -975,6 +997,9 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                 : isLow
                                   ? "border-gray-800/70 opacity-90"
                                   : "border-gray-800";
+                              const menuOpen =
+                                priorityMenuId === item.id ||
+                                moveMenuId === item.id;
                               return (
                                 <div
                                   key={tid}
@@ -985,7 +1010,8 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                     priorityBorder +
                                     (isHigh
                                       ? " bg-gradient-to-r from-red-950/30 via-gray-900/80 to-gray-900/80 shadow-sm shadow-red-900/20"
-                                      : "")
+                                      : "") +
+                                    (menuOpen ? " z-40" : "")
                                   }
                                 >
                                   {/* Priority badge — only Alta visible inline */}
@@ -1008,7 +1034,8 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                     />
                                     {item.site}
                                   </span>
-                                  {/* Horario real — SEMPRE visivel, direita do site badge */}
+                                  {/* Horario real — SEMPRE visivel, direita do site badge.
+                                      Quando maxLate ativo, mostra time → maxLate */}
                                   <span className="inline-flex items-center gap-0.5 text-[10px] font-mono tabular-nums text-gray-300 shrink-0">
                                     <Clock className="w-2.5 h-2.5 text-gray-500" />
                                     {typeof item.time === "string" &&
@@ -1016,6 +1043,18 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                       ? item.time
                                       : "—"}
                                   </span>
+                                  {/* Max late badge — exibido quando definido */}
+                                  {typeof item.maxLate === "string" &&
+                                    item.maxLate.length > 0 && (
+                                      <span
+                                        data-testid={`day-zoom-tournament-maxlate-${item.id ?? tid}`}
+                                        className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono tabular-nums bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0"
+                                        title={`Reg final ${item.maxLate}`}
+                                      >
+                                        <Hourglass className="w-2.5 h-2.5" />
+                                        {item.maxLate}
+                                      </span>
+                                    )}
                                   {/* Name */}
                                   <span
                                     className={
@@ -1033,6 +1072,26 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                   <span className="text-xs font-bold text-emerald-300 tabular-nums shrink-0">
                                     {formatUsd(item.buyinUsd ?? 0)}
                                   </span>
+                                  {/* Garantido + field estimado */}
+                                  {typeof item.guaranteedUsd === "number" &&
+                                    item.guaranteedUsd > 0 && (
+                                      <span
+                                        data-testid={`day-zoom-tournament-gtd-${item.id ?? tid}`}
+                                        className="hidden sm:inline-flex items-center gap-0.5 text-[10px] tabular-nums text-amber-200 shrink-0"
+                                        title={
+                                          item.estimatedField
+                                            ? `Garantido ${formatUsd(item.guaranteedUsd)} · ~${item.estimatedField} jogadores`
+                                            : `Garantido ${formatUsd(item.guaranteedUsd)}`
+                                        }
+                                      >
+                                        GTD {formatUsd(item.guaranteedUsd)}
+                                        {item.estimatedField ? (
+                                          <span className="text-gray-500 ml-0.5">
+                                            · ~{item.estimatedField}
+                                          </span>
+                                        ) : null}
+                                      </span>
+                                    )}
                                   {/* Type/Speed chip */}
                                   {(item.type || item.speed) && (
                                     <span className="hidden sm:inline text-[9px] text-gray-500 uppercase tracking-wide shrink-0">
@@ -1124,7 +1183,7 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                     <div
                                       data-zoom-menu="priority"
                                       data-testid={`day-zoom-tournament-priority-menu-${item.id}`}
-                                      className="absolute right-2 top-full mt-1 z-20 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 w-44"
+                                      className="absolute right-2 top-full mt-1 z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 w-44"
                                     >
                                       <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1 px-1">
                                         Prioridade
@@ -1197,7 +1256,7 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                                     <div
                                       data-zoom-menu="move"
                                       data-testid={`day-zoom-tournament-move-menu-${item.id}`}
-                                      className="absolute right-2 top-full mt-1 z-20 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto w-48"
+                                      className="absolute right-2 top-full mt-1 z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2 max-h-48 overflow-y-auto w-48"
                                     >
                                       <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1 px-1">
                                         Mover para

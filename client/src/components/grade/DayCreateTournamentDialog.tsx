@@ -60,6 +60,8 @@ export function DayCreateTournamentDialog(
   const [site, setSite] = React.useState(knownSites[0] ?? "");
   const [buyIn, setBuyIn] = React.useState("");
   const [time, setTime] = React.useState(suggestedSlot);
+  const [maxLate, setMaxLate] = React.useState("");
+  const [guaranteed, setGuaranteed] = React.useState("");
   const [type, setType] = React.useState("Vanilla");
   const [speed, setSpeed] = React.useState("Normal");
   const [submitting, setSubmitting] = React.useState(false);
@@ -74,6 +76,8 @@ export function DayCreateTournamentDialog(
       setSite(knownSites[0] ?? "");
       setBuyIn("");
       setTime(suggestedSlot);
+      setMaxLate("");
+      setGuaranteed("");
       setType("Vanilla");
       setSpeed("Normal");
       setError(null);
@@ -118,12 +122,22 @@ export function DayCreateTournamentDialog(
     try {
       const buyInValue =
         buyIn.trim() === "" ? "0" : buyIn.replace(",", ".").trim();
+      const guaranteedValue =
+        guaranteed.trim() === ""
+          ? "0"
+          : guaranteed.replace(",", ".").trim();
+      const maxLateValue =
+        maxLate.trim() !== "" && /^\d{1,2}:\d{1,2}$/.test(maxLate.trim())
+          ? maxLate.trim()
+          : null;
       await apiRequest("POST", "/api/planned-tournaments", {
         name: name.trim(),
         site: site.trim(),
         dayOfWeek,
         time,
         buyIn: buyInValue,
+        guaranteed: guaranteedValue,
+        registrationTime: maxLateValue,
         type,
         speed,
         profile: profileLetter,
@@ -163,6 +177,8 @@ export function DayCreateTournamentDialog(
     site,
     buyIn,
     time,
+    maxLate,
+    guaranteed,
     type,
     speed,
     dayOfWeek,
@@ -292,6 +308,36 @@ export function DayCreateTournamentDialog(
                     </option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Max Late (reg final)
+                </label>
+                <input
+                  type="time"
+                  data-testid="day-zoom-create-input-maxlate"
+                  value={maxLate}
+                  onChange={(e) => setMaxLate(e.target.value)}
+                  placeholder="opcional"
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-amber-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Garantido USD
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  data-testid="day-zoom-create-input-guaranteed"
+                  value={guaranteed}
+                  onChange={(e) => setGuaranteed(e.target.value)}
+                  placeholder="0"
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-emerald-500 outline-none"
+                />
               </div>
             </div>
 

@@ -27,6 +27,12 @@ export interface DayDetailListItem {
   count: number;
   time?: string;
   prioridade?: number;
+  // Sprint manage-4: max late (horario final de registro, HH:MM). Reusa
+  // coluna legada registration_time. Quando preenchido, bucketing usa este
+  // valor; senao usa time.
+  maxLate?: string | null;
+  guaranteedUsd?: number;
+  estimatedField?: number;
 }
 
 export interface DayDetailVolumeItem {
@@ -47,6 +53,7 @@ export interface DayDetailResult {
     abiUsd: number;
     investmentUsd: number;
     bankrollNeeded: number;
+    medianFieldSize: number;
   };
   format: {
     pctPKO: number;
@@ -124,6 +131,7 @@ export async function getDayDetail(
         abiUsd: 0,
         investmentUsd: 0,
         bankrollNeeded: 0,
+        medianFieldSize: 0,
       },
       format: { pctPKO: 0, pctTurbo: 0, pctVanilla: 0 },
       volume: [],
@@ -176,6 +184,17 @@ export async function getDayDetail(
       (investmentBySite.get(site) ?? 0) + usd * cnt,
     );
 
+    const guaranteedNative = Number(pt.guaranteed ?? 0) || 0;
+    const guaranteedUsd = nativeToUsd(
+      guaranteedNative,
+      pt.currency ?? "USD",
+      rates,
+    );
+    const estimatedField =
+      usd > 0 && guaranteedUsd > 0
+        ? Math.max(1, Math.round(guaranteedUsd / usd))
+        : 0;
+
     list.push({
       id: pt.id ?? pt.plannedId,
       plannedId: pt.plannedId,
@@ -191,6 +210,12 @@ export async function getDayDetail(
         typeof pt.prioridade === "number" && pt.prioridade >= 1 && pt.prioridade <= 3
           ? pt.prioridade
           : 2,
+      maxLate:
+        typeof pt.registrationTime === "string" && pt.registrationTime.length > 0
+          ? pt.registrationTime
+          : null,
+      guaranteedUsd: Number(guaranteedUsd.toFixed(2)),
+      estimatedField,
     });
   }
 
@@ -269,12 +294,27 @@ export async function getDayDetail(
     return 0;
   });
 
+  // Mediana de field size — usa estimatedField (>0) de cada torneio.
+  const fields = list
+    .map((x) => x.estimatedField ?? 0)
+    .filter((n) => n > 0)
+    .sort((a, b) => a - b);
+  let medianFieldSize = 0;
+  if (fields.length > 0) {
+    const mid = Math.floor(fields.length / 2);
+    medianFieldSize =
+      fields.length % 2 === 0
+        ? Math.round((fields[mid - 1] + fields[mid]) / 2)
+        : fields[mid];
+  }
+
   return {
     cards: {
       totalTournaments,
       abiUsd: Number(abiUsd.toFixed(4)),
       investmentUsd: Number(investmentUsd.toFixed(4)),
       bankrollNeeded: Number(bankrollNeeded.toFixed(2)),
+      medianFieldSize,
     },
     format: formatBlock,
     volume,

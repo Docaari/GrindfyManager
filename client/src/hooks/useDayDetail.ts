@@ -19,6 +19,7 @@ export interface DayDetailCards {
   abiUsd: number;
   investmentUsd: number;
   bankrollNeeded: number;
+  medianFieldSize?: number;
 }
 
 export interface DayDetailFormat {
@@ -51,6 +52,9 @@ export interface DayDetailListItem {
   count: number;
   time?: string;
   prioridade?: number;
+  maxLate?: string | null;
+  guaranteedUsd?: number;
+  estimatedField?: number;
 }
 
 export interface DayDetailResponse {

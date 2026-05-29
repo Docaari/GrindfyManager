@@ -31,6 +31,10 @@ export interface DayEditTournamentDialogProps {
     time?: string;
     type?: string;
     speed?: string;
+    maxLate?: string | null;
+    registrationTime?: string | null;
+    guaranteedUsd?: number;
+    guaranteed?: string | number | null;
   } | null;
   knownSites?: string[];
   onSaved?: () => void;
@@ -53,6 +57,8 @@ export function DayEditTournamentDialog(
   const [site, setSite] = React.useState("");
   const [buyIn, setBuyIn] = React.useState("");
   const [time, setTime] = React.useState("");
+  const [maxLate, setMaxLate] = React.useState("");
+  const [guaranteed, setGuaranteed] = React.useState("");
   const [type, setType] = React.useState("Vanilla");
   const [speed, setSpeed] = React.useState("Normal");
   const [submitting, setSubmitting] = React.useState(false);
@@ -72,6 +78,14 @@ export function DayEditTournamentDialog(
             : "";
       setBuyIn(initialBuyIn);
       setTime(tournament.time ?? "");
+      setMaxLate(tournament.maxLate ?? tournament.registrationTime ?? "");
+      const initialGtd =
+        tournament.guaranteedUsd != null
+          ? String(tournament.guaranteedUsd)
+          : tournament.guaranteed != null
+            ? String(tournament.guaranteed)
+            : "";
+      setGuaranteed(initialGtd);
       setType(tournament.type ?? "Vanilla");
       setSpeed(tournament.speed ?? "Normal");
       setError(null);
@@ -92,11 +106,21 @@ export function DayEditTournamentDialog(
     try {
       const buyInValue =
         buyIn.trim() === "" ? "0" : buyIn.replace(",", ".").trim();
+      const guaranteedValue =
+        guaranteed.trim() === ""
+          ? "0"
+          : guaranteed.replace(",", ".").trim();
+      const maxLateValue =
+        maxLate.trim() !== "" && /^\d{1,2}:\d{1,2}$/.test(maxLate.trim())
+          ? maxLate.trim()
+          : null;
       await apiRequest("PUT", `/api/planned-tournaments/${tournament.id}`, {
         name: name.trim(),
         site: site.trim(),
         time,
         buyIn: buyInValue,
+        guaranteed: guaranteedValue,
+        registrationTime: maxLateValue,
         type,
         speed,
       });
@@ -133,6 +157,8 @@ export function DayEditTournamentDialog(
     site,
     buyIn,
     time,
+    maxLate,
+    guaranteed,
     type,
     speed,
     dayOfWeek,
@@ -212,6 +238,35 @@ export function DayEditTournamentDialog(
                   data-testid="day-zoom-edit-input-buyin"
                   value={buyIn}
                   onChange={(e) => setBuyIn(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40 outline-none transition"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Max Late (reg final)
+                </label>
+                <input
+                  type="time"
+                  data-testid="day-zoom-edit-input-maxlate"
+                  value={maxLate}
+                  onChange={(e) => setMaxLate(e.target.value)}
+                  placeholder="opcional"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-amber-500 focus:ring-1 focus:ring-amber-500/40 outline-none transition"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Garantido USD
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  data-testid="day-zoom-edit-input-guaranteed"
+                  value={guaranteed}
+                  onChange={(e) => setGuaranteed(e.target.value)}
+                  placeholder="0"
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40 outline-none transition"
                 />
               </div>
