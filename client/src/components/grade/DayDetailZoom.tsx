@@ -19,7 +19,7 @@
 
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { X, Plus } from "lucide-react";
 import {
   Panel,
   PanelGroup,
@@ -38,6 +38,11 @@ import {
   parseSlotFromDroppableId,
 } from "@/components/grade/helpers";
 import { BibliotecaEmbedded } from "@/components/grade/BibliotecaEmbedded";
+import {
+  DayPlannedFilterChips,
+  useDayPlannedFilter,
+} from "@/components/grade/DayPlannedFilterChips";
+import { DayCreateTournamentDialog } from "@/components/grade/DayCreateTournamentDialog";
 import { generateTimeSlots } from "@shared/grade-hours";
 
 const DEFAULT_START_HOUR = 14;
@@ -105,18 +110,79 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
     [],
   );
 
-  // Slot -> lista (a partir de useDayDetail.list).
+  // Filtro plataforma (RF-03) + estado modal Criar (RF-01).
+  const [filterSelected, setFilterSelected] = useDayPlannedFilter(
+    profileLetter,
+    dayOfWeek,
+  );
+  const [createOpen, setCreateOpen] = React.useState(false);
+
+  // Sites disponiveis para chips: dedup de volume + list ordenado desc por count.
+  const availableSites = React.useMemo<
+    Array<{ site: string; count: number }>
+  >(() => {
+    const counts = new Map<string, number>();
+    const list: any[] = Array.isArray(data?.list) ? data.list : [];
+    for (const item of list) {
+      const s = item?.site;
+      if (typeof s !== "string" || s.length === 0) continue;
+      counts.set(s, (counts.get(s) ?? 0) + (Number(item?.count) || 1));
+    }
+    const volume: any[] = Array.isArray(data?.volume) ? data.volume : [];
+    for (const v of volume) {
+      const s = v?.site;
+      if (typeof s !== "string" || s.length === 0) continue;
+      if (!counts.has(s)) counts.set(s, Number(v?.count) || 0);
+    }
+    return Array.from(counts.entries())
+      .map(([site, count]) => ({ site, count }))
+      .sort((a, b) => b.count - a.count || a.site.localeCompare(b.site));
+  }, [data?.list, data?.volume]);
+
+  // Slot -> lista (a partir de useDayDetail.list) com filtro plataforma aplicado.
   const plannedSlots = React.useMemo<Record<string, any[]>>(() => {
     const out: Record<string, any[]> = {};
     for (const s of timeSlots) out[s] = [];
     const list: any[] = Array.isArray(data?.list) ? data.list : [];
+    const filterSet = new Set(filterSelected);
+    const filterActive = filterSet.size > 0;
     for (const item of list) {
+      if (filterActive && !filterSet.has(item?.site)) continue;
       const slot = item.time ?? "00:00";
       if (!out[slot]) out[slot] = [];
       out[slot].push(item);
     }
     return out;
-  }, [data?.list, timeSlots]);
+  }, [data?.list, timeSlots, filterSelected]);
+
+  // Total filtrado (para empty state + telemetria filter_apply).
+  const filteredCount = React.useMemo(() => {
+    let total = 0;
+    for (const slot of Object.keys(plannedSlots)) {
+      total += plannedSlots[slot]?.length ?? 0;
+    }
+    return total;
+  }, [plannedSlots]);
+
+  // Emit filter_apply ao mudar selecao (skip mount + re-hydrate identico).
+  const lastFilterSigRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const sig = JSON.stringify(filterSelected);
+    if (lastFilterSigRef.current === null) {
+      lastFilterSigRef.current = sig;
+      return;
+    }
+    if (lastFilterSigRef.current === sig) return;
+    lastFilterSigRef.current = sig;
+    safeEmit("coach.day_zoom_filter_apply", {
+      feature: "day_zoom",
+      dayOfWeek,
+      profileLetter,
+      filters: { platforms: filterSelected },
+      cleared: filterSelected.length === 0,
+      resultCount: filteredCount,
+    });
+  }, [filterSelected, filteredCount, dayOfWeek, profileLetter]);
 
   // Emit open uma vez por mount com open=true.
   React.useEffect(() => {
@@ -226,7 +292,11 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
   );
 
   const mutateRemove = React.useCallback(
-    async (tournamentId: string, slot: string) => {
+    async (
+      tournamentId: string,
+      slot: string,
+      eventSource: "dnd" | "inline" = "dnd",
+    ) => {
       // Snapshot pra undo.
       const snapshotItem = (() => {
         const list = plannedSlots[slot] ?? [];
@@ -234,12 +304,34 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
       })();
       try {
         await apiRequest("DELETE", `/api/planned-tournaments/${tournamentId}`);
-        safeEmit("coach.day_zoom_dnd_remove", {
-          feature: "day_zoom",
-          tournamentId,
-          dayOfWeek,
-          slot,
-        });
+        if (eventSource === "inline") {
+          safeEmit("coach.day_zoom_delete_inline", {
+            feature: "day_zoom",
+            tournamentId,
+            dayOfWeek,
+            slot,
+          });
+        } else {
+          safeEmit("coach.day_zoom_dnd_remove", {
+            feature: "day_zoom",
+            tournamentId,
+            dayOfWeek,
+            slot,
+          });
+        }
+        try {
+          queryClient.invalidateQueries?.({
+            queryKey: ["day-detail", profileLetter, dayOfWeek],
+          });
+          queryClient.invalidateQueries?.({
+            queryKey: ["planned-tournaments"],
+          });
+          queryClient.invalidateQueries?.({
+            queryKey: ["/api/planned-tournaments"],
+          });
+        } catch {
+          /* ignore */
+        }
         undoToast.show({
           label: "Removido",
           action: "remove",
@@ -328,7 +420,7 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
       ) {
         const slot = parseSlotFromDroppableId(srcId);
         if (!slot) return;
-        await mutateRemove(draggableId, slot);
+        await mutateRemove(draggableId, slot, "dnd");
         return;
       }
     },
@@ -457,18 +549,32 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                 {titleText}
               </h2>
             </DialogPrimitive.Title>
-            <button
-              type="button"
-              data-testid="day-zoom-close-button"
-              onClick={() => {
-                closeReasonRef.current = "cta";
-                handleOpenChange(false);
-              }}
-              className="p-1 rounded hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
-              aria-label="Fechar"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                data-testid="day-zoom-create-button"
+                onClick={() => setCreateOpen(true)}
+                disabled={dayProfileOff}
+                className="flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                aria-label="Criar torneio"
+                title={dayProfileOff ? "Dia OFF — sem criacao" : "Criar torneio"}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Criar
+              </button>
+              <button
+                type="button"
+                data-testid="day-zoom-close-button"
+                onClick={() => {
+                  closeReasonRef.current = "cta";
+                  handleOpenChange(false);
+                }}
+                className="p-1 rounded hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Split (>=1024) */}
@@ -528,6 +634,37 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                   </div>
                 </div>
 
+                {/* Filtro plataforma (RF-03) */}
+                {availableSites.length > 0 && (
+                  <DayPlannedFilterChips
+                    profileLetter={profileLetter}
+                    dayOfWeek={dayOfWeek}
+                    availableSites={availableSites}
+                    selected={filterSelected}
+                    onChange={setFilterSelected}
+                  />
+                )}
+
+                {/* Empty state pos-filter */}
+                {filterSelected.length > 0 && filteredCount === 0 && (
+                  <div
+                    data-testid="day-zoom-filter-empty"
+                    className="bg-gray-900/40 border border-dashed border-gray-700 rounded-md px-3 py-4 text-center"
+                  >
+                    <p className="text-xs text-gray-400 mb-2">
+                      Nenhum torneio com esses filtros
+                    </p>
+                    <button
+                      type="button"
+                      data-testid="day-zoom-filter-clear"
+                      onClick={() => setFilterSelected([])}
+                      className="text-xs text-emerald-400 hover:text-emerald-300 font-medium"
+                    >
+                      Limpar filtros
+                    </button>
+                  </div>
+                )}
+
                 {/* Slots */}
                 <div
                   data-dnd-disabled={dayProfileOff ? "true" : "false"}
@@ -545,15 +682,36 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                           {slot}
                         </div>
                         <div className="space-y-1">
-                          {items.map((item: any, idx: number) => (
-                            <div
-                              key={item.id ?? `${slot}-${idx}`}
-                              data-testid={`day-zoom-tournament-${item.id ?? idx}`}
-                              className="text-xs text-white bg-gray-800 rounded px-2 py-1"
-                            >
-                              {item.name ?? item.site} — {formatUsd(item.buyinUsd ?? 0)}
-                            </div>
-                          ))}
+                          {items.map((item: any, idx: number) => {
+                            const tid = item.id ?? `${slot}-${idx}`;
+                            const displayName = item.name ?? item.site;
+                            return (
+                              <div
+                                key={tid}
+                                data-testid={`day-zoom-tournament-${tid}`}
+                                className="group flex items-center justify-between gap-2 text-xs text-white bg-gray-800 hover:bg-gray-700/80 rounded px-2 py-1 transition-colors"
+                              >
+                                <span className="truncate">
+                                  {displayName} —{" "}
+                                  {formatUsd(item.buyinUsd ?? 0)}
+                                </span>
+                                {item.id && !dayProfileOff && (
+                                  <button
+                                    type="button"
+                                    data-testid={`day-zoom-tournament-delete-${item.id}`}
+                                    onClick={() =>
+                                      mutateRemove(item.id, slot, "inline")
+                                    }
+                                    aria-label={`Remover torneio ${displayName}`}
+                                    title="Remover"
+                                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-0.5 rounded text-gray-400 hover:text-red-300 hover:bg-red-900/30 transition-opacity"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -636,6 +794,18 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
           )}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
+
+      {/* Create dialog (RF-01) — fora do Portal pra evitar nested portal issues */}
+      <DayCreateTournamentDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        dayOfWeek={dayOfWeek}
+        profileLetter={profileLetter}
+        suggestedSlot={
+          findFirstFreeSlot(plannedSlots, timeSlots) ?? timeSlots[0] ?? "20:00"
+        }
+        knownSites={availableSites.map((s) => s.site)}
+      />
     </DialogPrimitive.Root>
   );
 }
