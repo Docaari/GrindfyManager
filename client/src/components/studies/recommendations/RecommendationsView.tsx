@@ -172,8 +172,10 @@ export function RecommendationsView() {
                       }
                     : undefined
                 }
-                className={`rounded-lg border border-gray-700 bg-gray-900/40 p-3 ${
-                  r.cta_url ? 'cursor-pointer hover:bg-gray-800/60 focus:outline-none focus:ring-2 focus:ring-poker-accent/40' : ''
+                className={`rounded-xl border border-gray-700/80 bg-gray-900/40 p-4 transition-all duration-200 ${
+                  r.cta_url
+                    ? 'cursor-pointer hover:-translate-y-0.5 hover:bg-gray-800/60 hover:border-gray-600 hover:shadow-lg hover:shadow-black/20 focus:outline-none focus:ring-2 focus:ring-poker-accent/40'
+                    : ''
                 }`}
               >
                 <header className="flex items-center justify-between mb-2">

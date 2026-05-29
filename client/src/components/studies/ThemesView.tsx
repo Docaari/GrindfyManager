@@ -191,31 +191,68 @@ export function ThemesView() {
           {filtered.map((t) => {
             const delta = leakDelta[t.id] ?? 0;
             const suggested = delta < SUGGESTED_THRESHOLD;
+            const accent = t.color || '#16a34a';
+            const progress = Math.max(0, Math.min(100, t.progress ?? 0));
             return (
               <button
                 key={t.id}
                 type="button"
                 data-testid={`theme-card-${t.id}`}
                 onClick={() => navigate(`/estudos/temas/${t.id}`)}
-                className="text-left rounded-lg border border-gray-700 bg-gray-800/80 p-4 hover:bg-gray-800 transition-colors"
+                style={{ ['--accent' as any]: accent }}
+                className="group relative text-left rounded-xl border border-gray-700/80 bg-gray-800/60 p-4 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-600 hover:bg-gray-800 hover:shadow-lg hover:shadow-black/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm font-semibold text-white">
-                    {t.emoji ? `${t.emoji} ` : ''}
-                    {t.name}
+                {/* Faixa de cor do tema */}
+                <span
+                  aria-hidden
+                  className="absolute inset-y-0 left-0 w-1"
+                  style={{ backgroundColor: accent }}
+                />
+                <div className="flex items-start justify-between gap-2 mb-3 pl-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="flex-shrink-0 grid place-items-center h-9 w-9 rounded-lg text-lg"
+                      style={{ backgroundColor: `${accent}22` }}
+                      aria-hidden
+                    >
+                      {t.emoji || (
+                        <span style={{ color: accent }} className="text-sm font-bold">
+                          {(t.name || '?').slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-sm font-semibold text-white truncate">
+                      {t.name}
+                    </span>
                   </div>
                   {suggested && (
-                    <Badge variant="outline" className="text-[10px] text-blue-400 border-blue-600/40">
+                    <Badge
+                      variant="outline"
+                      className="flex-shrink-0 text-[10px] text-blue-300 border-blue-500/40 bg-blue-500/10"
+                    >
                       Sugerido
                     </Badge>
                   )}
                 </div>
-                <div className="text-xs text-gray-400">
-                  Progresso: {t.progress ?? 0}%
+
+                {/* Progresso */}
+                <div className="pl-1 space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-gray-400">
+                    <span>Progresso</span>
+                    <span className="font-mono text-gray-300">{progress}%</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-gray-700/60 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${progress}%`, backgroundColor: accent }}
+                    />
+                  </div>
                 </div>
+
                 {t.attacksLeakType && (
-                  <div className="text-[11px] text-yellow-400 mt-1">
-                    Leak: {t.attacksLeakType}
+                  <div className="mt-3 pl-1 inline-flex items-center gap-1 text-[11px] text-amber-300">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden />
+                    Ataca leak: {t.attacksLeakType}
                   </div>
                 )}
               </button>

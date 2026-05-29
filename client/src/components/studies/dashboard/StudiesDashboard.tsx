@@ -9,6 +9,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
+import { Plus } from 'lucide-react';
 import { ContinueWhereLeftOff } from './ContinueWhereLeftOff';
 import { WeekInsights } from './WeekInsights';
 import { PendingSpotsPreview } from './PendingSpotsPreview';
@@ -203,8 +204,9 @@ export function StudiesDashboard() {
           type="button"
           data-testid="studies-dashboard-register-study"
           onClick={() => setLogOpen(true)}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded font-medium"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-poker-accent text-black rounded-lg font-semibold transition-all hover:bg-poker-accent/90 hover:shadow-lg hover:shadow-poker-accent/20"
         >
+          <Plus className="w-4 h-4" aria-hidden />
           Registrar Estudo
         </button>
       </div>
@@ -219,7 +221,7 @@ export function StudiesDashboard() {
         <section
           data-testid="studies-dashboard-card-continue"
           aria-label="Continue de onde parou"
-          className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-2"
+          className="rounded-xl border border-gray-700/80 bg-gray-900/40 p-4 space-y-2 transition-colors hover:border-gray-600"
         >
           <h2 className="text-sm font-semibold text-gray-300">Continue de onde parou</h2>
           <ContinueWhereLeftOff themes={themes as any} />
@@ -228,7 +230,7 @@ export function StudiesDashboard() {
         <section
           data-testid="studies-dashboard-card-insights"
           aria-label="Insights da semana"
-          className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-2"
+          className="rounded-xl border border-gray-700/80 bg-gray-900/40 p-4 space-y-2 transition-colors hover:border-gray-600"
         >
           <h2 className="text-sm font-semibold text-gray-300">Insights da semana</h2>
           <WeekInsights insights={insights} />
@@ -237,7 +239,7 @@ export function StudiesDashboard() {
         <section
           data-testid="studies-dashboard-card-spots"
           aria-label="Spots pendentes"
-          className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-2"
+          className="rounded-xl border border-gray-700/80 bg-gray-900/40 p-4 space-y-2 transition-colors hover:border-gray-600"
         >
           <h2 className="text-sm font-semibold text-gray-300">Spots pendentes</h2>
           <PendingSpotsPreview spots={spots as any} />
@@ -246,7 +248,7 @@ export function StudiesDashboard() {
         <section
           data-testid="studies-dashboard-card-recomendacoes"
           aria-label="Recomendacoes"
-          className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-2"
+          className="rounded-xl border border-gray-700/80 bg-gray-900/40 p-4 space-y-2 transition-colors hover:border-gray-600"
         >
           <h2 className="text-sm font-semibold text-gray-300">Recomendacoes</h2>
           <RecommendationsPreview items={recs.items as any} />
@@ -256,7 +258,7 @@ export function StudiesDashboard() {
           data-testid="studies-dashboard-card-streak"
           aria-label="Streak de estudos"
           data-streak-days={streakDays}
-          className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-2"
+          className="rounded-xl border border-gray-700/80 bg-gray-900/40 p-4 space-y-2 transition-colors hover:border-gray-600"
         >
           <h2 className="text-sm font-semibold text-gray-300">Streak</h2>
           <StudyStreakBadge />

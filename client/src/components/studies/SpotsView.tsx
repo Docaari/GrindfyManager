@@ -13,6 +13,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
+import { Bookmark } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { getCsrfToken, queryClient } from '@/lib/queryClient';
 import { parseSearch } from '@/lib/url';
@@ -280,13 +281,20 @@ export function SpotsView() {
               type="button"
               data-testid={`spot-card-${s.id}`}
               onClick={() => openSpotModal(s)}
-              className="text-left rounded-lg border border-gray-700 bg-gray-800/80 p-0 hover:bg-gray-800 transition-colors overflow-hidden flex flex-col"
+              className="group text-left rounded-xl border border-gray-700/80 bg-gray-800/60 p-0 overflow-hidden flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-600 hover:shadow-lg hover:shadow-black/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-poker-accent/50"
             >
-              <div className="bg-black/40 aspect-[4/3] w-full overflow-hidden flex items-center justify-center">
+              <div className="relative bg-black/40 aspect-[4/3] w-full overflow-hidden flex items-center justify-center">
+                {/* Placeholder atras da imagem — aparece se a img falhar/zerar. */}
+                <div
+                  aria-hidden
+                  className="absolute inset-0 grid place-items-center text-gray-600"
+                >
+                  <Bookmark className="w-8 h-8" />
+                </div>
                 <img
                   src={`/api/starred-hands/${s.id}/image`}
                   alt={`Spot ${s.type ?? ''} ${s.spot ?? ''}`.trim()}
-                  className="w-full h-full object-contain"
+                  className="relative w-full h-full object-contain transition-transform duration-200 group-hover:scale-[1.02]"
                   loading="lazy"
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = 'none';
