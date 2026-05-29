@@ -396,6 +396,35 @@ export const tournaments = pgTable("tournaments", {
 ]);
 
 // =============================================================================
+// Sprint library-evolution Fase 5 — saved_tournament_highlights (Migration 0082)
+// Cards de FAMILIA que o jogador salvou (do modo Overview ou da /library). Ficam
+// fixados no topo da pagina "Torneios", filtrados por plataforma. Guardam um
+// SNAPSHOT das metricas + motivos do destaque (ROI medio / baixa variancia /
+// $/hora) no momento do save — o card sobrevive mesmo se o historico mudar.
+// =============================================================================
+export const savedTournamentHighlights = pgTable("saved_tournament_highlights", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull(),
+  site: varchar("site").notNull(),
+  familyKey: varchar("family_key").notNull(),
+  groupName: varchar("group_name"),
+  buyInTier: varchar("buy_in_tier"),
+  type: varchar("type"),
+  // Snapshot das metricas (roi, volume, avgBuyin, profitPerTableHour, etc).
+  metrics: jsonb("metrics"),
+  // Motivos do destaque: [{ kind, label }] (ROI medio / baixa variancia / $/hora).
+  reasons: jsonb("reasons"),
+  source: varchar("source").default("overview"), // 'overview' | 'library'
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  // Dedup: nao salvar a mesma familia 2x pro mesmo user.
+  uniqueIndex("uq_saved_highlight_user_family").on(table.userId, table.familyKey),
+  index("idx_saved_highlight_user_site").on(table.userId, table.site),
+]);
+export type SavedTournamentHighlight = typeof savedTournamentHighlights.$inferSelect;
+export type InsertSavedTournamentHighlight = typeof savedTournamentHighlights.$inferInsert;
+
+// =============================================================================
 // Sprint Flight-1 — tournament_series (ADR-090, ADR-091, Migration 0029)
 // =============================================================================
 

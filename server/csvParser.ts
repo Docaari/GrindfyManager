@@ -39,6 +39,7 @@ export interface ParsedTournament {
   gameType?: string | null; // 'Holdem' | 'Omaha'
   startingStackBb?: number | null;
   deepStack?: boolean;
+  playerNick?: string; // Fase 5 Overview — nick do jogador (pool multi-jogador)
 }
 
 /**
@@ -1163,6 +1164,9 @@ export class PokerCSVParser {
     const name = g('Name') || g('Nome');
     const gameId = g('Game ID') || g('ID do Jogo');
     const site = g('Network') || g('Rede') || 'Unknown';
+    // Fase 5 (Overview): nick do jogador. Redundante no historico proprio (e o
+    // user), essencial no pool multi-jogador efemero ("quem jogou cada um").
+    const playerNick = (g('Player') || g('Jogador') || '').toString().trim() || undefined;
 
     // P1 fix (2026-05-11): normalize currency before lookup (SharkScope path).
     let originalCurrency = PokerCSVParser.normalizeCurrency(g('Currency') || g('Moeda') || 'USD');
@@ -1232,6 +1236,7 @@ export class PokerCSVParser {
       gameType,
       startingStackBb,
       deepStack,
+      playerNick,
     };
   }
 

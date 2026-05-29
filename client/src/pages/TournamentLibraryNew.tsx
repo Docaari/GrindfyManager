@@ -21,6 +21,8 @@ import { formatPercentage } from "@/lib/formatting";
 import { buildCSVContent, formatCSVRow, getExportFilename } from "@/lib/export-helpers";
 import { tokens } from "@/lib/ui-tokens";
 import { GRADE_COLORS, GRADE_ORDER } from "@shared/library-grades";
+import { OverviewPanel } from "@/components/library/OverviewPanel";
+import { SavedHighlightsStrip } from "@/components/library/SavedHighlightsStrip";
 
 // Tipo para os filtros (definindo aqui para remover dependência externa)
 type TournamentLibraryFiltersType = {
@@ -881,8 +883,12 @@ export default function TournamentLibraryNew() {
             <h2 className="text-2xl font-bold mb-2">Biblioteca de Torneios</h2>
             <p className="text-gray-400">Analise estatistica de performance por grupo de torneio</p>
           </div>
+          <OverviewPanel />
         </div>
       </div>
+
+      {/* Fase 5/6: destaques salvos (familias) fixados no topo, por plataforma. */}
+      <SavedHighlightsStrip sites={filters.sites} />
 
       {/* KPIs */}
       <div className="bg-gray-800 rounded-xl p-6 mb-6">
