@@ -42,6 +42,14 @@ export interface DayDetailBankrollItem {
   coveragePct: number;
 }
 
+// RF-01: breakdown por plataforma (card expansivel "Plataformas").
+export interface DayDetailPlatformItem {
+  site: string;
+  count: number;
+  investedUsd: number;
+  abiUsd: number;
+}
+
 export interface DayDetailListItem {
   id?: string;
   name?: string;
@@ -62,6 +70,7 @@ export interface DayDetailResponse {
   format: DayDetailFormat;
   volume: DayDetailVolumeItem[];
   bankroll: DayDetailBankrollItem[];
+  platforms?: DayDetailPlatformItem[];
   list: DayDetailListItem[];
 }
 

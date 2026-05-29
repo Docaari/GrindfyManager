@@ -38,6 +38,7 @@ import {
   ChevronDown,
   Users,
   Hourglass,
+  Layers,
 } from "lucide-react";
 import {
   Panel,
@@ -45,7 +46,7 @@ import {
   PanelResizeHandle,
   type ImperativePanelHandle,
 } from "react-resizable-panels";
-import { useDayDetail } from "@/hooks/useDayDetail";
+import { useDayDetail, type DayDetailPlatformItem } from "@/hooks/useDayDetail";
 import { useUndoToast } from "@/hooks/useUndoToast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { DAYS_PT } from "@/lib/days-pt";
@@ -257,6 +258,37 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
     // onCollapse/onExpand do Panel direto, sem precisar re-run deste effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // RF-01: card expansivel "Plataformas". Default minimizado (ADR-213, mesma
+  // convencao da biblioteca). Estado persistido em localStorage.
+  const [platformsCollapsed, setPlatformsCollapsed] = React.useState<boolean>(
+    () => {
+      if (typeof window === "undefined") return true;
+      try {
+        return (
+          window.localStorage.getItem("dayZoom.platformsCollapsed") !== "0"
+        );
+      } catch {
+        return true;
+      }
+    },
+  );
+  const togglePlatforms = React.useCallback(() => {
+    setPlatformsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(
+            "dayZoom.platformsCollapsed",
+            next ? "1" : "0",
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
 
   // Sites disponiveis para chips: dedup de volume + list ordenado desc por count.
   const availableSites = React.useMemo<
@@ -1021,6 +1053,89 @@ export function DayDetailZoom(props: DayDetailZoomProps): React.ReactElement | n
                     </div>
                   </div>
                 </div>
+
+                {/* RF-01: card expansivel "Plataformas" — investido total + ABI
+                    por site. Default minimizado. */}
+                {Array.isArray(data?.platforms) &&
+                  data.platforms.length > 0 && (
+                    <div
+                      data-testid="day-zoom-platforms-card"
+                      className="bg-gradient-to-br from-gray-900 to-gray-900/50 border border-gray-800 rounded-xl overflow-hidden"
+                    >
+                      <button
+                        type="button"
+                        data-testid="day-zoom-platforms-toggle"
+                        onClick={togglePlatforms}
+                        aria-expanded={!platformsCollapsed}
+                        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-800/40 transition-colors"
+                      >
+                        <span className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-gray-400 font-medium">
+                          <Layers className="w-3.5 h-3.5 text-indigo-400/70" />
+                          Plataformas
+                          <span className="text-gray-600">
+                            ({data.platforms.length})
+                          </span>
+                        </span>
+                        <ChevronDown
+                          className={
+                            "w-4 h-4 text-gray-500 transition-transform " +
+                            (platformsCollapsed ? "" : "rotate-180")
+                          }
+                        />
+                      </button>
+                      {!platformsCollapsed && (
+                        <div
+                          data-testid="day-zoom-platforms-body"
+                          className="px-3 pb-3 pt-1 space-y-1.5"
+                        >
+                          <div className="flex items-center gap-2 px-1.5 text-[9px] uppercase tracking-wider text-gray-600">
+                            <span className="flex-1">Plataforma</span>
+                            <span className="w-12 text-right">Torn.</span>
+                            <span className="w-24 text-right">Investido</span>
+                            <span className="w-20 text-right">ABI</span>
+                          </div>
+                          {data.platforms.map((p: DayDetailPlatformItem) => {
+                            const c = getSiteColors(p.site);
+                            return (
+                              <div
+                                key={p.site}
+                                data-testid={`day-zoom-platform-row-${p.site}`}
+                                className="flex items-center gap-2 rounded-lg px-1.5 py-1.5 bg-gray-900/60 border border-gray-800/70"
+                              >
+                                <span
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border shrink-0 ${c.bg} ${c.text} ${c.border}`}
+                                >
+                                  <span
+                                    className={`w-1 h-1 rounded-full ${c.dot}`}
+                                  />
+                                  {p.site}
+                                </span>
+                                <span className="flex-1" />
+                                <span
+                                  data-testid={`day-zoom-platform-count-${p.site}`}
+                                  className="w-12 text-right text-xs tabular-nums text-gray-300"
+                                >
+                                  {p.count}
+                                </span>
+                                <span
+                                  data-testid={`day-zoom-platform-invested-${p.site}`}
+                                  className="w-24 text-right text-xs font-bold tabular-nums text-amber-300"
+                                >
+                                  {formatUsd(p.investedUsd)}
+                                </span>
+                                <span
+                                  data-testid={`day-zoom-platform-abi-${p.site}`}
+                                  className="w-20 text-right text-xs tabular-nums text-blue-300"
+                                >
+                                  {formatUsd(p.abiUsd)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                 {/* Filtro plataforma (RF-03) */}
                 {availableSites.length > 0 && (

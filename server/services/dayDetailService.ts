@@ -47,6 +47,15 @@ export interface DayDetailBankrollItem {
   coveragePct: number;
 }
 
+// RF-01 (modal Detalhes do Dia): breakdown por plataforma (por site) para o
+// card expansivel "Plataformas" — investido total + ABI (buy-in medio) no dia.
+export interface DayDetailPlatformItem {
+  site: string;
+  count: number; // nº torneios no dia nessa plataforma
+  investedUsd: number; // soma buy-in × count (USD)
+  abiUsd: number; // investedUsd / count
+}
+
 export interface DayDetailResult {
   cards: {
     totalTournaments: number;
@@ -64,6 +73,7 @@ export interface DayDetailResult {
   };
   volume: DayDetailVolumeItem[];
   bankroll: DayDetailBankrollItem[];
+  platforms: DayDetailPlatformItem[];
   list: DayDetailListItem[];
 }
 
@@ -77,7 +87,20 @@ function nativeToUsd(
   if (typeof rate === "number" && rate > 0) {
     return amount / rate;
   }
-  return 0;
+  // Lesson #9: logar antes do fallback. Sem cotacao para a moeda, NAO zeramos
+  // o valor (zerar fazia garantido/buy-in sumirem da UI — badge GTD gated em
+  // >0 + mediana ignorava o item). Fallback: trata o valor nativo como ja-USD
+  // para nao sumir o dado. Distorce a magnitude (super-estima moedas mais
+  // fracas que o USD, ex. BRL; sub-estima mais fortes) — follow-up: flag
+  // fxFallback no item p/ degradar display. Hoje o path real e USD-identity
+  // (template_id NULL → currency NULL), entao nao dispara em producao.
+  if (amount > 0) {
+    console.warn(
+      `[dayDetailService] nativeToUsd: sem cotacao para "${currency}"; ` +
+        `usando valor nativo como fallback (amount=${amount}).`,
+    );
+  }
+  return amount;
 }
 
 async function resolveExchangeRates(
@@ -136,6 +159,7 @@ export async function getDayDetail(
       format: { pctPKO: 0, pctTurbo: 0, pctVanilla: 0 },
       volume: [],
       bankroll: [],
+      platforms: [],
       list: [],
     };
   }
@@ -239,6 +263,21 @@ export async function getDayDetail(
     .map(([site, count]) => ({ site, count }))
     .sort((a, b) => b.count - a.count);
 
+  // RF-01: breakdown por plataforma (por site) — reusa volumeMap (count) +
+  // investmentBySite (investido USD) ja agregados no loop. ABI = investido/count.
+  const platforms: DayDetailPlatformItem[] = Array.from(volumeMap.entries())
+    .map(([site, count]) => {
+      const investedUsd = investmentBySite.get(site) ?? 0;
+      const abiUsd = count > 0 ? investedUsd / count : 0;
+      return {
+        site,
+        count,
+        investedUsd: Number(investedUsd.toFixed(2)),
+        abiUsd: Number(abiUsd.toFixed(2)),
+      };
+    })
+    .sort((a, b) => b.investedUsd - a.investedUsd);
+
   // Bankroll por plataforma — junta com getConsolidatedBalance
   let consolidated: any = null;
   try {
@@ -319,6 +358,7 @@ export async function getDayDetail(
     format: formatBlock,
     volume,
     bankroll: bankrollList,
+    platforms,
     list,
   };
 }
