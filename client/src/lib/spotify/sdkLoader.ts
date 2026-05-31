@@ -39,6 +39,16 @@ export function loadSpotifySDK(): Promise<any> {
     }
 
     const timeout = setTimeout(() => {
+      // B-SDKLOADER: re-checa window.Spotify antes de rejeitar — se o SDK foi
+      // seteado externamente apos o timeout, resolve em vez de manter erro.
+      const SDK = (globalThis as any).Spotify;
+      if (SDK) {
+        resolve(SDK);
+        return;
+      }
+      // B-SDKLOADER: reseta loadingPromise para permitir retry numa 2a chamada
+      // (sem herdar eternamente a promise rejeitada).
+      loadingPromise = null;
       reject(new SpotifySdkLoadError());
     }, TIMEOUT_MS);
 
@@ -46,13 +56,12 @@ export function loadSpotifySDK(): Promise<any> {
       clearTimeout(timeout);
       const SDK = (globalThis as any).Spotify;
       if (!SDK) {
+        loadingPromise = null;
         reject(new SpotifySdkLoadError("Spotify global ausente apos callback"));
         return;
       }
       resolve(SDK);
     };
-
-    // Re-check after timeout — caso Spotify ja tenha sido seteado externamente.
   });
 
   return loadingPromise;

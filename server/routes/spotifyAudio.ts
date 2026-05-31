@@ -495,7 +495,14 @@ export async function handlePostSpotifyRefresh(
           .json({ message: "Spotify token revogado. Reconecte." });
         return;
       }
-      // Path generico: incrementa + 502 (ou 401 apos 3 fails).
+      // B-DISCONNECT-3X: 5xx upstream = transitorio (hiccup da Spotify). NAO
+      // incrementa o failure_count (nao caminha rumo ao disconnect permanente).
+      // Devolve 502 ao client; a proxima tentativa pode recuperar.
+      if (resp.status >= 500) {
+        res.status(502).json({ message: "Spotify indisponivel (transitorio)" });
+        return;
+      }
+      // Path generico (4xx nao-invalid_grant): incrementa + 502 (ou 401 apos 3 fails).
       // HIGH-2 (MP2): usar retorno de incrementRefreshFailureCount em vez de
       // ler row.refreshFailureCount + 1 (stale em requisicoes concorrentes).
       const newCount = await storage.incrementRefreshFailureCount(userId);
@@ -602,7 +609,10 @@ export async function handleGetSpotifyStatus(
     res.status(200).json({
       connected: true,
       displayName: row.displayName ?? null,
-      productTier: "premium", // somente premium chega aqui (RF-01.2)
+      // B-PRODUCTTIER: reflete o tier persistido na row; back-compat (rows antigas
+      // sem a coluna) cai pro default "premium" (so premium conectou ate hoje).
+      // Sem migration/persistencia ainda (deferido) — fallback cobre.
+      productTier: row.productTier ?? "premium",
       connectedAt: row.connectedAt ?? null,
     });
   } catch (err) {
@@ -669,15 +679,24 @@ function sanitizeCoverFromSpotify(url: string | null | undefined): string | null
 
 function normalizeTrack(track: any): any {
   if (!track) return null;
-  const coverUrlRaw = track.album?.images?.[0]?.url ?? null;
+  // B-EPISODE-1 / ADR-221: episodios projetam capa em `images` (top-level) e
+  // preview em `audio_preview_url`; tracks normais usam album.images / preview_url.
+  const isEpisode = track.type === "episode";
+  const coverUrlRaw = isEpisode
+    ? (track.images?.[0]?.url ?? null)
+    : (track.album?.images?.[0]?.url ?? null);
+  const previewUrlRaw = isEpisode
+    ? (track.audio_preview_url ?? null)
+    : (track.preview_url ?? null);
+  const fallbackUriPrefix = isEpisode ? "spotify:episode:" : "spotify:track:";
   return {
-    trackId: track.uri ?? (track.id ? `spotify:track:${track.id}` : ""),
+    trackId: track.uri ?? (track.id ? `${fallbackUriPrefix}${track.id}` : ""),
     title: track.name ?? "",
     artists: Array.isArray(track.artists)
       ? track.artists.map((a: any) => a?.name ?? "").filter(Boolean)
       : [],
     durationSec: Math.round((track.duration_ms ?? 0) / 1000),
-    previewUrl: track.preview_url ?? null,
+    previewUrl: previewUrlRaw,
     coverUrl: sanitizeCoverFromSpotify(coverUrlRaw),
     album: track.album?.name ?? "",
   };
@@ -1089,6 +1108,8 @@ export async function handleSpotifyListPlaylists(
 const PlaylistIdSchema = z.string().regex(/^[a-zA-Z0-9]{22}$/);
 const PlaylistTracksQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional().default(50),
+  // B-PAGINATE-1: aceita offset para o paginador (client itera offset crescente).
+  offset: z.coerce.number().int().min(0).optional().default(0),
 });
 
 export async function handleSpotifyPlaylistTracks(
@@ -1113,10 +1134,10 @@ export async function handleSpotifyPlaylistTracks(
       res.status(400).json({ message: "Query invalido" });
       return;
     }
-    const { limit } = qParsed.data;
+    const { limit, offset } = qParsed.data;
 
     const deps = await resolveCatalogDeps(injectedDeps);
-    const cacheKey = { playlistId, limit };
+    const cacheKey = { playlistId, limit, offset };
     const cached = deps.cache.get(userId, "playlist_tracks", cacheKey);
     if (cached) {
       res.status(200).json({ ...cached, cached: true });
@@ -1147,12 +1168,16 @@ export async function handleSpotifyPlaylistTracks(
     // 403 Forbidden para apps em Development Mode. O substituto é /items, que
     // generaliza track→item (playlists podem conter tracks OU episódios). O
     // campo de cada entrada passou de `track` para `item`. Ver ADR-220.
+    // B-EPISODE-1: projeta `type` (distingue track/episode) + os campos
+    // especificos de episode (`images` top-level, `audio_preview_url`) alem dos
+    // de track (album.images, preview_url). normalizeTrack escolhe a fonte por type.
     const fields =
-      "items(item(id,name,uri,duration_ms,preview_url,album(name,images),artists(name))),total,limit";
+      "items(item(id,name,uri,type,duration_ms,preview_url,audio_preview_url,images,album(name,images),artists(name))),total,limit";
     const upstream = new URL(
       `${SPOTIFY_API_BASE}/playlists/${playlistId}/items`,
     );
     upstream.searchParams.set("limit", String(limit));
+    if (offset > 0) upstream.searchParams.set("offset", String(offset));
     upstream.searchParams.set("fields", fields);
 
     let resp: any;

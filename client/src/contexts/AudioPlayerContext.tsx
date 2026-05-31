@@ -297,6 +297,10 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   courseContextRef.current = courseContext;
   const activeTrackRef = useRef<AudioTrack | null>(null);
   activeTrackRef.current = activeTrack;
+  // B-NEXTPREV-1: historico de reproducao (pilha). Empilhado em playTrack quando
+  // NAO eh history-driven (empilha o track atual ANTES de trocar). playPrevious
+  // faz pop + playTrack(history-driven) para nao re-empilhar em loop.
+  const playHistoryRef = useRef<AudioTrack[]>([]);
   // D22 fullscreen: remember displayMode before fullscreen so we can restore.
   const displayModeBeforeFullscreenRef = useRef<DisplayMode | null>(null);
 
@@ -624,7 +628,22 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
 
   // === playTrack (RF-07) ===
   const playTrack = useCallback(
-    (track: AudioTrack, ctxArg?: CourseContext) => {
+    (
+      track: AudioTrack,
+      ctxArg?: CourseContext,
+      opts?: { historyDriven?: boolean },
+    ) => {
+      // B-NEXTPREV-1: empilha o track ATUAL no historico antes de trocar, exceto
+      // quando a troca veio do proprio historico (playPrevious) — senao o pop
+      // re-empilharia o mesmo track e o proximo previous voltaria pra ele (loop).
+      if (!opts?.historyDriven) {
+        const current = activeTrackRef.current;
+        if (current && current.trackId !== track.trackId) {
+          playHistoryRef.current.push(current);
+          // Cap pra nao crescer indefinido em sessao longa (reviewer LOW).
+          if (playHistoryRef.current.length > 50) playHistoryRef.current.shift();
+        }
+      }
       setActiveTrack(track);
       // Sprint MP-MODERN — atualiza ref imediatamente para que chamadas
       // sincronas seguintes a `setDisplayMode("expanded")` (ex: tests do
@@ -907,27 +926,68 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   // === playNext / playPrevious (RF-02) ===
   const playNext = useCallback(() => {
     const ctxArg = courseContextRef.current;
-    if (!ctxArg) return;
-    const nextIndex = ctxArg.currentIndex + 1;
-    if (nextIndex >= ctxArg.lessons.length) return;
-    const next = ctxArg.lessons[nextIndex];
-    playTrack(next, { ...ctxArg, currentIndex: nextIndex });
-    emitTelemetry("next", {
-      lessonId: next.trackId,
-      trigger: "manual",
-    });
-  }, [playTrack]);
+    if (ctxArg) {
+      const nextIndex = ctxArg.currentIndex + 1;
+      if (nextIndex >= ctxArg.lessons.length) return;
+      const next = ctxArg.lessons[nextIndex];
+      playTrack(next, { ...ctxArg, currentIndex: nextIndex });
+      emitTelemetry("next", {
+        lessonId: next.trackId,
+        trigger: "manual",
+      });
+      return;
+    }
+    // B-NEXTPREV-1: sem courseContext (Spotify/fila) -> consome a proxima da FILA
+    // (mesma logica shuffle-aware de tryAutoplayNext: acha head, remove, toca).
+    if (queue.queue && queue.queue.length > 0) {
+      let nextItem: (typeof queue.queue)[number] | undefined;
+      if (
+        queue.shuffleEnabled &&
+        queue.shuffledOrder &&
+        queue.shuffledOrder.length > 0
+      ) {
+        for (const sid of queue.shuffledOrder) {
+          const found = queue.queue.find((q) => q.id === sid);
+          if (found) {
+            nextItem = found;
+            break;
+          }
+        }
+      }
+      if (!nextItem) nextItem = queue.queue[0];
+      if (nextItem?.track) {
+        queue.removeFromQueue(nextItem.id);
+        playTrack(nextItem.track as AudioTrack);
+        emitTelemetry("next", {
+          lessonId: nextItem.track.trackId,
+          trigger: "manual_queue",
+        });
+      }
+    }
+    // sem fila e sem courseContext -> NO-OP gracioso.
+  }, [playTrack, queue]);
 
   const playPrevious = useCallback(() => {
     const ctxArg = courseContextRef.current;
-    if (!ctxArg) return;
-    const prevIndex = ctxArg.currentIndex - 1;
-    if (prevIndex < 0) return;
-    const prev = ctxArg.lessons[prevIndex];
-    playTrack(prev, { ...ctxArg, currentIndex: prevIndex });
+    if (ctxArg) {
+      const prevIndex = ctxArg.currentIndex - 1;
+      if (prevIndex < 0) return;
+      const prev = ctxArg.lessons[prevIndex];
+      playTrack(prev, { ...ctxArg, currentIndex: prevIndex });
+      emitTelemetry("previous", {
+        lessonId: prev.trackId,
+        trigger: "manual",
+      });
+      return;
+    }
+    // B-NEXTPREV-1: sem courseContext -> volta pro historico de reproducao.
+    // pop + playTrack(history-driven) para nao re-empilhar (evita loop).
+    const prev = playHistoryRef.current.pop();
+    if (!prev) return; // sem historico -> NO-OP gracioso.
+    playTrack(prev, undefined, { historyDriven: true });
     emitTelemetry("previous", {
       lessonId: prev.trackId,
-      trigger: "manual",
+      trigger: "manual_history",
     });
   }, [playTrack]);
 

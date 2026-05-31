@@ -263,8 +263,10 @@ describe('POST /api/audio/spotify/refresh (RF-01.4 / ADR-190)', () => {
     expect(cleared).toBeDefined();
   });
 
-  it('Spotify refresh endpoint 502 transient (sem invalid_grant) -> path generico: incrementa + 502 (RF-01 regressao)', async () => {
-    // Path generico continua incrementando e devolvendo 502.
+  it('Spotify refresh endpoint 502 transient (5xx upstream) -> 502 SEM incrementar (B-DISCONNECT-3X nova politica)', async () => {
+    // B-DISCONNECT-3X (WAVE FINAL): 5xx upstream = transitorio (hiccup Spotify).
+    // NAO incrementa o failure_count (nao caminha rumo ao disconnect permanente).
+    // ATUALIZACAO DE POLITICA documentada na spec sprint-spotify-polish-bugs.md.
     storageMock.getSpotifyToken.mockResolvedValue({
       userId: 'USER-0001',
       refreshTokenEncrypted: 'c',
@@ -289,7 +291,7 @@ describe('POST /api/audio/spotify/refresh (RF-01.4 / ADR-190)', () => {
     );
 
     expect(res.statusCode).toBe(502);
-    expect(storageMock.incrementRefreshFailureCount).toHaveBeenCalledWith('USER-0001');
+    expect(storageMock.incrementRefreshFailureCount).not.toHaveBeenCalled();
     expect(storageMock.markSpotifyDisconnected).not.toHaveBeenCalled();
   });
 
@@ -355,6 +357,9 @@ describe('POST /api/audio/spotify/refresh (RF-01.4 / ADR-190)', () => {
 
   it('apos 3 falhas consecutivas (path generico, NAO invalid_grant): marca disconnected_at + 401 + clearCookie', async () => {
     // Cobre o accumulator generico (>=3). invalid_grant ja eh terminal direto na 1a (RF-01).
+    // B-DISCONNECT-3X (WAVE FINAL): o accumulator generico cobre 4xx nao-invalid_grant.
+    // 5xx upstream agora eh transitorio (nao incrementa) — por isso este caso usa
+    // um 4xx generico (400 sem invalid_grant) para exercitar o path do accumulator.
     storageMock.getSpotifyToken.mockResolvedValue({
       userId: 'USER-0001',
       refreshTokenEncrypted: 'c',
@@ -366,8 +371,8 @@ describe('POST /api/audio/spotify/refresh (RF-01.4 / ADR-190)', () => {
     storageMock.incrementRefreshFailureCount.mockResolvedValue(3);
     fetchMock.mockResolvedValueOnce({
       ok: false,
-      status: 502,
-      json: async () => ({ error: 'server_error' }),
+      status: 400,
+      json: async () => ({ error_description: 'something else' }),
     });
 
     const handler = await loadHandler();

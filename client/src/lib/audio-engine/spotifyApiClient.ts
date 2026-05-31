@@ -96,14 +96,61 @@ export async function listPlaylists(
 
 export async function listPlaylistTracks(
   playlistId: string,
-  opts: { limit?: number } = {},
+  opts: { limit?: number; offset?: number } = {},
 ): Promise<ListPlaylistTracksResponse> {
   const params = new URLSearchParams();
   if (opts.limit) params.set("limit", String(opts.limit));
+  if (opts.offset) params.set("offset", String(opts.offset));
   const qs = params.toString();
   return fetchJson(
     `/api/audio/spotify/playlists/${playlistId}/tracks${qs ? `?${qs}` : ""}`,
   );
+}
+
+// B-PAGINATE-1: paginadores que concatenam todas as paginas via offset.
+const PAGE_LIMIT = 50;
+
+/**
+ * Concatena todas as paginas de /me/playlists (loop por offset ate `total`).
+ * Usado por "Tocar tudo" / listagem completa para nao truncar em 50.
+ */
+export async function listAllPlaylists(
+  opts: { pageLimit?: number } = {},
+): Promise<ListPlaylistsResponse> {
+  const limit = opts.pageLimit ?? PAGE_LIMIT;
+  const first = await listPlaylists({ limit, offset: 0 });
+  const playlists = [...first.playlists];
+  const total = first.total ?? playlists.length;
+  let offset = playlists.length;
+  while (offset < total && playlists.length < total) {
+    const page = await listPlaylists({ limit, offset });
+    if (!page.playlists.length) break;
+    playlists.push(...page.playlists);
+    offset += page.playlists.length;
+  }
+  return { playlists, total, truncated: false, cached: first.cached };
+}
+
+/**
+ * Concatena todas as paginas de items de uma playlist (loop por offset ate
+ * `total`). "Tocar tudo" / "Adicionar tudo" usam a versao completa.
+ */
+export async function listAllPlaylistTracks(
+  playlistId: string,
+  opts: { pageLimit?: number } = {},
+): Promise<ListPlaylistTracksResponse> {
+  const limit = opts.pageLimit ?? PAGE_LIMIT;
+  const first = await listPlaylistTracks(playlistId, { limit, offset: 0 });
+  const tracks = [...first.tracks];
+  const total = first.total ?? tracks.length;
+  let offset = tracks.length;
+  while (offset < total && tracks.length < total) {
+    const page = await listPlaylistTracks(playlistId, { limit, offset });
+    if (!page.tracks.length) break;
+    tracks.push(...page.tracks);
+    offset += page.tracks.length;
+  }
+  return { tracks, total, truncated: false, cached: first.cached };
 }
 
 export const spotifyKeys = {

@@ -69,3 +69,17 @@
 
 ## Não-regressão (preservar — RF-07)
 fetch `.bind(globalThis)`, oauth-callback sem requireAuth, /refresh por JWT, COOP poll silentMode, CSP Spotify, /items (track→item), tier 'active', telemetria CSRF exempt, singleton queryClient (lesson #29), 77+ testes spotify-e2e verdes.
+
+---
+
+## WAVE FINAL (founder: "conclua todas as correções") — 2026-05-31
+
+- **B-NEXTPREV-1 [HIGH]** `playNext`/`playPrevious` (AudioPlayerContext ~908/921) só funcionam com `courseContext` (biblioteca) → `if(!ctxArg) return`. Pós-D4 (courseContext null no Spotify), os botões next/anterior do MiniPlayer são NO-OP pro Spotify/fila. **Fix:** `playNext` sem courseContext → consome próxima da fila (mesma lógica de tryAutoplayNext: shuffle-aware, remove head, playTrack); `playPrevious` → histórico de reprodução (novo `playHistoryRef` empilhado em playTrack quando não é history-driven; pop+playTrack). Empilhar o track atual antes de trocar. Testável: queue→next toca head; history→previous toca anterior.
+- **B-PAGINATE-1 [HIGH]** (deferido) Playlists >50 e tracks >50 truncam silenciosamente. **Fix:** client pagina via offset (loop até `total` ou "carregar mais") em listPlaylists + playlist items; "Tocar tudo" pega todas; banner truncated na lista de playlists.
+- **B-EPISODE-1 [HIGH]** (deferido) Episódios em playlist: `fields item(...album...)` não cobre episode (capa/preview null), `spotify:episode:` URI pode falhar no play, onPlay engole em catch. **Fix:** projetar `type` no fields; normalizeTrack lê `images`/`audio_preview_url` de episode; SDK toca episode uri (suporta) OU filtra com feedback se não-suportado.
+- **B-PREVIEW-IDX [MED]** preview por index → trocar busca toca preview errado. **Fix:** rastrear por trackId + reset ao mudar query.
+- **B-SDKLOADER [LOW]** timeout deixa loadingPromise rejeitada (sem retry). **Fix:** null no reject + re-check window.Spotify.
+- **B-DISCONNECT-3X [MED]** 3 falhas transitórias (5xx) → disconnect permanente; políticas divergentes /refresh vs requireSpotifyAccess. **Fix:** 5xx = transitório (não conta); unificar.
+- **B-KEY-INDEX [LOW]** `key={trackId+i}` derrota reconciliação. **Fix:** key estável.
+- **B-DURATION-0 [LOW]** "0:00" pra duração ausente. **Fix:** ocultar quando 0.
+- **B-PRODUCTTIER [LOW]** status hardcoded `premium`. **Fix:** derivar de me.product persistido.

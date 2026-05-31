@@ -32,6 +32,7 @@ import {
   searchTracks,
   listPlaylists,
   listPlaylistTracks,
+  listAllPlaylistTracks,
   spotifyKeys,
   type SpotifyTrack,
   type SpotifyPlaylist,
@@ -178,7 +179,11 @@ function SearchPanel({
   const [query, setQuery] = useState(initialQuery ?? "");
   const [debounced, setDebounced] = useState(initialQuery ?? "");
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [activePreviewIdx, setActivePreviewIdx] = useState<number | null>(null);
+  // B-PREVIEW-IDX: preview rastreado por trackId (nao por index). Trocar a busca
+  // nao toca o preview da faixa errada; o reset (abaixo) limpa ao mudar a query.
+  const [activePreviewTrackId, setActivePreviewTrackId] = useState<string | null>(
+    null,
+  );
   const { playTrack, addToQueue, clearQueue } = useAudioPlayer() as any;
 
   // Debounce 500ms; min 2 chars.
@@ -276,11 +281,17 @@ function SearchPanel({
     [addToQueue],
   );
 
-  const onPreview = useCallback((track: SpotifyTrack, idx: number) => {
+  const onPreview = useCallback((track: SpotifyTrack) => {
     if (!track.previewUrl) return;
-    setActivePreviewIdx(idx);
+    setActivePreviewTrackId(track.trackId);
     // audio element criado declarativamente abaixo via state.
   }, []);
+
+  // B-PREVIEW-IDX: reset do preview ao trocar a query (nova busca). O preview
+  // amarrado a uma faixa da busca anterior nao deve persistir.
+  useEffect(() => {
+    setActivePreviewTrackId(null);
+  }, [debounced]);
 
   // Reset preview on unmount.
   useEffect(() => {
@@ -296,10 +307,12 @@ function SearchPanel({
   }, []);
 
   const activePreviewUrl = useMemo(() => {
-    if (activePreviewIdx === null) return null;
-    const t = result.data?.tracks?.[activePreviewIdx];
+    if (activePreviewTrackId === null) return null;
+    const t = result.data?.tracks?.find(
+      (tr) => tr.trackId === activePreviewTrackId,
+    );
     return t?.previewUrl ?? null;
-  }, [activePreviewIdx, result.data]);
+  }, [activePreviewTrackId, result.data]);
 
   if (errorStatus === 401) {
     return <ReconnectCTA />;
@@ -361,9 +374,13 @@ function SearchPanel({
         <ul className="max-h-[60vh] space-y-1 overflow-y-auto">
           {result.data.tracks.map((t, i) => {
             const cover = sanitizeSpotifyCoverUrl(t.coverUrl);
+            // B-DURATION-0: oculta a duracao quando 0/ausente (sem "0:00").
+            const durationLabel =
+              t.durationSec > 0 ? formatDuration(t.durationSec) : null;
+            const artistLabel = t.artists.join(", ");
             return (
               <li
-                key={t.trackId + i}
+                key={t.trackId}
                 data-testid="search-result-row"
                 onClick={() => onPlay(t)}
                 className="flex items-center gap-3 rounded px-2 py-1 hover:bg-white/5 cursor-pointer"
@@ -380,7 +397,7 @@ function SearchPanel({
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm text-white">{t.title}</div>
                   <div className="text-xs text-gray-400 truncate">
-                    {t.artists.join(", ")} · {formatDuration(t.durationSec)}
+                    {durationLabel ? `${artistLabel} · ${durationLabel}` : artistLabel}
                   </div>
                 </div>
                 {t.previewUrl ? (
@@ -391,7 +408,7 @@ function SearchPanel({
                     title="Preview"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onPreview(t, i);
+                      onPreview(t);
                     }}
                     className="rounded px-2 py-1 text-xs text-gray-300 hover:bg-white/10"
                   >
@@ -428,6 +445,8 @@ function SearchPanel({
         <audio
           ref={audioRef}
           data-testid="spotify-preview-audio"
+          // B-PREVIEW-IDX: expoe o trackId da faixa em preview (rastreio estavel).
+          data-preview-track-id={activePreviewTrackId ?? undefined}
           src={activePreviewUrl}
           controls
           autoPlay
@@ -482,7 +501,18 @@ function PlaylistsPanel({
   }, []);
 
   const onPlayAll = useCallback(async () => {
-    const tracks = drillQ.data?.tracks ?? [];
+    // B-PAGINATE-1: "Tocar tudo" pega TODAS as faixas (paginado), não só as 50
+    // exibidas no drill-in. Fallback pro que já está em tela se a paginação
+    // falhar. O display continua capado em 50 (com banner truncated).
+    let tracks = drillQ.data?.tracks ?? [];
+    if (drillId) {
+      try {
+        const all = await listAllPlaylistTracks(drillId);
+        if (all?.tracks?.length) tracks = all.tracks;
+      } catch {
+        // mantém o subset exibido
+      }
+    }
     if (!tracks.length) return;
     const first = tracks[0];
     // D2 (B-QUEUE-1): "Tocar tudo" SUBSTITUI a fila — clearQueue ANTES.
@@ -548,7 +578,16 @@ function PlaylistsPanel({
 
   const onAddAll = useCallback(async () => {
     // D2 (B-QUEUE-1): "Adicionar tudo" ANEXA (sem clearQueue).
-    const tracks = drillQ.data?.tracks ?? [];
+    // B-PAGINATE-1: pega TODAS as faixas (paginado).
+    let tracks = drillQ.data?.tracks ?? [];
+    if (drillId) {
+      try {
+        const all = await listAllPlaylistTracks(drillId);
+        if (all?.tracks?.length) tracks = all.tracks;
+      } catch {
+        // mantém subset
+      }
+    }
     for (const t of tracks) {
       try {
         await addToQueue({
@@ -759,7 +798,7 @@ function PlaylistsPanel({
         const cover = sanitizeSpotifyCoverUrl(pl.coverUrl);
         return (
           <li
-            key={pl.playlistId + i}
+            key={pl.playlistId}
             data-testid="playlist-row"
             onClick={() => onPlaylistClick(pl)}
             className="flex items-center gap-3 rounded px-2 py-2 hover:bg-white/5 cursor-pointer"
