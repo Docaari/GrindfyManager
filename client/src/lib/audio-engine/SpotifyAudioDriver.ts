@@ -91,9 +91,19 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
     this.expiresIn = deps.expiresIn;
     this.refreshFn = deps.refresh;
     this.sdkLoaderFn = deps.sdkLoader ?? (loadSpotifySDK as any);
-    this.fetchFn =
+    // CRITICAL: `fetch` precisa ser invocado com `this === window/globalThis`.
+    // Guardar a referência crua e chamar `this.fetchFn(...)` faz `this` virar a
+    // instância do driver → "Failed to execute 'fetch' on 'Window': Illegal
+    // invocation" em produção (todo play/pause/seek quebrava). Mocks vi.fn() não
+    // ligam pro `this`, então os testes não pegavam (lesson #3). `.bind` preserva
+    // o tracking de chamadas do mock.
+    const rawFetch =
       deps.fetchFn ??
       (typeof fetch !== "undefined" ? fetch : (undefined as any));
+    this.fetchFn =
+      typeof rawFetch === "function"
+        ? (rawFetch.bind(globalThis) as typeof fetch)
+        : rawFetch;
     this.telemetry = deps.telemetry;
     this.onReconnectFailed = deps.onReconnectFailed;
     this.onTokenRefreshed = deps.onTokenRefreshed;
@@ -152,6 +162,21 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
               const err = new Error(
                 `Spotify API ${r.status} ${path}`,
               );
+              // eslint-disable-next-line no-console
+              console.error(
+                "[SpotifyAudioDriver] play API não-ok:",
+                r.status,
+                path,
+              );
+              // Best-effort: loga o corpo do erro do Spotify (reason/message).
+              try {
+                (r as any).clone?.().json?.().then?.((b: any) => {
+                  // eslint-disable-next-line no-console
+                  console.error("[SpotifyAudioDriver] play API body:", b);
+                }).catch?.(() => {});
+              } catch {
+                // ignore
+              }
               this.safeTelemetry("spotify_api_error", {
                 path,
                 status: r.status,
@@ -160,6 +185,12 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
             }
           })
           .catch((err) => {
+            // eslint-disable-next-line no-console
+            console.error(
+              "[SpotifyAudioDriver] play fetch REJEITOU (rede/CORS/CSP):",
+              path,
+              err?.message ?? err,
+            );
             this.safeTelemetry("spotify_api_error", {
               path,
               network: true,
@@ -246,6 +277,11 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
     // Attach SDK listeners.
     const onReady = (data: any) => {
       this.deviceId = data?.device_id ?? null;
+      // eslint-disable-next-line no-console
+      console.info(
+        "[SpotifyAudioDriver] SDK ready — device 'Grindfy' registrado, device_id=",
+        this.deviceId,
+      );
       this.safeTelemetry("spotify_connected", { deviceId: this.deviceId });
       // RF-01.4 — flush de play enfileirado antes do `ready`.
       if (this.pendingPlay && this.deviceId) {
@@ -278,6 +314,17 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
       }
     };
     const onPlaybackError = (data: any) => {
+      // Log explícito (lesson #9): a mensagem do SDK (ex: EME/DRM, track
+      // indisponível, region) é o sinal real — sem isso vira só "erro ao
+      // carregar audio" sem causa.
+      // eslint-disable-next-line no-console
+      console.error(
+        "[SpotifyAudioDriver] playback/init error:",
+        data?.message ?? data,
+      );
+      this.safeTelemetry("spotify_playback_error", {
+        message: String(data?.message ?? "playback_error"),
+      });
       this.emit("error", data ?? {});
     };
     const onAuthError = () => {
