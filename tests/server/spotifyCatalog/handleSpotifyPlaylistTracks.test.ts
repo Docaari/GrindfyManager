@@ -35,10 +35,12 @@ function makeRes() {
   return res;
 }
 
+// Spotify deprecou /tracks (2026-03-09 migration) → /items, com campo `item`
+// no lugar de `track`. O handler lê `it.item ?? it.track` (fallback).
 function makePlaylistTrackJson(id: string, withTrack = true) {
   return withTrack
     ? {
-        track: {
+        item: {
           id,
           name: `T ${id}`,
           uri: `spotify:track:${id}`,
@@ -48,7 +50,7 @@ function makePlaylistTrackJson(id: string, withTrack = true) {
           artists: [{ name: 'Artist' }],
         },
       }
-    : { track: null };
+    : { item: null };
 }
 
 function makeStorageStub() {
@@ -115,7 +117,7 @@ describe('handleSpotifyPlaylistTracks (RF-03 / spec §6.3)', () => {
     expect(res.body.total).toBe(50);
     expect(res.body.truncated).toBe(false);
     const url = String(fetchStub.mock.calls[0][0]);
-    expect(url).toContain('/playlists/37i9dQZF1DXcBWIGoYBM5M/tracks');
+    expect(url).toContain('/playlists/37i9dQZF1DXcBWIGoYBM5M/items');
   });
 
   it('truncated=true se total > limit', async () => {

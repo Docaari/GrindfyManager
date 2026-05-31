@@ -1142,10 +1142,14 @@ export async function handleSpotifyPlaylistTracks(
       return;
     }
 
+    // Spotify deprecou GET /playlists/{id}/tracks na migração de 2026-03-09 →
+    // 403 Forbidden para apps em Development Mode. O substituto é /items, que
+    // generaliza track→item (playlists podem conter tracks OU episódios). O
+    // campo de cada entrada passou de `track` para `item`. Ver ADR-220.
     const fields =
-      "items(track(id,name,uri,duration_ms,preview_url,album(name,images),artists(name))),total,limit";
+      "items(item(id,name,uri,duration_ms,preview_url,album(name,images),artists(name))),total,limit";
     const upstream = new URL(
-      `${SPOTIFY_API_BASE}/playlists/${playlistId}/tracks`,
+      `${SPOTIFY_API_BASE}/playlists/${playlistId}/items`,
     );
     upstream.searchParams.set("limit", String(limit));
     upstream.searchParams.set("fields", fields);
@@ -1202,8 +1206,10 @@ export async function handleSpotifyPlaylistTracks(
     }
     const rawItems = json?.items ?? [];
     const tracksNormalized = rawItems
-      .filter((it: any) => it && it.track) // spec §9.9
-      .map((it: any) => normalizeTrack(it.track))
+      // /items usa `item`; fallback `track` para back-compat de cache/respostas
+      // antigas. Episódios (type='episode') também caem aqui mas normalizeTrack
+      // extrai os campos comuns (id/name/uri/duration).
+      .map((it: any) => normalizeTrack(it?.item ?? it?.track))
       .filter(Boolean);
     const total = json?.total ?? tracksNormalized.length;
     const normalized = {
