@@ -221,6 +221,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (req.path === '/auth/forgot-password' || req.path === '/auth/reset-password' || req.path === '/auth/verify-email' || req.path === '/auth/resend-verification' || req.path === '/auth/send-verification' || req.path === '/auth/refresh' || req.path === '/auth/verify-reset-token') return next();
     // Skip CSRF for webhooks (use their own verification)
     if (req.path.startsWith('/webhooks/')) return next();
+    // Skip CSRF for fire-and-forget telemetry (write-only, baixo risco). O
+    // transporte primário é navigator.sendBeacon, que NÃO permite headers
+    // custom (X-CSRF-Token) — sem isenção, todo evento de telemetria 403a e
+    // polui o console (lesson #40). Continua atrás de requireAuth (user-scoped).
+    if (req.path === '/user-activity' || req.path === '/user-activity/batch') return next();
     // Skip CSRF for CSRF token endpoint itself
     if (req.path === '/csrf-token') return next();
 
