@@ -4663,6 +4663,8 @@ export const spotifyTokens = pgTable("spotify_tokens", {
   displayName: varchar("display_name"),
   displayNameHash: varchar("display_name_hash", { length: 64 }),
   spotifyUserId: varchar("spotify_user_id"),
+  // B-PRODUCTTIER (migration 0084) — me.product do Spotify (premium/free/open).
+  productTier: varchar("product_tier"),
   connectedAt: timestamp("connected_at").defaultNow().notNull(),
   disconnectedAt: timestamp("disconnected_at"),
   lastRefreshAt: timestamp("last_refresh_at"),

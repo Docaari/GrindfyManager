@@ -369,6 +369,9 @@ export async function handleGetSpotifyOauthCallback(
       displayName,
       displayNameHash: displayName ? hashDisplayName(displayName) : null,
       spotifyUserId: me?.id ?? null,
+      // B-PRODUCTTIER (migration 0084): persiste me.product (premium hoje, mas
+      // o status passa a refletir o real em vez de hardcode).
+      productTier: me?.product ?? null,
     });
 
     deleteOauthSession(sessionId);

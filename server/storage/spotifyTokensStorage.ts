@@ -16,6 +16,7 @@ export interface SpotifyTokenRow {
   displayName: string | null;
   displayNameHash: string | null;
   spotifyUserId: string | null;
+  productTier: string | null;
   connectedAt: Date;
   disconnectedAt: Date | null;
   lastRefreshAt: Date | null;
@@ -33,6 +34,7 @@ export interface UpsertSpotifyTokenInput {
   displayName?: string | null;
   displayNameHash?: string | null;
   spotifyUserId?: string | null;
+  productTier?: string | null;
 }
 
 async function loadTable(): Promise<any> {
@@ -68,6 +70,7 @@ async function loadTable(): Promise<any> {
     displayName: { name: "display_name" },
     displayNameHash: { name: "display_name_hash" },
     spotifyUserId: { name: "spotify_user_id" },
+    productTier: { name: "product_tier" },
     connectedAt: { name: "connected_at" },
     disconnectedAt: { name: "disconnected_at" },
     lastRefreshAt: { name: "last_refresh_at" },
@@ -110,6 +113,7 @@ export async function upsertSpotifyToken(
     displayName: input.displayName ?? null,
     displayNameHash: input.displayNameHash ?? null,
     spotifyUserId: input.spotifyUserId ?? null,
+    productTier: input.productTier ?? null,
     connectedAt: now,
     disconnectedAt: null,
     refreshFailureCount: 0,
@@ -130,6 +134,7 @@ export async function upsertSpotifyToken(
         displayName: input.displayName ?? null,
         displayNameHash: input.displayNameHash ?? null,
         spotifyUserId: input.spotifyUserId ?? null,
+        productTier: input.productTier ?? null,
         disconnectedAt: null,
         refreshFailureCount: 0,
         updatedAt: now,
