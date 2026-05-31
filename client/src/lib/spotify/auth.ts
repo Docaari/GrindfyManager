@@ -266,6 +266,17 @@ export async function initiateSpotifyAuth(): Promise<SpotifyAuthSuccess> {
 
     function cleanup() {
       window.removeEventListener("message", onMessage);
+      // B-POPUP-HANG: limpa os timers de poll/timeout no fast-path (postMessage).
+      try {
+        clearInterval(interval);
+      } catch {
+        // ignore
+      }
+      try {
+        clearTimeout(absoluteTimer);
+      } catch {
+        // ignore
+      }
       try {
         if (popup && !popup.closed) popup.close();
       } catch {
@@ -303,9 +314,38 @@ export async function initiateSpotifyAuth(): Promise<SpotifyAuthSuccess> {
       }
     };
 
+    // B-POPUP-HANG: timeout absoluto. Sob COOP `.closed` pode mentir + o
+    // postMessage nunca chega -> sem isto a Promise pendurava o spinner
+    // "Conectando..." pra sempre. Aos ~120s resolve via status (se conectou) ou
+    // rejeita com erro claro.
+    const ABSOLUTE_TIMEOUT_MS = 120_000;
+    const absoluteTimer = setTimeout(() => {
+      if (resolved) return;
+      void (async () => {
+        await pollStatus();
+        if (!resolved) {
+          resolved = true;
+          clearInterval(interval);
+          window.removeEventListener("message", onMessage);
+          try {
+            if (popupRef && !popupRef.closed) popupRef.close();
+          } catch {
+            // ignore
+          }
+          reject(new SpotifyOAuthCancelledError());
+        }
+      })();
+    }, ABSOLUTE_TIMEOUT_MS);
+
+    // Throttle do poll de status com popup aberto: o `.closed`-check roda a
+    // 500ms, mas o `/status`(+/refresh) só a cada OPEN_POLL_INTERVAL_MS pra não
+    // spammar `/refresh` 401 enquanto o user não conclui o login (reviewer MED).
+    const OPEN_POLL_INTERVAL_MS = 3000;
+    let lastOpenPollAt = 0;
     const interval = setInterval(() => {
       if (resolved) {
         clearInterval(interval);
+        clearTimeout(absoluteTimer);
         return;
       }
       if (Date.now() - startTs < CLOSE_GRACE_MS) return;
@@ -317,8 +357,8 @@ export async function initiateSpotifyAuth(): Promise<SpotifyAuthSuccess> {
       }
       if (isClosed) {
         clearInterval(interval);
+        clearTimeout(absoluteTimer);
         // Popup fechou: confirma via status UMA vez antes de decidir cancel.
-        // (Nao pollamos enquanto aberto pra evitar spam de /refresh 401.)
         void (async () => {
           await pollStatus();
           if (!resolved) {
@@ -327,8 +367,16 @@ export async function initiateSpotifyAuth(): Promise<SpotifyAuthSuccess> {
             reject(new SpotifyOAuthCancelledError());
           }
         })();
+        return;
       }
-      // Popup ainda aberto: aguarda postMessage (fast-path) ou o fechamento.
+      // B-POPUP-HANG: popup ainda aberto -> poll periodico do status (respeita o
+      // lock `checking`). Sob COOP, `.closed` pode mentir e o postMessage nao
+      // chega; o cookie de sessao ja foi setado pelo callback, entao o status
+      // converge mesmo sem a mensagem. O lock evita spam concorrente.
+      if (!checking && Date.now() - lastOpenPollAt >= OPEN_POLL_INTERVAL_MS) {
+        lastOpenPollAt = Date.now();
+        void pollStatus();
+      }
     }, 500);
   });
 }
@@ -343,4 +391,8 @@ export async function refreshAccessToken(): Promise<{
 
 export async function disconnectSpotify(): Promise<void> {
   await apiRequest("POST", "/api/audio/spotify/disconnect");
+  // D7 (B-DISCONNECT-SYNC): invalida o status DENTRO do helper (apos o POST) —
+  // qualquer caller (painel, futuros) fica sincronizado sem replicar a
+  // invalidacao. Idempotente.
+  invalidateSpotifyStatus();
 }

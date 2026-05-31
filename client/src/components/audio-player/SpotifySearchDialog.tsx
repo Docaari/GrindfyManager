@@ -179,7 +179,7 @@ function SearchPanel({
   const [debounced, setDebounced] = useState(initialQuery ?? "");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [activePreviewIdx, setActivePreviewIdx] = useState<number | null>(null);
-  const { playTrack, addToQueue } = useAudioPlayer() as any;
+  const { playTrack, addToQueue, clearQueue } = useAudioPlayer() as any;
 
   // Debounce 500ms; min 2 chars.
   useEffect(() => {
@@ -207,11 +207,20 @@ function SearchPanel({
 
   const onPlay = useCallback(
     async (track: SpotifyTrack) => {
+      // D2 (B-QUEUE-1): play avulso da busca SUBSTITUI a fila — clearQueue ANTES
+      // de playTrack (elimina residuo de plays anteriores).
+      try {
+        clearQueue?.();
+      } catch {
+        // ignore
+      }
       try {
         await playTrack({
           source: "spotify",
           trackId: track.trackId,
           title: track.title,
+          // D8 (B-ARTIST-1): propaga artist = artists.join(", ").
+          artist: track.artists.join(", "),
           coverUrl: track.coverUrl,
           spotifyUri: track.trackId,
           durationSeconds: track.durationSec,
@@ -232,16 +241,19 @@ function SearchPanel({
       }
       onCloseDialog();
     },
-    [playTrack, onCloseDialog],
+    [playTrack, clearQueue, onCloseDialog],
   );
 
   const onAdd = useCallback(
     async (track: SpotifyTrack) => {
+      // D2 (B-QUEUE-1): botao "+" ANEXA (sem clearQueue).
       try {
         await addToQueue({
           source: "spotify",
           trackId: track.trackId,
           title: track.title,
+          // D8 (B-ARTIST-1): propaga artist.
+          artist: track.artists.join(", "),
           coverUrl: track.coverUrl,
           spotifyUri: track.trackId,
           durationSeconds: track.durationSec,
@@ -325,6 +337,26 @@ function SearchPanel({
             />
           ))}
         </div>
+      ) : err && errorStatus !== 429 ? (
+        // B-SEARCH-ERR (RF-04): erro generico (403/500/etc) NAO eh "Nenhum
+        // resultado" — bloco PT-BR + retry (refetch). 401 ja virou ReconnectCTA
+        // acima; 429 vira RateLimitBanner.
+        <div
+          data-testid="spotify-search-error"
+          className="flex flex-col items-center gap-3 py-6 text-center"
+        >
+          <p className="text-sm text-gray-300">
+            Nao foi possivel buscar agora. Tente novamente.
+          </p>
+          <button
+            type="button"
+            data-testid="spotify-search-retry"
+            onClick={() => result.refetch()}
+            className="rounded-md bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/20"
+          >
+            Tentar de novo
+          </button>
+        </div>
       ) : result.data?.tracks?.length ? (
         <ul className="max-h-[60vh] space-y-1 overflow-y-auto">
           {result.data.tracks.map((t, i) => {
@@ -384,7 +416,10 @@ function SearchPanel({
           })}
         </ul>
       ) : (
-        <p className="py-4 text-center text-xs text-gray-400">
+        <p
+          data-testid="spotify-search-empty"
+          className="py-4 text-center text-xs text-gray-400"
+        >
           Nenhum resultado para "{debounced}".
         </p>
       )}
@@ -413,7 +448,7 @@ function PlaylistsPanel({
   onCloseDialog: () => void;
 }) {
   const [drillId, setDrillId] = useState<string | null>(null);
-  const { playTrack, addToQueue } = useAudioPlayer() as any;
+  const { playTrack, addToQueue, clearQueue } = useAudioPlayer() as any;
 
   const listQ = useQuery({
     queryKey: spotifyKeys.playlists(),
@@ -438,7 +473,7 @@ function PlaylistsPanel({
       void emitAudioEvent("audio.spotify_playlist_select", {
         playlistId: pl.playlistId,
         trackCount: pl.trackCount,
-        truncated: pl.trackCount > 50,
+        truncated: (pl.trackCount ?? 0) > 50,
       });
     } catch {
       // ignore
@@ -450,11 +485,19 @@ function PlaylistsPanel({
     const tracks = drillQ.data?.tracks ?? [];
     if (!tracks.length) return;
     const first = tracks[0];
+    // D2 (B-QUEUE-1): "Tocar tudo" SUBSTITUI a fila — clearQueue ANTES.
+    try {
+      clearQueue?.();
+    } catch {
+      // ignore
+    }
     try {
       await playTrack({
         source: "spotify",
         trackId: first.trackId,
         title: first.title,
+        // D8 (B-ARTIST-1): artist da primeira faixa.
+        artist: first.artists.join(", "),
         coverUrl: first.coverUrl,
         spotifyUri: first.trackId,
         durationSeconds: first.durationSec,
@@ -480,6 +523,7 @@ function PlaylistsPanel({
           source: "spotify",
           trackId: t.trackId,
           title: t.title,
+          artist: t.artists.join(", "),
           coverUrl: t.coverUrl,
           spotifyUri: t.trackId,
           durationSeconds: t.durationSec,
@@ -500,9 +544,10 @@ function PlaylistsPanel({
       }
     }
     onCloseDialog();
-  }, [drillQ.data, drillId, playTrack, addToQueue, onCloseDialog]);
+  }, [drillQ.data, drillId, playTrack, addToQueue, clearQueue, onCloseDialog]);
 
   const onAddAll = useCallback(async () => {
+    // D2 (B-QUEUE-1): "Adicionar tudo" ANEXA (sem clearQueue).
     const tracks = drillQ.data?.tracks ?? [];
     for (const t of tracks) {
       try {
@@ -510,6 +555,7 @@ function PlaylistsPanel({
           source: "spotify",
           trackId: t.trackId,
           title: t.title,
+          artist: t.artists.join(", "),
           coverUrl: t.coverUrl,
           spotifyUri: t.trackId,
           durationSeconds: t.durationSec,
@@ -530,6 +576,52 @@ function PlaylistsPanel({
       }
     }
   }, [drillQ.data, drillId, addToQueue]);
+
+  // D2 (B-QUEUE-1) drill-in: clicar a faixa i SUBSTITUI a fila — clearQueue +
+  // playTrack(t[i]) + enfileira t[i+1..n].
+  const onPlayTrackAt = useCallback(
+    async (idx: number) => {
+      const tracks = drillQ.data?.tracks ?? [];
+      const target = tracks[idx];
+      if (!target) return;
+      try {
+        clearQueue?.();
+      } catch {
+        // ignore
+      }
+      try {
+        await playTrack({
+          source: "spotify",
+          trackId: target.trackId,
+          title: target.title,
+          artist: target.artists.join(", "),
+          coverUrl: target.coverUrl,
+          spotifyUri: target.trackId,
+          durationSeconds: target.durationSec,
+        });
+      } catch {
+        // ignore
+      }
+      for (let i = idx + 1; i < tracks.length; i++) {
+        const t = tracks[i];
+        try {
+          await addToQueue({
+            source: "spotify",
+            trackId: t.trackId,
+            title: t.title,
+            artist: t.artists.join(", "),
+            coverUrl: t.coverUrl,
+            spotifyUri: t.trackId,
+            durationSeconds: t.durationSec,
+          });
+        } catch {
+          // ignore
+        }
+      }
+      onCloseDialog();
+    },
+    [drillQ.data, playTrack, addToQueue, clearQueue, onCloseDialog],
+  );
 
   if (drillId) {
     const tracks = drillQ.data?.tracks ?? [];
@@ -588,7 +680,8 @@ function PlaylistsPanel({
                 <li
                   key={t.trackId + i}
                   data-testid="playlist-track-row"
-                  className="flex items-center gap-3 rounded px-2 py-1 hover:bg-white/5"
+                  onClick={() => onPlayTrackAt(i)}
+                  className="flex items-center gap-3 rounded px-2 py-1 hover:bg-white/5 cursor-pointer"
                 >
                   {cover ? (
                     <img
@@ -610,6 +703,37 @@ function PlaylistsPanel({
             })}
           </ul>
         )}
+      </div>
+    );
+  }
+
+  // B-PLERR-1 (RF-02): trata erro da lista ANTES do empty (nao mentir "sem
+  // playlists"). 401 -> ReconnectCTA; 429 -> RateLimitBanner; outro -> bloco
+  // PT-BR + retry (refetch).
+  const listErr: any = listQ.error;
+  if (listErr) {
+    const status = listErr?.status ?? null;
+    if (status === 401) return <ReconnectCTA />;
+    if (status === 429) {
+      return (
+        <div className="p-3">
+          <RateLimitBanner retryAfterMs={listErr?.retryAfterMs} />
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-col items-center gap-3 p-6 text-center">
+        <p className="text-sm text-gray-300">
+          Nao foi possivel carregar suas playlists. Tente novamente.
+        </p>
+        <button
+          type="button"
+          data-testid="playlist-list-retry"
+          onClick={() => listQ.refetch()}
+          className="rounded-md bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/20"
+        >
+          Tentar de novo
+        </button>
       </div>
     );
   }
@@ -651,9 +775,15 @@ function PlaylistsPanel({
             )}
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm text-white">{pl.name}</div>
-              <div className="text-xs text-gray-400 truncate">
-                {pl.trackCount} tracks
-              </div>
+              {/* B-PLCOUNT-1 (RF-01): null = desconhecido -> omite a linha; 0 =
+                  "Sem faixas"; n = "{n} faixas" (PT-BR, nao "tracks"). */}
+              {pl.trackCount === null || pl.trackCount === undefined ? null : (
+                <div className="text-xs text-gray-400 truncate">
+                  {pl.trackCount === 0
+                    ? "Sem faixas"
+                    : `${pl.trackCount} faixas`}
+                </div>
+              )}
             </div>
           </li>
         );
@@ -777,6 +907,11 @@ function SpotifySearchDialogInner({ open, onOpenChange, initialQuery }: Props) {
             <DialogPrimitive.Title className="text-sm font-semibold">
               Spotify
             </DialogPrimitive.Title>
+            {/* B-A11Y-DIALOG (RF-05): Description sr-only — elimina o warning do
+                Radix e provê aria-describedby pra leitores de tela. */}
+            <DialogPrimitive.Description className="sr-only">
+              Busque faixas e playlists do seu Spotify para tocar no Grindfy.
+            </DialogPrimitive.Description>
             <DialogPrimitive.Close asChild>
               <button
                 type="button"

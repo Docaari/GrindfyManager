@@ -22,6 +22,8 @@ import { defaultAccessTokenCache } from "../services/spotifyAccess";
 // CRITICAL-1 fix: resolveEligiblePlanTier mapeia subscription_plan='trial'
 // corretamente — resolveUserTier (coachAccess) trata trial como 'free'.
 import { resolveEligiblePlanTier } from "../coach/planEligibility";
+// B-COVER-1 / ADR-221 §D6 — SSoT da allowlist de cover (sufixo).
+import { sanitizeSpotifyCover } from "@shared/spotifyCoverHosts";
 
 const SPOTIFY_OAUTH_SESSION_COOKIE = "spotify_oauth_session";
 const SPOTIFY_SESSION_COOKIE = "spotify_session";
@@ -659,23 +661,10 @@ export function invalidateSpotifyCache(userId: string): void {
   }
 }
 
-// Allowed Spotify cover hosts (paridade client sanitize).
-const ALLOWED_COVER_HOSTS = new Set([
-  "i.scdn.co",
-  "mosaic.scdn.co",
-  "wrapped-images.spotifycdn.com",
-]);
-
+// B-COVER-1 / ADR-221 §D6: allowlist por SUFIXO (SSoT shared) — paridade
+// client sanitize. Capas custom de playlist (image-cdn-ak.spotifycdn.com) passam.
 function sanitizeCoverFromSpotify(url: string | null | undefined): string | null {
-  if (!url || typeof url !== "string") return null;
-  try {
-    const u = new URL(url);
-    if (u.protocol !== "https:") return null;
-    if (!ALLOWED_COVER_HOSTS.has(u.hostname)) return null;
-    return url;
-  } catch {
-    return null;
-  }
+  return sanitizeSpotifyCover(url);
 }
 
 function normalizeTrack(track: any): any {
@@ -698,10 +687,15 @@ function normalizePlaylist(pl: any): any {
   if (!pl) return null;
   const coverUrlRaw =
     Array.isArray(pl.images) && pl.images[0]?.url ? pl.images[0].url : null;
+  // B-PLCOUNT-1 / RF-01: trackCount = number | null. null = total desconhecido
+  // (API nao mandou tracks.total); 0 = vazio comprovado; n = presente. NUNCA
+  // colapsar undefined em 0 ("0 tracks" mentiroso).
+  const totalRaw = pl.tracks?.total;
+  const trackCount = typeof totalRaw === "number" ? totalRaw : null;
   return {
     playlistId: pl.id ?? "",
     name: pl.name ?? "",
-    trackCount: pl.tracks?.total ?? 0,
+    trackCount,
     coverUrl: sanitizeCoverFromSpotify(coverUrlRaw),
     ownerName: pl.owner?.display_name ?? null,
     isCollaborative: !!pl.collaborative,
@@ -1024,6 +1018,13 @@ export async function handleSpotifyListPlaylists(
     const upstream = new URL(`${SPOTIFY_API_BASE}/me/playlists`);
     upstream.searchParams.set("limit", String(limit));
     if (offset > 0) upstream.searchParams.set("offset", String(offset));
+    // B-PLCOUNT-1 / RF-01: pedir tracks.total explicitamente (sem fields a API
+    // 2026 pode omitir -> trackCount viraria null em todos). Mantem demais
+    // campos consumidos por normalizePlaylist.
+    upstream.searchParams.set(
+      "fields",
+      "items(id,name,images,owner.display_name,collaborative,public,tracks.total),total,limit,offset",
+    );
 
     let resp: any;
     try {

@@ -20,22 +20,30 @@ export interface SpotifyStatus {
   isLoading: boolean;
 }
 
-interface SpotifyStatusResponse {
+export interface SpotifyStatusResponse {
   connected?: boolean;
   productTier?: string | null;
   displayName?: string | null;
 }
 
+/**
+ * D7 (B-PANEL-401): fetcher SSoT resiliente do status Spotify. Usa `fetch`
+ * (NUNCA `apiRequest`, que dispara o logout global em 401). 401/!ok ->
+ * {connected:false}. Exportado p/ o hook E o SpotifyConnectionPanel consumirem
+ * a MESMA query (mesma key + mesmo fetcher) — sem politicas divergentes.
+ */
+export async function fetchSpotifyStatus(): Promise<SpotifyStatusResponse> {
+  const resp = await fetch("/api/audio/spotify/status", {
+    credentials: "include",
+  });
+  if (!resp.ok) return { connected: false }; // 401 NAO desloga (resiliente)
+  return (await resp.json()) as SpotifyStatusResponse;
+}
+
 export function useSpotifyStatus(): SpotifyStatus {
   const q = useQuery<SpotifyStatusResponse>({
     queryKey: SPOTIFY_STATUS_QUERY_KEY,
-    queryFn: async () => {
-      const resp = await fetch("/api/audio/spotify/status", {
-        credentials: "include",
-      });
-      if (!resp.ok) return { connected: false };
-      return (await resp.json()) as SpotifyStatusResponse;
-    },
+    queryFn: fetchSpotifyStatus,
     staleTime: 60_000,
     retry: false,
   });

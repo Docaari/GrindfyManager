@@ -1,0 +1,35 @@
+%% ADR-221 D7 / B-BOOT-1 + B-DISCONNECT-SYNC + B-PANEL-401
+%% Reconciliacao do status de conexao Spotify. Fetcher unico resiliente +
+%% invalidacao no helper de boot/disconnect. UI nunca afirma "conectado"
+%% com driver null; 401 no status NUNCA desloga.
+flowchart TB
+    subgraph boot["Bootstrap pos-reload (AudioPlayerContext)"]
+        BA["resolveViaStatusFallback()<br/>(silentMode: 401 != logout)"] --> BB{"fb.accessToken?"}
+        BB -->|"sim (token OK)"| BC["connectSpotify(fb)<br/>+ invalidateSpotifyStatus()"]
+        BC --> BCR["status reconverge -> connected:true REAL<br/>driver pronto"]
+        BB -->|"null (status dizia connected<br/>mas refresh falhou — B-BOOT-1)"| BD["invalidateSpotifyStatus()"]
+        BD --> BDR["status reconverge -> connected:false<br/>sem driver orfao, UI honesta"]
+    end
+
+    subgraph disc["Disconnect (SpotifyConnectionPanel)"]
+        DA["disconnectSpotify()  (auth.ts)"] --> DA2["POST /disconnect"]
+        DA2 --> DA3["invalidateSpotifyStatus()<br/>(B-DISCONNECT-SYNC: no helper)"]
+        DA --> DB["audio.disconnectSpotifyDriver()<br/>(cleanup driver em memoria)"]
+    end
+
+    subgraph status["Leitura de status (SSoT)"]
+        SA["fetchSpotifyStatus()<br/>fetch + credentials:include"] --> SB{"resp.ok?"}
+        SB -->|"sim"| SC["resp.json()"]
+        SB -->|"401/erro"| SD["{ connected:false }<br/>(resiliente — NAO desloga)"]
+        SE["useSpotifyStatus (hook)<br/>MiniPlayerBar / SearchDialog"] --> SA
+        SF["SpotifyConnectionPanel<br/>(B-PANEL-401: troca apiRequest -> fetchSpotifyStatus)"] --> SA
+    end
+
+    SA -. "mesma queryKey<br/>SPOTIFY_STATUS_QUERY_KEY<br/>cache compartilhado" .-> KEY[("['spotify-status']")]
+    BC -.-> KEY
+    BD -.-> KEY
+    DA3 -.-> KEY
+
+    classDef bad fill:#7f1d1d,stroke:#ef4444,color:#fff
+    classDef good fill:#14532d,stroke:#22c55e,color:#fff
+    class BDR,SD,BCR good

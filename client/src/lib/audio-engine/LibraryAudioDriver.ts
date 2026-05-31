@@ -40,6 +40,12 @@ export class LibraryAudioDriver implements IAudioSourceDriver {
     }
   }
 
+  // D3 (B-RESUME-1): library resume = play() no <audio>, que ja retoma da
+  // posicao corrente (currentTime preservado). Apenas o Spotify reinicia.
+  async resume(): Promise<void> {
+    await this.play();
+  }
+
   pause(): void {
     try {
       this.audioEl.pause();

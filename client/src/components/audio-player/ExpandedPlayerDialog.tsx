@@ -303,8 +303,11 @@ export function ExpandedPlayerDialog() {
               data-testid="expanded-course-context"
               className="text-sm text-gray-400 text-center"
             >
-              {courseTitle ?? ""}
-              {courseTitle && moduleTitle ? ` · ${moduleTitle}` : ""}
+              {/* D8 (B-ARTIST-1): artist (Spotify) precede courseTitle (library). */}
+              {activeTrack.artist ?? courseTitle ?? ""}
+              {!activeTrack.artist && courseTitle && moduleTitle
+                ? ` · ${moduleTitle}`
+                : ""}
             </p>
           </section>
 
@@ -439,20 +442,22 @@ export function ExpandedPlayerDialog() {
               <h3 className="text-sm font-semibold text-gray-300 mb-2">Fila</h3>
               <ul className="space-y-2 max-h-64 overflow-y-auto">
                 {visibleQueue.map((item: any, idx: number) => (
-                  <li key={item?.queueItemId ?? item?.trackId ?? idx}>
+                  <li key={item?.id ?? item?.queueItemId ?? item?.trackId ?? idx}>
                     <button
                       type="button"
                       className="w-full text-left px-3 py-2 hover:bg-white/5 rounded-md text-sm text-gray-200 flex items-center gap-2"
                       onClick={() => {
                         try {
-                          skipToQueueItem?.(idx);
+                          // B-SKIP-1: passar a STRING id do item (skipToQueueItem
+                          // espera id, NAO o index numerico -> findIndex(-1) no-op).
+                          skipToQueueItem?.(item?.id);
                         } catch {
                           // ignore
                         }
                       }}
                     >
                       <span className="flex-1 truncate">
-                        {item?.title ?? `Aula ${idx + 1}`}
+                        {item?.track?.title ?? item?.title ?? `Aula ${idx + 1}`}
                       </span>
                     </button>
                   </li>

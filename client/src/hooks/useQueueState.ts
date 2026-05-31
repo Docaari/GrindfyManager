@@ -15,6 +15,9 @@ export interface AudioTrackLike {
   courseTitle?: string | null;
   durationSeconds?: number;
   spotifyUri?: string;
+  // D8 (B-ARTIST-1): artista propagado ate o QueuePopover (RF-10.6). Opcional
+  // (lesson #7). Spotify: artists.join(", "). Library: undefined.
+  artist?: string | null;
 }
 
 export interface QueueItem {
@@ -177,6 +180,11 @@ export function useQueueState() {
     (track: AudioTrackLike): boolean => {
       let accepted = true;
       setStatePersist((prev) => {
+        // B-DEDUP-Q — dedup por trackId: nao adiciona a mesma musica 2x.
+        if (prev.queue.some((q) => q.track.trackId === track.trackId)) {
+          accepted = false;
+          return prev;
+        }
         if (prev.queue.length >= MAX_ITEMS) {
           accepted = false;
           return prev;

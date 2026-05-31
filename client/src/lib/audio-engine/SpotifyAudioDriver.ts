@@ -84,7 +84,18 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
     ended: new Set(),
     durationchange: new Set(),
     error: new Set(),
+    playstatechange: new Set(),
   };
+
+  // D1 (B-ENDED-1) — FSM leve para detectar fim de faixa do Web Playback SDK.
+  private lastPositionMs = 0; // posicao do ultimo player_state_changed
+  private lastDurationMs = 0; // duration do ultimo player_state_changed
+  private wasPlaying = false; // !paused do ultimo evento
+  private lastTrackUri: string | null = null; // current_track.uri do ultimo evento
+  private endedEmittedForUri: string | null = null; // dedupe: ja emitiu p/ esta uri
+
+  // B-404-RETRY — guard p/ nao retry-loopar o mesmo play.
+  private playRetriedFor: string | null = null;
 
   constructor(deps: SpotifyAudioDriverDeps) {
     this.accessToken = deps.accessToken;
@@ -108,6 +119,19 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
     this.onReconnectFailed = deps.onReconnectFailed;
     this.onTokenRefreshed = deps.onTokenRefreshed;
     this.onPremiumRequired = deps.onPremiumRequired;
+  }
+
+  /**
+   * RF-06 (B-LOG-GATE): logs de diagnostico (info/warn) so em DEV. console.error
+   * de erro real NUNCA gateado (lesson #9). `import.meta.env.DEV` resolvido de
+   * forma defensiva (jsdom/node test env pode nao ter import.meta.env).
+   */
+  private isDev(): boolean {
+    try {
+      return !!(import.meta as any)?.env?.DEV;
+    } catch {
+      return false;
+    }
   }
 
   /** Telemetry never throws — used in 6+ call sites across driver lifecycle. */
@@ -277,11 +301,13 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
     // Attach SDK listeners.
     const onReady = (data: any) => {
       this.deviceId = data?.device_id ?? null;
-      // eslint-disable-next-line no-console
-      console.info(
-        "[SpotifyAudioDriver] SDK ready — device 'Grindfy' registrado, device_id=",
-        this.deviceId,
-      );
+      if (this.isDev()) {
+        // eslint-disable-next-line no-console
+        console.info(
+          "[SpotifyAudioDriver] SDK ready — device 'Grindfy' registrado, device_id=",
+          this.deviceId,
+        );
+      }
       this.safeTelemetry("spotify_connected", { deviceId: this.deviceId });
       // RF-01.4 — flush de play enfileirado antes do `ready`.
       if (this.pendingPlay && this.deviceId) {
@@ -302,16 +328,55 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
         this.duration = state.duration / 1000;
         this.emit("durationchange", { duration: this.duration });
       }
-      // Detect "ended": position >= duration AND paused
+
+      // B-EXTPAUSE — sincroniza isPlaying com o estado real do SDK (pausar no
+      // app Spotify reflete na UI). Emite ANTES da deteccao de fim.
+      const paused = state.paused === true;
+      this.emit("playstatechange", { paused });
+
+      // D1 (B-ENDED-1) — FSM combinada + dedupe por faixa.
+      const cur: string | null = state.track_window?.current_track?.uri ?? null;
+      const pos = typeof state.position === "number" ? state.position : 0;
+      const dur = typeof state.duration === "number" ? state.duration : 0;
+      const prevUris: Array<string | null> = (
+        state.track_window?.previous_tracks ?? []
+      ).map((t: any) => t?.uri ?? null);
+
+      const endedNow =
+        // C1 — playing perto do fim virou paused + reset p/ 0.
+        (this.wasPlaying &&
+          paused &&
+          pos === 0 &&
+          dur > 0 &&
+          this.lastPositionMs >= dur * 0.95) ||
+        // C2 — a faixa que tocava migrou p/ previous_tracks. HARDENING (reviewer
+        // HIGH): exige que a faixa anterior estivesse PERTO DO FIM. Sem isso, um
+        // skip MANUAL (PUT /play {uris:[B]}) que joga A em previous_tracks
+        // dispararia 'ended' espurio de A → tryAutoplayNext avanca de novo →
+        // PULA uma faixa (bug #1 do founder). Num skip no meio, lastPositionMs
+        // (de A) << lastDurationMs (de A) → C2 nao dispara.
+        (this.lastTrackUri != null &&
+          prevUris.includes(this.lastTrackUri) &&
+          (cur !== this.lastTrackUri || cur == null) &&
+          this.lastDurationMs > 0 &&
+          this.lastPositionMs >= this.lastDurationMs * 0.95) ||
+        // C3 — fallback legado.
+        (paused && dur > 0 && pos >= dur);
+
       if (
-        state.paused === true &&
-        typeof state.position === "number" &&
-        typeof state.duration === "number" &&
-        state.duration > 0 &&
-        state.position >= state.duration
+        endedNow &&
+        this.lastTrackUri &&
+        this.endedEmittedForUri !== this.lastTrackUri
       ) {
+        this.endedEmittedForUri = this.lastTrackUri;
         this.emit("ended", {});
       }
+
+      // Atualiza lastState SEMPRE (apos a checagem).
+      this.lastPositionMs = pos;
+      this.lastDurationMs = dur;
+      this.wasPlaying = !paused;
+      this.lastTrackUri = cur;
     };
     const onPlaybackError = (data: any) => {
       // Log explícito (lesson #9): a mensagem do SDK (ex: EME/DRM, track
@@ -395,7 +460,10 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
   private scheduleRefresh(expiresIn: number): void {
     if (this.destroyed) return;
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
-    const fireInMs = Math.max(0, (expiresIn - 300) * 1000);
+    // B-REFRESH-CLAMP — clamp minimo de 30s. expiresIn<300 colapsaria
+    // (expiresIn-300) em <=0 -> fire imediato/loop de refresh.
+    const fireInSec = Math.max(30, expiresIn - 300);
+    const fireInMs = fireInSec * 1000;
     this.refreshTimer = setTimeout(() => {
       this.performRefreshWithRetry(0);
     }, fireInMs);
@@ -500,11 +568,23 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
 
   async load(track: AudioTrack): Promise<void> {
     this.currentTrack = track;
+    // D1 — reset do guard de dedupe quando uma faixa nova comeca; a proxima
+    // faixa pode entao emitir seu proprio `ended`.
+    if (track?.trackId !== this.endedEmittedForUri) {
+      this.endedEmittedForUri = null;
+    }
+    this.playRetriedFor = null;
   }
 
   async play(): Promise<void> {
+    // B-DESTROY-DEVICE — guard: driver morto nao faz PUT pra device morto.
+    if (this.destroyed) return;
     // RF-01.7 — sem track carregada nao ha o que tocar (no-op, nao enfileira).
     if (!this.currentTrack) return;
+    // D1 — load inicial / replay: reset do guard de dedupe da faixa atual.
+    if (this.currentTrack.trackId !== this.endedEmittedForUri) {
+      this.endedEmittedForUri = null;
+    }
     // RF-01.4 — play antes do `ready` (deviceId null) enfileira; flusha no ready.
     // Isso eh fluxo NORMAL (nao erro): emite evento dedicado `spotify_play_queued`
     // em vez de `spotify_api_error` (que fica reservado pra deviceId ausente APOS
@@ -518,20 +598,125 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
       return;
     }
     this.safeTelemetry("spotify_play", { trackId: this.currentTrack.trackId });
+    await this.issuePlay(this.currentTrack.trackId);
+  }
+
+  /**
+   * D3 (B-RESUME-1) — retoma da posicao corrente SEM reenviar `uris` (nao
+   * reinicia do 0). Usa SDK `player.resume()` quando disponivel; fallback REST
+   * `PUT /play SEM body` (Spotify trata play sem uris como resume).
+   */
+  async resume(): Promise<void> {
+    if (this.destroyed) return;
+    try {
+      const r = this.player?.resume?.();
+      if (r && typeof (r as any).then === "function") {
+        await r;
+        return;
+      }
+      if (typeof this.player?.resume === "function") return; // sync ok
+    } catch {
+      // fall-through to REST
+    }
+    if (!this.deviceId) {
+      this.pendingPlay = true;
+      return;
+    }
     const device = encodeURIComponent(this.deviceId);
-    this.spotifyApiPut(`/me/player/play?device_id=${device}`, {
-      uris: [this.currentTrack.trackId],
-    });
+    // SEM body -> resume do estado corrente.
+    this.spotifyApiPut(`/me/player/play?device_id=${device}`);
+  }
+
+  /**
+   * B-404-RETRY + B-401-RESUME — PUT /play com uris, tratando:
+   *   - 404 (device race pos-ready): retry 1x apos pequeno delay.
+   *   - 401 (token/sessao): tryReconnect + re-toca a faixa apos reconnect.
+   * Demais erros caem no fluxo de erro padrao (emit error / telemetria).
+   */
+  private async issuePlay(trackId: string): Promise<void> {
+    if (this.destroyed || !this.deviceId) return;
+    const device = encodeURIComponent(this.deviceId);
+    const path = `/me/player/play?device_id=${device}`;
+    const init: RequestInit = {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ uris: [trackId] }),
+    };
+    let resp: any;
+    try {
+      resp = await this.fetchFn(`${SPOTIFY_API}${path}`, init as any);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[SpotifyAudioDriver] play fetch REJEITOU (rede/CORS/CSP):",
+        path,
+        (err as any)?.message ?? err,
+      );
+      this.safeTelemetry("spotify_api_error", {
+        path,
+        network: true,
+        message: String((err as any)?.message ?? err),
+      });
+      this.emit("error", err);
+      return;
+    }
+    if (!resp) return;
+    if (resp.ok) {
+      this.playRetriedFor = null;
+      return;
+    }
+    // B-404-RETRY — device race: retry 1x.
+    if (resp.status === 404 && this.playRetriedFor !== trackId) {
+      this.playRetriedFor = trackId;
+      this.safeTelemetry("spotify_api_error", { path, status: 404, retry: true });
+      setTimeout(() => {
+        if (this.destroyed) return;
+        void this.issuePlay(trackId);
+      }, 30);
+      return;
+    }
+    // B-401-RESUME — 401 mid-play: reconnect SDK + re-toca a faixa.
+    if (resp.status === 401) {
+      this.safeTelemetry("spotify_api_error", { path, status: 401 });
+      this.tryReconnect(0);
+      // Re-toca apos um delay curto (da tempo do reconnect do SDK).
+      setTimeout(() => {
+        if (this.destroyed) return;
+        void this.issuePlay(trackId);
+      }, 30);
+      return;
+    }
+    // Outros erros.
+    // eslint-disable-next-line no-console
+    console.error("[SpotifyAudioDriver] play API não-ok:", resp.status, path);
+    this.safeTelemetry("spotify_api_error", { path, status: resp.status });
+    this.emit("error", new Error(`Spotify API ${resp.status} ${path}`));
   }
 
   pause(): void {
+    if (this.destroyed) return;
     this.safeTelemetry("spotify_pause", {});
+    // D3 — pausa via SDK preservando posicao; fallback REST.
+    try {
+      const r = this.player?.pause?.();
+      if (r && typeof (r as any).then === "function") {
+        void r;
+        return;
+      }
+      if (typeof this.player?.pause === "function") return; // sync ok
+    } catch {
+      // fall-through to REST
+    }
     if (!this.deviceId) return;
     const device = encodeURIComponent(this.deviceId);
     this.spotifyApiPut(`/me/player/pause?device_id=${device}`);
   }
 
   seek(seconds: number): void {
+    if (this.destroyed) return;
     if (!this.deviceId) return;
     const positionMs = Math.max(0, Math.floor(seconds * 1000));
     const device = encodeURIComponent(this.deviceId);
@@ -550,8 +735,10 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
 
   setSpeed(_rate: number): void {
     // Spotify nao suporta variable speed — no-op.
-    // eslint-disable-next-line no-console
-    console.warn("Spotify driver: setSpeed unsupported");
+    if (this.isDev()) {
+      // eslint-disable-next-line no-console
+      console.warn("Spotify driver: setSpeed unsupported");
+    }
   }
 
   getCurrentTime(): number {
@@ -565,6 +752,8 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    // B-DESTROY-DEVICE — nula deviceId p/ nao mandar PUT a device morto.
+    this.deviceId = null;
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer);
       this.refreshTimer = null;

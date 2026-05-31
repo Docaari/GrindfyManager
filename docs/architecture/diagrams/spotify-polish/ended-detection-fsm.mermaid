@@ -1,0 +1,44 @@
+%% ADR-221 D1 / RF-09 / B-ENDED-1
+%% FSM de deteccao de fim de track Spotify a partir de player_state_changed.
+%% Estado guardado no driver: lastPositionMs, wasPlaying, lastTrackUri,
+%% endedEmittedForUri (dedupe). Emite 'ended' UMA vez por faixa.
+stateDiagram-v2
+    direction TB
+
+    [*] --> Idle: load(track)\nendedEmittedForUri=null
+
+    Idle --> Playing: play() / SDK reporta\npaused=false, pos crescente
+    note right of Playing
+        a cada player_state_changed:
+        atualiza lastPositionMs=pos
+        wasPlaying = !paused
+        lastTrackUri = current_track.uri
+    end note
+
+    Playing --> Playing: timeupdate\n(pos cresce, paused=false)
+    Playing --> PausedMid: paused=true\n& pos no MEIO\n(lastPos < 0.95*dur)
+    PausedMid --> Playing: resume()\n(paused=false)
+    note left of PausedMid
+        pause manual no meio:
+        NAO emite ended
+        (C1/C3 falham, faixa nao
+         migrou p/ previous_tracks)
+    end note
+
+    Playing --> EvalEnded: paused=true & pos=0\nOU lastTrackUri em\nprevious_tracks\nOU pos>=dur
+
+    state EvalEnded <<choice>>
+    EvalEnded --> EmitEnded: (C1 || C2 || C3)\n&& endedEmittedForUri\n!= lastTrackUri
+    EvalEnded --> Playing: dedupe bloqueia\n(ja emitiu p/ esta uri)
+
+    EmitEnded --> Ended: emit('ended')\nendedEmittedForUri = lastTrackUri
+    note right of EmitEnded
+        C1: wasPlaying && paused && pos==0
+            && lastPositionMs >= 0.95*dur
+        C2: lastTrackUri in previous_tracks
+            && (cur != lastTrackUri || cur==null)
+        C3 (legado): paused && dur>0 && pos>=dur
+    end note
+
+    Ended --> Idle: load(nova faixa)\nendedEmittedForUri=null
+    Ended --> [*]: destroy()

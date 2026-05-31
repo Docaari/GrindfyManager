@@ -1,0 +1,35 @@
+%% ADR-221 D2 / RF-08 / B-QUEUE-1
+%% Fluxo de decisao replace-vs-append da fila. Invariante:
+%% "Tocar" (play) = SUBSTITUI; "Adicionar" (+/Adicionar tudo) = ANEXA.
+%% clearQueue ja exposto no context (sem mudanca de contrato).
+flowchart TD
+    A["Acao do usuario<br/>no SpotifySearchDialog"] --> B{"Tipo de acao?"}
+
+    B -->|"Play track avulso<br/>(clique na linha da busca)"| C["clearQueue()"]
+    C --> C2["playTrack(track)"]
+    C2 --> CR["Fila final = vazia<br/>now-playing = track"]
+
+    B -->|"Botao + (search-result-add)"| D["addToQueue(track)<br/>(sem clear)"]
+    D --> DR["Fila final = fila anterior + track<br/>now-playing inalterado"]
+
+    B -->|"Tocar tudo (drill-in)<br/>ou Play no card (RF-10.4)"| E["clearQueue()"]
+    E --> E2["playTrack(tracks[0])"]
+    E2 --> E3["addToQueue(tracks[1..n])"]
+    E3 --> ER["Fila final = faixas da playlist<br/>now-playing = tracks[0]<br/>(residuo removido)"]
+
+    B -->|"Adicionar tudo (drill-in)"| F["addToQueue(tracks[0..n])<br/>(sem clear)"]
+    F --> FR["Fila final = fila anterior +<br/>faixas da playlist (anexa)"]
+
+    B -->|"Play da faixa i no drill-in<br/>(row clicavel, D8-B)"| G["clearQueue()"]
+    G --> G2["playTrack(tracks[i])"]
+    G2 --> G3["addToQueue(tracks[i+1..n])"]
+    G3 --> GR["Fila final = faixas i+1..n<br/>now-playing = tracks[i]<br/>(autoplay coerente na playlist)"]
+
+    ER -.->|"cap 50 respeitado"| CAP["addToQueue retorna false<br/>quando queue.length >= 50"]
+    GR -.-> CAP
+    FR -.-> CAP
+
+    classDef replace fill:#1b5e20,stroke:#4caf50,color:#fff
+    classDef append fill:#0d47a1,stroke:#42a5f5,color:#fff
+    class C,C2,E,E2,E3,G,G2,G3 replace
+    class D,F append

@@ -3,14 +3,17 @@
 
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import {
   initiateSpotifyAuth,
   disconnectSpotify,
   SpotifyPremiumRequiredError,
 } from "@/lib/spotify/auth";
 import { useOptionalAudioPlayer } from "@/contexts/AudioPlayerContext";
-import { SPOTIFY_STATUS_QUERY_KEY } from "@/hooks/useSpotifyStatus";
+import {
+  SPOTIFY_STATUS_QUERY_KEY,
+  fetchSpotifyStatus,
+  type SpotifyStatusResponse,
+} from "@/hooks/useSpotifyStatus";
 import {
   Dialog,
   DialogContent,
@@ -21,13 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SpotifyPremiumGateDialog } from "@/components/audio-player/SpotifyPremiumGateDialog";
-
-interface SpotifyStatus {
-  connected: boolean;
-  displayName?: string | null;
-  productTier?: string | null;
-  connectedAt?: string | null;
-}
 
 const MOBILE_BREAKPOINT = 1024;
 
@@ -59,11 +55,13 @@ export function SpotifyConnectionPanel() {
     setIsMobile(isMobileViewport());
   }, []);
 
-  const { data: status } = useQuery<SpotifyStatus>({
+  const { data: status } = useQuery<SpotifyStatusResponse>({
     // Key canonica compartilhada com useSpotifyStatus (Mini Player) — sincroniza
     // connect/disconnect entre o painel de Preferencias e o Mini Player.
+    // D7 (B-PANEL-401): usa o fetcher SSoT resiliente (fetch, 401 -> {connected:
+    // false}), NAO apiRequest (que dispara o logout global em 401).
     queryKey: SPOTIFY_STATUS_QUERY_KEY,
-    queryFn: () => apiRequest("GET", "/api/audio/spotify/status"),
+    queryFn: fetchSpotifyStatus,
   });
 
   const connected = !!status?.connected;

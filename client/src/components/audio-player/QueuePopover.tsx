@@ -21,6 +21,8 @@ interface QueueItemShape {
     audioUrl?: string;
     coverUrl?: string | null;
     durationSeconds?: number;
+    // D8 (B-ARTIST-1 / RF-10.6): artista do item (Spotify).
+    artist?: string | null;
   };
 }
 
@@ -99,6 +101,15 @@ function QueueItemRow({
       ) : null}
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm text-white">{item.track.title}</div>
+        {/* D8 (B-ARTIST-1 / RF-10.6): artista do item Spotify. Trunca via CSS. */}
+        {item.track.artist ? (
+          <div
+            data-testid="queue-item-artist"
+            className="truncate text-xs text-gray-300"
+          >
+            {item.track.artist}
+          </div>
+        ) : null}
         <div className="text-xs text-gray-400">
           {formatDuration(item.track.durationSeconds ?? null)}
           {isSpotify ? (

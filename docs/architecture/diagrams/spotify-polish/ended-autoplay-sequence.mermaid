@@ -1,0 +1,35 @@
+%% ADR-221 D1+D4 / RF-09 / B-ENDED-1 + B-AUTOPLAY-1
+%% Sequencia: player_state_changed -> deteccao de fim -> ended ->
+%% tryAutoplayNext -> proxima da fila. Mostra o courseContext=null (D4)
+%% fazendo o autoplay cair na FILA em vez de tentar a proxima AULA.
+sequenceDiagram
+    autonumber
+    participant SDK as Spotify Web<br/>Playback SDK
+    participant Drv as SpotifyAudioDriver<br/>onStateChanged (FSM)
+    participant Eng as AudioSourceEngine
+    participant Ctx as AudioPlayerContext<br/>tryAutoplayNext
+    participant Q as useQueueState
+
+    Note over Drv: estado: lastPositionMs, wasPlaying,<br/>lastTrackUri, endedEmittedForUri
+
+    SDK->>Drv: player_state_changed<br/>{paused:false, pos≈0.97*dur, current=trackA}
+    Drv->>Drv: wasPlaying=true<br/>lastPositionMs=0.97*dur<br/>lastTrackUri=trackA
+
+    SDK->>Drv: player_state_changed<br/>{paused:true, pos:0, previous_tracks:[trackA]}
+    Note over Drv: C1 (reset p/ 0 vindo de ~fim) OU<br/>C2 (trackA em previous_tracks) = true
+    Drv->>Drv: dedupe: endedEmittedForUri != trackA ✔<br/>endedEmittedForUri = trackA
+    Drv->>Eng: emit('ended')
+    Eng->>Ctx: on('ended') -> tryAutoplayNextRef.current()
+
+    Note over Ctx: D4: track Spotify tocou SEM ctx<br/>=> courseContextRef.current === null
+    Ctx->>Ctx: repeatMode==='one'? nao
+    Ctx->>Ctx: courseContext? null -> pula branch de AULA
+    Ctx->>Q: queue.length > 0 ?
+    Q-->>Ctx: sim -> head = trackB<br/>(shuffledOrder se shuffle on)
+    Ctx->>Q: removeFromQueue(trackB.id)
+    Ctx->>Ctx: playTrack(trackB)  // sem ctx
+    Note over Ctx: playTrack: setCourseContext(null) +<br/>courseContextRef.current=null (sincrono, D4)
+    Ctx->>Eng: eng.playTrack(trackB)
+    Eng->>Drv: load(trackB) + play()  // uris, do 0
+    Note over Drv: load reseta endedEmittedForUri<br/>(proxima faixa pode emitir seu ended)
+    Drv->>SDK: PUT /me/player/play {uris:[trackB]}

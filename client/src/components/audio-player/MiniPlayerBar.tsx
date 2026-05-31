@@ -463,9 +463,11 @@ export function MiniPlayerBar() {
           <div className="text-sm text-white truncate">
             {activeTrack.title ?? ""}
           </div>
-          {activeTrack.courseTitle ? (
+          {/* D8 (B-ARTIST-1): linha secundaria source-agnostic — Spotify mostra
+              artist; library mostra courseTitle. Trunca via CSS, nunca no dado. */}
+          {activeTrack.artist ?? activeTrack.courseTitle ? (
             <div className="text-xs text-gray-400 truncate">
-              {activeTrack.courseTitle}
+              {activeTrack.artist ?? activeTrack.courseTitle}
             </div>
           ) : null}
         </div>

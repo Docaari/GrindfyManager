@@ -45,26 +45,17 @@ export function sanitizeCoverUrl(
 }
 
 // Sprint SPOTIFY-DEEP / RF-05 + ADR-208 §6 — Spotify cover whitelist.
-const SPOTIFY_COVER_HOSTS: ReadonlySet<string> = new Set([
-  "i.scdn.co",
-  "mosaic.scdn.co",
-  "wrapped-images.spotifycdn.com",
-]);
+// B-COVER-1 / ADR-221 §D6: allowlist por SUFIXO (.scdn.co / .spotifycdn.com),
+// SSoT em shared/spotifyCoverHosts — paridade server+client. Capas custom de
+// playlist (image-cdn-ak.spotifycdn.com) agora passam.
+import { sanitizeSpotifyCover } from "@shared/spotifyCoverHosts";
 
 /**
- * Sanitize Spotify cover URL — STRICT whitelist (3 CDN hosts).
- * HTTPS-only + hostname em SPOTIFY_COVER_HOSTS. Outros → null.
+ * Sanitize Spotify cover URL — delega ao SSoT shared (allowlist por sufixo).
+ * HTTPS-only + hostname em *.scdn.co / *.spotifycdn.com. Outros → null.
  */
 export function sanitizeSpotifyCoverUrl(
   url: string | null | undefined,
 ): string | null {
-  if (!url || typeof url !== "string") return null;
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") return null;
-    if (!SPOTIFY_COVER_HOSTS.has(parsed.hostname)) return null;
-    return url;
-  } catch {
-    return null;
-  }
+  return sanitizeSpotifyCover(url);
 }

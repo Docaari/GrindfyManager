@@ -287,6 +287,10 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   // Latest volume for fade restore (avoid stale closure).
   const volumeRef = useRef<number>(volume);
   volumeRef.current = volume;
+  // D5 (B-VOLUME-1): isMuted espelhado em ref p/ a factory aplicar volume
+  // efetivo ao driver recem-construido sem depender de re-render.
+  const isMutedRef = useRef<boolean>(isMuted);
+  isMutedRef.current = isMuted;
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const courseContextRef = useRef<CourseContext | null>(null);
@@ -404,6 +408,16 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       eng.on("ended", () => {
         // Mesma logica do <audio> onEnded — tenta autoplay sequencial.
         tryAutoplayNextRef.current?.();
+      }),
+    );
+    // B-EXTPAUSE — reflete pausar/retomar feito no app Spotify nativo (ou outro
+    // device Connect) na UI. Functional update compara antes de setar: evita
+    // re-render redundante e loop com o useEffect[isPlaying] (que chama
+    // resume/pause; a acao gera novo playstatechange com o MESMO valor → bail).
+    engineUnsubscribersRef.current.push(
+      eng.on("playstatechange", (data: any) => {
+        const playing = data?.paused === false;
+        setIsPlaying((prev) => (prev === playing ? prev : playing));
       }),
     );
     engineUnsubscribersRef.current.push(
@@ -620,9 +634,12 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       setIsPlaying(true);
       setCurrentSeconds(0);
       setDurationSeconds(track.durationSeconds ?? 0);
-      if (ctxArg) {
-        setCourseContext(ctxArg);
-      }
+      // D4 (B-AUTOPLAY-1): courseContext espelha a intencao do playTrack atual.
+      // SEMPRE seta (inclusive limpa quando nao vem ctxArg) — assim um track
+      // Spotium (sem ctx) NAO herda o courseContext de uma sessao de biblioteca
+      // anterior. courseContextRef sincrono p/ tryAutoplayNext ler sem stale.
+      setCourseContext(ctxArg ?? null);
+      courseContextRef.current = ctxArg ?? null;
       setDisplayModeState((prev) => fsmNextOnPlayTrack(prev));
       // D8: user interaction (lesson pick) reseta timer.
       resetSleepTimer();
@@ -923,12 +940,24 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const tryAutoplayNext = useCallback(() => {
     // repeat one — replay.
     if (queue.repeatMode === "one" && activeTrackRef.current) {
-      const a = audioRef.current;
-      if (a) {
+      // B-REPEAT-ONE — branch por source: Spotify nao tem <audio> (audioRef null);
+      // re-toca via driver.seek(0) + play. Library reseta o currentTime do <audio>.
+      if (activeTrackRef.current.source === "spotify") {
+        const drv = spotifyDriverRef.current;
         try {
-          a.currentTime = 0;
+          drv?.seek?.(0);
+          drv?.play?.();
         } catch {
           // ignore
+        }
+      } else {
+        const a = audioRef.current;
+        if (a) {
+          try {
+            a.currentTime = 0;
+          } catch {
+            // ignore
+          }
         }
       }
       setCurrentSeconds(0);
@@ -997,6 +1026,26 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   // MP2 R2-H1: manter ref atualizada pro Engine `ended` handler chamar autoplay.
   tryAutoplayNextRef.current = tryAutoplayNext;
 
+  // B-SKIP-2 — wrapper: skipToQueueItem do queue hook so FATIA a fila (nao toca).
+  // Aqui: acha o item alvo -> playTrack(item.track) -> remove o item e todos os
+  // anteriores da fila. Clicar "Tocar" num item da fila agora REALMENTE toca.
+  const skipToQueueItem = useCallback(
+    (id: string) => {
+      const items = queue.queue;
+      const idx = items.findIndex((q) => q.id === id);
+      if (idx < 0) return;
+      const target = items[idx];
+      // Remove o alvo + todos os anteriores (ele vira now-playing).
+      for (let i = 0; i <= idx; i++) {
+        queue.removeFromQueue(items[i].id);
+      }
+      if (target?.track) {
+        playTrack(target.track as AudioTrack);
+      }
+    },
+    [queue, playTrack],
+  );
+
   // Sync isPlaying state -> audio element (library) ou driver (spotify).
   useEffect(() => {
     // Spotify path: pause/play via driver. spotifyDriverRef setado no playTrack.
@@ -1005,9 +1054,10 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       if (!drv) return;
       try {
         if (isPlaying) {
-          // play() do driver eh async + idempotente; engine ja chamou no playTrack.
-          // Aqui cobre toggle pause->play.
-          drv.play?.();
+          // D3 (B-RESUME-1): toggle pause->play RETOMA da posicao corrente via
+          // resume() — drv.play() reenviaria uris e reiniciaria do 0. O load
+          // inicial ja foi disparado pela Engine no playTrack.
+          drv.resume?.();
         } else {
           drv.pause?.();
         }
@@ -1162,9 +1212,12 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       }
       // Re-injeta factory sempre (caso reconnect com token novo).
       engineRef.current.setSpotifyDriverFactory((track: AudioTrack) => {
+        // D5 (B-TOKEN-CLOSURE): le o token FRESCO do ref na construcao — nao o
+        // closure connect-time (que ficaria stale apos refresh / troca de source).
+        const tok = spotifyTokenRef.current;
         const driver = new SpotifyAudioDriver({
-          accessToken,
-          expiresIn,
+          accessToken: tok?.accessToken ?? accessToken,
+          expiresIn: tok?.expiresIn ?? expiresIn,
           refresh: async () => {
             const r = await refreshAccessToken();
             return { accessToken: r.accessToken, expiresIn: r.expiresIn };
@@ -1216,6 +1269,15 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
             emitAudioEvent("spotify_reconnect_failed", {});
           },
         });
+        // D5 (B-VOLUME-1): aplica o volume atual ao driver recem-construido
+        // (o SDK ctor usa volume:1.0 hardcoded; o useEffect[volume] so propaga
+        // mudancas subsequentes). Le volumeRef/isMutedRef p/ valor sem re-render.
+        try {
+          const effective = isMutedRef.current ? 0 : volumeRef.current;
+          (driver as any).setVolume?.(effective);
+        } catch {
+          // ignore
+        }
         // Connect SDK -> deviceId pronto.
         // Fire-and-forget: connect e async, mas o driver guarda currentTrack
         // em load() + play() respeita deviceId nulo (no-op ate ready).
@@ -1247,12 +1309,18 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         // dispara o logout global do apiRequest (lesson: poll/bootstrap nao
         // pode deslogar o user).
         const fb = await resolveViaStatusFallback();
-        if (cancelled || !fb?.accessToken) return;
-        connectSpotify(fb.accessToken, fb.expiresIn, fb.displayName);
-        // Invalida o status pra useSpotifyStatus (cache staleTime 60s) refazer
-        // fetch -> SpotifySearchDialog/MiniPlayerBar enxergam connected:true.
-        // (resolveViaStatusFallback ja invalida no sucesso; helper idempotente.)
-        invalidateSpotifyStatus();
+        if (cancelled) return;
+        if (fb?.accessToken) {
+          connectSpotify(fb.accessToken, fb.expiresIn, fb.displayName);
+          // Invalida o status pra useSpotifyStatus (cache staleTime 60s) refazer
+          // fetch -> SpotifySearchDialog/MiniPlayerBar enxergam connected:true.
+          invalidateSpotifyStatus();
+        } else {
+          // D7 (B-BOOT-1): /status pode estar cacheado como connected (DB), mas
+          // o refresh falhou -> driver null. Invalida pra a query reconvergir pra
+          // verdade (false) — UI nunca afirma "conectado" com driver null.
+          invalidateSpotifyStatus();
+        }
       } catch {
         // best-effort: sem sessao / offline -> mantem desconectado.
       }
@@ -1454,7 +1522,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       clearQueue: queue.clearQueue,
       setRepeatMode: queue.setRepeatMode,
       toggleShuffle: queue.toggleShuffle,
-      skipToQueueItem: queue.skipToQueueItem,
+      skipToQueueItem,
       reorderQueue: queue.reorderQueue,
       // Sprint Mini Player 3.1 Wave B / TIER 3 #5 + #6.
       loadError,
@@ -1503,7 +1571,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       queue.clearQueue,
       queue.setRepeatMode,
       queue.toggleShuffle,
-      queue.skipToQueueItem,
+      skipToQueueItem,
       queue.reorderQueue,
       loadError,
       retryCurrent,

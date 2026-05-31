@@ -13,7 +13,9 @@ export interface SpotifyTrack {
 export interface SpotifyPlaylist {
   playlistId: string;
   name: string;
-  trackCount: number;
+  // B-PLCOUNT-1 (RF-01): null = total desconhecido (API nao mandou tracks.total);
+  // 0 = vazio comprovado; n = presente.
+  trackCount: number | null;
   coverUrl: string | null;
   ownerName: string | null;
   isCollaborative: boolean;
