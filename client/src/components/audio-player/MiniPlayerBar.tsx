@@ -33,7 +33,12 @@ import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
 // Sprint MP-VALIDATION / RF-01 — emit dot-namespace audio.* events.
 import { emitAudioEvent } from "@/lib/activity-telemetry";
 // Sprint UX-GLOBAL-BUTTONS — Spotify connect global no mini player.
-import { initiateSpotifyAuth } from "@/lib/spotify/auth";
+import {
+  initiateSpotifyAuth,
+  invalidateSpotifyStatus,
+  SpotifyPremiumRequiredError,
+} from "@/lib/spotify/auth";
+import { SPOTIFY_SEARCH_ELIGIBLE_TIERS } from "@/lib/spotify/tierEligibility";
 // Sprint UX-GLOBAL-BUTTONS — LessonPickerDialog lazy global (antes so /grind-live).
 const LessonPickerDialog = React.lazy(() =>
   import("./LessonPickerDialog").then((m) => ({ default: m.LessonPickerDialog })),
@@ -62,7 +67,6 @@ import { Search as SearchIcon } from "lucide-react";
 import { useSpotifyStatus } from "@/hooks/useSpotifyStatus";
 import { useAuth } from "@/contexts/AuthContext";
 import { SpotifySearchDialog } from "./SpotifySearchDialog";
-const SEARCH_ELIGIBLE_TIERS = new Set(["pro", "premium", "admin", "trial"]);
 
 // =============================================================================
 // HIGH-1 fix: ErrorBoundary local — captura "No QueryClient set" / "useAuth
@@ -288,7 +292,7 @@ export function MiniPlayerBar() {
     productTier: authSnapshot.productTier,
   };
   const tierLower = authSnapshot.tier;
-  const tierEligibleForSearch = SEARCH_ELIGIBLE_TIERS.has(tierLower);
+  const tierEligibleForSearch = SPOTIFY_SEARCH_ELIGIBLE_TIERS.has(tierLower);
   // Sprint MP-MODERN / RF-02 — scrub preview tooltip state.
   const [scrubPreviewSec, setScrubPreviewSec] = useState<number | null>(null);
   const [scrubPreviewLeftPct, setScrubPreviewLeftPct] = useState<number>(0);
@@ -751,7 +755,9 @@ export function MiniPlayerBar() {
               <SearchIcon className="w-4 h-4" />
             </button>
           ) : null}
-          {activeSource !== "spotify" ? (
+          {!spotifyStatus.isConnected &&
+          ctxRaw?.isSpotifyConnected !== true &&
+          activeSource !== "spotify" ? (
             <button
               type="button"
               data-testid="mini-player-spotify-connect"
@@ -769,10 +775,30 @@ export function MiniPlayerBar() {
                 }
                 setSpotifyConnecting(true);
                 try {
-                  await initiateSpotifyAuth();
+                  const result = await initiateSpotifyAuth();
+                  // Propaga token pro AudioPlayerContext criar o driver real
+                  // (sem isso o OAuth conclui mas nada toca + botao persiste).
+                  if (result?.accessToken && ctxRaw?.connectSpotify) {
+                    try {
+                      ctxRaw.connectSpotify(
+                        result.accessToken,
+                        result.expiresIn,
+                        result.displayName,
+                      );
+                    } catch (e) {
+                      // eslint-disable-next-line no-console
+                      console.warn("[MiniPlayerBar] connectSpotify falhou:", e);
+                    }
+                  }
+                  invalidateSpotifyStatus();
                 } catch (err) {
-                  // eslint-disable-next-line no-console
-                  console.warn("[MiniPlayerBar] Spotify connect falhou:", err);
+                  if (err instanceof SpotifyPremiumRequiredError) {
+                    // eslint-disable-next-line no-console
+                    console.warn("[MiniPlayerBar] Spotify Premium necessario");
+                  } else {
+                    // eslint-disable-next-line no-console
+                    console.warn("[MiniPlayerBar] Spotify connect falhou:", err);
+                  }
                 } finally {
                   setSpotifyConnecting(false);
                 }

@@ -1,0 +1,79 @@
+%% Sprint Spotify E2E — Componentes / fluxo do Mini Player Spotify (ADR-220)
+%% UI (EmptyStateCTA / MiniPlayerBar / SpotifySearchDialog / SpotifyPlaylistBrowser / QueuePopover)
+%%   <-> AudioPlayerContext <-> AudioSourceEngine <-> SpotifyAudioDriver <-> Spotify SDK/REST.
+%% Catalogo (search/playlists) passa por proxy server-side (ADR-208).
+%% Playback (play/pause/seek) e CLIENT-SIDE direto -> api.spotify.com (depende da CSP, ADR-220).
+graph TB
+    user["Usuario Premium<br/><i>Browser 127.0.0.1:3000</i>"]
+
+    subgraph ui["UI — Mini Player (client/src/components/audio-player)"]
+        cta["EmptyStateCTA<br/><i>Conectar / Buscar no Spotify</i>"]
+        bar["MiniPlayerBar<br/><i>controles + gate + speed oculto p/ spotify (D5)</i>"]
+        search["SpotifySearchDialog<br/><i>RF-02 busca debounce+abort</i>"]
+        browser["SpotifyPlaylistBrowser<br/><i>RF-03 playlists + drill-in</i>"]
+        queue["QueuePopover<br/><i>fila dual-source</i>"]
+    end
+
+    subgraph state["Estado / orquestracao (client)"]
+        ctx["AudioPlayerContext<br/><i>playTrack, isSpotifyConnected,<br/>connectSpotify, hide-speed</i>"]
+        status["useSpotifyStatus<br/><i>query [spotify-status] staleTime ~60s</i>"]
+        auth["lib/spotify/auth.ts<br/><i>OAuth PKCE + resolveViaStatusFallback</i>"]
+        eng["AudioSourceEngine<br/><i>roteia source -> driver</i>"]
+        drv["SpotifyAudioDriver<br/><i>ref: 1 player, lifecycle, reconnect</i>"]
+        loader["sdkLoader.ts<br/><i>lazy + idempotente + timeout 5s</i>"]
+        tel["activity-telemetry<br/><i>emitAudioEvent best-effort (ADR-207)</i>"]
+    end
+
+    subgraph server["Servidor Grindfy (Express) — proxy SO catalogo+OAuth"]
+        csp["CSP Helmet (routes/index.ts)<br/><i>ADR-220: allowlist Spotify</i>"]
+        cat["routes/spotifyAudio.ts<br/><i>search / me-playlists / playlists-tracks</i>"]
+        access["spotifyAccess.ts<br/><i>requireSpotifyAccess (RF-07)</i>"]
+        crypto["spotifyTokenCrypto<br/><i>AES-256-GCM refresh_token (ADR-190)</i>"]
+    end
+
+    subgraph spotify["Spotify (externo)"]
+        sdkcdn["sdk.scdn.co<br/><i>spotify-player.js (CSP scriptSrc/frameSrc)</i>"]
+        sdkp["window.Spotify.Player<br/><i>device Connect 'Grindfy' + iframe EME</i>"]
+        dealer["wss://dealer.spotify.com<br/><i>estado (CSP connectSrc)</i>"]
+        rest["api.spotify.com<br/><i>PUT /me/player/* (CSP connectSrc)</i>"]
+    end
+
+    user -->|"clica"| cta
+    user -->|"controla"| bar
+    cta -->|"abre"| search
+    search -->|"drill-in"| browser
+    bar -->|"abre"| queue
+
+    cta -->|"connectSpotify / playTrack"| ctx
+    bar -->|"play/pause/seek/volume/next/prev"| ctx
+    search -->|"playTrack(spotify)"| ctx
+    browser -->|"playTrack(spotify)"| ctx
+    queue -->|"playTrack(spotify)"| ctx
+
+    cta -.->|"le gate"| status
+    bar -.->|"le gate"| status
+    ctx -->|"connect/disconnect"| auth
+    auth -->|"invalida 1x (RF-04)"| status
+
+    ctx -->|"rota source=spotify"| eng
+    eng -->|"play/pause/seek"| drv
+    drv -->|"loadSpotifySDK()"| loader
+    ctx -->|"emit eventos"| tel
+
+    %% Catalogo: client -> server proxy -> Spotify REST
+    search -->|"GET /api/audio/spotify/search (REST)"| cat
+    browser -->|"GET /me/playlists + /playlists/:id/tracks (REST)"| cat
+    auth -->|"oauth-init / callback / refresh (REST)"| cat
+    cat -->|"requireSpotifyAccess(deps completos)"| access
+    access -->|"decrypt/encrypt"| crypto
+    access -->|"REST /v1/* + /api/token"| rest
+
+    %% Playback: CLIENT-SIDE direto (gated pela CSP)
+    csp -. "habilita carregar/conectar" .-> loader
+    loader -->|"<script> (CSP scriptSrc)"| sdkcdn
+    sdkcdn -->|"window.Spotify"| loader
+    drv -->|"new Player + addListener"| sdkp
+    sdkp -->|"ready{device_id} / player_state_changed"| drv
+    sdkp -->|"WebSocket estado (wss)"| dealer
+    drv -->|"PUT /me/player/play?device_id (REST direto)"| rest
+    sdkp -->|"iframe EME/Widevine -> audio audivel"| user

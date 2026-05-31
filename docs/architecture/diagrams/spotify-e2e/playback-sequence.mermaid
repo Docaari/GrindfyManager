@@ -1,0 +1,71 @@
+%% Sprint Spotify E2E — Sequencia de playback client-side (ADR-220)
+%% connect -> SDK load (sdk.scdn.co) -> Spotify.Player -> ready(device_id)
+%% -> user clica track -> activateElement (gesto) -> PUT /me/player/play?device_id
+%% -> player_state_changed -> UI sync.
+%% Pre-requisito ABSOLUTO: CSP allowlist Spotify (ADR-220 §Diretivas) ja aplicada,
+%% senao o passo "load spotify-player.js" e BLOQUEADO e window.Spotify nunca existe.
+sequenceDiagram
+    actor User as Usuario (Premium)
+    participant UI as MiniPlayerBar / EmptyStateCTA
+    participant Ctx as AudioPlayerContext
+    participant Eng as AudioSourceEngine
+    participant Drv as SpotifyAudioDriver
+    participant Loader as sdkLoader.ts
+    participant CDN as sdk.scdn.co (CSP scriptSrc)
+    participant SDK as window.Spotify.Player
+    participant Dealer as wss://dealer.spotify.com (CSP connectSrc)
+    participant REST as api.spotify.com (CSP connectSrc)
+
+    Note over UI,REST: CSP DEVE permitir sdk.scdn.co + api.spotify.com + wss://dealer.spotify.com<br/>(ADR-220). Sem isso o SDK nunca carrega e nada toca.
+
+    %% --- Connect (gesto do usuario) ---
+    User->>UI: clica "Conectar" (gesto)
+    UI->>Ctx: connectSpotify(token, expiresIn)
+    Ctx->>Eng: createAudioSourceEngine + registra SpotifyAudioDriver
+    Ctx->>Drv: connect()
+    Drv->>Loader: loadSpotifySDK() (idempotente)
+    Loader->>CDN: <script src="spotify-player.js"> (CSP scriptSrc)
+    CDN-->>Loader: onSpotifyWebPlaybackSDKReady() -> window.Spotify
+    Loader-->>Drv: SDK
+    Drv->>SDK: new Spotify.Player({ name:"Grindfy", getOAuthToken })
+    Drv->>SDK: addListener(ready / not_ready / player_state_changed / *_error)
+    Drv->>SDK: player.connect()
+    SDK->>Dealer: abre WebSocket de estado (CSP connectSrc wss)
+    SDK-->>Drv: ready { device_id }
+    Note over Drv: deviceId capturado.<br/>emitAudioEvent("spotify_connected") (best-effort, ADR-207)
+    Drv-->>Ctx: isSpotifyConnected = true
+    Note over Ctx,UI: RF-04: invalida ["spotify-status"] 1x -><br/>botao troca "Conectar" -> "Buscar no Spotify" sem F5
+
+    %% --- Primeiro play (dentro de gesto) ---
+    User->>UI: clica numa track (busca/playlist/fila) [GESTO]
+    UI->>Ctx: playTrack({ source:'spotify', trackId:'spotify:track:...' })
+    Ctx->>Drv: activateElement() (RF-01.3 — satisfaz autoplay/EME user-activation)
+
+    alt deviceId pronto (ready ja chegou) — caminho normal
+        Ctx->>Drv: load(track) + play()
+        Drv->>REST: PUT /me/player/play?device_id=<deviceId> { uris:[trackId] } (D3 start direto)
+        REST-->>Drv: 204 No Content
+    else play antes do ready (RF-01.4)
+        Note over Drv: enfileira o play;<br/>dispara no handler "ready" (NAO no-op silencioso)
+        SDK-->>Drv: ready { device_id }
+        Drv->>REST: PUT /me/player/play?device_id=<deviceId> { uris:[trackId] }
+    else deviceId ausente no play (RF-01.7)
+        Note over Drv: emitAudioEvent("spotify_api_error", {missing_device})<br/>+ estado de erro (nunca silencioso)
+    end
+
+    %% --- Sincronizacao de estado dirigida por evento (RF-01.5) ---
+    SDK->>Dealer: stream EME (iframe Widevine, CSP frameSrc/mediaSrc)
+    Dealer-->>SDK: audio decodificado -> audio audivel
+    loop durante o playback
+        SDK-->>Drv: player_state_changed { position, duration, paused }
+        Drv-->>Ctx: emit timeupdate / durationchange / ended
+        Ctx-->>UI: scrubber move, tempo/duracao atualizam, play/pause refletem
+    end
+
+    %% --- Fim de faixa -> autoplay ---
+    SDK-->>Drv: player_state_changed { paused:true, position>=duration }
+    Drv-->>Ctx: emit "ended"
+    Ctx->>Ctx: tryAutoplayNext() (curso / fila / repeat)
+
+    %% --- Erros (RF-01.7) ---
+    Note over Drv,UI: account_error -> "Spotify Premium necessario" (PT-BR)<br/>authentication_error -> reconnect exp 1s/2s/4s; 3x -> onReconnectFailed limpa driver<br/>SpotifySdkLoadError (adblock/timeout 5s) -> "verifique adblock/conexao"<br/>activeSource==='spotify' -> controle de velocidade OCULTO (D5)

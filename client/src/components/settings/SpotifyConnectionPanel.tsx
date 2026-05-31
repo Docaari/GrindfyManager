@@ -10,6 +10,7 @@ import {
   SpotifyPremiumRequiredError,
 } from "@/lib/spotify/auth";
 import { useOptionalAudioPlayer } from "@/contexts/AudioPlayerContext";
+import { SPOTIFY_STATUS_QUERY_KEY } from "@/hooks/useSpotifyStatus";
 import {
   Dialog,
   DialogContent,
@@ -59,7 +60,9 @@ export function SpotifyConnectionPanel() {
   }, []);
 
   const { data: status } = useQuery<SpotifyStatus>({
-    queryKey: ["/api/audio/spotify/status"],
+    // Key canonica compartilhada com useSpotifyStatus (Mini Player) — sincroniza
+    // connect/disconnect entre o painel de Preferencias e o Mini Player.
+    queryKey: SPOTIFY_STATUS_QUERY_KEY,
     queryFn: () => apiRequest("GET", "/api/audio/spotify/status"),
   });
 
@@ -84,7 +87,7 @@ export function SpotifyConnectionPanel() {
       }
       // Invalidate to refetch status
       queryClient.invalidateQueries({
-        queryKey: ["/api/audio/spotify/status"],
+        queryKey: SPOTIFY_STATUS_QUERY_KEY,
       });
     } catch (err) {
       if (err instanceof SpotifyPremiumRequiredError) {
@@ -111,7 +114,7 @@ export function SpotifyConnectionPanel() {
       }
       setConfirmOpen(false);
       queryClient.invalidateQueries({
-        queryKey: ["/api/audio/spotify/status"],
+        queryKey: SPOTIFY_STATUS_QUERY_KEY,
       });
     } catch (err) {
       // eslint-disable-next-line no-console

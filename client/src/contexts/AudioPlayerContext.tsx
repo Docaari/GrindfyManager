@@ -48,7 +48,11 @@ import {
   type DriverSwitchInfo,
 } from "@/lib/audio-engine/AudioSourceEngine";
 import { SpotifyAudioDriver } from "@/lib/audio-engine/SpotifyAudioDriver";
-import { refreshAccessToken } from "@/lib/spotify/auth";
+import {
+  invalidateSpotifyStatus,
+  refreshAccessToken,
+  resolveViaStatusFallback,
+} from "@/lib/spotify/auth";
 // Sprint Mini Player 3 / RF-05 — queue state hook (MP3.1 R1 fix wave: CRITICAL-2).
 // Surface exposta via context para QueuePopover + add-to-queue em LessonPicker.
 import { useQueueState, type RepeatMode, type QueueItem, type AudioTrackLike } from "@/hooks/useQueueState";
@@ -1179,6 +1183,27 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
               displayName: spotifyTokenRef.current?.displayName,
             };
           },
+          // ADR-220 RF-01.7 — conta nao-Premium durante playback (account_error)
+          // -> sinaliza a UX de Premium. Sem este wire o callback do driver era
+          // dead code (montado mas nunca passado), e o erro de conta ficava so no
+          // `error` cru sem mensagem PT-BR pro user.
+          onPremiumRequired: (premiumName?: string) => {
+            try {
+              emitAudioEvent("spotify_account_error", {
+                premium_required: true,
+                hasDisplayName: !!premiumName,
+              });
+            } catch {
+              // never throw
+            }
+            try {
+              setLoadError(
+                "Spotify Premium necessario para reproduzir",
+              );
+            } catch {
+              // never throw
+            }
+          },
           onReconnectFailed: () => {
             // Falha de reconnect -> limpa driver + state.
             try {
@@ -1206,6 +1231,36 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     },
     [bindEngineEvents],
   );
+
+  // Bootstrap pos-reload: se o server tem sessao Spotify ativa (cookie httpOnly
+  // setado pelo callback OAuth), rehydrata o driver via refreshAccessToken ->
+  // connectSpotify. Sem isso, apos um F5 o engine fica sem driver Spotify e
+  // nada toca mesmo com a conta conectada.
+  const spotifyBootstrappedRef = useRef(false);
+  useEffect(() => {
+    if (spotifyBootstrappedRef.current) return;
+    spotifyBootstrappedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        // resolveViaStatusFallback usa silentMode: um 401 do /refresh NUNCA
+        // dispara o logout global do apiRequest (lesson: poll/bootstrap nao
+        // pode deslogar o user).
+        const fb = await resolveViaStatusFallback();
+        if (cancelled || !fb?.accessToken) return;
+        connectSpotify(fb.accessToken, fb.expiresIn, fb.displayName);
+        // Invalida o status pra useSpotifyStatus (cache staleTime 60s) refazer
+        // fetch -> SpotifySearchDialog/MiniPlayerBar enxergam connected:true.
+        // (resolveViaStatusFallback ja invalida no sucesso; helper idempotente.)
+        invalidateSpotifyStatus();
+      } catch {
+        // best-effort: sem sessao / offline -> mantem desconectado.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectSpotify]);
 
   const disconnectSpotifyDriver = useCallback(() => {
     // MP2 R2-M1: se track Spotify ativa, parar playback + limpar UI.

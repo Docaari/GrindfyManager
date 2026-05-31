@@ -35,6 +35,10 @@ const SCOPES = [
   "user-read-private",
   "user-modify-playback-state",
   "user-read-playback-state",
+  // Necessarios pra GET /me/playlists devolver playlists privadas/colaborativas.
+  // Sem eles a aba "Minhas playlists" volta vazia.
+  "playlist-read-private",
+  "playlist-read-collaborative",
 ];
 
 function base64url(input: Buffer | string): string {
@@ -402,28 +406,28 @@ export async function handlePostSpotifyRefresh(
       res.status(401).json({ message: "Nao autenticado" });
       return;
     }
+    // O cookie spotify_session e REDUNDANTE pra identidade: requireAuth (JWT
+    // grindfy) ja autentica o dono, e a token row e buscada por `userId`.
+    // Exigir o cookie criava um modo de falha (cookie limpo / nao cruza
+    // localhost<->127.0.0.1 / COOP) onde /status dizia connected (DB row) mas
+    // /refresh dava 401. Quando o cookie ESTA presente, ainda validamos o
+    // mismatch (defesa contra cookie roubado de outro user — MEDIUM-8). Quando
+    // ausente, prosseguimos com o userId do JWT (o proprio dono).
     const cookieRaw = req.cookies?.[SPOTIFY_SESSION_COOKIE];
-    if (!cookieRaw) {
-      res.status(401).json({ message: "Spotify session ausente" });
-      return;
-    }
-
-    // MEDIUM-8: validar `uid` no JWT contra `req.user.userPlatformId` — sem
-    // isso, um attacker que rouba o cookie spotify_session de outro user
-    // poderia usar seu proprio JWT geral pra solicitar refresh com creds
-    // do dono do cookie. Em test/dev tolerado se decode falhar.
-    try {
-      const decoded = jwt.verify(cookieRaw, jwtSecret()) as any;
-      if (decoded?.uid && decoded.uid !== userId) {
-        res.status(401).json({ message: "Spotify session mismatch" });
-        return;
+    if (cookieRaw) {
+      try {
+        const decoded = jwt.verify(cookieRaw, jwtSecret()) as any;
+        if (decoded?.uid && decoded.uid !== userId) {
+          res.status(401).json({ message: "Spotify session mismatch" });
+          return;
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") {
+          res.status(401).json({ message: "Spotify session invalida" });
+          return;
+        }
+        // dev/test: tolera (cookie pode ser stub em test setup)
       }
-    } catch (err) {
-      if (process.env.NODE_ENV === "production") {
-        res.status(401).json({ message: "Spotify session invalida" });
-        return;
-      }
-      // dev/test: tolera (cookie pode ser stub em test setup)
     }
 
     const row = await storage.getSpotifyToken(userId);
@@ -1223,9 +1227,16 @@ export function registerSpotifyAudioRoutes(app: Express): void {
   app.post("/api/audio/spotify/oauth-init", requireAuth, async (req, res) => {
     await handlePostSpotifyOauthInit(req, res);
   });
+  // NAO usa requireAuth: o callback eh um redirect top-level cross-site do
+  // popup (accounts.spotify.com -> nosso callback). O cookie de auth da
+  // plataforma (grindfy_access_token, 15min) frequentemente nao chega nesse
+  // momento (expirou durante o OAuth dance ou o browser dropa em cross-site),
+  // o que disparava 401 "Token de acesso necessario" cru no popup. A identidade
+  // do usuario eh carregada pelo cookie de sessao OAuth assinado
+  // (SPOTIFY_OAUTH_SESSION_COOKIE -> session.userId) + validacao do param state
+  // (CSRF). Mesmo padrao do callback do Google OAuth.
   app.get(
     "/api/audio/spotify/oauth-callback",
-    requireAuth,
     async (req, res) => {
       await handleGetSpotifyOauthCallback(req, res);
     },

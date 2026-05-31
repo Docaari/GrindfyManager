@@ -157,7 +157,29 @@ describe('POST /api/audio/spotify/refresh (RF-01.4 / ADR-190)', () => {
     );
   });
 
-  it('cookie ausente → 401', async () => {
+  it('cookie ausente → segue via userId do JWT (200) — cookie e redundante', async () => {
+    // Contrato novo: requireAuth ja autentica o dono; a row e buscada por
+    // userId. O cookie spotify_session ausente (limpo / nao cruza
+    // localhost<->127.0.0.1 / COOP) NAO deve mais bloquear o proprio dono.
+    storageMock.getSpotifyToken.mockResolvedValue({
+      userId: 'USER-0001',
+      refreshTokenEncrypted: 'old-cipher',
+      refreshTokenIv: 'iv',
+      refreshTokenAuthTag: 'tag',
+      expiresAt: new Date(Date.now() + 60_000),
+      disconnectedAt: null,
+      refreshFailureCount: 0,
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        access_token: 'acc_via_userid',
+        expires_in: 3600,
+        token_type: 'Bearer',
+      }),
+    });
+
     const handler = await loadHandler();
     const res = makeRes();
     await handler.handlePostSpotifyRefresh(
@@ -165,7 +187,8 @@ describe('POST /api/audio/spotify/refresh (RF-01.4 / ADR-190)', () => {
       res,
       { storage: storageMock, fetchFn: fetchMock } as any,
     );
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.accessToken).toBe('acc_via_userid');
   });
 
   it('user nao tem spotify_tokens row → 404', async () => {

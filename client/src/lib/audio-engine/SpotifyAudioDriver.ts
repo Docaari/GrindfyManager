@@ -8,7 +8,7 @@
 // Lessons aplicadas: #5/#35 (new SDK em try/catch fallback factory), #34 (deps
 // injetadas).
 
-import { loadSpotifySDK } from "@/lib/spotify/sdkLoader";
+import { loadSpotifySDK, SpotifySdkLoadError } from "@/lib/spotify/sdkLoader";
 import type {
   AudioDriverEvent,
   AudioTrack,
@@ -64,6 +64,7 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
   ) => void;
   private readonly onReconnectFailed?: () => void;
   private readonly onTokenRefreshed?: (accessToken: string, expiresIn: number) => void;
+  private readonly onPremiumRequired?: (displayName?: string) => void;
 
   private player: any = null;
   private SDK: any = null;
@@ -71,6 +72,9 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
+  // RF-01.4 — play() chamado antes do evento `ready` (deviceId null) enfileira;
+  // o handler `ready` flusha. Evita o no-op silencioso do play pre-ready.
+  private pendingPlay = false;
 
   private currentTime = 0;
   private duration = 0;
@@ -93,6 +97,7 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
     this.telemetry = deps.telemetry;
     this.onReconnectFailed = deps.onReconnectFailed;
     this.onTokenRefreshed = deps.onTokenRefreshed;
+    this.onPremiumRequired = deps.onPremiumRequired;
   }
 
   /** Telemetry never throws — used in 6+ call sites across driver lifecycle. */
@@ -178,7 +183,36 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
   // -------------------------------------------------------------------------
   async connect(): Promise<void> {
     if (this.destroyed) return;
-    this.SDK = await this.sdkLoaderFn();
+    // RF-01.7 — SDK falhou ao carregar (adblock/timeout) NAO pode travar a UI
+    // nem deixar uma promise rejeitada non-handled. Sinaliza erro (telemetria +
+    // onReconnectFailed) e retorna. Lesson #9: logue antes do swallow.
+    try {
+      this.SDK = await this.sdkLoaderFn();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("spotify.driver.sdk_load_failed", {
+        message: String((err as any)?.message ?? err),
+      });
+      this.safeTelemetry("spotify_sdk_load_error", {
+        message: String((err as any)?.message ?? err),
+        isLoadError: err instanceof SpotifySdkLoadError,
+      });
+      if (this.onReconnectFailed) {
+        try {
+          this.onReconnectFailed();
+        } catch {
+          // ignore
+        }
+      }
+      this.emit("error", err);
+      return;
+    }
+    // LOW — corpo abrangente em try/catch: construcao do player, attach de
+    // listeners, activateElement e `await this.player.connect()` nao podem deixar
+    // uma promise rejeitada non-handled (a factory chama `driver.connect()`
+    // fire-and-forget). Qualquer throw vira telemetria + sinal de erro graciosos.
+    // Lesson #9: logue antes do swallow.
+    try {
     const PlayerCtor = this.SDK?.Player;
     const ctorArg = {
       name: "Grindfy",
@@ -213,6 +247,11 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
     const onReady = (data: any) => {
       this.deviceId = data?.device_id ?? null;
       this.safeTelemetry("spotify_connected", { deviceId: this.deviceId });
+      // RF-01.4 — flush de play enfileirado antes do `ready`.
+      if (this.pendingPlay && this.deviceId) {
+        this.pendingPlay = false;
+        void this.play();
+      }
     };
     const onNotReady = (_data: any) => {
       this.tryReconnect(0);
@@ -244,6 +283,21 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
     const onAuthError = () => {
       this.tryReconnect(0);
     };
+    // RF-01.7 — account_error (conta nao-Premium) -> onPremiumRequired (UI monta
+    // mensagem PT-BR) + telemetria. NAO so emite `error` cru.
+    const onAccountError = (data: any) => {
+      this.safeTelemetry("spotify_account_error", {
+        message: String(data?.message ?? "account_error"),
+      });
+      if (this.onPremiumRequired) {
+        try {
+          this.onPremiumRequired(undefined);
+        } catch {
+          // ignore
+        }
+      }
+      this.emit("error", data ?? {});
+    };
 
     try {
       this.player.addListener("ready", onReady);
@@ -252,14 +306,40 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
       this.player.addListener("playback_error", onPlaybackError);
       this.player.addListener("authentication_error", onAuthError);
       this.player.addListener("initialization_error", onPlaybackError);
-      this.player.addListener("account_error", onPlaybackError);
+      this.player.addListener("account_error", onAccountError);
     } catch {
       // ignore
     }
 
+    // RF-01.3 — connect() roda dentro do gesto do usuario (factory fire-and-forget
+    // no primeiro play). Ativar o elemento de midia AQUI satisfaz a politica de
+    // autoplay/EME (user-activation) ANTES do player.connect()/play(). Best-effort,
+    // nunca throw — alguns browsers/mocks nao expoem activateElement.
+    await this.activateElement();
+
     await this.player.connect();
     // Schedule proactive token refresh.
     this.scheduleRefresh(this.expiresIn);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("spotify.driver.connect_failed", {
+        message: String((err as any)?.message ?? err),
+      });
+      this.safeTelemetry("spotify_api_error", {
+        path: "connect",
+        connect_failed: true,
+        message: String((err as any)?.message ?? err),
+      });
+      if (this.onReconnectFailed) {
+        try {
+          this.onReconnectFailed();
+        } catch {
+          // ignore
+        }
+      }
+      this.emit("error", err);
+      return;
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -355,12 +435,42 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
   // -------------------------------------------------------------------------
   // IAudioSourceDriver
   // -------------------------------------------------------------------------
+  /**
+   * RF-01.3 — activateElement no gesto do usuario (autoplay/EME user-activation).
+   * Chama `player.activateElement()` quando o SDK expoe; no-op gracioso quando
+   * nao (alguns mocks/browsers nao expoem). NUNCA throw.
+   */
+  async activateElement(): Promise<void> {
+    try {
+      const fn = this.player?.activateElement;
+      if (typeof fn === "function") {
+        await fn.call(this.player);
+      }
+    } catch {
+      // ignore — best-effort gesture activation.
+    }
+  }
+
   async load(track: AudioTrack): Promise<void> {
     this.currentTrack = track;
   }
 
   async play(): Promise<void> {
-    if (!this.deviceId || !this.currentTrack) return;
+    // RF-01.7 — sem track carregada nao ha o que tocar (no-op, nao enfileira).
+    if (!this.currentTrack) return;
+    // RF-01.4 — play antes do `ready` (deviceId null) enfileira; flusha no ready.
+    // Isso eh fluxo NORMAL (nao erro): emite evento dedicado `spotify_play_queued`
+    // em vez de `spotify_api_error` (que fica reservado pra deviceId ausente APOS
+    // ready — ver spotifyApiPut). Mislabel anterior poluia metricas de erro.
+    if (!this.deviceId) {
+      this.pendingPlay = true;
+      this.safeTelemetry("spotify_play_queued", {
+        path: "/me/player/play",
+        trackId: this.currentTrack.trackId,
+      });
+      return;
+    }
+    this.safeTelemetry("spotify_play", { trackId: this.currentTrack.trackId });
     const device = encodeURIComponent(this.deviceId);
     this.spotifyApiPut(`/me/player/play?device_id=${device}`, {
       uris: [this.currentTrack.trackId],
@@ -368,6 +478,7 @@ export class SpotifyAudioDriver implements IAudioSourceDriver {
   }
 
   pause(): void {
+    this.safeTelemetry("spotify_pause", {});
     if (!this.deviceId) return;
     const device = encodeURIComponent(this.deviceId);
     this.spotifyApiPut(`/me/player/pause?device_id=${device}`);

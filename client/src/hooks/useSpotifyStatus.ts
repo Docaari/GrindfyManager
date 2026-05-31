@@ -6,6 +6,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+// Query-key canonica do status Spotify. Compartilhada entre o hook
+// (useSpotifyStatus -> Mini Player) e todos os callsites de invalidacao
+// (auth.ts, EmptyStateCTA, SpotifyConnectionPanel) para que connect/disconnect
+// convirjam o gate visual sem F5. Lesson #29: invalidacoes via singleton
+// queryClient nos componentes; o hook usa esta mesma key.
+export const SPOTIFY_STATUS_QUERY_KEY = ["spotify-status"] as const;
+
 export interface SpotifyStatus {
   isConnected: boolean;
   productTier: "premium" | "free" | null;
@@ -21,7 +28,7 @@ interface SpotifyStatusResponse {
 
 export function useSpotifyStatus(): SpotifyStatus {
   const q = useQuery<SpotifyStatusResponse>({
-    queryKey: ["spotify-status"],
+    queryKey: SPOTIFY_STATUS_QUERY_KEY,
     queryFn: async () => {
       const resp = await fetch("/api/audio/spotify/status", {
         credentials: "include",

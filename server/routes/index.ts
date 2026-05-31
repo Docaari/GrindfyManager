@@ -133,6 +133,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "https://accounts.google.com",
     "https://oauth2.googleapis.com",
     "https://www.googleapis.com",
+    // Spotify Web Playback SDK runtime (ADR-220): REST PUT /me/player/* +
+    // WebSocket de estado (dealer) + subdominios dinamicos de CDN/runtime.
+    // Restrito ao dominio Spotify/SCDN — sem `https:` global (NFR seguranca).
+    "https://api.spotify.com",
+    "https://*.spotify.com",
+    "wss://dealer.spotify.com",
+    "wss://*.spotify.com",
+    "https://*.scdn.co",
   ];
   if (!isProduction) {
     connectSrc.push("ws:", "wss:");
@@ -141,12 +149,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         scriptSrc: isProduction
-          ? ["'self'", "'unsafe-inline'"]
-          : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          ? ["'self'", "'unsafe-inline'", "https://sdk.scdn.co"]
+          : ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://sdk.scdn.co"],
         imgSrc: ["'self'", "data:", "https:", "blob:"],
-        fontSrc: ["'self'", "data:"],
+        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
         connectSrc,
         frameSrc: [
           "'self'",
@@ -154,9 +162,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           "https://hooks.stripe.com",
           // Mux Player renders the video element inside its own iframe
           "https://stream.mux.com",
+          // Spotify Web Playback SDK injeta iframe de playback/EME (ADR-220)
+          "https://sdk.scdn.co",
+          "https://*.spotify.com",
         ],
         objectSrc: ["'none'"],
-        mediaSrc: ["'self'", "blob:", "https://stream.mux.com", "https://*.mux.com"],
+        mediaSrc: [
+          "'self'",
+          "blob:",
+          "https://stream.mux.com",
+          "https://*.mux.com",
+          // Spotify SDK stream/preview + preview HTML5 30s da busca (ADR-220)
+          "https://*.scdn.co",
+          "https://*.spotify.com",
+          "https://sdk.scdn.co",
+        ],
         workerSrc: ["'self'", "blob:"],
       }
     },

@@ -11,8 +11,21 @@
 //  - Classes: SpotifyPremiumRequiredError, SpotifyAuthError, SpotifyPopupBlockedError,
 //             SpotifyOAuthCancelledError
 
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { saveOAuthSnapshot } from "@/lib/spotify/oauthSnapshot";
+
+// RF-04 — invalida ["spotify-status"] no SUCESSO do connect (postMessage OU
+// resolveViaStatusFallback), centralizando a invalidacao no auth.ts para que
+// `useSpotifyStatus` (staleTime ~60s) refaca o fetch e o gate visual convirja
+// para "conectado" sem F5. Lesson #29: usa o singleton `queryClient`, NAO
+// `useQueryClient`. Best-effort — nunca throw.
+export function invalidateSpotifyStatus(): void {
+  try {
+    queryClient.invalidateQueries({ queryKey: ["spotify-status"] });
+  } catch {
+    // ignore
+  }
+}
 
 // ============================================================================
 // Errors
@@ -135,10 +148,70 @@ function fallbackRedirect(authUrl: string): void {
   }
 }
 
+/**
+ * Fallback resiliente a COOP: o accounts.spotify.com pode cortar
+ * `window.opener`, entao o `postMessage` do callback nunca chega. Mas o server
+ * ja persistiu o token + setou o cookie de sessao no sucesso. Consultamos o
+ * status; se conectado, montamos o SpotifyAuthSuccess via refreshAccessToken
+ * (o access_token nao volta no status). Retorna null se nao conectado.
+ */
+export async function resolveViaStatusFallback(): Promise<SpotifyAuthSuccess | null> {
+  try {
+    const resp = await fetch("/api/audio/spotify/status", {
+      credentials: "include",
+    });
+    if (!resp.ok) return null;
+    const s = await resp.json();
+    if (s?.connected !== true) return null;
+    // CRITICAL: usa silentMode. Um 401 transiente/stale do /refresh durante o
+    // poll NAO pode disparar o logout global do apiRequest (que faz
+    // window.location.href='/login' + limpa user data) — isso recarregava a
+    // pagina e forcava re-login no meio do OAuth. silentMode lanca o erro sem
+    // refresh+redirect; tratamos como "ainda nao pronto" (null).
+    const r: any = await apiRequest(
+      "POST",
+      "/api/audio/spotify/refresh",
+      undefined,
+      { silentMode: true },
+    );
+    if (!r?.accessToken) return null;
+    // RF-04 — sucesso real (conectado + access token): invalida status.
+    invalidateSpotifyStatus();
+    return {
+      accessToken: r.accessToken,
+      expiresIn: r.expiresIn,
+      displayName: s.displayName ?? "",
+      productTier: s.productTier ?? undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function initiateSpotifyAuth(): Promise<SpotifyAuthSuccess> {
   const init = await apiRequest("POST", "/api/audio/spotify/oauth-init");
   const authUrl = (init as any)?.authUrl;
   if (!authUrl) throw new SpotifyAuthError("oauth-init: authUrl ausente");
+
+  // Guard host mismatch: o cookie de sessao OAuth/Spotify e gravado no host do
+  // redirect_uri (ex: 127.0.0.1). Se a pagina atual roda em outro host (ex:
+  // localhost), os cookies ficam em jars separados e o callback/refresh
+  // retornam 401 silenciosamente. Spotify exige 127.0.0.1 (rejeita localhost),
+  // entao o app precisa ser acessado no MESMO host do redirect_uri.
+  try {
+    const redirectHost = new URL(
+      new URL(authUrl).searchParams.get("redirect_uri") ?? "",
+    ).host;
+    if (redirectHost && redirectHost !== window.location.host) {
+      throw new SpotifyAuthError(
+        `host_mismatch: abra o app em http://${redirectHost} (atual: ${window.location.host}). ` +
+          `O Spotify exige 127.0.0.1 e os cookies nao cruzam entre localhost e 127.0.0.1.`,
+      );
+    }
+  } catch (e) {
+    if (e instanceof SpotifyAuthError) throw e;
+    // URL parse falhou -> segue (best-effort).
+  }
 
   const popup = window.open(
     authUrl,
@@ -158,7 +231,12 @@ export async function initiateSpotifyAuth(): Promise<SpotifyAuthSuccess> {
     let resolved = false;
     const expectedOrigin = window.location.origin;
     const startTs = Date.now();
-    const SAFARI_CLOSE_THRESHOLD_MS = 1500;
+    // Grace inicial: logo apos window.open o popup pode reportar
+    // `.closed === true` num race (antes da navegacao cross-site commitar) ou
+    // por COOP. NAO tratar isso como cancel/fallback — senao a pagina principal
+    // era redirecionada (fallbackRedirect) junto com o popup. Aguarda o popup
+    // assentar antes de confiar em `.closed`.
+    const CLOSE_GRACE_MS = 1200;
 
     const onMessage = (ev: MessageEvent) => {
       if (ev.origin !== expectedOrigin) return; // security: ignore foreign origins
@@ -167,6 +245,8 @@ export async function initiateSpotifyAuth(): Promise<SpotifyAuthSuccess> {
       if (data.type === "spotify-oauth-success") {
         resolved = true;
         cleanup();
+        // RF-04 — invalida ["spotify-status"] no sucesso via postMessage.
+        invalidateSpotifyStatus();
         resolve({
           accessToken: data.accessToken,
           expiresIn: data.expiresIn,
@@ -195,28 +275,60 @@ export async function initiateSpotifyAuth(): Promise<SpotifyAuthSuccess> {
 
     window.addEventListener("message", onMessage);
 
-    // Best-effort: detect popup closed by user (cancel).
-    // Sprint MP3 RF-06.1: popup.closed em <1.5s sem postMessage -> fallback
-    // automatico (Safari async-close threshold). Apos esse threshold,
-    // popup.closed = cancel manual normal.
+    // Best-effort: detecta popup fechado pelo user (cancel). NUNCA redireciona
+    // a pagina principal — o popup ja esta aberto; a pagina atual deve
+    // permanecer e aguardar o resultado. `.closed` so e confiavel apos a grace
+    // inicial (evita falso-positivo do race de abertura/COOP).
     const popupRef = popup;
-    const interval = setInterval(() => {
+    let checking = false;
+
+    const succeed = (fb: SpotifyAuthSuccess) => {
+      if (resolved) return;
+      resolved = true;
+      cleanup();
+      resolve(fb);
+    };
+
+    // Poll de status: cobre o caso COOP (opener cortado -> postMessage nunca
+    // chega). O server ja setou o cookie de sessao no sucesso, entao o status
+    // vira `connected:true` mesmo sem a mensagem.
+    const pollStatus = async () => {
+      if (resolved || checking) return;
+      checking = true;
       try {
-        if (popupRef && popupRef.closed && !resolved) {
-          clearInterval(interval);
-          window.removeEventListener("message", onMessage);
-          if (Date.now() - startTs < SAFARI_CLOSE_THRESHOLD_MS) {
-            // Safari async-close: fallback redirect.
-            fallbackRedirect(authUrl);
-            return;
-          }
-          reject(new SpotifyOAuthCancelledError());
-        } else if (resolved) {
-          clearInterval(interval);
-        }
-      } catch {
-        // cross-origin or closed
+        const fb = await resolveViaStatusFallback();
+        if (fb) succeed(fb);
+      } finally {
+        checking = false;
       }
+    };
+
+    const interval = setInterval(() => {
+      if (resolved) {
+        clearInterval(interval);
+        return;
+      }
+      if (Date.now() - startTs < CLOSE_GRACE_MS) return;
+      let isClosed = false;
+      try {
+        isClosed = !!(popupRef && popupRef.closed);
+      } catch {
+        isClosed = false;
+      }
+      if (isClosed) {
+        clearInterval(interval);
+        // Popup fechou: confirma via status UMA vez antes de decidir cancel.
+        // (Nao pollamos enquanto aberto pra evitar spam de /refresh 401.)
+        void (async () => {
+          await pollStatus();
+          if (!resolved) {
+            resolved = true;
+            window.removeEventListener("message", onMessage);
+            reject(new SpotifyOAuthCancelledError());
+          }
+        })();
+      }
+      // Popup ainda aberto: aguarda postMessage (fast-path) ou o fechamento.
     }, 500);
   });
 }

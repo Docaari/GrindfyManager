@@ -121,6 +121,26 @@ export async function requireSpotifyAccess(
   }
 
   // 3+4. Refresh (sempre que sem cache, ja que access_token nao eh persistido).
+  //
+  // RF-07 / ADR-220 D6 — GOTCHA: distinguir erro de PROGRAMACAO (dep ausente,
+  // `tokenCrypto`/`decryptRefreshToken` undefined -> TypeError) de CORRUPCAO REAL
+  // do ciphertext (decrypt lanca erro NAO-TypeError, ex. AES-GCM auth fail).
+  // So o segundo caso marca disconnect — bug de chamada NAO pode desconectar o
+  // usuario (scripts de diagnostico com deps incompletos desconectavam o founder
+  // a cada run).
+  if (
+    !deps.tokenCrypto ||
+    typeof deps.tokenCrypto.decryptRefreshToken !== "function"
+  ) {
+    // Dep ausente / objeto parcial — erro de configuracao, NAO de dados.
+    // eslint-disable-next-line no-console
+    console.error("spotify.access.config_missing_token_crypto", { userId });
+    throw new SpotifyAccessError(
+      "config_missing",
+      "tokenCrypto dep ausente — erro de configuracao (NAO desconecta)",
+    );
+  }
+
   let refreshTokenPlain: string;
   try {
     refreshTokenPlain = deps.tokenCrypto.decryptRefreshToken({
@@ -129,9 +149,42 @@ export async function requireSpotifyAccess(
       refreshTokenAuthTag: row.refreshTokenAuthTag,
     });
   } catch (err) {
-    // Decrypt fail eh corrupcao — trata como invalid_refresh + disconnect.
+    // RF-07 (refinado): nem todo TypeError eh erro de programacao. O AES-256-GCM
+    // do Node lanca TypeError para CORRUPCAO REAL de dados — ex. IV com tamanho
+    // invalido ("Invalid initialization vector"), auth tag invalida ("Invalid
+    // authentication tag length"/"Unsupported state or unable to authenticate
+    // data"). Esses casos sao corrupcao do ciphertext e DEVEM desconectar.
+    //
+    // So o TypeError de DEP AUSENTE ("is not a function" / "Cannot read
+    // properties of undefined") eh erro de config — NAO desconecta (a guarda
+    // antes do try ja cobre o caso comum de dep ausente; aqui cobrimos o
+    // metodo que existe mas chama algo undefined internamente).
+    const msg = String((err as Error)?.message ?? "");
+    // Assinaturas de CORRUPCAO real do AES-256-GCM (Node crypto). Especificas —
+    // NAO usar "data" cru (muito amplo, casaria com mensagens de config).
+    const isCorruption =
+      /initialization vector|authenticate data|auth(?:entication)? tag|unsupported state/i.test(
+        msg,
+      );
+    const isDepMissing =
+      err instanceof TypeError &&
+      !isCorruption &&
+      /is not a function|cannot read propert/i.test(msg);
+    if (isDepMissing) {
+      // eslint-disable-next-line no-console
+      console.error("spotify.access.decrypt_typeerror", {
+        userId,
+        message: msg,
+      });
+      throw new SpotifyAccessError(
+        "config_missing",
+        "decryptRefreshToken falhou com TypeError de dep ausente (erro de programacao)",
+      );
+    }
+    // Corrupcao real do ciphertext (TypeError de IV/tag invalida OU erro
+    // generico nao-TypeError) — invalid_refresh + disconnect.
     // eslint-disable-next-line no-console
-    console.error("spotify.access.decrypt_fail", { userId });
+    console.error("spotify.access.decrypt_fail", { userId, message: msg });
     await safeMarkDisconnect(deps.storage, userId, "decrypt_fail");
     throw new SpotifyAccessError("invalid_refresh", "Token nao decriptavel");
   }

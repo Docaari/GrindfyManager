@@ -7,15 +7,28 @@
 // ADR: Docs/architecture/decisions/209-mini-player-modern-redesign.md D7
 
 import React, { Suspense, useEffect, useState } from "react";
-import { BookOpen, Loader2, Music } from "lucide-react";
+import { BookOpen, Loader2, Music, Search as SearchIcon } from "lucide-react";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
 import { emitAudioEvent } from "@/lib/activity-telemetry";
-import { initiateSpotifyAuth } from "@/lib/spotify/auth";
+import {
+  initiateSpotifyAuth,
+  SpotifyPremiumRequiredError,
+} from "@/lib/spotify/auth";
+// Singleton (NAO useQueryClient) — render fora de provider em tests legacy
+// quebraria (lesson #29).
+import { queryClient } from "@/lib/queryClient";
 
 // Lazy global — picker de aulas.
 const LessonPickerDialog = React.lazy(() =>
   import("./LessonPickerDialog").then((m) => ({
     default: m.LessonPickerDialog,
+  })),
+);
+
+// Lazy — busca/navegacao Spotify (entry point quando conectado mas sem track).
+const SpotifySearchDialog = React.lazy(() =>
+  import("./SpotifySearchDialog").then((m) => ({
+    default: m.SpotifySearchDialog,
   })),
 );
 
@@ -48,11 +61,13 @@ export function EmptyStateCTA() {
   const ctxRaw = useAudioPlayer() as any;
   const activeSource: string | null =
     ctxRaw?.activeSource ?? ctxRaw?.activeTrack?.source ?? null;
-  const isSpotifyConnected = activeSource === "spotify";
+  const isSpotifyConnected =
+    activeSource === "spotify" || ctxRaw?.isSpotifyConnected === true;
 
   const reducedMotion = usePrefersReducedMotion();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [spotifyConnecting, setSpotifyConnecting] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const handleChooseLesson = () => {
     try {
@@ -71,10 +86,29 @@ export function EmptyStateCTA() {
     }
     setSpotifyConnecting(true);
     try {
-      await initiateSpotifyAuth();
+      const result = await initiateSpotifyAuth();
+      // Propaga token pro AudioPlayerContext criar o driver real.
+      if (result?.accessToken && ctxRaw?.connectSpotify) {
+        try {
+          ctxRaw.connectSpotify(
+            result.accessToken,
+            result.expiresIn,
+            result.displayName,
+          );
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn("[EmptyStateCTA] connectSpotify falhou:", e);
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ["spotify-status"] });
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn("[EmptyStateCTA] Spotify connect falhou:", err);
+      if (err instanceof SpotifyPremiumRequiredError) {
+        // eslint-disable-next-line no-console
+        console.warn("[EmptyStateCTA] Spotify Premium necessario");
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn("[EmptyStateCTA] Spotify connect falhou:", err);
+      }
     } finally {
       setSpotifyConnecting(false);
     }
@@ -120,6 +154,28 @@ export function EmptyStateCTA() {
           )}
           Conectar Spotify
         </button>
+      ) : (
+        <button
+          type="button"
+          data-testid="mini-player-empty-spotify-search"
+          className="px-4 py-1.5 bg-green-500 hover:bg-green-600 rounded-md text-sm font-medium inline-flex items-center"
+          onClick={() => {
+            try {
+              void emitAudioEvent("mini_player.empty_cta.spotify_search", {});
+            } catch {
+              // never throw
+            }
+            setSearchOpen(true);
+          }}
+        >
+          <SearchIcon className="w-4 h-4 mr-1.5" aria-hidden="true" />
+          Buscar no Spotify
+        </button>
+      )}
+      {searchOpen ? (
+        <Suspense fallback={null}>
+          <SpotifySearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+        </Suspense>
       ) : null}
       {pickerOpen ? (
         <Suspense fallback={null}>

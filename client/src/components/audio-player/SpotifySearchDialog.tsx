@@ -38,9 +38,13 @@ import {
   SpotifyApiError,
 } from "@/lib/audio-engine/spotifyApiClient";
 import { sanitizeSpotifyCoverUrl } from "@/lib/audio-engine/sanitizeCoverUrl";
-
-const ELIGIBLE_TIERS = new Set(["pro", "premium", "admin", "trial"]);
-const BLOCKED_TIERS = new Set(["free", "expired", ""]);
+// Sets de elegibilidade de tier compartilhados (fonte única) — ver
+// tierEligibility.ts. 'active' (pagante) resolve server-side; server é a
+// autoridade (nega via 403 se inelegível).
+import {
+  SPOTIFY_SEARCH_ELIGIBLE_TIERS as ELIGIBLE_TIERS,
+  SPOTIFY_BLOCKED_TIERS as BLOCKED_TIERS,
+} from "@/lib/spotify/tierEligibility";
 
 type ActiveTab = "search" | "playlists";
 
