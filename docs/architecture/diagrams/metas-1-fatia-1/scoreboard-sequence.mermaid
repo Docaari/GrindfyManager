@@ -1,0 +1,63 @@
+%% Sequencia GET /api/goals/scoreboard (ADR-229 RF-06/07/08 + DEC-A1 on-read UPSERT)
+%% Placar read-only para TODOS os tiers; geracao on-read idempotente (sem cron nesta fatia).
+
+sequenceDiagram
+    actor User
+    participant Web as MetasPage (/metas)
+    participant API as registerGoalsRoutes
+    participant H as handleGetScoreboard
+    participant S as goalsStorage
+    participant AGG as aggregateCurrentValue.ts (puro)
+    participant PERF as getPerformanceByPeriod / walletService / fxResolver
+    participant ADH as getPlannedVsActual (ADR-227, OPCIONAL)
+    participant PACE as computePace.ts (puro)
+    participant DB as PostgreSQL
+
+    User->>Web: abre /metas
+    Web->>API: GET /api/goals/scoreboard (JWT)
+    Note over API,H: read-only -> SEM tier gate (Free tambem le; DEC-A2)
+    API->>H: handleGetScoreboard(req,res,injectedStorage?)
+
+    H->>S: listActiveWigs(userId) (INNER JOIN career_goals x goal_wig_meta)
+    S->>DB: SELECT ... só career_goals com goal_wig_meta
+    DB-->>S: WIGs (so WIG-4DX)
+    S-->>H: WigView[]
+    H->>S: listGoals(userId, status=active) (medidas)
+    S->>DB: SELECT goals WHERE status=active AND archived_at IS NULL
+    DB-->>H: GoalRow[] (medidas)
+
+    loop por meta/WIG ativa
+        H->>AGG: aggregateCurrentValue(userId, sourceMetric, weekWindow)
+        alt sourceMetric = financeira (bankroll_usd)
+            AGG->>PERF: wallets + bankroll_snapshots
+            PERF-->>AGG: saldo nativo
+            AGG->>PERF: fxResolver -> USD (lesson SS6; FX ausente=fallback+log SS9)
+        else sourceMetric = performance (roi_pct/abi/itm_pct)
+            AGG->>PERF: getPerformanceByPeriod (grind_session_id IS NULL - SS6.1)
+            PERF-->>AGG: metricas historico
+        else volume/estudo (count/sum direto)
+            AGG->>DB: count(grind_sessions completed) / sum(study_sessions_v2.durationMinutes)
+            DB-->>AGG: contagem/soma
+        end
+        opt sourceMetric mapeia no motor (NAO hard-dep)
+            AGG->>ADH: getPlannedVsActual(...) (reduz divergencia futura fatia-2)
+            ADH-->>AGG: PlannedVsActual (opcional)
+        end
+        Note over AGG: numeric=string -> coerceFiniteNumber(parseFloat(v)) na boundary (nunca Number cego)
+        AGG-->>H: {value, dataSufficiency, note?}
+
+        H->>PACE: computeExpectedNow(baseline,target,createdAt,deadline,now)
+        PACE-->>H: expectedNow (null se day-zero / div-zero)
+        H->>PACE: deriveStatus(actual, expectedNow, target, direction)
+        PACE-->>H: status (ahead/on_track/behind/at_risk/achieved; DEC-A3 thresholds fixos)
+
+        H->>S: upsertGoalSnapshot({goalRefId, goalKind, weekStartDate(ymdUtc corrente), current, expected, status, dataSufficiency})
+        S->>DB: INSERT ... ON CONFLICT (goal_ref_id, week_start_date) DO UPDATE
+        Note over S,DB: idempotente (UNIQUE) -> reler N vezes/semana = 1 row (DEC-A1)
+        DB-->>S: snapshot row
+    end
+
+    H-->>API: { wigs:[...], measures:[...], snapshotsWeek }
+    API-->>Web: 200 JSON (RF-06: SEM P&L diario / ROI semanal)
+    Web-->>User: placar (current x target x expectedNow x status + sparkline)
+    Note over Web: sub-fetcher isolado em ErrorBoundary local (lesson SS29)

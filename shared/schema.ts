@@ -23,6 +23,7 @@ import {
   SatelliteRewardTypeSchema,
 } from "./tournamentTypes";
 import { LIBRARY_CATEGORY_IDS, type LibraryCategoryId } from "./library-categories";
+import type { MdaImage } from "./mda";
 
 // Session storage table (mandatory for Replit Auth)
 export const sessions = pgTable(
@@ -2408,6 +2409,47 @@ export const insertStudyThemeSpotLinkSchema = createInsertSchema(studyThemeSpotL
 });
 export type StudyThemeSpotLink = typeof studyThemeSpotLinks.$inferSelect;
 export type InsertStudyThemeSpotLink = z.infer<typeof insertStudyThemeSpotLinkSchema>;
+
+// =============================================================================
+// Sprint MDA-1 (ADR-230 / migration 0090) — MDA (Tendencias da Populacao)
+// =============================================================================
+// `mda_reads` = card de referencia (exploit do field), SEM tempo/XP, soft delete.
+// `mda_read_themes` = junction N:N (1 MDA -> N temas), espelha
+// study_theme_spot_links. UNIQUE (mda_read_id, theme_id) garante idempotencia da
+// tag. Tipos/Zod em shared/mda.ts (mantem schema.ts enxuto). SEM FK rigida
+// (ownership validado em app, padrao 0088/0089).
+// =============================================================================
+export const mdaReads = pgTable("mda_reads", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull(),
+  title: varchar("title", { length: 120 }).notNull(),
+  spotContext: varchar("spot_context", { length: 200 }),
+  filters: text("filters"),
+  tendencyText: text("tendency_text"),
+  statId: varchar("stat_id", { length: 64 }),
+  images: jsonb("images").$type<MdaImage[]>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at"),
+}, (table) => [
+  index("idx_mda_reads_user").on(table.userId, table.deletedAt),
+]);
+
+export const mdaReadThemes = pgTable("mda_read_themes", {
+  mdaReadId: varchar("mda_read_id").notNull(),
+  themeId: varchar("theme_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("mda_read_themes_read_theme_unique").on(table.mdaReadId, table.themeId),
+  index("idx_mda_read_themes_theme").on(table.userId, table.themeId),
+  index("idx_mda_read_themes_read").on(table.mdaReadId),
+]);
+
+export type MdaReadRow = typeof mdaReads.$inferSelect;
+export type InsertMdaReadRow = typeof mdaReads.$inferInsert;
+export type MdaReadThemeRow = typeof mdaReadThemes.$inferSelect;
+export type InsertMdaReadThemeRow = typeof mdaReadThemes.$inferInsert;
 
 // =============================================================================
 // Sprint Estudos-Habito-1 (ADR-126) — study_sessions_v2
@@ -5710,4 +5752,118 @@ export interface ReportStudyWeek {
   timeByTheme: Array<{ themeId: string; minutes: number }>; // cap 8, minutos desc
   narrative?: string;
 }
+
+// =============================================================================
+// Ferramenta de Metas 4DX — fatia-1 (ADR-229). Migration 0091_goals.sql.
+// goal_kind discrimina goals (so 'measure' usado na fatia-1; WIG vive em
+// career_goals + goal_wig_meta). FK para career_goals = SQL-only (nao drizzle —
+// career_goals nao esta formalizada no drizzle, ADR-229 DEC-A6-impl opcao b).
+// =============================================================================
+
+// --- goals: medidas de direcao (D2) ---
+export const goals = pgTable(
+  "goals",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    goalKind: varchar("goal_kind", { length: 12 }).notNull().default("measure"),
+    goalType: varchar("goal_type", { length: 16 }).notNull(),
+    category: varchar("category", { length: 24 }).notNull(),
+    title: varchar("title", { length: 120 }).notNull(),
+    sourceMetric: varchar("source_metric", { length: 48 }),
+    targetValue: numeric("target_value"),
+    unit: varchar("unit", { length: 16 }),
+    cadence: varchar("cadence", { length: 8 }),
+    direction: varchar("direction", { length: 4 }).notNull().default("up"),
+    horizon: varchar("horizon", { length: 8 }).notNull(),
+    status: varchar("status", { length: 12 }).notNull().default("active"),
+    origin: varchar("origin", { length: 24 }).notNull().default("manual"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    archivedAt: timestamp("archived_at"),
+  },
+  (t) => [
+    index("idx_goals_user_status").on(t.userId, t.status),
+    index("idx_goals_user_kind").on(t.userId, t.goalKind),
+  ],
+);
+
+// --- goal_wig_meta: filha 1:1 da WIG (career_goals). Presenca = e WIG-4DX. ---
+export const goalWigMeta = pgTable(
+  "goal_wig_meta",
+  {
+    careerGoalId: varchar("career_goal_id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    baselineValue: numeric("baseline_value").notNull(),
+    targetValue4dx: numeric("target_value_4dx"),
+    sourceMetric: varchar("source_metric", { length: 48 }),
+    unit: varchar("unit", { length: 16 }),
+    horizon4dx: varchar("horizon_4dx", { length: 8 }),
+    wigRole: varchar("wig_role", { length: 24 }),
+    coachToneAtCreate: varchar("coach_tone_at_create", { length: 8 }),
+    origin: varchar("origin", { length: 24 }).notNull().default("manual"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [index("idx_goal_wig_meta_user").on(t.userId)],
+);
+
+// --- goal_links: N:N WIG<->medida ---
+export const goalLinks = pgTable(
+  "goal_links",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    wigCareerGoalId: varchar("wig_career_goal_id").notNull(), // FK -> career_goals(id) SQL-only
+    measureId: varchar("measure_id")
+      .notNull()
+      .references(() => goals.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("goal_links_wig_measure_unique").on(t.wigCareerGoalId, t.measureId),
+    index("idx_goal_links_user").on(t.userId),
+  ],
+);
+
+// --- goal_progress_snapshots: placar historico (RF-08) ---
+export const goalProgressSnapshots = pgTable(
+  "goal_progress_snapshots",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    goalRefId: varchar("goal_ref_id").notNull(), // polimorfico: goals.id OU career_goals.id
+    goalKind: varchar("goal_kind", { length: 12 }).notNull(),
+    weekStartDate: date("week_start_date").notNull(),
+    currentValue: numeric("current_value"),
+    expectedValue: numeric("expected_value"),
+    compliancePct: numeric("compliance_pct"),
+    streakDays: integer("streak_days").default(0),
+    status: varchar("status", { length: 12 }),
+    dataSufficiency: varchar("data_sufficiency", { length: 4 }).notNull().default("ok"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("goal_progress_snapshots_ref_week_unique").on(t.goalRefId, t.weekStartDate),
+    index("idx_goal_snapshots_user_week").on(t.userId, t.weekStartDate),
+  ],
+);
+
+export const goalsRelations = relations(goals, ({ one }) => ({
+  user: one(users, { fields: [goals.userId], references: [users.userPlatformId] }),
+}));
+
+export type GoalRow = typeof goals.$inferSelect;
+export type InsertGoal = typeof goals.$inferInsert;
+export type GoalWigMetaRow = typeof goalWigMeta.$inferSelect;
+export type GoalLinkRow = typeof goalLinks.$inferSelect;
+export type GoalSnapshotRow = typeof goalProgressSnapshots.$inferSelect;
 

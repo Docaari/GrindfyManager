@@ -16691,3 +16691,10 @@ attachWeeklyPlanningStorage(storage as any);
 // EST-5 (ADR-226) — weekly_reviews CRUD (ritual de segunda).
 import { attachWeeklyReviewStorage } from "./storage/weeklyReviewStorage";
 attachWeeklyReviewStorage(storage as any);
+// METAS-1 fatia-1 (ADR-229) — goals (medidas) + WIG (career_goals + goal_wig_meta)
+// + goal_links + goal_progress_snapshots.
+import { attachGoalsStorage } from "./storage/goalsStorage";
+attachGoalsStorage(storage as any);
+// MDA-1 (ADR-230) — mda_reads CRUD + junction N:N idempotente + imagens jsonb.
+import { attachMdaStorage } from "./storage/mdaStorage";
+attachMdaStorage(storage as any);

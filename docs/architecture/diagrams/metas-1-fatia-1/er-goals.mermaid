@@ -1,0 +1,84 @@
+%% ER — Ferramenta de Metas 4DX fatia-1 (ADR-229, DEC-A6-impl opcao b)
+%% career_goals INTOCADA (raw SQL only, nao no drizzle). WIG = career_goal + goal_wig_meta (filha 1:1).
+%% FK para career_goals declarada SO na migration SQL (drizzle = varchar sem .references()).
+
+erDiagram
+    users ||--o{ career_goals : "tem (AI-2B, intocada)"
+    users ||--o{ goals : "tem medidas"
+    users ||--o{ goal_links : "tem"
+    users ||--o{ goal_progress_snapshots : "tem"
+
+    career_goals ||--o| goal_wig_meta : "vira WIG-4DX quando (presenca = e WIG)"
+    career_goals ||--o{ goal_links : "wig_career_goal_id (FK SQL-only)"
+    goals ||--o{ goal_links : "measure_id (FK CASCADE)"
+
+    career_goals {
+        varchar id PK "AI-2B - intocada"
+        varchar user_id FK "users.user_platform_id CASCADE"
+        varchar title "NOT NULL"
+        varchar target_metric "CHECK profit_usd|tournaments_count|roi_pct|bankroll_usd|custom"
+        numeric target_value
+        date target_deadline
+        varchar horizon "CHECK mes|trimestre|ano|multi_ano (4DX mapeia em codigo)"
+        varchar status "CHECK active|achieved|abandoned|expired"
+    }
+
+    goal_wig_meta {
+        varchar career_goal_id PK "FK career_goals.id CASCADE (SQL-only) - presenca = WIG-4DX"
+        varchar user_id FK "users CASCADE"
+        numeric baseline_value "NOT NULL - X imutavel (RF-01)"
+        numeric target_value_4dx "Y (opcional - espelha career_goals.target_value)"
+        varchar source_metric "allowlist RF-05"
+        varchar unit "usd|pct|sessions|..."
+        varchar horizon_4dx "CHECK quarter|season (WIG e lag longo, deadline >= +90d)"
+        varchar wig_role "auditoria"
+        varchar coach_tone_at_create "snapshot tom (A4)"
+        varchar origin "manual (templates fora fatia-1)"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    goals {
+        varchar id PK "nanoid"
+        varchar user_id FK "users CASCADE"
+        varchar goal_kind "default measure (discriminador; WIG NAO vive aqui)"
+        varchar goal_type "CHECK process|performance|result (C7)"
+        varchar category "CHECK 7 valores (dores learnings)"
+        varchar title "NOT NULL"
+        varchar source_metric "allowlist RF-04/05; sem fonte = lead_no_data_source"
+        numeric target_value "Y"
+        varchar unit "usd|pct|minutes|sessions|days|boolean"
+        varchar cadence "CHECK weekly|daily (RF-03)"
+        varchar direction "default up (DEC-A3; menor-melhor = down futuro)"
+        varchar horizon "CHECK week|month|quarter|season (RF-12)"
+        varchar status "default active (medida nasce active)"
+        varchar origin "default manual"
+        timestamp created_at
+        timestamp updated_at
+        timestamp archived_at "soft-delete"
+    }
+
+    goal_links {
+        varchar id PK "nanoid"
+        varchar user_id FK "users CASCADE"
+        varchar wig_career_goal_id FK "career_goals.id (FK SQL-only)"
+        varchar measure_id FK "goals.id CASCADE"
+        timestamp created_at
+        varchar UNIQUE "(wig_career_goal_id, measure_id)"
+    }
+
+    goal_progress_snapshots {
+        varchar id PK "nanoid"
+        varchar user_id FK "users CASCADE"
+        varchar goal_ref_id "polimorfico: goals.id OU career_goals.id"
+        varchar goal_kind "CHECK measure|wig (discrimina goal_ref_id)"
+        date week_start_date "DATE UTC via ymdUtc (CLAUDE.md SS10)"
+        numeric current_value "realizado (agregacao direta fatia-1)"
+        numeric expected_value "pace line (RF-07)"
+        numeric compliance_pct "medidas"
+        integer streak_days "default 0 (A9)"
+        varchar status "ahead|on_track|behind|at_risk|achieved"
+        varchar data_sufficiency "default ok; low se amostra pequena (D9)"
+        timestamp created_at
+        varchar UNIQUE "(goal_ref_id, week_start_date) - idempotencia (RF-08)"
+    }
