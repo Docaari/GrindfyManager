@@ -78,14 +78,20 @@ export const COACH_PREFS_DEFAULTS: CoachPreferences = {
   channelPush: false,
   coachTone: "balanced",
   frozenCategories: {},
-  reportWeeklyEnabled: false,
+  // EST-1.1 (ADR-223 §INFO-2): delivery defaults flipados para `true` para que
+  // NOVOS usuarios elegiveis nascam opt-in (honra D2/D6 para signups via app —
+  // a migration 0086 so cobriu o DEFAULT do DB + back-fill de rows existentes;
+  // upsertCoachPreferences insere as colunas explicitamente a partir daqui).
+  // Risco semantico zero: getReportTier gateia free/expired na geracao.
+  // Quarterly intocado (segue opt-out — D6).
+  reportWeeklyEnabled: true,
   nudgeBGapcheck: true,
   nudgeBImport: true,
-  reportDailyEnabled: false,
-  reportMonthlyEnabled: false,
+  reportDailyEnabled: true,
+  reportMonthlyEnabled: true,
   reportQuarterlyEnabled: false,
-  emailWeeklyEnabled: false,
-  emailMonthlyEnabled: false,
+  emailWeeklyEnabled: true,
+  emailMonthlyEnabled: true,
   emailQuarterlyEnabled: false,
   disclaimerAcceptedAt: null,
   audioSleepTimerMinutes: null,
