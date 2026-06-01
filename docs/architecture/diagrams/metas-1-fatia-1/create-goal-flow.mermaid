@@ -1,0 +1,36 @@
+%% Fluxograma POST /api/goals (ADR-229 RF-01/03/04/11) — validacao de criacao WIG vs medida.
+%% Erros NOMEADOS (nao 500 generico). Tier gate defense-in-depth (DEC-A2).
+
+flowchart TD
+    A["POST /api/goals (JWT)"] --> TIER{"getReportTier(user)<br/>!= 'free' ?"}
+    TIER -->|"Não (free/expired)"| E403["403 tier_not_eligible<br/>(DEC-A2 defense-in-depth)"]
+    TIER -->|"Sim (trial/pro/premium/admin)"| ZOD{"body parse Zod OK ?"}
+    ZOD -->|"Não"| E400["400 validation_error"]
+    ZOD -->|"Sim"| KIND{"é WIG ?<br/>(goalType result/performance<br/>+ intencao WIG)"}
+
+    %% ----- ramo WIG (D1) -----
+    KIND -->|"WIG"| WPROC{"goalType == 'process' ?"}
+    WPROC -->|"Sim"| EWPROC["422 wig_must_be_lag<br/>(processo é D2, vira medida)"]
+    WPROC -->|"Não"| WREQ{"tem sourceMetric +<br/>baselineValue + targetValue +<br/>targetDeadline ?"}
+    WREQ -->|"Não"| EWREQ["422 wig_underspecified"]
+    WREQ -->|"Sim"| WDL{"targetDeadline >= +90 dias<br/>(trimestre) ?"}
+    WDL -->|"Não"| EWDL["422 wig_deadline_too_short<br/>(cita D9: ROI só converge em escala)"]
+    WDL -->|"Sim"| WCAP{"countActiveWigs(user) < 2 ?<br/>(só career_goals COM goal_wig_meta)"}
+    WCAP -->|"Não"| EWCAP["422 wig_active_limit (cap 2)"]
+    WCAP -->|"Sim"| WCREATE["createWig: 1 tx<br/>INSERT career_goals (horizon 4DX -> enum AI-2B)<br/>+ INSERT goal_wig_meta (baseline X imutável)<br/>status='draft' (sem medida ainda — RF-02)"]
+    WCREATE --> W201["201 WigView (status=draft,<br/>fora do placar até link-measure)"]
+
+    %% ----- ramo medida de direcao (D2) -----
+    KIND -->|"Medida"| MREQ{"tem targetValue +<br/>unit + cadence ?"}
+    MREQ -->|"Não"| EMREQ["422 lead_underspecified<br/>(cita C7: meta vaga = sem meta)"]
+    MREQ -->|"Sim"| MCTRL{"sourceMetric ∈ allowlist<br/>controlável ? (RF-04b)"}
+    MCTRL -->|"Não<br/>(profit_short_term / win_a_tournament /<br/>beat_specific_player)"| EMCTRL["422 lead_not_controllable<br/>(cita A2/D9: outcome bias)"]
+    MCTRL -->|"Sim"| MSRC{"sourceMetric tem fonte<br/>mapeada (RF-05) ? (RF-04a)"}
+    MSRC -->|"Não"| EMSRC["422 lead_no_data_source"]
+    MSRC -->|"Sim"| MCAP{"countActiveMeasures(user) < 3 ?"}
+    MCAP -->|"Não"| EMCAP["422 lead_active_limit (cap 3)"]
+    MCAP -->|"Sim"| MCREATE["createGoal: INSERT goals<br/>goal_kind='measure', status='active',<br/>direction='up' default"]
+    MCREATE --> M201["201 GoalRow (medida ativa,<br/>vincula a WIG via link-measure)"]
+
+    %% notas
+    EWDL -.->|"todos erros = 4xx nomeado,<br/>nunca 500 genérico"| NOTE["erros nomeados (lesson #9:<br/>log antes de fallback)"]

@@ -7,6 +7,8 @@ import cookieParser from "cookie-parser";
 import { pool } from "../db";
 
 import { registerAuthRoutes } from "./auth";
+import { requireAuth } from "../auth";
+import { registerGoalsRoutes } from "./goals";
 import { registerAdminRoutes } from "./admin";
 import { registerDashboardRoutes } from "./dashboard";
 import { registerAnalyticsRoutes } from "./analytics";
@@ -62,6 +64,8 @@ import { registerAdminFxRoutes } from "./adminFx";
 // Sprint Estudos-Habito-1: /api/study-sessions + /api/users/me/study-habit + auto-suggest.
 import { registerStudySessionsRoutes } from "./study-sessions";
 import { registerFocusStatsAutoSuggestRoutes } from "./focus-stats-auto-suggest";
+// Sprint MDA-1 (ADR-230): /api/mda-reads (Tendencias da Populacao).
+import { registerMdaRoutes } from "./mda";
 // Sprint Estudos-Coach-Biblio-2: /api/biblioteca/recommendations, /api/study-weekly-plan, /api/coach/session-insights.
 import { registerBibliotecaRecommendationsRoutes } from "./biblioteca-recommendations";
 import { registerStudyWeeklyPlanRoutes } from "./study-weekly-plan";
@@ -313,6 +317,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // canonical /api/home/settings (registrado acima).
   registerStudySessionsRoutes(app);
   registerFocusStatsAutoSuggestRoutes(app);
+
+  // Sprint MDA-1 (ADR-230) — Registro de MDA (Tendencias da Populacao).
+  registerMdaRoutes(app);
+
+  // METAS-1 fatia-1 (ADR-229) — Ferramenta de Metas 4DX (placar + CRUD + snapshots).
+  registerGoalsRoutes(app, requireAuth);
 
   // Sprint Estudos-Coach-Biblio-2 — RF-2/3/4 endpoints.
   registerBibliotecaRecommendationsRoutes(app);

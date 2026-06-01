@@ -35,6 +35,8 @@ const GradePlanner = lazy(() => import("@/pages/GradePlanner"));
 const UploadHistory = lazy(() => import("@/pages/UploadHistory"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Studies = lazy(() => import("@/pages/Studies"));
+const MetasPage = lazy(() => import("@/pages/metas/MetasPage"));
+const MetasNovaPage = lazy(() => import("@/pages/metas/MetasNovaPage"));
 const AdminUsers = lazy(() => import("@/pages/AdminUsers"));
 const AdminBugs = lazy(() => import("@/pages/AdminBugs"));
 const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
@@ -134,6 +136,9 @@ function Router() {
                   <Route path="/estudos" component={() => (<ProtectedRoute><Studies /></ProtectedRoute>)} />
                   <Route path="/estudos/:rest*" component={() => (<ProtectedRoute><Studies /></ProtectedRoute>)} />
                   <Route path="/calculadoras" component={() => (<ProtectedRoute><Calculadoras /></ProtectedRoute>)} />
+                  {/* METAS-1 fatia-1 (ADR-229): rota mais especifica /nova ANTES da generica. */}
+                  <Route path="/metas/nova" component={() => (<ProtectedRoute><MetasNovaPage /></ProtectedRoute>)} />
+                  <Route path="/metas" component={() => (<ProtectedRoute><MetasPage /></ProtectedRoute>)} />
                   <Route path="/admin/dashboard" component={() => (<ProtectedRoute><AdminDashboard /></ProtectedRoute>)} />
                   <Route path="/admin/users" component={() => (<ProtectedRoute><AdminUsers /></ProtectedRoute>)} />
                   <Route path="/admin/bugs" component={() => (<ProtectedRoute><AdminBugs /></ProtectedRoute>)} />
