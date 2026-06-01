@@ -5,8 +5,8 @@
  * order-dependent de storage.ts (groupTournamentsBySimilarity) por chaves
  * compostas deterministicas O(n):
  *
- *   familia  = `${site}|${buyInTier}|${typePrimary}`   (agrega Regular/Turbo/Hyper)
- *   especifico = `${familyKey}|${nameSignature}|${speed}`
+ *   familia  = `${site}|${buyInTier}|${typePrimary}|${speed}`   (separa por velocidade)
+ *   especifico = `${familyKey}|${nameSignature}`   (speed ja na familia)
  *
  * Buy-in passa por canonicalBuyIn (snap de ruido de fee/arredondamento) ANTES
  * de tierar, para que $21.60 e $22 caiam no mesmo tier sem mesclar $5 com $500.
@@ -29,9 +29,21 @@ export interface GroupedFamily {
   site: string;
   buyInTier: string;
   type: string;
+  speed: string;
   representative: any;
   tournaments: any[];
   specifics: GroupedSpecific[];
+}
+
+/**
+ * Normaliza velocidade de um torneio para um SpeedBucket canonico. Parsers so
+ * emitem Normal/Turbo/Hyper (csvParser.detectSpeed); default "Normal" quando
+ * ausente — NUNCA "Regular" (bucket fantasma que nao casa com dado real nem com
+ * o filtro inArray(tournaments.speed, ...)).
+ */
+export function normalizeSpeed(t: any): string {
+  const raw = (t?.speed ?? "").toString().trim();
+  return raw || "Normal";
 }
 
 /**
@@ -112,7 +124,8 @@ export function groupTournaments(tournaments: any[]): GroupedFamily[] {
     const site = (t.site ?? "Unknown").toString();
     const tier = buyInTier(parseFloat(String(t.buyIn ?? 0)));
     const type = typePrimary(t);
-    const familyKey = `${site}|${tier}|${type}`;
+    const speed = normalizeSpeed(t);
+    const familyKey = `${site}|${tier}|${type}|${speed}`;
 
     let fam = familyMap.get(familyKey);
     if (!fam) {
@@ -121,6 +134,7 @@ export function groupTournaments(tournaments: any[]): GroupedFamily[] {
         site,
         buyInTier: tier,
         type,
+        speed,
         representative: t,
         tournaments: [],
         specifics: [],
@@ -152,8 +166,11 @@ function clusterSpecifics(familyKey: string, list: any[]): GroupedSpecific[] {
 
   for (const t of list) {
     const sig = nameSignature(t.name ?? "");
-    const speed = (t.speed ?? "Regular").toString();
-    const fineKey = `${familyKey}|${sig}|${speed}`;
+    // speed ja faz parte da familyKey (separacao por velocidade); o especifico
+    // separa so por nameSignature. spec.speed espelha a familia (consumido em
+    // storage.generateSpecificName / metrics) e e identico p/ todos da familia.
+    const speed = normalizeSpeed(t);
+    const fineKey = `${familyKey}|${sig}`;
     let spec = byKey.get(fineKey);
     if (!spec) {
       spec = {

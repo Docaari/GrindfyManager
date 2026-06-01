@@ -14,7 +14,15 @@ export type ColdStartLevel = "pure" | "partial" | false;
 export type SelectorSource = "suprema" | "library";
 export type TimeOfDayBucket = "madrugada" | "manha" | "tarde" | "noite-cedo" | "noite-nobre";
 export type FieldBucket = "pequeno" | "medio" | "grande" | "massivo";
-export type SpeedBucket = "Normal" | "Turbo" | "Hyper";
+/**
+ * SSoT runtime das velocidades de torneio. Fonte unica para: default de
+ * agrupamento (libraryGrouping), chips do filtro de velocidade (Tournament
+ * Library) e qualquer iteracao sobre os buckets. Parsers (csvParser.detectSpeed)
+ * so emitem estes valores. O type SpeedBucket e derivado do array (lock em
+ * compile-time — nao ha como dessincronizar).
+ */
+export const SPEED_BUCKETS = ["Normal", "Turbo", "Hyper"] as const;
+export type SpeedBucket = (typeof SPEED_BUCKETS)[number];
 
 export interface ScoringSignal {
   value: number;       // ROI bruto do bucket

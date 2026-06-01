@@ -313,7 +313,7 @@ export const tournaments = pgTable("tournaments", {
   // Sprint 1 (ADR-031): modelo ortogonal type primario + modificadores booleanos
   type: varchar("type").default("Vanilla"), // Vanilla | PKO | Mystery | Satellite | Add-on (SSoT em shared/tournamentTypes.ts)
   category: varchar("category").notNull(), // [DEPRECATED ADR-032] espelho de `type` durante deprecation gradual; remover apos migracao concluida
-  speed: varchar("speed").notNull(), // Regular, Turbo, Hyper, etc
+  speed: varchar("speed").notNull(), // Normal, Turbo, Hyper (SSoT: shared/scoring.SPEED_BUCKETS)
   fieldSize: integer("field_size"),
   reentries: integer("reentries").default(0),
   finalTable: boolean("final_table").default(false),
@@ -393,6 +393,10 @@ export const tournaments = pgTable("tournaments", {
   index("idx_tournaments_user_created_history")
     .on(table.userId, table.createdAt.desc())
     .where(sql`grind_session_id IS NULL`),
+  // Migration 0085: filtro de velocidade + range de field size na Tournament
+  // Library (buildFilters inArray(speed) + range field_size + insights bucketing).
+  index("idx_tournaments_user_speed").on(table.userId, table.speed),
+  index("idx_tournaments_user_field_size").on(table.userId, table.fieldSize),
 ]);
 
 // =============================================================================

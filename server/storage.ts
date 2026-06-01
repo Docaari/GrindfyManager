@@ -3282,6 +3282,35 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   // Tournament Library com Agrupamento Inteligente
+  /**
+   * Guard defensivo de FX: normaliza buyIn/prize para USD nas linhas residuais
+   * (`!convertedToUSD && currency !== 'USD'`) ANTES de agrupar — sem isso uma
+   * conta multi-moeda soma BRL/EUR/USD crus e corrompe ROI/totais. Linhas ja-USD
+   * passam direto (nao re-converte — evita double-divide). O grosso do historico
+   * e normalizado pela migration de backfill (0085); este guard cobre imports
+   * futuros de moeda exotica sem default de cotacao. Fast-path quando nada precisa.
+   */
+  private async normalizeTournamentsToUsd(rows: any[], userId: string): Promise<any[]> {
+    const needsFx = rows.some(
+      (t) => !t.convertedToUSD && t.currency && t.currency !== "USD",
+    );
+    if (!needsFx) return rows;
+    const { convertToUSD, resolveExchangeRates, FALLBACK_FX_RATES } = await import("./services/fxResolver");
+    const { rates } = await resolveExchangeRates(userId);
+    return rows.map((t) => {
+      if (t.convertedToUSD || !t.currency || t.currency === "USD") return t;
+      // So normaliza+marca convertido quando existe taxa real p/ a moeda. Sem
+      // taxa (moeda exotica), convertToUSD retornaria o valor nativo dividido por
+      // 1 — marcar convertedToUSD=true ai esconderia uma linha NAO convertida nos
+      // agregados. Deixa intacta (false) p/ ficar visivel. (review MEDIUM-1)
+      const rate = (rates as any)[t.currency] ?? (FALLBACK_FX_RATES as any)[t.currency];
+      if (!rate || rate <= 0) return t;
+      const buyIn = convertToUSD(parseFloat(String(t.buyIn ?? 0)), t.currency, rates);
+      const prize = convertToUSD(parseFloat(String(t.prize ?? 0)), t.currency, rates);
+      return { ...t, buyIn, prize, convertedToUSD: true };
+    });
+  }
+
   async getTournamentLibrary(userId: string, period: string = "all", filters: any = {}): Promise<any[]> {
     // Base condition - always filter by user
     const baseConditions = [
@@ -3331,11 +3360,14 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     const whereCondition = and(...baseConditions);
 
     // Get all tournaments for the user within period/filters
-    const allTournaments = await db
-      .select()
-      .from(tournaments)
-      .where(whereCondition)
-      .orderBy(tournaments.datePlayed);
+    const allTournaments = await this.normalizeTournamentsToUsd(
+      await db
+        .select()
+        .from(tournaments)
+        .where(whereCondition)
+        .orderBy(tournaments.datePlayed),
+      userId,
+    );
 
     // Sprint library-evolution Fase 1: agrupamento deterministico 2 niveis
     // (familia coarse -> especificos fine). Substitui o matcher guloso O(n^2)
@@ -3353,7 +3385,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           representativeTournament: fam.representative,
           site: fam.site,
           category: fam.type,
-          speed: "Todos",
+          speed: fam.speed,
           format: fam.representative?.format ?? "MTT",
           buyInTier: fam.buyInTier,
         });
@@ -3468,16 +3500,19 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
       // Best and worst results
       // prize já é net profit (lucro líquido), não precisa subtrair buyIn
-      const bestResult = Math.max(...tournamentsList.map((t: any) => parseFloat(String(t.prize || 0))));
-      const worstResult = Math.min(...tournamentsList.map((t: any) => parseFloat(String(t.prize || 0))));
+      // Guard: lista vazia -> Math.max(...[]) = -Infinity -> NaN no toFixed. (HIGH-1)
+      const prizeValues = tournamentsList.map((t: any) => parseFloat(String(t.prize || 0)));
+      const bestResult = prizeValues.length > 0 ? Math.max(...prizeValues) : 0;
+      const worstResult = prizeValues.length > 0 ? Math.min(...prizeValues) : 0;
 
       // Confidence Grade (recalibrado — shared/library-grades.ts SSoT).
       const confidenceGrade = confidenceGradeForVolume(volume);
       const lowConfidence = volume < MIN_GROUP_VISIBLE;
 
       // Standard Deviation in buy-ins
+      // Guard: prizes vazio -> 0/0 = NaN propaga p/ sd/volatility. (HIGH-5)
       const prizes = tournamentsList.map((t: any) => parseFloat(String(t.prize || 0)));
-      const mean = prizes.reduce((a: number, b: number) => a + b, 0) / prizes.length;
+      const mean = prizes.length > 0 ? prizes.reduce((a: number, b: number) => a + b, 0) / prizes.length : 0;
       const sumSquaredDiffs = prizes.reduce((sum: number, p: number) => sum + Math.pow(p - mean, 2), 0);
       const sd = volume > 1 ? Math.sqrt(sumSquaredDiffs / (volume - 1)) : 0; // Bessel's correction
       const sdBuyins = avgBuyin > 0 ? sd / avgBuyin : 0;
@@ -3567,10 +3602,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     }
   }
 
-  // Nome amigavel da familia: tier + tipo + site (ex. "PKO $22-54.99 · PokerStars").
-  // fam.type nunca e vazio (typePrimary cai em "Vanilla").
+  // Nome amigavel da familia: tier + tipo + velocidade + site
+  // (ex. "PKO $22-54.99 Turbo · PokerStars"). Familia agora separa por
+  // velocidade (libraryGrouping); sufixo de speed omitido p/ "Normal" (label
+  // limpo no caso dominante). fam.type nunca e vazio (typePrimary cai em "Vanilla").
   private generateFamilyName(fam: GroupedFamily): string {
-    return `${fam.type} ${fam.buyInTier} · ${fam.site}`;
+    const speedSuffix = fam.speed && fam.speed !== "Normal" ? ` ${fam.speed}` : "";
+    return `${fam.type} ${fam.buyInTier}${speedSuffix} · ${fam.site}`;
   }
 
   // Nome amigavel do torneio especifico: usa stripNameNoise (mesma base da
@@ -3883,15 +3921,18 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   ): Promise<{ found: boolean; metrics: any; recentResults: any[] }> {
     try {
       const site = String(familyKey).split("|")[0];
-      const rows = await db
-        .select()
-        .from(tournaments)
-        .where(and(
-          eq(tournaments.userId, userId),
-          isNull(tournaments.grindSessionId),
-          eq(tournaments.site, site),
-        ))
-        .orderBy(desc(tournaments.datePlayed));
+      const rows = await this.normalizeTournamentsToUsd(
+        await db
+          .select()
+          .from(tournaments)
+          .where(and(
+            eq(tournaments.userId, userId),
+            isNull(tournaments.grindSessionId),
+            eq(tournaments.site, site),
+          ))
+          .orderBy(desc(tournaments.datePlayed)),
+        userId,
+      );
 
       const fam = groupTournaments(rows).find((f) => f.familyKey === familyKey);
       if (!fam) return { found: false, metrics: null, recentResults: [] };
@@ -4465,7 +4506,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       // Sprint Estudos-Sessao-1 RF-02: default status='active' quando handler nao envia.
       status: (session as any).status ?? 'active',
       activities: Array.isArray(session.activities) ? session.activities : (session.activities !== undefined && session.activities !== null ? [session.activities as string] : []),
-      insights: Array.isArray(session.insights) ? session.insights : (session.insights !== undefined && session.insights !== null ? [session.insights as string] : [])
+      // `insights` e coluna `text` (NAO jsonb) — coagir para array gravava o
+      // literal "{}" no campo. Mantem string/null.
+      insights: session.insights ?? null,
     };
 
     const [newSession] = await db

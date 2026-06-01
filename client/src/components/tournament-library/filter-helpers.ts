@@ -7,6 +7,10 @@ interface TournamentLibraryFilters {
     min: number | null;
     max: number | null;
   };
+  fieldSizeRange?: {
+    min: number | null;
+    max: number | null;
+  };
   roiFilter: string;
   profitFilter: string;
   volumeFilter: string;
@@ -40,6 +44,8 @@ export function hasActiveFilters(
   if (filters.speeds.length > 0) return true;
   if (filters.buyinRange.min !== null) return true;
   if (filters.buyinRange.max !== null) return true;
+  if (filters.fieldSizeRange?.min != null) return true;
+  if (filters.fieldSizeRange?.max != null) return true;
   if (filters.roiFilter !== 'all') return true;
   if (filters.profitFilter !== 'all') return true;
   if (filters.volumeFilter !== 'all') return true;

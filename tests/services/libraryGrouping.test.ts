@@ -4,6 +4,7 @@ import {
   buyInTier,
   nameSignature,
   groupTournaments,
+  normalizeSpeed,
 } from "../../server/services/libraryGrouping";
 
 // Minimal tournament factory matching the DB shape consumed by grouping.
@@ -105,13 +106,34 @@ describe("groupTournaments — 2 niveis familia -> especifico", () => {
     expect(fams).toHaveLength(2);
   });
 
-  it("mesmo nome Regular vs Hyper -> 1 familia, 2 especificos", () => {
+  it("velocidade SEPARA familias: Normal vs Hyper (mesmo nome) -> 2 familias", () => {
+    // Decisao do sprint: speed entra na familyKey (site|tier|type|speed).
     const fams = groupTournaments([
-      t({ speed: "Regular", name: "Bounty Builder" }),
+      t({ speed: "Normal", name: "Bounty Builder" }),
       t({ speed: "Hyper", name: "Bounty Builder" }),
     ]);
+    expect(fams).toHaveLength(2);
+    expect(new Set(fams.map((f) => f.speed))).toEqual(new Set(["Normal", "Hyper"]));
+    // Cada familia tem 1 especifico (speed nao esta mais no fineKey).
+    expect(fams[0].specifics).toHaveLength(1);
+    expect(fams[1].specifics).toHaveLength(1);
+  });
+
+  it("familyKey inclui speed como 4o segmento", () => {
+    const [fam] = groupTournaments([t({ speed: "Turbo", name: "Bounty Builder" })]);
+    expect(fam.familyKey.split("|")).toHaveLength(4);
+    expect(fam.familyKey.endsWith("|Turbo")).toBe(true);
+    expect(fam.speed).toBe("Turbo");
+  });
+
+  it("mesma familia+nome, mesma speed -> 1 especifico (speed fora do fineKey)", () => {
+    const fams = groupTournaments([
+      t({ speed: "Turbo", name: "Bounty Builder $50K Gtd" }),
+      t({ speed: "Turbo", name: "Bounty Builder $100K Gtd" }),
+    ]);
     expect(fams).toHaveLength(1);
-    expect(fams[0].specifics).toHaveLength(2);
+    expect(fams[0].specifics).toHaveLength(1);
+    expect(fams[0].specifics[0].fineKey.split("|")).toHaveLength(5); // site|tier|type|speed|sig
   });
 
   it("order-independence: shuffle das linhas = mesmas familias", () => {
@@ -145,5 +167,19 @@ describe("groupTournaments — 2 niveis familia -> especifico", () => {
     ]);
     expect(fams).toHaveLength(1);
     expect(fams[0].type).toBe("PKO");
+  });
+});
+
+describe("normalizeSpeed — default Normal (NAO Regular)", () => {
+  it("preserva Normal/Turbo/Hyper", () => {
+    expect(normalizeSpeed({ speed: "Turbo" })).toBe("Turbo");
+    expect(normalizeSpeed({ speed: "Hyper" })).toBe("Hyper");
+    expect(normalizeSpeed({ speed: "Normal" })).toBe("Normal");
+  });
+  it("default Normal quando ausente/vazio (bucket fantasma Regular eliminado)", () => {
+    expect(normalizeSpeed({ speed: null })).toBe("Normal");
+    expect(normalizeSpeed({ speed: undefined })).toBe("Normal");
+    expect(normalizeSpeed({ speed: "  " })).toBe("Normal");
+    expect(normalizeSpeed({})).toBe("Normal");
   });
 });

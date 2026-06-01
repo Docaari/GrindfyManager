@@ -21,6 +21,7 @@ import { formatPercentage } from "@/lib/formatting";
 import { buildCSVContent, formatCSVRow, getExportFilename } from "@/lib/export-helpers";
 import { tokens } from "@/lib/ui-tokens";
 import { GRADE_COLORS, GRADE_ORDER } from "@shared/library-grades";
+import { SPEED_BUCKETS } from "@shared/scoring";
 import { OverviewPanel } from "@/components/library/OverviewPanel";
 import { SavedHighlightsStrip } from "@/components/library/SavedHighlightsStrip";
 
@@ -31,6 +32,10 @@ type TournamentLibraryFiltersType = {
   categories: string[];
   speeds: string[];
   buyinRange: {
+    min: number | null;
+    max: number | null;
+  };
+  fieldSizeRange: {
     min: number | null;
     max: number | null;
   };
@@ -209,7 +214,9 @@ function GroupDetailDialogContent({ group }: GroupDetailDialogContentProps) {
   };
 
   const handleExportCSV = useCallback(() => {
-    const headers = ['Data', 'Site', 'Nome', 'Tipo', 'Velocidade', 'Buy-in', 'Posicao', 'Total', 'Profit'];
+    // Coluna Moeda: valores ja vem normalizados em USD pelo backend, mas o CSV
+    // explicita a moeda original p/ desambiguar conta multi-moeda. (LOW-2)
+    const headers = ['Data', 'Site', 'Nome', 'Tipo', 'Velocidade', 'Buy-in', 'Moeda', 'Posicao', 'Total', 'Profit'];
     const rows = sortedTournaments.map((t: any) =>
       formatCSVRow(
         {
@@ -219,6 +226,7 @@ function GroupDetailDialogContent({ group }: GroupDetailDialogContentProps) {
           Tipo: t.category ?? '',
           Velocidade: t.speed ?? '',
           'Buy-in': parseFloat(String(t.buyIn ?? 0)).toFixed(2),
+          Moeda: t.currency ?? 'USD',
           Posicao: t.position ?? '',
           Total: t.fieldSize ?? '',
           Profit: parseFloat(String(t.prize ?? 0)).toFixed(2),
@@ -578,6 +586,10 @@ export default function TournamentLibraryNew() {
       min: null,
       max: null,
     },
+    fieldSizeRange: {
+      min: null,
+      max: null,
+    },
     roiFilter: "all",
     profitFilter: "all",
     volumeFilter: "all",
@@ -587,12 +599,14 @@ export default function TournamentLibraryNew() {
   const { data: libraryGroups, isLoading, isError, refetch } = useQuery({
     queryKey: ["/api/tournament-library-grouped", filters],
     queryFn: async () => {
+      // roiFilter NAO vai pro backend: ROI e metrica de GRUPO (nao coluna de
+      // torneio) -> nao vira predicado SQL. Filtro fica client-side (abaixo).
       const filterParams = {
         sites: filters.sites,
         categories: filters.categories,
         speeds: filters.speeds,
         buyinRange: filters.buyinRange,
-        roiFilter: filters.roiFilter
+        fieldSizeRange: filters.fieldSizeRange,
       };
 
       const params = new URLSearchParams({
@@ -613,7 +627,7 @@ export default function TournamentLibraryNew() {
         categories: filters.categories,
         speeds: filters.speeds,
         buyinRange: filters.buyinRange,
-        roiFilter: filters.roiFilter,
+        fieldSizeRange: filters.fieldSizeRange,
       };
       const params = new URLSearchParams({
         period: filters.period,
@@ -647,7 +661,10 @@ export default function TournamentLibraryNew() {
       let matchesProfit = true;
       if (filters.profitFilter === "higher" || filters.profitFilter === "lower") {
         const allGroups = libraryGroups || [];
-        const avgProfit = allGroups.reduce((sum, g) => sum + g.avgProfit, 0) / allGroups.length;
+        // Guard: lista vazia -> 0/0 = NaN -> comparacao sempre falsa. (HIGH-2)
+        const avgProfit = allGroups.length > 0
+          ? allGroups.reduce((sum, g) => sum + g.avgProfit, 0) / allGroups.length
+          : 0;
         matchesProfit = filters.profitFilter === "higher" ? group.avgProfit > avgProfit : group.avgProfit < avgProfit;
       }
 
@@ -671,7 +688,10 @@ export default function TournamentLibraryNew() {
   // Get unique values for filters
   const sites = useMemo(() => Array.from(new Set((libraryGroups || []).map(g => g.site))), [libraryGroups]);
   const categories = useMemo(() => Array.from(new Set((libraryGroups || []).map(g => g.category))), [libraryGroups]);
-  const speeds = useMemo(() => Array.from(new Set((libraryGroups || []).map(g => g.speed))), [libraryGroups]);
+  // Chips de velocidade vem do SSoT (shared/scoring) — NAO de g.speed. Antes a
+  // familia tinha speed="Todos" fixo, entao o Set so produzia ["Todos"] e o
+  // filtro inArray(tournaments.speed,["Todos"]) retornava 0 linhas (bug morto).
+  const speeds = SPEED_BUCKETS;
 
   // KPI calculations (memoized)
   const kpis = useMemo(() => {
@@ -701,6 +721,7 @@ export default function TournamentLibraryNew() {
     setFilters({
       period: "all", sites: [], categories: [], speeds: [],
       buyinRange: { min: null, max: null },
+      fieldSizeRange: { min: null, max: null },
       roiFilter: "all", profitFilter: "all", volumeFilter: "all", minimumVolume: null,
     });
     setSearchTerm("");
@@ -780,6 +801,17 @@ export default function TournamentLibraryNew() {
           buyinRange: { min: null, max: null },
         })),
         tone: 'warn',
+      });
+    }
+    if (filters.fieldSizeRange.min !== null || filters.fieldSizeRange.max !== null) {
+      chips.push({
+        key: 'fieldSize',
+        label: `Field: ${filters.fieldSizeRange.min ?? 0} — ${filters.fieldSizeRange.max ?? '∞'}`,
+        onRemove: () => setFilters(prev => ({
+          ...prev,
+          fieldSizeRange: { min: null, max: null },
+        })),
+        tone: 'accent',
       });
     }
     return chips;
@@ -1236,6 +1268,36 @@ export default function TournamentLibraryNew() {
                     onChange={(e) => setFilters(prev => ({
                       ...prev,
                       buyinRange: { ...prev.buyinRange, max: e.target.value ? parseFloat(e.target.value) : null }
+                    }))}
+                  />
+                </div>
+              </div>
+
+              {/* Tamanho do Field (entradas) */}
+              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+                <h4 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                  Tamanho do Field
+                </h4>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    className="flex-1 bg-poker-surface border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-poker-accent focus:outline-none"
+                    value={filters.fieldSizeRange.min ?? ''}
+                    onChange={(e) => setFilters(prev => ({
+                      ...prev,
+                      fieldSizeRange: { ...prev.fieldSizeRange, min: e.target.value ? parseInt(e.target.value, 10) : null }
+                    }))}
+                  />
+                  <span className="text-gray-500 text-sm">—</span>
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    className="flex-1 bg-poker-surface border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-poker-accent focus:outline-none"
+                    value={filters.fieldSizeRange.max ?? ''}
+                    onChange={(e) => setFilters(prev => ({
+                      ...prev,
+                      fieldSizeRange: { ...prev.fieldSizeRange, max: e.target.value ? parseInt(e.target.value, 10) : null }
                     }))}
                   />
                 </div>
