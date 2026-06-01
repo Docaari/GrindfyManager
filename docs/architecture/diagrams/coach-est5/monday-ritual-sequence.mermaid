@@ -1,0 +1,77 @@
+---
+title: EST-5 Monday Ritual — sequência cron → recap → confirm → deep analysis → handoff (ADR-226)
+---
+sequenceDiagram
+    autonumber
+    participant Cron as cronRunner<br/>(0 * * * *)
+    participant Tick as weeklyReviewMondayTick
+    participant Orch as weeklyReviewOrchestrator
+    participant Store as weeklyReviewStorage
+    participant Bundle as weeklyReportGenerator<br/>(gatherBundle + builders EST-2)
+    participant Chat as reportChatSession<br/>(EST-1)
+    participant User as Jogador (UI /coach-ai?tab=review)
+    participant Route as coachWeeklyReview routes
+    participant Plan as weeklyPlanningOrchestrator<br/>(EST-6)
+
+    rect rgb(238, 245, 255)
+    Note over Cron,Tick: FASE 1 — disparo de segunda (hourly, local-Monday-filtered)
+    Cron->>Tick: weeklyReviewMondayTick({ now })
+    alt COACH_NUDGES_ENABLED === "false"
+        Tick-->>Cron: skip (nudges_globally_disabled) — kill-switch absoluto
+    else habilitado
+        Tick->>Store: listUsersForCron(LIST_USERS_FOR_REPORTS_FILTER)
+        loop por user (pre-check barato antes de query pesada)
+            Note over Tick: getLocalWeekday(now,tz)===1 (segunda) && getLocalHour===MONDAY_HOUR(9)?
+            Note over Tick: getReportTier(user)!=='free' ? reportWeeklyEnabled===true ?
+            Note right of Tick: R-1 — weekStartDate = ymdUtc(nextMondayUtc(now)) é UTC;<br/>disparo é "segunda 9h local". Em fusos extremos o local-Monday<br/>pode mapear p/ weekStartDate UTC adjacente. Aceito por paridade EST-6<br/>(review + planning usam a MESMA chave UTC → coerentes entre si).
+            Tick->>Orch: createWeeklyReview(userId, ymdUtc(nextMondayUtc(now)))
+            Orch->>Store: createWeeklyReview (onConflictDoNothing + re-leitura)
+            alt review já existe p/ a semana
+                Store-->>Orch: review existente (idempotente)
+                Orch-->>Tick: skip — não re-posta recap
+            else nova review (status='recap_sent')
+                Orch->>Bundle: gatherBundle(storage, userId, periodAnterior) + buildMentalState + buildStudyWeek
+                Bundle-->>Orch: bundle (histórico grind_session_id IS NULL + break_feedbacks + estudo)
+                Orch->>Orch: buildRecap(bundle) → recap_content (markdown PT-BR + CTA /upload)
+                Orch->>Store: persiste recap_content
+                Orch->>Chat: getOrCreateReportChatSession(userId) + insertChatMessage(role=assistant, recap+CTA)
+                Note over Orch,Chat: R-2 — falha do chat NÃO derruba o tick (lesson #9). Review fica em recap_sent.
+                Orch->>Store: advance recap_sent → awaiting_upload
+            end
+        end
+    end
+    end
+
+    rect rgb(240, 255, 240)
+    Note over User,Plan: FASE 2 — confirmação de upload + análise profunda (síncrona, determinística)
+    User->>Route: POST /api/coach/weekly-review/:weekStartDate/confirm-upload
+    Route->>Orch: confirmUpload(userId, weekStartDate)
+    alt review inexistente
+        Orch-->>Route: throw weekly_review_not_found
+        Route-->>User: 404
+    else review em estado terminal (deep_analysis_done | planning)
+        Orch-->>Route: no-op (retorna review como está, sem reprocessar)
+        Route-->>User: 200 { review, uploadDetected, source }
+    else review em awaiting_upload
+        Orch->>Store: getLastUploadAt(userId)  (Date | null)
+        Note over Orch: < 24h → source='recent_import', uploadDetected=true;<br/>senão source='explicit', uploadDetected=false (botão vence)
+        Orch->>Store: advance awaiting_upload → upload_confirmed
+        Orch->>Bundle: gatherBundle 7d (grind_session_id IS NULL, NÃO session_tournaments) + builders
+        Bundle-->>Orch: bundle 7d (performance + break_feedbacks/finalNotes + estudo incl. stat_analysis)
+        Orch->>Orch: buildDeepAnalysisNarrative(bundle) → analysis_content (DEC-1: SEM Anthropic; llmGenerated=false)
+        alt deep analysis falhou
+            Note over Orch: log antes do fallback (lesson #9); review fica em upload_confirmed (re-confirmar reprocessa)
+        else ok
+            Orch->>Store: persiste analysis_content
+            Orch->>Chat: insertChatMessage(role=assistant, síntese 7d)
+            Orch->>Store: advance upload_confirmed → deep_analysis_done
+            Orch->>Plan: handoffToPlanning → startPlanning(userId, weekStartDate, { source:'est5_ritual' })
+            Note right of Plan: mesma chave UTC (DEC-4). startPlanning idempotente (UNIQUE EST-6).<br/>R-6 — tier_not_eligible → review fica em deep_analysis_done, log, sem crash.
+            Plan-->>Orch: { session } (planning_session_id)
+            Orch->>Store: advance deep_analysis_done → planning + grava planning_session_id
+            Orch->>Chat: insertChatMessage("vamos montar o plano da semana?" + CTA aba review)
+        end
+        Orch-->>Route: { review, uploadDetected, source }
+        Route-->>User: 200 — UI re-fetch; estado planning monta &lt;PlanningWizard&gt;
+    end
+    end

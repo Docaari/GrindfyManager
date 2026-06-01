@@ -49,6 +49,7 @@ import {
   History,
   Settings,
   Sparkles,
+  CalendarCheck,
   X,
 } from 'lucide-react';
 import { useLocation } from 'wouter';
@@ -67,13 +68,16 @@ import NudgeCard from '@/components/coach/NudgeCard';
 import { getFallbackSuggestions } from '@/lib/quickSuggestionsFallback';
 // Sprint Mini Player 2 (CRITICAL-2) — Spotify connection panel em Preferencias.
 import { SpotifyConnectionPanel } from '@/components/settings/SpotifyConnectionPanel';
+// EST-5 (ADR-224 -> 226) — Revisao semanal (ritual de segunda) + monta PlanningWizard.
+import { WeeklyReviewPanel } from '@/components/coach/weekly-review/WeeklyReviewPanel';
 
-const HUB_TABS = ['chat', 'reports', 'audit', 'prefs'] as const;
+const HUB_TABS = ['chat', 'reports', 'review', 'audit', 'prefs'] as const;
 type HubTab = (typeof HUB_TABS)[number];
 
 const TAB_META: ReadonlyArray<{ value: HubTab; label: string; icon: any }> = [
   { value: 'chat', label: 'Chat', icon: MessageSquare },
   { value: 'reports', label: 'Relatorios e avisos', icon: FileText },
+  { value: 'review', label: 'Revisao semanal', icon: CalendarCheck },
   { value: 'audit', label: 'Historico de acoes', icon: History },
   { value: 'prefs', label: 'Preferencias', icon: Settings },
 ];
@@ -1018,10 +1022,29 @@ function CoachPreferencesPanel() {
 // -----------------------------------------------------------------------------
 export default function CoachAI() {
   const [activeTab, setActiveTab] = useTabFromUrl(HUB_TABS as unknown as string[], 'chat');
-  const tab = (HUB_TABS as readonly string[]).includes(activeTab) ? (activeTab as HubTab) : 'chat';
+  const urlTab = (HUB_TABS as readonly string[]).includes(activeTab) ? (activeTab as HubTab) : 'chat';
+
+  // Aba otimista: o clique alterna a UI na hora, sem esperar o round-trip da URL
+  // (setActiveTab -> setLocation -> re-render). Mantem-se em sincronia com a URL
+  // (deep-link ?tab= / back/forward) via o effect abaixo.
+  const [localTab, setLocalTab] = useState<HubTab>(urlTab);
+  useEffect(() => {
+    setLocalTab(urlTab);
+  }, [urlTab]);
+  const tab = localTab;
+
+  const changeTab = useCallback(
+    (v: string) => {
+      if ((HUB_TABS as readonly string[]).includes(v)) {
+        setLocalTab(v as HubTab);
+      }
+      setActiveTab(v);
+    },
+    [setActiveTab],
+  );
 
   return (
-    <Tabs value={tab} onValueChange={(v) => setActiveTab(v)} className="flex flex-col h-full bg-gray-900">
+    <Tabs value={tab} onValueChange={(v) => changeTab(v)} className="flex flex-col h-full bg-gray-900">
       <div className="border-b border-gray-700 px-4 pt-4 pb-0 flex flex-col gap-3">
         <h1 data-testid="coach-ai-hub-title" className="text-xl font-semibold text-gray-100 flex items-center gap-2">
           <Sparkles size={20} className="text-green-400" />
@@ -1035,7 +1058,7 @@ export default function CoachAI() {
               data-testid={`coach-ai-tab-${t.value}`}
               // Lesson #27: Radix Tabs reage a onMouseDown — onClick redundante
               // garante que fireEvent.click (RTL) tambem alterne a aba.
-              onClick={() => setActiveTab(t.value)}
+              onClick={() => changeTab(t.value)}
               className="data-[state=active]:bg-green-600/20 data-[state=active]:text-green-400 text-gray-400"
             >
               <t.icon size={16} className="mr-2" />
@@ -1054,6 +1077,9 @@ export default function CoachAI() {
             <ReportDiscoverabilityBanner onGoToPreferences={() => setActiveTab('prefs')} />
           </div>
           <ReportsPanel />
+        </TabsContent>
+        <TabsContent value="review" data-testid="coach-ai-tabpanel-review" className="h-full m-0 overflow-auto">
+          <WeeklyReviewPanel />
         </TabsContent>
         <TabsContent value="audit" data-testid="coach-ai-tabpanel-audit" className="h-full m-0 overflow-auto">
           <CoachAuditPanel />

@@ -1,0 +1,55 @@
+---
+title: EST-5 Weekly Review — máquina de estados (ADR-226)
+---
+stateDiagram-v2
+    [*] --> recap_sent : createWeeklyReview<br/>(recap postado no mesmo ato)
+
+    recap_sent --> awaiting_upload : logo após postar CTA de upload
+    awaiting_upload --> upload_confirmed : POST confirm-upload<br/>(explicit | recent_import)
+    upload_confirmed --> deep_analysis_done : runDeepAnalysis ok<br/>(determinística — DEC-1, sem LLM)
+    deep_analysis_done --> planning : handoffToPlanning<br/>startPlanning(source='est5_ritual')
+
+    planning --> [*] : monta &lt;PlanningWizard&gt; na tab
+
+    note right of recap_sent
+        UNIQUE (user_id, week_start_date) — chave UTC (DEC-4)
+        createWeeklyReview 2x = no-op (onConflictDoNothing + re-leitura)
+    end note
+
+    note right of awaiting_upload
+        confirm-upload exige awaiting_upload.
+        getLastUploadAt &lt; 24h → recent_import; senão explicit (botão vence).
+    end note
+
+    note right of upload_confirmed
+        Falha da deep analysis → permanece em upload_confirmed.
+        Re-confirmar reprocessa (log antes do fallback — lesson #9).
+    end note
+
+    note right of deep_analysis_done
+        tier_not_eligible no handoff → fica aqui (não avança).
+        Re-handoff não duplica planning session (UNIQUE EST-6).
+    end note
+
+    note left of planning
+        Idempotência terminal: confirmar/handoff em
+        deep_analysis_done|planning = no-op (não reprocessa).
+    end note
+
+    %% --- Transições INVÁLIDAS (somente avançar, nunca pular nem retroceder) ---
+    %% Qualquer salto/retrocesso/auto-loop → throw invalid_weekly_review_transition
+    %% (err.code = 'invalid_weekly_review_transition' → HTTP 409).
+    %% Exemplos rejeitados:
+    %%   recap_sent        -> planning            (salto)
+    %%   recap_sent        -> upload_confirmed     (salto)
+    %%   awaiting_upload   -> deep_analysis_done   (salto)
+    %%   upload_confirmed  -> awaiting_upload      (retrocesso)
+    %%   deep_analysis_done-> recap_sent           (retrocesso)
+    %%   planning          -> deep_analysis_done   (retrocesso)
+    %%   X                 -> X                     (auto-loop)
+    %% VALID_TRANSITIONS (shared/coach-weekly-review.ts):
+    %%   recap_sent        -> { awaiting_upload }
+    %%   awaiting_upload   -> { upload_confirmed }
+    %%   upload_confirmed  -> { deep_analysis_done }
+    %%   deep_analysis_done-> { planning }
+    %%   planning          -> {} (terminal)

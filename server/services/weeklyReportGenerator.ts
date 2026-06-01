@@ -148,7 +148,7 @@ function parseWeekBounds(periodStart: string, periodEnd: string): { weekStart: D
   };
 }
 
-async function gatherBundle(storage: any, userId: string, periodStart: string, periodEnd: string) {
+export async function gatherBundle(storage: any, userId: string, periodStart: string, periodEnd: string) {
   const period = "7d";
   const { weekStart, weekEnd } = parseWeekBounds(periodStart, periodEnd);
   const [

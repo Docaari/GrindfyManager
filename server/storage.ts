@@ -16500,3 +16500,6 @@ attachCoachSignalsStorage(storage as any);
 // EST-6 (ADR-224) — weekly_planning_sessions CRUD + delete recs por semana BRT.
 import { attachWeeklyPlanningStorage } from "./storage/weeklyPlanningStorage";
 attachWeeklyPlanningStorage(storage as any);
+// EST-5 (ADR-226) — weekly_reviews CRUD (ritual de segunda).
+import { attachWeeklyReviewStorage } from "./storage/weeklyReviewStorage";
+attachWeeklyReviewStorage(storage as any);

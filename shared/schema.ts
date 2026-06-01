@@ -5295,6 +5295,42 @@ export const insertWeeklyPlanningSessionSchema = z.object({
 });
 
 // =============================================================================
+// EST-5 (ADR-226) — weekly_reviews
+// =============================================================================
+// Estado da maquina de estados "Weekly Review" (ritual de segunda) — 1 row por
+// usuario por semana (chave UTC via ymdUtc). UNIQUE (user_id, week_start_date)
+// garante idempotencia. status ∈ recap_sent|awaiting_upload|upload_confirmed|
+// deep_analysis_done|planning (Zod-only em shared/coach-weekly-review.ts, sem
+// CHECK DB). recap_content/analysis_content jsonb snapshots deterministicos.
+// Sem FK (app valida ownership por userId). Migration 0089.
+// =============================================================================
+export const weeklyReviews = pgTable(
+  "weekly_reviews",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id").notNull(),
+    weekStartDate: date("week_start_date").notNull(),
+    status: varchar("status", { length: 24 }).notNull().default("recap_sent"),
+    recapContent: jsonb("recap_content"),
+    analysisContent: jsonb("analysis_content"),
+    uploadSource: varchar("upload_source", { length: 16 }),
+    planningSessionId: varchar("planning_session_id"),
+    chatSessionId: varchar("chat_session_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("weekly_reviews_user_week_unique").on(
+      table.userId,
+      table.weekStartDate,
+    ),
+  ],
+);
+
+export type WeeklyReviewRow = typeof weeklyReviews.$inferSelect;
+export type InsertWeeklyReview = typeof weeklyReviews.$inferInsert;
+
+// =============================================================================
 // Sprint Estudos-Coach-Biblio-2 (ADR-133) — coach_session_insights
 // =============================================================================
 // Cache 24h + auditoria de insights Coach pos-sessao /grind-live (RF-4). 1 row

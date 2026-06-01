@@ -28,6 +28,8 @@ import { bImportTick } from "./jobs/bImport";
 import { bDownswingTick } from "./jobs/bDownswing";
 import { bVolumeTick } from "./jobs/bVolume";
 import { bGradeTick } from "./jobs/bGrade";
+// EST-5 (ADR-226) — Interactive Monday Ritual (recap de segunda 9h local).
+import { weeklyReviewMondayTick } from "./jobs/weeklyReviewMonday";
 // Sprint D / RF-03.1 (ADR-184) — housekeeping, fora do gate COACH_NUDGES_ENABLED.
 import { expireTicketsTick } from "../jobs/expireTickets";
 import { withAdvisoryLock } from "../lib/advisoryLock";
@@ -147,6 +149,18 @@ export function startCoachCrons(): void {
       await withAdvisoryLock("cron:coach-b-grade", () => bGradeTick({}));
     } catch (err) {
       console.error("coach.cron.b_grade.tick.error", { err });
+    }
+  });
+
+  // EST-5 (ADR-226) — ritual de segunda. Hourly tick que filtra dia/hora local
+  // (segunda 9h) internamente. Gateado pelo kill switch global (acima).
+  cron.schedule("0 * * * *", async () => {
+    try {
+      await withAdvisoryLock("cron:coach-weekly-review", () =>
+        weeklyReviewMondayTick({}),
+      );
+    } catch (err) {
+      console.error("coach.cron.weekly_review.tick.error", { err });
     }
   });
 

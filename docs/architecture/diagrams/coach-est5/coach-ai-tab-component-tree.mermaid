@@ -1,0 +1,31 @@
+---
+title: EST-5 — árvore de componentes da tab "Revisão semanal" em /coach-ai (ADR-226 DEC-2)
+---
+flowchart TD
+    App["App.tsx<br/>Route /coach-ai (já existe — sem rota nova, lesson #19)"]
+    App --> CoachAI["CoachAI.tsx (hub)<br/>HUB_TABS = chat | reports | audit | prefs | <b>review</b><br/>TAB_META += review (label 'Revisão semanal', ícone CalendarCheck)<br/>useTabFromUrl → ?tab=review (URL-persisted)"]
+
+    CoachAI --> Tabs["Radix &lt;Tabs value/onValueChange&gt;"]
+    Tabs --> Trigger["&lt;TabsTrigger value='review'&gt;<br/><b>onClick redundante</b> (lesson #27 — Radix usa onMouseDown;<br/>fireEvent.click não alterna sem onClick)"]
+    Tabs --> Content["&lt;TabsContent value='review'&gt;"]
+
+    Content --> EB["ErrorBoundary local (lesson #29)<br/>useQuery sem QueryClientProvider em teste standalone<br/>→ fallback empty state, sem crash"]
+    EB --> Panel["WeeklyReviewPanel.tsx"]
+
+    Panel --> Mount["mount: POST /api/coach/weekly-review/start (DEC-3)<br/>server é a fonte da weekStartDate UTC — não recalcula no client"]
+    Panel --> Query["useQuery → GET /api/coach/weekly-review/:weekStartDate"]
+    Query --> Switch{"review.status?"}
+
+    Switch -->|"404 / sem review"| Empty["EmptyState<br/>'sua revisão de segunda aparece aqui'<br/>(opcional) botão 'iniciar revisão agora' → POST .../start"]
+    Switch -->|"recap_sent / awaiting_upload"| RecapView["RecapView<br/>lê recap_content (markdown + métricas — mitiga R-2)<br/>CTA 'confirmar upload' → POST .../confirm-upload<br/>link /upload (rota registrada — lesson #19)"]
+    Switch -->|"upload_confirmed / deep_analysis_done"| AnalysisView["AnalysisView<br/>lê analysis_content (síntese 7d)<br/>CTA 'montar plano da semana' → aponta para a PRÓPRIA tab<br/>(re-tenta handoff se ficou em deep_analysis_done — R-6)"]
+    Switch -->|"planning"| WizardMount["monta &lt;PlanningWizard weekStartDate={review.weekStartDate} /&gt;"]
+
+    WizardMount --> Wizard["PlanningWizard.tsx (EST-6 — antes órfão)<br/>grind → study → lessons → themes<br/>(já tem ErrorBoundary próprio + useQuery planning)<br/><b>jogador CHEGA ao wizard pelo ritual</b> (critério-chave RF-08)"]
+
+    classDef novo fill:#dff5e1,stroke:#2e7d32,color:#1b5e20;
+    classDef alterado fill:#fff4d6,stroke:#b8860b,color:#7a5901;
+    classDef existente fill:#e8eef9,stroke:#3b5ba5,color:#1f3b73;
+    class Panel,Mount,Query,Switch,Empty,RecapView,AnalysisView,WizardMount,EB novo;
+    class CoachAI,Tabs,Trigger,Content alterado;
+    class App,Wizard existente;

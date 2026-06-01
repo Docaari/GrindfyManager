@@ -8,6 +8,7 @@ import { nanoid } from "nanoid";
 import { db } from "../db";
 import { registerCoachAi1bRoutes } from "./coachAi1b";
 import { registerCoachPlanningRoutes } from "./coachPlanning";
+import { registerCoachWeeklyReviewRoutes } from "./coachWeeklyReview";
 import {
   chatSessions,
   chatMessages,
@@ -1072,6 +1073,9 @@ export function registerCoachRoutes(app: Express): void {
   // EST-6 (ADR-224) — Next-Week Planning Flow. Registrado ANTES do AI-1B
   // (prefixo `planning` disjunto; guard test cobre colisao).
   registerCoachPlanningRoutes(app, requireAuth);
+  // EST-5 (ADR-226) — Interactive Monday Ritual. Registrado ANTES do AI-1B
+  // (prefixo `weekly-review` disjunto; guard test cobre colisao).
+  registerCoachWeeklyReviewRoutes(app, requireAuth);
   // Sprint AI-1B — timeline / reports / suggestions.
   registerCoachAi1bRoutes(app, requireAuth);
 }
