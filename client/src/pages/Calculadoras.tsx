@@ -7,6 +7,7 @@ import RPCalculator from "@/components/calculators/RPCalculator";
 import MysteryBountyCalculator from "@/components/calculators/MysteryBountyCalculator";
 import BountyCalculator from "@/components/calculators/BountyCalculator";
 import SatelliteCalculator from "@/components/calculators/SatelliteCalculator";
+import CombosCalculator from "@/components/calculators/CombosCalculator";
 import Randomizer from "@/components/calculators/Randomizer";
 import { calculatorTools, openCalculatorPopup } from "@/lib/calculatorTools";
 
@@ -43,7 +44,7 @@ export default function Calculadoras() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto gap-1 bg-gray-900 p-1 rounded-lg">
+          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-7 h-auto gap-1 bg-gray-900 p-1 rounded-lg">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -91,6 +92,13 @@ export default function Calculadoras() {
             <PopoutButton toolKey="satelites" />
             <div className="flex justify-center">
               <SatelliteCalculator />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="combos" className="mt-4">
+            <PopoutButton toolKey="combos" />
+            <div className="flex justify-center">
+              <CombosCalculator />
             </div>
           </TabsContent>
 

@@ -4,6 +4,7 @@ import RPCalculator from "@/components/calculators/RPCalculator";
 import MysteryBountyCalculator from "@/components/calculators/MysteryBountyCalculator";
 import BountyCalculator from "@/components/calculators/BountyCalculator";
 import SatelliteCalculator from "@/components/calculators/SatelliteCalculator";
+import CombosCalculator from "@/components/calculators/CombosCalculator";
 import Randomizer from "@/components/calculators/Randomizer";
 
 const toolMap: Record<string, React.FC> = {
@@ -12,6 +13,7 @@ const toolMap: Record<string, React.FC> = {
   "mystery-bounty": MysteryBountyCalculator,
   "pko-bounty": BountyCalculator,
   "satelites": SatelliteCalculator,
+  "combos": CombosCalculator,
   "randomizador": Randomizer,
 };
 

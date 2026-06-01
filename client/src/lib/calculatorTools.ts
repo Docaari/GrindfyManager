@@ -1,4 +1,4 @@
-import { Calculator, Target, Award, Trophy, Dices, Gift } from "lucide-react";
+import { Calculator, Target, Award, Trophy, Dices, Gift, Layers } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 // Fonte unica de verdade das calculadoras (usado em /calculadoras + /grind-live).
@@ -14,6 +14,7 @@ export const calculatorTools: CalculatorTool[] = [
   { value: "mystery-bounty", label: "Mystery Bounty", icon: Gift },
   { value: "pko-bounty", label: "PKO Bounty", icon: Award },
   { value: "satelites", label: "Satelites", icon: Trophy },
+  { value: "combos", label: "Combos", icon: Layers },
   { value: "randomizador", label: "Randomizador", icon: Dices },
 ];
 
@@ -23,6 +24,7 @@ const toolPopupSizes: Record<string, { width: number; height: number }> = {
   "mystery-bounty": { width: 650, height: 850 },
   "pko-bounty": { width: 700, height: 850 },
   "satelites": { width: 700, height: 900 },
+  "combos": { width: 820, height: 1000 },
   "randomizador": { width: 350, height: 300 },
 };
 
