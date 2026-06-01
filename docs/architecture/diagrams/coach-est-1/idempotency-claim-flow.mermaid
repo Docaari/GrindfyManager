@@ -1,0 +1,30 @@
+%% EST-1 (ADR-223 Decisão 3) — Claim atômico do ledger reports.delivered_channels.
+%% Garante "no máximo 1 entrega por canal por relatório" mesmo sob reprocessamento
+%% (retry, fail-soft) e dois ticks concorrentes em runners distintos.
+%% Padrão: claim-then-act, com compensação (unmark) só no caminho de erro.
+flowchart TD
+    A["deliverReport canal C<br/>(inApp | chat)"] --> B["markReportDelivered(reportId, C)<br/>UPDATE reports<br/>SET delivered_channels = delivered_channels || '{C: ISO}'<br/>WHERE id=$1 AND NOT (delivered_channels ? C)<br/>RETURNING id"]
+    B --> C{"rowCount > 0?<br/>(claim ganho)"}
+
+    C -->|"Não (0) — outro tick/run já marcou"| SKIP["Skip silencioso<br/>(idempotência — não repete efeito)"]
+
+    C -->|"Sim (1) — este run ganhou o claim"| EFF["Executar efeito colateral do canal<br/>in-app: createNotification<br/>chat: getOrCreate session + insertChatMessage"]
+
+    EFF --> D{"Efeito teve sucesso?"}
+    D -->|"Sim"| OK["Canal entregue 1x.<br/>Chave C permanece em delivered_channels<br/>→ reprocess NÃO repete"]
+    D -->|"Não (lançou)"| LOG["console.error(...) ANTES do fallback<br/>(lesson #9)"]
+    LOG --> UNDO["unmarkReportDelivered(reportId, C)<br/>UPDATE reports<br/>SET delivered_channels = delivered_channels - C"]
+    UNDO --> RETRY["Claim liberado → próximo reprocess<br/>re-claim e re-tenta este canal<br/>(outros canais já entregues NÃO repetem)"]
+
+    subgraph RACE["Anti-race (dois ticks simultâneos)"]
+        direction LR
+        R1["Tick A: UPDATE condicional"] --> RLOCK["Postgres row-lock<br/>na linha do reports"]
+        R2["Tick B: UPDATE condicional"] --> RLOCK
+        RLOCK --> RWIN["Só 1 afeta a linha (rowCount=1)<br/>o outro vê rowCount=0 → skip"]
+    end
+
+    subgraph EMAIL["Email — barreira independente"]
+        E1["sendReportEmail"] --> E2["email_log UNIQUE (report_id, kind)"]
+        E2 --> E3["2ª tentativa → skipped<br/>(already_sent_or_pending)"]
+        E2 -.->|"delivered_channels.email = só observabilidade"| E4["NÃO é a barreira do email"]
+    end

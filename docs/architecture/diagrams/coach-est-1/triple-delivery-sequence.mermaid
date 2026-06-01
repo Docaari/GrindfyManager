@@ -1,0 +1,75 @@
+%% EST-1 (ADR-223) — Entrega tripla idempotente do relatório do Coach.
+%% Disparada em processOneJob (reportJobRunner) após persistir o reportId.
+%% Best-effort por canal; cada canal em try/catch isolado; nunca lança.
+sequenceDiagram
+    autonumber
+    participant Cron as processReportJobsTick<br/>(reportJobRunner)
+    participant Job as processOneJob
+    participant Gen as Generator<br/>(weekly/daily/monthly)
+    participant DEL as deliverReport<br/>(reportDelivery.ts)
+    participant ELG as isReportEligible<br/>(reportEligibility)
+    participant ST as storage
+    participant DB as PostgreSQL<br/>(reports / notifications / chat / email_log)
+    participant MAIL as sendReportEmail<br/>(reportEmailSender)
+
+    Cron->>Job: claim job (advisory lock no tick)
+    Job->>Gen: callGeneratorByType(reportType, ...)
+    Gen-->>Job: ReportContent
+    Job->>ST: persistOrFetchReportId(...)
+    ST->>DB: INSERT/UPSERT reports → reportId
+    DB-->>ST: reportId
+    ST-->>Job: reportId
+    Job->>ST: updateReportJob(status='done', reportId)
+
+    Note over Job,DEL: só weekly|daily|monthly (quarterly fora de EST-1)
+    Job->>DEL: void deliverReport({reportId,userId,reportType}, storage).catch(log)
+
+    DEL->>ELG: isReportEligible(user, reportType)?
+    ELG-->>DEL: elegível? (Trial/Pro/Premium/admin)
+    Note over DEL: gate = isReportEligible && reportPref[type]<br/>(+ channelInApp p/ in-app)
+
+    rect rgb(235,245,255)
+        Note over DEL,DB: Canal 1 — in-app (try/catch isolado)
+        DEL->>ST: markReportDelivered(reportId,'inApp')
+        ST->>DB: UPDATE reports SET delivered_channels=...<br/>WHERE NOT (delivered_channels ? 'inApp') RETURNING id
+        DB-->>ST: rowCount (1=claim / 0=já entregue)
+        alt claim ganho (true)
+            DEL->>ST: createNotification(type='coach_report',<br/>deepLink='/coach-ai/relatorio/'+id, priority='medium')
+            ST->>DB: INSERT notifications
+            Note over DEL: em erro → log (lesson #9) + unmarkReportDelivered('inApp')
+        else já entregue (false)
+            Note over DEL: skip silencioso (idempotência)
+        end
+    end
+
+    rect rgb(240,255,240)
+        Note over DEL,DB: Canal 2 — chat post (sem LLM)
+        DEL->>ST: markReportDelivered(reportId,'chat')
+        ST->>DB: UPDATE condicional WHERE NOT (... ? 'chat')
+        DB-->>ST: rowCount
+        alt claim ganho
+            DEL->>ST: getOrCreateReportChatSession(userId)<br/>coachType='technical', reusa ativa+recente
+            ST->>DB: SELECT chat_sessions / INSERT se ausente
+            DEL->>ST: insertChatMessage(role='assistant',<br/>content="Terminei seu relatório... /coach-ai/relatorio/<id>")
+            ST->>DB: INSERT chat_messages
+            Note over DEL: em erro → log + unmarkReportDelivered('chat')
+        else já entregue
+            Note over DEL: skip
+        end
+    end
+
+    rect rgb(255,248,235)
+        Note over DEL,MAIL: Canal 3 — email (só weekly|monthly; daily sem email Q-G)
+        DEL->>MAIL: void sendReportEmail({reportId,userId,kind}, storage)
+        MAIL->>DB: SELECT email_log (report_id,kind)
+        alt já 'sent'/'pending'
+            MAIL-->>DEL: skipped (already_sent_or_pending) — UNIQUE barrier
+        else novo
+            MAIL->>DB: INSERT email_log pending → buildUnsubscribeUrl (HMAC)
+            MAIL->>DB: UPDATE email_log status='sent'/'failed'
+            Note over MAIL: EMAIL_UNSUBSCRIBE_SECRET ausente → 'failed'<br/>(in-app+chat NÃO afetados)
+        end
+        DEL->>ST: markReportDelivered(reportId,'email') (best-effort, observabilidade)
+    end
+
+    Note over Job: job já marcado 'done' independentemente do resultado da entrega

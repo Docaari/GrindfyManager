@@ -8,7 +8,61 @@
 import { db } from "../db";
 import { nanoid } from "nanoid";
 import { and, asc, desc, eq, isNull, lte, or, sql } from "drizzle-orm";
-import { reportJobs, reports } from "@shared/schema";
+import { reportJobs, reports, chatSessions } from "@shared/schema";
+
+// Sprint EST-1 (ADR-223) — canais de entrega rastreados no ledger jsonb.
+export type ReportDeliveryChannel = "inApp" | "chat" | "email";
+
+// Sprint EST-1 / RF-05 — claim atomico de canal de entrega via jsonb ledger.
+// UPDATE condicional: so marca se o canal AINDA NAO esta no delivered_channels.
+// Retorna true sse ESTA chamada marcou agora (RETURNING traz a linha / rowCount>0).
+// Lesson #33 (manipulacao jsonb atomica) + #34 (tx opcional injetado).
+async function markReportDelivered(
+  reportId: string,
+  channel: ReportDeliveryChannel,
+  tx?: any,
+): Promise<boolean> {
+  try {
+    const runner = tx ?? db;
+    const iso = new Date().toISOString();
+    const result: any = await runner.execute(sql`
+      UPDATE reports
+      SET delivered_channels =
+        delivered_channels || ${JSON.stringify({ [channel]: iso })}::jsonb
+      WHERE id = ${reportId}
+        AND NOT (delivered_channels ? ${channel})
+      RETURNING id
+    `);
+    const rowCount =
+      typeof result?.rowCount === "number"
+        ? result.rowCount
+        : Array.isArray(result?.rows)
+          ? result.rows.length
+          : 0;
+    return rowCount > 0;
+  } catch (err) {
+    console.error("storage.markReportDelivered.error", { reportId, channel, err });
+    return false;
+  }
+}
+
+// Sprint EST-1 / RF-05 — compensacao: remove o canal do ledger (libera re-tentativa).
+async function unmarkReportDelivered(
+  reportId: string,
+  channel: ReportDeliveryChannel,
+  tx?: any,
+): Promise<void> {
+  try {
+    const runner = tx ?? db;
+    await runner.execute(sql`
+      UPDATE reports
+      SET delivered_channels = delivered_channels - ${channel}
+      WHERE id = ${reportId}
+    `);
+  } catch (err) {
+    console.error("storage.unmarkReportDelivered.error", { reportId, channel, err });
+  }
+}
 
 async function insertReportJobOnConflictDoNothing(row: any): Promise<any> {
   try {
@@ -194,6 +248,43 @@ export function attachReportStorage(storage: any): void {
   storage.listReportsForUser = listReportsForUser;
   storage.markReportRead = markReportRead;
   storage.markReportDismissed = markReportDismissed;
+  storage.markReportDelivered = markReportDelivered;
+  storage.unmarkReportDelivered = unmarkReportDelivered;
+
+  // Sprint EST-1 / RF-04 — reusa a chatSession technical mais recente do user
+  // (canal de chat dos relatorios) ou cria uma nova 'Relatorios'. tx opcional.
+  storage.getOrCreateReportChatSession = async (
+    userId: string,
+    _tx?: any,
+  ): Promise<{ id: string }> => {
+    try {
+      const rows = await db
+        .select()
+        .from(chatSessions)
+        .where(
+          and(
+            eq(chatSessions.userId, userId),
+            eq(chatSessions.coachType, "technical"),
+            eq(chatSessions.status, "active"),
+          ),
+        )
+        .orderBy(desc(chatSessions.updatedAt))
+        .limit(1);
+      const existing = (rows as any[])?.[0];
+      if (existing?.id) {
+        return { id: existing.id };
+      }
+      const created = await storage.createChatSession({
+        userId,
+        coachType: "technical",
+        title: "Relatórios",
+      });
+      return { id: created.id };
+    } catch (err) {
+      console.error("storage.getOrCreateReportChatSession.error", { userId, err });
+      throw err;
+    }
+  };
 
   // listNudgeLogForUser reusa listCoachAudit (AI-1A).
   storage.listNudgeLogForUser = async (opts: { userId: string; limit?: number }) => {

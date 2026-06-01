@@ -4627,6 +4627,15 @@ export const userCoachPreferences = pgTable("user_coach_preferences", {
   reportDailyEnabled: boolean("report_daily_enabled").notNull().default(false),
   reportMonthlyEnabled: boolean("report_monthly_enabled").notNull().default(false),
 
+  // Sprint AI-2B (migration 0071) — colunas que ja existem no DB fisico mas faltavam
+  // no drizzle (schema drift corrigido em EST-1 / RF-01, ADR-223 §Decisao 1).
+  // Defaults false aqui (o flip pra true e da migration 0086, nao do drizzle).
+  reportQuarterlyEnabled: boolean("report_quarterly_enabled").notNull().default(false),
+  emailWeeklyEnabled: boolean("email_weekly_enabled").notNull().default(false),
+  emailMonthlyEnabled: boolean("email_monthly_enabled").notNull().default(false),
+  emailQuarterlyEnabled: boolean("email_quarterly_enabled").notNull().default(false),
+  disclaimerAcceptedAt: timestamp("disclaimer_accepted_at"),
+
   // Sprint Mini Player 2 (RF-NEW.2) — sleep timer preset. NULL = nao auto-ativa. Migration 0076.
   audioSleepTimerMinutes: integer("audio_sleep_timer_minutes"),
 
@@ -4701,6 +4710,12 @@ export const updateCoachPreferencesSchema = z.object({
   // Sprint AI-1C (ADR-159) — opt-in Daily Debrief + Monthly Report.
   reportDailyEnabled: z.boolean().optional(),
   reportMonthlyEnabled: z.boolean().optional(),
+  // Sprint EST-1 (ADR-223 §Decisao 1) — opt-ins de email + quarterly report.
+  // disclaimerAcceptedAt NAO entra (spoofavel via PUT).
+  reportQuarterlyEnabled: z.boolean().optional(),
+  emailWeeklyEnabled: z.boolean().optional(),
+  emailMonthlyEnabled: z.boolean().optional(),
+  emailQuarterlyEnabled: z.boolean().optional(),
   // Sprint Mini Player 2 (RF-NEW.2) — sleep timer preset minutes. Aceita
   // exatamente [15, 30, 45, 60, 90] ou null (desativa). String/numero fora do
   // enum -> 400.

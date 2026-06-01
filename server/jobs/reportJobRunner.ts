@@ -608,12 +608,23 @@ async function processOneJob(storage: any, job: any, now: Date): Promise<void> {
     const reportId: string | null = await persistOrFetchReportId(storage, claimed, result);
     await storage.updateReportJob?.(job.id, { status: "done", reportId, updatedAt: new Date() });
     if (reportId) {
-      const emailKind = `report_${reportType}` as "report_weekly" | "report_monthly" | "report_quarterly";
-      if (emailKind === "report_weekly" || emailKind === "report_monthly" || emailKind === "report_quarterly") {
+      // Sprint EST-1 (ADR-223 §Decisão 5/6) — entrega tripla (in-app → chat → email)
+      // para weekly/daily/monthly via deliverReport (email coberto internamente).
+      if (reportType === "weekly" || reportType === "daily" || reportType === "monthly") {
+        try {
+          const { deliverReport } = await import("../services/reportDelivery");
+          void deliverReport({ reportId, userId, reportType }, storage).catch((err) =>
+            console.error("report.job.deliver.error", { reportId, userId, reportType, err: err instanceof Error ? err.message : String(err) }),
+          );
+        } catch (err) {
+          console.error("report.job.deliver.import.error", { reportId, userId, err: err instanceof Error ? err.message : String(err) });
+        }
+      } else if (reportType === "quarterly") {
+        // Quarterly fica fora de EST-1 — preserva o email do AI-2B (não regredir).
         try {
           const { sendReportEmail } = await import("../services/reportEmailSender");
-          void sendReportEmail({ reportId, userId, kind: emailKind }, storage).catch((err) =>
-            console.error("report.job.email.send.error", { reportId, userId, kind: emailKind, err: err instanceof Error ? err.message : String(err) }),
+          void sendReportEmail({ reportId, userId, kind: "report_quarterly" }, storage).catch((err) =>
+            console.error("report.job.email.send.error", { reportId, userId, kind: "report_quarterly", err: err instanceof Error ? err.message : String(err) }),
           );
         } catch (err) {
           console.error("report.job.email.import.error", { reportId, userId, err: err instanceof Error ? err.message : String(err) });

@@ -49,6 +49,7 @@ import {
   History,
   Settings,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useCoachChat, type CoachType, type ChatMessage } from '@/hooks/useCoachChat';
@@ -489,6 +490,62 @@ function ChatPanel() {
 // -----------------------------------------------------------------------------
 // Relatorios e avisos — timeline (reports + nudges) — Sprint AI-1B / RF-08
 // -----------------------------------------------------------------------------
+
+// Sprint EST-1 / RF-06 — banner de discoverability (default-ON, dismissable).
+// Anuncia a entrega tripla dos relatorios + CTA para a aba Preferencias.
+const COACH_REPORT_BANNER_DISMISS_KEY = 'coachReportBanner.dismissed.v1';
+
+function ReportDiscoverabilityBanner({ onGoToPreferences }: { onGoToPreferences: () => void }) {
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    try {
+      return typeof window !== 'undefined'
+        && window.localStorage?.getItem(COACH_REPORT_BANNER_DISMISS_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  if (dismissed) return null;
+
+  const handleDismiss = () => {
+    try { window.localStorage?.setItem(COACH_REPORT_BANNER_DISMISS_KEY, '1'); } catch { /* noop */ }
+    setDismissed(true);
+  };
+
+  return (
+    <div
+      data-testid="coach-report-banner"
+      className="rounded-lg border border-green-600/40 bg-green-600/10 p-4 flex items-start justify-between gap-3"
+    >
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-green-300">
+          Seus relatorios chegam por notificacao, chat e email
+        </p>
+        <p className="text-xs text-gray-400">
+          Ative ou ajuste a entrega por email na aba Preferencias.
+        </p>
+        <button
+          type="button"
+          data-testid="coach-report-banner-cta"
+          onClick={onGoToPreferences}
+          className="mt-1 text-xs font-medium text-green-400 underline"
+        >
+          Abrir Preferências
+        </button>
+      </div>
+      <button
+        type="button"
+        data-testid="coach-report-banner-dismiss"
+        onClick={handleDismiss}
+        aria-label="Dispensar aviso"
+        className="text-gray-500 hover:text-gray-300"
+      >
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
+
 type TimelineItem =
   | { kind: 'report'; id: string; reportType: string; periodStart: string; periodEnd: string; status: string; summaryLine?: string; generatedAt?: string; readAt?: string | null; dismissedAt?: string | null }
   | { kind: 'nudge'; id: string; category: string; status: string; title?: string | null; bodyPreview?: string | null; sentAt?: string | null; engagedAt?: string | null; dismissedAt?: string | null; snoozeUntil?: string | null; chatSessionId?: string | null; triggeredByEvent?: string | null };
@@ -661,6 +718,9 @@ type PrefsResponse = {
   reportWeeklyEnabled?: boolean;
   reportDailyEnabled?: boolean;
   reportMonthlyEnabled?: boolean;
+  // EST-1 / RF-06 — opt-in de entrega por email.
+  emailWeeklyEnabled?: boolean;
+  emailMonthlyEnabled?: boolean;
 };
 
 const FROZEN_CATEGORY_LABELS: Record<string, string> = {
@@ -710,6 +770,9 @@ function CoachPreferencesPanel() {
   const [reportWeekly, setReportWeekly] = useState<boolean>(false);
   const [reportDaily, setReportDaily] = useState<boolean>(false);
   const [reportMonthly, setReportMonthly] = useState<boolean>(false);
+  // EST-1 / RF-06 — opt-in de entrega por email (weekly + monthly).
+  const [emailWeekly, setEmailWeekly] = useState<boolean>(false);
+  const [emailMonthly, setEmailMonthly] = useState<boolean>(false);
 
   useEffect(() => {
     if (!data) return;
@@ -733,6 +796,8 @@ function CoachPreferencesPanel() {
     if (typeof data.reportWeeklyEnabled === 'boolean') setReportWeekly(data.reportWeeklyEnabled);
     if (typeof data.reportDailyEnabled === 'boolean') setReportDaily(data.reportDailyEnabled);
     if (typeof data.reportMonthlyEnabled === 'boolean') setReportMonthly(data.reportMonthlyEnabled);
+    if (typeof data.emailWeeklyEnabled === 'boolean') setEmailWeekly(data.emailWeeklyEnabled);
+    if (typeof data.emailMonthlyEnabled === 'boolean') setEmailMonthly(data.emailMonthlyEnabled);
   }, [data]);
 
   const saveMutation = useMutation({
@@ -759,8 +824,10 @@ function CoachPreferencesPanel() {
       reportWeeklyEnabled: reportWeekly,
       reportDailyEnabled: reportDaily,
       reportMonthlyEnabled: reportMonthly,
+      emailWeeklyEnabled: emailWeekly,
+      emailMonthlyEnabled: emailMonthly,
     });
-  }, [nudges, quietStart, quietEnd, perDay, perHour, reportWeekly, reportDaily, reportMonthly, saveMutation]);
+  }, [nudges, quietStart, quietEnd, perDay, perHour, reportWeekly, reportDaily, reportMonthly, emailWeekly, emailMonthly, saveMutation]);
 
   return (
     <div data-testid="coach-prefs-panel" className="p-4 space-y-5 max-w-xl">
@@ -869,6 +936,31 @@ function CoachPreferencesPanel() {
         <p className="text-xs text-gray-500">Disponivel para Trial + Pro/Premium. Free nao recebe.</p>
       </div>
 
+      {/* EST-1 / RF-06 — entrega por email dos relatorios (weekly + monthly). */}
+      <div data-testid="coach-prefs-emails" className="space-y-2 border-t border-gray-800 pt-4">
+        <h4 className="text-sm font-medium text-gray-300">Entrega por email</h4>
+        <label className="flex items-center justify-between gap-3 text-sm text-gray-300">
+          <span>Relatorio semanal por email</span>
+          <input
+            type="checkbox"
+            data-testid="coach-prefs-toggle-email-weekly"
+            checked={emailWeekly}
+            onChange={(e) => setEmailWeekly(e.target.checked)}
+            className="h-4 w-4"
+          />
+        </label>
+        <label className="flex items-center justify-between gap-3 text-sm text-gray-300">
+          <span>Relatorio mensal por email</span>
+          <input
+            type="checkbox"
+            data-testid="coach-prefs-toggle-email-monthly"
+            checked={emailMonthly}
+            onChange={(e) => setEmailMonthly(e.target.checked)}
+            className="h-4 w-4"
+          />
+        </label>
+      </div>
+
       {/* Sprint Mini Player 2 (CRITICAL-2) — Integracoes externas. */}
       <div data-testid="coach-prefs-integrations" className="space-y-2 border-t border-gray-800 pt-4">
         <h4 className="text-sm font-medium text-gray-300">Integracoes</h4>
@@ -957,7 +1049,10 @@ export default function CoachAI() {
         <TabsContent value="chat" data-testid="coach-ai-tabpanel-chat" className="h-full m-0">
           <ChatPanel />
         </TabsContent>
-        <TabsContent value="reports" data-testid="coach-ai-tabpanel-reports" className="h-full m-0">
+        <TabsContent value="reports" data-testid="coach-ai-tabpanel-reports" className="h-full m-0 overflow-auto">
+          <div className="p-4 pb-0">
+            <ReportDiscoverabilityBanner onGoToPreferences={() => setActiveTab('prefs')} />
+          </div>
           <ReportsPanel />
         </TabsContent>
         <TabsContent value="audit" data-testid="coach-ai-tabpanel-audit" className="h-full m-0 overflow-auto">
