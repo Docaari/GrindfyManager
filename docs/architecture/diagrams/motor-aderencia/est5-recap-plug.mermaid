@@ -1,0 +1,32 @@
+%% Motor de Aderência — Fase A (ADR-227) — DEC-MA6 RESOLVIDO
+%% Onde o motor pluga no recap do ritual de segunda (EST-5).
+%% Ponto exato: server/coach/weeklyReview/weeklyReviewOrchestrator.ts
+%%   createWeeklyReview (L220) → buildWeeklyRecapContent (L125) → buildRecap (L179)
+%% HOJE: o recap só mostra REALIZADO. DEPOIS: enriquece com PLANEJADO vs REALIZADO.
+flowchart TD
+    A["weeklyReviewMondayTick / POST .../start<br/>createWeeklyReview(userId, weekStartDate)<br/>L220 weeklyReviewOrchestrator.ts"] --> B["prevWeekPeriod(weekStartDate)<br/>L90 → { periodStart, periodEnd } (segunda anterior, UTC)"]
+    B --> C["buildWeeklyRecapContent(storage, userId, periodStart, periodEnd)<br/>L125 — coleta dashStats/grindSessions/studyV2/breakFeedbacks (best-effort)"]
+
+    C --> D["buildRecap(RecapInput)<br/>L179 buildRecap.ts — PURO, determinístico, sem LLM"]
+
+    subgraph NEW["NOVO — RF-08 (motor pluga AQUI)"]
+        E["buildAdherenceRecap(userId, prevWeekStartDate, injectedStorage)<br/>server/coach/adherence/recap.ts"]
+        E --> F["getPlannedVsActual(grind_sessions_count)<br/>getPlannedVsActual(study_minutes)"]
+        F --> G["adherenceRecapTone.ts (lesson #10)<br/>regras A4 em arquivo único — sem culpa"]
+        G --> H["{ grind, study, summaryText }<br/>'planejou X, realizou A — alavanca: ___'"]
+    end
+
+    C -.->|"chama o helper do motor<br/>antes de buildRecap"| E
+    H -.->|"injeta adherence em RecapInput<br/>(campo novo opcional, lesson #7 back-compat)"| D
+
+    D --> I["RecapContent { schemaVersion, markdown, performance,<br/>mentalState, studyWeek, hasData, adherence? }"]
+    I --> J["postToChat(markdown) L198<br/>+ storage.createWeeklyReview(recapContent) jsonb"]
+
+    K{"dataSufficiency === 'low'?"}
+    H --> K
+    K -->|"sim (sem plano / janela aberta / stub)"| L["recap NÃO emite veredito numérico forte<br/>'ainda sem plano/dado suficiente' (D9)"]
+    K -->|"não ('ok')"| M["recap mostra X planejado vs A realizado<br/>skip = decisão neutra; shortfall = alavanca (A4)"]
+
+    style NEW fill:#1e3a2f,stroke:#22c55e,color:#e5e7eb
+    style E fill:#14532d,stroke:#22c55e,color:#fff
+    style D fill:#3b2f14,stroke:#eab308,color:#fff

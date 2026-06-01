@@ -14,6 +14,7 @@
 
 import type { ReportMentalState, ReportStudyWeek } from "@shared/schema";
 import { numOr, normalizeRoi } from "./numUtils";
+import type { AdherenceRecap } from "../adherence/types";
 
 // Entrada = bundle do gatherBundle + mentalState/studyWeek ja computados + o
 // periodo (segunda..domingo anterior). Aceita shape flexivel (lesson #3).
@@ -23,10 +24,14 @@ export interface RecapInput {
   dashStats7d?: { count?: number; profit?: number; roi?: number | null } | null;
   mentalState?: ReportMentalState | null;
   studyWeek?: ReportStudyWeek | null;
+  // DEC-MA6 (ADR-227) — plug ADITIVO do Motor de Aderência (lesson #7). Quando
+  // ausente -> output byte-idêntico (schemaVersion fica 1). Quando presente ->
+  // schemaVersion sobe para 2 + seção "Plano vs Realizado".
+  adherence?: AdherenceRecap | null;
 }
 
 export interface RecapContent {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   periodStart: string;
   periodEnd: string;
   markdown: string;
@@ -34,6 +39,8 @@ export interface RecapContent {
   mentalState: ReportMentalState | null;
   studyWeek: ReportStudyWeek | null;
   hasData: boolean;
+  // Presente apenas quando o motor de aderência (ADR-227) forneceu dados.
+  adherence?: AdherenceRecap;
 }
 
 export function buildRecap(input: RecapInput): RecapContent {
@@ -49,6 +56,9 @@ export function buildRecap(input: RecapInput): RecapContent {
 
   const hasData = volume > 0 || mentalState != null || studyWeek != null;
 
+  // DEC-MA6 — aderência é ADITIVA: ausente -> markdown byte-idêntico (lesson #7).
+  const adherence = input.adherence ?? null;
+
   const markdown = buildMarkdown({
     periodStart,
     periodEnd,
@@ -58,10 +68,11 @@ export function buildRecap(input: RecapInput): RecapContent {
     mentalState,
     studyWeek,
     hasData,
+    adherence,
   });
 
-  return {
-    schemaVersion: 1,
+  const out: RecapContent = {
+    schemaVersion: adherence ? 2 : 1,
     periodStart,
     periodEnd,
     markdown,
@@ -70,6 +81,10 @@ export function buildRecap(input: RecapInput): RecapContent {
     studyWeek,
     hasData,
   };
+  if (adherence) {
+    out.adherence = adherence;
+  }
+  return out;
 }
 
 function buildMarkdown(args: {
@@ -81,6 +96,7 @@ function buildMarkdown(args: {
   mentalState: ReportMentalState | null;
   studyWeek: ReportStudyWeek | null;
   hasData: boolean;
+  adherence?: AdherenceRecap | null;
 }): string {
   const lines: string[] = [];
   lines.push(`# Revisao de segunda — semana de ${args.periodStart} a ${args.periodEnd}`);
@@ -115,6 +131,22 @@ function buildMarkdown(args: {
       lines.push("");
       lines.push("## Estudo");
       lines.push(`- ${minutes} min de estudo | ${hands} maos resolvidas.`);
+    }
+  }
+
+  // DEC-MA6 — seção "Plano vs Realizado" só quando o motor forneceu aderência.
+  // dataSufficiency='low' -> não crava veredito numérico forte (D9).
+  if (args.adherence) {
+    const adh = args.adherence;
+    lines.push("");
+    lines.push("## Plano vs Realizado");
+    const anyOk = adh.grind.dataSufficiency === "ok" || adh.study.dataSufficiency === "ok";
+    if (anyOk) {
+      lines.push(`- ${adh.summaryText}`);
+    } else {
+      lines.push(
+        "- Ainda sem plano/dado suficiente da semana passada para comparar.",
+      );
     }
   }
 

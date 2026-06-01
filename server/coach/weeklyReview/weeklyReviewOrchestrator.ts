@@ -33,6 +33,7 @@ import {
   buildStudyWeek,
 } from "../../services/weeklyReportGenerator";
 import { buildRecap } from "./buildRecap";
+import { buildAdherenceRecap } from "../adherence";
 import { buildDeepAnalysisNarrative } from "./buildDeepAnalysisNarrative";
 import { numOr, normalizeRoi } from "./numUtils";
 
@@ -176,12 +177,21 @@ async function buildWeeklyRecapContent(
   const mentalState = safeSync(() => buildMentalState(recapBundle), null);
   const studyWeek = safeSync(() => buildStudyWeek(recapBundle), null);
 
+  // DEC-MA6 (ADR-227) — Motor de Aderência: compara plano (EST-6) x realizado da
+  // semana anterior. Best-effort (lesson #9 — degrade se motor falhar); ausente
+  // -> recap byte-idêntico (lesson #7). A janela é a semana anterior (periodStart).
+  const adherence = await safe(
+    async () => await buildAdherenceRecap(userId, periodStart, storage),
+    null,
+  );
+
   return buildRecap({
     periodStart,
     periodEnd,
     dashStats7d: dashStats,
     mentalState,
     studyWeek,
+    adherence,
   });
 }
 

@@ -1,0 +1,56 @@
+%% Motor de Aderência — Fase A (ADR-227)
+%% Sequência de cálculo de getPlannedVsActual(userId, sourceMetric, period)
+%% Stateless, read-only, on-demand. Reusa storage methods existentes via injectedStorage.
+sequenceDiagram
+    actor Caller as Consumidor<br/>(Metas fatia-2 / buildAdherenceRecap EST-5)
+    participant Engine as getPlannedVsActual<br/>(server/coach/adherence/index.ts)
+    participant Map as SOURCE_METRIC_MAP<br/>(sourceMetricMap.ts)
+    participant Keys as weekKeys.ts<br/>(ymdToUtcDate UTC)
+    participant Store as storage<br/>(injectedStorage ?? await import)
+    participant Log as console.error<br/>(lesson #9)
+
+    Caller->>Engine: getPlannedVsActual('USER-X', sourceMetric, period, injectedStorage?)
+
+    Engine->>Map: lookup(sourceMetric)
+    alt sourceMetric fora da allowlist
+        Map-->>Engine: undefined
+        Engine-->>Caller: throw 'unknown_source_metric' (não 500)
+    end
+    Map-->>Engine: { dimensionKey, plannedSource, actualSource, unit }
+
+    Engine->>Keys: ymdToUtcDate(period.weekStartDate) → [start, end)
+    Note over Engine,Keys: chave UTC alinhada a weekly_planning_sessions<br/>NÃO unificar com BRT (CLAUDE.md §10)
+
+    Engine->>Store: getWeeklyPlanningSession(userId, weekStartDate) [1 query]
+    Store-->>Engine: session | null
+
+    alt session === null (sem plano na janela)
+        Note over Engine: planned=null, dataSufficiency='low',<br/>note='no_plan' (D9 — não cobrar)
+    else session.steps.<dimensionKey>.status === 'skipped'
+        Note over Engine: breakdown.skipped=true, compliancePct=null<br/>(decisão consciente, A4 — DEC-MA5)
+    else status confirmed/proposed/pending
+        Note over Engine: lê planned da plannedSource (steps + tabela)
+    end
+
+    par planned (reusa storage existente)
+        Engine->>Store: planned source (getPlannedTournaments / getStudyWeeklyPlan / steps jsonb)
+        Store-->>Engine: linhas de plano
+    and actual (reusa storage existente)
+        Engine->>Store: actual source (getGrindSessions / getStudySessionsV2 / getSessionTournaments)
+        Store-->>Engine: linhas realizadas
+    end
+
+    Note over Engine: filtra status='completed' + data ∈ janela IN-MEMORY<br/>(getGrindSessions/getStudySessionsV2 NÃO filtram status)<br/>§6.1: volume usa tabelas de sessão
+
+    alt fonte stub/vazia (ex: getStatsLeaks → [])
+        Engine->>Log: log 'adherence.<metric>.source_stub' ANTES do fallback
+        Note over Engine: planned=null, dataSufficiency='low', note='source_stub'<br/>NUNCA fabrica dado (lesson #11)
+    else fonte throw
+        Engine->>Log: log { userId, sourceMetric, err }
+        Note over Engine: captura, dataSufficiency='low', NÃO propaga 500
+    end
+
+    Engine->>Engine: computeCompliance(planned, actual)<br/>min(100, round(actual/planned*100))
+    Note over Engine: janela ainda aberta (now < end) → dataSufficiency='low', note='window_open'<br/>janela fechada + plano + dado → 'ok'
+
+    Engine-->>Caller: { sourceMetric, period, planned, actual,<br/>compliancePct, dataSufficiency, breakdown }
