@@ -1,14 +1,18 @@
 /**
- * Cool-down Analytics Routes — Sprint Cooldown-2
+ * Mental Analytics Routes — cool-down + warm-up + A/B/C-game (Sprint Cooldown-2 + Fase B)
  *
  * Spec: Docs/specs/cooldown-refactor-plan.md (RF-06)
+ *     + Docs/specs/sprint-fase-b-lead-measures-2026-06-01.md (RF-01/RF-02)
  * ADR : Docs/architecture/decisions/041-cooldown-dedicated-spec-and-schema.md
+ *     + Docs/architecture/decisions/228-fase-b-lead-measures-warmup-compliance-abgame-distribution.md
  *
  * Endpoints (auth + ownership rigoroso, cache 5min):
  *   GET /api/analytics/cooldown-compliance         -> handleCooldownCompliance
  *   GET /api/analytics/starred-hands-distribution  -> handleStarredHandsDistribution
  *   GET /api/analytics/cooldown-impact             -> handleCooldownImpact
  *   GET /api/analytics/top-lessons                 -> handleTopLessons
+ *   GET /api/analytics/warmup-compliance           -> handleWarmupCompliance   (Fase B)
+ *   GET /api/analytics/abgame-distribution         -> handleAbGameDistribution (Fase B)
  */
 
 import type { Express, Request, Response } from "express";
@@ -151,6 +155,58 @@ export async function handleTopLessons(req: any, res: Response): Promise<void> {
 }
 
 // =============================================================================
+// GET /api/analytics/warmup-compliance (Fase B — RF-01)
+// =============================================================================
+
+export async function handleWarmupCompliance(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) {
+    unauthorized(res);
+    return;
+  }
+  const period = resolvePeriod(req);
+  if (!period) {
+    res.status(400).json({ message: "period invalido. Aceitos: 7d, 30d, 90d" });
+    return;
+  }
+
+  try {
+    setCacheHeader(res);
+    const data = await storage.getWarmupComplianceMetrics(userId, period);
+    res.status(200).json(data);
+  } catch (err: any) {
+    console.error("GET /api/analytics/warmup-compliance failed:", err);
+    res.status(500).json({ message: err?.message ?? "Erro" });
+  }
+}
+
+// =============================================================================
+// GET /api/analytics/abgame-distribution (Fase B — RF-02)
+// =============================================================================
+
+export async function handleAbGameDistribution(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) {
+    unauthorized(res);
+    return;
+  }
+  const period = resolvePeriod(req);
+  if (!period) {
+    res.status(400).json({ message: "period invalido. Aceitos: 7d, 30d, 90d" });
+    return;
+  }
+
+  try {
+    setCacheHeader(res);
+    const data = await storage.getAbGameDistribution(userId, period);
+    res.status(200).json(data);
+  } catch (err: any) {
+    console.error("GET /api/analytics/abgame-distribution failed:", err);
+    res.status(500).json({ message: err?.message ?? "Erro" });
+  }
+}
+
+// =============================================================================
 // Express registration
 // =============================================================================
 
@@ -168,5 +224,15 @@ export function registerCooldownAnalyticsRoutes(app: Express): void {
   );
   app.get("/api/analytics/top-lessons", requireAuth, (req: Request, res: Response) =>
     handleTopLessons(req, res),
+  );
+  app.get(
+    "/api/analytics/warmup-compliance",
+    requireAuth,
+    (req: Request, res: Response) => handleWarmupCompliance(req, res),
+  );
+  app.get(
+    "/api/analytics/abgame-distribution",
+    requireAuth,
+    (req: Request, res: Response) => handleAbGameDistribution(req, res),
   );
 }

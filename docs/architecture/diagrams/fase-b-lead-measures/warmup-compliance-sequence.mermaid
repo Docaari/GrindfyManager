@@ -1,0 +1,39 @@
+%% ADR-228 — Fase B Lead Measures: fluxo dos 2 endpoints da aba Mental
+%% Spec: Docs/specs/sprint-fase-b-lead-measures-2026-06-01.md
+sequenceDiagram
+    actor User as Jogador MTT
+    participant Tab as MentalAnalyticsTab<br/>(useQuery + apiRequest)
+    participant Route as cooldownAnalytics.ts<br/>(handlers req,res)
+    participant Storage as storage.ts
+    participant DB as PostgreSQL
+    participant Tok as lessonTokenizer.ts
+
+    User->>Tab: Abre aba Mental + escolhe period (7d/30d/90d)
+
+    par RF-01 Warm-up Compliance
+        Tab->>Route: GET /api/analytics/warmup-compliance?period=30d
+        Note over Route: requireAuth + userIdOf(token)<br/>resolvePeriod (default 30d, invalido->400)<br/>setCacheHeader private,max-age=300
+        Route->>Storage: getWarmupComplianceMetrics(userId, period)
+        Storage->>DB: COUNT grind_sessions<br/>status='completed' AND date>=cutoff
+        DB-->>Storage: total
+        Storage->>DB: COUNT warmup_rituals<br/>completedAt!=null AND version='full' AND startedAt>=cutoff<br/>(+ abortedCount, decisionNotToPlayCount, overrideUsedCount)
+        DB-->>Storage: counts
+        Note over Storage: complianceRate = total>0<br/>? min(1, completed/total) : 0<br/>(clamp p/ tabelas independentes)
+        Storage-->>Route: WarmupComplianceMetrics
+        Route-->>Tab: 200 JSON
+        Tab-->>User: WarmupComplianceWidget (pct% + "X de Y sessoes")
+    and RF-02 Distribuicao A/B/C-game
+        Tab->>Route: GET /api/analytics/abgame-distribution?period=30d
+        Note over Route: mesmos guards (auth/period/cache)
+        Route->>Storage: getAbGameDistribution(userId, period)
+        Storage->>DB: SELECT abGameAnswers FROM cooldown_logs<br/>completedAt!=null AND startedAt>=cutoff
+        DB-->>Storage: rows (jsonb, possivelmente null/parcial)
+        Note over Storage: parse defensivo (lesson #9/#11)<br/>journaledSessions, aGame/bGameItemCount,<br/>cGameEntryCount, medias, abShare A vs B
+        Storage->>Tok: tokenizeLessons([...cGames, ...lessons])
+        Tok-->>Storage: cGameThemes top-30 (PII-safe, sem frase crua)
+        Storage-->>Route: AbGameDistribution
+        Route-->>Tab: 200 JSON (vazio coerente se sem dados)
+        Tab-->>User: AbGameDistributionWidget (share A/B + chips C-game)
+    end
+
+    Note over Route,Storage: Erro storage -> console.error (lesson #9) + 500 {message}<br/>cada widget isola isError; anyError banner agregado

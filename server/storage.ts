@@ -1184,6 +1184,31 @@ const _isTestEnv = () => process.env.NODE_ENV === "test";
 const _libraryAccessFallback = new Map<string, Set<string>>();
 const _libraryProgressFallbackIds = new Map<string, string>();
 
+// ============================================================================
+// Sprint Fase B — Lead measures shapes (ADR-228 D-B3)
+// Exportados aqui ao lado dos metodos; widget redeclara espelho local.
+// ============================================================================
+
+export interface WarmupComplianceMetrics {
+  total: number; // grind_sessions status='completed' AND date>=cutoff
+  completed: number; // warmup_rituals completedAt!=null AND version='full' AND startedAt>=cutoff
+  complianceRate: number; // total>0 ? Math.min(1, completed/total) : 0
+  abortedCount: number; // warmup_rituals version='aborted' no periodo
+  decisionNotToPlayCount: number; // SUBCONJUNTO de completed: version='full' AND decisionToPlay=false
+  overrideUsedCount: number; // version='full' AND overrideUsed=true (sinal de risco)
+}
+
+export interface AbGameDistribution {
+  journaledSessions: number; // logs com >=1 campo de abGameAnswers preenchido
+  aGameItemCount: number; // soma de itens nao-vazios em aGame
+  bGameItemCount: number; // soma de itens nao-vazios em bGame
+  cGameEntryCount: number; // linhas com cGame string nao-vazia
+  avgAGamePerSession: number; // 0 se journaledSessions=0 (cru)
+  avgBGamePerSession: number; // 0 se journaledSessions=0
+  abShare: { aGamePct: number; bGamePct: number }; // soma 1 quando a+b>0; {0,0} senao
+  cGameThemes: Array<{ token: string; count: number }>; // tokenizeLessons([...cGames,...lessons]), top-30
+}
+
 export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
@@ -8023,14 +8048,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   }
 
-  async getCooldownComplianceMetrics(
-    userId: string,
-    period: "7d" | "30d" | "90d",
-  ): Promise<{ total: number; completed: number; complianceRate: number }> {
-    const cutoff = this.periodCutoff(period);
-
-    // Total = sessoes do user com status='completed' no periodo
-    const [{ count: totalCount }] = await db
+  /** Denominador compartilhado de compliance: grind_sessions completed no periodo (§6.1). */
+  private async countCompletedSessionsInPeriod(userId: string, cutoff: Date): Promise<number> {
+    const [{ count: c }] = await db
       .select({ count: count() })
       .from(grindSessions)
       .where(
@@ -8040,6 +8060,17 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           gte(grindSessions.date, cutoff),
         ),
       );
+    return Number(c ?? 0);
+  }
+
+  async getCooldownComplianceMetrics(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<{ total: number; completed: number; complianceRate: number }> {
+    const cutoff = this.periodCutoff(period);
+
+    // Total = sessoes do user com status='completed' no periodo (helper compartilhado)
+    const total = await this.countCompletedSessionsInPeriod(userId, cutoff);
 
     // Completed = cooldown_logs com completedAt!=null no periodo
     const [{ count: completedCount }] = await db
@@ -8053,7 +8084,6 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         ),
       );
 
-    const total = Number(totalCount ?? 0);
     const completed = Number(completedCount ?? 0);
     const complianceRate = total > 0 ? Math.min(1, completed / total) : 0;
     return { total, completed, complianceRate };
@@ -8184,6 +8214,164 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // Tokenizer aplicado aqui (sanitizer + agregacao)
     const { tokenizeLessons } = await import("./services/lessonTokenizer");
     return tokenizeLessons(lessons);
+  }
+
+  // ===========================================================================
+  // Sprint Fase B — Lead measures (warm-up compliance + A/B/C-game distribution)
+  // Spec : Docs/specs/sprint-fase-b-lead-measures-2026-06-01.md (RF-01/RF-02)
+  // ADR  : Docs/architecture/decisions/228-fase-b-lead-measures-warmup-compliance-abgame-distribution.md
+  // Metas (futuro): sourceMetric `warmup_compliance` <- WarmupComplianceMetrics.complianceRate;
+  //                 `a_game_pct` <- AbGameDistribution.abShare.aGamePct (metas-tool-2026-06-01.md)
+  // ===========================================================================
+
+  async getWarmupComplianceMetrics(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<WarmupComplianceMetrics> {
+    const cutoff = this.periodCutoff(period);
+
+    // Denominador (total) = grind_sessions status='completed' no periodo (§6.1 —
+    // grind_sessions, NUNCA session_tournaments; helper compartilhado com cooldown).
+    const total = await this.countCompletedSessionsInPeriod(userId, cutoff);
+
+    // Scan unico dos warmup_rituals do periodo (startedAt>=cutoff) + agregacao em JS
+    // (auxiliares "todos baratos, do mesmo scan" — ADR D-B5).
+    const rituals = await db
+      .select({
+        version: warmupRituals.version,
+        completedAt: warmupRituals.completedAt,
+        decisionToPlay: warmupRituals.decisionToPlay,
+        overrideUsed: warmupRituals.overrideUsed,
+      })
+      .from(warmupRituals)
+      .where(
+        and(
+          eq(warmupRituals.userId, userId),
+          gte(warmupRituals.startedAt, cutoff),
+        ),
+      );
+
+    let completed = 0;
+    let abortedCount = 0;
+    let decisionNotToPlayCount = 0;
+    let overrideUsedCount = 0;
+
+    for (const r of rituals as any[]) {
+      const version = r?.version;
+      const isFull = version === "full";
+      // TODO(W-3): incluir version='minimal' em completed quando Sprint W-3 existir (ADR-228 DEC-B1)
+      const isFullCompleted = isFull && r?.completedAt != null;
+      if (isFullCompleted) {
+        // decisionToPlay NAO filtra: full com decisionToPlay=false conta positivo (decisao travada)
+        completed += 1;
+        if (r?.decisionToPlay === false) decisionNotToPlayCount += 1;
+        if (r?.overrideUsed === true) overrideUsedCount += 1;
+      }
+      if (version === "aborted") abortedCount += 1;
+    }
+
+    const complianceRate = total > 0 ? Math.min(1, completed / total) : 0;
+
+    return {
+      total,
+      completed,
+      complianceRate,
+      abortedCount,
+      decisionNotToPlayCount,
+      overrideUsedCount,
+    };
+  }
+
+  async getAbGameDistribution(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<AbGameDistribution> {
+    const cutoff = this.periodCutoff(period);
+
+    // Scan cooldown_logs do periodo (completedAt!=null AND startedAt>=cutoff)
+    // — mesmo recorte de getTopLessons.
+    const rows = await db
+      .select({ abGameAnswers: cooldownLogs.abGameAnswers })
+      .from(cooldownLogs)
+      .where(
+        and(
+          eq(cooldownLogs.userId, userId),
+          isNotNull(cooldownLogs.completedAt),
+          gte(cooldownLogs.startedAt, cutoff),
+        ),
+      );
+
+    let journaledSessions = 0;
+    let aGameItemCount = 0;
+    let bGameItemCount = 0;
+    let cGameEntryCount = 0;
+    const cGameTexts: string[] = [];
+
+    const countItems = (arr: any): number => {
+      if (!Array.isArray(arr)) return 0; // lesson #11 — nao fabrica de lixo
+      let n = 0;
+      for (const it of arr) {
+        if (typeof it === "string" && it.trim()) n += 1;
+      }
+      return n;
+    };
+
+    for (const r of rows as any[]) {
+      const answers = r?.abGameAnswers;
+      if (answers == null || typeof answers !== "object") continue; // null/ausente — ignora (lesson #9)
+
+      const a = countItems(answers.aGame);
+      const b = countItems(answers.bGame);
+      const cGame =
+        typeof answers.cGame === "string" && answers.cGame.trim()
+          ? answers.cGame
+          : "";
+      const lesson =
+        typeof answers.lesson === "string" && answers.lesson.trim()
+          ? answers.lesson
+          : "";
+
+      const hasContent = a > 0 || b > 0 || cGame !== "" || lesson !== "";
+      if (!hasContent) continue; // linha sem nenhum campo preenchido nao conta
+
+      journaledSessions += 1;
+      aGameItemCount += a;
+      bGameItemCount += b;
+      if (cGame !== "") {
+        cGameEntryCount += 1;
+        cGameTexts.push(cGame);
+      }
+      if (lesson !== "") cGameTexts.push(lesson);
+    }
+
+    const avgAGamePerSession =
+      journaledSessions > 0 ? aGameItemCount / journaledSessions : 0;
+    const avgBGamePerSession =
+      journaledSessions > 0 ? bGameItemCount / journaledSessions : 0;
+
+    const abTotal = aGameItemCount + bGameItemCount;
+    const abShare =
+      abTotal > 0
+        ? { aGamePct: aGameItemCount / abTotal, bGamePct: bGameItemCount / abTotal }
+        : { aGamePct: 0, bGamePct: 0 };
+
+    // cGameThemes: tokeniza C-game + licao (nunca copia texto cru — R5 / PII-safe)
+    let cGameThemes: Array<{ token: string; count: number }> = [];
+    if (cGameTexts.length > 0) {
+      const { tokenizeLessons } = await import("./services/lessonTokenizer");
+      cGameThemes = tokenizeLessons(cGameTexts);
+    }
+
+    return {
+      journaledSessions,
+      aGameItemCount,
+      bGameItemCount,
+      cGameEntryCount,
+      avgAGamePerSession,
+      avgBGamePerSession,
+      abShare,
+      cGameThemes,
+    };
   }
 
   // ============================================================================

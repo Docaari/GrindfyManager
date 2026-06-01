@@ -3,15 +3,18 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
 // =============================================================================
-// MentalAnalyticsTab — Sprint Cooldown-2
+// MentalAnalyticsTab — Sprint Cooldown-2 + Fase B (lead measures)
 //
-// Spec: Docs/specs/cooldown-refactor-plan.md (RF-06)
+// Specs: Docs/specs/cooldown-refactor-plan.md (RF-06) +
+//        Docs/specs/sprint-fase-b-lead-measures-2026-06-01.md (RF-01/02) +
+//        Docs/specs/metas-tool-2026-06-01.md (consumidor futuro: sourceMetric)
 //
-// Aba "Mental" do perfil. 4 widgets agregados:
-//   - Compliance (gauge)
+// Aba "Mental" do perfil. 6 widgets agregados:
+//   - Compliance cool-down (gauge) + warm-up (Fase B RF-01)
 //   - Distribuicao starred hands (donut)
 //   - Cool-down impact (comparison)
 //   - Top licoes (word cloud)
+//   - Distribuicao A/B + C-game (Fase B RF-02)
 // Period selector 7d/30d/90d.
 // =============================================================================
 
@@ -45,6 +48,32 @@ interface LessonItem {
   count: number;
 }
 
+// Fase B — espelho local dos shapes server (ADR-228 D-B3)
+interface WarmupComplianceData {
+  total: number;
+  completed: number;
+  complianceRate: number;
+  abortedCount: number;
+  decisionNotToPlayCount: number;
+  overrideUsedCount: number;
+}
+
+interface AbGameThemeItem {
+  token: string;
+  count: number;
+}
+
+interface AbGameDistributionData {
+  journaledSessions: number;
+  aGameItemCount: number;
+  bGameItemCount: number;
+  cGameEntryCount: number;
+  avgAGamePerSession: number;
+  avgBGamePerSession: number;
+  abShare: { aGamePct: number; bGamePct: number };
+  cGameThemes: AbGameThemeItem[];
+}
+
 function Skeleton({ className }: { className?: string }) {
   return (
     <div
@@ -53,33 +82,42 @@ function Skeleton({ className }: { className?: string }) {
   );
 }
 
+// Compliance de processo (cool-down RF — Sprint Cooldown-2; warm-up RF-01 — Fase B).
+// Widget genérico: mesma renderização, varia só rótulo/testid (lead measure 4DX-D2).
 function ComplianceWidget({
   data,
   isLoading,
   isError,
+  testId,
+  title,
+  footerNoun,
+  errorLabel,
+  errorTestId,
 }: {
   data?: ComplianceData;
   isLoading: boolean;
   isError: boolean;
+  testId: string;
+  title: string;
+  footerNoun: string;
+  errorLabel: string;
+  errorTestId?: string;
 }) {
   if (isLoading) return <Skeleton />;
   if (isError) {
     return (
-      <div className="text-sm text-red-500">
-        Erro ao carregar compliance. Tente novamente.
+      <div data-testid={errorTestId} className="text-sm text-red-500">
+        Erro ao carregar {errorLabel}. Tente novamente.
       </div>
     );
   }
   const pct = data ? Math.round(data.complianceRate * 100) : 0;
   return (
-    <div
-      data-testid="mental-analytics-compliance"
-      className="rounded border p-4"
-    >
-      <div className="text-sm font-medium">Compliance de cool-down</div>
+    <div data-testid={testId} className="rounded border p-4">
+      <div className="text-sm font-medium">Compliance de {title}</div>
       <div className="mt-2 text-3xl font-bold">{pct}%</div>
       <div className="mt-1 text-xs text-muted-foreground">
-        {data?.completed ?? 0} de {data?.total ?? 0} sessoes com cool-down
+        {data?.completed ?? 0} de {data?.total ?? 0} sessoes com {footerNoun}
       </div>
     </div>
   );
@@ -228,6 +266,90 @@ function LessonsWidget({
   );
 }
 
+// Fase B — RF-01: compliance de warm-up (processo, sem $/ROI — RF-03)
+// Fase B — RF-02: distribuicao A/B + C-game (sem $/ROI nem comparacao social — RF-03)
+function AbGameDistributionWidget({
+  data,
+  isLoading,
+  isError,
+}: {
+  data?: AbGameDistributionData;
+  isLoading: boolean;
+  isError: boolean;
+}) {
+  if (isLoading) return <Skeleton />;
+  if (isError) {
+    return (
+      <div
+        data-testid="mental-analytics-abgame-error"
+        className="text-sm text-red-500"
+      >
+        Erro ao carregar A/B/C-game. Tente novamente.
+      </div>
+    );
+  }
+
+  const journaled = data?.journaledSessions ?? 0;
+  if (journaled === 0) {
+    return (
+      <div data-testid="mental-analytics-abgame" className="rounded border p-4">
+        <div className="text-sm font-medium">Distribuicao A/B/C-game</div>
+        <div
+          data-testid="mental-analytics-abgame-empty"
+          className="mt-2 text-xs text-muted-foreground"
+        >
+          Sem registros A/B/C. Preencha o journal no cool-down para acompanhar.
+        </div>
+      </div>
+    );
+  }
+
+  const aPct = Math.round((data?.abShare?.aGamePct ?? 0) * 100);
+  const bPct = Math.round((data?.abShare?.bGamePct ?? 0) * 100);
+  const themes = Array.isArray(data?.cGameThemes) ? data!.cGameThemes : [];
+
+  return (
+    <div data-testid="mental-analytics-abgame" className="rounded border p-4">
+      <div className="text-sm font-medium">Distribuicao A/B/C-game</div>
+      <div className="mt-1 text-xs text-muted-foreground">
+        {journaled} sessoes com journal
+      </div>
+      <div className="mt-2 flex h-3 w-full overflow-hidden rounded bg-muted">
+        <div
+          className="h-full bg-emerald-500"
+          style={{ width: `${aPct}%` }}
+          aria-label={`A-game ${aPct}%`}
+        />
+        <div
+          className="h-full bg-amber-500"
+          style={{ width: `${bPct}%` }}
+          aria-label={`B-game ${bPct}%`}
+        />
+      </div>
+      <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+        <span>A-game {aPct}%</span>
+        <span>B-game {bPct}%</span>
+      </div>
+      <div className="mt-3 text-xs font-medium">
+        C-game: {data?.cGameEntryCount ?? 0} registros
+      </div>
+      {themes.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {themes.map((t) => (
+            <span
+              key={t.token}
+              className="rounded bg-muted px-2 py-1 text-xs"
+            >
+              {t.token}{" "}
+              <span className="text-muted-foreground">({t.count})</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function MentalAnalyticsTab(_props: MentalAnalyticsTabProps = {}) {
   // Hooks first
   const [period, setPeriod] = useState<Period>("30d");
@@ -259,11 +381,26 @@ export function MentalAnalyticsTab(_props: MentalAnalyticsTabProps = {}) {
       apiRequest("GET", `/api/analytics/top-lessons?period=${period}`),
   });
 
+  // Fase B — RF-01/RF-02
+  const warmupCompliance = useQuery<WarmupComplianceData>({
+    queryKey: ["mental-analytics", "warmup-compliance", period],
+    queryFn: () =>
+      apiRequest("GET", `/api/analytics/warmup-compliance?period=${period}`),
+  });
+
+  const abGame = useQuery<AbGameDistributionData>({
+    queryKey: ["mental-analytics", "abgame-distribution", period],
+    queryFn: () =>
+      apiRequest("GET", `/api/analytics/abgame-distribution?period=${period}`),
+  });
+
   const anyError =
     compliance.isError ||
     distribution.isError ||
     impact.isError ||
-    lessons.isError;
+    lessons.isError ||
+    warmupCompliance.isError ||
+    abGame.isError;
 
   return (
     <div className="space-y-4">
@@ -307,6 +444,10 @@ export function MentalAnalyticsTab(_props: MentalAnalyticsTabProps = {}) {
           data={compliance.data}
           isLoading={compliance.isLoading}
           isError={compliance.isError}
+          testId="mental-analytics-compliance"
+          title="cool-down"
+          footerNoun="cool-down"
+          errorLabel="compliance"
         />
         <DistributionWidget
           data={distribution.data}
@@ -322,6 +463,21 @@ export function MentalAnalyticsTab(_props: MentalAnalyticsTabProps = {}) {
           data={lessons.data}
           isLoading={lessons.isLoading}
           isError={lessons.isError}
+        />
+        <ComplianceWidget
+          data={warmupCompliance.data}
+          isLoading={warmupCompliance.isLoading}
+          isError={warmupCompliance.isError}
+          testId="mental-analytics-warmup-compliance"
+          title="warm-up"
+          footerNoun="warm-up completo"
+          errorLabel="warm-up"
+          errorTestId="mental-analytics-warmup-compliance-error"
+        />
+        <AbGameDistributionWidget
+          data={abGame.data}
+          isLoading={abGame.isLoading}
+          isError={abGame.isError}
         />
       </div>
     </div>
