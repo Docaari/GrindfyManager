@@ -866,9 +866,16 @@ export async function createStudyTheme(input: {
   }
 }
 
-export async function deleteStudyTheme(themeId: string): Promise<void> {
+export async function deleteStudyTheme(themeId: string, userId?: string): Promise<void> {
   try {
     await db.execute(sql`DELETE FROM study_themes WHERE id = ${themeId}` as any);
+    // MDA-1 (ADR-230 / D-4): cleanup de tags orfas na junction (sem FK). So quando
+    // userId presente (back-compat com callers legados que passam so themeId).
+    if (userId) {
+      await db.execute(
+        sql`DELETE FROM mda_read_themes WHERE theme_id = ${themeId} AND user_id = ${userId}` as any,
+      );
+    }
   } catch (err) {
     console.error("coach_signals.deleteStudyTheme.error", { themeId, err });
   }

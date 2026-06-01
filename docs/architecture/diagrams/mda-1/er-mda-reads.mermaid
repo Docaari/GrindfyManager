@@ -1,0 +1,46 @@
+erDiagram
+    %% =====================================================================
+    %% MDA-1 (ADR-230) — Modelo de dados: mda_reads + mda_read_themes (N:N)
+    %% Junction espelha study_theme_spot_links. Sem FK rigida (ownership
+    %% app-level por user_id). Enums Zod-only sem CHECK DB; opcionais nullable
+    %% sem default (lesson #7). Tipos sem parens por convencao Mermaid do repo.
+    %% =====================================================================
+
+    users ||--o{ mda_reads : "1:N ownership app-level (user_id)"
+    users ||--o{ mda_read_themes : "1:N user_id denormalizado"
+    mda_reads ||--o{ mda_read_themes : "1:N mda_read_id"
+    study_themes ||--o{ mda_read_themes : "1:N theme_id; cleanup app-level no deleteTheme"
+
+    %% mda_reads x study_themes = N:N materializado pela junction
+    mda_reads }o--o{ study_themes : "N:N via mda_read_themes (1 MDA -> N temas)"
+
+    mda_reads {
+        varchar id PK "nanoid()"
+        varchar user_id "NOT NULL — ownership app-level (sem FK)"
+        varchar title "varchar(120) NOT NULL — rotulo curto"
+        varchar spot_context "varchar(200) nullable — posicao+acao texto livre"
+        text filters "nullable — filtros do banco (max 500 Zod)"
+        text tendency_text "nullable — tendencia + exploit (max 2000 Zod)"
+        varchar stat_id "varchar(64) nullable — catalog id OU custom_*; NAO FK"
+        jsonb images "nullable — MdaImage[] id,key,caption cap 8"
+        timestamptz created_at "NOT NULL DEFAULT now()"
+        timestamptz updated_at "NOT NULL DEFAULT now()"
+        timestamptz deleted_at "nullable — soft delete"
+    }
+
+    mda_read_themes {
+        varchar mda_read_id "NOT NULL — UNIQUE(mda_read_id,theme_id) idempotencia"
+        varchar theme_id "NOT NULL — idx (user_id,theme_id) query QUENTE"
+        varchar user_id "NOT NULL — denormalizado p/ filtro ownership"
+        timestamptz created_at "NOT NULL DEFAULT now()"
+    }
+
+    study_themes {
+        varchar id PK "tema de estudo (existente)"
+        varchar user_id "dono"
+        varchar name "nome do tema"
+    }
+
+    users {
+        varchar id PK "user (existente)"
+    }

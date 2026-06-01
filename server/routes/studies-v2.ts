@@ -425,6 +425,14 @@ export function registerStudiesV2Routes(app: Express): void {
 
       await db.delete(studyThemes).where(eq(studyThemes.id, id));
 
+      // MDA-1 (ADR-230 / D-4): cleanup de tags orfas na junction N:N (sem FK).
+      // Escopado por theme_id + user_id (ownership ja validado acima) — sem isso
+      // mda_read_themes ficaria apontando para um tema inexistente. Usa raw sql
+      // (espelha deleteStudyTheme) p/ o predicado ser inspecionavel.
+      await db.execute(
+        sql`DELETE FROM mda_read_themes WHERE theme_id = ${id} AND user_id = ${userId}` as any,
+      );
+
       res.json({ message: "Tema deletado com sucesso" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete study theme" });
