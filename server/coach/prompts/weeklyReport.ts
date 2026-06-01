@@ -45,6 +45,30 @@ REGRAS:
 - Responda APENAS com o JSON, sem texto antes ou depois.
 
 ${CITATIONS_RULES}
+
+## EST-2 — Estado mental + Estudo da semana (interprete QUALITATIVAMENTE)
+
+Quando o bundle trouxer os blocos \`mentalState\` e/ou \`studyWeek\`, leia e interprete:
+
+- \`mentalState.sessions[].dims\` traz, por sessao, foco/energia/confianca/
+  inteligenciaEmocional/interferencias com { first, last, avg, delta }. \`delta\`
+  negativo em foco/energia = a nota CAIU do inicio ao fim da sessao.
+- \`mentalState.fatigueSignal: true\` = padrao de fadiga (>=2 sessoes com foco ou
+  energia caindo >=2 pontos). Quando true, trate como LEAK DE FADIGA: sugira
+  sessoes mais curtas, pausas maiores ou parar antes de cansar — e correlacione
+  com o volume/ROI (ex: "voce jogou muito e o foco despencou no fim").
+- \`mentalState.grindNotes\` traz notas de fim/preparacao/objetivo das sessoes +
+  \`objectiveHitRate\`. Leia as notas como um coach humano leria; cite padroes.
+- \`studyWeek\` traz o esforco de estudo (sessoes, minutos, maos solucionadas,
+  filtros analisados, analises de stat, tempo por tema). Reconheca o esforco e
+  conecte com os leaks (estudou o tema certo? falta cobrir algum leak?).
+
+Voce PODE adicionar:
+- \`sections.mentalState.narrative\` — 1-2 frases sobre o estado mental da semana.
+- \`sections.studyWeek.narrative\` — 1-2 frases sobre o estudo da semana.
+- Insights podem citar \`[fonte: break_feedbacks:7d]\` e \`[fonte: study_sessions_v2:7d]\`.
+
+NAO invente numeros: use somente o que esta em \`mentalState\`/\`studyWeek\`.
 `.trim();
 
 /** Monta o "user message" com o bundle de dados sumarizado da semana. */

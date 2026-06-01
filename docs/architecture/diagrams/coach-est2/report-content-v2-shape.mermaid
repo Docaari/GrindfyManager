@@ -1,0 +1,65 @@
+%% EST-2 (ADR-225) — Shape do ReportContent v2 (campos novos mentalState + studyWeek).
+%% Ambos OPCIONAIS (lesson #7). schemaVersion 1->2 quando qualquer um populado.
+classDiagram
+    class ReportContent {
+        +number schemaVersion "1 legado, 2 com EST-2"
+        +string reportType
+        +ReportContentSections sections
+        +Insight[] insights
+        +ReportMentalState mentalState "OPCIONAL — EST-2"
+        +ReportStudyWeek studyWeek "OPCIONAL — EST-2"
+        +Comparatives comparatives "OPCIONAL — AI-1C"
+        +SessionSummary sessionSummary "OPCIONAL — AI-1C"
+    }
+
+    class ReportMentalState {
+        +WeeklyAverages weeklyAverages "5 dims, media TODOS breaks, null se vazio"
+        +number breakCount "total semana"
+        +number totalSessionsWithBreaks "pode > sessions.length (cap 10)"
+        +boolean fatigueSignal ">=2 sessoes foco|energia delta <= -2"
+        +ReportMentalSession[] sessions "cap 10, recentes"
+        +ReportGrindNote[] grindNotes "cap 10; [] se nenhuma (D-3)"
+        +number objectiveHitRate "% inteiro; null se nenhum definido"
+        +string narrative "OPCIONAL — LLM"
+    }
+
+    class ReportMentalSession {
+        +string sessionId
+        +string date "ISO"
+        +Dims dims "foco/energia/confianca/IE/interferencias"
+        +number breakCount
+    }
+
+    class ReportMentalDim {
+        +number first "1o break cronologico (sort ASC)"
+        +number last "ultimo break cronologico"
+        +number avg "1 casa"
+        +number delta "last - first, 1 casa"
+    }
+
+    class ReportGrindNote {
+        +string sessionId
+        +string date "ISO"
+        +string finalNotes "OPCIONAL, trunc 500"
+        +string preparationNotes "OPCIONAL, trunc 500"
+        +string dailyGoals "OPCIONAL, trunc 500"
+        +boolean objectiveCompleted "OPCIONAL"
+    }
+
+    class ReportStudyWeek {
+        +number sessionCount
+        +number minutesLogged
+        +number handsSolvedTotal "soma EST-3, null->0"
+        +number filtersAnalyzedTotal "soma EST-3, null->0"
+        +number statAnalysisEntriesTotal "soma entries.length"
+        +number statAnalysisSessionCount "mode=stat_analysis"
+        +number lessonInsightsCount "sessoes c/ lessonInsights"
+        +TimeByTheme[] timeByTheme "cap 8, minutos desc"
+        +string narrative "OPCIONAL — LLM"
+    }
+
+    ReportContent --> "0..1" ReportMentalState : mentalState?
+    ReportContent --> "0..1" ReportStudyWeek : studyWeek?
+    ReportMentalState --> "0..10" ReportMentalSession : sessions
+    ReportMentalState --> "0..10" ReportGrindNote : grindNotes
+    ReportMentalSession --> "5" ReportMentalDim : dims (foco/energia/confianca/IE/interferencias)

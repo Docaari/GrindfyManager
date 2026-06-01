@@ -28,7 +28,7 @@
 // =============================================================================
 
 import { nanoid } from "nanoid";
-import type { ReportContent } from "@shared/schema";
+import type { ReportContent, ReportMentalState, ReportMentalSession, ReportMentalDim, ReportStudyWeek } from "@shared/schema";
 import { getCurrentWeekStartBRT } from "../coach/weekHelper";
 // Sprint AI-3.2 / RF-B3 (ADR-203) — computeReportCost shared (paridade 5/5
 // generators); pricing Sonnet 4.6 vem de server/coach/reportCost.ts.
@@ -247,7 +247,20 @@ async function gatherBundle(storage: any, userId: string, periodStart: string, p
     ? warmupResult.items
     : (Array.isArray(warmupResult) ? warmupResult : []);
 
+  // EST-2 (ADR-225 / RF-01 + D-2) — FASE 2: break_feedbacks das sessoes da semana.
+  // Sequencial (depende dos ids das grindSessions resolvidas no Promise.all).
+  // safe() degrada [] em erro (lesson #9); sessionIds vazio -> helper retorna [].
+  const weekSessions = Array.isArray(grindSessions) ? grindSessions : [];
+  const sessionIds = weekSessions
+    .map((s: any) => s?.id)
+    .filter((id: any): id is string => typeof id === "string" && id.length > 0);
+  const breakFeedbacks = await safe(
+    async () => await storage.getBreakFeedbacksBySessionIds?.(userId, sessionIds) ?? [],
+    [],
+  );
+
   return {
+    breakFeedbacks: Array.isArray(breakFeedbacks) ? breakFeedbacks : [],
     dashStats7d,
     dashStats30d,
     perfSeries7d: Array.isArray(perfSeries7d) ? perfSeries7d : [],
@@ -404,6 +417,179 @@ function buildSections(bundle: any): ReportContent["sections"] {
   };
 }
 
+// -----------------------------------------------------------------------------
+// EST-2 (ADR-225) — agregacoes deterministicas puras (testaveis sem DB).
+// buildMentalState le bundle.breakFeedbacks + bundle.grindSessions;
+// buildStudyWeek le bundle.studySessions. Ambas degradam (null) gracioso.
+// -----------------------------------------------------------------------------
+const MENTAL_DIMS = ["foco", "energia", "confianca", "inteligenciaEmocional", "interferencias"] as const;
+type MentalDimKey = (typeof MENTAL_DIMS)[number];
+const SESSION_CAP = 10;
+const NOTE_CHAR_CAP = 500;
+const THEME_CAP = 8;
+
+function round1(x: number): number {
+  return Math.round(x * 10) / 10;
+}
+
+function truncateNote(raw: any): string | undefined {
+  const s = typeof raw === "string" ? raw.trim() : "";
+  if (s.length === 0) return undefined;
+  return s.length > NOTE_CHAR_CAP ? `${s.slice(0, NOTE_CHAR_CAP)}…` : s;
+}
+
+function buildDim(values: number[]): ReportMentalDim {
+  const first = values[0];
+  const last = values[values.length - 1];
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  return { first, last, avg: round1(avg), delta: round1(last - first) };
+}
+
+export function buildMentalState(bundle: any): ReportMentalState | null {
+  const breaks: any[] = Array.isArray(bundle?.breakFeedbacks) ? bundle.breakFeedbacks : [];
+  const grindSessions: any[] = Array.isArray(bundle?.grindSessions) ? bundle.grindSessions : [];
+
+  // mapa sessionId -> data da grind session (pra ordenar/recencia).
+  const dateBySession = new Map<string, string>();
+  for (const g of grindSessions) {
+    if (g?.id) dateBySession.set(String(g.id), String(g?.date ?? ""));
+  }
+
+  // agrupa breaks por sessionId.
+  const bySession = new Map<string, any[]>();
+  for (const b of breaks) {
+    const sid = String(b?.sessionId ?? "");
+    if (!sid) continue;
+    if (!bySession.has(sid)) bySession.set(sid, []);
+    bySession.get(sid)!.push(b);
+  }
+
+  // monta sessions detalhadas (reordena ASC por breakTime antes de first/last).
+  const allSessions: ReportMentalSession[] = [];
+  for (const [sid, rows] of bySession.entries()) {
+    const sorted = [...rows].sort(
+      (a, b) => new Date(a?.breakTime ?? 0).getTime() - new Date(b?.breakTime ?? 0).getTime(),
+    );
+    const dims: any = {};
+    for (const dim of MENTAL_DIMS) {
+      const vals = sorted.map((r) => n(r?.[dim])).filter((v) => Number.isFinite(v));
+      dims[dim] = buildDim(vals.length > 0 ? vals : [0]);
+    }
+    allSessions.push({
+      sessionId: sid,
+      date: dateBySession.get(sid) ?? "",
+      dims,
+      breakCount: sorted.length,
+    });
+  }
+  // recencia por data desc; cap 10 detalhadas.
+  allSessions.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+  const totalSessionsWithBreaks = allSessions.length;
+  const sessions = allSessions.slice(0, SESSION_CAP);
+
+  // weeklyAverages = media de TODOS os breaks da semana por dim.
+  const weeklyAverages: ReportMentalState["weeklyAverages"] = {
+    foco: null, energia: null, confianca: null, inteligenciaEmocional: null, interferencias: null,
+  };
+  if (breaks.length > 0) {
+    for (const dim of MENTAL_DIMS) {
+      const vals = breaks.map((b) => n(b?.[dim])).filter((v) => Number.isFinite(v));
+      weeklyAverages[dim as MentalDimKey] = vals.length > 0
+        ? round1(vals.reduce((a, b) => a + b, 0) / vals.length)
+        : null;
+    }
+  }
+
+  // fatigueSignal: >=2 sessoes com foco.delta <= -2 OU energia.delta <= -2.
+  const fatigueSessions = allSessions.filter(
+    (s) => s.dims.foco.delta <= -2 || s.dims.energia.delta <= -2,
+  ).length;
+  const fatigueSignal = fatigueSessions >= 2;
+
+  // grindNotes (cap 10 recentes); inclui so campos nao-vazios; exclui sessoes sem nada.
+  const sortedGrind = [...grindSessions].sort(
+    (a, b) => new Date(b?.date ?? 0).getTime() - new Date(a?.date ?? 0).getTime(),
+  );
+  const grindNotes: NonNullable<ReportContent["mentalState"]>["grindNotes"] = [];
+  let objectivesDefined = 0;
+  let objectivesHit = 0;
+  for (const g of sortedGrind) {
+    const objDefined = g?.objectiveCompleted != null;
+    if (objDefined) {
+      objectivesDefined += 1;
+      if (g.objectiveCompleted === true) objectivesHit += 1;
+    }
+    if (grindNotes.length >= SESSION_CAP) continue;
+    const finalNotes = truncateNote(g?.finalNotes);
+    const preparationNotes = truncateNote(g?.preparationNotes);
+    const dailyGoals = truncateNote(g?.dailyGoals);
+    const hasContent = finalNotes != null || preparationNotes != null || dailyGoals != null || objDefined;
+    if (!hasContent) continue;
+    const note: any = { sessionId: String(g?.id ?? ""), date: String(g?.date ?? "") };
+    if (finalNotes != null) note.finalNotes = finalNotes;
+    if (preparationNotes != null) note.preparationNotes = preparationNotes;
+    if (dailyGoals != null) note.dailyGoals = dailyGoals;
+    if (objDefined) note.objectiveCompleted = g.objectiveCompleted === true;
+    grindNotes.push(note);
+  }
+  const objectiveHitRate = objectivesDefined > 0
+    ? Math.round((objectivesHit / objectivesDefined) * 100)
+    : null;
+
+  // degrade: null SO se zero breaks E zero notas/objectives.
+  if (breaks.length === 0 && grindNotes.length === 0) return null;
+
+  return {
+    weeklyAverages,
+    breakCount: breaks.length,
+    totalSessionsWithBreaks,
+    fatigueSignal,
+    sessions,
+    grindNotes,
+    objectiveHitRate,
+  };
+}
+
+export function buildStudyWeek(bundle: any): ReportStudyWeek | null {
+  const sessions: any[] = Array.isArray(bundle?.studySessions) ? bundle.studySessions : [];
+  if (sessions.length === 0) return null;
+
+  let handsSolvedTotal = 0;
+  let filtersAnalyzedTotal = 0;
+  let statAnalysisEntriesTotal = 0;
+  let statAnalysisSessionCount = 0;
+  let lessonInsightsCount = 0;
+  let minutesLogged = 0;
+  const themeMinutes = new Map<string, number>();
+
+  for (const s of sessions) {
+    minutesLogged += n(s?.durationMinutes);
+    handsSolvedTotal += n(s?.handsSolvedCount);
+    filtersAnalyzedTotal += n(s?.filtersAnalyzedCount);
+    if (Array.isArray(s?.statAnalysisEntries)) statAnalysisEntriesTotal += s.statAnalysisEntries.length;
+    if (s?.mode === "stat_analysis") statAnalysisSessionCount += 1;
+    if (typeof s?.lessonInsights === "string" && s.lessonInsights.trim().length > 0) lessonInsightsCount += 1;
+    const theme = typeof s?.themeId === "string" ? s.themeId.trim() : "";
+    if (theme.length > 0) themeMinutes.set(theme, (themeMinutes.get(theme) ?? 0) + n(s?.durationMinutes));
+  }
+
+  const timeByTheme = Array.from(themeMinutes.entries())
+    .map(([themeId, minutes]) => ({ themeId, minutes }))
+    .sort((a, b) => b.minutes - a.minutes)
+    .slice(0, THEME_CAP);
+
+  return {
+    sessionCount: sessions.length,
+    minutesLogged,
+    handsSolvedTotal,
+    filtersAnalyzedTotal,
+    statAnalysisEntriesTotal,
+    statAnalysisSessionCount,
+    lessonInsightsCount,
+    timeByTheme,
+  };
+}
+
 function renderMarkdown(content: ReportContent): string {
   const lines: string[] = [];
   lines.push(`# ${content.header.title}`);
@@ -439,6 +625,43 @@ function renderMarkdown(content: ReportContent): string {
     lines.push("## Mental + Operacional");
     lines.push(`- Warm-ups: ${s.mentalOps.warmupSessions}${s.mentalOps.avgFocusRating != null ? ` · Foco médio: ${s.mentalOps.avgFocusRating}/5` : ""} · Sessões com tilt: ${s.mentalOps.tiltSessions}`);
     if (s.mentalOps.narrative) lines.push(`> ${s.mentalOps.narrative}`);
+    lines.push("");
+  }
+  // EST-2 (ADR-225 / RF-07) — blocos novos; OMITIDOS quando ausentes (back-compat).
+  const ms = content.mentalState;
+  if (ms) {
+    lines.push("## Estado mental da semana");
+    const wa = ms.weeklyAverages;
+    const avgParts = [
+      wa.foco != null ? `Foco ${wa.foco}` : null,
+      wa.energia != null ? `Energia ${wa.energia}` : null,
+      wa.confianca != null ? `Confiança ${wa.confianca}` : null,
+      wa.inteligenciaEmocional != null ? `IE ${wa.inteligenciaEmocional}` : null,
+      wa.interferencias != null ? `Interferências ${wa.interferencias}` : null,
+    ].filter(Boolean);
+    if (avgParts.length) lines.push(`- Médias da semana (0-10): ${avgParts.join(" · ")} (${ms.breakCount} breaks)`);
+    if (ms.fatigueSignal) lines.push("- Sinal de fadiga: foco/energia caindo ao longo das sessões.");
+    for (const sess of ms.sessions) {
+      const f = sess.dims.foco; const e = sess.dims.energia;
+      if (f.delta <= -2 || e.delta <= -2) {
+        lines.push(`- Sessão ${sess.date.slice(0, 10)}: Foco ${f.first}→${f.last} · Energia ${e.first}→${e.last}`);
+      }
+    }
+    if (ms.objectiveHitRate != null) lines.push(`- Objetivos cumpridos: ${ms.objectiveHitRate}%`);
+    for (const note of ms.grindNotes) {
+      if (note.finalNotes) lines.push(`- Nota de fim (${note.date.slice(0, 10)}): ${note.finalNotes}`);
+    }
+    if (ms.narrative) lines.push(`> ${ms.narrative}`);
+    lines.push("");
+  }
+  const sw = content.studyWeek;
+  if (sw) {
+    lines.push("## Estudo da semana");
+    lines.push(`- Sessões: ${sw.sessionCount} · ${sw.minutesLogged}min · Mãos solucionadas: ${sw.handsSolvedTotal} · Filtros: ${sw.filtersAnalyzedTotal}`);
+    if (sw.statAnalysisSessionCount > 0) lines.push(`- Análises de stat: ${sw.statAnalysisSessionCount} sessões (${sw.statAnalysisEntriesTotal} entradas)`);
+    if (sw.timeByTheme.length) lines.push(`- Tempo por tema: ${sw.timeByTheme.map((t) => `${t.themeId} ${t.minutes}min`).join(", ")}`);
+    if (sw.lessonInsightsCount > 0) lines.push(`- Aulas com insights: ${sw.lessonInsightsCount}`);
+    if (sw.narrative) lines.push(`> ${sw.narrative}`);
     lines.push("");
   }
   if (content.insights.length) {
@@ -688,6 +911,15 @@ export async function generateWeeklyReport(args: GenerateWeeklyReportArgs): Prom
     return { content, markdown: md, status: "ready", model: null, costUsdEstimate: 0, reportId };
   }
 
+  // EST-2 (ADR-225) — agregacoes deterministicas + schemaVersion. Popular
+  // qualquer bloco => schemaVersion 2 (lesson #7).
+  const mentalState = buildMentalState(bundle);
+  const studyWeek = buildStudyWeek(bundle);
+  const schemaVersion = mentalState || studyWeek ? 2 : 1;
+  // RF-08 — o bundle do LLM NAO leva o array cru breakFeedbacks; so a agregacao.
+  const { breakFeedbacks: _omitRawBreaks, ...bundleRest } = bundle as any;
+  const llmBundle = { ...bundleRest, mentalState, studyWeek };
+
   // ---- fail-soft: sem ANTHROPIC_API_KEY -> deterministico direto ----
   if (!process.env.ANTHROPIC_API_KEY && !failSoft) {
     return await buildDeterministic({
@@ -702,6 +934,9 @@ export async function generateWeeklyReport(args: GenerateWeeklyReportArgs): Prom
       recommendedLesson,
       weeklyStudyPlanRef,
       degradedReason: "no_anthropic_key",
+      mentalState,
+      studyWeek,
+      schemaVersion,
     });
   }
 
@@ -711,7 +946,7 @@ export async function generateWeeklyReport(args: GenerateWeeklyReportArgs): Prom
   let degradedReason: string | null = null;
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      const out = await callLlm(model, bundle, tone, level);
+      const out = await callLlm(model, llmBundle, tone, level);
       if ((out as any).clientUnavailable) {
         // SDK/cliente indisponivel OU callReportLlm retornou degradedReason
         // (Sprint AI-3.2 / RF-B1 — paridade monthly/quarterly).
@@ -750,6 +985,9 @@ export async function generateWeeklyReport(args: GenerateWeeklyReportArgs): Prom
       recommendedLesson,
       weeklyStudyPlanRef,
       degradedReason,
+      mentalState,
+      studyWeek,
+      schemaVersion,
     });
   }
 
@@ -771,9 +1009,16 @@ export async function generateWeeklyReport(args: GenerateWeeklyReportArgs): Prom
     });
   }
 
+  // EST-2 (ADR-225 / RF-06) — merge da narrative (do LLM, sob sections.*) nos
+  // blocos novos. mentalState/studyWeek sao top-level em content; aplicado aqui.
+  const mergeNarrative = <T extends object>(obj: T | null, narrative: any): T | undefined =>
+    obj ? (typeof narrative === "string" && narrative ? { ...obj, narrative } : obj) : undefined;
+  const mentalStateMerged = mergeNarrative(mentalState, parsed?.sections?.mentalState?.narrative);
+  const studyWeekMerged = mergeNarrative(studyWeek, parsed?.sections?.studyWeek?.narrative);
+
   const cost = computeCost(usage);
   const content: ReportContent = {
-    schemaVersion: 1,
+    schemaVersion,
     reportType: "weekly",
     periodStart,
     periodEnd,
@@ -787,6 +1032,8 @@ export async function generateWeeklyReport(args: GenerateWeeklyReportArgs): Prom
       ...(parsed?.header?.comparison ? { comparison: String(parsed.header.comparison) } : {}),
     },
     sections: { ...merged, study: { ...merged.study, recommendedLesson } },
+    ...(mentalStateMerged ? { mentalState: mentalStateMerged } : {}),
+    ...(studyWeekMerged ? { studyWeek: studyWeekMerged } : {}),
     insights,
     nextWeekPlan: {
       // sanitiza o href do LLM contra rotas registradas (lesson #19) — aluc -> /coach.
@@ -848,10 +1095,16 @@ async function buildDeterministic(opts: {
   recommendedLesson: ReportContent["sections"]["study"]["recommendedLesson"] | null;
   weeklyStudyPlanRef: { weekStartDate: string } | null;
   degradedReason: string;
+  // EST-2 (ADR-225) — agregacoes deterministicas (sem narrative no modo degraded).
+  mentalState?: ReportMentalState | null;
+  studyWeek?: ReportStudyWeek | null;
+  schemaVersion?: number;
 }): Promise<WeeklyReportResult> {
   const { storage, userId, periodStart, periodEnd, label, sections, tone, level, recommendedLesson, weeklyStudyPlanRef, degradedReason } = opts;
+  const mentalState = opts.mentalState ?? null;
+  const studyWeek = opts.studyWeek ?? null;
   const content: ReportContent = {
-    schemaVersion: 1,
+    schemaVersion: opts.schemaVersion ?? 1,
     reportType: "weekly",
     periodStart,
     periodEnd,
@@ -863,6 +1116,8 @@ async function buildDeterministic(opts: {
       summaryLine: `Relatório gerado em modo simplificado — os números estão completos abaixo. Você jogou ${sections.volumeResults.tournaments} torneios essa semana.`,
     },
     sections: { ...sections, study: { ...sections.study, recommendedLesson } },
+    ...(mentalState ? { mentalState } : {}),
+    ...(studyWeek ? { studyWeek } : {}),
     insights: [],
     nextWeekPlan: {
       gradeSuggestionHref: "/coach",

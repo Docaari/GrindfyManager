@@ -1,0 +1,54 @@
+%% EST-2 (ADR-225) — Fluxo enriquecido do Weekly Report Generator.
+%% gatherBundle (2 fases) -> agregacoes deterministicas puras -> LLM -> merge -> render.
+sequenceDiagram
+    participant Cron as reportJobRunner<br/>(processReportJobsTick)
+    participant Gen as generateWeeklyReport
+    participant Bundle as gatherBundle
+    participant Store as storage
+    participant Mental as buildMentalState (puro)
+    participant Study as buildStudyWeek (puro)
+    participant LLM as callReportLlm (Sonnet 4.6)
+    participant Merge as mergeLlm
+    participant Render as renderMarkdown
+    participant DB as reports (JSONB)
+
+    Cron->>Gen: generateWeeklyReport({userId, periodStart, periodEnd})
+    Gen->>Bundle: gatherBundle(storage, userId, period)
+
+    Note over Bundle,Store: FASE 1 — Promise.all (16 fontes, inclui grindSessions + studySessionsV2)
+    Bundle->>Store: Promise.all([getDashboardStats, getGrindSessions, getStudySessionsV2, ...])
+    Store-->>Bundle: { grindSessions[], studySessionsV2[], ... }
+
+    Note over Bundle,Store: FASE 2 — break_feedbacks por sessionIds (D-2)
+    Bundle->>Bundle: sessionIds = grindSessions.map(s => s.id)
+    alt sessionIds.length > 0
+        Bundle->>Store: safe(getBreakFeedbacksBySessionIds(userId, sessionIds))
+        Store-->>Bundle: BreakFeedback[] (desc breakTime)
+    else vazio
+        Bundle-->>Bundle: breakFeedbacks = []
+    end
+    Bundle-->>Gen: bundle { ...16 fontes, breakFeedbacks[] }
+
+    Note over Gen,Study: Agregacoes deterministicas (cap 10 sessoes, sort ASC breakTime)
+    Gen->>Mental: buildMentalState(bundle)
+    Mental-->>Gen: ReportMentalState | null<br/>(weeklyAverages, sessions[].dims, grindNotes[], fatigueSignal)
+    Gen->>Study: buildStudyWeek(bundle)
+    Study-->>Gen: ReportStudyWeek | null<br/>(handsSolved, statAnalysisEntries, timeByTheme)
+    Gen->>Gen: schemaVersion = (mentalState || studyWeek) ? 2 : 1
+
+    Note over Gen,LLM: D-1 — array cru breakFeedbacks NAO vai pro prompt (so a agregacao)
+    Gen->>LLM: callLlm(model, llmBundle{sections, mentalState, studyWeek}, tone, level)
+    LLM-->>Gen: { parsed.sections.mentalState.narrative, studyWeek.narrative, insights[3] }<br/>OR { clientUnavailable, degradedReason }
+
+    alt LLM ok
+        Gen->>Merge: mergeLlm(sections, parsed) + narrativas mentalState/studyWeek
+        Merge-->>Gen: sections enriquecidas
+    else degraded (no_anthropic_key | llm_failed_3x | timeout)
+        Gen->>Gen: buildDeterministic (mentalState/studyWeek sem narrative)
+    end
+
+    Gen->>Render: renderMarkdown(content)
+    Note over Render: blocos "## Estado mental da semana" + "## Estudo da semana"<br/>OMITIDOS se mentalState/studyWeek ausentes (back-compat)
+    Render-->>Gen: markdown
+    Gen->>DB: persistReport(content v2 + markdown)
+    Gen-->>Cron: { content, markdown, status, schemaVersion }

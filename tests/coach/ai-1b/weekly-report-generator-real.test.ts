@@ -152,7 +152,10 @@ describe("generateWeeklyReport — storage de assinatura REAL", () => {
     const res: any = await generateWeeklyReport({ userId: "USER-0042", periodStart: "2026-05-04", periodEnd: "2026-05-10" });
 
     expect(res.status).toBe("ready");
-    expect(res.content.schemaVersion).toBe(1);
+    // EST-2 (ADR-225): este fixture tem study sessions (getStudySessionsV2 -> 90min),
+    // entao buildStudyWeek popula `studyWeek` e o schemaVersion sobe 1 -> 2.
+    // (Antes do EST-2 era sempre 1; o bump eh esperado quando ha bloco novo — lesson #7.)
+    expect(res.content.schemaVersion).toBe(2);
     // tom/nivel vem do perfil estruturado (mock do MODULO aiStructuredProfile, NAO do objeto storage).
     expect(res.content.tone).toBe("direct");
     expect(res.content.level).toBe("pro");

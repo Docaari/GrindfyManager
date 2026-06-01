@@ -5605,5 +5605,73 @@ export interface ReportContent {
     profitByCurrency?: Array<{ currency: string; native: number; usd: number }>;
     narrative?: string;
   };
+
+  // EST-2 (ADR-225) — Weekly Report Data Enrichment. Opcionais (lesson #7);
+  // renderer + frontend toleram ausencia. Popular qualquer um => schemaVersion=2.
+  mentalState?: ReportMentalState;
+  studyWeek?: ReportStudyWeek;
+}
+
+// -----------------------------------------------------------------------------
+// EST-2 (ADR-225) — sub-shapes de mentalState + studyWeek do Weekly Report.
+// -----------------------------------------------------------------------------
+
+/** Uma dimensao mental 0-10 dentro de uma sessao. delta = last - first. */
+export interface ReportMentalDim {
+  first: number;
+  last: number;
+  avg: number;   // 1 casa decimal
+  delta: number; // last - first, 1 casa decimal
+}
+
+export interface ReportMentalSession {
+  sessionId: string;
+  date: string;               // ISO (data da sessao)
+  dims: {
+    foco: ReportMentalDim;
+    energia: ReportMentalDim;
+    confianca: ReportMentalDim;
+    inteligenciaEmocional: ReportMentalDim;
+    interferencias: ReportMentalDim;
+  };
+  breakCount: number;         // breaks nesta sessao
+}
+
+export interface ReportGrindNote {
+  sessionId: string;
+  date: string;               // ISO
+  finalNotes?: string;        // truncado 500
+  preparationNotes?: string;  // truncado 500
+  dailyGoals?: string;        // truncado 500
+  objectiveCompleted?: boolean;
+}
+
+export interface ReportMentalState {
+  weeklyAverages: {           // media de TODOS os breaks da semana, por dim (1 casa)
+    foco: number | null;
+    energia: number | null;
+    confianca: number | null;
+    inteligenciaEmocional: number | null;
+    interferencias: number | null;
+  };
+  breakCount: number;                 // total de breaks na semana
+  totalSessionsWithBreaks: number;    // pode ser > sessions.length (cap 10)
+  fatigueSignal: boolean;
+  sessions: ReportMentalSession[];    // cap 10, mais recentes
+  grindNotes: ReportGrindNote[];      // cap 10; [] se nenhuma nota
+  objectiveHitRate: number | null;    // % inteiro; null se nenhum objectiveCompleted definido
+  narrative?: string;                 // preenchido pelo LLM
+}
+
+export interface ReportStudyWeek {
+  sessionCount: number;
+  minutesLogged: number;
+  handsSolvedTotal: number;
+  filtersAnalyzedTotal: number;
+  statAnalysisEntriesTotal: number;
+  statAnalysisSessionCount: number;
+  lessonInsightsCount: number;
+  timeByTheme: Array<{ themeId: string; minutes: number }>; // cap 8, minutos desc
+  narrative?: string;
 }
 
