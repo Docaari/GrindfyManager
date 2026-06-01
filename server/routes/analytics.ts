@@ -157,7 +157,8 @@ export function registerAnalyticsRoutes(app: Express): void {
     try {
       const userId = req.user.userPlatformId;
       const period = req.query.period as string || "30d";
-      const filters = parseFiltersParam(req.query.filters);
+      const rawFilters = parseFiltersParam(req.query.filters);
+      const filters = mapFiltersToBackendFormat(rawFilters);
       const analytics = await storage.getAnalyticsByDayOfWeek(userId, period, filters);
       res.json(analytics);
     } catch (error) {

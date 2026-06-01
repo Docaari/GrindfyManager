@@ -61,7 +61,7 @@ function pnlClass(v: number): string {
 }
 
 function sessionHref(s: RecentSession): string {
-  return s.status === 'live' ? `/grind-live/${s.id}` : `/dashboard?session=${s.id}`;
+  return s.status === 'live' ? `/grind-live` : `/dashboard?session=${s.id}`;
 }
 
 export default function RecentSessionsList({ data }: Props): JSX.Element {

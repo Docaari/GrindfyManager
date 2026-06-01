@@ -80,6 +80,8 @@ export default function UploadHistory() {
       queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tournaments/sites"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/upload-stats"] });
     },
     onError: (error) => {
       toast({

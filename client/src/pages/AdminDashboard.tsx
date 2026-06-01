@@ -93,8 +93,7 @@ const AdminDashboard: React.FC = () => {
   const { data: dashboardStats, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useQuery<AdminDashboardStats>({
     queryKey: ['/api/admin/dashboard-stats'],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/admin/dashboard-stats');
-      const jsonData = await response.json();
+      const jsonData = await apiRequest('GET', '/api/admin/dashboard-stats');
       return jsonData || {};
     },
     refetchInterval: refreshInterval
@@ -104,8 +103,7 @@ const AdminDashboard: React.FC = () => {
   const { data: monitoringData, isLoading: monitoringLoading, isError: monitoringError, refetch: refetchMonitoring } = useQuery<MonitoringData>({
     queryKey: ['/api/admin/monitoring'],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/admin/monitoring');
-      const jsonData = await response.json();
+      const jsonData = await apiRequest('GET', '/api/admin/monitoring');
       return jsonData || {};
     },
     refetchInterval: 10000 // 10 segundos para tempo real
@@ -202,10 +200,6 @@ const AdminDashboard: React.FC = () => {
                   {dashboardStats?.onlineUsers || 0} usuários online
                 </span>
               </div>
-              <Button variant="outline" size="sm">
-                <Settings className="h-4 w-4 mr-2" />
-                Configurações
-              </Button>
             </div>
           </div>
         </div>
@@ -381,10 +375,6 @@ const AdminDashboard: React.FC = () => {
                       <SelectItem value="blocked">Bloqueados</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button>
-                    <Filter className="h-4 w-4 mr-2" />
-                    Filtros Avançados
-                  </Button>
                 </div>
               </CardHeader>
               <CardContent>

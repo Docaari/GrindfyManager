@@ -377,6 +377,11 @@ export function registerAdminRoutes(app: Express): void {
       const userId = req.params.id;
       const { status } = req.body;
 
+      const VALID_STATUSES = ['active', 'inactive', 'pending_verification', 'blocked'];
+      if (!VALID_STATUSES.includes(status)) {
+        return res.status(400).json({ message: 'status invalido' });
+      }
+
       const [updatedUser] = await db.update(users)
         .set({ status })
         .where(eq(users.userPlatformId, userId))

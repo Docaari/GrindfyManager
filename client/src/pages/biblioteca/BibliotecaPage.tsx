@@ -124,12 +124,16 @@ export function BibliotecaPage() {
   function handleNotifyClick() {
     writeNotifyRequested();
     setNotifyRequested(true);
+    // Intenção de marketing (nao atrelada a uma aula real). Vai pro canal de
+    // telemetria de atividade (/api/user-activity, action livre) em vez de
+    // /api/library/events — este ultimo exige access check por lessonId e o
+    // "library_notify" sintetico sempre dava 401 silencioso.
     apiRequest(
       "POST",
-      "/api/library/events",
+      "/api/user-activity",
       {
-        lessonId: "library_notify",
-        eventType: "view",
+        action: "library_notify_interest",
+        page: "biblioteca",
         metadata: { intent: "notify_when_published" },
       },
       { silentMode: true },

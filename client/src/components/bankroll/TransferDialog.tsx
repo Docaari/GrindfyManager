@@ -160,12 +160,12 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
       toast({ title: "Transferencia criada", description: "A movimentacao foi registrada." });
       onOpenChange(false);
     } catch (err: any) {
-      const code = err?.body?.code ?? err?.code;
+      const code = err?.response?.data?.code ?? err?.body?.code ?? err?.code;
       if (code === "FX_DIFF_HIGH") {
         setError({
           code: "FX_DIFF_HIGH",
-          providedRate: err?.body?.providedRate,
-          marketRate: err?.body?.marketRate,
+          providedRate: err?.response?.data?.providedRate ?? err?.body?.providedRate,
+          marketRate: err?.response?.data?.marketRate ?? err?.body?.marketRate,
           message: err?.message,
         });
         setNeedsConfirm(true);

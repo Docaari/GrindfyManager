@@ -544,7 +544,10 @@ function ReportsPanel() {
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium text-gray-200">
-                Relatório semanal — {it.periodStart} a {it.periodEnd}
+                {(it.reportType === 'daily' ? 'Debrief diário'
+                  : it.reportType === 'monthly' ? 'Relatório mensal'
+                  : it.reportType === 'quarterly' ? 'Revisão trimestral'
+                  : 'Relatório semanal')} — {it.periodStart} a {it.periodEnd}
               </span>
               {it.status === 'degraded' ? (
                 <span className="shrink-0 rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] text-amber-300">
@@ -734,6 +737,9 @@ function CoachPreferencesPanel() {
 
   const saveMutation = useMutation({
     mutationFn: (payload: any) => apiRequest('PUT', '/api/coach/preferences', payload),
+    onSuccess: () => {
+      try { queryClient.invalidateQueries({ queryKey: ['/api/coach/preferences'] }); } catch { /* noop */ }
+    },
   });
 
   const handleSave = useCallback(() => {

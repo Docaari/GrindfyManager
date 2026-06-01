@@ -1,33 +1,14 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Calculator, Target, Award, Trophy, Dices, Gift, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import SizeGeometricoCalculator from "@/components/calculators/SizeGeometricoCalculator";
 import RPCalculator from "@/components/calculators/RPCalculator";
 import MysteryBountyCalculator from "@/components/calculators/MysteryBountyCalculator";
 import BountyCalculator from "@/components/calculators/BountyCalculator";
 import SatelliteCalculator from "@/components/calculators/SatelliteCalculator";
 import Randomizer from "@/components/calculators/Randomizer";
-
-const toolPopupSizes: Record<string, { width: number; height: number }> = {
-  "size-geometrico": { width: 500, height: 700 },
-  "rp-icm": { width: 650, height: 750 },
-  "mystery-bounty": { width: 650, height: 850 },
-  "pko-bounty": { width: 700, height: 850 },
-  "satelites": { width: 700, height: 900 },
-  "randomizador": { width: 350, height: 300 },
-};
-
-function openToolPopup(toolKey: string) {
-  const size = toolPopupSizes[toolKey] ?? { width: 600, height: 700 };
-  const left = window.screenX + (window.outerWidth - size.width) / 2;
-  const top = window.screenY + (window.outerHeight - size.height) / 2;
-  window.open(
-    `/calculadora-popup/${toolKey}`,
-    `tool-${toolKey}`,
-    `width=${size.width},height=${size.height},left=${Math.round(left)},top=${Math.round(top)},resizable=yes,scrollbars=yes`
-  );
-}
+import { calculatorTools, openCalculatorPopup } from "@/lib/calculatorTools";
 
 function PopoutButton({ toolKey }: { toolKey: string }) {
   return (
@@ -36,7 +17,7 @@ function PopoutButton({ toolKey }: { toolKey: string }) {
         variant="ghost"
         size="sm"
         className="h-7 px-2 text-xs text-gray-400 hover:text-white gap-1"
-        onClick={() => openToolPopup(toolKey)}
+        onClick={() => openCalculatorPopup(toolKey)}
         title="Abrir em nova janela"
       >
         <ExternalLink className="h-3 w-3" />
@@ -46,14 +27,7 @@ function PopoutButton({ toolKey }: { toolKey: string }) {
   );
 }
 
-const tabs = [
-  { value: "size-geometrico", label: "Size Geometrico", icon: Calculator },
-  { value: "rp-icm", label: "RP/ICM", icon: Target },
-  { value: "mystery-bounty", label: "Mystery Bounty", icon: Gift },
-  { value: "pko-bounty", label: "PKO Bounty", icon: Award },
-  { value: "satelites", label: "Satelites", icon: Trophy },
-  { value: "randomizador", label: "Randomizador", icon: Dices },
-] as const;
+const tabs = calculatorTools;
 
 export default function Calculadoras() {
   const [activeTab, setActiveTab] = useState("size-geometrico");

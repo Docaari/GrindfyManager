@@ -47,6 +47,8 @@ export function WalletEditDialog({ open, onOpenChange, wallet }: Props) {
       try {
         queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
         queryClient.invalidateQueries({ queryKey: [`/api/wallets/${wallet.id}`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/bankroll/consolidated"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/bankroll"] });
       } catch {
         // ignore
       }

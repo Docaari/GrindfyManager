@@ -499,7 +499,19 @@ export function registerStudiesRoutes(app: Express): void {
   });
 
   // Sprint Estudos-Sessao-1 RF-02: POST agora retorna sessao com status='active'.
-  app.post('/api/study-sessions', requireAuth, async (req: any, res) => {
+  // Compat com V2 (espelha o PATCH abaixo): se o body e claramente V2-shaped
+  // (mode/source/durationMinutes/...), delega pro handler V2 via next(). Sem
+  // isso, StudyLogDialog (CTA "Registrar Estudo" do dashboard) postava body V2
+  // sem `date`/`duration` no handler legacy -> INSERT NOT NULL falha -> 400.
+  app.post('/api/study-sessions', requireAuth, async (req: any, res, next) => {
+    const body = req?.body ?? {};
+    const V2_FIELDS = ['mode', 'source', 'durationMinutes', 'duration_minutes', 'startedAt', 'started_at', 'endedAt', 'ended_at'];
+    const LEGACY_FIELDS = ['date', 'duration', 'activities', 'focusScore', 'productivityScore', 'insights'];
+    const hasV2 = V2_FIELDS.some((k) => k in body);
+    const hasLegacy = LEGACY_FIELDS.some((k) => k in body);
+    if (hasV2 && !hasLegacy) {
+      return next();
+    }
     await handleCreateStudySession(req, res);
   });
 

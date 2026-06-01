@@ -59,8 +59,11 @@ export default function WeeklyReportView() {
   const content: any = report.content ?? {};
   const sections: any = content.sections ?? {};
   const isDegraded = report.status === "degraded" || content?.generation?.degraded === true;
-  const sectionIds = ["volumeResults", "bankroll", "selection", "study"];
-  if (sections.mentalOps) sectionIds.push("mentalOps");
+  // Render only sections that actually exist. Weekly reports carry all of them;
+  // daily/monthly carry none — sem isso o componente despejava JSON vazio (`undefined`)
+  // das secoes weekly para relatorios daily/monthly.
+  const sectionIds = ["volumeResults", "bankroll", "selection", "study", "mentalOps"]
+    .filter((id) => sections[id] != null);
 
   const handleCta = (cta: any) => {
     if (cta?.kind === "tool" && cta.toolName) {

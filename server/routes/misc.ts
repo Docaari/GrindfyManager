@@ -15,7 +15,7 @@ import { eq, and } from "drizzle-orm";
 
 export function registerMiscRoutes(app: Express): void {
   // Email template preview routes
-  app.get('/api/email-templates/:type', requirePermission('admin_full'), async (req: any, res) => {
+  app.get('/api/email-templates/:type', requireAuth, requirePermission('admin_full'), async (req: any, res) => {
     try {
       const { type } = req.params;
 

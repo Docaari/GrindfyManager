@@ -124,7 +124,7 @@ function mapStaleSpot(spot: any): RecommendationItem {
     description: conclusion,
     priority_score: scoreStaleSpot(spot),
     cta_action: 'review_spot',
-    cta_url: `/estudos/spots/${id}`,
+    cta_url: `/estudos/spots?spot=${id}`,
     metadata: {
       spot_id: id,
       spot_type: spot.type ?? null,

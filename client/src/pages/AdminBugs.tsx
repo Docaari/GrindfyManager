@@ -130,6 +130,13 @@ export default function AdminBugs() {
       setIsEditModalOpen(false);
       setEditingReport(null);
     },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao atualizar",
+        description: error?.message || "Não foi possível atualizar o relatório.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Delete bug report mutation
@@ -143,6 +150,13 @@ export default function AdminBugs() {
       });
       queryClient.invalidateQueries({ queryKey: ['/api/bug-reports'] });
       queryClient.invalidateQueries({ queryKey: ['/api/bug-reports/stats'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao excluir",
+        description: error?.message || "Não foi possível excluir o relatório.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -311,10 +325,6 @@ export default function AdminBugs() {
             Gerencie relatórios de bugs, sugestões e problemas de performance
           </p>
         </div>
-        <Button className="bg-green-600 hover:bg-green-700">
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Relatório
-        </Button>
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full">
@@ -579,10 +589,7 @@ export default function AdminBugs() {
                     <div className="bug-card-info">
                       <div className="bug-card-user">
                         <User className="h-4 w-4" />
-                        <span>Usuário: {report.userId === 'USER-0001' ? 'Ricardo' : 
-                               report.userId === 'USER-0002' ? 'Ana Silva' : 
-                               report.userId === 'USER-0003' ? 'João Santos' : 
-                               `ID: ${report.userId.slice(-4)}`}</span>
+                        <span>Usuário: ID {report.userId.slice(-4)}</span>
                       </div>
                       <div className="bug-card-date">
                         <Calendar className="h-4 w-4" />
@@ -717,10 +724,7 @@ export default function AdminBugs() {
                     <div className="bug-card-info">
                       <div className="bug-card-user">
                         <User className="h-4 w-4" />
-                        <span>Usuário: {report.userId === 'USER-0001' ? 'Ricardo' : 
-                               report.userId === 'USER-0002' ? 'Ana Silva' : 
-                               report.userId === 'USER-0003' ? 'João Santos' : 
-                               `ID: ${report.userId.slice(-4)}`}</span>
+                        <span>Usuário: ID {report.userId.slice(-4)}</span>
                       </div>
                       <div className="bug-card-date">
                         <Calendar className="h-4 w-4" />
@@ -854,10 +858,7 @@ export default function AdminBugs() {
                     <div className="bug-card-info">
                       <div className="bug-card-user">
                         <User className="h-4 w-4" />
-                        <span>Usuário: {report.userId === 'USER-0001' ? 'Ricardo' : 
-                               report.userId === 'USER-0002' ? 'Ana Silva' : 
-                               report.userId === 'USER-0003' ? 'João Santos' : 
-                               `ID: ${report.userId.slice(-4)}`}</span>
+                        <span>Usuário: ID {report.userId.slice(-4)}</span>
                       </div>
                       <div className="bug-card-date">
                         <Calendar className="h-4 w-4" />
@@ -995,10 +996,7 @@ export default function AdminBugs() {
                     <div className="bug-card-info">
                       <div className="bug-card-user">
                         <User className="h-4 w-4" />
-                        <span>Usuário: {report.userId === 'USER-0001' ? 'Ricardo' : 
-                               report.userId === 'USER-0002' ? 'Ana Silva' : 
-                               report.userId === 'USER-0003' ? 'João Santos' : 
-                               `ID: ${report.userId.slice(-4)}`}</span>
+                        <span>Usuário: ID {report.userId.slice(-4)}</span>
                       </div>
                       <div className="bug-card-date">
                         <Calendar className="h-4 w-4" />

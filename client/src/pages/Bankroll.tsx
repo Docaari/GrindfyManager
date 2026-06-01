@@ -169,7 +169,6 @@ export default function BankrollPage() {
           description="Crie sua primeira carteira para acompanhar saldos, transacoes e regras de banca."
           ctaLabel="Criar primeira carteira"
           ctaAction={() => setCreateDialogOpen(true)}
-          secondaryLink={{ label: "Saber mais", href: "/help/bankroll" }}
         />
       )}
 

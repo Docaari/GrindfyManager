@@ -49,27 +49,17 @@ export default function Dashboard() {
 
   const { user } = useAuth();
 
-  // Verificacao de permissao no inicio
-  if (!hasDashboardAccess) {
-    return <AccessDenied
-      featureName="Dashboard"
-      description="Acesso ao dashboard de performance e analytics."
-    />;
-  }
-
+  // Lesson #1 (hooks primeiro): NAO fazer early-return aqui — todos os hooks
+  // abaixo precisam rodar em toda render. Computamos as flags de gate agora e
+  // adiamos os returns para DEPOIS de todos os hooks (junto do guard de hasError).
   // Sprint Cooldown-2 — Sleep Gate suave: splash "Bom dia!" se snoozed.
-  // Early return mantem hooks abaixo coerentes com o ja-existente !hasDashboardAccess.
   const snoozedUntil = (user as any)?.dashboardSnoozedUntil;
-  if (snoozedUntil) {
+  const showSnoozeSplash = (() => {
+    if (!snoozedUntil) return false;
     const until = typeof snoozedUntil === 'string' ? new Date(snoozedUntil) : snoozedUntil;
-    if (until instanceof Date && !Number.isNaN(until.getTime()) && until.getTime() > Date.now()) {
-      return (
-        <div className="p-6 text-white">
-          <DashboardGoodMorningSplash />
-        </div>
-      );
-    }
-  }
+    return until instanceof Date && !Number.isNaN(until.getTime()) && until.getTime() > Date.now();
+  })();
+
   // Initialize state from URL params (FP-11)
   const initialUrlFilters = useMemo(() => {
     return deserializeFiltersFromURL(window.location.search.replace(/^\?/, ''));
@@ -399,6 +389,22 @@ export default function Dashboard() {
   const isMainLoading = statsLoading || performanceLoading;
   const hasError = statsError || performanceError;
   const hasNoData = !isMainLoading && !hasError && stats?.count === 0;
+
+  // Gates adiados (lesson #1): rodam DEPOIS de todos os hooks.
+  if (!hasDashboardAccess) {
+    return <AccessDenied
+      featureName="Dashboard"
+      description="Acesso ao dashboard de performance e analytics."
+    />;
+  }
+
+  if (showSnoozeSplash) {
+    return (
+      <div className="p-6 text-white">
+        <DashboardGoodMorningSplash />
+      </div>
+    );
+  }
 
   if (hasError) {
     return (

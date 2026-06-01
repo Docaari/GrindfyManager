@@ -300,12 +300,35 @@ const Sidebar: React.FC = () => {
                   // F7: prefix-match for sub-routes so "/biblioteca/curso/X"
                   // and "/admin/users/Y" highlight their parent nav item.
                   // Root '/' keeps strict equality plus the '/dashboard' alias.
-                  const isActive =
-                    location === item.path ||
-                    (item.path === '/' &&
+                  //
+                  // Query-aware: itens com `?tab=` (ex: /coach?tab=flights) so
+                  // ficam ativos quando o ?tab da URL bate. Wouter useLocation
+                  // retorna so o pathname, entao o item-base (/coach) cederia o
+                  // highlight pro irmao quando o tab pertence a ele.
+                  const [itemPath, itemQuery] = item.path.split('?');
+                  const itemTab = itemQuery
+                    ? new URLSearchParams(itemQuery).get('tab')
+                    : null;
+                  const currentTab = new URLSearchParams(window.location.search).get('tab');
+                  const pathnameMatch =
+                    location === itemPath ||
+                    (itemPath === '/' &&
                       (location === '/' || location === '/dashboard')) ||
-                    (item.path !== '/' &&
-                      location.startsWith(item.path + '/'));
+                    (itemPath !== '/' &&
+                      location.startsWith(itemPath + '/'));
+                  let isActive: boolean;
+                  if (itemTab) {
+                    isActive = location === itemPath && currentTab === itemTab;
+                  } else {
+                    const claimedBySibling =
+                      currentTab != null &&
+                      section.items.some((sib) => {
+                        const [sp, sq] = sib.path.split('?');
+                        const st = sq ? new URLSearchParams(sq).get('tab') : null;
+                        return st != null && sp === itemPath && st === currentTab;
+                      });
+                    isActive = pathnameMatch && !claimedBySibling;
+                  }
 
                   const showPendingSpotsBadge =
                     item.path === '/estudos' &&
@@ -333,57 +356,53 @@ const Sidebar: React.FC = () => {
 
                   return (
                     <li key={item.path}>
-                      <Link href={item.path}>
-                        {/* Reviewer wave 2 MEDIUM-6 tentou remover `href`
-                            redundante baseando-se em lesson #23, mas o
-                            warning de validateDOMNesting + falha do teste
-                            sidebar-points-coach-ai mostram que Wouter v3
-                            renderiza UMA anchor adicional aqui (cloneElement
-                            path nao se aplica). Mantemos `href` no inner
-                            para que `.closest('a').getAttribute('href')`
-                            funcione. Lesson #23 atualizada via comment. */}
-                        <a
-                          href={item.path}
-                          data-testid={linkTestId}
-                          onClick={() => {
-                            // F9: marca biblioteca como visitada para esconder
-                            // o badge "Novo" em proximas renderizacoes.
-                            if (item.path === '/biblioteca') {
-                              try {
-                                localStorage.setItem('library:visited', 'true');
-                              } catch {
-                                // ignore
-                              }
+                      {/* Wouter v3: passa href + props direto pro <Link>, que
+                          renderiza UMA unica <a>. Evita o nested-anchor
+                          (<a><a>) que quebrava getByRole('link') + validateDOMNesting.
+                          `.closest('a')` continua achando esta anchor (tem href).
+                          Lesson #23. */}
+                      <Link
+                        href={item.path}
+                        data-testid={linkTestId}
+                        onClick={() => {
+                          // F9: marca biblioteca como visitada para esconder
+                          // o badge "Novo" em proximas renderizacoes.
+                          if (item.path === '/biblioteca') {
+                            try {
+                              localStorage.setItem('library:visited', 'true');
+                            } catch {
+                              // ignore
                             }
-                          }}
-                          className={`
+                          }
+                        }}
+                        className={`
                           flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
                           ${isActive
                             ? 'bg-green-600/20 text-green-400 border-l-2 border-green-400'
                             : 'text-gray-300 hover:bg-green-600/10 hover:text-green-400'
                           }
-                        `}>
-                          <item.icon size={20} className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-400'}`} />
-                          {!isCollapsed && (
-                            <span className="font-medium">{item.label}</span>
-                          )}
-                          {showLibraryNewBadge && !isCollapsed && (
-                            <span
-                              data-testid="sidebar-biblioteca-new-badge"
-                              className="ml-auto inline-flex items-center justify-center px-1.5 h-5 rounded-full bg-green-500/20 border border-green-500/40 text-green-300 text-[10px] font-semibold animate-pulse"
-                            >
-                              Novo
-                            </span>
-                          )}
-                          {showPendingSpotsBadge && (
-                            <span
-                              data-testid="sidebar-pending-spots-badge"
-                              className={`ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full border text-[10px] font-semibold ${tokens.color.warn.bg} ${tokens.color.warn.border} ${tokens.color.warn.text}`}
-                            >
-                              {pendingSpotsBadgeText}
-                            </span>
-                          )}
-                        </a>
+                        `}
+                      >
+                        <item.icon size={20} className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-400'}`} />
+                        {!isCollapsed && (
+                          <span className="font-medium">{item.label}</span>
+                        )}
+                        {showLibraryNewBadge && !isCollapsed && (
+                          <span
+                            data-testid="sidebar-biblioteca-new-badge"
+                            className="ml-auto inline-flex items-center justify-center px-1.5 h-5 rounded-full bg-green-500/20 border border-green-500/40 text-green-300 text-[10px] font-semibold animate-pulse"
+                          >
+                            Novo
+                          </span>
+                        )}
+                        {showPendingSpotsBadge && (
+                          <span
+                            data-testid="sidebar-pending-spots-badge"
+                            className={`ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full border text-[10px] font-semibold ${tokens.color.warn.bg} ${tokens.color.warn.border} ${tokens.color.warn.text}`}
+                          >
+                            {pendingSpotsBadgeText}
+                          </span>
+                        )}
                       </Link>
                     </li>
                   );

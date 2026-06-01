@@ -47,6 +47,15 @@ export function MeditationDialog({ open, onOpenChange }: MeditationDialogProps) 
     };
   }, [meditationTimer.isRunning, meditationTimer.timeLeft]);
 
+  // Pausa o timer ao fechar o dialog. O componente fica montado (so `open`
+  // muda), entao sem isso a meditacao continuava contando em background e
+  // completava de forma invisivel.
+  useEffect(() => {
+    if (!open) {
+      setMeditationTimer(prev => (prev.isRunning ? { ...prev, isRunning: false } : prev));
+    }
+  }, [open]);
+
   const startTimer = () => setMeditationTimer(prev => ({ ...prev, isRunning: true, isCompleted: false }));
   const pauseTimer = () => setMeditationTimer(prev => ({ ...prev, isRunning: false }));
   const resetTimer = () => setMeditationTimer(prev => ({ ...prev, timeLeft: prev.duration, isRunning: false, isCompleted: false }));

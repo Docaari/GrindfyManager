@@ -2,6 +2,16 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
@@ -28,6 +38,7 @@ export default function Subscriptions() {
   const [location] = useLocation();
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   const [checkoutCancelled, setCheckoutCancelled] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   const status = user ? getSubscriptionStatus(user) : 'expired';
   const trialDays = getTrialDaysRemaining(user?.trialEndsAt);
@@ -148,9 +159,7 @@ export default function Subscriptions() {
   };
 
   const handleCancel = () => {
-    if (window.confirm('Tem certeza que deseja cancelar sua assinatura? Ela permanecera ativa ate o fim do periodo atual.')) {
-      cancelMutation.mutate();
-    }
+    setCancelDialogOpen(true);
   };
 
   const formatDate = (dateStr?: string | null) => {
@@ -237,6 +246,27 @@ export default function Subscriptions() {
                   <XCircle className="w-4 h-4 mr-1" />
                   {cancelMutation.isPending ? 'Cancelando...' : 'Cancelar'}
                 </Button>
+                <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancelar assinatura?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Sua assinatura permanecera ativa ate o fim do periodo atual. Depois disso, o acesso aos recursos premium sera encerrado.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Manter assinatura</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => {
+                          setCancelDialogOpen(false);
+                          cancelMutation.mutate();
+                        }}
+                      >
+                        Cancelar assinatura
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
           </div>

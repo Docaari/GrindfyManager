@@ -47,6 +47,12 @@ export function VisualizationDialog({ showSelection, onSelectionChange, showGuid
     };
   }, [isRunning, timeLeft, currentStep, currentSteps]);
 
+  // Pausa ao fechar o guia. Componente fica montado (so `showGuide` muda),
+  // entao sem isso a visualizacao continuava avancando steps em background.
+  useEffect(() => {
+    if (!showGuide && isRunning) setIsRunning(false);
+  }, [showGuide, isRunning]);
+
   const selectDuration = (d: 6 | 12) => {
     setDuration(d);
     setCurrentStep(0);

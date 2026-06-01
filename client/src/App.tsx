@@ -42,7 +42,6 @@ const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
 const AdminAudioMetrics = lazy(() => import("@/pages/admin/AudioMetrics"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const Subscriptions = lazy(() => import("@/pages/Subscriptions"));
-const SubscriptionDemo = lazy(() => import("@/pages/SubscriptionDemo"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const RegisterPage = lazy(() => import("@/pages/RegisterPage"));
@@ -141,7 +140,6 @@ function Router() {
                   <Route path="/admin/audio-metrics" component={() => (<ProtectedRoute><AdminAudioMetrics /></ProtectedRoute>)} />
                   <Route path="/analytics" component={() => (<ProtectedRoute><Analytics /></ProtectedRoute>)} />
                   <Route path="/subscriptions" component={() => (<ProtectedRoute><Subscriptions /></ProtectedRoute>)} />
-                  <Route path="/subscription-demo" component={() => (<ProtectedRoute><SubscriptionDemo /></ProtectedRoute>)} />
                   <Route path="/coach-ai" component={() => (<ProtectedRoute><CoachAI /></ProtectedRoute>)} />
                   <Route path="/coach-ai/onboarding" component={() => (<ProtectedRoute><CoachOnboarding /></ProtectedRoute>)} />
                   <Route path="/coach-ai/relatorio/:id" component={() => (<ProtectedRoute><WeeklyReportView /></ProtectedRoute>)} />

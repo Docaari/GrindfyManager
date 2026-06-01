@@ -32,7 +32,7 @@ import { getCurrentHourKey, getBrtMinute } from "@/components/grind-session/brea
 import { useBreakAutoOpenWiring } from "@/hooks/useBreakAutoOpenWiring";
 import SupremaImportModal from "@/components/SupremaImportModal";
 import { buildSupremaMatchKey, buildSupremaMatchKeysFromSession } from "@/lib/supremaDedupe";
-import { Download, X } from "lucide-react";
+import { Download, X, Camera } from "lucide-react";
 import { LateRegAlertManager } from "@/lib/lateRegAlerts";
 import { getBreakFrequency, shouldTriggerBreak, getBreakCountdownMinutes, canSnoozeBreak, getSnoozeOptions, calculateNextBreakTime } from "@/components/grind-session/break-notification-helpers";
 import { getHistoricalAverages, distributeQuickFeedback } from "@/components/grind-session/quick-feedback-helpers";
@@ -44,6 +44,7 @@ import { useFocusStatsBar } from "@/hooks/useFocusStatsBar";
 import type { SessionAlert } from "@shared/generic-alerts";
 import { fireAlert } from "@/lib/fireAlert";
 import { stopAlertById, stopAllAlerts } from "@/lib/tts/narrationQueue";
+import { calculatorTools, openCalculatorPopup } from "@/lib/calculatorTools";
 
 // Sub-components
 import SessionHeader from "@/components/grind-session-live/SessionHeader";
@@ -558,8 +559,8 @@ export default function GrindSessionLive() {
           const bounty = parseFloat(String(t.bounty ?? 0)) || 0;
           const rebuys = parseInt(String(t.rebuys ?? 0), 10) || 0;
           const reentries = parseInt(String(t.reentries ?? 0), 10) || 0;
-          const addonCost = parseFloat(String(t.addonCost ?? 0)) || 0;
-          const addonTaken = !!t.addonTaken;
+          const addonCost = parseFloat(String(t.addOnCost ?? t.addonCost ?? 0)) || 0;
+          const addonTaken = !!(t.addOnTaken ?? t.addonTaken);
           const profitNative =
             res + bounty - bi * (1 + rebuys + reentries) - (addonTaken ? addonCost : 0);
           const site = String(t.site ?? '');
@@ -2540,6 +2541,30 @@ export default function GrindSessionLive() {
         isAudioPlaying={!!audioCtx?.isPlaying}
       />
 
+      {/* Calculadoras — abrem em popup (mesma janela de /calculadoras).
+          Abaixo do header, acima dos prints de spots. */}
+      <div className="mb-6">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          {calculatorTools.map((tool) => {
+            const Icon = tool.icon;
+            return (
+              <button
+                key={tool.value}
+                type="button"
+                onClick={() => openCalculatorPopup(tool.value)}
+                title={`Abrir ${tool.label} em nova janela`}
+                className="group flex flex-col items-center justify-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-2 py-3 text-center transition-all duration-200 hover:border-emerald-500/60 hover:bg-slate-800 hover:shadow-lg hover:shadow-emerald-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+              >
+                <Icon className="h-5 w-5 text-emerald-400 transition-transform duration-200 group-hover:scale-110" />
+                <span className="text-[11px] font-medium leading-tight text-gray-300 group-hover:text-white">
+                  {tool.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Sprint Mini Player 1 / RF-09: LessonPickerDialog lazy-loaded */}
       {lessonPickerOpen && (
         <Suspense fallback={null}>
@@ -2554,19 +2579,30 @@ export default function GrindSessionLive() {
           inputs) ou clique em "Adicionar print" para file picker. Counter X/10
           mostra prints da sessao atual. Revise em Estudos > Spots ou no cooldown. */}
       {activeSession && (
-        <div className="my-3 flex items-center justify-between rounded-lg border border-gray-700/60 bg-gray-900/40 px-3 py-2">
-          <div className="text-xs text-gray-400">
-            <span className="font-medium text-gray-200">Prints de spots</span>
-            <span className="ml-2">Cole (Ctrl+V) ou clique para anexar.</span>
-          </div>
-          <SpotScreenshotPaster
-            sessionId={activeSession.id}
-            usedCount={spotUsedCount}
-            onUploaded={handleSpotUploaded}
-            onError={handleSpotError}
-            onCounterClick={openSpotViewer}
-          />
-        </div>
+        <Card className="my-4 bg-slate-800/70 border border-slate-700/60 shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 transition-all duration-300">
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/20">
+                <Camera className="h-5 w-5 text-emerald-400" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold tracking-wide text-emerald-400">PRINTS DE SPOTS</h3>
+                <p className="text-xs text-gray-400">
+                  Cole (Ctrl+V) ou clique para anexar. Revise depois em Estudos &gt; Spots.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <SpotScreenshotPaster
+                sessionId={activeSession.id}
+                usedCount={spotUsedCount}
+                onUploaded={handleSpotUploaded}
+                onError={handleSpotError}
+                onCounterClick={openSpotViewer}
+              />
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <SessionDashboard
