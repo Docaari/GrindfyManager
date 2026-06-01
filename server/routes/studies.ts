@@ -525,7 +525,10 @@ export function registerStudiesRoutes(app: Express): void {
   // ou se body tem APENAS fields V2-only, delega para handler V2 (via next()).
   app.patch('/api/study-sessions/:id', requireAuth, async (req: any, res, next) => {
     const body = req?.body ?? {};
-    const V2_FIELDS = ['mode', 'source', 'durationMinutes', 'duration_minutes', 'startedAt', 'started_at', 'endedAt', 'ended_at'];
+    // EST-3 (ADR-222 / RF-06): campos v2-only de stat_analysis + registro
+    // enriquecido. Sem eles aqui, um PATCH editando entries/counts cairia no
+    // handler legacy (404 — sessao v2 nao existe na tabela V1).
+    const V2_FIELDS = ['mode', 'source', 'durationMinutes', 'duration_minutes', 'startedAt', 'started_at', 'endedAt', 'ended_at', 'statId', 'statAnalysisEntries', 'handsSolvedCount', 'filtersAnalyzedCount', 'lessonInsights'];
     const LEGACY_FIELDS = ['status', 'duration', 'focusScore', 'productivityScore', 'insights'];
     const hasV2 = V2_FIELDS.some((k) => k in body);
     const hasLegacy = LEGACY_FIELDS.some((k) => k in body);

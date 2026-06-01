@@ -33,6 +33,10 @@ import { ThemesView } from '@/components/studies/ThemesView';
 import ThemeDetailView from '@/components/studies/ThemeDetailView';
 // Sprint Estudos-Sessao-1 RF-05: pagina dedicada /estudos/sessao/:id.
 import StudySessionPage from '@/components/studies/StudySessionPage';
+// Sprint EST-3 (ADR-222 / RF-08): form de registro unificado + detalhe v2.
+import StudySessionForm from '@/components/studies/StudySessionForm';
+import SessaoDetailPage from '@/components/studies/SessaoDetailPage';
+import type { StudySessionMode } from '@shared/schema';
 import { StatsView } from '@/components/studies/StatsView';
 import { SpotsView } from '@/components/studies/SpotsView';
 // Sprint Estudos-Fixes GAP-2: lista de sessoes de estudo.
@@ -49,6 +53,8 @@ type ViewKey =
   | 'temas'
   | 'tema-detail'
   | 'sessao-detail'
+  | 'analise-detail'
+  | 'registrar'
   | 'sessoes'
   | 'stats'
   | 'spots'
@@ -102,6 +108,37 @@ function extractSessionIdFromPath(path: string): string | null {
   return m[1] || null;
 }
 
+// Sprint EST-3 (RF-08 surface 3): extrai sessionId do path '/estudos/analise/:id'
+// (detalhe v2 — entries + counts; distinto do legado /estudos/sessao/:id).
+function extractAnaliseIdFromPath(path: string): string | null {
+  const stripped = path.split('?')[0].replace(/\/+$/, '');
+  const m = /^\/estudos\/analise\/([^/]+)$/.exec(stripped);
+  if (!m) return null;
+  return m[1] || null;
+}
+
+// Sprint EST-3 (RF-08 surface 1): props do form unificado a partir da query
+// string (CTA "Analisar esta stat" navega com mode/statId/themeId/lessonId).
+function parseRegistrarParams(): {
+  initialMode?: StudySessionMode;
+  statId?: string;
+  themeId?: string;
+  lessonId?: string;
+} {
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    const mode = sp.get('mode');
+    return {
+      initialMode: (mode as StudySessionMode) || undefined,
+      statId: sp.get('statId') || undefined,
+      themeId: sp.get('themeId') || undefined,
+      lessonId: sp.get('lessonId') || undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 function viewFromPath(path: string): ViewKey {
   const stripped = path.split('?')[0];
   if (stripped === '/estudos' || stripped === '/estudos/' || stripped.startsWith('/estudos/dashboard')) {
@@ -111,6 +148,10 @@ function viewFromPath(path: string): ViewKey {
     return extractThemeIdFromPath(stripped) ? 'tema-detail' : 'temas';
   }
   if (stripped.startsWith('/estudos/sessoes')) return 'sessoes';
+  if (stripped.startsWith('/estudos/registrar')) return 'registrar';
+  if (stripped.startsWith('/estudos/analise')) {
+    return extractAnaliseIdFromPath(stripped) ? 'analise-detail' : 'unknown';
+  }
   if (stripped.startsWith('/estudos/sessao')) {
     return extractSessionIdFromPath(stripped) ? 'sessao-detail' : 'unknown';
   }
@@ -217,6 +258,25 @@ export default function Studies() {
         return (
           <div data-testid="studies-view-sessao-detail">
             <StudySessionPage sessionId={sessionId} />
+          </div>
+        );
+      }
+      case 'registrar': {
+        // Sprint EST-3 RF-08 surface 1: form unificado pre-preenchido via query.
+        const params = parseRegistrarParams();
+        return (
+          <div data-testid="studies-view-registrar">
+            <StudySessionForm {...params} />
+          </div>
+        );
+      }
+      case 'analise-detail': {
+        // Sprint EST-3 RF-08 surface 3: detalhe v2 (entries + counts).
+        const sessionId = extractAnaliseIdFromPath(location || '/estudos/analise');
+        if (!sessionId) return <Redirect to="/estudos/dashboard" />;
+        return (
+          <div data-testid="studies-view-analise-detail">
+            <SessaoDetailPage sessionId={sessionId} />
           </div>
         );
       }

@@ -2440,6 +2440,13 @@ export const studySessionsV2 = pgTable("study_sessions_v2", {
   drillPlatform: varchar("drill_platform", { length: 32 }),
   drillAccuracy: integer("drill_accuracy"),
   difficultSpots: jsonb("difficult_spots").$type<Array<{ context: string; note: string }>>(),
+  // Sprint EST-3 (ADR-222) — stat_analysis + registro enriquecido. Todos nullable
+  // (lesson #7): zero quebra para sessoes/modos existentes.
+  statId: varchar("stat_id", { length: 64 }),
+  statAnalysisEntries: jsonb("stat_analysis_entries").$type<StatAnalysisEntry[]>(),
+  handsSolvedCount: integer("hands_solved_count"),
+  filtersAnalyzedCount: integer("filters_analyzed_count"),
+  lessonInsights: text("lesson_insights"),
   durationMinutes: integer("duration_minutes").notNull(),
   startedAt: timestamp("started_at", { withTimezone: true }),
   endedAt: timestamp("ended_at", { withTimezone: true }),
@@ -2457,6 +2464,12 @@ export const studySessionsV2 = pgTable("study_sessions_v2", {
   index("idx_ssv2_user_started").on(table.userId, table.startedAt),
   index("idx_ssv2_user_mode_started").on(table.userId, table.mode, table.startedAt),
   index("idx_ssv2_user_registered").on(table.userId, table.registeredAt),
+  // Sprint EST-3 (ADR-222 / D-1) — indice parcial para a revisao "por stat dentro
+  // do tema". Parcial (so sessoes stat_analysis nao soft-deleted) mantem o custo
+  // de write baixo e cobre o caminho quente de getStatAnalysisEntries.
+  index("idx_ssv2_stat_analysis_theme_stat")
+    .on(table.userId, table.themeId, table.statId)
+    .where(sql`mode = 'stat_analysis' AND deleted_at IS NULL`),
 ]);
 
 // Zod enums explicitos (CHECK constraints DB-level garantem alem do Zod).
@@ -2466,8 +2479,34 @@ export const STUDY_SESSION_MODES = [
   "hand_review",
   "lesson",
   "other",
+  // Sprint EST-3 (ADR-222 / RF-01) — analise de uma stat HUD dentro de um tema.
+  "stat_analysis",
 ] as const;
 export type StudySessionMode = (typeof STUDY_SESSION_MODES)[number];
+
+// Sprint EST-3 (ADR-222 / RF-02 / D-2) — uma "jogada" analisada dentro de uma
+// sessao stat_analysis. `filters` eh string livre (D-2). `id`/`createdAt` sao
+// gerados server-side (cliente nao envia). playImageKey/solutionImageKey nullable
+// (preenchidos via upload depois — fluxo (a) de D-3).
+export interface StatAnalysisEntry {
+  id: string;
+  filters: string;
+  playImageKey: string | null;
+  solutionImageKey: string | null;
+  errorText: string;
+  learnedText: string;
+  createdAt: string;
+}
+
+export const statAnalysisEntrySchema = z.object({
+  id: z.string().optional(),
+  filters: z.string().max(500).default(""),
+  errorText: z.string().max(1000).default(""),
+  learnedText: z.string().max(1000).default(""),
+  playImageKey: z.string().nullable().optional(),
+  solutionImageKey: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
+});
 
 export const STUDY_SESSION_SOURCES = [
   "manual_post_hoc",
@@ -2512,6 +2551,12 @@ export const insertStudySessionV2Schema = z.object({
     url: z.string(),
   })).max(5).nullable().optional(),
   wasProductive: z.boolean().nullable().optional(),
+  // Sprint EST-3 (ADR-222) — campos novos, todos opcionais (lesson #7).
+  statId: z.string().max(64).nullable().optional(),
+  statAnalysisEntries: z.array(statAnalysisEntrySchema).max(10).nullable().optional(),
+  handsSolvedCount: z.number().int().min(0).max(1000).nullable().optional(),
+  filtersAnalyzedCount: z.number().int().min(0).max(1000).nullable().optional(),
+  lessonInsights: z.string().max(2000).nullable().optional(),
 });
 
 // =============================================================================

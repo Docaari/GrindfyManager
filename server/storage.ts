@@ -135,6 +135,8 @@ import {
   studySessionsV2,
   type StudySessionV2,
   type InsertStudySessionV2,
+  // Sprint EST-3 (ADR-222) — stat_analysis entry type.
+  type StatAnalysisEntry,
   // Sprint F4 — stats analyzer hud_stat_targets
   hudStatTargets,
   type HudStatTarget,
@@ -14784,6 +14786,33 @@ async function getStudyMinutesByThemeMonth(
 
 const VALID_GOAL_VALUES = new Set([0, 15, 30, 45, 60, 90, 120]);
 
+// Sprint EST-3 (ADR-222 / D-5) — cap de entries de stat_analysis (defesa em
+// profundidade alem do Zod). Tambem em update.
+const STAT_ANALYSIS_ENTRIES_CAP = 10;
+
+function throwTooManyEntries(): never {
+  const e: any = new Error("TOO_MANY_ENTRIES");
+  e.code = "TOO_MANY_ENTRIES";
+  throw e;
+}
+
+// Normaliza uma entry recebida na CRIACAO: gera id + createdAt server-side,
+// inicializa keys de imagem null (upload vem depois — fluxo (a) de D-3).
+function normalizeNewStatEntry(raw: any): StatAnalysisEntry {
+  return {
+    id: typeof raw?.id === "string" && raw.id.length > 0 ? raw.id : nanoid(),
+    filters: typeof raw?.filters === "string" ? raw.filters : "",
+    errorText: typeof raw?.errorText === "string" ? raw.errorText : "",
+    learnedText: typeof raw?.learnedText === "string" ? raw.learnedText : "",
+    playImageKey: raw?.playImageKey ?? null,
+    solutionImageKey: raw?.solutionImageKey ?? null,
+    createdAt:
+      typeof raw?.createdAt === "string" && raw.createdAt.length > 0
+        ? raw.createdAt
+        : new Date().toISOString(),
+  };
+}
+
 async function createStudySessionV2(input: {
   userId: string;
   mode: string;
@@ -14804,10 +14833,23 @@ async function createStudySessionV2(input: {
   attachments?: any[] | null;
   wasProductive?: boolean | null;
   dailyGoalMet?: boolean;
+  statId?: string | null;
+  statAnalysisEntries?: any[] | null;
+  handsSolvedCount?: number | null;
+  filtersAnalyzedCount?: number | null;
+  lessonInsights?: string | null;
 }): Promise<StudySessionV2> {
   try {
     const id = nanoid();
     const status = input.status ?? "completed";
+    // Sprint EST-3 (D-5): re-checa cap 10 + gera id/createdAt + keys null.
+    let statAnalysisEntries: StatAnalysisEntry[] | null = null;
+    if (Array.isArray(input.statAnalysisEntries)) {
+      if (input.statAnalysisEntries.length > STAT_ANALYSIS_ENTRIES_CAP) {
+        throwTooManyEntries();
+      }
+      statAnalysisEntries = input.statAnalysisEntries.map(normalizeNewStatEntry);
+    }
     const values: any = {
       id,
       userId: input.userId,
@@ -14829,6 +14871,12 @@ async function createStudySessionV2(input: {
       attachments: input.attachments ?? null,
       wasProductive: input.wasProductive ?? null,
       dailyGoalMet: input.dailyGoalMet ?? false,
+      // Sprint EST-3 — back-fill ?? null (lesson #7).
+      statId: input.statId ?? null,
+      statAnalysisEntries,
+      handsSolvedCount: input.handsSolvedCount ?? null,
+      filtersAnalyzedCount: input.filtersAnalyzedCount ?? null,
+      lessonInsights: input.lessonInsights ?? null,
     };
     const [row] = await db
       .insert(studySessionsV2)
@@ -14928,6 +14976,45 @@ async function getRunningStudySessionV2(
   }
 }
 
+// Sprint EST-3 (ADR-222 / Q-OPEN-3) — merge das entries do PATCH por `id`:
+//  - entry com id existente: atualiza filters/errorText/learnedText; preserva
+//    playImageKey/solutionImageKey se o patch NAO os menciona (campo ausente !=
+//    null — lesson #43). null explicito zera.
+//  - entry sem id: cria nova (id+createdAt server-side, keys null).
+//  - entries existentes ausentes do array do patch: removidas.
+function mergeStatAnalysisEntries(
+  existing: StatAnalysisEntry[],
+  patchEntries: any[],
+): StatAnalysisEntry[] {
+  const byId = new Map<string, StatAnalysisEntry>();
+  for (const e of existing) {
+    if (e && typeof e.id === "string") byId.set(e.id, e);
+  }
+  return patchEntries.map((raw) => {
+    const prior = raw?.id ? byId.get(raw.id) : undefined;
+    if (!prior) {
+      // Entry nova (sem id ou id desconhecido).
+      return normalizeNewStatEntry(raw);
+    }
+    // Merge: campos de texto atualizados; keys preservadas a menos que o patch
+    // mencione explicitamente o campo (incluindo null para zerar).
+    const playImageKey =
+      "playImageKey" in raw ? raw.playImageKey ?? null : prior.playImageKey;
+    const solutionImageKey =
+      "solutionImageKey" in raw ? raw.solutionImageKey ?? null : prior.solutionImageKey;
+    return {
+      id: prior.id,
+      filters: typeof raw?.filters === "string" ? raw.filters : prior.filters,
+      errorText: typeof raw?.errorText === "string" ? raw.errorText : prior.errorText,
+      learnedText:
+        typeof raw?.learnedText === "string" ? raw.learnedText : prior.learnedText,
+      playImageKey,
+      solutionImageKey,
+      createdAt: prior.createdAt,
+    };
+  });
+}
+
 async function updateStudySessionV2(
   id: string,
   userId: string,
@@ -14936,6 +15023,10 @@ async function updateStudySessionV2(
     themeId: string | null;
     wasProductive: boolean | null;
     attachments: any[] | null;
+    handsSolvedCount: number | null;
+    filtersAnalyzedCount: number | null;
+    lessonInsights: string | null;
+    statAnalysisEntries: any[] | null;
   }>,
 ): Promise<StudySessionV2 | null> {
   try {
@@ -14944,6 +15035,25 @@ async function updateStudySessionV2(
     if (patch.themeId !== undefined) setValues.themeId = patch.themeId;
     if (patch.wasProductive !== undefined) setValues.wasProductive = patch.wasProductive;
     if (patch.attachments !== undefined) setValues.attachments = patch.attachments;
+    // Sprint EST-3 — campos B editaveis.
+    if (patch.handsSolvedCount !== undefined) setValues.handsSolvedCount = patch.handsSolvedCount;
+    if (patch.filtersAnalyzedCount !== undefined) setValues.filtersAnalyzedCount = patch.filtersAnalyzedCount;
+    if (patch.lessonInsights !== undefined) setValues.lessonInsights = patch.lessonInsights;
+    // Sprint EST-3 (Q-OPEN-3 / D-5) — merge das entries por id; statId NUNCA muda
+    // aqui (D-4 — imutavel). Re-checa cap 10 (D-5).
+    if (patch.statAnalysisEntries !== undefined) {
+      const next = Array.isArray(patch.statAnalysisEntries) ? patch.statAnalysisEntries : [];
+      if (next.length > STAT_ANALYSIS_ENTRIES_CAP) {
+        throwTooManyEntries();
+      }
+      const current = await getStudySessionV2ById(id, userId);
+      const existingEntries: StatAnalysisEntry[] = Array.isArray(
+        (current as any)?.statAnalysisEntries,
+      )
+        ? ((current as any).statAnalysisEntries as StatAnalysisEntry[])
+        : [];
+      setValues.statAnalysisEntries = mergeStatAnalysisEntries(existingEntries, next);
+    }
     const rows = await db
       .update(studySessionsV2)
       .set(setValues)
@@ -14953,10 +15063,151 @@ async function updateStudySessionV2(
       ))
       .returning();
     return ((rows as any[])?.[0] ?? null) as StudySessionV2 | null;
-  } catch (err) {
+  } catch (err: any) {
+    // Sprint EST-3 (D-5): cap de entries eh invariante de dominio — propaga o
+    // erro tipado para o handler converter em 400 (nao engole como erro de DB).
+    if (err?.code === "TOO_MANY_ENTRIES") throw err;
     console.error("storage.updateStudySessionV2.error", { id, userId, err });
     return null;
   }
+}
+
+// Sprint EST-3 (ADR-222 / D-1) — revisao "por stat dentro do tema".
+// Recorta as sessoes stat_analysis do tema (via indice parcial) e achata as
+// entries no app-layer (flatten cross-session), agregando por statId.
+// Devolve keys CRUAS — o handler monta as URLs servíveis (RF-05/RF-07).
+interface StatAnalysisReviewEntry {
+  id: string;
+  filters: string;
+  errorText: string;
+  learnedText: string;
+  createdAt: string;
+  playImageKey: string | null;
+  solutionImageKey: string | null;
+}
+interface StatAnalysisReviewGroup {
+  statId: string;
+  sessions: Array<{
+    sessionId: string;
+    registeredAt: string;
+    durationMinutes: number;
+    entries: StatAnalysisReviewEntry[];
+  }>;
+  entryCount: number;
+}
+
+async function getStatAnalysisEntries(
+  userId: string,
+  themeId: string,
+  statId?: string,
+): Promise<StatAnalysisReviewGroup[]> {
+  try {
+    const where: any[] = [
+      eq(studySessionsV2.userId, userId),
+      eq(studySessionsV2.themeId, themeId),
+      eq(studySessionsV2.mode, "stat_analysis"),
+      isNull(studySessionsV2.deletedAt),
+    ];
+    if (statId) where.push(eq(studySessionsV2.statId, statId));
+    const rows = await db
+      .select()
+      .from(studySessionsV2)
+      .where(and(...where))
+      .orderBy(desc(studySessionsV2.registeredAt));
+
+    const groups = new Map<string, StatAnalysisReviewGroup>();
+    for (const row of (Array.isArray(rows) ? rows : []) as any[]) {
+      const sid = row?.statId;
+      if (!sid) continue;
+      let group = groups.get(sid);
+      if (!group) {
+        group = { statId: sid, sessions: [], entryCount: 0 };
+        groups.set(sid, group);
+      }
+      const entries: StatAnalysisReviewEntry[] = Array.isArray(row.statAnalysisEntries)
+        ? row.statAnalysisEntries.map((e: any) => ({
+            id: e?.id,
+            filters: e?.filters ?? "",
+            errorText: e?.errorText ?? "",
+            learnedText: e?.learnedText ?? "",
+            createdAt: e?.createdAt ?? null,
+            playImageKey: e?.playImageKey ?? null,
+            solutionImageKey: e?.solutionImageKey ?? null,
+          }))
+        : [];
+      group.sessions.push({
+        sessionId: row.id,
+        registeredAt:
+          typeof row.registeredAt === "string"
+            ? row.registeredAt
+            : row.registeredAt?.toISOString?.() ?? null,
+        durationMinutes: row.durationMinutes ?? 0,
+        entries,
+      });
+      group.entryCount += entries.length;
+    }
+    return Array.from(groups.values());
+  } catch (err) {
+    console.error("storage.getStatAnalysisEntries.error", { userId, themeId, statId, err });
+    return [];
+  }
+}
+
+// Sprint EST-3 (ADR-222) — atualiza a key de imagem (slot play/solution) de uma
+// entry no jsonb. Retorna { oldKey } para cleanup best-effort (D-6.1).
+async function updateStatEntryImage(
+  sessionId: string,
+  userId: string,
+  entryId: string,
+  slot: "play" | "solution",
+  key: string,
+): Promise<{ oldKey: string | null }> {
+  const session = await getStudySessionV2ById(sessionId, userId);
+  if (!session) {
+    const e: any = new Error("SESSION_NOT_FOUND");
+    e.code = "SESSION_NOT_FOUND";
+    throw e;
+  }
+  const entries: StatAnalysisEntry[] = Array.isArray((session as any).statAnalysisEntries)
+    ? ((session as any).statAnalysisEntries as StatAnalysisEntry[])
+    : [];
+  const field = slot === "play" ? "playImageKey" : "solutionImageKey";
+  let oldKey: string | null = null;
+  let found = false;
+  const updated = entries.map((e) => {
+    if (e?.id !== entryId) return e;
+    found = true;
+    oldKey = (e as any)[field] ?? null;
+    return { ...e, [field]: key };
+  });
+  if (!found) {
+    const e: any = new Error("ENTRY_NOT_FOUND");
+    e.code = "ENTRY_NOT_FOUND";
+    throw e;
+  }
+  await db
+    .update(studySessionsV2)
+    .set({ statAnalysisEntries: updated, updatedAt: new Date() })
+    .where(and(eq(studySessionsV2.id, sessionId), eq(studySessionsV2.userId, userId)));
+  return { oldKey };
+}
+
+// Sprint EST-3 (ADR-222 / RF-05) — le a key de imagem do slot com ownership.
+async function getStatEntryImageKey(
+  sessionId: string,
+  userId: string,
+  entryId: string,
+  slot: "play" | "solution",
+): Promise<string | null> {
+  const session = await getStudySessionV2ById(sessionId, userId);
+  if (!session) return null;
+  const entries: StatAnalysisEntry[] = Array.isArray((session as any).statAnalysisEntries)
+    ? ((session as any).statAnalysisEntries as StatAnalysisEntry[])
+    : [];
+  const entry = entries.find((e) => e?.id === entryId);
+  if (!entry) return null;
+  const field = slot === "play" ? "playImageKey" : "solutionImageKey";
+  return (entry as any)[field] ?? null;
 }
 
 async function deleteStudySessionV2(
@@ -15321,6 +15572,10 @@ function formatYearMonthUTC(d: Date): string {
 (storage as any).getRunningStudySessionV2 = getRunningStudySessionV2;
 (storage as any).updateStudySessionV2 = updateStudySessionV2;
 (storage as any).deleteStudySessionV2 = deleteStudySessionV2;
+// Sprint EST-3 (ADR-222).
+(storage as any).getStatAnalysisEntries = getStatAnalysisEntries;
+(storage as any).updateStatEntryImage = updateStatEntryImage;
+(storage as any).getStatEntryImageKey = getStatEntryImageKey;
 (storage as any).finalizeStudySessionV2 = finalizeStudySessionV2;
 (storage as any).getStudyMinutesTodayV2 = getStudyMinutesTodayV2;
 (storage as any).findAutoLessonInWindow = findAutoLessonInWindow;

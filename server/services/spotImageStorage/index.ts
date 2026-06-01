@@ -16,7 +16,9 @@ export type { SpotImageMime } from "./mime";
 // para servir imagens de estudos. Colocar spots em `uploads/spots` os exporia via
 // GET /uploads/spots/<key> bypassando o ownership check de RF-10. F2 ja resolveu
 // com private-uploads/. Reutilizamos o padrao — D7 especificou layout, nao root.
-export function createSpotImageStorage(): SpotImageStorage {
+// `rootSubdir` permite singletons dedicados por dominio sem clonar o
+// boilerplate de selecao de backend (EST-3 reusa para `private-uploads/stat-analysis`).
+export function createSpotImageStorage(rootSubdir = "private-uploads/spots"): SpotImageStorage {
   const backend = process.env.SPOT_IMAGE_STORAGE_BACKEND ?? "local";
   if (backend === "s3") {
     throw new Error(
@@ -24,7 +26,7 @@ export function createSpotImageStorage(): SpotImageStorage {
     );
   }
   return new LocalFsSpotImageStorage({
-    root: path.resolve("private-uploads/spots"),
+    root: path.resolve(rootSubdir),
   });
 }
 

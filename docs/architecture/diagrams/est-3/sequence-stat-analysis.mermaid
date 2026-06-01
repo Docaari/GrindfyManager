@@ -1,0 +1,89 @@
+sequenceDiagram
+    actor User as Jogador MTT
+    participant FE as StudySessionForm (FE)
+    participant API as routes/study-sessions.ts
+    participant CAT as hud-stat-catalog
+    participant ST as storage.ts
+    participant IMG as LocalFs stat-analysis store
+    participant DB as study_sessions_v2
+
+    Note over User,DB: Fluxo (a) — cria sessão draft → upload por entry → revisão (D-3)
+
+    %% 1. Criar sessão stat_analysis com entries (sem imagens)
+    User->>FE: "Analisar esta stat" (statId+themeId pré-preenchidos) + 3 jogadas
+    FE->>API: POST /api/study-sessions { mode:stat_analysis, themeId, statId, statAnalysisEntries[3] }
+    API->>API: Zod parse + validateModeRequirements
+    alt sem themeId
+        API-->>FE: 400 MISSING_THEME
+    else sem statId
+        API-->>FE: 400 MISSING_STAT
+    else entries > 10
+        API-->>FE: 400 TOO_MANY_ENTRIES
+    else statAnalysisEntries em mode != stat_analysis
+        API-->>FE: 400 STAT_ENTRIES_WRONG_MODE
+    else válido
+        API->>CAT: getStatById(statId) || regex ^custom_...
+        alt statId inválido
+            API-->>FE: 400 INVALID_STAT_ID
+        else ok
+            API->>ST: createStudySessionV2({... entries: id+createdAt server-side, keys null})
+            ST->>ST: re-checa cap 10 (D-5)
+            ST->>DB: INSERT row (stat_id, stat_analysis_entries jsonb)
+            DB-->>ST: row
+            ST-->>API: session
+            API-->>FE: 201 { id, statAnalysisEntries[] com ids }
+        end
+    end
+
+    %% 2. Upload imagem por entry (play / solution)
+    User->>FE: anexa print da jogada na entry e1
+    FE->>API: POST /api/study-sessions/:id/stat-analysis/entries/e1/image (multipart file, slot=play)
+    API->>API: multerErrorHandler (5MB, invalid_mime) + detectMimeFromBuffer
+    API->>ST: getStudySessionV2ById(id, userId)
+    alt não-owner ou inexistente
+        API-->>FE: 404 (não confirma existência)
+    else mode != stat_analysis
+        API-->>FE: 409 STAT_ENTRIES_WRONG_MODE
+    else entryId inexistente
+        API-->>FE: 404 ENTRY_NOT_FOUND
+    else ok
+        API->>IMG: put({userId, sessionId, ext, buffer}) -> key
+        IMG-->>API: { key, size }
+        API->>ST: updateStatEntryImage(sessionId,userId,e1,slot=play,key)
+        ST->>DB: jsonb_set entry.playImageKey = key (retorna oldKey)
+        alt DB falhou (órfã)
+            API->>IMG: delete(key) rollback best-effort
+            API-->>FE: 500
+        else ok + havia oldKey (re-upload)
+            API->>IMG: delete(oldKey) best-effort (D-6.1)
+            API-->>FE: 200 { playImageKey setado }
+        end
+    end
+
+    %% 3. Servir imagem com ownership (RF-05)
+    User->>FE: abre /estudos/sessao/:id
+    FE->>API: GET /api/study-sessions/:id (hGet, D-7)
+    API->>ST: getStudySessionV2ById(id,userId)
+    ST-->>API: session + entries (keys cruas)
+    API->>API: map keys -> URLs servíveis (.../image/:slot); sem imagem -> null
+    API-->>FE: 200 { entries com URLs, handsSolvedCount, filtersAnalyzedCount }
+    FE->>API: <img> GET .../entries/e1/image/play
+    API->>ST: getStatEntryImageKey(...) (ownership)
+    alt não-owner / slot vazio
+        API-->>FE: 404
+    else ok
+        API->>IMG: get(key)
+        IMG-->>API: buffer + mime
+        API-->>FE: 200 binário (Cache-Control: private, max-age=300)
+    end
+
+    %% 4. Revisão por stat dentro do tema (RF-07, D-1)
+    User->>FE: ThemeDetailView -> lista por stat
+    FE->>API: GET /api/study-sessions/stat-analysis?themeId=X[&statId=Y]
+    API->>ST: getStatAnalysisEntries(userId, themeId, statId?)
+    ST->>DB: SELECT ... WHERE user_id,theme_id,[stat_id],mode=stat_analysis,deleted_at IS NULL (idx parcial)
+    DB-->>ST: sessões
+    ST->>ST: agrupa por stat_id + flatten entries cross-session + entryCount
+    ST-->>API: StatAnalysisReviewGroup[] (keys cruas)
+    API->>API: tema pertence ao user? (404/403) + keys -> URLs (RF-05)
+    API-->>FE: 200 grupos por stat com URLs + counts

@@ -1,0 +1,75 @@
+graph TB
+    subgraph client["Frontend — React (form unificado + surfaces)"]
+        statsView["StatsView<br/><i>botão 'Analisar esta stat'</i>"]
+        themeDetail["ThemeDetailView<br/><i>botão + lista por stat (RF-07)</i>"]
+        unifiedForm["StudySessionForm (unificado)<br/><i>campos base + bloco condicional por mode</i>"]
+        statBlock["StatAnalysisBlock<br/><i>filtros + lista de jogadas (até 10)</i>"]
+        playRow["PlayEntryRow<br/><i>upload jogada + upload solução + erro + aprendizado</i>"]
+        enrichBlock["EnrichedFieldsBlock<br/><i>handsSolvedCount / filtersAnalyzedCount / lessonInsights</i>"]
+        sessionDetail["SessaoDetailPage /estudos/sessao/:id<br/><i>entries + counts (RF-08 surface 3)</i>"]
+        reviewByStat["StatAnalysisReviewList<br/><i>ErrorBoundary local (lesson #29)</i>"]
+    end
+
+    subgraph routes["server/routes/study-sessions.ts (estendido + handlers novos)"]
+        hCreate["handleCreateStudySession<br/><i>estendido: mode stat_analysis + campos B</i>"]
+        hPatch["handleUpdateStudySession<br/><i>estendido: merge entries por id + statId imutável</i>"]
+        hGet["handleGetStudySession (NOVO, D-7)<br/><i>GET /:id — entries→URLs servíveis</i>"]
+        hUpload["handleUploadStatEntryImage (NOVO)<br/><i>POST .../entries/:entryId/image — multipart, slot</i>"]
+        hServe["handleServeStatEntryImage (NOVO)<br/><i>GET .../entries/:entryId/image/:slot — ownership</i>"]
+        hList["handleListStatAnalysisByTheme (NOVO)<br/><i>GET /api/study-sessions/stat-analysis?themeId=&statId=</i>"]
+    end
+
+    subgraph mw["Middleware reuse (starred-hands)"]
+        multerEH["multerErrorHandler<br/><i>5MB + invalid_mime</i>"]
+        rl["screenshotUploadLimiter / spotImageServeLimiter"]
+    end
+
+    subgraph storage["server/storage.ts (delta)"]
+        sCreate["createStudySessionV2 (+5 campos, cap 10)"]
+        sUpdate["updateStudySessionV2 (+merge entries, cap 10)"]
+        sGet["getStudySessionV2ById (existente)"]
+        sReview["getStatAnalysisEntries (NOVO)<br/><i>índice parcial + flatten cross-session</i>"]
+        sImgUpd["updateStatEntryImage / getStatEntryImageKey (NOVO)"]
+    end
+
+    subgraph infra["Infra / dados"]
+        statStore["LocalFsSpotImageStorage dedicado<br/><i>root private-uploads/stat-analysis (D-3)</i>"]
+        mime["detectMimeFromBuffer / extFromMime<br/><i>magic bytes</i>"]
+        catalog["shared/hud-stat-catalog<br/><i>getStatById — valida statId catalog ou custom_*</i>"]
+        db[("study_sessions_v2<br/>+stat_id,+stat_analysis_entries,<br/>+hands_solved/filters/lesson_insights<br/>idx parcial mode=stat_analysis")]
+    end
+
+    statsView -->|"abre"| unifiedForm
+    themeDetail -->|"abre"| unifiedForm
+    themeDetail -->|"GET stat-analysis"| reviewByStat
+    unifiedForm --> statBlock
+    unifiedForm --> enrichBlock
+    statBlock --> playRow
+    sessionDetail -->|"GET /:id"| hGet
+
+    unifiedForm -->|"POST /api/study-sessions"| hCreate
+    playRow -->|"POST .../entries/:entryId/image"| hUpload
+    sessionDetail -->|"<img> GET .../image/:slot"| hServe
+    reviewByStat -->|"GET .../stat-analysis"| hList
+    unifiedForm -->|"PATCH /:id"| hPatch
+
+    hUpload --> multerEH
+    hUpload --> rl
+    hServe --> rl
+
+    hCreate -->|"valida statId"| catalog
+    hCreate --> sCreate
+    hPatch --> sUpdate
+    hGet --> sGet
+    hList --> sReview
+    hUpload -->|"detect mime"| mime
+    hUpload -->|"put()"| statStore
+    hUpload --> sImgUpd
+    hServe --> sImgUpd
+    hServe -->|"get()"| statStore
+
+    sCreate --> db
+    sUpdate --> db
+    sGet --> db
+    sReview -->|"idx parcial"| db
+    sImgUpd --> db

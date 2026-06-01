@@ -42,6 +42,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ThemeFormDialog, type ThemeFormValues } from './ThemeFormDialog';
+import StatAnalysisReviewList from './StatAnalysisReviewList';
 
 interface ThemeRow {
   id: string;
@@ -303,6 +304,32 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
           pickerOpen={pickerOpen}
         />
 
+        {/* Sprint EST-3 (ADR-222 / RF-08 surface 1) — CTA "Analisar esta stat"
+            por stat foco linkada. Navega para o form unificado em mode
+            stat_analysis com statId+themeId pre-preenchidos. */}
+        {statsSummary.length > 0 ? (
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium">Analisar uma stat</h3>
+            <div className="flex flex-wrap gap-2">
+              {statsSummary.map((stat) => (
+                <button
+                  key={stat.statId}
+                  type="button"
+                  data-testid={`analyze-stat-button-${stat.statId}`}
+                  onClick={() =>
+                    navigate(
+                      `/estudos/registrar?mode=stat_analysis&statId=${encodeURIComponent(stat.statId)}&themeId=${encodeURIComponent(themeId)}`,
+                    )
+                  }
+                  className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent"
+                >
+                  Analisar {stat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {/* Polish #3: drawer migrado para Collapsible (Radix) — aria-expanded
             no trigger gratis, transicao suave, mantido inline (nao overlay).
             #2: rodape NAO toggle; sempre setPickerOpen(true) e exibe APENAS
@@ -361,6 +388,13 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
           >
             Ver outros temas
           </button>
+        </div>
+
+        {/* Sprint EST-3 (ADR-222 / RF-08 surface 2) — revisao das analises de
+            stat agrupadas por stat dentro deste tema. */}
+        <div data-testid="theme-stat-analysis-review" className="pt-4 border-t border-border">
+          <h3 className="text-sm font-medium mb-3">Revisao por stat</h3>
+          <StatAnalysisReviewList themeId={themeId} />
         </div>
       </div>
 
