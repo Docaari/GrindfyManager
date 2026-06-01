@@ -7,6 +7,7 @@ import { requireAuth } from "../auth";
 import { nanoid } from "nanoid";
 import { db } from "../db";
 import { registerCoachAi1bRoutes } from "./coachAi1b";
+import { registerCoachPlanningRoutes } from "./coachPlanning";
 import {
   chatSessions,
   chatMessages,
@@ -1068,6 +1069,9 @@ export function registerCoachRoutes(app: Express): void {
   app.get('/api/admin/coach/report-cost-metrics', requireAuth, async (req: any, res: any) => {
     await handleGetReportCostMetrics(req, res);
   });
+  // EST-6 (ADR-224) — Next-Week Planning Flow. Registrado ANTES do AI-1B
+  // (prefixo `planning` disjunto; guard test cobre colisao).
+  registerCoachPlanningRoutes(app, requireAuth);
   // Sprint AI-1B — timeline / reports / suggestions.
   registerCoachAi1bRoutes(app, requireAuth);
 }

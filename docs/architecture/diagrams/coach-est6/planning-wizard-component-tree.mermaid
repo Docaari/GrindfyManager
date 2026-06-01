@@ -1,0 +1,50 @@
+graph TD
+    CoachAI["CoachAI page<br/><i>/coach-ai (App.tsx:143)</i>"]
+    ChatThread["ChatThread<br/><i>turnos do mentor + jogador</i>"]
+    CoachAI --> ChatThread
+
+    ChatThread -->|"renderiza inline quando<br/>há planning session ativa"| WizardRoot["PlanningWizard<br/><i>card embutido no chat</i>"]
+
+    subgraph dataLayer["Camada de dados (TanStack Query)"]
+        useStart["useStartPlanning()<br/><i>POST /api/coach/planning/start</i>"]
+        useGet["usePlanningSession(weekStartDate)<br/><i>GET /api/coach/planning/:weekStartDate</i>"]
+        usePropose["useProposeStep()<br/><i>POST .../step/:step/propose</i>"]
+        useConfirm["useConfirmStep()<br/><i>POST .../step/:step/confirm</i>"]
+        useSkip["useSkipStep()<br/><i>POST .../step/:step/skip</i>"]
+    end
+
+    WizardRoot --> EB["PlanningErrorBoundary<br/><i>lesson #29 — useQuery sem provider<br/>cai em null silencioso</i>"]
+    EB --> useGet
+    WizardRoot --> useStart
+
+    EB --> StepNav["StepNav<br/><i>grind → study → lessons → themes<br/>status badge por passo</i>"]
+
+    EB --> ActiveStep{"step ativo?"}
+    ActiveStep -->|"grind"| GrindStep["GrindStepCard"]
+    ActiveStep -->|"study"| StudyStep["StudyStepCard"]
+    ActiveStep -->|"lessons"| LessonsStep["LessonsStepCard"]
+    ActiveStep -->|"themes"| ThemesStep["ThemesStepCard"]
+
+    GrindStep --> GrindPreview["GradePreview<br/><i>proposed[] + conflicts[] + summary</i>"]
+    GrindStep --> OffDayChip["OffDayPicker<br/><i>marca folga → mark_off_day</i>"]
+    GrindStep --> usePropose
+    GrindStep --> useConfirm
+
+    StudyStep --> BlockList["StudyBlockList<br/><i>N blocos: topic/dia-hora/duração/tema</i>"]
+    StudyStep --> BlockCTA["activity.ctaTarget<br/><i>/biblioteca/curso/:courseSlug/:lessonSlug/play<br/>(lesson #19 — rota Wouter App.tsx:160)</i>"]
+    StudyStep --> useConfirm
+
+    LessonsStep --> LessonCards["CuratedLessonCards<br/><i>whitelist curated (anti-alucinação)</i>"]
+    LessonCards --> LessonCTA["url=/biblioteca/curso/:courseSlug/:slug<br/>(rota Wouter App.tsx:170)"]
+    LessonsStep --> useConfirm
+
+    ThemesStep --> FocusList["FocusThemesList<br/><i>top-N leaks / focus stats / fallback msg</i>"]
+
+    EB --> SummaryCard["PlanningSummaryCard<br/><i>exibido quando status='completed'<br/>(resumo também postado no chat pelo backend)</i>"]
+
+    classDef new fill:#1e3a5f,stroke:#4a90d9,color:#fff;
+    classDef hook fill:#3a2f1e,stroke:#d9a04a,color:#fff;
+    classDef route fill:#1e3a2f,stroke:#4ad98f,color:#fff;
+    class WizardRoot,EB,StepNav,GrindStep,StudyStep,LessonsStep,ThemesStep,GrindPreview,OffDayChip,BlockList,LessonCards,FocusList,SummaryCard new;
+    class useStart,useGet,usePropose,useConfirm,useSkip hook;
+    class BlockCTA,LessonCTA route;

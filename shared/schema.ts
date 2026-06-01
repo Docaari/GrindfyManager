@@ -5242,6 +5242,59 @@ export const insertStudyWeeklyPlanSchema = z.object({
 });
 
 // =============================================================================
+// EST-6 (ADR-224) — weekly_planning_sessions
+// =============================================================================
+// Estado leve de 1 planning session por usuario por semana (chave UTC via
+// ymdUtc). UNIQUE (user_id, week_start_date) garante idempotencia — reabrir a
+// mesma semana retorna a sessao existente. `steps` jsonb com 4 passos
+// (grind/study/lessons/themes); status por passo validado em Zod
+// (shared/coach-planning.ts), sem CHECK DB. Migration 0088.
+// =============================================================================
+export const weeklyPlanningSessions = pgTable(
+  "weekly_planning_sessions",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    weekStartDate: date("week_start_date").notNull(),
+    status: varchar("status", { length: 16 }).notNull().default("in_progress"),
+    steps: jsonb("steps").notNull().default(sql`'{}'::jsonb`),
+    source: varchar("source", { length: 16 }).notNull().default("coach_manual"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("weekly_planning_sessions_user_week_unique").on(
+      table.userId,
+      table.weekStartDate,
+    ),
+  ],
+);
+
+export const weeklyPlanningSessionsRelations = relations(
+  weeklyPlanningSessions,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [weeklyPlanningSessions.userId],
+      references: [users.userPlatformId],
+    }),
+  }),
+);
+
+export type WeeklyPlanningSessionRow = typeof weeklyPlanningSessions.$inferSelect;
+export type InsertWeeklyPlanningSession = typeof weeklyPlanningSessions.$inferInsert;
+
+export const insertWeeklyPlanningSessionSchema = z.object({
+  id: z.string().optional(),
+  userId: z.string(),
+  weekStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  status: z.string().optional(),
+  steps: z.any().optional(),
+  source: z.string().optional(),
+});
+
+// =============================================================================
 // Sprint Estudos-Coach-Biblio-2 (ADR-133) — coach_session_insights
 // =============================================================================
 // Cache 24h + auditoria de insights Coach pos-sessao /grind-live (RF-4). 1 row

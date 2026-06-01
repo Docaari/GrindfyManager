@@ -16497,3 +16497,6 @@ attachReportStorage(storage as any);
 // Sprint AI-1B (ADR-157) — sinais de estado real do gap-check / B-IMPORT.
 import { attachCoachSignalsStorage } from "./storage/coachSignalsStorage";
 attachCoachSignalsStorage(storage as any);
+// EST-6 (ADR-224) — weekly_planning_sessions CRUD + delete recs por semana BRT.
+import { attachWeeklyPlanningStorage } from "./storage/weeklyPlanningStorage";
+attachWeeklyPlanningStorage(storage as any);

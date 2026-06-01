@@ -1,0 +1,87 @@
+sequenceDiagram
+    autonumber
+    actor Player as Jogador (/coach-ai)
+    participant EST5 as EST-5 (futuro)<br/><i>estado planning</i>
+    participant API as coachPlanning.ts<br/><i>HTTP handlers</i>
+    participant Orch as weeklyPlanningOrchestrator
+    participant Tools as Tools AI-2A<br/><i>bulkProposeGrade / scheduleStudyBlock /<br/>recommendLesson / markOffDay</i>
+    participant Store as storage.ts
+    participant Chat as Chat do Coach<br/><i>getOrCreateReportChatSession</i>
+
+    Note over Player,EST5: Ponto de entrada PLUGGÁVEL — HTTP ou EST-5 chamam startPlanning
+
+    alt via HTTP (coach_manual)
+        Player->>API: POST /api/coach/planning/start { weekStartDate?, source? }
+        API->>Orch: startPlanning(userId, weekStartDate, { source:'coach_manual' })
+    else via EST-5 (est5_ritual)
+        EST5->>Orch: startPlanning(userId, weekStartDate, { source:'est5_ritual' })
+    end
+    Orch->>Store: getReportTier(user)
+    Store-->>Orch: 'eligible' | 'free'
+    Note right of Orch: free/expired → 403 (sem criar row)
+    Orch->>Store: upsert weekly_planning_sessions<br/>UNIQUE (user_id, week_start_date) UTC
+    Store-->>Orch: session (4 passos pending; idempotente)
+    Orch-->>API: { session }
+    API-->>Player: 200 { session: steps pending }
+
+    Note over Player,Tools: PASSO 1 — grind (preview → confirm)
+    Player->>API: POST .../step/grind/propose
+    API->>Orch: proposeStep('grind', wsd, input, ctx)
+    Orch->>Tools: bulkProposeGradeTool.fetchPayloadBefore(input, {userId,injectedStorage}, undefined)
+    Tools->>Store: getTournamentSuggestions / listPlannedTournaments / listOffDaysForUser
+    Tools-->>Orch: { preview: { proposed[], conflicts[], summary } }
+    Orch-->>Player: card no chat (NÃO persiste) status='proposed'
+    opt jogador pede folga
+        Player->>API: (auxiliar) mark_off_day('quarta')
+        Orch->>Tools: markOffDayTool.executeConfirmed → off_day no próximo preview
+    end
+    Player->>API: POST .../step/grind/confirm
+    API->>Orch: confirmStep('grind', wsd, input, ctx)
+    Orch->>Tools: bulkProposeGradeTool.executeConfirmed (dedup already_in_grade)
+    Tools->>Store: createPlannedTournament × N
+    Tools-->>Orch: { createdIds[] }
+    Orch->>Store: update steps.grind = { status:'confirmed', createdIds }
+
+    Note over Player,Tools: PASSO 2 — study (loop blocos + UPSERT study_weekly_plans UTC)
+    Player->>API: POST .../step/study/confirm { blocks[] }
+    API->>Orch: confirmStep('study', wsd, input, ctx)
+    loop por bloco
+        Orch->>Tools: scheduleStudyBlockTool.executeConfirmed(block, ctx)
+        Tools->>Store: ownership theme + entitlement lesson + createStudySessionV2(status='planned')
+        Tools-->>Orch: { sessionId }
+    end
+    Orch->>Store: upsertStudyWeeklyPlan({ weekStartDate UTC, planJsonb, source:'coach_manual' })
+    Orch->>Store: update steps.study = { status:'confirmed', sessionIds[], weeklyPlanSynced:true }
+
+    Note over Player,Store: PASSO 3 — lessons (whitelist curated → coach_lesson_recommendations BRT)
+    Player->>API: POST .../step/lessons/confirm { lessonIds[] }
+    API->>Orch: confirmStep('lessons', wsd, input, ctx)
+    Orch->>Tools: recommendLessonTool.handler (fonte whitelist + ranking)
+    Tools-->>Orch: { lessons[] curated }
+    Orch->>Store: delete coach_lesson_recommendations (user, week BRT, source) then insert confirmados
+    Orch->>Store: update steps.lessons = { status:'confirmed', lessonIds[], recIds[] }
+
+    Note over Player,Store: PASSO 4 — themes (read-only, degrade gracioso)
+    Player->>API: POST .../step/themes/confirm
+    API->>Orch: confirmStep('themes', wsd, input, ctx)
+    Orch->>Store: getStatsLeaks(userId, n)
+    alt leaks disponíveis
+        Store-->>Orch: top-N { statId, statName, severity }
+    else vazio/erro (log antes do fallback — lesson #9)
+        Orch->>Store: user_focus_stats (mês corrente)
+        Store-->>Orch: focus stats OU [] (flow não quebra)
+    end
+    Orch->>Store: update steps.themes = { status:'confirmed', focus[] }
+
+    Note over Orch,Chat: CONCLUSÃO — todos os 4 passos ∈ {confirmed, skipped}
+    Orch->>Orch: recompute status → 'completed'
+    Orch->>Chat: getOrCreateReportChatSession(userId)
+    Chat-->>Orch: { id } (coachType=technical)
+    Orch->>Chat: insertChatMessage({ chatSessionId, role:'assistant', content: resumo })
+    Orch->>Store: update weekly_planning_sessions.status = 'completed'
+
+    Note over EST5,Store: SINAL pro EST-5 — contrato de conclusão
+    EST5->>Orch: getPlanningSession(userId, weekStartDate)
+    Orch->>Store: select weekly_planning_sessions
+    Store-->>Orch: { status:'completed', steps }
+    Orch-->>EST5: status='completed' → fecha o ritual

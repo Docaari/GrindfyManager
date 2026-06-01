@@ -31,6 +31,8 @@ import {
   type StudyPlanUserContext,
 } from "../coachTools/studies/coachStudyPlan.prompts";
 import { coachStudyPlanTool } from "../coachTools/studies/coachStudyPlan";
+// ymdUtc extraido para util compartilhado (EST-6 / ADR-224) — DRY, mesmo comportamento.
+import { ymdUtc } from "../coach/planning/weekKeys";
 
 const REGENERATE_RATE_LIMIT = 1; // 1/dia
 const REGENERATE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -80,13 +82,6 @@ function clampDailyTarget(avg: number | null): number {
   if (avg == null || !Number.isFinite(avg) || avg < 15) return 30;
   const target = Math.round(avg * 0.95);
   return Math.max(15, Math.min(120, target));
-}
-
-function ymdUtc(d: Date): string {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 function currentMonthUtc(date: Date = new Date()): string {
