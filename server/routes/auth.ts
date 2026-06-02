@@ -846,12 +846,27 @@ export async function handleGetUserSettingsStops(req: any, res: any): Promise<vo
     } catch (err) {
       console.warn("[handleGetUserSettingsStops] getCurrentDayDeltaUsd failed:", (err as any)?.message);
     }
+    // ABI (USD) p/ sugestão do stop-loss a frio no warm-up (Fase D #5 / ADR-235 D-2).
+    // FX já resolvido server-side (lesson #6) — invested USD / nº torneios do histórico.
+    // null degrada graciosamente (esconde a sugestão BI no IntentionBlock).
+    let abiUsd: number | null = null;
+    try {
+      const { getDashboardAllTimeSummary } = await import("../services/dashboardAllTime");
+      const summary = await getDashboardAllTimeSummary(userId);
+      if (summary && summary.tournaments > 0 && Number.isFinite(summary.invested)) {
+        const abi = summary.invested / summary.tournaments;
+        abiUsd = abi > 0 ? Number(abi.toFixed(2)) : null;
+      }
+    } catch (err) {
+      console.warn("[handleGetUserSettingsStops] abiUsd resolution failed:", (err as any)?.message);
+    }
     res.status(200).json({
       stopLossUsd: settings.stopLossUsd ?? null,
       stopWinUsd: settings.stopWinUsd ?? null,
       stopLockUntil: settings.stopLockUntil ?? null,
       stopLockDurationHours: settings.stopLockDurationHours ?? 12,
       currentDayDeltaUsd,
+      abiUsd,
     });
   } catch (err) {
     console.error("[handleGetUserSettingsStops] failed:", err);
@@ -880,6 +895,42 @@ export async function handlePutUserSettingsStops(req: any, res: any): Promise<vo
     return;
   }
   try {
+    // Fase D #5 (RF-04, ADR-235 D-1): trava de edição quente do stop-LOSS.
+    // Só aplica quando stopLossUsd está presente no body (mexe no loss).
+    if (stopLossUsd !== undefined) {
+      const current = (await storage.getUserSettings(userId)) as any;
+      const currentLoss =
+        current?.stopLossUsd == null ? null : parseFloat(String(current.stopLossUsd));
+      const nextLoss =
+        stopLossUsd == null
+          ? null
+          : typeof stopLossUsd === "number"
+          ? stopLossUsd
+          : parseFloat(String(stopLossUsd));
+      // Re-consulta no momento do write (anti-race do edge case).
+      // Guard defensivo (lesson #32): se listGrindSessionsByUser não está disponível
+      // (ambiente sem essa dependência), trata como "a frio" (sem sessão ativa) —
+      // edição livre, comportamento back-compat.
+      let hasActiveSession = false;
+      if (typeof (storage as any).listGrindSessionsByUser === "function") {
+        const sessions = (await storage.listGrindSessionsByUser(userId)) ?? [];
+        hasActiveSession = sessions.some((s: any) => s?.status === "active");
+      }
+      const { canLoosenStopLoss } = await import("../coach/stops/canLoosenStopLoss");
+      const decision = canLoosenStopLoss(
+        Number.isFinite(currentLoss as any) ? (currentLoss as number) : null,
+        Number.isFinite(nextLoss as any) ? (nextLoss as number) : null,
+        hasActiveSession,
+      );
+      if (!decision.allowed) {
+        res.status(409).json({
+          code: "STOP_LOOSEN_BLOCKED",
+          message:
+            "Stop-loss comitado a frio é inegociável durante a sessão. Você pode apertar, mas não afrouxar enquanto joga.",
+        });
+        return;
+      }
+    }
     await storage.upsertUserSettings({
       userId,
       stopLossUsd: stopLossUsd === undefined ? undefined : stopLossUsd,

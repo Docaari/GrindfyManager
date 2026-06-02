@@ -35,6 +35,7 @@ import { CheckCircle, Brain } from "lucide-react";
 import { useWarmupGate } from "@/hooks/useWarmupGate";
 import { useWarmupTelemetry } from "@/hooks/useWarmupTelemetry";
 import { StopBanner } from "@/components/bankroll/StopBanner";
+import { StopRemainingIndicator } from "@/components/grind-session-live/StopRemainingIndicator";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1284,6 +1285,17 @@ export default function GrindSession() {
             dayDeltaUsd={stopStatus?.currentDayDeltaUsd}
             stopLossUsd={stopStatus?.stopLossUsd ?? null}
             stopWinUsd={stopStatus?.stopWinUsd ?? null}
+          />
+        </div>
+      )}
+
+      {/* Fase D #5 (RF-03): indicador leve "quanto falta" para o stop. Some quando
+          stopLossUsd null ou quando o lock cheio (StopBanner loss) já cobre. */}
+      {!stopBannerVariant && stopStatus?.stopLossUsd != null && (
+        <div className="mb-4">
+          <StopRemainingIndicator
+            stopLossUsd={stopStatus.stopLossUsd}
+            currentDayDeltaUsd={stopStatus.currentDayDeltaUsd ?? 0}
           />
         </div>
       )}

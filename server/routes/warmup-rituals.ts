@@ -15,6 +15,7 @@ import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { requireAuth, requirePermission } from "../auth";
 import { warmupService } from "../services/warmupService";
+import { coldStopCommitZod } from "../../shared/cold-stop-commit";
 
 // ============================================================================
 // Helpers
@@ -49,6 +50,7 @@ const sessionIntentionZod = z.object({
   focus: z.string().trim().min(1).max(200),
   tiltPlan: z.string().trim().min(1).max(200),
   stopCriteria: z.string().trim().min(1).max(200),
+  coldStopCommit: coldStopCommitZod, // Fase D #5 (ADITIVO, opcional — ADR-235 D-3)
 });
 
 const blockSnapshotZod = z

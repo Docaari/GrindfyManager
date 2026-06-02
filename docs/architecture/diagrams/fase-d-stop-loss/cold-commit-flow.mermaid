@@ -1,0 +1,57 @@
+%% ADR-235 — Fase D #5: Stop-loss pré-comprometido a frio (cold commit)
+%% Fluxo: cold-commit no warm-up -> escreve stopLossUsd -> enforcement existente
+%% + trava de afrouxar quente no PUT /api/user-settings/stops.
+
+flowchart TD
+    subgraph warmup["Warm-up — bloco 4 Intenção (IntentionBlock.tsx) — estado A FRIO"]
+        A["Jogador no bloco Intenção"] --> B{"Quer comitar<br/>stop a frio?"}
+        B -->|"Não (opcional, DEC-6)"| Bskip["Avança sem comitar<br/>stopLossUsd inalterado"]
+        B -->|"Sim"| C["GET planned dashboard stats<br/>avgBuyin (nativo, preferredCurrency)"]
+        C --> D{"avgBuyin > 0<br/>e FX disponível?"}
+        D -->|"Não (degrada, DEC-4)"| E["Esconde sugestão BI<br/>só campo USD livre"]
+        D -->|"Sim"| F["fxResolver.convertToUSD(avgBuyin)<br/>abiUsd (lesson #6/#9)"]
+        F --> G["suggestColdStopLossUsd(nBI, abiUsd)<br/>= round2(nBI × abiUsd) — basis 'bi'"]
+        E --> H["Jogador digita USD livre<br/>basis 'manual'"]
+        G --> H2["Pré-preenche; jogador pode<br/>sobrescrever → basis 'manual'"]
+        H --> I["Comitar: USD final > 0"]
+        H2 --> I
+    end
+
+    I --> PUT["PUT /api/user-settings/stops<br/>{ stopLossUsd: USD final }"]
+
+    subgraph server["Server — handlePutUserSettingsStops (auth.ts) — TRAVA QUENTE"]
+        PUT --> Z{"Zod + isPositiveOrNull?"}
+        Z -->|"inválido"| E400["400 — body inválido / <= 0"]
+        Z -->|"ok"| S1["Lê settings.stopLossUsd atual (current)"]
+        S1 --> S2["listGrindSessionsByUser(userId)<br/>(re-consulta no write — anti-race)"]
+        S2 --> S3{"hasActiveSession =<br/>some(status === 'active')?"}
+        S3 -->|"Não (a frio)"| OKfrio["Edição livre (sobe/desce/null)"]
+        S3 -->|"Sim (quente)"| CAN["canLoosenStopLoss(current, next, true)"]
+        CAN --> CANq{"afrouxar?<br/>next > current OU valor→null"}
+        CANq -->|"Sim (afrouxar)"| E409["409 STOP_LOOSEN_BLOCKED<br/>valor NÃO muda (RF-04)"]
+        CANq -->|"Não (apertar / criar / no-op)"| OKquente["Permitido"]
+        OKfrio --> UP["storage.upsertUserSettings({ stopLossUsd })"]
+        OKquente --> UP
+        UP --> R200["200 — stopLossUsd gravado"]
+    end
+
+    R200 --> FIN["POST /api/warmup-rituals (version full)<br/>sessionIntention.coldStopCommit persistido<br/>{committedUsd, basis, nBI?, abiUsdAtCommit?, committedAt} (DEC-2/RF-05)"]
+    Bskip --> FINskip["POST warmup-rituals SEM coldStopCommit"]
+
+    subgraph display["Exibição — 'quanto falta' (RF-03, D-5)"]
+        FIN --> QF["GET /api/user-settings/stops<br/>→ {stopLossUsd, currentDayDeltaUsd}"]
+        R200 --> QF
+        QF --> CALC["computeStopRemaining(stopLossUsd, currentDayDeltaUsd)<br/>= stopLossUsd + delta (delta<0 ao perder)"]
+        CALC --> WdiUI["Warm-up: confirmação + conceito desperation (RF-05/DEC-9)"]
+        CALC --> GLUI["Grind-live (GrindSessionLive) + /grind:<br/>indicador leve 'faltam $X para o stop'"]
+    end
+
+    subgraph enforce["Enforcement existente — INALTERADO (ADR-060)"]
+        ENF["stopService.evaluateStops(userId, sessionId)<br/>lê settings.stopLossUsd"]
+        ENF --> ENFq{"deltaUsd <= -stopLossUsd?"}
+        ENFq -->|"Sim"| LOCK["seta stopLockUntil (+12h)<br/>→ 423 STOP_LOCKED nas próximas ações"]
+        ENFq -->|"Não"| NOLOCK["segue jogando"]
+        LOCK --> SB["StopBanner (read-only) — bloqueio<br/>ortogonal à trava de edição (D-4)"]
+    end
+
+    UP -.->|"valor que o enforcement passa a ler"| ENF
