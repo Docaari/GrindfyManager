@@ -200,11 +200,12 @@ const Sidebar: React.FC = () => {
     if (status === 'trial') {
       const daysLeft = getTrialDaysRemaining(user.trialEndsAt);
       return (
-        <Link href="/subscriptions">
-          <a className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-medium hover:bg-amber-500/25 transition-colors">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            {isCollapsed ? `${daysLeft}d` : `Trial - ${daysLeft} dias`}
-          </a>
+        <Link
+          href="/subscriptions"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-medium hover:bg-amber-500/25 transition-colors"
+        >
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+          {isCollapsed ? `${daysLeft}d` : `Trial - ${daysLeft} dias`}
         </Link>
       );
     }
@@ -220,11 +221,12 @@ const Sidebar: React.FC = () => {
 
     // expired
     return (
-      <Link href="/subscriptions">
-        <a className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-medium hover:bg-red-500/25 transition-colors">
-          <span className="w-2 h-2 rounded-full bg-red-400" />
-          {isCollapsed ? '!' : 'Assine agora'}
-        </a>
+      <Link
+        href="/subscriptions"
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-medium hover:bg-red-500/25 transition-colors"
+      >
+        <span className="w-2 h-2 rounded-full bg-red-400" />
+        {isCollapsed ? '!' : 'Assine agora'}
       </Link>
     );
   };
@@ -440,37 +442,37 @@ const Sidebar: React.FC = () => {
         {/* Subscription Status Badge */}
         {renderSubscriptionBadge()}
 
-        <Link href="/subscriptions">
-          <a className={`
+        <Link
+          href="/subscriptions"
+          className={`
             flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
             ${location === '/subscriptions'
               ? 'bg-green-600/20 text-green-400 border-l-2 border-green-400'
               : 'text-gray-300 hover:bg-green-600/10 hover:text-green-400'
             }
-          `}>
-            <CreditCard size={20} className={`flex-shrink-0 ${location === '/subscriptions' ? 'text-green-400' : 'text-gray-400'}`} />
-            {!isCollapsed && (
-              <span className="font-medium">Assinatura</span>
-            )}
-          </a>
+          `}
+        >
+          <CreditCard size={20} className={`flex-shrink-0 ${location === '/subscriptions' ? 'text-green-400' : 'text-gray-400'}`} />
+          {!isCollapsed && (
+            <span className="font-medium">Assinatura</span>
+          )}
         </Link>
 
-        <Link href="/settings">
-          <a
-            data-testid="sidebar-footer-settings"
-            href="/settings"
-            className={`
+        <Link
+          href="/settings"
+          data-testid="sidebar-footer-settings"
+          className={`
             flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200
             ${location === '/settings'
               ? 'bg-green-600/20 text-green-400 border-l-2 border-green-400'
               : 'text-gray-300 hover:bg-green-600/10 hover:text-green-400'
             }
-          `}>
-            <Settings size={20} className={`flex-shrink-0 ${location === '/settings' ? 'text-green-400' : 'text-gray-400'}`} />
-            {!isCollapsed && (
-              <span className="font-medium">Configuracoes</span>
-            )}
-          </a>
+          `}
+        >
+          <Settings size={20} className={`flex-shrink-0 ${location === '/settings' ? 'text-green-400' : 'text-gray-400'}`} />
+          {!isCollapsed && (
+            <span className="font-medium">Configuracoes</span>
+          )}
         </Link>
 
         {/* Ajuda — submenu colapsavel agrupando Bug + Sugestao */}

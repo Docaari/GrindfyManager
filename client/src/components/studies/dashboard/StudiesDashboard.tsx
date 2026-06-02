@@ -198,16 +198,37 @@ export function StudiesDashboard() {
         visible={focusBar.visible}
       />
 
-      {/* Sprint Estudos-Habito-1 RF-1: CTA primario para abrir dialog. */}
-      <div>
+      {/* Sprint Estudos-UX-Fix FASE 2 (discoverability): entry points globais.
+          Antes a unica forma de registrar um MDA era pelo botao DENTRO da pagina
+          de tema, e "Registrar Estudo" abria so o quick-log (StudyLogDialog), nao
+          o form unificado EST-3. Agora os 2 fluxos canonicos sao alcancaveis a 1
+          clique do dashboard; o quick-log fica como acao secundaria. */}
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           data-testid="studies-dashboard-register-study"
-          onClick={() => setLogOpen(true)}
+          onClick={() => navigate('/estudos/registrar')}
           className="inline-flex items-center gap-2 px-4 py-2 bg-poker-accent text-black rounded-lg font-semibold transition-all hover:bg-poker-accent/90 hover:shadow-lg hover:shadow-poker-accent/20"
         >
           <Plus className="w-4 h-4" aria-hidden />
           Registrar Estudo
+        </button>
+        <button
+          type="button"
+          data-testid="studies-dashboard-register-mda"
+          onClick={() => navigate('/estudos/mda/registrar')}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold border border-gray-700 text-gray-200 transition-colors hover:bg-gray-800"
+        >
+          <Plus className="w-4 h-4" aria-hidden />
+          Registrar MDA
+        </button>
+        <button
+          type="button"
+          data-testid="studies-dashboard-quick-log"
+          onClick={() => setLogOpen(true)}
+          className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm text-gray-400 transition-colors hover:text-gray-200 hover:bg-gray-800/60"
+        >
+          Log rapido
         </button>
       </div>
 

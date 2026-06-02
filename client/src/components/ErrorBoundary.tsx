@@ -5,6 +5,13 @@ import { AlertTriangle } from 'lucide-react';
 interface Props {
   children: ReactNode;
   fallbackMessage?: string;
+  /**
+   * Sprint Estudos-UX-Fix BUG-C: fallback leve para uso por-secao (lesson #29).
+   * Quando fornecido, substitui o bloco pesado default — permite isolar uma
+   * sub-secao com fetch (ex: MdaReadsSection) sem dominar a pagina toda; passe
+   * `null` para falha silenciosa.
+   */
+  fallback?: ReactNode;
 }
 
 interface State {
@@ -29,6 +36,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      // Fallback leve por-secao (BUG-C): se o caller passou `fallback`, usa-o
+      // em vez do bloco pesado default. `null` => secao some silenciosamente.
+      if (this.props.fallback !== undefined) {
+        return this.props.fallback;
+      }
       return (
         <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
           <AlertTriangle className="w-12 h-12 text-red-400 mb-4" />

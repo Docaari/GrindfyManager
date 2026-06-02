@@ -38,7 +38,15 @@ vi.mock('@/contexts/AuthContext', () => ({
 const mockUseLocation = vi.fn(() => ['/', vi.fn()] as any);
 vi.mock('wouter', () => ({
   useLocation: () => mockUseLocation(),
-  Link: ({ href, children }: any) => <a href={href}>{children}</a>,
+  // Sprint Estudos-UX-Fix BUG-B: mock fiel ao Wouter v3 — Link encaminha props
+  // extras (data-testid, className) para a <a> que renderiza (lesson #3). Sem o
+  // {...rest}, o mock dropava data-testid e os testes nao achavam links que
+  // migraram do padrao v2 (<Link><a testid/></Link>) para o v3 (<Link testid/>).
+  Link: ({ href, children, ...rest }: any) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 vi.mock('@assets/grindfy-logo-mark.png', () => ({ default: 'grindfy-logo-mark.png' }), {
@@ -252,6 +260,15 @@ describe('Sidebar reform — footer', () => {
     render(wrap(<Sidebar />));
     expect(await screen.findByTestId('sidebar-footer-settings')).toBeInTheDocument();
     expect(screen.getByTestId('sidebar-footer-logout')).toBeInTheDocument();
+  });
+
+  // Sprint Estudos-UX-Fix BUG-B (lesson #23): Wouter v3 — links migrados de
+  // <Link><a/></Link> (v2, gera <a><a> aninhado + validateDOMNesting) para
+  // <Link/> unico. Guard: nenhuma <a> aninhada em outra <a> no Sidebar.
+  it('nenhuma anchor aninhada em outra anchor (sem <a><a>)', async () => {
+    const { container } = render(wrap(<Sidebar />));
+    await screen.findByTestId('sidebar-footer-settings');
+    expect(container.querySelectorAll('a a').length).toBe(0);
   });
 
   it('Ajuda submenu inicia colapsado (Bug+Sugestao escondidos)', async () => {

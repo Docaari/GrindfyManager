@@ -162,6 +162,27 @@ describe('<MdaReadForm> — submit 2-passos (#13)', () => {
       expect(navigatedToDetail).toBe(true);
     });
   });
+
+  // Sprint Estudos-UX-Fix BUG-A (lesson #21): sem invalidar, o MDA recem-criado
+  // nao aparece na MdaReadsSection do tema (query by-theme stale).
+  it('apos criar, invalida o cache de mda-reads (by-theme + lista)', async () => {
+    const qcMod: any = await import('@/lib/queryClient');
+    await renderForm({ initialThemeId: 't1' });
+    await waitFor(() => expect(screen.getByTestId('mda-read-form')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('mda-read-title-input'), { target: { value: 'x' } });
+    fireEvent.click(screen.getByTestId('mda-read-form-submit'));
+    await waitFor(() => {
+      expect(qcMod.queryClient.invalidateQueries).toHaveBeenCalled();
+    });
+    const calls = (qcMod.queryClient.invalidateQueries as any).mock.calls;
+    const firstKeys = calls
+      .map((c: any) => (Array.isArray(c[0]?.queryKey) ? c[0].queryKey[0] : null))
+      .filter(Boolean);
+    // by-theme (TanStack v5 prefix-match cobre [..., themeId])
+    expect(firstKeys).toContain('/api/mda-reads/by-theme');
+    // lista /api/mda-reads
+    expect(firstKeys).toContain('/api/mda-reads');
+  });
 });
 
 // =============================================================================

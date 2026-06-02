@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { apiRequest, initCsrf, getCsrfToken, queryClient } from '@/lib/queryClient';
+import { apiRequest, initCsrf, getCsrfInitPromise, getCsrfToken, queryClient } from '@/lib/queryClient';
 import { clearAudioOnLogout } from '@/lib/audio-engine/logoutCleanup';
 import { hasFullAccess, isSuperAdmin } from '../../../shared/permissions';
 
@@ -110,8 +110,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.removeItem('grindfy_refresh_token');
       } catch { /* localStorage unavailable (SSR/incognito edge) — ignore */ }
 
-      // Initialize CSRF token
-      await initCsrf();
+      // Initialize CSRF token (singleton — dedupe vs lazy-init do apiRequest).
+      await getCsrfInitPromise();
 
       // Try to restore user from localStorage first for instant UI
       const savedUser = localStorage.getItem(USER_DATA_KEY);
@@ -293,7 +293,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
         }
 
-        // Initialize CSRF token after login
+        // Initialize CSRF token after login — fresh fetch (cookie rotacionado
+        // no login; nao reusa promise pre-login do singleton).
         await initCsrf();
 
         // Fetch full user data (includes subscriptionPlan) immediately

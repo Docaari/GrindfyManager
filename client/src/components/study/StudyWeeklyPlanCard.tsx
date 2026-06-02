@@ -92,8 +92,18 @@ export function StudyWeeklyPlanCard() {
   const query = useQuery<PlanResponse | null>({
     queryKey: QUERY_KEY,
     queryFn: async () => {
-      const r = await apiRequest("GET", "/api/study-weekly-plan");
-      return r ?? null;
+      // Sprint Estudos-UX-Fix BUG-D: 404 = "sem plano nesta semana" (estado
+      // legitimo de quem nunca gerou plano), NAO um erro. Sem este catch o 404
+      // cai no branch query.isError e o card mostra "Nao consegui carregar seu
+      // plano" pra todo usuario sem plano. Erros reais (500/timeout) ainda
+      // propagam -> error state com retry.
+      try {
+        const r = await apiRequest("GET", "/api/study-weekly-plan");
+        return r ?? null;
+      } catch (err: any) {
+        if (err?.response?.status === 404) return null;
+        throw err;
+      }
     },
     staleTime: 30 * 1000,
     retry: false,

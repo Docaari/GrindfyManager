@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface StudyThemeLite {
   id: string;
@@ -156,6 +156,12 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
       return { ...(saved ?? {}), id: savedId };
     },
     onSuccess: (saved: any) => {
+      // Sprint Estudos-UX-Fix BUG-A (lesson #21): sem isso o MDA recem-criado
+      // NAO aparece na MdaReadsSection do tema (query stale sob staleTime 5min).
+      // TanStack v5 faz prefix-match por elemento -> queryKey ["...by-theme"]
+      // ja cobre ["...by-theme", themeId] sem precisar de predicate.
+      queryClient.invalidateQueries({ queryKey: ["/api/mda-reads/by-theme"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/mda-reads"] });
       if (saved?.id) navigate(`/estudos/mda/${saved.id}`);
     },
   });

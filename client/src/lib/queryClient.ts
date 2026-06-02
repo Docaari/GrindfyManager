@@ -68,6 +68,18 @@ export async function initCsrf() {
   }
 }
 
+// Sprint Estudos-UX-Fix BUG-D: singleton da inicializacao de CSRF — espelha o
+// `getRefreshPromise` acima. Sem ele, N requests non-GET disparadas cedo no load
+// (todas veem csrfToken null) fariam N fetches paralelos a /api/csrf-token.
+let csrfInitPromise: Promise<void> | null = null;
+export function getCsrfInitPromise(): Promise<void> {
+  if (csrfInitPromise) return csrfInitPromise;
+  csrfInitPromise = initCsrf().finally(() => {
+    csrfInitPromise = null;
+  });
+  return csrfInitPromise;
+}
+
 export interface ApiRequestOptions {
   /**
    * F3b: quando true, NAO faz refresh+redirect em 401. Apenas lanca o erro
@@ -107,9 +119,18 @@ export async function apiRequest(
     headers['Content-Type'] = 'application/json';
   }
 
-  // Add CSRF token for state-changing requests
-  if (method !== 'GET' && csrfToken) {
-    headers['X-CSRF-Token'] = csrfToken;
+  // Add CSRF token for state-changing requests.
+  // Sprint Estudos-UX-Fix BUG-D: requests non-GET disparadas cedo no load (ex:
+  // useActivityTracker -> POST /api/analytics/track) ocorriam antes do initCsrf()
+  // do AuthContext setar o token -> header ausente -> 403 CSRF repetido no console.
+  // Lazy-init: se o token ainda nao existe, busca-o uma vez antes de seguir.
+  if (method !== 'GET') {
+    if (!csrfToken) {
+      await getCsrfInitPromise();
+    }
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
   }
 
   const fetchOptions: RequestInit = {

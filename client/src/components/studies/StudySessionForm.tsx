@@ -14,7 +14,7 @@
 
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { getStatById } from '@shared/hud-stat-catalog';
 import type { StudySessionMode } from '@shared/schema';
@@ -86,6 +86,15 @@ export default function StudySessionForm({
       if (lessonId && lessonInsights !== '') payload.lessonInsights = lessonInsights;
 
       const created = await apiRequest('POST', '/api/study-sessions', payload);
+      // Sprint Estudos-UX-Fix BUG-A (lesson #21): sem invalidar, a sessao/analise
+      // recem-criada NAO aparece na lista de Sessoes nem na StatAnalysisReviewList
+      // do tema (queries stale sob staleTime 5min). TanStack v5 faz prefix-match
+      // por elemento -> a key base ja cobre ["...by-theme", themeId, statId].
+      queryClient.invalidateQueries({ queryKey: ['/api/study-sessions'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/study-sessions/stat-analysis/by-theme'],
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/home/focus-stats'] });
       const sessionId = created?.id;
       if (sessionId) {
         // Rota v2 dedicada (SessaoDetailPage) — NAO /estudos/sessao/:id, que eh

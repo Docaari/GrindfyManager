@@ -236,3 +236,29 @@ describe('RF-02 StudiesDashboard — render principal', () => {
     });
   });
 });
+
+// Sprint Estudos-UX-Fix FASE 2 — discoverability: "Registrar Estudo" e
+// "Registrar MDA" alcancaveis a 1 clique do dashboard (antes MDA so nascia de
+// dentro da pagina de tema; "Registrar Estudo" abria so o quick-log legado).
+describe('FASE 2 — entry points globais de registro', () => {
+  it('CTA "Registrar Estudo" navega para o form unificado EST-3 (/estudos/registrar)', async () => {
+    render(withClient(<StudiesDashboard />));
+    const cta = await screen.findByTestId('studies-dashboard-register-study');
+    await userEvent.click(cta);
+    expect(navigateMock).toHaveBeenCalledWith('/estudos/registrar');
+  });
+
+  it('CTA "Registrar MDA" navega para /estudos/mda/registrar', async () => {
+    render(withClient(<StudiesDashboard />));
+    const cta = await screen.findByTestId('studies-dashboard-register-mda');
+    await userEvent.click(cta);
+    expect(navigateMock).toHaveBeenCalledWith('/estudos/mda/registrar');
+  });
+
+  it('Log rapido (quick-log) abre o StudyLogDialog ao clicar', async () => {
+    render(withClient(<StudiesDashboard />));
+    const cta = await screen.findByTestId('studies-dashboard-quick-log');
+    await userEvent.click(cta);
+    expect(await screen.findByTestId('study-log-dialog')).toBeInTheDocument();
+  });
+});

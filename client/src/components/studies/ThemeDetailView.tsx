@@ -25,6 +25,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ThemeStatsFocoSection } from '@/components/study-themes/ThemeStatsFocoSection';
 import { StatLinkPicker } from '@/components/study-themes/StatLinkPicker';
 import {
@@ -299,12 +300,17 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
             esse e o entry point do empty case. Quando ja ha stats linkadas,
             o empty state nao aparece — entry point fica apenas no rodape
             ("Editar stats foco"). */}
-        <ThemeStatsFocoSection
-          themeId={themeId}
-          stats={statsSummary}
-          onConfigureClick={() => setPickerOpen(true)}
-          pickerOpen={pickerOpen}
-        />
+        {/* Sprint Estudos-UX-Fix BUG-C (lesson #29): cada sub-secao com fetch
+            isolada numa ErrorBoundary leve — se uma estourar, vira null e a
+            pagina do tema (nome+progresso+stats) sobrevive. */}
+        <ErrorBoundary fallback={null}>
+          <ThemeStatsFocoSection
+            themeId={themeId}
+            stats={statsSummary}
+            onConfigureClick={() => setPickerOpen(true)}
+            pickerOpen={pickerOpen}
+          />
+        </ErrorBoundary>
 
         {/* Sprint EST-3 (ADR-222 / RF-08 surface 1) — CTA "Analisar esta stat"
             por stat foco linkada. Navega para o form unificado em mode
@@ -396,12 +402,28 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
             stat agrupadas por stat dentro deste tema. */}
         <div data-testid="theme-stat-analysis-review" className="pt-4 border-t border-border">
           <h3 className="text-sm font-medium mb-3">Revisao por stat</h3>
-          <StatAnalysisReviewList themeId={themeId} />
+          <ErrorBoundary
+            fallback={
+              <p className="text-sm text-muted-foreground">
+                Nao foi possivel carregar as analises de stat agora.
+              </p>
+            }
+          >
+            <StatAnalysisReviewList themeId={themeId} />
+          </ErrorBoundary>
         </div>
 
         {/* Sprint MDA-1 (ADR-230 / RF-05) — MDAs da populacao tagueados ao tema. */}
         <div className="pt-4 border-t border-border">
-          <MdaReadsSection themeId={themeId} />
+          <ErrorBoundary
+            fallback={
+              <p className="text-sm text-muted-foreground">
+                Nao foi possivel carregar os MDAs deste tema agora.
+              </p>
+            }
+          >
+            <MdaReadsSection themeId={themeId} />
+          </ErrorBoundary>
         </div>
       </div>
 
