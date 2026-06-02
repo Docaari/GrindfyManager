@@ -1,0 +1,50 @@
+%% METAS-2 fatia-2 (ADR-234) — Ponte de sourceMetric + fluxo do scoreboard
+%% GET /api/goals/scoreboard resolve cada medida por 1 de 3 caminhos:
+%%   motor (getPlannedVsActual), leak_focus (helper puro) ou agregação direta (fatia-1).
+%% Cada entry é isolada em try/catch -> degrade não derruba o placar (200).
+flowchart TD
+    A["GET /api/goals/scoreboard<br/><i>handleScoreboard, todos os tiers</i>"] --> B["listGoals(active) + listActiveWigs<br/>normaliza medidas + WIGs"]
+    B --> C{"para cada entry<br/><i>Promise.all, try/catch por entry</i>"}
+
+    C -->|"kind = wig"| WIG["WIG: caminho fatia-1 intacto<br/>aggregateCurrentValue + deriveStatus<br/><i>NÃO passa pelo motor</i>"]
+
+    C -->|"kind = measure"| ROUTE{"adherenceBridge:<br/>resolvesViaAdherence?<br/>isLeakFocusMetric?"}
+
+    %% --- Caminho 1: via motor (ponte) ---
+    ROUTE -->|"sourceMetric na ponte<br/>(sessions_per_week, grind_days,<br/>study_minutes_week, study_sessions_count)"| BRIDGE["bridgedSourceMetric()<br/>fatia-1 nome -> motor SourceMetric"]
+    BRIDGE --> MOTOR["getPlannedVsActual(userId,<br/>bridged, {kind:'week', weekStartDate}, storage)"]
+    MOTOR --> MOK{"motor OK?"}
+    MOK -->|"sim"| MRES["current = adherence.actual (DEC-3)<br/>compliancePct = motor<br/>dataSufficiency = motor<br/>adherence = breakdown"]
+    MRES --> SKIP{"breakdown.skipped?"}
+    SKIP -->|"sim (A4)"| NEUTRAL["status = on_track<br/>adherence.skipped = true<br/>compliancePct = null<br/><i>não vira at_risk (DEC-6)</i>"]
+    SKIP -->|"não"| PACE["status = deriveStatus(current,<br/>expectedNow, target, dir)"]
+    MOK -->|"no_plan / source_error / throw"| MDEGRADE["LOG antes do fallback (lesson #9)<br/>current = aggregateCurrentValue (fallback)<br/>compliancePct = null<br/>dataSufficiency = 'low'"]
+
+    %% --- Caminho 2: leak_focus ---
+    ROUTE -->|"sourceMetric = leak_focus_progress:&lt;statId&gt;"| LPARSE["parseLeakFocusStatId()<br/>+ isValidStatId"]
+    LPARSE --> LGATHER["compõe inputs:<br/>getStatsLeaks(userId, N=10)<br/>coach_leak_focus (match statId)<br/>count stat_analysis(statId, janela)"]
+    LGATHER --> LHELPER["evaluateLeakFocusProgress()<br/><i>helper puro, sem Date.now()</i>"]
+    LHELPER --> LRES{"sinal de progresso"}
+    LRES -->|"coach_leak_focus resolved"| L1["achieved / 100 / ok"]
+    LRES -->|"leaks [] ou throw"| L2["LOG antes (lessons #9/#11)<br/>compliancePct = null<br/>dataSufficiency = 'low'<br/>note = source_stub/source_error"]
+    LRES -->|"saiu do top-N"| L3["ahead | on_track / ok"]
+    LRES -->|"no top-N + stat_analysis"| L4["behind (atacando)<br/>compliancePct = esforço/target"]
+    LRES -->|"no top-N + sem ataque"| L5["at_risk / compliancePct = null"]
+
+    %% --- Caminho 3: agregação direta (fatia-1) ---
+    ROUTE -->|"sem entrada na ponte<br/>(roi_pct, abi, itm_pct, bankroll_usd)"| DIRECT["aggregateCurrentValue (fatia-1)<br/>current = agregação direta<br/>compliancePct = null<br/>dataSufficiency = real (RF-04)<br/>§6.1 grind_session_id IS NULL"]
+    DIRECT --> PACE2["status = deriveStatus (pace)"]
+
+    %% --- Convergência: snapshot + resposta ---
+    WIG --> SNAP["upsertGoalSnapshot (on-read, idempotente)<br/>grava compliancePct + dataSufficiency REAIS<br/>UNIQUE (goal_ref_id, week_start_date)"]
+    NEUTRAL --> SNAP
+    PACE --> SNAP
+    MDEGRADE --> SNAP
+    L1 --> SNAP
+    L2 --> SNAP
+    L3 --> SNAP
+    L4 --> SNAP
+    L5 --> SNAP
+    PACE2 --> SNAP
+
+    SNAP --> RESP["200 JSON aditivo (lesson #7)<br/>{ wigs, measures[+compliancePct,<br/>+dataSufficiency, +adherence], snapshotsWeek }"]

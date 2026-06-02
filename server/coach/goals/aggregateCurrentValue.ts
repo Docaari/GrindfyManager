@@ -136,6 +136,13 @@ export async function aggregateCurrentValue(
       };
     }
 
+    case "leak": {
+      // METAS-2 fatia-2 (ADR-234 / D-4): leak_focus nao tem agregacao direta. O
+      // scoreboard resolve via evaluateLeakFocusProgress ANTES de chamar este
+      // helper; este early-return so existe para o despacho nao cair em default.
+      return { value: null, dataSufficiency: "low", note: "leak_no_direct_aggregation" };
+    }
+
     default:
       return { value: null, dataSufficiency: "low", note: "unknown_kind" };
   }

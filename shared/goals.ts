@@ -32,6 +32,9 @@ export const CONTROLLABLE_SOURCE_METRICS = [
   "roi_pct",
   "abi",
   "itm_pct",
+  // METAS-2 fatia-2 (ADR-234 / RF-02): raiz da meta leak_focus. O statId alvo vem
+  // como sufixo (leak_focus_progress:<statId>); a allowlist compara so a raiz.
+  "leak_focus_progress",
 ] as const;
 // recusadas explicitamente (RF-04) → lead_not_controllable
 export const NON_CONTROLLABLE_SOURCE_METRICS = [
