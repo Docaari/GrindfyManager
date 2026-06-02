@@ -1,0 +1,62 @@
+%% Fase C #10 — Insight mental x resultado (mental x P&L) — ADR-233
+%% Fluxo de UMA das 3 queries (tilt/focus/abgame). As 3 batem o mesmo metodo
+%% de storage getMentalResultInsights; o handler fatia o sub-bloco. FX 1x/request,
+%% helper puro recebe P&L ja em USD. Read-only, sem migration.
+sequenceDiagram
+    actor User as Jogador MTT
+    participant Tab as MentalAnalyticsTab<br/><i>client (3 useQuery)</i>
+    participant Route as cooldownAnalytics.ts<br/><i>handleMentalResultTilt</i>
+    participant Auth as requireAuth<br/><i>JWT + userId</i>
+    participant Storage as storage.getMentalResultInsights<br/><i>I/O + FX + orquestra</i>
+    participant DB as PostgreSQL<br/><i>grind_sessions / cooldown_logs / break_feedbacks</i>
+    participant FX as fxResolver<br/><i>resolveExchangeRates / convertToUSD</i>
+    participant Pure as buildMentalResultInsights<br/><i>server/coach/mental (puro)</i>
+
+    User->>Tab: Abre aba Mental + escolhe periodo (7d/30d/90d)
+    Tab->>Route: GET /api/analytics/mental-result/tilt?period=30d
+    Route->>Auth: requireAuth
+    alt sem user
+        Auth-->>Tab: 401 Unauthorized
+    else autenticado
+        Auth-->>Route: req.user.userPlatformId
+        Route->>Route: resolvePeriod(req)
+        alt period invalido
+            Route-->>Tab: 400 "period invalido. Aceitos: 7d, 30d, 90d"
+        else period ok
+            Route->>Storage: getMentalResultInsights(userId, period)
+
+            Note over Storage,DB: 1 scan conjunto base (D-2)
+            Storage->>DB: SELECT * FROM grind_sessions<br/>WHERE userId=$ AND status='completed' AND date>=cutoff
+            DB-->>Storage: baseSessions[] (id, profit, focoMedio, ...)
+
+            Storage->>DB: SELECT * FROM cooldown_logs<br/>WHERE userId=$ AND sessionId IN (baseIds)
+            DB-->>Storage: cooldownBySession (tiltSelfAssessment, abGameAnswers)
+
+            opt focoMedio ausente em alguma sessao
+                Storage->>DB: getBreakFeedbacksBySessionIds(userId, sessionIds)
+                DB-->>Storage: breakFeedbacks[] (sessionId, foco 0-10)
+            end
+
+            Note over Storage,FX: FX resolvido 1x/request (D-3, lesson #9)
+            Storage->>FX: resolveExchangeRates(userId)
+            alt fxResolver falha
+                FX-->>Storage: throw
+                Storage->>Storage: console.warn + FALLBACK_FX_RATES
+            else ok
+                FX-->>Storage: { rates }
+            end
+            Storage->>FX: convertToUSD(pnlNative, currency, rates) por sessao
+            FX-->>Storage: pnlUsd (lesson #6; !finite -> 0)
+
+            Note over Storage,Pure: monta SessionPnlRow[] (tiltType|null, focusValue|null,<br/>abGameBucket|null) — PII fora (D5)
+            Storage->>Pure: buildMentalResultInsights(rows, period)
+            Note over Pure: buckets + mean/median (N par = 2 centrais) +<br/>deltaVsBaseline (0 em empate, null se lado null) +<br/>dataSufficiency (low < 4 bucket / < 8 baseline)
+            Pure-->>Storage: { tilt, focus, abgame }
+            Storage-->>Route: MentalResultInsights
+
+            Route->>Route: result.tilt (fatia o sub-bloco)
+            Route->>Route: setCacheHeader private, max-age=300
+            Route-->>Tab: 200 { period, baseline, buckets[], dataSufficiency }
+            Tab-->>User: Card tilt x P&L (delta verde/vermelho;<br/>"Amostra pequena" se low; empty se baseline.n=0)
+        end
+    end
