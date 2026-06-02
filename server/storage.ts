@@ -210,6 +210,8 @@ import { savedTournamentHighlights } from "@shared/schema";
 import { isValidTiltType, type TiltTypeId } from "@shared/tilt-types";
 // Fase C #3 (ADR-231) — síntese comportamental de leaks (helper puro).
 import { synthesizeLeaks } from "./coach/leaks/detectLeaks";
+// Fase C #10 (ADR-233) — tipo do cruzamento mental × resultado (type-only).
+import type { MentalResultInsights } from "./coach/mental/mentalResultInsights";
 import { STAT_ANALYSIS_WINDOW_DAYS } from "./coach/leaks/constants";
 import type { StatLeak } from "./coach/leaks/types";
 
@@ -1225,6 +1227,15 @@ export interface TiltTypeDistribution {
   distribution: Array<{ tiltType: TiltTypeId; count: number; sharePct: number }>; // desc; sharePct = count/typedCount
   dataSufficiency: "ok" | "low"; // "low" quando typedCount < 3
 }
+
+// Fase C #10 (ADR-233) — cruzamento de sinais mentais com resultado (P&L USD).
+// Re-export dos tipos do helper puro para o consumidor (rotas/cliente).
+export type {
+  BucketStat,
+  MentalResultBuckets,
+  MentalResultInsights,
+  SessionPnlRow,
+} from "./coach/mental/mentalResultInsights";
 
 export class DatabaseStorage implements IStorage {
   // User operations
@@ -8466,6 +8477,159 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       distribution,
       dataSufficiency,
     };
+  }
+
+  // Fase C #10 (ADR-233 / RF-01/02/03) — cruza sinais mentais com P&L USD.
+  // D-1: 1 scan grind_sessions (conjunto base) + 1 scan cooldown_logs por sessionIds
+  // + 1 scan opcional break_feedbacks por sessionIds; FX 1x; monta SessionPnlRow[]
+  // e chama o helper PURO buildMentalResultInsights. PII (D5): action/cGame/lesson
+  // (texto livre) NUNCA entram na resposta — so enums/numeros/buckets.
+  async getMentalResultInsights(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<MentalResultInsights> {
+    const { buildMentalResultInsights } = await import(
+      "./coach/mental/mentalResultInsights"
+    );
+
+    const cutoff = this.periodCutoff(period);
+
+    // 1) Conjunto base = grind_sessions completed do periodo (paridade §6.1 /
+    //    countCompletedSessionsInPeriod). Scan completo (precisa de profit/focoMedio).
+    const sessionRows: any[] = await db
+      .select()
+      .from(grindSessions)
+      .where(
+        and(
+          eq(grindSessions.userId, userId),
+          eq(grindSessions.status, "completed"),
+          gte(grindSessions.date, cutoff),
+        ),
+      );
+
+    const sessionIds = sessionRows.map((r) => String(r.id));
+
+    if (sessionIds.length === 0) {
+      return buildMentalResultInsights([], period);
+    }
+
+    // 2) FX resolvido 1x (try/catch + console.warn ANTES do fallback — lesson #9).
+    const { FALLBACK_FX_RATES, convertToUSD, resolveExchangeRates } =
+      await import("./services/fxResolver");
+    let fxRates: Record<string, number> = { ...FALLBACK_FX_RATES };
+    try {
+      const resolved = await resolveExchangeRates(userId);
+      if (resolved?.rates) fxRates = resolved.rates;
+    } catch (err) {
+      console.warn(
+        "[getMentalResultInsights] fxResolver failed:",
+        (err as any)?.message,
+      );
+    }
+
+    // 3) cooldown_logs por sessionIds (tilt + abGame). Lookup por Map<sessionId>.
+    const cooldownRows: any[] = await db
+      .select()
+      .from(cooldownLogs)
+      .where(
+        and(
+          eq(cooldownLogs.userId, userId),
+          inArray(cooldownLogs.sessionId, sessionIds),
+          // Só cooldowns concluídos entram nos buckets (spec RF-01/RF-03; paridade
+          // getTiltTypeDistribution) — cooldown abandonado tem mental parcial.
+          isNotNull(cooldownLogs.completedAt),
+        ),
+      );
+    const cooldownBySession = new Map<string, any>();
+    for (const c of cooldownRows) {
+      cooldownBySession.set(String(c.sessionId), c);
+    }
+
+    // 4) break_feedbacks por sessionIds (fallback de foco). Media de foco por sessao.
+    const breakRows = await this.getBreakFeedbacksBySessionIds(userId, sessionIds);
+    const breakFocoBySession = new Map<string, { sum: number; n: number }>();
+    for (const b of breakRows as any[]) {
+      const sid = String(b.sessionId);
+      const foco = Number(b.foco);
+      if (!Number.isFinite(foco)) continue;
+      const acc = breakFocoBySession.get(sid) ?? { sum: 0, n: 0 };
+      acc.sum += foco;
+      acc.n += 1;
+      breakFocoBySession.set(sid, acc);
+    }
+
+    // Conta itens nao-vazios de um array (lesson #11 — array nao-array -> 0).
+    const countItems = (arr: any): number => {
+      if (!Array.isArray(arr)) return 0;
+      let n = 0;
+      for (const it of arr) {
+        if (typeof it === "string" && it.trim()) n += 1;
+      }
+      return n;
+    };
+
+    // 5) Monta SessionPnlRow[] por sessao.
+    const rows = sessionRows.map((s) => {
+      const sid = String(s.id);
+
+      // --- P&L USD (helper RF-05) ---
+      const pnlNative = Number(s?.pnlNative ?? s?.profit ?? s?.profitLoss ?? 0);
+      const currency = String(s?.currency ?? s?.siteCurrency ?? "USD");
+      const pnlUsdRaw = convertToUSD(pnlNative, currency, fxRates);
+      const pnlUsd = Number.isFinite(pnlUsdRaw) ? pnlUsdRaw : 0;
+
+      const cd = cooldownBySession.get(sid);
+
+      // --- tiltType (so explicito + valido + tilt declarado) ---
+      let tiltType: TiltTypeId | null = null;
+      const t = cd?.tiltSelfAssessment;
+      if (t != null && typeof t === "object") {
+        const feltTilt = typeof t.feltTilt === "number" ? t.feltTilt : 0;
+        const keptTilting = typeof t.keptTilting === "number" ? t.keptTilting : 0;
+        const hasTilt = feltTilt > 0 || keptTilting > 0;
+        if (
+          hasTilt &&
+          typeof t.tiltType === "string" &&
+          isValidTiltType(t.tiltType)
+        ) {
+          tiltType = t.tiltType as TiltTypeId;
+        }
+      }
+
+      // --- abGameBucket (countItems + prioridade bc_present) ---
+      let abGameBucket: "a_dominant" | "bc_present" | null = null;
+      const ab = cd?.abGameAnswers;
+      if (ab != null && typeof ab === "object") {
+        const aCount = countItems(ab.aGame);
+        const bCount = countItems(ab.bGame);
+        const hasC =
+          (typeof ab.cGame === "string" && ab.cGame.trim() !== "") ||
+          (typeof ab.lesson === "string" && ab.lesson.trim() !== "");
+        if (bCount > 0 || hasC) {
+          abGameBucket = "bc_present"; // sinal de risco domina
+        } else if (aCount > bCount && aCount > 0) {
+          abGameBucket = "a_dominant";
+        }
+        // journal vazio -> null (fora dos buckets)
+      }
+
+      // --- focusValue (focoMedio finito OU media de break_feedbacks.foco) ---
+      let focusValue: number | null = null;
+      const focoMedio = Number(s?.focoMedio);
+      if (s?.focoMedio != null && Number.isFinite(focoMedio)) {
+        focusValue = focoMedio;
+      } else {
+        const acc = breakFocoBySession.get(sid);
+        if (acc && acc.n > 0) {
+          const avg = acc.sum / acc.n;
+          if (Number.isFinite(avg)) focusValue = avg;
+        }
+      }
+
+      return { sessionId: sid, pnlUsd, tiltType, focusValue, abGameBucket };
+    });
+
+    return buildMentalResultInsights(rows, period);
   }
 
   // ============================================================================

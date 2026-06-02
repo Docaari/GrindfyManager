@@ -85,6 +85,28 @@ interface TiltTypeDistributionData {
   dataSufficiency: "ok" | "low";
 }
 
+// Fase C #10 (ADR-233 — RF-04) — espelho local do shape server MentalResultBuckets.
+type BucketSufficiency = "ok" | "low";
+
+interface MentalResultBucketStat {
+  n: number;
+  avgPnlUsd: number | null;
+  medianPnlUsd: number | null;
+  dataSufficiency: BucketSufficiency;
+}
+
+interface MentalResultBucket extends MentalResultBucketStat {
+  key: string;
+  deltaVsBaseline: number | null;
+}
+
+interface MentalResultData {
+  period: Period;
+  baseline: MentalResultBucketStat;
+  buckets: MentalResultBucket[];
+  dataSufficiency: BucketSufficiency;
+}
+
 function Skeleton({ className }: { className?: string }) {
   return (
     <div
@@ -419,6 +441,135 @@ function TiltDominantWidget({
   );
 }
 
+// Fase C #10 (ADR-233 — RF-04): cruzamento mental × resultado (P&L USD).
+// Degrada loading/erro/empty/low-sample sem fabricar conclusao (lesson #11).
+function MentalResultWidget({
+  data,
+  isLoading,
+  isError,
+  testId,
+  title,
+  labelFor,
+}: {
+  data?: MentalResultData;
+  isLoading: boolean;
+  isError: boolean;
+  testId: string;
+  title: string;
+  labelFor: (key: string) => string;
+}) {
+  if (isLoading) return <Skeleton />;
+  if (isError) {
+    return (
+      <div
+        data-testid={`${testId}-error`}
+        className="text-sm text-red-500"
+      >
+        Erro ao carregar {title}. Tente novamente.
+      </div>
+    );
+  }
+
+  const baselineN = data?.baseline?.n ?? 0;
+  if (baselineN === 0) {
+    return (
+      <div data-testid={testId} className="rounded border p-4">
+        <div className="text-sm font-medium">{title}</div>
+        <div
+          data-testid={`${testId}-empty`}
+          className="mt-2 text-xs text-muted-foreground"
+        >
+          Sem sessoes com P&amp;L nesse periodo. Registre sessoes para gerar o
+          insight.
+        </div>
+      </div>
+    );
+  }
+
+  const fmtUsd = (n: number | null) =>
+    typeof n === "number"
+      ? `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`
+      : "-";
+  const fmtDelta = (n: number | null) =>
+    typeof n === "number"
+      ? `${n > 0 ? "+" : n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`
+      : "-";
+
+  const isLow = data?.dataSufficiency === "low";
+  const buckets = Array.isArray(data?.buckets) ? data!.buckets : [];
+  // So mostra buckets com pelo menos 1 sessao (sem fabricar linhas vazias).
+  const filled = buckets.filter((b) => b.n > 0);
+
+  return (
+    <div data-testid={testId} className="rounded border p-4">
+      <div className="text-sm font-medium">{title}</div>
+      <div className="mt-1 text-xs text-muted-foreground">
+        Baseline: {fmtUsd(data?.baseline?.avgPnlUsd ?? null)} ({baselineN} sessoes)
+      </div>
+
+      {isLow && (
+        <div className="mt-1 text-xs text-amber-600">
+          Amostra pequena, continue registrando.
+        </div>
+      )}
+
+      {filled.length === 0 ? (
+        <div className="mt-2 text-xs text-muted-foreground">
+          Sem registros mentais nesse periodo para cruzar com o resultado.
+        </div>
+      ) : (
+        <ul className="mt-2 space-y-1 text-sm">
+          {filled.map((b) => {
+            const delta = b.deltaVsBaseline;
+            const deltaColor =
+              typeof delta === "number"
+                ? delta > 0
+                  ? "text-emerald-600"
+                  : delta < 0
+                    ? "text-red-600"
+                    : "text-muted-foreground"
+                : "text-muted-foreground";
+            return (
+              <li
+                key={b.key}
+                className="flex items-center justify-between"
+                data-mental-result-bucket={b.key}
+              >
+                <span>
+                  {labelFor(b.key)}{" "}
+                  <span className="text-xs text-muted-foreground">
+                    ({b.n})
+                  </span>
+                  {b.dataSufficiency === "low" && (
+                    <span className="ml-1 text-xs text-amber-600">
+                      amostra pequena
+                    </span>
+                  )}
+                </span>
+                <span className="flex items-center gap-2 font-mono">
+                  <span>{fmtUsd(b.avgPnlUsd)}</span>
+                  <span className={deltaColor}>{fmtDelta(delta)}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+const FOCUS_BUCKET_LABELS: Record<string, string> = {
+  alto: "Foco alto",
+  medio: "Foco medio",
+  baixo: "Foco baixo",
+};
+
+const ABGAME_BUCKET_LABELS: Record<string, string> = {
+  a_dominant: "A-game predominante",
+  bc_present: "B/C-game presente",
+};
+
 export function MentalAnalyticsTab(_props: MentalAnalyticsTabProps = {}) {
   // Hooks first
   const [period, setPeriod] = useState<Period>("30d");
@@ -470,6 +621,25 @@ export function MentalAnalyticsTab(_props: MentalAnalyticsTabProps = {}) {
       apiRequest("GET", `/api/analytics/tilt-type-distribution?period=${period}`),
   });
 
+  // Fase C #10 — RF-04: cruzamento mental × resultado (3 endpoints).
+  const mentalResultTilt = useQuery<MentalResultData>({
+    queryKey: ["mental-analytics", "mental-result-tilt", period],
+    queryFn: () =>
+      apiRequest("GET", `/api/analytics/mental-result/tilt?period=${period}`),
+  });
+
+  const mentalResultFocus = useQuery<MentalResultData>({
+    queryKey: ["mental-analytics", "mental-result-focus", period],
+    queryFn: () =>
+      apiRequest("GET", `/api/analytics/mental-result/focus?period=${period}`),
+  });
+
+  const mentalResultAbgame = useQuery<MentalResultData>({
+    queryKey: ["mental-analytics", "mental-result-abgame", period],
+    queryFn: () =>
+      apiRequest("GET", `/api/analytics/mental-result/abgame?period=${period}`),
+  });
+
   const anyError =
     compliance.isError ||
     distribution.isError ||
@@ -477,7 +647,10 @@ export function MentalAnalyticsTab(_props: MentalAnalyticsTabProps = {}) {
     lessons.isError ||
     warmupCompliance.isError ||
     abGame.isError ||
-    tiltTypeDistribution.isError;
+    tiltTypeDistribution.isError ||
+    mentalResultTilt.isError ||
+    mentalResultFocus.isError ||
+    mentalResultAbgame.isError;
 
   return (
     <div className="space-y-4">
@@ -560,6 +733,30 @@ export function MentalAnalyticsTab(_props: MentalAnalyticsTabProps = {}) {
           data={tiltTypeDistribution.data}
           isLoading={tiltTypeDistribution.isLoading}
           isError={tiltTypeDistribution.isError}
+        />
+        <MentalResultWidget
+          data={mentalResultTilt.data}
+          isLoading={mentalResultTilt.isLoading}
+          isError={mentalResultTilt.isError}
+          testId="mental-result-tilt"
+          title="Tilt x Resultado"
+          labelFor={(key) => getTiltType(key)?.label ?? key}
+        />
+        <MentalResultWidget
+          data={mentalResultFocus.data}
+          isLoading={mentalResultFocus.isLoading}
+          isError={mentalResultFocus.isError}
+          testId="mental-result-focus"
+          title="Foco x Resultado"
+          labelFor={(key) => FOCUS_BUCKET_LABELS[key] ?? key}
+        />
+        <MentalResultWidget
+          data={mentalResultAbgame.data}
+          isLoading={mentalResultAbgame.isLoading}
+          isError={mentalResultAbgame.isError}
+          testId="mental-result-abgame"
+          title="A-game vs B/C-game x Resultado"
+          labelFor={(key) => ABGAME_BUCKET_LABELS[key] ?? key}
         />
       </div>
     </div>

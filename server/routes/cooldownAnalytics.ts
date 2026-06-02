@@ -233,6 +233,52 @@ export async function handleTiltTypeDistribution(req: any, res: Response): Promi
 }
 
 // =============================================================================
+// GET /api/analytics/mental-result/{tilt|focus|abgame} (Fase C #10 — RF-01/02/03, ADR-233)
+//
+// D-1: 1 metodo storage.getMentalResultInsights -> 3 handlers fatiam o sub-bloco
+// (result.tilt / result.focus / result.abgame). PII (D5): a resposta nunca carrega
+// texto livre — o storage ja agrega so enums/numeros/buckets.
+// =============================================================================
+
+async function handleMentalResult(
+  req: any,
+  res: Response,
+  key: "tilt" | "focus" | "abgame",
+): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) {
+    unauthorized(res);
+    return;
+  }
+  const period = resolvePeriod(req);
+  if (!period) {
+    res.status(400).json({ message: "period invalido. Aceitos: 7d, 30d, 90d" });
+    return;
+  }
+
+  try {
+    setCacheHeader(res);
+    const result = await storage.getMentalResultInsights(userId, period);
+    res.status(200).json(result[key]);
+  } catch (err: any) {
+    console.error(`GET /api/analytics/mental-result/${key} failed:`, err);
+    res.status(500).json({ message: err?.message ?? "Erro" });
+  }
+}
+
+export async function handleMentalResultTilt(req: any, res: Response): Promise<void> {
+  return handleMentalResult(req, res, "tilt");
+}
+
+export async function handleMentalResultFocus(req: any, res: Response): Promise<void> {
+  return handleMentalResult(req, res, "focus");
+}
+
+export async function handleMentalResultAbgame(req: any, res: Response): Promise<void> {
+  return handleMentalResult(req, res, "abgame");
+}
+
+// =============================================================================
 // Express registration
 // =============================================================================
 
@@ -265,5 +311,21 @@ export function registerCooldownAnalyticsRoutes(app: Express): void {
     "/api/analytics/tilt-type-distribution",
     requireAuth,
     (req: Request, res: Response) => handleTiltTypeDistribution(req, res),
+  );
+  // Fase C #10 (ADR-233) — rotas estaticas (sem path param) -> sem colisao.
+  app.get(
+    "/api/analytics/mental-result/tilt",
+    requireAuth,
+    (req: Request, res: Response) => handleMentalResultTilt(req, res),
+  );
+  app.get(
+    "/api/analytics/mental-result/focus",
+    requireAuth,
+    (req: Request, res: Response) => handleMentalResultFocus(req, res),
+  );
+  app.get(
+    "/api/analytics/mental-result/abgame",
+    requireAuth,
+    (req: Request, res: Response) => handleMentalResultAbgame(req, res),
   );
 }
