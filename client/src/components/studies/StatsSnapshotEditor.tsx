@@ -244,7 +244,7 @@ export default function StatsSnapshotEditor({
                       {target && (
                         <span
                           data-testid={`stat-target-${stat.key}`}
-                          className="text-[10px] text-gray-500 font-mono"
+                          className="text-[10px] text-muted-foreground font-mono"
                         >
                           target: {target.min}-{target.max}
                         </span>

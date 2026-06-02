@@ -67,7 +67,7 @@ export function LinkSpotToThemeDropdown({
               onClick={() => onChange(t.id)}
               disabled={disabled}
               className={`w-full text-left text-xs px-2 py-1 rounded ${
-                active ? 'bg-poker-accent/30 text-white' : 'text-gray-300 hover:bg-gray-700/40'
+                active ? 'bg-primary/30 text-white' : 'text-gray-300 hover:bg-gray-700/40'
               }`}
             >
               {t.emoji ? `${t.emoji} ` : ''}

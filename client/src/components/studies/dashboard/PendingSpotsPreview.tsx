@@ -25,7 +25,7 @@ export function PendingSpotsPreview({ spots }: PendingSpotsPreviewProps) {
 
   if (!top.length) {
     return (
-      <div data-testid="pending-spots-preview-empty" className="text-xs text-gray-500">
+      <div data-testid="pending-spots-preview-empty" className="text-xs text-muted-foreground">
         Sem spots pendentes.
       </div>
     );
@@ -39,12 +39,12 @@ export function PendingSpotsPreview({ spots }: PendingSpotsPreviewProps) {
           type="button"
           data-testid={`dashboard-spot-${s.id}`}
           onClick={() => navigate(`/estudos/spots?spot=${encodeURIComponent(s.id)}`)}
-          className="w-full text-left rounded-md border border-gray-700 bg-gray-800/70 px-3 py-2 hover:bg-gray-800"
+          className="w-full text-left rounded-md border border-border bg-muted px-3 py-2 hover:bg-accent"
         >
-          <div className="text-sm font-medium text-white truncate">
+          <div className="text-sm font-medium text-foreground truncate">
             {s.type ?? 'spot'} {s.spot ? `· ${s.spot}` : ''}
           </div>
-          <div className="text-[11px] text-gray-400 truncate">{s.conclusion ?? ''}</div>
+          <div className="text-[11px] text-muted-foreground truncate">{s.conclusion ?? ''}</div>
         </button>
       ))}
     </div>

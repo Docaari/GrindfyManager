@@ -868,6 +868,12 @@ export function registerStudySessionsRoutes(app: Express): void {
   // Wrapper (req,res)=>... impede que o `next` do Express vaze como o 3o arg
   // `injectedStorage` do handler (lesson #34).
   app.get("/api/study-sessions/stat-analysis/by-theme", requireAuth, (req: Request, res: Response) => handleListStatAnalysisByTheme(req, res));
+  // Sprint Estudos-UX (founder) — lista das sessoes REGISTRADAS (v2, todos os
+  // modos) pra SessionsView. A GET /api/study-sessions "crua" (linha acima) eh
+  // shadowada pela legacy studies.ts (study_sessions V1). Sub-path 2-segmentos
+  // dedicado evita a colisao com o GET /:id legado (1 seg) — mesmo motivo do
+  // /stat-analysis/by-theme. Reusa handleListStudySessions -> { items: [] }.
+  app.get("/api/study-sessions/registered/list", requireAuth, handleListStudySessions);
   // Sub-paths fixos de imagem registrados antes do PATCH /:id generico.
   app.post(
     "/api/study-sessions/:id/stat-analysis/entries/:entryId/image",

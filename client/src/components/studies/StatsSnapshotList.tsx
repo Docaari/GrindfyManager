@@ -84,10 +84,10 @@ export default function StatsSnapshotList({
     return (
       <div
         data-testid="snapshots-empty"
-        className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-6 text-center"
+        className="bg-muted border border-border rounded-lg p-6 text-center"
       >
-        <BarChart3 className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-        <p className="text-gray-400 text-sm">
+        <BarChart3 className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+        <p className="text-muted-foreground text-sm">
           Nenhum snapshot ainda. Salve seu primeiro acima.
         </p>
       </div>
@@ -108,15 +108,15 @@ export default function StatsSnapshotList({
         return (
           <Card
             key={snap.id}
-            className={`bg-gray-800/80 border-gray-700/50 ${
-              isSelected ? "border-poker-accent" : ""
+            className={`bg-card border-border ${
+              isSelected ? "border-primary" : ""
             }`}
             data-testid={`snapshot-${snap.id}`}
           >
             <CardContent className="p-3 flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="text-sm font-medium text-white">
+                  <span className="text-sm font-medium text-foreground">
                     {layout?.name ?? "Layout removido"}
                   </span>
                   <Badge variant="outline" className="text-[9px]">
@@ -144,15 +144,15 @@ export default function StatsSnapshotList({
                     );
                   })()}
                 </div>
-                <p className="text-xs text-gray-400 mb-2">
+                <p className="text-xs text-muted-foreground mb-2">
                   {formatDateBR(snap.capturedAt)}
                 </p>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
                   {previewKeys.map((k) => {
                     const v = extractValue(snap.values[k]);
                     return (
-                      <span key={k} className="text-gray-300">
-                        <span className="text-gray-500">{k}:</span>{" "}
+                      <span key={k} className="text-foreground">
+                        <span className="text-muted-foreground">{k}:</span>{" "}
                         <span className="font-mono">
                           {v === null ? "—" : v.toFixed(1)}
                         </span>
@@ -161,7 +161,7 @@ export default function StatsSnapshotList({
                   })}
                 </div>
                 {snap.notes && (
-                  <p className="text-[11px] text-gray-500 italic mt-1 line-clamp-1">
+                  <p className="text-[11px] text-muted-foreground italic mt-1 line-clamp-1">
                     {snap.notes}
                   </p>
                 )}

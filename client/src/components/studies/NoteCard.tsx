@@ -25,7 +25,7 @@ export function NoteCard({ note, onDelete }: NoteCardProps) {
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
-              <FileText className="w-4 h-4 text-poker-accent" />
+              <FileText className="w-4 h-4 text-primary" />
               <h4 className="font-semibold text-white">{note.title}</h4>
             </div>
             <p className="text-gray-300 whitespace-pre-wrap mb-3">{note.content}</p>

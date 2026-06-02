@@ -27,9 +27,9 @@ export function StudyPlanningTab({ card }: StudyPlanningTabProps) {
   if (!hasPlanning) {
     return (
       <div className="text-center py-8">
-        <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-        <p className="text-gray-400">Nenhum planejamento semanal configurado</p>
-        <p className="text-sm text-gray-500 mt-2">
+        <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+        <p className="text-muted-foreground">Nenhum planejamento semanal configurado</p>
+        <p className="text-sm text-muted-foreground mt-2">
           Configure um planejamento ao editar este cartão de estudo
         </p>
       </div>
@@ -40,9 +40,9 @@ export function StudyPlanningTab({ card }: StudyPlanningTabProps) {
     <div className="space-y-4">
       <div className="grid gap-4">
         {/* Dias da Semana */}
-        <Card className="bg-gray-800 border-gray-600">
+        <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-white text-sm flex items-center gap-2">
+            <CardTitle className="text-foreground text-sm flex items-center gap-2">
               <CalendarDays className="w-4 h-4" />
               Dias de Estudo
             </CardTitle>
@@ -50,7 +50,7 @@ export function StudyPlanningTab({ card }: StudyPlanningTabProps) {
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {(card.studyDays ?? []).map((day) => (
-                <Badge key={day} variant="secondary" className="text-poker-accent">
+                <Badge key={day} variant="secondary" className="text-primary">
                   {getDayLabel(day)}
                 </Badge>
               ))}
@@ -62,29 +62,29 @@ export function StudyPlanningTab({ card }: StudyPlanningTabProps) {
         {(card.studyStartTime || card.studyDuration) && (
           <div className="grid grid-cols-2 gap-4">
             {card.studyStartTime && (
-              <Card className="bg-gray-800 border-gray-600">
+              <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle className="text-white text-sm flex items-center gap-2">
+                  <CardTitle className="text-foreground text-sm flex items-center gap-2">
                     <Clock className="w-4 h-4" />
                     Horário
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-300">{card.studyStartTime}</p>
+                  <p className="text-foreground">{card.studyStartTime}</p>
                 </CardContent>
               </Card>
             )}
 
             {card.studyDuration && (
-              <Card className="bg-gray-800 border-gray-600">
+              <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle className="text-white text-sm flex items-center gap-2">
+                  <CardTitle className="text-foreground text-sm flex items-center gap-2">
                     <Clock className="w-4 h-4" />
                     Duração
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-300">{formatTime(card.studyDuration)}</p>
+                  <p className="text-foreground">{formatTime(card.studyDuration)}</p>
                 </CardContent>
               </Card>
             )}
@@ -93,15 +93,15 @@ export function StudyPlanningTab({ card }: StudyPlanningTabProps) {
 
         {/* Recorrência */}
         {card.isRecurring && (
-          <Card className="bg-gray-800 border-gray-600">
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-white text-sm flex items-center gap-2">
+              <CardTitle className="text-foreground text-sm flex items-center gap-2">
                 <RotateCcw className="w-4 h-4" />
                 Estudo Recorrente
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-300">
+              <p className="text-foreground">
                 {card.weeklyFrequency ? `${card.weeklyFrequency}x por semana` : 'Sim'}
               </p>
             </CardContent>
@@ -110,15 +110,15 @@ export function StudyPlanningTab({ card }: StudyPlanningTabProps) {
 
         {/* Descrição */}
         {card.studyDescription && (
-          <Card className="bg-gray-800 border-gray-600">
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-white text-sm flex items-center gap-2">
+              <CardTitle className="text-foreground text-sm flex items-center gap-2">
                 <FileText className="w-4 h-4" />
                 Descrição
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-300">{card.studyDescription}</p>
+              <p className="text-foreground">{card.studyDescription}</p>
             </CardContent>
           </Card>
         )}

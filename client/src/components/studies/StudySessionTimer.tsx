@@ -63,11 +63,11 @@ export function StudySessionTimer({ cardId, onTimeUpdate }: StudySessionTimerPro
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4 mb-4">
+    <div className="bg-card rounded-lg p-4 mb-4">
       <div className="flex items-center justify-between">
         <div>
-          <h4 className="text-white font-semibold mb-2">Cronômetro de Estudo</h4>
-          <div className="text-2xl font-mono text-poker-accent">
+          <h4 className="text-foreground font-semibold mb-2">Cronômetro de Estudo</h4>
+          <div className="text-2xl font-mono text-primary">
             {formatTimeDisplay(time)}
           </div>
         </div>
@@ -75,7 +75,7 @@ export function StudySessionTimer({ cardId, onTimeUpdate }: StudySessionTimerPro
           {!isActive ? (
             <Button
               onClick={handleStart}
-              className="bg-green-600 hover:bg-green-700 text-white"
+              className="bg-primary hover:opacity-90 text-primary-foreground"
               size="sm"
             >
               <Play className="w-4 h-4 mr-2" />
@@ -86,14 +86,14 @@ export function StudySessionTimer({ cardId, onTimeUpdate }: StudySessionTimerPro
               <Button
                 onClick={handlePause}
                 variant="outline"
-                className="text-white border-gray-600 hover:bg-gray-700"
+                className="text-foreground border-border hover:bg-accent"
                 size="sm"
               >
                 {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
               </Button>
               <Button
                 onClick={handleStop}
-                className="bg-red-600 hover:bg-red-700 text-white"
+                className="bg-destructive hover:opacity-90 text-destructive-foreground"
                 size="sm"
               >
                 <RotateCcw className="w-4 h-4 mr-2" />

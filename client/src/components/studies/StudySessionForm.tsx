@@ -22,9 +22,20 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { getStatById } from '@shared/hud-stat-catalog';
 import type { StudySessionMode } from '@shared/schema';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 const STAT_ENTRIES_CAP = 10;
 const DIFFICULT_SPOTS_CAP = 5;
+
+// PT-BR labels dos modos (subtitle do header — espelha o <select>).
+const MODE_LABELS: Record<string, string> = {
+  drill_gto: 'Drill GTO',
+  tournament_review: 'Revisao de torneio',
+  hand_review: 'Revisao de maos',
+  lesson: 'Aula',
+  stat_analysis: 'Analise de stat',
+  other: 'Outro',
+};
 
 interface PlayEntryDraft {
   filters: string;
@@ -188,40 +199,44 @@ export default function StudySessionForm({
   }
 
   return (
-    <form
-      data-testid="study-session-form"
-      onSubmit={handleSubmit}
-      className="space-y-6 p-4 max-w-2xl mx-auto"
-    >
-      <div>
-        <label className="block text-sm font-medium mb-1">Tipo de estudo</label>
-        <select
-          data-testid="study-session-mode-select"
-          value={mode}
-          onChange={(e) => setMode(e.target.value as StudySessionMode)}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        >
-          <option value="drill_gto">Drill GTO</option>
-          <option value="tournament_review">Revisao de torneio</option>
-          <option value="hand_review">Revisao de maos</option>
-          <option value="lesson">Aula</option>
-          <option value="stat_analysis">Analise de stat</option>
-          <option value="other">Outro</option>
-        </select>
-      </div>
-
-      {/* Duracao — comum a qualquer tipo. */}
-      <div>
-        <label className="block text-sm font-medium mb-1">Duracao (minutos)</label>
-        <input
-          type="number"
-          min={1}
-          max={1440}
-          data-testid="field-duration"
-          value={durationMinutes}
-          onChange={(e) => setDurationMinutes(Number(e.target.value))}
-          className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
-        />
+    <div className="p-4 max-w-2xl mx-auto">
+      <PageHeader title="Registrar estudo" subtitle={MODE_LABELS[mode] ?? 'Estudo'} />
+      <form
+        data-testid="study-session-form"
+        onSubmit={handleSubmit}
+        className="space-y-6"
+      >
+      {/* Secao "Sobre o estudo" — tipo + duracao, comuns a qualquer modo. */}
+      <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-foreground">Sobre o estudo</h3>
+        <div>
+          <label className="block text-sm font-medium mb-1">Tipo de estudo</label>
+          <select
+            data-testid="study-session-mode-select"
+            value={mode}
+            onChange={(e) => setMode(e.target.value as StudySessionMode)}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          >
+            <option value="drill_gto">Drill GTO</option>
+            <option value="tournament_review">Revisao de torneio</option>
+            <option value="hand_review">Revisao de maos</option>
+            <option value="lesson">Aula</option>
+            <option value="stat_analysis">Analise de stat</option>
+            <option value="other">Outro</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Duracao (minutos)</label>
+          <input
+            type="number"
+            min={1}
+            max={1440}
+            data-testid="field-duration"
+            value={durationMinutes}
+            onChange={(e) => setDurationMinutes(Number(e.target.value))}
+            className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+          />
+        </div>
       </div>
 
       {mode === 'stat_analysis' && (
@@ -414,26 +429,30 @@ export default function StudySessionForm({
       </div>
 
       {/* Notas — comum a qualquer tipo. */}
-      <div>
-        <label className="block text-sm font-medium mb-1">Notas (opcional)</label>
+      <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+        <label className="block text-sm font-semibold text-foreground">Anotacoes</label>
         <textarea
           data-testid="field-notes"
           value={notes}
           maxLength={500}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Observacoes livres sobre o estudo..."
+          rows={4}
           className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
         />
       </div>
 
-      <button
-        type="submit"
-        data-testid="study-session-submit"
-        disabled={submitting}
-        className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground disabled:opacity-50"
-      >
-        Registrar sessao
-      </button>
-    </form>
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          data-testid="study-session-submit"
+          disabled={submitting}
+          className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+        >
+          Registrar sessao
+        </button>
+      </div>
+      </form>
+    </div>
   );
 }

@@ -21,34 +21,34 @@ export function WeekInsights({ insights }: WeekInsightsProps) {
         type="button"
         data-testid="insight-themesOpened"
         onClick={() => navigate('/estudos/temas')}
-        className="rounded border border-gray-700 bg-gray-800/70 px-2 py-2 text-left hover:bg-gray-800"
+        className="rounded border border-border bg-muted px-2 py-2 text-left hover:bg-accent"
       >
-        <div className="text-lg font-bold text-white">{insights.themesOpenedThisWeek}</div>
-        <div className="text-[11px] text-gray-400">temas abertos</div>
+        <div className="text-lg font-bold text-foreground">{insights.themesOpenedThisWeek}</div>
+        <div className="text-[11px] text-muted-foreground">temas abertos</div>
       </button>
       <button
         type="button"
         data-testid="insight-spotsReviewed"
         onClick={() => navigate('/estudos/spots')}
-        className="rounded border border-gray-700 bg-gray-800/70 px-2 py-2 text-left hover:bg-gray-800"
+        className="rounded border border-border bg-muted px-2 py-2 text-left hover:bg-accent"
       >
-        <div className="text-lg font-bold text-white">{insights.spotsReviewedThisWeek}</div>
-        <div className="text-[11px] text-gray-400">spots revisados</div>
+        <div className="text-lg font-bold text-foreground">{insights.spotsReviewedThisWeek}</div>
+        <div className="text-[11px] text-muted-foreground">spots revisados</div>
       </button>
       <button
         type="button"
         data-testid="insight-hoursStudied"
         onClick={() => navigate('/estudos/stats')}
         title="Ver historico de sessoes em Stats"
-        className="rounded border border-gray-700 bg-gray-800/70 px-2 py-2 text-left hover:bg-gray-800"
+        className="rounded border border-border bg-muted px-2 py-2 text-left hover:bg-accent"
       >
-        <div className="text-lg font-bold text-white">
+        <div className="text-lg font-bold text-foreground">
           {insights.hoursStudiedThisWeek.toLocaleString('pt-BR', {
             minimumFractionDigits: 1,
             maximumFractionDigits: 1,
           })}h
         </div>
-        <div className="text-[11px] text-gray-400">horas estudadas</div>
+        <div className="text-[11px] text-muted-foreground">horas estudadas</div>
       </button>
     </div>
   );

@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 interface StudyThemeLite {
   id: string;
@@ -169,7 +170,12 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
   };
 
   return (
-    <form data-testid="mda-read-form" onSubmit={handleSubmit} className="space-y-4">
+    <div className="p-4 max-w-2xl mx-auto">
+      <PageHeader title="Registrar MDA" subtitle="Tendencia da populacao" />
+      <form data-testid="mda-read-form" onSubmit={handleSubmit} className="space-y-6">
+      {/* Identificacao */}
+      <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-foreground">Identificacao</h3>
       <div>
         <label className="text-xs font-medium text-muted-foreground" htmlFor="mda-title">
           Titulo
@@ -180,7 +186,7 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={120}
-          className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm"
           placeholder="BTN vs BB SRP — pop overfolda turn"
         />
       </div>
@@ -195,7 +201,7 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
           value={spotContext}
           onChange={(e) => setSpotContext(e.target.value)}
           maxLength={200}
-          className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm"
         />
       </div>
 
@@ -209,10 +215,14 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
           value={filters}
           onChange={(e) => setFilters(e.target.value)}
           maxLength={500}
-          className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm"
         />
       </div>
+      </div>
 
+      {/* Tendencia + stat ligada */}
+      <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-foreground">Tendencia da populacao</h3>
       <div>
         <label className="text-xs font-medium text-muted-foreground" htmlFor="mda-tendency">
           Tendencia da populacao + como explorar
@@ -224,7 +234,7 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
           onChange={(e) => setTendencyText(e.target.value)}
           maxLength={2000}
           rows={3}
-          className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm"
         />
       </div>
 
@@ -238,14 +248,15 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
           value={statId}
           onChange={(e) => setStatId(e.target.value)}
           maxLength={64}
-          className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm"
           placeholder="ex: vpip"
         />
       </div>
+      </div>
 
       {/* Theme multi-select (N:N) */}
-      <div className="space-y-2">
-        <div className="text-xs font-medium text-muted-foreground">Temas (1 ou mais)</div>
+      <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+        <div className="text-sm font-semibold text-foreground">Temas (1 ou mais)</div>
         <div className="flex flex-wrap gap-2">
           {selectedThemeIds.map((id) => (
             <span
@@ -283,8 +294,8 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
       </div>
 
       {/* Upload de prints */}
-      <div className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground" htmlFor="mda-image">
+      <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+        <label className="text-sm font-semibold text-foreground" htmlFor="mda-image">
           Prints da populacao (max {MAX_IMAGES})
         </label>
         <input
@@ -350,15 +361,18 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
         </div>
       </div>
 
-      <button
-        type="submit"
-        data-testid="mda-read-form-submit"
-        disabled={!canSubmit || saveMutation.isPending}
-        className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-      >
-        {saveMutation.isPending ? "Salvando…" : "Salvar MDA"}
-      </button>
-    </form>
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          data-testid="mda-read-form-submit"
+          disabled={!canSubmit || saveMutation.isPending}
+          className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
+        >
+          {saveMutation.isPending ? "Salvando…" : "Salvar MDA"}
+        </button>
+      </div>
+      </form>
+    </div>
   );
 }
 

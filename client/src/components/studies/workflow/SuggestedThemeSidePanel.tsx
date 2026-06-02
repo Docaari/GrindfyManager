@@ -53,7 +53,7 @@ export function SuggestedThemeSidePanel({ spot, themes, onApply }: SuggestedThem
             type="button"
             data-testid="suggested-theme-apply"
             onClick={() => onApply(suggested.id)}
-            className="text-xs px-3 py-1.5 rounded bg-poker-accent text-black font-semibold"
+            className="text-xs px-3 py-1.5 rounded bg-primary text-black font-semibold"
           >
             Aplicar sugestao
           </button>

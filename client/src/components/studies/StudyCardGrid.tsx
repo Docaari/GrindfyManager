@@ -21,7 +21,7 @@ export function StudyCardGrid({ filteredCards, searchQuery, selectedCategory, on
         {filteredCards.map((card: StudyCard) => (
           <Card
             key={card.id}
-            className="bg-poker-surface border-gray-700 hover:border-poker-accent/50 transition-colors cursor-pointer"
+            className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer"
             onClick={() => onSelectCard(card)}
           >
             <CardHeader className="pb-3">
@@ -29,16 +29,16 @@ export function StudyCardGrid({ filteredCards, searchQuery, selectedCategory, on
                 <Badge className={`${getPriorityColor(card.priority)} text-white`}>
                   {PRIORITIES.find(p => p.value === card.priority)?.label}
                 </Badge>
-                <Badge variant="outline" className="text-white border-gray-400">
+                <Badge variant="outline" className="text-foreground border-gray-400">
                   {card.category}
                 </Badge>
               </div>
-              <CardTitle className="text-white text-lg">{card.title}</CardTitle>
+              <CardTitle className="text-foreground text-lg">{card.title}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Progresso</span>
+                  <span className="text-muted-foreground">Progresso</span>
                   <span className={`font-semibold ${getScoreColor(card.knowledgeScore || 0)}`}>
                     {card.knowledgeScore || 0}%
                   </span>
@@ -46,14 +46,14 @@ export function StudyCardGrid({ filteredCards, searchQuery, selectedCategory, on
                 <Progress value={card.knowledgeScore || 0} className="h-2" />
 
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Tempo investido</span>
-                  <span className="text-white">{formatTime(card.timeInvested || 0)}</span>
+                  <span className="text-muted-foreground">Tempo investido</span>
+                  <span className="text-foreground">{formatTime(card.timeInvested || 0)}</span>
                 </div>
 
                 {card.currentStat && card.targetStat && (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Stat atual</span>
-                    <span className="text-white">
+                    <span className="text-muted-foreground">Stat atual</span>
+                    <span className="text-foreground">
                       {card.currentStat}% → {card.targetStat}%
                     </span>
                   </div>
@@ -67,11 +67,11 @@ export function StudyCardGrid({ filteredCards, searchQuery, selectedCategory, on
       {/* Empty State */}
       {filteredCards.length === 0 && (
         <div className="text-center py-12">
-          <Brain className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-400 mb-2">
+          <Brain className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-muted-foreground mb-2">
             {searchQuery || selectedCategory ? "Nenhum estudo encontrado" : "Nenhum estudo criado"}
           </h3>
-          <p className="text-gray-500 mb-6">
+          <p className="text-muted-foreground mb-6">
             {searchQuery || selectedCategory ?
               "Tente ajustar os filtros ou criar um novo estudo" :
               "Comece criando seu primeiro cartão de estudo"
@@ -79,7 +79,7 @@ export function StudyCardGrid({ filteredCards, searchQuery, selectedCategory, on
           </p>
           <Button
             onClick={onCreateNew}
-            className="hover:bg-poker-accent/90 text-black font-semibold bg-[#16a249]"
+            className="hover:bg-primary/90 text-primary-foreground font-semibold bg-primary"
           >
             <Plus className="w-4 h-4 mr-2" />
             Criar Primeiro Estudo

@@ -32,6 +32,7 @@ import {
   Collapsible,
   CollapsibleContent,
 } from '@/components/ui/collapsible';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -166,39 +167,10 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
     },
   });
 
-  const startSessionMutation = useMutation({
-    mutationFn: async () => {
-      // LOW-13 reviewer: wira themeId no POST de study-sessions quando user
-      // inicia estudo a partir do tema. Backend (insertStudySessionSchema +
-      // createStudySession) ja aceita themeId via spread.
-      return await apiRequest('POST', '/api/study-sessions', {
-        themeId,
-        date: new Date().toISOString(),
-        duration: 0,
-        activities: ['theme'],
-      });
-    },
-    // Sprint Estudos-Sessao-1 RF-09: redirect para /estudos/sessao/:id apos
-    // POST sucesso. apiRequest retorna JSON parseado direto (lesson #13),
-    // entao `created.id` funciona sem precisar de .json().
-    onSuccess: (created: any) => {
-      qc.invalidateQueries({ queryKey: ['/api/study-sessions'] });
-      qc.invalidateQueries({ queryKey: ['/api/home/focus-stats'] });
-      const sessionId = created?.id;
-      if (sessionId) {
-        navigate(`/estudos/sessao/${sessionId}`);
-      } else {
-        // Fallback defensivo se backend nao retornar id (nao deve acontecer).
-        toast({ title: 'Sessao de estudo iniciada' });
-      }
-    },
-    onError: () => {
-      toast({
-        title: 'Erro ao iniciar sessao',
-        variant: 'destructive',
-      });
-    },
-  });
+  // Sprint Estudos-UX (founder): "Iniciar sessao" agora navega pro form de
+  // registro UNIFICADO (/estudos/registrar — StudySessionForm, EST-3) em vez de
+  // criar a sessao legacy minima (timer + nota crua). O form rico tem tipo de
+  // estudo, jogadas, insights da aula, spots dificeis. Ver onClick do botao.
 
   const theme = themes.find((t) => t.id === themeId) ?? null;
 
@@ -315,32 +287,6 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
           />
         </ErrorBoundary>
 
-        {/* Sprint EST-3 (ADR-222 / RF-08 surface 1) — CTA "Analisar esta stat"
-            por stat foco linkada. Navega para o form unificado em mode
-            stat_analysis com statId+themeId pre-preenchidos. */}
-        {statsSummary.length > 0 ? (
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium">Analisar uma stat</h3>
-            <div className="flex flex-wrap gap-2">
-              {statsSummary.map((stat) => (
-                <button
-                  key={stat.statId}
-                  type="button"
-                  data-testid={`analyze-stat-button-${stat.statId}`}
-                  onClick={() =>
-                    navigate(
-                      `/estudos/registrar?mode=stat_analysis&statId=${encodeURIComponent(stat.statId)}&themeId=${encodeURIComponent(themeId)}`,
-                    )
-                  }
-                  className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent"
-                >
-                  Analisar {stat.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
         {/* Polish #3: drawer migrado para Collapsible (Radix) — aria-expanded
             no trigger gratis, transicao suave, mantido inline (nao overlay).
             #2: rodape NAO toggle; sempre setPickerOpen(true) e exibe APENAS
@@ -374,11 +320,14 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
           <button
             type="button"
             data-testid="theme-detail-start-session"
-            disabled={startSessionMutation.isPending}
-            onClick={() => startSessionMutation.mutate()}
+            onClick={() =>
+              navigate(
+                `/estudos/registrar?themeId=${encodeURIComponent(themeId)}`,
+              )
+            }
             className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >
-            Iniciar sessao de estudo
+            Registrar estudo
           </button>
           {/* Polish #2: rodape edit so quando ha stats linkadas; nunca toggle. */}
           {Array.isArray(theme.linkedStats) && theme.linkedStats.length > 0 && (
@@ -400,24 +349,71 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
             Ver outros temas
           </button>
         </div>
+      </div>
 
-        {/* Sprint EST-3 (ADR-222 / RF-08 surface 2) — revisao das analises de
-            stat agrupadas por stat dentro deste tema. */}
-        <div data-testid="theme-stat-analysis-review" className="pt-4 border-t border-border">
-          <h3 className="text-sm font-medium mb-3">Revisao por stat</h3>
-          <ErrorBoundary
-            fallback={
-              <p className="text-sm text-muted-foreground">
-                Nao foi possivel carregar as analises de stat agora.
-              </p>
-            }
-          >
-            <StatAnalysisReviewList themeId={themeId} />
-          </ErrorBoundary>
-        </div>
+      {/* Sprint Estudos-UX (founder) — densidade: as 4 areas antes empilhadas
+          (analises por stat / MDAs / spots / aulas) viram ABAS. So a aba ativa
+          fica visivel -> menos "muita informacao" de uma vez. forceMount mantem
+          todas no DOM: cada sub-secao continua isolada por ErrorBoundary e os
+          data-testid seguem presentes independente da aba ativa. */}
+      <Tabs defaultValue="analises" className="mt-6">
+        <TabsList className="flex flex-wrap">
+          <TabsTrigger value="analises" data-testid="theme-tab-analises">
+            Analises
+          </TabsTrigger>
+          <TabsTrigger value="mda" data-testid="theme-tab-mda">
+            MDA
+          </TabsTrigger>
+          <TabsTrigger value="spots" data-testid="theme-tab-spots">
+            Spots
+          </TabsTrigger>
+          <TabsTrigger value="aulas" data-testid="theme-tab-aulas">
+            Aulas
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Analises: CTA "Analisar uma stat" (EST-3 surface 1) + revisao por
+            stat agrupada (surface 2). */}
+        <TabsContent value="analises" forceMount className="mt-4 space-y-4">
+          {statsSummary.length > 0 ? (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">Analisar uma stat</h3>
+              <div className="flex flex-wrap gap-2">
+                {statsSummary.map((stat) => (
+                  <button
+                    key={stat.statId}
+                    type="button"
+                    data-testid={`analyze-stat-button-${stat.statId}`}
+                    onClick={() =>
+                      navigate(
+                        `/estudos/registrar?mode=stat_analysis&statId=${encodeURIComponent(stat.statId)}&themeId=${encodeURIComponent(themeId)}`,
+                      )
+                    }
+                    className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-accent"
+                  >
+                    Analisar {stat.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div data-testid="theme-stat-analysis-review">
+            <h3 className="text-sm font-medium mb-3">Revisao por stat</h3>
+            <ErrorBoundary
+              fallback={
+                <p className="text-sm text-muted-foreground">
+                  Nao foi possivel carregar as analises de stat agora.
+                </p>
+              }
+            >
+              <StatAnalysisReviewList themeId={themeId} />
+            </ErrorBoundary>
+          </div>
+        </TabsContent>
 
         {/* Sprint MDA-1 (ADR-230 / RF-05) — MDAs da populacao tagueados ao tema. */}
-        <div className="pt-4 border-t border-border">
+        <TabsContent value="mda" forceMount className="mt-4">
           <ErrorBoundary
             fallback={
               <p className="text-sm text-muted-foreground">
@@ -427,10 +423,10 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
           >
             <MdaReadsSection themeId={themeId} />
           </ErrorBoundary>
-        </div>
+        </TabsContent>
 
         {/* Sprint Estudos-WS-Fix — spots marcados vinculados ao tema. */}
-        <div className="pt-4 border-t border-border">
+        <TabsContent value="spots" forceMount className="mt-4">
           <ErrorBoundary
             fallback={
               <p className="text-sm text-muted-foreground">
@@ -440,12 +436,12 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
           >
             <ThemeLinkedSpotsSection themeId={themeId} />
           </ErrorBoundary>
-        </div>
+        </TabsContent>
 
         {/* Sprint Estudos-WS-Fix — conteudo/aulas vinculadas. linkedLessons sao
             slugs; em vez de deep-link (risco de 404, lesson #19) damos acesso a
             Biblioteca. */}
-        <div className="pt-4 border-t border-border">
+        <TabsContent value="aulas" forceMount className="mt-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Conteudo e aulas</h3>
             <button
@@ -462,8 +458,8 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
               ? `${theme.linkedLessons.length} aula(s) vinculada(s) a este tema.`
               : 'Nenhuma aula vinculada ainda. Estude na Biblioteca e vincule o conteudo a este tema.'}
           </p>
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
 
       <ThemeFormDialog
         open={editOpen}

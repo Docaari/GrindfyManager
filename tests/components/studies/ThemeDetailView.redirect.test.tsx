@@ -109,27 +109,18 @@ async function loadView() {
 }
 
 // =============================================================================
-// RF-09 — navigate apos POST sucesso
+// Sprint Estudos-UX (founder) — "Iniciar sessao" navega pro form de registro
+// UNIFICADO (/estudos/registrar) em vez de criar a sessao legacy minima.
+// Supersede o RF-09 original (POST + navigate /estudos/sessao/:id).
 // =============================================================================
-describe('<ThemeDetailView> RF-09 — redirect apos iniciar sessao', () => {
-  it('click "Iniciar sessao" -> POST -> navigate("/estudos/sessao/:id")', async () => {
+describe('<ThemeDetailView> — botao "Registrar estudo" abre form unificado', () => {
+  it('click -> navigate("/estudos/registrar?themeId=:id") (sem POST)', async () => {
     apiRequestMock.mockImplementation(async (method: string, url: string) => {
       if (method === 'GET' && url === '/api/study-themes') {
         return [baseTheme];
       }
       if (method === 'GET' && url.includes('/stats-summary')) {
         return { themeId: 'thm_1', stats: [] };
-      }
-      if (method === 'POST' && url === '/api/study-sessions') {
-        return {
-          id: 'sess_new_123',
-          userId: 'USER-OWNER',
-          themeId: 'thm_1',
-          status: 'active',
-          date: new Date().toISOString(),
-          duration: 0,
-          activities: ['theme'],
-        };
       }
       return null;
     });
@@ -143,64 +134,18 @@ describe('<ThemeDetailView> RF-09 — redirect apos iniciar sessao', () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByTestId('theme-detail-start-session'));
-
-    await waitFor(() => {
-      const postCalls = apiRequestMock.mock.calls.filter(
-        (c) => c[0] === 'POST' && c[1] === '/api/study-sessions',
-      );
-      expect(postCalls.length).toBeGreaterThan(0);
-    });
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalled();
       const dest = navigateMock.mock.calls[0]?.[0];
-      expect(String(dest)).toBe('/estudos/sessao/sess_new_123');
-    });
-  });
-
-  it('erro do POST -> toast erro + NAO navigate', async () => {
-    apiRequestMock.mockImplementation(async (method: string, url: string) => {
-      if (method === 'GET' && url === '/api/study-themes') {
-        return [baseTheme];
-      }
-      if (method === 'GET' && url.includes('/stats-summary')) {
-        return { themeId: 'thm_1', stats: [] };
-      }
-      if (method === 'POST' && url === '/api/study-sessions') {
-        throw new Error('Server error');
-      }
-      return null;
+      expect(String(dest)).toBe('/estudos/registrar?themeId=thm_1');
     });
 
-    const View = await loadView();
-    renderWithClient(<View themeId="thm_1" />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('theme-detail-start-session')).toBeInTheDocument();
-    });
-
-    const user = userEvent.setup();
-    await user.click(screen.getByTestId('theme-detail-start-session'));
-
-    await waitFor(() => {
-      expect(toastMock).toHaveBeenCalled();
-      const calls = toastMock.mock.calls;
-      const errToast = calls.find((c) => {
-        const arg = c[0] ?? {};
-        return (
-          arg?.variant === 'destructive' ||
-          /erro/i.test(arg?.title ?? '') ||
-          /erro/i.test(arg?.description ?? '')
-        );
-      });
-      expect(errToast).toBeTruthy();
-    });
-
-    // Em caso de erro NAO deve navegar pra /estudos/sessao/*
-    const sessionRedirects = navigateMock.mock.calls.filter((c) =>
-      String(c[0]).startsWith('/estudos/sessao/'),
+    // Nao cria mais sessao legacy via POST.
+    const postCalls = apiRequestMock.mock.calls.filter(
+      (c) => c[0] === 'POST' && c[1] === '/api/study-sessions',
     );
-    expect(sessionRedirects.length).toBe(0);
+    expect(postCalls.length).toBe(0);
   });
 });
 

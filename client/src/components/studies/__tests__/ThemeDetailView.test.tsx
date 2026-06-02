@@ -73,10 +73,8 @@ describe('<ThemeDetailView /> — render', () => {
     expect(screen.getByText(/Tema nao encontrado/i)).toBeInTheDocument();
   });
 
-  it('botao "Iniciar sessao de estudo" dispara POST /api/study-sessions com themeId', async () => {
-    mockApiRequest
-      .mockResolvedValueOnce(themeFixtures) // GET /api/study-themes
-      .mockResolvedValueOnce({ id: 'sess-new', themeId: 'th-1' }); // POST
+  it('botao "Registrar estudo" navega pro form unificado com themeId', async () => {
+    mockApiRequest.mockResolvedValue(themeFixtures); // GET /api/study-themes
     const { default: ThemeDetailView } = await import('../ThemeDetailView');
     renderWithQuery(<ThemeDetailView themeId="th-1" />);
     await waitFor(() => {
@@ -84,12 +82,12 @@ describe('<ThemeDetailView /> — render', () => {
     });
     fireEvent.click(screen.getByTestId('theme-detail-start-session'));
     await waitFor(() => {
-      const postCalls = mockApiRequest.mock.calls.filter(
-        (args) => args[0] === 'POST' && typeof args[1] === 'string' && args[1].includes('/api/study-sessions'),
-      );
-      expect(postCalls.length).toBeGreaterThanOrEqual(1);
-      const body = postCalls[0][2];
-      expect(body.themeId).toBe('th-1');
+      expect(mockNavigate).toHaveBeenCalledWith('/estudos/registrar?themeId=th-1');
     });
+    // Nao cria mais sessao legacy via POST.
+    const postCalls = mockApiRequest.mock.calls.filter(
+      (args) => args[0] === 'POST' && typeof args[1] === 'string' && args[1].includes('/api/study-sessions'),
+    );
+    expect(postCalls.length).toBe(0);
   });
 });

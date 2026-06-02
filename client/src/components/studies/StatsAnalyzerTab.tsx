@@ -275,20 +275,20 @@ export default function StatsAnalyzerTab() {
       />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-poker-accent" />
+          <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-primary" />
             Stats Analyzer
             {/* [Stats-UX-Polish Item 13] Badge com nome do layout ativo. */}
             {activeLayout && (
               <Badge
                 variant="outline"
-                className="ml-2 text-xs text-slate-400 border-slate-600"
+                className="ml-2 text-xs text-muted-foreground border-border"
               >
                 {activeLayout.name}
               </Badge>
             )}
           </h2>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Registre stats HUD do seu tracker e compare evolucao.
           </p>
         </div>
@@ -301,7 +301,7 @@ export default function StatsAnalyzerTab() {
               setCustomizerLayout(null);
               setCustomizerOpen(true);
             }}
-            className="border-gray-700 text-gray-200"
+            className="border-border text-foreground"
           >
             <Settings className="w-4 h-4 mr-2" />
             Novo layout
@@ -310,7 +310,7 @@ export default function StatsAnalyzerTab() {
             data-testid="stats-new-snapshot"
             onClick={() => setEditorOpen(true)}
             disabled={!defaultLayout}
-            className="bg-[#16a249] text-black font-semibold hover:bg-poker-accent/90"
+            className="bg-primary text-primary-foreground font-semibold hover:bg-primary/90"
           >
             <Plus className="w-4 h-4 mr-2" />
             Novo snapshot manual
@@ -321,29 +321,29 @@ export default function StatsAnalyzerTab() {
       {isLoading ? (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20 bg-gray-700 rounded" />
+            <Skeleton key={i} className="h-20 bg-muted rounded" />
           ))}
         </div>
       ) : layouts.length === 0 ? (
         <div
           data-testid="stats-no-layouts"
-          className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-6 text-center"
+          className="bg-muted border border-border rounded-lg p-6 text-center"
         >
-          <p className="text-gray-400 text-sm">
+          <p className="text-muted-foreground text-sm">
             Nenhum layout encontrado. Use um template para comecar.
           </p>
         </div>
       ) : (
         <>
           {/* View tabs */}
-          <div className="flex flex-wrap items-center gap-2 border-b border-gray-800 pb-2">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2">
             <button
               data-testid="stats-view-grouped"
               onClick={() => setView("grouped")}
               className={`px-3 py-1.5 text-sm rounded-md transition ${
                 view === "grouped"
-                  ? "bg-poker-accent text-black font-semibold"
-                  : "text-gray-300 hover:bg-gray-800"
+                  ? "bg-primary text-black font-semibold"
+                  : "text-foreground hover:bg-accent"
               }`}
             >
               <BarChart3 className="w-4 h-4 inline mr-1" />
@@ -354,8 +354,8 @@ export default function StatsAnalyzerTab() {
               onClick={() => setView("ocr")}
               className={`px-3 py-1.5 text-sm rounded-md transition ${
                 view === "ocr"
-                  ? "bg-poker-accent text-black font-semibold"
-                  : "text-gray-300 hover:bg-gray-800"
+                  ? "bg-primary text-black font-semibold"
+                  : "text-foreground hover:bg-accent"
               }`}
             >
               <ScanLine className="w-4 h-4 inline mr-1" />
@@ -367,8 +367,8 @@ export default function StatsAnalyzerTab() {
               disabled={layoutSnapshots.length < 2}
               className={`px-3 py-1.5 text-sm rounded-md transition disabled:opacity-40 disabled:cursor-not-allowed ${
                 view === "compare"
-                  ? "bg-poker-accent text-black font-semibold"
-                  : "text-gray-300 hover:bg-gray-800"
+                  ? "bg-primary text-black font-semibold"
+                  : "text-foreground hover:bg-accent"
               }`}
             >
               <GitCompare className="w-4 h-4 inline mr-1" />
@@ -379,8 +379,8 @@ export default function StatsAnalyzerTab() {
               onClick={() => setView("list")}
               className={`px-3 py-1.5 text-sm rounded-md transition ${
                 view === "list"
-                  ? "bg-poker-accent text-black font-semibold"
-                  : "text-gray-300 hover:bg-gray-800"
+                  ? "bg-primary text-black font-semibold"
+                  : "text-foreground hover:bg-accent"
               }`}
             >
               <ListOrdered className="w-4 h-4 inline mr-1" />
@@ -388,14 +388,14 @@ export default function StatsAnalyzerTab() {
             </button>
 
             <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-gray-500">Filtrar layout:</span>
+              <span className="text-xs text-muted-foreground">Filtrar layout:</span>
               <Select
                 value={filterLayoutId}
                 onValueChange={setFilterLayoutId}
               >
                 <SelectTrigger
                   data-testid="stats-filter-layout"
-                  className="w-56 bg-gray-800 border-gray-700 text-white"
+                  className="w-56 bg-card border-border text-foreground"
                 >
                   <SelectValue placeholder="Todos os layouts" />
                 </SelectTrigger>
@@ -415,14 +415,14 @@ export default function StatsAnalyzerTab() {
           {/* Active snapshot selector — visible em grouped view */}
           {view === "grouped" && snapshots.length > 0 && (
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-xs text-gray-500">Snapshot:</span>
+              <span className="text-xs text-muted-foreground">Snapshot:</span>
               <Select
                 value={activeSnapshot?.id ?? ""}
                 onValueChange={(v) => setActiveSnapshotId(v)}
               >
                 <SelectTrigger
                   data-testid="stats-active-snapshot"
-                  className="w-72 bg-gray-800 border-gray-700 text-white"
+                  className="w-72 bg-card border-border text-foreground"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -462,14 +462,14 @@ export default function StatsAnalyzerTab() {
           {view === "grouped" && (!activeLayout || !activeSnapshot) && (
             <div
               data-testid="stats-grouped-empty"
-              className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-8 text-center"
+              className="bg-muted border border-border rounded-lg p-8 text-center"
             >
-              <p className="text-gray-400 text-sm mb-3">
+              <p className="text-muted-foreground text-sm mb-3">
                 Crie seu primeiro snapshot para ver o layout Hand2Note.
               </p>
               <Button
                 onClick={() => setView("ocr")}
-                className="bg-poker-accent text-black"
+                className="bg-primary text-black"
               >
                 <ScanLine className="w-4 h-4 mr-2" />
                 Capturar via print
@@ -522,9 +522,9 @@ export default function StatsAnalyzerTab() {
               {compareSelection.length === 2 && (
                 <div
                   data-testid="compare-bar"
-                  className="bg-gray-800/80 border border-poker-accent/40 rounded-md px-3 py-2 flex items-center justify-between"
+                  className="bg-card border border-primary/40 rounded-md px-3 py-2 flex items-center justify-between"
                 >
-                  <span className="text-sm text-gray-200">
+                  <span className="text-sm text-foreground">
                     2 snapshots selecionados
                   </span>
                   <div className="flex gap-2">
@@ -540,7 +540,7 @@ export default function StatsAnalyzerTab() {
                       size="sm"
                       data-testid="compare-open"
                       onClick={() => setComparatorOpen(true)}
-                      className="bg-poker-accent text-black"
+                      className="bg-primary text-black"
                     >
                       <GitCompare className="w-4 h-4 mr-1" />
                       Comparar

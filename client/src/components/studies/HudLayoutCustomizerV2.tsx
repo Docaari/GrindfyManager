@@ -184,14 +184,14 @@ export default function HudLayoutCustomizerV2({
           placeholder="Buscar stat..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 rounded border border-poker-border bg-poker-bg px-3 py-2 text-sm"
+          className="flex-1 rounded border border-border bg-background px-3 py-2 text-sm"
           aria-label="Buscar stats"
         />
       </div>
 
       {/* Filter pills — MEDIUM-2 UX: collapsible em mobile via <details> */}
       <details
-        className="sm:hidden border border-poker-border/40 rounded"
+        className="sm:hidden border border-border/40 rounded"
         data-testid="customizer-filters-mobile"
       >
         <summary className="cursor-pointer px-3 py-2 text-xs font-medium select-none">
@@ -208,8 +208,8 @@ export default function HudLayoutCustomizerV2({
                 onClick={() => toggleFilter(groupId)}
                 className={`rounded-full px-3 py-1 text-xs border transition-colors ${
                   active
-                    ? "bg-poker-accent text-poker-bg border-poker-accent"
-                    : "bg-transparent text-poker-fg border-poker-border"
+                    ? "bg-primary text-background border-primary"
+                    : "bg-transparent text-foreground border-border"
                 }`}
                 aria-pressed={active}
               >
@@ -230,8 +230,8 @@ export default function HudLayoutCustomizerV2({
               onClick={() => toggleFilter(groupId)}
               className={`rounded-full px-3 py-1 text-xs border transition-colors ${
                 active
-                  ? "bg-poker-accent text-poker-bg border-poker-accent"
-                  : "bg-transparent text-poker-fg border-poker-border"
+                  ? "bg-primary text-background border-primary"
+                  : "bg-transparent text-foreground border-border"
               }`}
               aria-pressed={active}
             >
@@ -245,7 +245,7 @@ export default function HudLayoutCustomizerV2({
       {totalMatches === 0 && normalizedSearch ? (
         <div
           data-testid="customizer-empty-state"
-          className="text-sm text-poker-muted py-8 text-center"
+          className="text-sm text-muted-foreground py-8 text-center"
         >
           Nenhum stat encontrado para "{search}".
         </div>
@@ -282,7 +282,7 @@ export default function HudLayoutCustomizerV2({
               aria-expanded={expanded ? "true" : "false"}
               hidden={isHiddenByFilter}
               data-hidden={isHiddenByFilter ? "true" : "false"}
-              className="rounded border border-poker-border/60 bg-poker-card/40"
+              className="rounded border border-border/60 bg-card/40"
               style={groupStyle}
             >
               <header
@@ -290,7 +290,7 @@ export default function HudLayoutCustomizerV2({
                 onClick={() => toggleGroup(groupId)}
               >
                 <h3 className="text-sm font-semibold">{groupLabel}</h3>
-                <span className="text-xs text-poker-muted">
+                <span className="text-xs text-muted-foreground">
                   {entries.length} stats {expanded ? "▼" : "▶"}
                 </span>
               </header>
@@ -300,7 +300,7 @@ export default function HudLayoutCustomizerV2({
                     <div
                       key={entry.id}
                       data-testid={`customizer-stat-${entry.id}`}
-                      className="rounded border border-poker-border/40 px-2 py-1 text-xs flex items-center justify-between gap-2"
+                      className="rounded border border-border/40 px-2 py-1 text-xs flex items-center justify-between gap-2"
                     >
                       <span className="truncate">{entry.label}</span>
                       {/* HIGH-1 UX: dropdown para mover stat para qualquer grupo */}
@@ -316,7 +316,7 @@ export default function HudLayoutCustomizerV2({
                         onClick={(e) => e.stopPropagation()}
                         data-testid={`customizer-move-${entry.id}-select`}
                         aria-label={`Mover ${entry.label} para outro grupo`}
-                        className="bg-poker-bg border border-poker-border rounded text-xs px-1 py-0.5 max-w-[7rem] text-poker-fg"
+                        className="bg-background border border-border rounded text-xs px-1 py-0.5 max-w-[7rem] text-foreground"
                       >
                         {HUD_GROUP_IDS.map((g) => (
                           <option key={g} value={g}>

@@ -16,6 +16,7 @@ import { PendingSpotsPreview } from './PendingSpotsPreview';
 import { RecommendationsPreview } from './RecommendationsPreview';
 import { StudyStreakBadge } from '../StudyStreakBadge';
 import { EmptyState } from '../EmptyState';
+import { PageHeader } from '@/components/ui/PageHeader';
 // Sprint Estudos-Habito-1 (RF-2.4 / RF-4 / RF-1.6): wiring na home /estudos.
 import { StudyHeaderHabit, type StudyHeaderHabitData } from '@/components/study/StudyHeaderHabit';
 import { FocusStatsBar } from '@/components/study/FocusStatsBar';
@@ -142,13 +143,13 @@ export function StudiesDashboard() {
   if (isFirstFetch) {
     return (
       <div data-testid="studies-dashboard" className="p-6 space-y-4">
-        <div className="text-2xl font-semibold text-white">{greet}</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="text-2xl font-semibold text-foreground">{greet}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3, 4, 5].map((n) => (
             <div
               key={n}
               data-testid={`studies-dashboard-skeleton-${n}`}
-              className="h-32 rounded-lg bg-gray-800 animate-pulse"
+              className="h-32 rounded-lg bg-muted animate-pulse"
             />
           ))}
         </div>
@@ -159,7 +160,7 @@ export function StudiesDashboard() {
   if (isEmpty) {
     return (
       <div data-testid="studies-dashboard" className="p-6">
-        <div className="text-2xl font-semibold text-white mb-4">{greet}</div>
+        <div className="text-2xl font-semibold text-foreground mb-4">{greet}</div>
         <EmptyState
           area="dashboard"
           title="Comece sua jornada de estudos"
@@ -181,10 +182,7 @@ export function StudiesDashboard() {
 
   return (
     <div data-testid="studies-dashboard" className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-white">{greet}</h1>
-        <p className="text-sm text-gray-400 mt-1">Continue de onde parou nos estudos.</p>
-      </div>
+      <PageHeader title={greet} subtitle="Continue de onde parou nos estudos." />
 
       {/* Sprint Estudos-Habito-1 RF-2.4: header habito (streak + meta + freezes). */}
       {habitQ.data && <StudyHeaderHabit data={habitQ.data} />}
@@ -204,7 +202,7 @@ export function StudiesDashboard() {
           type="button"
           data-testid="studies-dashboard-register-study"
           onClick={() => setLogOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-poker-accent text-black rounded-lg font-semibold transition-all hover:bg-poker-accent/90 hover:shadow-lg hover:shadow-poker-accent/20"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-black rounded-lg font-semibold transition-all hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/20"
         >
           <Plus className="w-4 h-4" aria-hidden />
           Registrar Estudo
@@ -217,40 +215,40 @@ export function StudiesDashboard() {
       {/* Sprint Estudos-Coach-Biblio-2 RF-2.5: aulas recomendadas por leak. */}
       <BibliotecaRecommendationsCard placement="estudos" />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <section
           data-testid="studies-dashboard-card-continue"
           aria-label="Continue de onde parou"
-          className="rounded-xl border border-gray-700/80 bg-gray-900/40 p-4 space-y-2 transition-colors hover:border-gray-600"
+          className="rounded-xl border border-border bg-card p-4 space-y-2 transition-colors hover:border-accent"
         >
-          <h2 className="text-sm font-semibold text-gray-300">Continue de onde parou</h2>
+          <h2 className="text-sm font-semibold text-foreground">Continue de onde parou</h2>
           <ContinueWhereLeftOff themes={themes as any} />
         </section>
 
         <section
           data-testid="studies-dashboard-card-insights"
           aria-label="Insights da semana"
-          className="rounded-xl border border-gray-700/80 bg-gray-900/40 p-4 space-y-2 transition-colors hover:border-gray-600"
+          className="rounded-xl border border-border bg-card p-4 space-y-2 transition-colors hover:border-accent"
         >
-          <h2 className="text-sm font-semibold text-gray-300">Insights da semana</h2>
+          <h2 className="text-sm font-semibold text-foreground">Insights da semana</h2>
           <WeekInsights insights={insights} />
         </section>
 
         <section
           data-testid="studies-dashboard-card-spots"
           aria-label="Spots pendentes"
-          className="rounded-xl border border-gray-700/80 bg-gray-900/40 p-4 space-y-2 transition-colors hover:border-gray-600"
+          className="rounded-xl border border-border bg-card p-4 space-y-2 transition-colors hover:border-accent"
         >
-          <h2 className="text-sm font-semibold text-gray-300">Spots pendentes</h2>
+          <h2 className="text-sm font-semibold text-foreground">Spots pendentes</h2>
           <PendingSpotsPreview spots={spots as any} />
         </section>
 
         <section
           data-testid="studies-dashboard-card-recomendacoes"
           aria-label="Recomendacoes"
-          className="rounded-xl border border-gray-700/80 bg-gray-900/40 p-4 space-y-2 transition-colors hover:border-gray-600"
+          className="rounded-xl border border-border bg-card p-4 space-y-2 transition-colors hover:border-accent"
         >
-          <h2 className="text-sm font-semibold text-gray-300">Recomendacoes</h2>
+          <h2 className="text-sm font-semibold text-foreground">Recomendacoes</h2>
           <RecommendationsPreview items={recs.items as any} />
         </section>
 
@@ -258,9 +256,9 @@ export function StudiesDashboard() {
           data-testid="studies-dashboard-card-streak"
           aria-label="Streak de estudos"
           data-streak-days={streakDays}
-          className="rounded-xl border border-gray-700/80 bg-gray-900/40 p-4 space-y-2 transition-colors hover:border-gray-600"
+          className="rounded-xl border border-border bg-card p-4 space-y-2 transition-colors hover:border-accent"
         >
-          <h2 className="text-sm font-semibold text-gray-300">Streak</h2>
+          <h2 className="text-sm font-semibold text-foreground">Streak</h2>
           <StudyStreakBadge />
         </section>
 

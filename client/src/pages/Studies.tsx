@@ -375,7 +375,7 @@ export default function Studies() {
   }
 
   return (
-    <div className="min-h-screen bg-poker-bg text-white" data-testid="studies-layout-main">
+    <div className="min-h-screen bg-background text-foreground" data-testid="studies-layout-main">
       <div className="flex">
         {showSidebar && (
           <div className="flex-shrink-0 relative">
@@ -386,7 +386,7 @@ export default function Studies() {
                 data-testid="studies-sidebar-toggle"
                 onClick={toggleCollapse}
                 aria-label={sidebarCollapsed ? 'Expandir sidebar' : 'Contrair sidebar'}
-                className="absolute -right-3 top-4 w-6 h-6 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 hover:text-white"
+                className="absolute -right-3 top-4 w-6 h-6 rounded-full bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent"
               >
                 {sidebarCollapsed ? (
                   <ChevronRight className="w-3 h-3" aria-hidden />

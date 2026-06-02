@@ -83,16 +83,16 @@ export default function StatsWizardFirstUse({ open, onOpenChange, onSeeded }: Pr
                 onClick={() => setSelected(t.id)}
                 className={`cursor-pointer transition-colors ${
                   active
-                    ? "bg-poker-accent/15 border-poker-accent"
-                    : "bg-gray-800/60 border-gray-700/40 hover:bg-gray-800"
+                    ? "bg-primary/15 border-primary"
+                    : "bg-muted border-border hover:bg-accent"
                 }`}
               >
                 <CardContent className="p-4">
-                  <h4 className="text-sm font-semibold text-white mb-1">
+                  <h4 className="text-sm font-semibold text-foreground mb-1">
                     {t.template.name}
                   </h4>
-                  <p className="text-xs text-gray-400">{t.description}</p>
-                  <p className="text-[11px] text-gray-500 mt-2">
+                  <p className="text-xs text-muted-foreground">{t.description}</p>
+                  <p className="text-[11px] text-muted-foreground mt-2">
                     {t.template.sections.reduce((acc, s) => acc + s.stats.length, 0)}{" "}
                     stats
                   </p>
@@ -114,7 +114,7 @@ export default function StatsWizardFirstUse({ open, onOpenChange, onSeeded }: Pr
             onClick={() => seedMutation.mutate(selected)}
             disabled={seedMutation.isPending}
             data-testid="wizard-confirm"
-            className="bg-poker-accent text-black"
+            className="bg-primary text-black"
           >
             {seedMutation.isPending ? "Criando..." : "Comecar"}
           </Button>

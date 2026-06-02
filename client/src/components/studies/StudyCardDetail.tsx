@@ -58,48 +58,48 @@ export function StudyCardDetail({ card, onClose }: StudyCardDetailProps) {
     <div className="space-y-6">
       <DialogHeader>
         <div className="flex items-center justify-between">
-          <DialogTitle className="text-white flex items-center gap-3">
-            <BookOpen className="w-6 h-6 text-poker-accent" />
+          <DialogTitle className="text-foreground flex items-center gap-3">
+            <BookOpen className="w-6 h-6 text-primary" />
             {card.title}
           </DialogTitle>
           <Badge className={`${getPriorityColor(card.priority)} text-white`}>
             {PRIORITIES.find(p => p.value === card.priority)?.label}
           </Badge>
         </div>
-        <DialogDescription className="text-gray-400">
+        <DialogDescription className="text-muted-foreground">
           {card.description}
         </DialogDescription>
       </DialogHeader>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 bg-gray-800">
-          <TabsTrigger value="overview" className="text-white">Visão Geral</TabsTrigger>
-          <TabsTrigger value="materials" className="text-white">Materiais</TabsTrigger>
-          <TabsTrigger value="notes" className="text-white">Anotações</TabsTrigger>
-          <TabsTrigger value="planning" className="text-white">Planejamento</TabsTrigger>
-          <TabsTrigger value="progress" className="text-white">Progresso</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-5 bg-muted">
+          <TabsTrigger value="overview" className="text-foreground">Visão Geral</TabsTrigger>
+          <TabsTrigger value="materials" className="text-foreground">Materiais</TabsTrigger>
+          <TabsTrigger value="notes" className="text-foreground">Anotações</TabsTrigger>
+          <TabsTrigger value="planning" className="text-foreground">Planejamento</TabsTrigger>
+          <TabsTrigger value="progress" className="text-foreground">Progresso</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="bg-gray-800 border-gray-600">
+            <Card className="bg-card border-border">
               <CardHeader>
-                <CardTitle className="text-white text-sm">Progresso</CardTitle>
+                <CardTitle className="text-foreground text-sm">Progresso</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-poker-accent mb-2">
+                <div className="text-2xl font-bold text-primary mb-2">
                   {card.knowledgeScore || 0}%
                 </div>
                 <Progress value={card.knowledgeScore || 0} className="h-2" />
               </CardContent>
             </Card>
 
-            <Card className="bg-gray-800 border-gray-600">
+            <Card className="bg-card border-border">
               <CardHeader>
-                <CardTitle className="text-white text-sm">Tempo Investido</CardTitle>
+                <CardTitle className="text-foreground text-sm">Tempo Investido</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-white">
+                <div className="text-2xl font-bold text-foreground">
                   {formatTime(card.timeInvested || 0)}
                 </div>
               </CardContent>
@@ -107,12 +107,12 @@ export function StudyCardDetail({ card, onClose }: StudyCardDetailProps) {
           </div>
 
           {card.objectives && (
-            <Card className="bg-gray-800 border-gray-600">
+            <Card className="bg-card border-border">
               <CardHeader>
-                <CardTitle className="text-white text-sm">Objetivos</CardTitle>
+                <CardTitle className="text-foreground text-sm">Objetivos</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-300 whitespace-pre-wrap">{card.objectives}</p>
+                <p className="text-foreground whitespace-pre-wrap">{card.objectives}</p>
               </CardContent>
             </Card>
           )}
@@ -120,18 +120,18 @@ export function StudyCardDetail({ card, onClose }: StudyCardDetailProps) {
 
         <TabsContent value="materials" className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-white">Materiais de Estudo</h3>
+            <h3 className="text-lg font-semibold text-foreground">Materiais de Estudo</h3>
             <Dialog open={showAddMaterial} onOpenChange={setShowAddMaterial}>
               <DialogTrigger asChild>
-                <Button className="bg-poker-accent hover:bg-poker-accent/90 text-black">
+                <Button className="bg-primary hover:bg-primary/90 text-black">
                   <Plus className="w-4 h-4 mr-2" />
                   Adicionar Material
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-gray-900 border-gray-700 max-w-2xl">
+              <DialogContent className="bg-card border-border max-w-2xl">
                 <DialogHeader>
-                  <DialogTitle className="text-white">Adicionar Material de Estudo</DialogTitle>
-                  <DialogDescription className="text-gray-400">
+                  <DialogTitle className="text-foreground">Adicionar Material de Estudo</DialogTitle>
+                  <DialogDescription className="text-muted-foreground">
                     Adicione links, arquivos ou aulas para organizar seus materiais de estudo
                   </DialogDescription>
                 </DialogHeader>
@@ -148,9 +148,9 @@ export function StudyCardDetail({ card, onClose }: StudyCardDetailProps) {
             </div>
           ) : (
             <div className="text-center py-8">
-              <Video className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-              <p className="text-gray-400">Nenhum material adicionado ainda</p>
-              <p className="text-sm text-gray-500 mt-2">
+              <Video className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">Nenhum material adicionado ainda</p>
+              <p className="text-sm text-muted-foreground mt-2">
                 Adicione aulas, artigos, vídeos ou arquivos para organizar seus estudos
               </p>
             </div>
@@ -159,18 +159,18 @@ export function StudyCardDetail({ card, onClose }: StudyCardDetailProps) {
 
         <TabsContent value="notes" className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-white">Anotações</h3>
+            <h3 className="text-lg font-semibold text-foreground">Anotações</h3>
             <Dialog open={showAddNote} onOpenChange={setShowAddNote}>
               <DialogTrigger asChild>
-                <Button className="bg-poker-accent hover:bg-poker-accent/90 text-black">
+                <Button className="bg-primary hover:bg-primary/90 text-black">
                   <Plus className="w-4 h-4 mr-2" />
                   Nova Anotação
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-gray-900 border-gray-700 max-w-2xl">
+              <DialogContent className="bg-card border-border max-w-2xl">
                 <DialogHeader>
-                  <DialogTitle className="text-white">Nova Anotação</DialogTitle>
-                  <DialogDescription className="text-gray-400">
+                  <DialogTitle className="text-foreground">Nova Anotação</DialogTitle>
+                  <DialogDescription className="text-muted-foreground">
                     Crie anotações para registrar insights e descobertas importantes
                   </DialogDescription>
                 </DialogHeader>
@@ -187,9 +187,9 @@ export function StudyCardDetail({ card, onClose }: StudyCardDetailProps) {
             </div>
           ) : (
             <div className="text-center py-8">
-              <FileText className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-              <p className="text-gray-400">Nenhuma anotação criada ainda</p>
-              <p className="text-sm text-gray-500 mt-2">
+              <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">Nenhuma anotação criada ainda</p>
+              <p className="text-sm text-muted-foreground mt-2">
                 Registre insights, descobertas e pontos importantes dos seus estudos
               </p>
             </div>

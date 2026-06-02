@@ -57,7 +57,7 @@ export function StatsView() {
           onClick={suggestThemes}
           disabled={!hasLeaks}
           title={hasLeaks ? undefined : 'Importe historicos com 50+ MTTs para detectar leaks'}
-          className="bg-poker-accent text-black font-semibold"
+          className="bg-primary text-black font-semibold"
         >
           <Sparkles className="w-4 h-4 mr-2" />
           Sugerir temas baseado em leaks

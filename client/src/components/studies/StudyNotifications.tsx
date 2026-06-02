@@ -19,7 +19,7 @@ export function StudyNotifications({ stats, dailyRecommendations }: StudyNotific
               <Target className="w-5 h-5 text-yellow-500" />
               <div>
                 <p className="text-yellow-400 font-medium">Meta Semanal em Andamento</p>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Você estudou {formatTime(stats.weeklyTime)} de 8h esta semana.
                   Continue focado para atingir sua meta!
                 </p>
@@ -36,7 +36,7 @@ export function StudyNotifications({ stats, dailyRecommendations }: StudyNotific
               <Trophy className="w-5 h-5 text-green-500" />
               <div>
                 <p className="text-green-400 font-medium">🎯 Meta Semanal Atingida!</p>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Parabéns! Você completou {formatTime(stats.weeklyTime)} de estudo esta semana.
                 </p>
               </div>
@@ -53,7 +53,7 @@ export function StudyNotifications({ stats, dailyRecommendations }: StudyNotific
               <BookOpen className="w-5 h-5 text-blue-400" />
               <div>
                 <p className="text-blue-400 font-medium">Hora de Estudar!</p>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Você ainda não estudou hoje. Que tal começar com uma sessão de {formatTime(60)}?
                 </p>
               </div>
@@ -69,7 +69,7 @@ export function StudyNotifications({ stats, dailyRecommendations }: StudyNotific
               <Clock className="w-5 h-5 text-orange-400" />
               <div>
                 <p className="text-orange-400 font-medium">Continue Estudando!</p>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Você já estudou {formatTime(dailyRecommendations.studiedToday)} hoje.
                   Faltam apenas {formatTime(dailyRecommendations.remainingTime)} para sua meta diária!
                 </p>
@@ -86,7 +86,7 @@ export function StudyNotifications({ stats, dailyRecommendations }: StudyNotific
               <CheckCircle className="w-5 h-5 text-green-400" />
               <div>
                 <p className="text-green-400 font-medium">🎉 Meta Diária Conquistada!</p>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Excelente! Você completou {formatTime(dailyRecommendations.studiedToday)} de estudo hoje.
                 </p>
               </div>
