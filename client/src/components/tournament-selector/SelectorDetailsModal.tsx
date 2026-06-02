@@ -21,6 +21,17 @@ const SIGNAL_LABEL_PT: Record<keyof ScoringSignals, string> = {
   fieldRoi: 'Field',
 };
 
+// Fase F #12 (ADR-237 D-5) — softness. Modal lista os 6 indicadores
+// (batidos destacados + nao-batidos em cinza) + legenda fixa de honestidade.
+const SOFTNESS_ALL_INDICATORS: Array<{ key: string; label: string; weak: boolean }> = [
+  { key: 'overlay', label: 'Garantido alto vs buy-in', weak: false },
+  { key: 'primetime', label: 'Horario nobre', weak: false },
+  { key: 'sportsbook', label: 'Rede com sportsbook', weak: true },
+  { key: 'satellite', label: 'Satelite / qualifier', weak: true },
+  { key: 'multiday', label: 'Multi-day', weak: true },
+  { key: 'regional', label: 'Serie regional', weak: true },
+];
+
 export interface SelectorDetailsModalProps {
   tournament: SelectorTournament | null;
   open: boolean;
@@ -96,6 +107,48 @@ export function SelectorDetailsModal({ tournament, open, onOpenChange }: Selecto
         {tournament.rationale && (
           <p className="text-sm text-muted-foreground italic mt-3">
             {tournament.rationale}
+          </p>
+        )}
+
+        {/* Fase F #12 (ADR-237 D-5) — secao "Softness do field". Lista os 6
+            indicadores (batidos destacados + nao-batidos em cinza) + legenda
+            fixa de honestidade. null => "Nao calculado", sem quebrar o modal. */}
+        {tournament.softness ? (
+          <div data-testid="softness-modal-section" className="mt-4 border-t pt-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h4 className="text-sm font-medium">Softness do field</h4>
+              <span className="text-sm text-muted-foreground">
+                Score {tournament.softness.score}/100
+              </span>
+            </div>
+            <ul className="space-y-1">
+              {SOFTNESS_ALL_INDICATORS.map((def) => {
+                const hit = tournament.softness!.indicators.find((i) => i.key === def.key);
+                const matched = !!hit;
+                return (
+                  <li
+                    key={def.key}
+                    data-testid={`softness-modal-indicator-${def.key}`}
+                    className={`text-sm ${matched ? 'font-medium' : 'text-muted-foreground'}`}
+                  >
+                    {def.label}
+                    {def.weak ? ' *' : ''}
+                    {hit?.evidence ? ` — ${hit.evidence}` : ''}
+                  </li>
+                );
+              })}
+            </ul>
+            <p
+              data-testid="softness-modal-legend"
+              className="text-xs text-muted-foreground italic mt-2"
+            >
+              Indicadores marcados com * sao estimados pelo nome do torneio e podem ter
+              falsos positivos/negativos.
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground mt-4 border-t pt-3">
+            Softness do field: nao calculado.
           </p>
         )}
 
