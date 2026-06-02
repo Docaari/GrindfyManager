@@ -207,6 +207,32 @@ export async function handleAbGameDistribution(req: any, res: Response): Promise
 }
 
 // =============================================================================
+// GET /api/analytics/tilt-type-distribution (Fase C #4 — RF-04, ADR-232)
+// =============================================================================
+
+export async function handleTiltTypeDistribution(req: any, res: Response): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) {
+    unauthorized(res);
+    return;
+  }
+  const period = resolvePeriod(req);
+  if (!period) {
+    res.status(400).json({ message: "period invalido. Aceitos: 7d, 30d, 90d" });
+    return;
+  }
+
+  try {
+    setCacheHeader(res);
+    const data = await storage.getTiltTypeDistribution(userId, period);
+    res.status(200).json(data);
+  } catch (err: any) {
+    console.error("GET /api/analytics/tilt-type-distribution failed:", err);
+    res.status(500).json({ message: err?.message ?? "Erro" });
+  }
+}
+
+// =============================================================================
 // Express registration
 // =============================================================================
 
@@ -234,5 +260,10 @@ export function registerCooldownAnalyticsRoutes(app: Express): void {
     "/api/analytics/abgame-distribution",
     requireAuth,
     (req: Request, res: Response) => handleAbGameDistribution(req, res),
+  );
+  app.get(
+    "/api/analytics/tilt-type-distribution",
+    requireAuth,
+    (req: Request, res: Response) => handleTiltTypeDistribution(req, res),
   );
 }

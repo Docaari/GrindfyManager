@@ -24,6 +24,7 @@ import {
 } from "./tournamentTypes";
 import { LIBRARY_CATEGORY_IDS, type LibraryCategoryId } from "./library-categories";
 import type { MdaImage } from "./mda";
+import { tiltTypeSchema, type TiltTypeId } from "./tilt-types";
 
 // Session storage table (mandatory for Replit Auth)
 export const sessions = pgTable(
@@ -3552,6 +3553,10 @@ export type TiltSelfAssessment = {
   presence: number;
   triggers: string[];
   action: string;
+  // Fase C #4 (ADR-232) — tipo de tilt (1 dos 7). nullable+optional (lesson #7,
+  // back-compat com registros legados sem o campo). Campo dentro do jsonb
+  // tilt_self_assessment existente — SEM migration.
+  tiltType?: TiltTypeId | null;
 };
 
 export const cooldownLogs = pgTable("cooldown_logs", {
@@ -3860,6 +3865,8 @@ export const tiltSelfAssessmentSchema = z.object({
   presence: z.number().min(0).max(10),
   triggers: z.array(tiltTriggerSchema),
   action: z.string().max(500, "action tem limite de 500 caracteres"),
+  // Fase C #4 (ADR-232) — tiltType nullable+optional (lesson #7, back-compat).
+  tiltType: tiltTypeSchema.nullable().optional(),
 });
 
 export const sleepGateInputSchema = z.object({
