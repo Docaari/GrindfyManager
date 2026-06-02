@@ -129,7 +129,12 @@ describe('StudySessionForm — submit inclui campos por tipo', () => {
     await waitFor(() => {
       expect(mockApiRequest).toHaveBeenCalled();
     });
-    const payload = mockApiRequest.mock.calls[0][2];
+    // O form agora carrega temas (GET /api/study-themes) no mount via apiRequest,
+    // entao a chamada de submit nao e mais necessariamente calls[0] — localiza o POST.
+    const postCall = mockApiRequest.mock.calls.find(
+      (c: any) => c[0] === 'POST' && c[1] === '/api/study-sessions',
+    );
+    const payload = postCall?.[2];
     expect(payload.drillPlatform).toBe('gtowizard');
     expect(payload.drillAccuracy).toBe(85);
   });

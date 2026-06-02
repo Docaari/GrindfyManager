@@ -145,6 +145,9 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
       qc.invalidateQueries({ queryKey: ['/api/study-sessions'] });
       toast({ title: 'Tema atualizado' });
     },
+    onError: () => {
+      toast({ title: 'Erro ao atualizar tema', variant: 'destructive' });
+    },
   });
 
   async function handleEdit(values: ThemeFormValues) {

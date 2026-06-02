@@ -16,11 +16,12 @@
  * Lessons: #2 data-testid estaveis; #7 campos opcionais; #13 apiRequest direto.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { getStatById } from '@shared/hud-stat-catalog';
+import { getStatById, HUD_STAT_CATALOG } from '@shared/hud-stat-catalog';
 import type { StudySessionMode } from '@shared/schema';
 import { PageHeader } from '@/components/ui/PageHeader';
 
@@ -105,8 +106,57 @@ export default function StudySessionForm({
   const [drillAccuracy, setDrillAccuracy] = useState<string>('');
   const [difficultSpots, setDifficultSpots] = useState<DifficultSpotDraft[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  // Picker de tema/stat (antes so vinham via query param — modos que exigem
+  // themeId/statId davam 400 silencioso quando o user trocava o tipo no select).
+  const [selectedThemeId, setSelectedThemeId] = useState<string>(themeId ?? '');
+  const [selectedStatId, setSelectedStatId] = useState<string>(statId ?? '');
 
-  const statLabel = statId ? getStatById(statId)?.label ?? statId : '';
+  // Resync quando o prop muda pos-mount (ex: query param chega sem remount) —
+  // paridade com MdaReadForm. So-seed: o dep e o prop, entao limpar o select
+  // (setSelected* '') nao dispara o effect, preservando a edicao do usuario.
+  useEffect(() => {
+    if (themeId) setSelectedThemeId(themeId);
+  }, [themeId]);
+  useEffect(() => {
+    if (statId) setSelectedStatId(statId);
+  }, [statId]);
+
+  const { data: themesData } = useQuery<Array<{ id: string; name: string; emoji?: string | null }>>({
+    queryKey: ['/api/study-themes'],
+    queryFn: () => apiRequest('GET', '/api/study-themes'),
+    staleTime: 30_000,
+  });
+  const themes = Array.isArray(themesData) ? themesData : [];
+
+  // selectedThemeId/selectedStatId ja sao seedados dos props (themeId/statId) no
+  // useState — sao a unica fonte, e isso permite limpar o select pra "Nenhum".
+  const effectiveThemeId = selectedThemeId;
+  const effectiveStatId = selectedStatId;
+
+  const statLabel = effectiveStatId
+    ? getStatById(effectiveStatId)?.label ?? effectiveStatId
+    : '';
+
+  // Espelha validateModeRequirements do backend — hint inline ANTES do 400, sem
+  // bloquear o submit (back-compat com testes que disparam o POST direto).
+  const missingHint: string | null = (() => {
+    if (
+      (mode === 'drill_gto' || mode === 'other' || mode === 'stat_analysis') &&
+      !effectiveThemeId
+    ) {
+      return 'Selecione um tema abaixo para este tipo de estudo.';
+    }
+    if (mode === 'stat_analysis' && !effectiveStatId) {
+      return 'Selecione a stat analisada abaixo.';
+    }
+    if (mode === 'lesson' && !lessonId) {
+      return 'Registre estudos do tipo "Aula" a partir da pagina da aula.';
+    }
+    if (mode === 'hand_review') {
+      return 'Registre "Revisao de maos" a partir das maos marcadas.';
+    }
+    return null;
+  })();
   const labels = enrichedLabels(mode);
   const showDifficultSpots = mode === 'tournament_review' || mode === 'hand_review';
   const showLessonInsights = !!lessonId || mode === 'lesson';
@@ -150,11 +200,11 @@ export default function StudySessionForm({
         source: 'manual_post_hoc',
         durationMinutes: Math.max(1, Number(durationMinutes) || 1),
       };
-      if (themeId) payload.themeId = themeId;
+      if (effectiveThemeId) payload.themeId = effectiveThemeId;
       if (lessonId) payload.lessonId = lessonId;
       if (notes.trim() !== '') payload.notes = notes.trim();
       if (mode === 'stat_analysis') {
-        if (statId) payload.statId = statId;
+        if (effectiveStatId) payload.statId = effectiveStatId;
         payload.statAnalysisEntries = entries;
       }
       // drill_gto: plataforma + precisao.
@@ -191,8 +241,14 @@ export default function StudySessionForm({
       } else {
         toast({ title: 'Sessao registrada' });
       }
-    } catch {
-      toast({ title: 'Erro ao registrar sessao', variant: 'destructive' });
+    } catch (err: any) {
+      // apiRequest ja lanca Error cujo .message e a mensagem PT-BR do backend
+      // (validateModeRequirements retorna message por codigo) — surface direto.
+      toast({
+        title: 'Erro ao registrar sessao',
+        description: err?.message,
+        variant: 'destructive',
+      });
     } finally {
       setSubmitting(false);
     }
@@ -237,6 +293,31 @@ export default function StudySessionForm({
             className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
           />
         </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Tema (vinculo)</label>
+          <select
+            data-testid="field-theme-select"
+            value={effectiveThemeId}
+            onChange={(e) => setSelectedThemeId(e.target.value)}
+            className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+          >
+            <option value="">Nenhum</option>
+            {themes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.emoji ? `${t.emoji} ` : ''}
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {missingHint ? (
+          <p
+            data-testid="study-session-hint"
+            className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400"
+          >
+            {missingHint}
+          </p>
+        ) : null}
       </div>
 
       {mode === 'stat_analysis' && (
@@ -261,6 +342,26 @@ export default function StudySessionForm({
               Adicionar jogada
             </button>
           </div>
+
+          {/* Sem statId via query param -> picker (antes: 400 MISSING_STAT mudo). */}
+          {!statId ? (
+            <div>
+              <label className="block text-sm font-medium mb-1">Stat analisada</label>
+              <select
+                data-testid="field-stat-select"
+                value={effectiveStatId}
+                onChange={(e) => setSelectedStatId(e.target.value)}
+                className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+              >
+                <option value="">Selecione...</option>
+                {HUD_STAT_CATALOG.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div className="space-y-4">
             {entries.map((entry, i) => (

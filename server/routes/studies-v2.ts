@@ -13,6 +13,7 @@ import path from "path";
 import fs from "fs";
 import { detectLeaks } from "../coachLeakDetection";
 import { STAT_INDEX_BY_ID } from "@shared/hud-stat-catalog";
+import { detectMimeFromBuffer, extFromMime } from "../services/spotImageStorage/mime";
 
 // HIGH-6 reviewer: rate limiter para PATCH /api/study-themes/:id.
 // 30 req/min por IP — protege contra abuso (cada PATCH faz validacao + cache invalidation).
@@ -23,6 +24,20 @@ const patchStudyThemeRateLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     message: "Muitas requisicoes a /api/study-themes. Tente em instantes.",
+  },
+});
+
+// Rate limit para criacao de tema/tab (cada POST de tema insere 1 tema + 4 tabs).
+// Chaveado por usuario (requireAuth roda antes) para nao penalizar NAT/IP
+// compartilhado; cai pro IP se userPlatformId ausente.
+const createStudyThemeRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.user?.userPlatformId ?? req.ip,
+  message: {
+    message: "Muitas criacoes em /api/study-themes. Tente em instantes.",
   },
 });
 
@@ -50,40 +65,42 @@ function createDefaultTabs(themeId: string) {
   }));
 }
 
-// Multer config for study images (disk storage)
+// Multer config for study images.
+// Seguranca: memory storage + validacao por magic-bytes (detectMimeFromBuffer)
+// em vez de confiar no Content-Type (spoofavel) ou na extensao do originalname
+// (controlada pelo cliente). O arquivo so toca o disco depois de validado, com
+// extensao DERIVADA do MIME real — fecha o vetor de stored-XSS via .svg/.html
+// servido por express.static. Whitelist: PNG/JPEG/WebP (mesma dos uploads de
+// copyright MDA/stat-analysis).
 const uploadsDir = path.resolve("uploads/study-images");
 
-const imageStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    // Ensure directory exists
-    fs.mkdirSync(uploadsDir, { recursive: true });
-    cb(null, uploadsDir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${nanoid()}${ext}`);
-  },
-});
-
-const ALLOWED_IMAGE_TYPES = [
-  "image/png",
-  "image/jpg",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-];
-
 const imageUpload = multer({
-  storage: imageStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: (_req, file, cb) => {
-    if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Formato de imagem inválido. Aceitos: PNG, JPG, JPEG, GIF, WebP"));
-    }
-  },
 });
+
+// Detecta o tipo da imagem do EDITOR de notas por magic-bytes e retorna a
+// extensao a persistir. Reusa o detector estrito do ADR-057 (PNG/JPEG/WebP) e
+// ADICIONA GIF — que e seguro neste caminho PUBLICO servido por express.static
+// (raster, nao executa script, ao contrario de SVG/HTML). O shared mime.ts
+// continua estrito de proposito (uploads de copyright MDA/stat-analysis).
+function detectEditorImageExt(buffer: Buffer): "png" | "jpeg" | "webp" | "gif" | null {
+  const strict = detectMimeFromBuffer(buffer);
+  if (strict) return extFromMime(strict);
+  // GIF: "GIF8" + "7a"|"9a"
+  if (
+    buffer.length >= 6 &&
+    buffer[0] === 0x47 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x38 &&
+    (buffer[4] === 0x37 || buffer[4] === 0x39) &&
+    buffer[5] === 0x61
+  ) {
+    return "gif";
+  }
+  return null;
+}
 
 // Mapping from leak type to study topic (same as client-side helper)
 function mapLeakToStudyTopic(leak: { type: string; data?: any }): string {
@@ -318,7 +335,7 @@ export function registerStudiesV2Routes(app: Express): void {
   });
 
   // POST /api/study-themes - Create a new theme with default tabs
-  app.post("/api/study-themes", requireAuth, async (req: any, res) => {
+  app.post("/api/study-themes", requireAuth, createStudyThemeRateLimiter, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
       const { name, color, emoji } = req.body;
@@ -468,7 +485,7 @@ export function registerStudiesV2Routes(app: Express): void {
   });
 
   // POST /api/study-themes/:themeId/tabs - Create a new tab
-  app.post("/api/study-themes/:themeId/tabs", requireAuth, async (req: any, res) => {
+  app.post("/api/study-themes/:themeId/tabs", requireAuth, createStudyThemeRateLimiter, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
       const { themeId } = req.params;
@@ -668,11 +685,22 @@ export function registerStudiesV2Routes(app: Express): void {
     },
     async (req: any, res) => {
       try {
-        if (!req.file) {
+        if (!req.file?.buffer) {
           return res.status(400).json({ message: "Nenhuma imagem enviada" });
         }
+        // Source of truth: magic-bytes, NAO o Content-Type nem a extensao.
+        const detectedExt = detectEditorImageExt(req.file.buffer);
+        if (!detectedExt) {
+          return res
+            .status(400)
+            .json({ message: "Formato de imagem invalido. Aceitos: PNG, JPG, WebP, GIF" });
+        }
+        // Async I/O — nao bloqueia o event-loop em uploads concorrentes de ate 5MB.
+        await fs.promises.mkdir(uploadsDir, { recursive: true });
+        const filename = `${nanoid()}.${detectedExt}`;
+        await fs.promises.writeFile(path.join(uploadsDir, filename), req.file.buffer);
 
-        const url = `/uploads/study-images/${req.file.filename}`;
+        const url = `/uploads/study-images/${filename}`;
         res.json({ url });
       } catch (error) {
         res.status(500).json({ message: "Failed to upload image" });
