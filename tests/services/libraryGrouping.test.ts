@@ -5,6 +5,7 @@ import {
   nameSignature,
   groupTournaments,
   normalizeSpeed,
+  isExcludedFromLibrary,
 } from "../../server/services/libraryGrouping";
 
 // Minimal tournament factory matching the DB shape consumed by grouping.
@@ -45,20 +46,23 @@ describe("canonicalBuyIn — snap de ruido de fee/arredondamento", () => {
 });
 
 describe("buyInTier — reutiliza BUYIN_BUCKETS", () => {
-  it("$21.60 e $22 caem no mesmo tier ($22-54.99) via canonicalBuyIn", () => {
+  it("$21.60 e $22 caem no mesmo tier ($20-29) via canonicalBuyIn", () => {
     expect(buyInTier(21.6)).toBe(buyInTier(22));
-    expect(buyInTier(22)).toBe("$22-54.99");
+    expect(buyInTier(22)).toBe("$20-29");
+  });
+  it("split $16-19 vs $20-29: $18 e $22 em tiers diferentes", () => {
+    expect(buyInTier(18)).toBe("$16-19");
+    expect(buyInTier(22)).toBe("$20-29");
   });
   it("$5 e $500 caem em tiers diferentes", () => {
     expect(buyInTier(5)).not.toBe(buyInTier(500));
   });
-  it("fronteira: snap colapsa ruido de fee cruzando boundary (54.99 ~ 55)", () => {
+  it("fronteira: snap colapsa ruido de fee cruzando boundary (70.5 ~ 71)", () => {
     // O snap para inteiro proximo cruza a fronteira do bucket DE PROPOSITO:
-    // 54.99 e efetivamente um $55 (ruido de fee/cambio) -> tier $55-109.99.
-    expect(buyInTier(22)).toBe("$22-54.99");
-    expect(buyInTier(54)).toBe("$22-54.99"); // $54 genuino fica no tier baixo
-    expect(buyInTier(54.99)).toBe("$55-109.99"); // snapa pra 55
-    expect(buyInTier(55)).toBe("$55-109.99");
+    // 70.5 e efetivamente um $71 (ruido de fee/cambio) -> tier $71-130.
+    expect(buyInTier(70)).toBe("$50-70"); // $70 genuino fica no tier baixo
+    expect(buyInTier(70.5)).toBe("$71-130"); // snapa pra 71
+    expect(buyInTier(71)).toBe("$71-130");
   });
 });
 
@@ -119,11 +123,15 @@ describe("groupTournaments — 2 niveis familia -> especifico", () => {
     expect(fams[1].specifics).toHaveLength(1);
   });
 
-  it("familyKey inclui speed como 4o segmento", () => {
+  it("familyKey = 6 dims (site|tier|type|speed|field|time), speed no 4o segmento", () => {
     const [fam] = groupTournaments([t({ speed: "Turbo", name: "Bounty Builder" })]);
-    expect(fam.familyKey.split("|")).toHaveLength(4);
-    expect(fam.familyKey.endsWith("|Turbo")).toBe(true);
+    const segs = fam.familyKey.split("|");
+    expect(segs).toHaveLength(6);
+    expect(segs[3]).toBe("Turbo");
     expect(fam.speed).toBe("Turbo");
+    // sem datePlayed/fieldSize -> sem-field / sem-horario
+    expect(fam.fieldBucket).toBe("sem-field");
+    expect(segs[5]).toBe("sem-horario");
   });
 
   it("mesma familia+nome, mesma speed -> 1 especifico (speed fora do fineKey)", () => {
@@ -133,7 +141,7 @@ describe("groupTournaments — 2 niveis familia -> especifico", () => {
     ]);
     expect(fams).toHaveLength(1);
     expect(fams[0].specifics).toHaveLength(1);
-    expect(fams[0].specifics[0].fineKey.split("|")).toHaveLength(5); // site|tier|type|speed|sig
+    expect(fams[0].specifics[0].fineKey.split("|")).toHaveLength(7); // site|tier|type|speed|field|time|sig
   });
 
   it("order-independence: shuffle das linhas = mesmas familias", () => {
@@ -168,6 +176,63 @@ describe("groupTournaments — 2 niveis familia -> especifico", () => {
     expect(fams).toHaveLength(1);
     expect(fams[0].type).toBe("PKO");
   });
+
+  // === Sprint torneios-library-grouping: novas dimensoes + read-side derive ===
+
+  it("field-size SEPARA familias (founder: tamanho do field importa)", () => {
+    const fams = groupTournaments([
+      t({ fieldSize: 50, name: "Bounty Builder" }),
+      t({ fieldSize: 1500, name: "Bounty Builder" }),
+    ]);
+    expect(fams).toHaveLength(2);
+    expect(new Set(fams.map((f) => f.fieldBucket))).toEqual(
+      new Set(["pequeno", "grande"]),
+    );
+  });
+
+  it("horario SEPARA familias: $X meio-dia vs $X noite -> 2 familias", () => {
+    const noon = new Date(Date.UTC(2026, 0, 15, 12, 30));
+    const night = new Date(Date.UTC(2026, 0, 15, 21, 15));
+    const fams = groupTournaments([
+      t({ datePlayed: noon, name: "Bounty Builder" }),
+      t({ datePlayed: night, name: "Bounty Builder" }),
+    ]);
+    expect(fams).toHaveLength(2);
+    expect(new Set(fams.map((f) => f.timeBin))).toEqual(new Set(["12-14", "20-22"]));
+  });
+
+  it("read-side: satellite caido em Vanilla e elevado p/ Satellite", () => {
+    const [fam] = groupTournaments([
+      t({ type: "Vanilla", category: "Vanilla", name: "Mega Sat to Main Event" }),
+    ]);
+    expect(fam.type).toBe("Satellite");
+  });
+
+  it("read-side: nome Hyper com speed gravado Normal vira Hyper", () => {
+    const [fam] = groupTournaments([
+      t({ speed: "Normal", name: "Sunday Hyper Bounty" }),
+    ]);
+    expect(fam.speed).toBe("Hyper");
+  });
+});
+
+describe("isExcludedFromLibrary — PLO / Freeroll / buy-in 0", () => {
+  it("exclui PLO no nome (variantes)", () => {
+    expect(isExcludedFromLibrary({ name: "$22 PLO", buyIn: "22" })).toBe(true);
+    expect(isExcludedFromLibrary({ name: "Daily PLO8 Hi/Lo", buyIn: "11" })).toBe(true);
+    expect(isExcludedFromLibrary({ name: "PLO5 Bounty", buyIn: "55" })).toBe(true);
+  });
+  it("exclui Freeroll e buy-in 0", () => {
+    expect(isExcludedFromLibrary({ name: "Sunday Freeroll", buyIn: "0" })).toBe(true);
+    expect(isExcludedFromLibrary({ name: "Free Roll Daily", buyIn: "0" })).toBe(true);
+    expect(isExcludedFromLibrary({ name: "Bounty Builder", buyIn: "0" })).toBe(true);
+    expect(isExcludedFromLibrary({ name: "Bounty Builder", buyIn: "0.00" })).toBe(true);
+  });
+  it("NAO exclui Holdem normal nem nomes parecidos", () => {
+    expect(isExcludedFromLibrary({ name: "Bounty Builder", buyIn: "22" })).toBe(false);
+    expect(isExcludedFromLibrary({ name: "Diplomat Special", buyIn: "11" })).toBe(false); // 'plo' nao em boundary
+    expect(isExcludedFromLibrary({ name: "Sunday Million", buyIn: "109" })).toBe(false);
+  });
 });
 
 describe("normalizeSpeed — default Normal (NAO Regular)", () => {
@@ -181,5 +246,11 @@ describe("normalizeSpeed — default Normal (NAO Regular)", () => {
     expect(normalizeSpeed({ speed: undefined })).toBe("Normal");
     expect(normalizeSpeed({ speed: "  " })).toBe("Normal");
     expect(normalizeSpeed({})).toBe("Normal");
+  });
+  it("read-side: deriva do nome quando gravado e mais lento (corrige legado)", () => {
+    expect(normalizeSpeed({ speed: "Normal", name: "Hyper Turbo $5" })).toBe("Hyper");
+    expect(normalizeSpeed({ speed: "Regular", name: "Turbo Deal" })).toBe("Turbo");
+    // nao rebaixa: gravado mais rapido que o nome prevalece
+    expect(normalizeSpeed({ speed: "Hyper", name: "Daily Regular" })).toBe("Hyper");
   });
 });

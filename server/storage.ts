@@ -205,7 +205,8 @@ import { nanoid } from "nanoid";
 import { normalizeTournamentTypePayload } from "./storage/normalizeTournamentTypePayload";
 import { getDisplayRegistrationTime } from "@shared/grade-time";
 import { ensureLibraryEntryForPlannedSafe } from "./services/libraryAutoPopulate";
-import { groupTournaments, stripNameNoise, canonicalBuyIn, type GroupedFamily, type GroupedSpecific } from "./services/libraryGrouping";
+import { groupTournaments, stripNameNoise, canonicalBuyIn, isExcludedFromLibrary, type GroupedFamily, type GroupedSpecific } from "./services/libraryGrouping";
+import { timeBinLabel, NO_TIME_BIN } from "../shared/time-bin";
 import { confidenceGradeForVolume, MIN_GROUP_VISIBLE, FAMILY_GROUP_FLOOR } from "@shared/library-grades";
 import { computeLibraryInsights, type DimensionBucket, type Insight } from "./insights/libraryInsights";
 import { savedTournamentHighlights } from "@shared/schema";
@@ -3427,15 +3428,19 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       userId,
     );
 
+    // Sprint torneios-library-grouping (ajuste founder): desconsidera PLO /
+    // Freeroll / buy-in 0 da biblioteca (nao do historico/dashboard).
+    const eligibleTournaments = allTournaments.filter((t: any) => !isExcludedFromLibrary(t));
+
     // Sprint library-evolution Fase 1: agrupamento deterministico 2 niveis
     // (familia coarse -> especificos fine). Substitui o matcher guloso O(n^2)
     // order-dependent + o piso rigido de 50. Ver server/services/libraryGrouping.ts.
-    const families = groupTournaments(allTournaments);
+    const families = groupTournaments(eligibleTournaments);
 
     // Familias visiveis: >= FAMILY_GROUP_FLOOR torneios (lowConfidence se
     // < MIN_GROUP_VISIBLE). Antes da reforma um grinder com milhares de
     // torneios via ~zero grupos.
-    const libraryGroups = families
+    const mappedGroups = families
       .map((fam: GroupedFamily) => {
         const famMetrics = this.computeGroupMetrics(fam.tournaments, {
           id: fam.familyKey,
@@ -3446,6 +3451,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           speed: fam.speed,
           format: fam.representative?.format ?? "MTT",
           buyInTier: fam.buyInTier,
+          timeBin: fam.timeBin,
+          fieldBucket: fam.fieldBucket,
         });
         // Especificos: todos retornados (sao o drill-down); flag lowConfidence
         // herdada de computeGroupMetrics. Ordenado por volume desc.
@@ -3461,13 +3468,24 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
               format: spec.representative?.format ?? "MTT",
               buyInTier: fam.buyInTier,
               parentFamilyKey: fam.familyKey,
+              timeBin: fam.timeBin,
+              fieldBucket: fam.fieldBucket,
             }),
           )
           .sort((a: any, b: any) => b.volume - a.volume);
         return { ...famMetrics, isFamily: true, specifics };
       })
-      .filter((fam: any) => fam.volume >= FAMILY_GROUP_FLOOR)
       .sort((a: any, b: any) => b.volume - a.volume);
+
+    // Sprint torneios-library-grouping: com 6 dimensoes de familia (incl.
+    // field-size + janela de horario ~2h), as familias ficam MENORES. O floor
+    // rigido (FAMILY_GROUP_FLOOR) podia esvaziar a biblioteca de um jogador de
+    // baixo/medio volume. Relaxamento adaptativo: se NENHUMA familia atinge o
+    // floor, mostra todas (o badge lowConfidence ja sinaliza "amostra baixa").
+    // Alto volume nao e afetado (tem familias >= floor; as pequenas seguem ocultas
+    // como ruido, igual a Fase 1).
+    const aboveFloor = mappedGroups.filter((fam: any) => fam.volume >= FAMILY_GROUP_FLOOR);
+    const libraryGroups = aboveFloor.length > 0 ? aboveFloor : mappedGroups;
 
     return libraryGroups;
   }
@@ -3489,6 +3507,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       format: string;
       buyInTier?: string;
       parentFamilyKey?: string;
+      timeBin?: string;
+      fieldBucket?: string;
     },
   ): any {
     {
@@ -3610,6 +3630,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         format: identity.format,
         buyInTier: identity.buyInTier,
         parentFamilyKey: identity.parentFamilyKey,
+        // Sprint torneios-library-grouping: dimensoes novas da familia.
+        timeBin: identity.timeBin ?? null,
+        fieldBucket: identity.fieldBucket ?? null,
         lowConfidence,
 
         // Volume metrics
@@ -3666,7 +3689,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   // limpo no caso dominante). fam.type nunca e vazio (typePrimary cai em "Vanilla").
   private generateFamilyName(fam: GroupedFamily): string {
     const speedSuffix = fam.speed && fam.speed !== "Normal" ? ` ${fam.speed}` : "";
-    return `${fam.type} ${fam.buyInTier}${speedSuffix} · ${fam.site}`;
+    // Sprint torneios-library-grouping: sufixo de janela de horario quando
+    // conhecida (familia agora separa por ~2h). NO_TIME_BIN -> sem sufixo.
+    const timeSuffix =
+      fam.timeBin && fam.timeBin !== NO_TIME_BIN ? ` · ${timeBinLabel(fam.timeBin)}` : "";
+    return `${fam.type} ${fam.buyInTier}${speedSuffix} · ${fam.site}${timeSuffix}`;
   }
 
   // Nome amigavel do torneio especifico: usa stripNameNoise (mesma base da
@@ -3688,14 +3715,18 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   private buyinTierCaseExpr() {
     return sql<string>`
       CASE
-        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 2 THEN '$0-1.99'
-        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 5 THEN '$2-4.99'
-        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 11 THEN '$5-10.99'
-        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 22 THEN '$11-21.99'
-        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 55 THEN '$22-54.99'
-        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 110 THEN '$55-109.99'
-        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 220 THEN '$110-219.99'
-        ELSE '$220+'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 7 THEN '$1-6'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 16 THEN '$7-15'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 20 THEN '$16-19'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 30 THEN '$20-29'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 50 THEN '$30-49'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 71 THEN '$50-70'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 131 THEN '$71-130'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 251 THEN '$131-250'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 351 THEN '$251-350'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 600 THEN '$351-599'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 1000 THEN '$600-1K'
+        ELSE '$1K+'
       END`;
   }
   private fieldBucketCaseExpr() {
@@ -5198,7 +5229,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
    *
    * Diferente de getAnalyticsByBuyinRange (que usa labels antigos $0-$5, $5-$10... para o dashboard),
    * este metodo usa as fronteiras documentadas em BUYIN_BUCKETS:
-   *   $0-1.99, $2-4.99, $5-10.99, $11-21.99, $22-54.99, $55-109.99, $110-219.99, $220+
+   *   $1-6, $7-15, $16-19, $20-29, $30-49, $50-70, $71-130, $131-250, $251-350, $351-599, $600-1K, $1K+
    */
   async getAnalyticsByBuyinRangeV2(userId: string, period = "180d", filters: any = {}): Promise<any[]> {
     try {
@@ -5216,14 +5247,18 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
       const bucketExpr = sql<string>`
         CASE
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 0 AND CAST(${tournaments.buyIn} AS DECIMAL) < 2 THEN '$0-1.99'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 2 AND CAST(${tournaments.buyIn} AS DECIMAL) < 5 THEN '$2-4.99'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 5 AND CAST(${tournaments.buyIn} AS DECIMAL) < 11 THEN '$5-10.99'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 11 AND CAST(${tournaments.buyIn} AS DECIMAL) < 22 THEN '$11-21.99'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 22 AND CAST(${tournaments.buyIn} AS DECIMAL) < 55 THEN '$22-54.99'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 55 AND CAST(${tournaments.buyIn} AS DECIMAL) < 110 THEN '$55-109.99'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) >= 110 AND CAST(${tournaments.buyIn} AS DECIMAL) < 220 THEN '$110-219.99'
-          ELSE '$220+'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 7 THEN '$1-6'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 16 THEN '$7-15'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 20 THEN '$16-19'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 30 THEN '$20-29'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 50 THEN '$30-49'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 71 THEN '$50-70'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 131 THEN '$71-130'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 251 THEN '$131-250'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 351 THEN '$251-350'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 600 THEN '$351-599'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 1000 THEN '$600-1K'
+          ELSE '$1K+'
         END
       `;
 

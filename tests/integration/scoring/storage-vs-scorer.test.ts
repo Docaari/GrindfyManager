@@ -29,14 +29,18 @@ describe('CRITICAL #1: BUYIN_BUCKETS labels devem alinhar com getAnalyticsByBuyi
     // O storage.getAnalyticsByBuyinRangeV2 emite estes labels via CASE WHEN.
     // Aqui validamos a lista esperada.
     const expectedLabels = [
-      '$0-1.99',
-      '$2-4.99',
-      '$5-10.99',
-      '$11-21.99',
-      '$22-54.99',
-      '$55-109.99',
-      '$110-219.99',
-      '$220+',
+      '$1-6',
+      '$7-15',
+      '$16-19',
+      '$20-29',
+      '$30-49',
+      '$50-70',
+      '$71-130',
+      '$131-250',
+      '$251-350',
+      '$351-599',
+      '$600-1K',
+      '$1K+',
     ];
     const actualLabels = BUYIN_BUCKETS.map((b) => b.range);
     expect(actualLabels).toEqual(expectedLabels);
@@ -99,7 +103,7 @@ describe('CRITICAL #1+#2 integration: playerBundle propaga labels de scoringCons
     const { storage } = await import('../../../server/storage');
 
     const fakeBuyInResult = [
-      { range: '$11-21.99', sample: 134, roi: 16.8 },
+      { range: '$20-29', sample: 134, roi: 16.8 },
     ];
 
     const spies = [
@@ -121,7 +125,7 @@ describe('CRITICAL #1+#2 integration: playerBundle propaga labels de scoringCons
     try {
       (playerBundleCache as any).__resetForTest?.();
       const bundle = await playerBundleCache.getOrLoad('USER-CRIT', 180);
-      expect(bundle.byBuyIn[0].range).toBe('$11-21.99');
+      expect(bundle.byBuyIn[0].range).toBe('$20-29');
       const labels = BUYIN_BUCKETS.map((b) => b.range);
       expect(labels).toContain(bundle.byBuyIn[0].range);
     } finally {

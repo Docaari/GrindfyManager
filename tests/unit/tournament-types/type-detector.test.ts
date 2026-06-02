@@ -32,6 +32,24 @@ describe('detectSatelliteFromName', () => {
     expect(detectSatelliteFromName(undefined)).toBe(false);
     expect(detectSatelliteFromName('')).toBe(false);
   });
+
+  // Sprint torneios-library-grouping: cobertura ampliada (Mega/Sats/Seats/Sat).
+  it('detecta variantes ampliadas Sat/Sats/Seats/Mega', () => {
+    expect(detectSatelliteFromName('$5.50 Sat')).toBe(true);
+    expect(detectSatelliteFromName('Daily Sats')).toBe(true);
+    expect(detectSatelliteFromName('Win Your Seats')).toBe(true);
+    expect(detectSatelliteFromName('Seat to Main Event')).toBe(true);
+    expect(detectSatelliteFromName('Mega Sat to WSOP')).toBe(true);
+    expect(detectSatelliteFromName('Mega Satellite $109')).toBe(true);
+    expect(detectSatelliteFromName('Satellites GTD')).toBe(true);
+  });
+
+  it('NAO confunde Mega/Seat genuinos de torneio regular', () => {
+    // "Mega" puro (sem sat) NAO e satellite — evita falso-positivo.
+    expect(detectSatelliteFromName('Mega Stack Deep')).toBe(false);
+    expect(detectSatelliteFromName('Mega Deep $55')).toBe(false);
+    expect(detectSatelliteFromName('Saturday Special')).toBe(false);
+  });
 });
 
 describe('detectIsFlightFromName', () => {
