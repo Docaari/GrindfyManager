@@ -13,6 +13,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { BankrollWidget } from "@/components/bankroll/BankrollWidget";
+import { BankrollHealthCard } from "@/components/bankroll/BankrollHealthCard";
 import { BankrollHistoryTable } from "@/components/bankroll/BankrollHistoryTable";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { WalletList, type WalletListItem, type WalletSuggestion } from "@/components/bankroll/WalletList";
@@ -160,6 +161,8 @@ export default function BankrollPage() {
       </header>
 
       {hasActiveWallets && <BankrollWidget />}
+
+      {hasActiveWallets && <BankrollHealthCard />}
 
       {!hasActiveWallets && (
         <EmptyState

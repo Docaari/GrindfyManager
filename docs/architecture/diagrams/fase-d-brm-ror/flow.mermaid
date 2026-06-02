@@ -1,0 +1,58 @@
+%% Fase D #8 — Painel BRM/RoR ao vivo (ADR-236)
+%% Fluxo: banca real + histórico → groups → varianceEngine → RoR → classificação → card
+flowchart TD
+    user["Jogador abre /bankroll"] -->|"GET /api/variance/bankroll-health (JWT)"| route["varianceRouter<br/><i>routes/variance.ts</i><br/>requireAuth + userId"]
+
+    route --> auth{"userId presente?"}
+    auth -->|"Não"| r401["401 Unauthorized"]
+    auth -->|"Sim"| cache{"Cache hit?<br/>brm:userId<br/>expiresAt &gt; now &amp;&amp;<br/>generation == gen"}
+
+    cache -->|"Hit"| payloadCached["200 payload do cache<br/><i>engine NÃO roda</i>"]
+    cache -->|"Miss"| svc["buildBankrollHealth(userId)<br/><i>services/bankrollHealth.ts</i>"]
+
+    svc --> fetch["Busca paralela"]
+    fetch --> bank["getCurrentBankroll(userId)<br/>→ totalUsd (USD, FX cascata)<br/>ou null"]
+    fetch --> hist["getHistoricalStatsByUser(userId)<br/>→ tiers[] all-time, USD-only,<br/>grind_session_id IS NULL"]
+
+    bank --> sample["sampleSize = soma de count<br/>de TODOS os tiers"]
+    hist --> sample
+
+    sample --> suff{"resolveDataSufficiency<br/>(sampleSize, bankrollUsd)<br/><i>helper puro D-4</i>"}
+
+    suff -->|"bankrollUsd &lt;= 0/null"| sNoBank["no_bankroll<br/><i>engine NÃO roda</i><br/>rorPct=null"]
+    suff -->|"sampleSize == 0"| sNone["none<br/><i>engine NÃO roda</i><br/>rorPct=null"]
+    suff -->|"1..199"| sLow["low (roda, com aviso)"]
+    suff -->|"&gt;= 200"| sOk["ok (roda)"]
+
+    sLow --> groups["Monta groups[]<br/>buyIn=avg_buy_in, field=avg_field,<br/>roi=roi_adjusted, count=count (all-time),<br/>isPKO=type==='PKO'<br/>(descarta count 0 / NaN)"]
+    sOk --> groups
+
+    groups --> engine["runMonteCarloSimulation<br/>{ groups, weeks: 52, bankrollUsd }<br/><i>varianceEngine.ts (ADR-211/215)</i>"]
+    engine --> out["Output: riskOfRuin.pct,<br/>stdDev, roi.mean<br/><i>SD é OUTPUT, não input</i>"]
+
+    out --> classify["classifyRiskOfRuin(rorPct)<br/><i>helper puro D-3</i>"]
+    classify --> cHealthy["&lt; 5% → healthy (verde)"]
+    classify --> cWarning["5–15% → warning (âmbar)"]
+    classify --> cRisky["&gt; 15% → risky (vermelho)"]
+
+    cHealthy --> assemble["Monta BankrollHealthResult<br/>+ bisOfMargin = totalUsd / weightedAvgBuyIn"]
+    cWarning --> assemble
+    cRisky --> assemble
+    sNone --> assembleDegraded["payload degradado<br/>rorPct=null, classification=null"]
+    sNoBank --> assembleDegraded
+
+    assemble --> store["Grava no cache brm:userId<br/>TTL 1h + generation"]
+    assembleDegraded --> store
+    store --> resp["200 payload"]
+
+    engine -.->|"throw → log ANTES (lesson #9)"| assembleDegraded
+
+    payloadCached --> card["BankrollHealthCard<br/><i>components/bankroll/ em /bankroll</i>"]
+    resp --> card
+
+    card --> uiOk["ok → card completo<br/>(banca, ROI, SD, RoR, BIs)"]
+    card --> uiLow["low → card + 'Amostra pequena'"]
+    card --> uiNone["none → empty-state + CTA /upload"]
+    card --> uiNoBank["no_bankroll → empty-state 'Adicione sua banca'"]
+
+    upload["Upload de CSV<br/><i>routes/upload.ts</i>"] -.->|"invalidateHistoricalStatsCache(userId)<br/>generation++ busta TODAS as keys do user<br/>(inclui brm:)"| cache
