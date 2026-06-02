@@ -560,6 +560,11 @@ export default function TournamentLibraryNew() {
   // Sprint torneios-library-grouping: filtro por faixa de horario (timeBin).
   // [] = todas. Client-side sobre o timeBin ja vindo do backend.
   const [selectedTimeBins, setSelectedTimeBins] = useState<string[]>([]);
+  // Sprint torneios-library-grouping (ajuste founder): filtro por tags no nome
+  // (contem/nao-contem, igual dashboard). AND entre tags. Client-side.
+  const [nameFilters, setNameFilters] = useState<Array<{ text: string; mode: "contains" | "not_contains" }>>([]);
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameDraftMode, setNameDraftMode] = useState<"contains" | "not_contains">("contains");
   // RF-03 (L5): sort em URL. Hidrata state inicial dos query params no mount.
   // Default sem param = confidence/desc (mantem comportamento atual).
   const VALID_SORT_KEYS = new Set([
@@ -720,13 +725,20 @@ export default function TournamentLibraryNew() {
         selectedTimeBins.length === 0 ||
         selectedTimeBins.includes((group as any).timeBin ?? "sem-horario");
 
-      return matchesSearch && matchesBuyinRange && matchesRoi && matchesProfit && matchesVolume && matchesTime;
+      // Tags de nome (contem/nao-contem) — AND entre todas.
+      const lowerName = group.groupName.toLowerCase();
+      const matchesNameTags = nameFilters.every((f) => {
+        const has = lowerName.includes(f.text.toLowerCase());
+        return f.mode === "contains" ? has : !has;
+      });
+
+      return matchesSearch && matchesBuyinRange && matchesRoi && matchesProfit && matchesVolume && matchesTime && matchesNameTags;
     })
     .sort((a, b) => {
       const aValue = getSortValue(a, sortBy);
       const bValue = getSortValue(b, sortBy);
       return sortOrder === "desc" ? bValue - aValue : aValue - bValue;
-    }), [libraryGroups, searchTerm, filters, sortBy, sortOrder, selectedTimeBins]);
+    }), [libraryGroups, searchTerm, filters, sortBy, sortOrder, selectedTimeBins, nameFilters]);
 
   // Faixas de horario presentes nos dados (ordenadas por hora). Para os chips
   // do filtro de horario. "sem-horario" entra por ultimo quando existe.
@@ -791,6 +803,8 @@ export default function TournamentLibraryNew() {
     });
     setSearchTerm("");
     setSelectedTimeBins([]);
+    setNameFilters([]);
+    setNameDraft("");
     setSortBy("confidence");
     setSortOrder("desc");
   }, []);
@@ -1029,6 +1043,85 @@ export default function TournamentLibraryNew() {
             <p className="text-xs text-gray-500">{kpis.filteredTournaments} torneios</p>
           </div>
         </div>
+      </div>
+
+      {/* Sprint torneios-library-grouping: filtro por TAGS no nome (contem/nao-contem). */}
+      <div className="mb-4" data-testid="library-nametag-filter">
+        <div className="text-sm text-gray-400 mb-2">Filtrar por nome (tags)</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={nameDraftMode}
+            onChange={(e) => setNameDraftMode(e.target.value as "contains" | "not_contains")}
+            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white"
+            data-testid="library-nametag-mode"
+          >
+            <option value="contains">Contém</option>
+            <option value="not_contains">Não contém</option>
+          </select>
+          <input
+            type="text"
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const t = nameDraft.trim();
+                if (!t) return;
+                setNameFilters((prev) =>
+                  prev.some((f) => f.text.toLowerCase() === t.toLowerCase() && f.mode === nameDraftMode)
+                    ? prev
+                    : [...prev, { text: t, mode: nameDraftMode }],
+                );
+                setNameDraft("");
+              }
+            }}
+            placeholder="ex.: Bounty, Mystery, Sunday..."
+            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white flex-1 min-w-[180px]"
+            data-testid="library-nametag-input"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const t = nameDraft.trim();
+              if (!t) return;
+              setNameFilters((prev) =>
+                prev.some((f) => f.text.toLowerCase() === t.toLowerCase() && f.mode === nameDraftMode)
+                  ? prev
+                  : [...prev, { text: t, mode: nameDraftMode }],
+              );
+              setNameDraft("");
+            }}
+            disabled={!nameDraft.trim()}
+            className="rounded-lg px-4 py-2 text-sm font-medium bg-[#24c25e] text-black disabled:opacity-40 disabled:cursor-not-allowed"
+            data-testid="library-nametag-add"
+          >
+            Adicionar
+          </button>
+        </div>
+        {nameFilters.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {nameFilters.map((f, i) => (
+              <span
+                key={`${f.mode}-${f.text}-${i}`}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-medium ${
+                  f.mode === "contains"
+                    ? "bg-emerald-700/40 text-emerald-200 border border-emerald-600/40"
+                    : "bg-red-700/40 text-red-200 border border-red-600/40"
+                }`}
+                data-testid="library-nametag-chip"
+              >
+                {f.mode === "contains" ? "Contém" : "Não contém"}: "{f.text}"
+                <button
+                  type="button"
+                  onClick={() => setNameFilters((prev) => prev.filter((_, j) => j !== i))}
+                  className="hover:text-white"
+                  aria-label="Remover filtro"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Sprint torneios-library-grouping: filtro por faixa de horario (~2h). */}
