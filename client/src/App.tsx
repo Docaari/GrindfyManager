@@ -134,7 +134,12 @@ function Router() {
                   <Route path="/upload" component={() => (<ProtectedRoute><UploadHistory /></ProtectedRoute>)} />
                   <Route path="/settings" component={() => (<ProtectedRoute><Settings /></ProtectedRoute>)} />
                   <Route path="/estudos" component={() => (<ProtectedRoute><Studies /></ProtectedRoute>)} />
-                  <Route path="/estudos/:rest*" component={() => (<ProtectedRoute><Studies /></ProtectedRoute>)} />
+                  {/* Wouter v3: `:rest*` casa so 1 segmento (regexparam trata
+                      `rest*` como nome de chave -> /([^/]+?)). O catch-all real
+                      multi-segmento e `*` -> /(.*). Sem isso, /estudos/temas/:id,
+                      /estudos/mda/registrar, /estudos/analise/:id etc caem no
+                      NotFound (404). Studies le useLocation() (path completo). */}
+                  <Route path="/estudos/*" component={() => (<ProtectedRoute><Studies /></ProtectedRoute>)} />
                   <Route path="/calculadoras" component={() => (<ProtectedRoute><Calculadoras /></ProtectedRoute>)} />
                   {/* METAS-1 fatia-1 (ADR-229): rota mais especifica /nova ANTES da generica. */}
                   <Route path="/metas/nova" component={() => (<ProtectedRoute><MetasNovaPage /></ProtectedRoute>)} />

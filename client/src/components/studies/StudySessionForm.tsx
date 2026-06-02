@@ -1,10 +1,14 @@
 /**
  * Sprint EST-3 (ADR-222 / RF-08) — form de registro UNIFICADO.
+ * Sprint Estudos-WS-Fix — campos mudam por tipo de estudo (gap do founder).
  *
  * Campos condicionais por mode:
- *   - mode=stat_analysis: bloco de "jogadas" (cap 10) + stat pre-preenchida.
- *   - qualquer mode: bloco de campos enriquecidos (Parte B) — hands solved,
- *     filters analyzed; lessonInsights so quando lessonId presente.
+ *   - SEMPRE: tipo, duracao, notas + bloco enriquecido (maos solucionadas /
+ *     filtros analisados, com labels adaptados ao tipo).
+ *   - drill_gto: plataforma de solver + precisao (%).
+ *   - tournament_review / hand_review: editor de "spots dificeis" (cap 5).
+ *   - lesson: insights da aula (lessonInsights).
+ *   - stat_analysis: bloco de "jogadas" (cap 10) + stat pre-preenchida.
  *
  * Props: initialMode / statId / themeId / lessonId pre-preenchem o form (CTA
  * "Analisar esta stat" navega com query params).
@@ -14,12 +18,13 @@
 
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { getStatById } from '@shared/hud-stat-catalog';
 import type { StudySessionMode } from '@shared/schema';
 
 const STAT_ENTRIES_CAP = 10;
+const DIFFICULT_SPOTS_CAP = 5;
 
 interface PlayEntryDraft {
   filters: string;
@@ -27,11 +32,45 @@ interface PlayEntryDraft {
   learnedText: string;
 }
 
+interface DifficultSpotDraft {
+  context: string;
+  note: string;
+}
+
 interface Props {
   initialMode?: StudySessionMode;
   statId?: string;
   themeId?: string;
   lessonId?: string;
+}
+
+// Plataformas de solver/treino comuns (drill_gto). value -> backend drillPlatform.
+const DRILL_PLATFORMS: Array<{ value: string; label: string }> = [
+  { value: '', label: 'Selecione...' },
+  { value: 'gtowizard', label: 'GTO Wizard' },
+  { value: 'gtoplus', label: 'GTO+' },
+  { value: 'piosolver', label: 'PioSolver' },
+  { value: 'deepsolver', label: 'DeepSolver' },
+  { value: 'simple_gto', label: 'Simple GTO Trainer' },
+  { value: 'other', label: 'Outra' },
+];
+
+// Label do bloco enriquecido (maos/filtros) adaptado ao tipo de estudo.
+function enrichedLabels(mode: StudySessionMode): { hands: string; filters: string } {
+  switch (mode) {
+    case 'drill_gto':
+      return { hands: 'Maos drilladas', filters: 'Spots/filtros treinados' };
+    case 'tournament_review':
+      return { hands: 'Torneios revisados', filters: 'Spots analisados' };
+    case 'hand_review':
+      return { hands: 'Maos revisadas', filters: 'Filtros analisados' };
+    case 'lesson':
+      return { hands: 'Exercicios feitos', filters: 'Conceitos revisados' };
+    case 'stat_analysis':
+      return { hands: 'Maos solucionadas', filters: 'Filtros analisados' };
+    default:
+      return { hands: 'Maos solucionadas', filters: 'Filtros analisados' };
+  }
 }
 
 export default function StudySessionForm({
@@ -45,13 +84,21 @@ export default function StudySessionForm({
 
   const [mode, setMode] = useState<StudySessionMode>(initialMode);
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
+  const [notes, setNotes] = useState<string>('');
   const [entries, setEntries] = useState<PlayEntryDraft[]>([]);
   const [handsSolved, setHandsSolved] = useState<string>('');
   const [filtersAnalyzed, setFiltersAnalyzed] = useState<string>('');
   const [lessonInsights, setLessonInsights] = useState<string>('');
+  // Campos por tipo (Estudos-WS-Fix).
+  const [drillPlatform, setDrillPlatform] = useState<string>('');
+  const [drillAccuracy, setDrillAccuracy] = useState<string>('');
+  const [difficultSpots, setDifficultSpots] = useState<DifficultSpotDraft[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const statLabel = statId ? getStatById(statId)?.label ?? statId : '';
+  const labels = enrichedLabels(mode);
+  const showDifficultSpots = mode === 'tournament_review' || mode === 'hand_review';
+  const showLessonInsights = !!lessonId || mode === 'lesson';
 
   function addPlay() {
     setEntries((prev) => {
@@ -66,6 +113,23 @@ export default function StudySessionForm({
     );
   }
 
+  function addSpot() {
+    setDifficultSpots((prev) => {
+      if (prev.length >= DIFFICULT_SPOTS_CAP) return prev;
+      return [...prev, { context: '', note: '' }];
+    });
+  }
+
+  function updateSpot(index: number, patch: Partial<DifficultSpotDraft>) {
+    setDifficultSpots((prev) =>
+      prev.map((s, i) => (i === index ? { ...s, ...patch } : s)),
+    );
+  }
+
+  function removeSpot(index: number) {
+    setDifficultSpots((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -73,23 +137,45 @@ export default function StudySessionForm({
       const payload: Record<string, any> = {
         mode,
         source: 'manual_post_hoc',
-        durationMinutes,
+        durationMinutes: Math.max(1, Number(durationMinutes) || 1),
       };
       if (themeId) payload.themeId = themeId;
       if (lessonId) payload.lessonId = lessonId;
+      if (notes.trim() !== '') payload.notes = notes.trim();
       if (mode === 'stat_analysis') {
         if (statId) payload.statId = statId;
         payload.statAnalysisEntries = entries;
       }
+      // drill_gto: plataforma + precisao.
+      if (mode === 'drill_gto') {
+        if (drillPlatform !== '') payload.drillPlatform = drillPlatform;
+        if (drillAccuracy !== '') {
+          payload.drillAccuracy = Math.max(0, Math.min(100, Number(drillAccuracy)));
+        }
+      }
+      // review modes: spots dificeis (descarta linhas vazias).
+      if (showDifficultSpots) {
+        const cleaned = difficultSpots
+          .map((s) => ({ context: s.context.trim(), note: s.note.trim() }))
+          .filter((s) => s.context !== '' || s.note !== '');
+        if (cleaned.length > 0) payload.difficultSpots = cleaned;
+      }
       if (handsSolved !== '') payload.handsSolvedCount = Number(handsSolved);
       if (filtersAnalyzed !== '') payload.filtersAnalyzedCount = Number(filtersAnalyzed);
-      if (lessonId && lessonInsights !== '') payload.lessonInsights = lessonInsights;
+      if (showLessonInsights && lessonInsights !== '') {
+        payload.lessonInsights = lessonInsights;
+      }
 
       const created = await apiRequest('POST', '/api/study-sessions', payload);
+      // Sprint Estudos-UX-Fix BUG-A (lesson #21): invalida caches dependentes.
+      queryClient.invalidateQueries({ queryKey: ['/api/study-sessions'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/study-sessions/stat-analysis/by-theme'],
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/home/focus-stats'] });
       const sessionId = created?.id;
       if (sessionId) {
-        // Rota v2 dedicada (SessaoDetailPage) — NAO /estudos/sessao/:id, que eh
-        // a pagina legada (timer/notes) servida pelo GET /:id de studies.ts.
+        // Rota v2 dedicada (SessaoDetailPage).
         navigate(`/estudos/analise/${sessionId}`);
       } else {
         toast({ title: 'Sessao registrada' });
@@ -122,6 +208,20 @@ export default function StudySessionForm({
           <option value="stat_analysis">Analise de stat</option>
           <option value="other">Outro</option>
         </select>
+      </div>
+
+      {/* Duracao — comum a qualquer tipo. */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Duracao (minutos)</label>
+        <input
+          type="number"
+          min={1}
+          max={1440}
+          data-testid="field-duration"
+          value={durationMinutes}
+          onChange={(e) => setDurationMinutes(Number(e.target.value))}
+          className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+        />
       </div>
 
       {mode === 'stat_analysis' && (
@@ -181,12 +281,105 @@ export default function StudySessionForm({
         </div>
       )}
 
+      {/* drill_gto: plataforma de solver + precisao. */}
+      {mode === 'drill_gto' && (
+        <div
+          data-testid="drill-fields-block"
+          className="rounded-lg border border-border bg-card p-4 space-y-3"
+        >
+          <div>
+            <label className="block text-sm font-medium mb-1">Plataforma / solver</label>
+            <select
+              data-testid="field-drill-platform"
+              value={drillPlatform}
+              onChange={(e) => setDrillPlatform(e.target.value)}
+              className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+            >
+              {DRILL_PLATFORMS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Precisao (%)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              data-testid="field-drill-accuracy"
+              value={drillAccuracy}
+              onChange={(e) => setDrillAccuracy(e.target.value)}
+              className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* review modes: spots dificeis (cap 5). */}
+      {showDifficultSpots && (
+        <div
+          data-testid="difficult-spots-block"
+          className="rounded-lg border border-border bg-card p-4 space-y-3"
+        >
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium">Spots dificeis</label>
+            <button
+              type="button"
+              data-testid="difficult-spots-add"
+              onClick={addSpot}
+              disabled={difficultSpots.length >= DIFFICULT_SPOTS_CAP}
+              className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground disabled:opacity-50"
+            >
+              Adicionar spot
+            </button>
+          </div>
+          {difficultSpots.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Registre spots que te deram duvida (ex: "AKo BTN vs 3bet" + nota).
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {difficultSpots.map((spot, i) => (
+                <div
+                  key={i}
+                  data-testid={`difficult-spot-row-${i}`}
+                  className="rounded border border-border p-3 space-y-2"
+                >
+                  <input
+                    type="text"
+                    placeholder="Contexto (ex: BTN vs BB, SRP)"
+                    value={spot.context}
+                    onChange={(e) => updateSpot(i, { context: e.target.value })}
+                    className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+                  />
+                  <textarea
+                    placeholder="Nota / duvida"
+                    value={spot.note}
+                    onChange={(e) => updateSpot(i, { note: e.target.value })}
+                    className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSpot(i)}
+                    className="text-xs text-destructive hover:underline"
+                  >
+                    Remover
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div
         data-testid="enriched-fields-block"
         className="rounded-lg border border-border bg-card p-4 space-y-3"
       >
         <div>
-          <label className="block text-sm font-medium mb-1">Maos solucionadas</label>
+          <label className="block text-sm font-medium mb-1">{labels.hands}</label>
           <input
             type="number"
             min={0}
@@ -197,7 +390,7 @@ export default function StudySessionForm({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Filtros analisados</label>
+          <label className="block text-sm font-medium mb-1">{labels.filters}</label>
           <input
             type="number"
             min={0}
@@ -207,7 +400,7 @@ export default function StudySessionForm({
             className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
           />
         </div>
-        {lessonId && (
+        {showLessonInsights && (
           <div>
             <label className="block text-sm font-medium mb-1">Insights da aula</label>
             <textarea
@@ -220,8 +413,22 @@ export default function StudySessionForm({
         )}
       </div>
 
+      {/* Notas — comum a qualquer tipo. */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Notas (opcional)</label>
+        <textarea
+          data-testid="field-notes"
+          value={notes}
+          maxLength={500}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Observacoes livres sobre o estudo..."
+          className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+        />
+      </div>
+
       <button
         type="submit"
+        data-testid="study-session-submit"
         disabled={submitting}
         className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground disabled:opacity-50"
       >
