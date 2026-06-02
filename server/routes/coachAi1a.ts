@@ -60,7 +60,43 @@ async function resolveOnboardingStorage(injectedStorage?: any): Promise<any> {
     updateNudgeLogStatus: (id: string, status: string, extra: any) =>
       (storage as any).updateNudgeLogStatus(id, status, extra),
     checkAndFreezeCategory: (uid: string, cat: any) => (storage as any).checkAndFreezeCategory(uid, cat),
+    // #2 — 1o insight: criar sessao de chat + mensagem de boas-vindas no complete.
+    createChatSession: (input: any) => (storage as any).createChatSession(input),
+    insertChatMessage: (input: any) => (storage as any).insertChatMessage(input),
   };
+}
+
+// #2 — primeiro insight personalizado pos-onboarding (deterministico, sem LLM
+// pra ser instantaneo e confiavel). Referencia o que o jogador acabou de contar
+// + oferece acoes concretas (tools), criando o "aha moment" no pico de atencao.
+const NIVEL_LABEL: Record<string, string> = {
+  sem_dados: "comecando",
+  iniciando: "iniciante",
+  micro_ascensao: "micro em ascensao",
+  mid_consistente: "mid consistente",
+  high_stakes: "high stakes",
+  recreativo_serio: "recreativo serio",
+};
+
+function buildOnboardingFirstMessage(profile: any): string {
+  const lines: string[] = [];
+  lines.push("Show, configurei teu perfil!");
+  const nivel = profile?.nivel ? (NIVEL_LABEL[String(profile.nivel)] ?? String(profile.nivel)) : null;
+  if (nivel) lines.push(`Pelo que me contou, teu nivel ta em **${nivel}**.`);
+  const foco = typeof profile?.focoDoMes === "string" ? profile.focoDoMes.trim() : "";
+  if (foco) lines.push(`Teu foco do mes: **${foco}**.`);
+  const metas = Array.isArray(profile?.metas)
+    ? profile.metas.map((m: any) => String(m?.texto ?? "").trim()).filter(Boolean).slice(0, 3)
+    : [];
+  if (metas.length) lines.push(`Tuas metas: ${metas.join("; ")}.`);
+  lines.push("");
+  lines.push("Ja da pra comecar agora — eu nao so respondo, eu **ajo** sobre teus dados. Posso:");
+  lines.push("- puxar teus **3 maiores leaks** agora");
+  lines.push("- **montar tua grade** da semana");
+  lines.push("- analisar tua **variancia** do mes");
+  lines.push("");
+  lines.push("Por onde quer comecar?");
+  return lines.join("\n");
 }
 
 function reqUserId(req: any): string | null {
@@ -401,7 +437,29 @@ export async function handleCompleteOnboarding(req: any, res: any, injectedStora
       onboardingDraft: null,
     });
 
-    res.status(200).json({ structuredProfile: finalProfile, preferences });
+    // #2 — aha moment: cria a 1a sessao de chat ja com um insight personalizado
+    // (best-effort — falha aqui NAO falha o onboarding).
+    let chatSessionId: string | null = null;
+    try {
+      const session = await store.createChatSession?.({
+        userId,
+        coachType: "technical",
+        title: "Bem-vindo ao Grindfy AI",
+      });
+      chatSessionId = session?.id ?? null;
+      if (chatSessionId) {
+        await store.insertChatMessage?.({
+          chatSessionId,
+          role: "assistant",
+          content: buildOnboardingFirstMessage(finalProfile),
+        });
+      }
+    } catch (err) {
+      console.error("coach.onboarding.first_insight.error", { userId, err });
+      chatSessionId = null;
+    }
+
+    res.status(200).json({ structuredProfile: finalProfile, preferences, chatSessionId });
   } catch (err: any) {
     console.error("coach.onboarding.complete.error", { err });
     res.status(500).json({ message: "Erro interno" });

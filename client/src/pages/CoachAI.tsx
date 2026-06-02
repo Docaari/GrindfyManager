@@ -66,6 +66,7 @@ import { CoachLensChips } from '@/components/coach-ai/CoachLensChips';
 import { LENS_PLACEHOLDER } from '@/lib/coachLensMeta';
 // Sprint AI-1B — timeline (reports + nudges) + quick suggestions anti-blank-page.
 import NudgeCard from '@/components/coach/NudgeCard';
+import { CoachReportCtaButtons, type CoachReportCta } from '@/components/coach/CoachReportCtaButtons';
 import { getFallbackSuggestions } from '@/lib/quickSuggestionsFallback';
 // Sprint Mini Player 2 (CRITICAL-2) — Spotify connection panel em Preferencias.
 import { SpotifyConnectionPanel } from '@/components/settings/SpotifyConnectionPanel';
@@ -367,6 +368,20 @@ function ChatPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamedText]);
 
+  // #2 — chegou de /coach-ai/onboarding com ?session=<id> -> abre a sessao recem
+  // criada (com o 1o insight personalizado). Roda uma vez.
+  const didInitSessionFromUrl = useRef(false);
+  useEffect(() => {
+    if (didInitSessionFromUrl.current) return;
+    try {
+      const sid = new URLSearchParams(window.location.search).get('session');
+      if (sid) {
+        setActiveSessionId(sid);
+        didInitSessionFromUrl.current = true;
+      }
+    } catch { /* noop */ }
+  }, [setActiveSessionId]);
+
   const handleSend = useCallback(() => {
     const trimmed = inputValue.trim();
     if (!trimmed || isStreaming) return;
@@ -557,7 +572,7 @@ function ReportDiscoverabilityBanner({ onGoToPreferences }: { onGoToPreferences:
 }
 
 type TimelineItem =
-  | { kind: 'report'; id: string; reportType: string; periodStart: string; periodEnd: string; status: string; summaryLine?: string; generatedAt?: string; readAt?: string | null; dismissedAt?: string | null }
+  | { kind: 'report'; id: string; reportType: string; periodStart: string; periodEnd: string; status: string; summaryLine?: string; ctas?: CoachReportCta[]; generatedAt?: string; readAt?: string | null; dismissedAt?: string | null }
   | { kind: 'nudge'; id: string; category: string; status: string; title?: string | null; bodyPreview?: string | null; sentAt?: string | null; engagedAt?: string | null; dismissedAt?: string | null; snoozeUntil?: string | null; chatSessionId?: string | null; triggeredByEvent?: string | null };
 
 function ReportsPanel() {
@@ -601,29 +616,42 @@ function ReportsPanel() {
       ) : null}
       {items.map((it) =>
         it.kind === 'report' ? (
-          <button
+          <div
             key={`r-${it.id}`}
-            type="button"
             data-testid="coach-timeline-item-report"
-            data-href={`/coach-ai/relatorio/${it.id}`}
-            onClick={() => setLocation(`/coach-ai/relatorio/${it.id}`)}
-            className="w-full text-left rounded-lg border border-gray-700 bg-gray-800/50 p-4 hover:bg-gray-800"
+            className="rounded-lg border border-gray-700 bg-gray-800/50 p-4"
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-gray-200">
-                {(it.reportType === 'daily' ? 'Debrief diário'
-                  : it.reportType === 'monthly' ? 'Relatório mensal'
-                  : it.reportType === 'quarterly' ? 'Revisão trimestral'
-                  : 'Relatório semanal')} — {it.periodStart} a {it.periodEnd}
-              </span>
-              {it.status === 'degraded' ? (
-                <span className="shrink-0 rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] text-amber-300">
-                  modo simplificado
+            {/* Header clicavel -> detalhe do relatorio (separado dos CTAs pra
+                nao aninhar interativos — #1). */}
+            <button
+              type="button"
+              data-testid="coach-timeline-report-open"
+              data-href={`/coach-ai/relatorio/${it.id}`}
+              onClick={() => setLocation(`/coach-ai/relatorio/${it.id}`)}
+              className="w-full text-left rounded hover:opacity-90"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-gray-200">
+                  {(it.reportType === 'daily' ? 'Debrief diário'
+                    : it.reportType === 'monthly' ? 'Relatório mensal'
+                    : it.reportType === 'quarterly' ? 'Revisão trimestral'
+                    : 'Relatório semanal')} — {it.periodStart} a {it.periodEnd}
                 </span>
-              ) : null}
-            </div>
-            {it.summaryLine ? <p className="mt-1 text-xs text-gray-400">{it.summaryLine}</p> : null}
-          </button>
+                {it.status === 'degraded' ? (
+                  <span className="shrink-0 rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] text-amber-300">
+                    modo simplificado
+                  </span>
+                ) : null}
+              </div>
+              {it.summaryLine ? <p className="mt-1 text-xs text-gray-400">{it.summaryLine}</p> : null}
+            </button>
+            {/* #1 — CTAs acionaveis direto na timeline (fecha o loop). */}
+            {Array.isArray(it.ctas) && it.ctas.length > 0 ? (
+              <div className="mt-3">
+                <CoachReportCtaButtons ctas={it.ctas} />
+              </div>
+            ) : null}
+          </div>
         ) : (
           <div key={`n-${it.id}`} data-testid="coach-timeline-item-nudge">
             <NudgeCard nudge={it} />

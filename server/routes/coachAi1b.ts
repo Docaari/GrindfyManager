@@ -66,6 +66,9 @@ export async function handleGetCoachTimeline(req: any, res: any, injectedStorage
         periodEnd: r.periodEnd,
         status: r.status,
         summaryLine: r.summaryLine ?? reportSummaryLine(r.content),
+        // #1 — CTAs acionaveis na timeline (top 2 do relatorio) — fecha o loop
+        // diagnostico -> acao sem precisar abrir o detalhe.
+        ctas: Array.isArray(r.content?.cta) ? r.content.cta.slice(0, 2) : [],
         generatedAt: r.generatedAt,
         readAt: r.readAt ?? null,
         dismissedAt: r.dismissedAt ?? null,

@@ -605,6 +605,13 @@ async function processOneJob(storage: any, job: any, now: Date): Promise<void> {
       return;
     }
 
+    // #12 — debrief inteligente: generator pode suprimir (sessao trivial). Marca
+    // o job 'skipped' sem persistir relatorio nem entregar (sem spam).
+    if ((result as any).suppressed === true) {
+      await storage.updateReportJob?.(job.id, { status: "skipped", lastError: "below_relevance_threshold", updatedAt: new Date() });
+      return;
+    }
+
     const reportId: string | null = await persistOrFetchReportId(storage, claimed, result);
     await storage.updateReportJob?.(job.id, { status: "done", reportId, updatedAt: new Date() });
     if (reportId) {
