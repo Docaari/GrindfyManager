@@ -87,12 +87,40 @@ const BY_ROUTE: Record<string, Suggestion[]> = {
     s("st-batem", "Meus stats batem com o esperado?"),
     s("st-fora", "Algum stat fora do padrão?"),
   ],
+  // #3 — empty-state vende ACAO (demonstra tools), nao chat passivo.
   "/coach-ai": [
-    s("ca-week", "O que mudou na minha semana?"),
-    s("ca-leaks", "Quais meus leaks?"),
-    s("ca-next", "Sugira meu próximo passo"),
+    s("ca-grade", "Monta minha grade de amanha"),
+    s("ca-leaks", "Quais meus 3 maiores leaks?"),
+    s("ca-downswing", "To em downswing, o que faco?"),
+    s("ca-field", "Como ta meu ROI vs o field BR?"),
   ],
 };
+
+// #11 — sugestoes acionaveis por lente (mental/tournament/technical). Copia
+// server da fonte client (client/src/lib/coachLensMeta.ts) — bundles separados.
+type CoachLens = "mental" | "tournament" | "technical";
+const LENS_SUGGESTIONS: Record<CoachLens, Suggestion[]> = {
+  mental: [
+    s("lens-mental-downswing", "To em downswing, o que faco?"),
+    s("lens-mental-focus", "Registra meu foco de leak do mes"),
+    s("lens-mental-abc", "Como ta meu A/B/C-game?"),
+  ],
+  tournament: [
+    s("lens-tour-grade", "Monta minha grade de amanha"),
+    s("lens-tour-banca", "Esses torneios cabem na minha banca?"),
+    s("lens-tour-rake", "Qual meu rake efetivo por site?"),
+  ],
+  technical: [
+    s("lens-tech-leaks", "Quais meus 3 maiores leaks?"),
+    s("lens-tech-field", "Como ta meu ROI vs o field BR?"),
+    s("lens-tech-var", "Analisa minha variancia do mes"),
+  ],
+};
+
+function lensFromCtx(ctx: any): CoachLens | null {
+  const v = ctx?.lens;
+  return v === "mental" || v === "tournament" || v === "technical" ? v : null;
+}
 
 const DASHBOARD_DOWNSWING: Suggestion[] = [
   s("dd-perdendo", "Por que estou perdendo essa semana?"),
@@ -131,15 +159,19 @@ export async function computeSuggestions(
   injectedStorage?: any,
 ): Promise<Suggestion[]> {
   const r = normalizeRoute(route);
+  const lens = lensFromCtx(_ctx);
   // Sprint AI-2A RF-07 — chip OCR recente bypassa cache (estado pos-upload).
   const isOcrAwareRoute = r === "/stats" || r === "/estudos/stats" || r === "/grind-live";
   if (!isOcrAwareRoute) {
-    const cacheKey = `${userId ?? "anon"}|${r}`;
+    const cacheKey = `${userId ?? "anon"}|${r}|${lens ?? ""}`;
     const cached = _cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
   }
 
-  let result: Suggestion[] = staticFor(r);
+  // #11 — no chat, a lente ativa define o set base acionavel (sobrescrito por
+  // NO_DATA abaixo se o jogador ainda nao tem historico — onboarding vence).
+  let result: Suggestion[] =
+    r === "/coach-ai" && lens ? LENS_SUGGESTIONS[lens] : staticFor(r);
 
   // check leve de estado — so onde adiciona valor. Safe-degrade (lesson #9).
   try {
@@ -214,7 +246,7 @@ export async function computeSuggestions(
   const clamped = result.slice(0, 4);
   const finalResult = clamped.length >= 2 ? clamped : staticFor(r).slice(0, 4);
   if (!isOcrAwareRoute) {
-    const cacheKey = `${userId ?? "anon"}|${r}`;
+    const cacheKey = `${userId ?? "anon"}|${r}|${lens ?? ""}`;
     _cache.set(cacheKey, { value: finalResult, expiresAt: Date.now() + CACHE_TTL_MS });
   }
   return finalResult;

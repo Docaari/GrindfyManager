@@ -63,6 +63,7 @@ import {
 // Sprint AI-1A follow-up (RF-07): banner de onboarding no topo da aba Chat.
 import OnboardingBanner from '@/components/coach/OnboardingBanner';
 import { CoachLensChips } from '@/components/coach-ai/CoachLensChips';
+import { LENS_PLACEHOLDER } from '@/lib/coachLensMeta';
 // Sprint AI-1B — timeline (reports + nudges) + quick suggestions anti-blank-page.
 import NudgeCard from '@/components/coach/NudgeCard';
 import { getFallbackSuggestions } from '@/lib/quickSuggestionsFallback';
@@ -292,12 +293,15 @@ function SessionSidebar({
 // -----------------------------------------------------------------------------
 type QuickSuggestion = { id: string; text: string; sendOnClick?: boolean };
 
-function QuickSuggestionChips({ route, onPick }: { route: string; onPick: (text: string) => void }) {
+function QuickSuggestionChips({ route, coachType, onPick }: { route: string; coachType?: CoachType; onPick: (text: string) => void }) {
+  // #11 — a lente ativa entra na queryKey + no endpoint, entao trocar de lente
+  // re-busca chips sob medida (e o cache do servidor tambem eh por lente).
+  const lensQuery = coachType ? `&lens=${encodeURIComponent(coachType)}` : '';
   const { data, isLoading } = useQuery<{ suggestions?: QuickSuggestion[] } | null>({
-    queryKey: ['/api/coach/suggestions', route],
+    queryKey: ['/api/coach/suggestions', route, coachType ?? null],
     queryFn: async () => {
       try {
-        return await apiRequest('GET', `/api/coach/suggestions?route=${encodeURIComponent(route)}`);
+        return await apiRequest('GET', `/api/coach/suggestions?route=${encodeURIComponent(route)}${lensQuery}`);
       } catch {
         return null; // fallback estatico abaixo
       }
@@ -310,7 +314,7 @@ function QuickSuggestionChips({ route, onPick }: { route: string; onPick: (text:
   const suggestions: QuickSuggestion[] =
     (data && Array.isArray((data as any).suggestions) && (data as any).suggestions.length > 0)
       ? (data as any).suggestions
-      : (getFallbackSuggestions(route) as any);
+      : (getFallbackSuggestions(route, coachType) as any);
 
   if (!suggestions || suggestions.length === 0) return null;
   return (
@@ -399,8 +403,8 @@ function ChatPanel() {
         <CoachLensChips
           coachType={coachType}
           onChangeCoachType={(value) => {
+            // #4 — NAO limpar o input ao trocar de lente (perda de texto digitado).
             setCoachType(value);
-            setInputValue('');
           }}
         />
 
@@ -423,11 +427,13 @@ function ChatPanel() {
               <Sparkles size={48} className="text-green-600/40 mb-4" />
               <h3 className="text-lg font-medium text-gray-300 mb-2">Grindfy AI</h3>
               <p className="text-sm text-gray-500 max-w-md">
-                Pergunte qualquer coisa sobre seu jogo, sua banca, sua grade ou seu mental.
-                O Grindfy AI ve seus dados e usa ferramentas para o detalhe.
+                Nao so respondo — eu <span className="text-gray-300">ajo</span> sobre seus dados:
+                monto sua grade, registro um foco de leak, calculo seu rake, analiso sua variancia.
+                Peca direto, ou comece por aqui:
               </p>
               <QuickSuggestionChips
                 route="/coach-ai"
+                coachType={coachType}
                 onPick={(text) => { setInputValue(text); textareaRef.current?.focus(); }}
               />
             </div>
@@ -466,7 +472,7 @@ function ChatPanel() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Mensagem para o Grindfy AI..."
+              placeholder={LENS_PLACEHOLDER[coachType]}
               className="flex-1 bg-gray-800 border-gray-700 text-gray-100 placeholder:text-gray-500 resize-none min-h-[44px] max-h-[120px]"
               rows={1}
               disabled={isStreaming}
