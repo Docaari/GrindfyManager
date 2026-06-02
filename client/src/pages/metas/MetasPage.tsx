@@ -11,6 +11,15 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
+interface ScoreboardAdherence {
+  planned: number | null;
+  actual: number;
+  skipped: boolean;
+  shortfall: number | null;
+  overachieved: boolean;
+  note: string | null;
+}
+
 interface ScoreboardMeasure {
   id: string;
   title: string;
@@ -19,6 +28,10 @@ interface ScoreboardMeasure {
   target: number;
   expectedNow: number | null;
   status: string;
+  // ADICOES fatia-2 (opcionais; ausentes/null em metas diretas/legadas).
+  compliancePct?: number | null;
+  dataSufficiency?: "ok" | "low";
+  adherence?: ScoreboardAdherence | null;
 }
 
 interface ScoreboardWig {
@@ -119,15 +132,34 @@ function ScoreboardContent() {
           <p className="text-sm text-muted-foreground">Nenhuma medida ativa.</p>
         ) : (
           <ul>
-            {measures.map((m) => (
-              <li key={m.id} data-testid={`measure-row-${m.id}`}>
-                <span>{m.title}</span>
-                <span data-testid={`measure-current-${m.id}`}>{m.current ?? "—"}</span>
-                <span data-testid={`measure-target-${m.id}`}>{m.target}</span>
-                <span data-testid={`measure-expected-${m.id}`}>{m.expectedNow ?? "—"}</span>
-                <span data-testid={`measure-status-${m.id}`}>{m.status}</span>
-              </li>
-            ))}
+            {measures.map((m) => {
+              const compliance =
+                typeof m.compliancePct === "number" ? `${m.compliancePct}%` : "—";
+              const adherenceLabel = m.adherence?.skipped
+                ? "pulado conscientemente"
+                : (m.adherence?.shortfall ?? 0) > 0
+                  ? "abaixo do plano"
+                  : null;
+              return (
+                <li key={m.id} data-testid={`measure-row-${m.id}`}>
+                  <span>{m.title}</span>
+                  <span data-testid={`measure-current-${m.id}`}>{m.current ?? "—"}</span>
+                  <span data-testid={`measure-target-${m.id}`}>{m.target}</span>
+                  <span data-testid={`measure-expected-${m.id}`}>{m.expectedNow ?? "—"}</span>
+                  <span data-testid={`measure-status-${m.id}`}>{m.status}</span>
+                  {/* fatia-2: compliancePct rigoroso (null nunca vira "0%" — lesson #11). */}
+                  <span data-testid={`measure-compliance-${m.id}`}>{compliance}</span>
+                  {/* amostra fraca — badge so quando dataSufficiency='low'. */}
+                  {m.dataSufficiency === "low" ? (
+                    <span data-testid={`measure-datasufficiency-${m.id}`}>amostra fraca</span>
+                  ) : null}
+                  {/* A4: "pulado conscientemente" vs "abaixo do plano" (sem culpa). */}
+                  {adherenceLabel ? (
+                    <span data-testid={`measure-adherence-${m.id}`}>{adherenceLabel}</span>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

@@ -12048,6 +12048,24 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     }
   }
 
+  // Lista TODOS os coach_leak_focus do user (qualquer status, qualquer mês),
+  // mais recente primeiro. METAS-2 fatia-2 precisa enxergar status='resolved'
+  // (e leaks de meses anteriores) p/ a meta leak_focus virar achieved — o
+  // findActiveLeakFocusList filtra active+mês corrente e esconderia a resolução.
+  async findLeakFocusList(userId: string): Promise<CoachLeakFocus[]> {
+    try {
+      const rows = await db
+        .select()
+        .from(coachLeakFocus)
+        .where(eq(coachLeakFocus.userId, userId))
+        .orderBy(desc(coachLeakFocus.createdAt));
+      return rows ?? [];
+    } catch (err) {
+      console.error("storage.findLeakFocusList.error", { userId, err });
+      return [];
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // study sessions (suporte a Coach-2B)
   // ---------------------------------------------------------------------------

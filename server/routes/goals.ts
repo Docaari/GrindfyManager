@@ -28,6 +28,16 @@ import { computeExpectedNow, deriveStatus } from "../coach/goals/computePace";
 import { aggregateCurrentValue, type AggregateDeps } from "../coach/goals/aggregateCurrentValue";
 import { num } from "../coach/goals/num";
 import { ymdUtc } from "../coach/planning/weekKeys";
+import {
+  resolvesViaAdherence,
+  bridgedSourceMetric,
+  isLeakFocusMetric,
+  parseLeakFocusStatId,
+  normalizeStatIdForLeakMatch,
+} from "../coach/goals/adherenceBridge";
+import { getPlannedVsActual } from "../coach/adherence";
+import { evaluateLeakFocusProgress } from "../coach/goals/leakFocusProgress";
+import { isValidStatId } from "../coach/statId";
 
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -181,37 +191,245 @@ interface NormalizedGoal {
   horizon: any;
 }
 
+// Conta study_sessions_v2 mode='stat_analysis' do statId na janela (esforco do
+// leak_focus). Reusa deps.getStudySessionsV2 (ja filtra janela UTC). Match do
+// statId normaliza prefixo "leak:".
+async function countStatAnalysisForStat(
+  deps: AggregateDeps,
+  userId: string,
+  weekStartDate: string,
+  targetStatId: string,
+): Promise<number> {
+  const rows = (await deps.getStudySessionsV2?.(userId, { weekStartDate })) ?? [];
+  const wanted = normalizeStatIdForLeakMatch(targetStatId);
+  return rows.filter(
+    (r: any) =>
+      r?.mode === "stat_analysis" &&
+      !r?.deletedAt &&
+      normalizeStatIdForLeakMatch(String(r?.statId ?? "")) === wanted,
+  ).length;
+}
+
+// Resolve uma meta leak_focus (DEC-4): getStatsLeaks + coach_leak_focus + esforco
+// stat_analysis -> evaluateLeakFocusProgress. Falha de fonte degrada (log antes,
+// lesson #9), nunca quebra o scoreboard.
+async function resolveLeakFocus(
+  g: NormalizedGoal,
+  deps: AggregateDeps,
+  storage: any,
+  weekStartDate: string,
+  userId: string,
+): Promise<{ status: string; compliancePct: number | null; dataSufficiency: "ok" | "low"; current: number | null }> {
+  const targetStatId = parseLeakFocusStatId(g.sourceMetric) ?? "";
+
+  // As 3 fontes sao independentes -> em paralelo (cada uma degrada sozinha +
+  // loga antes do fallback, #9). Esforco (stat_analysis) | getStatsLeaks top N |
+  // coach_leak_focus (status de resolucao do statId alvo).
+  let leaksErrored = false;
+  const [statAnalysisCount, leaks, leakFocusStatus] = await Promise.all([
+    countStatAnalysisForStat(deps, userId, weekStartDate, targetStatId).catch((err) => {
+      console.error("goals.scoreboard.leak.statAnalysis.error", { userId, goalRefId: g.refId, err });
+      return 0;
+    }),
+    Promise.resolve()
+      .then(() => storage.getStatsLeaks?.(userId, LEAK_TOP_N))
+      .then((r: any[] | undefined) => r ?? [])
+      .catch((err: unknown) => {
+        console.error("goals.scoreboard.leak.getStatsLeaks.error", { userId, goalRefId: g.refId, err });
+        leaksErrored = true;
+        return null as any[] | null;
+      }),
+    Promise.resolve()
+      // findLeakFocusList (NÃO findActiveLeakFocusList): status-agnóstico + sem
+      // filtro de mês, senão status='resolved' nunca chega ao helper (HIGH-1).
+      .then(() => storage.findLeakFocusList?.(userId))
+      .then((list: any[] | undefined) => {
+        const wanted = normalizeStatIdForLeakMatch(targetStatId);
+        const match = ((list ?? []) as any[]).find(
+          (clf) => normalizeStatIdForLeakMatch(String(clf?.baselineStatKey ?? "")) === wanted,
+        );
+        return match ? (match.status ?? null) : null;
+      })
+      .catch((err: unknown) => {
+        console.error("goals.scoreboard.leak.coachLeakFocus.error", { userId, goalRefId: g.refId, err });
+        return null as string | null;
+      }),
+  ]);
+
+  const progress = evaluateLeakFocusProgress({
+    targetStatId,
+    target: g.target,
+    leaks,
+    leaksErrored,
+    leakFocusStatus,
+    statAnalysisCountInWindow: statAnalysisCount,
+  });
+
+  return {
+    status: progress.status,
+    compliancePct: progress.compliancePct,
+    dataSufficiency: progress.dataSufficiency,
+    // current de leak_focus = esforco (stat_analysis na janela) — D-5.
+    current: statAnalysisCount,
+  };
+}
+
 // Consolida o ciclo aggregate -> pace -> status por meta (medidas + WIGs).
+// fatia-2: medidas de processo via MOTOR (compliancePct rigoroso), leak_focus via
+// helper, performance/financeira via agregacao direta (fatia-1). Cada entry
+// isolada — falha degrada, NUNCA quebra o scoreboard (lesson #9).
 async function buildScoreboardEntry(
   g: NormalizedGoal,
   deps: AggregateDeps,
+  storage: any,
   weekStartDate: string,
   userId: string,
   now: Date,
 ): Promise<any> {
-  let current: number | null = null;
-  try {
-    const agg = await aggregateCurrentValue(userId, g.sourceMetric, { weekStartDate }, deps);
-    current = agg?.value ?? null;
-  } catch (err) {
-    console.error("goals.scoreboard.aggregate.error", { userId, goalRefId: g.refId, err });
-    current = null;
-  }
-
   const expectedNow = computeExpectedNow(g.baseline, g.target, g.createdAt, g.deadline, now);
-  const status = deriveStatus(current ?? 0, expectedNow, g.target, g.direction === "down" ? "down" : "up");
+  const dir = g.direction === "down" ? "down" : "up";
 
-  return {
+  const base = {
     refId: g.refId,
     kind: g.kind,
     title: g.title,
     sourceMetric: g.sourceMetric,
-    current,
     target: g.target,
     expectedNow,
-    status,
     horizon: g.horizon,
   };
+
+  // -------------------------------------------------------------------------
+  // leak_focus (apenas medidas) — resolucao dedicada (DEC-4).
+  // -------------------------------------------------------------------------
+  if (g.kind === "measure" && isLeakFocusMetric(g.sourceMetric)) {
+    const leak = await resolveLeakFocus(g, deps, storage, weekStartDate, userId);
+    return {
+      ...base,
+      current: leak.current,
+      status: leak.status,
+      compliancePct: leak.compliancePct,
+      dataSufficiency: leak.dataSufficiency,
+      adherence: null,
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // via MOTOR (apenas medidas de volume/estudo) — compliancePct rigoroso.
+  // -------------------------------------------------------------------------
+  if (g.kind === "measure" && resolvesViaAdherence(g.sourceMetric)) {
+    const bridged = bridgedSourceMetric(g.sourceMetric);
+    try {
+      const pva: any = await getPlannedVsActual(
+        userId,
+        bridged as any,
+        { kind: "week", weekStartDate },
+        storage,
+      );
+      const breakdown = pva?.breakdown ?? {};
+      // Degrade do motor: sem plano na janela (planned null). Fallback do current
+      // para agregacao direta (DEC-A5), mas compliancePct null + dataSufficiency low.
+      if (pva?.planned === null || pva?.planned === undefined) {
+        const fallbackCurrent = await aggregateCurrentForFallback(g, deps, userId, weekStartDate);
+        const status = deriveStatus(fallbackCurrent ?? 0, expectedNow, g.target, dir);
+        return {
+          ...base,
+          current: fallbackCurrent,
+          status,
+          compliancePct: null,
+          dataSufficiency: "low",
+          adherence: {
+            planned: pva?.planned ?? null,
+            actual: pva?.actual ?? 0,
+            skipped: !!breakdown.skipped,
+            shortfall: breakdown.shortfall ?? null,
+            overachieved: !!breakdown.overachieved,
+            note: breakdown.note ?? null,
+          },
+        };
+      }
+
+      const current = pva?.actual ?? 0;
+      // DEC-6: skipped (A4) -> estado neutro (on_track), nunca at_risk por isso.
+      const status = breakdown.skipped
+        ? "on_track"
+        : deriveStatus(current, expectedNow, g.target, dir);
+      return {
+        ...base,
+        current,
+        status,
+        compliancePct: pva?.compliancePct ?? null,
+        dataSufficiency: pva?.dataSufficiency ?? "ok",
+        adherence: {
+          planned: pva?.planned ?? null,
+          actual: pva?.actual ?? 0,
+          skipped: !!breakdown.skipped,
+          shortfall: breakdown.shortfall ?? null,
+          overachieved: !!breakdown.overachieved,
+          note: breakdown.note ?? null,
+        },
+      };
+    } catch (err) {
+      // Motor lancou: log ANTES do fallback (#9); meta degrada, scoreboard 200.
+      console.error("goals.scoreboard.adherence.error", { userId, goalRefId: g.refId, err });
+      const fallbackCurrent = await aggregateCurrentForFallback(g, deps, userId, weekStartDate);
+      const status = deriveStatus(fallbackCurrent ?? 0, expectedNow, g.target, dir);
+      return {
+        ...base,
+        current: fallbackCurrent,
+        status,
+        compliancePct: null,
+        dataSufficiency: "low",
+        adherence: null,
+      };
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // DIRETA (performance/financeira + WIGs) — agregacao direta da fatia-1.
+  // compliancePct null; dataSufficiency REAL da agregacao (RF-04).
+  // -------------------------------------------------------------------------
+  let current: number | null = null;
+  let dataSufficiency: "ok" | "low" = "ok";
+  try {
+    const agg = await aggregateCurrentValue(userId, g.sourceMetric, { weekStartDate }, deps);
+    current = agg?.value ?? null;
+    dataSufficiency = agg?.dataSufficiency ?? "ok";
+  } catch (err) {
+    console.error("goals.scoreboard.aggregate.error", { userId, goalRefId: g.refId, err });
+    current = null;
+    dataSufficiency = "low";
+  }
+
+  const status = deriveStatus(current ?? 0, expectedNow, g.target, dir);
+
+  return {
+    ...base,
+    current,
+    status,
+    compliancePct: null,
+    dataSufficiency,
+    adherence: null,
+  };
+}
+
+const LEAK_TOP_N = 10; // DEC-A3 — "saiu do top-N" do getStatsLeaks.
+
+// Fallback de current quando o motor degrada (DEC-A5): agregacao direta da
+// fatia-1. Erro aqui -> null (nao quebra).
+async function aggregateCurrentForFallback(
+  g: NormalizedGoal,
+  deps: AggregateDeps,
+  userId: string,
+  weekStartDate: string,
+): Promise<number | null> {
+  try {
+    const agg = await aggregateCurrentValue(userId, g.sourceMetric, { weekStartDate }, deps);
+    return agg?.value ?? null;
+  } catch (err) {
+    console.error("goals.scoreboard.fallbackAggregate.error", { userId, goalRefId: g.refId, err });
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -269,11 +487,32 @@ export async function handleScoreboard(req: any, res: any, injectedStorage?: any
     }
 
     // aggregate + pace + status em paralelo (independentes; <=5 metas).
+    // Cada entry isolada — falha degrada, NUNCA quebra o scoreboard (lesson #9).
     const entries = await Promise.all(
-      normalized.map((g) => buildScoreboardEntry(g, deps, weekStartDate, userId, now)),
+      normalized.map((g) =>
+        buildScoreboardEntry(g, deps, storage, weekStartDate, userId, now).catch((err: any) => {
+          console.error("goals.scoreboard.entry.error", { userId, goalRefId: g.refId, err });
+          // Degrade total da entry — mantem o shape minimo, scoreboard 200.
+          return {
+            refId: g.refId,
+            kind: g.kind,
+            title: g.title,
+            sourceMetric: g.sourceMetric,
+            current: null,
+            target: g.target,
+            expectedNow: computeExpectedNow(g.baseline, g.target, g.createdAt, g.deadline, now),
+            status: "at_risk",
+            compliancePct: null,
+            dataSufficiency: "low" as const,
+            adherence: null,
+            horizon: g.horizon,
+          };
+        }),
+      ),
     );
 
-    // UPSERT idempotente dos snapshots da semana corrente (on-read).
+    // UPSERT idempotente dos snapshots da semana corrente (on-read). RF-04:
+    // grava compliancePct + dataSufficiency REAIS (nao mais 'ok' hardcoded).
     await Promise.all(
       entries.map((e) =>
         Promise.resolve(
@@ -285,7 +524,8 @@ export async function handleScoreboard(req: any, res: any, injectedStorage?: any
             currentValue: e.current,
             expectedValue: e.expectedNow,
             status: e.status,
-            dataSufficiency: "ok",
+            compliancePct: e.compliancePct ?? null,
+            dataSufficiency: e.dataSufficiency ?? "ok",
           }),
         ).catch((err: any) =>
           console.error("goals.scoreboard.snapshot.error", { userId, goalRefId: e.refId, err }),
@@ -304,6 +544,10 @@ export async function handleScoreboard(req: any, res: any, injectedStorage?: any
         expectedNow: e.expectedNow,
         status: e.status,
         horizon: e.horizon,
+        // ADICOES fatia-2 (aditivas; null/ausente em metas diretas).
+        compliancePct: e.compliancePct ?? null,
+        dataSufficiency: e.dataSufficiency ?? "ok",
+        adherence: e.adherence ?? null,
       }));
     const wigs = entries
       .filter((e) => e.kind === "wig")
@@ -471,8 +715,23 @@ async function createMeasureHandler(userId: string, body: any, storage: any, res
     });
     return;
   }
+  // METAS-2 fatia-2 (RF-02): leak_focus usa sufixo "leak_focus_progress:<statId>".
+  // O statId alvo precisa ser valido (catalog id ou custom_*); statId
+  // ausente/invalido -> lead_no_data_source (nao persiste lixo). A allowlist/map
+  // compara so a RAIZ (leak_focus_progress).
+  let mapKey = body.sourceMetric;
+  if (isLeakFocusMetric(body.sourceMetric)) {
+    const statId = parseLeakFocusStatId(body.sourceMetric);
+    // parseLeakFocusStatId ja valida via isValidStatId; revalidamos aqui como
+    // defense-in-depth (statId precisa ser catalog id OU custom_*).
+    if (!statId || !isValidStatId(statId)) {
+      res.status(422).json({ message: "lead_no_data_source", code: "lead_no_data_source" });
+      return;
+    }
+    mapKey = "leak_focus_progress";
+  }
   // RF-05: precisa de fonte de dado mapeada.
-  if (!GOALS_SOURCE_METRIC_MAP[body.sourceMetric]) {
+  if (!GOALS_SOURCE_METRIC_MAP[mapKey]) {
     res.status(422).json({ message: "lead_no_data_source", code: "lead_no_data_source" });
     return;
   }

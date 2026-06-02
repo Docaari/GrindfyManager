@@ -14,7 +14,10 @@
 // `source` documenta a tabela/metodo de origem.
 // =============================================================================
 
-export type SourceMetricKind = "volume" | "study" | "financial" | "performance";
+// METAS-2 fatia-2 (ADR-234 / D-4): kind 'leak' — leak_focus NAO tem agregacao
+// direta; o scoreboard o resolve via evaluateLeakFocusProgress ANTES de chamar
+// aggregateCurrentValue (que faz early-return para kind:'leak').
+export type SourceMetricKind = "volume" | "study" | "financial" | "performance" | "leak";
 
 export interface SourceMetricSpec {
   kind: SourceMetricKind;
@@ -32,4 +35,6 @@ export const GOALS_SOURCE_METRIC_MAP: Record<string, SourceMetricSpec> = {
   roi_pct: { kind: "performance", source: "getPerformanceByPeriod", perfField: "roi" },
   abi: { kind: "performance", source: "getPerformanceByPeriod", perfField: "abi" },
   itm_pct: { kind: "performance", source: "getPerformanceByPeriod", perfField: "itmPct" },
+  // METAS-2 fatia-2: raiz controlavel de leak_focus. statId alvo via sufixo.
+  leak_focus_progress: { kind: "leak", source: "getStatsLeaks + coach_leak_focus + stat_analysis" },
 };
