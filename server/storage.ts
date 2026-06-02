@@ -4589,8 +4589,23 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   async createStudySession(session: InsertStudySession): Promise<StudySession> {
+    // `date` chega como ISO string via JSON (HTTP boundary) — JSON nao tem tipo
+    // Date. A coluna `timestamp` do drizzle faz `value.toISOString()` no insert,
+    // que quebra em string (`s.toISOString is not a function` -> 400 "Erro ao
+    // iniciar sessao"). O zod `insertStudySessionSchema` rejeita string e o
+    // fallback do handler passa a string crua, entao a coercao tem que viver
+    // aqui. Date object passa direto; ausente/invalido cai pra now().
+    const rawDate = (session as any).date;
+    const coercedDate =
+      rawDate instanceof Date
+        ? rawDate
+        : (() => {
+            const d = new Date(rawDate);
+            return Number.isNaN(d.getTime()) ? new Date() : d;
+          })();
     const sessionData = {
       ...session,
+      date: coercedDate,
       id: nanoid(),
       // Sprint Estudos-Sessao-1 RF-02: default status='active' quando handler nao envia.
       status: (session as any).status ?? 'active',

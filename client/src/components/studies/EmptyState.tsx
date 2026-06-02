@@ -71,7 +71,7 @@ export function EmptyState({
       <Button
         data-testid="empty-state-cta"
         onClick={handleClick}
-        className="bg-poker-accent hover:bg-poker-accent/90 text-black font-semibold"
+        className="bg-primary hover:bg-primary/90 text-black font-semibold"
       >
         {ctaLabel}
       </Button>

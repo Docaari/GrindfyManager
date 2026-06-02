@@ -41,7 +41,7 @@ export function StudiesNavSidebar({ collapsed = false }: StudiesNavSidebarProps)
               onClick={() => navigate(item.path)}
               className={`w-full flex items-center gap-3 rounded px-3 py-2 text-left text-sm transition-colors ${
                 active
-                  ? 'bg-poker-accent/20 text-white font-semibold ring-2 ring-poker-accent/50'
+                  ? 'bg-primary/20 text-white font-semibold ring-2 ring-primary/50'
                   : 'text-gray-300 hover:bg-gray-800'
               }`}
               title={collapsed ? item.label : undefined}

@@ -43,14 +43,14 @@ describe("<StatsWizardFirstUse>", () => {
   it("default selecionado = pt4", () => {
     renderWizard();
     const card = screen.getByTestId("wizard-template-pt4");
-    expect(card.className).toMatch(/poker-accent|border-poker-accent/);
+    expect(card.className).toMatch(/border-primary|bg-primary/);
   });
 
   it("clicar troca selecao", () => {
     renderWizard();
     fireEvent.click(screen.getByTestId("wizard-template-hm3"));
     const card = screen.getByTestId("wizard-template-hm3");
-    expect(card.className).toMatch(/poker-accent|border-poker-accent/);
+    expect(card.className).toMatch(/border-primary|bg-primary/);
   });
 
   it("confirm POST cria layout com payload do template selecionado", async () => {

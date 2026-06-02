@@ -10,7 +10,7 @@ interface StudyStatsCardsProps {
 export function StudyStatsCards({ stats }: StudyStatsCardsProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      <Card className="bg-poker-surface border-gray-700">
+      <Card className="bg-card border-gray-700">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm text-gray-400">Cartões Ativos</CardTitle>
         </CardHeader>
@@ -20,12 +20,12 @@ export function StudyStatsCards({ stats }: StudyStatsCardsProps) {
         </CardContent>
       </Card>
 
-      <Card className="bg-poker-surface border-gray-700">
+      <Card className="bg-card border-gray-700">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm text-gray-400">Tempo Investido</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-poker-accent">
+          <div className="text-2xl font-bold text-primary">
             {formatTime(stats.weeklyTime)}
           </div>
           <p className="text-xs text-gray-400">esta semana</p>
@@ -38,7 +38,7 @@ export function StudyStatsCards({ stats }: StudyStatsCardsProps) {
         </CardContent>
       </Card>
 
-      <Card className="bg-poker-surface border-gray-700">
+      <Card className="bg-card border-gray-700">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm text-gray-400">Score Médio</CardTitle>
         </CardHeader>
@@ -50,7 +50,7 @@ export function StudyStatsCards({ stats }: StudyStatsCardsProps) {
         </CardContent>
       </Card>
 
-      <Card className="bg-poker-surface border-gray-700">
+      <Card className="bg-card border-gray-700">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm text-gray-400">Concluídos</CardTitle>
         </CardHeader>

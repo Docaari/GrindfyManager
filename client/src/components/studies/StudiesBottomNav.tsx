@@ -30,7 +30,7 @@ export function StudiesBottomNav() {
             aria-label={item.shortLabel ?? item.label}
             onClick={() => navigate(item.path)}
             className={`flex-1 flex items-center justify-center text-sm ${
-              active ? 'text-poker-accent' : 'text-gray-400'
+              active ? 'text-primary' : 'text-gray-400'
             }`}
           >
             <Icon className="w-5 h-5" aria-hidden />

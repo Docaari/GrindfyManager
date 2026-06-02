@@ -131,12 +131,12 @@ export default function StatsWizardPostImport({
       aria-modal="true"
       aria-labelledby="wizard-title"
     >
-      <div className="w-full max-w-3xl rounded-lg border border-poker-border bg-poker-card p-6 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-3xl rounded-lg border border-border bg-card p-6 max-h-[90vh] overflow-y-auto">
         <header className="mb-4">
           <h2 id="wizard-title" className="text-lg font-semibold">
             Configurar Stats Analyzer
           </h2>
-          <p className="text-sm text-poker-muted mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Escolha um template para comecar. Voce pode customizar depois.
           </p>
         </header>
@@ -154,23 +154,23 @@ export default function StatsWizardPostImport({
                 onClick={() => setSelectedId(template.id)}
                 className={`text-left rounded border p-3 transition-colors ${
                   isSelected
-                    ? "ring-2 ring-poker-accent border-poker-accent"
+                    ? "ring-2 ring-primary border-primary"
                     : isRecommended
-                      ? "ring-2 ring-poker-accent/40 border-poker-accent"
-                      : "border-poker-border hover:border-poker-accent/50"
+                      ? "ring-2 ring-primary/40 border-primary"
+                      : "border-border hover:border-primary/50"
                 }`}
                 aria-pressed={isSelected}
               >
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="font-medium text-sm">{template.name}</h3>
                   {isRecommended ? (
-                    <span className="text-xs bg-poker-accent text-poker-bg px-2 py-0.5 rounded-full">
+                    <span className="text-xs bg-primary text-background px-2 py-0.5 rounded-full">
                       Recomendado
                     </span>
                   ) : null}
                 </div>
-                <p className="text-xs text-poker-muted">{template.description}</p>
-                <p className="text-xs text-poker-muted mt-1">
+                <p className="text-xs text-muted-foreground">{template.description}</p>
+                <p className="text-xs text-muted-foreground mt-1">
                   {template.fields.length} stats
                 </p>
               </button>
@@ -183,7 +183,7 @@ export default function StatsWizardPostImport({
             type="button"
             data-testid="wizard-skip"
             onClick={() => onOpenChange(false)}
-            className="text-sm text-poker-muted hover:text-poker-fg"
+            className="text-sm text-muted-foreground hover:text-foreground"
             title="Voce pode reabrir em /studies > Configurar"
             aria-label="Pular por agora — voce pode reabrir em /studies > Configurar"
           >
@@ -194,7 +194,7 @@ export default function StatsWizardPostImport({
               type="button"
               data-testid="wizard-customize"
               onClick={() => onCustomize(selectedTemplate)}
-              className="rounded border border-poker-border px-3 py-2 text-sm hover:border-poker-accent"
+              className="rounded border border-border px-3 py-2 text-sm hover:border-primary"
             >
               Customizar
             </button>
@@ -202,7 +202,7 @@ export default function StatsWizardPostImport({
               type="button"
               data-testid="wizard-confirm"
               onClick={() => onApplyTemplate(selectedTemplate)}
-              className="rounded bg-poker-accent px-3 py-2 text-sm text-poker-bg font-medium"
+              className="rounded bg-primary px-3 py-2 text-sm text-background font-medium"
             >
               Aplicar template
             </button>

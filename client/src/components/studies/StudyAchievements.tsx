@@ -10,10 +10,10 @@ export function StudyAchievements({ achievements }: StudyAchievementsProps) {
   if (achievements.length === 0) return null;
 
   return (
-    <Card className="bg-poker-surface border-gray-700 mb-6">
+    <Card className="bg-card border-gray-700 mb-6">
       <CardHeader>
         <CardTitle className="text-white flex items-center gap-2">
-          <Trophy className="w-5 h-5 text-poker-accent" />
+          <Trophy className="w-5 h-5 text-primary" />
           Conquistas Desbloqueadas
         </CardTitle>
       </CardHeader>

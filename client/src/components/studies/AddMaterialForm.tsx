@@ -73,11 +73,11 @@ export function AddMaterialForm({ studyCardId, onClose }: AddMaterialFormProps) 
             name="title"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-white">Título</FormLabel>
+                <FormLabel className="text-foreground">Título</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
-                    className="bg-gray-800 border-gray-600 text-white"
+                    className="bg-muted border-border text-foreground"
                     placeholder="Ex: Aula sobre 3bet ranges"
                   />
                 </FormControl>
@@ -91,14 +91,14 @@ export function AddMaterialForm({ studyCardId, onClose }: AddMaterialFormProps) 
             name="type"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-white">Tipo</FormLabel>
+                <FormLabel className="text-foreground">Tipo</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
-                    <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                    <SelectTrigger className="bg-muted border-border text-foreground">
                       <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent className="bg-poker-surface border-gray-600">
+                  <SelectContent className="bg-card border-border">
                     <SelectItem value="video">📹 Vídeo/Aula</SelectItem>
                     <SelectItem value="article">📄 Artigo</SelectItem>
                     <SelectItem value="file">📎 Arquivo</SelectItem>
@@ -116,11 +116,11 @@ export function AddMaterialForm({ studyCardId, onClose }: AddMaterialFormProps) 
           name="url"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-white">URL/Link</FormLabel>
+              <FormLabel className="text-foreground">URL/Link</FormLabel>
               <FormControl>
                 <Input
                   {...field}
-                  className="bg-gray-800 border-gray-600 text-white"
+                  className="bg-muted border-border text-foreground"
                   placeholder="https://..."
                 />
               </FormControl>
@@ -134,11 +134,11 @@ export function AddMaterialForm({ studyCardId, onClose }: AddMaterialFormProps) 
           name="description"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-white">Descrição</FormLabel>
+              <FormLabel className="text-foreground">Descrição</FormLabel>
               <FormControl>
                 <Textarea
                   {...field}
-                  className="bg-gray-800 border-gray-600 text-white"
+                  className="bg-muted border-border text-foreground"
                   placeholder="Descreva o conteúdo do material..."
                   rows={3}
                 />
@@ -149,12 +149,12 @@ export function AddMaterialForm({ studyCardId, onClose }: AddMaterialFormProps) 
         />
 
         <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={onClose} className="text-white border-gray-600">
+          <Button type="button" variant="outline" onClick={onClose} className="text-foreground border-border">
             Cancelar
           </Button>
           <Button
             type="submit"
-            className="bg-poker-accent hover:bg-poker-accent/90 text-black font-semibold"
+            className="bg-primary hover:bg-primary/90 text-black font-semibold"
             disabled={createMaterialMutation.isPending}
           >
             {createMaterialMutation.isPending ? "Criando..." : "Adicionar Material"}

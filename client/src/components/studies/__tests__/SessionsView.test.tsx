@@ -31,11 +31,14 @@ function withClient(ui: React.ReactNode) {
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
 }
 
-const sessionsFixture = [
-  { id: 'ses_fin', themeId: 'thm_1', status: 'finished', date: '2026-05-20T10:00:00Z', duration: 45 },
-  { id: 'ses_act', themeId: 'thm_1', status: 'active', date: '2026-05-29T18:00:00Z', duration: 0 },
-  { id: 'ses_free', themeId: null, status: 'finished', date: '2026-05-18T09:00:00Z', duration: 20 },
-];
+// Shape v2 (study_sessions_v2): mode + registeredAt + durationMinutes.
+const sessionsFixture = {
+  items: [
+    { id: 'ses_old', mode: 'lesson', themeId: 'thm_1', durationMinutes: 45, registeredAt: '2026-05-20T10:00:00Z' },
+    { id: 'ses_new', mode: 'stat_analysis', themeId: 'thm_1', durationMinutes: 30, registeredAt: '2026-05-29T18:00:00Z', statId: 'vpip' },
+    { id: 'ses_free', mode: 'drill_gto', themeId: null, durationMinutes: 20, registeredAt: '2026-05-18T09:00:00Z' },
+  ],
+};
 
 const themesFixture = [{ id: 'thm_1', name: 'IP vs BB', emoji: '' }];
 
@@ -44,48 +47,54 @@ beforeEach(() => {
   navigateMock.mockReset();
   locationStateMock.path = '/estudos/sessoes';
   apiRequestMock.mockImplementation(async (_method: string, url: string) => {
-    if (String(url).includes('/api/study-sessions')) return sessionsFixture;
+    if (String(url).includes('/api/study-sessions/registered/list')) return sessionsFixture;
     if (String(url).includes('/api/study-themes')) return themesFixture;
     return null;
   });
 });
 
-describe('GAP-2 SessionsView', () => {
+describe('SessionsView — sessoes registradas (v2)', () => {
   it('renderiza lista com todas as sessoes', async () => {
     render(withClient(<SessionsView />));
     await waitFor(() => {
       expect(screen.getByTestId('sessions-list')).toBeInTheDocument();
-      expect(screen.getByTestId('session-row-ses_fin')).toBeInTheDocument();
-      expect(screen.getByTestId('session-row-ses_act')).toBeInTheDocument();
+      expect(screen.getByTestId('session-row-ses_old')).toBeInTheDocument();
+      expect(screen.getByTestId('session-row-ses_new')).toBeInTheDocument();
       expect(screen.getByTestId('session-row-ses_free')).toBeInTheDocument();
     });
   });
 
-  it('sessao ativa aparece antes das finalizadas (ordenacao)', async () => {
+  it('mais recente aparece primeiro (registeredAt desc)', async () => {
     render(withClient(<SessionsView />));
     await screen.findByTestId('sessions-list');
     const rows = screen.getAllByTestId(/^session-row-/);
-    expect(rows[0].getAttribute('data-testid')).toBe('session-row-ses_act');
+    expect(rows[0].getAttribute('data-testid')).toBe('session-row-ses_new');
   });
 
-  it('mostra nome do tema quando vinculado e "Sessão livre" quando null', async () => {
+  it('mostra nome do tema quando vinculado e "Sessao livre" quando null', async () => {
     render(withClient(<SessionsView />));
     const free = await screen.findByTestId('session-row-ses_free');
-    expect(free.textContent).toMatch(/sessão livre/i);
-    const fin = screen.getByTestId('session-row-ses_fin');
-    expect(fin.textContent).toMatch(/IP vs BB/);
+    expect(free.textContent).toMatch(/sessao livre/i);
+    const old = screen.getByTestId('session-row-ses_old');
+    expect(old.textContent).toMatch(/IP vs BB/);
   });
 
-  it('click em sessao navega para o detalhe', async () => {
+  it('mostra badge do modo do estudo', async () => {
     render(withClient(<SessionsView />));
-    const row = await screen.findByTestId('session-row-ses_fin');
+    const statRow = await screen.findByTestId('session-row-ses_new');
+    expect(statRow.textContent).toMatch(/Analise de stat/i);
+  });
+
+  it('click em sessao navega para o detalhe v2', async () => {
+    render(withClient(<SessionsView />));
+    const row = await screen.findByTestId('session-row-ses_old');
     await userEvent.click(row);
-    expect(navigateMock).toHaveBeenCalledWith('/estudos/sessao/ses_fin');
+    expect(navigateMock).toHaveBeenCalledWith('/estudos/analise/ses_old');
   });
 
   it('empty state quando nao ha sessoes', async () => {
     apiRequestMock.mockImplementation(async (_m: string, url: string) =>
-      String(url).includes('/api/study-themes') ? themesFixture : [],
+      String(url).includes('/api/study-themes') ? themesFixture : { items: [] },
     );
     render(withClient(<SessionsView />));
     await waitFor(() => {

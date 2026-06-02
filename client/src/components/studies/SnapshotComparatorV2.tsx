@@ -115,7 +115,7 @@ function ColorLegend() {
   return (
     <div
       data-testid="comparator-color-legend"
-      className="flex flex-wrap items-center gap-3 px-3 py-2 rounded border border-poker-border/40 bg-poker-card/30 text-xs"
+      className="flex flex-wrap items-center gap-3 px-3 py-2 rounded border border-border/40 bg-card/30 text-xs"
       role="note"
       aria-label="Legenda de cores"
     >
@@ -169,9 +169,9 @@ export default function SnapshotComparatorV2({
         <section
           key={group.id}
           data-testid={`comparator-group-${group.id}`}
-          className="rounded border border-poker-border/60 p-3 bg-poker-card/40"
+          className="rounded border border-border/60 p-3 bg-card/40"
         >
-          <h3 className="text-sm font-semibold text-poker-accent mb-2">
+          <h3 className="text-sm font-semibold text-primary mb-2">
             {group.label}
           </h3>
           {/* MEDIUM-2 UX: 1 coluna no mobile, escala progressivamente */}
@@ -198,7 +198,7 @@ export default function SnapshotComparatorV2({
         <div
           role="tooltip"
           data-testid="comparator-tooltip"
-          className="fixed bottom-4 right-4 z-50 max-w-xs rounded bg-poker-bg border border-poker-accent p-3 text-xs"
+          className="fixed bottom-4 right-4 z-50 max-w-xs rounded bg-background border border-primary p-3 text-xs"
         >
           <div className="font-semibold mb-1">{hoveredStat.label}</div>
           <div>{getDirectionTooltip(hoveredStat.direction)}</div>

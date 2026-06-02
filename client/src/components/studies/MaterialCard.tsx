@@ -16,7 +16,7 @@ export function MaterialCard({ material, onDelete }: MaterialCardProps) {
       case "article": return <FileText className="w-5 h-5 text-blue-500" />;
       case "file": return <Download className="w-5 h-5 text-green-500" />;
       case "link": return <ExternalLink className="w-5 h-5 text-purple-500" />;
-      default: return <FileText className="w-5 h-5 text-gray-500" />;
+      default: return <FileText className="w-5 h-5 text-muted-foreground" />;
     }
   };
 
@@ -24,7 +24,7 @@ export function MaterialCard({ material, onDelete }: MaterialCardProps) {
     switch (status) {
       case "completed": return <CheckCircle className="w-5 h-5 text-green-500" />;
       case "in_progress": return <Clock className="w-5 h-5 text-yellow-500" />;
-      default: return <Circle className="w-5 h-5 text-gray-500" />;
+      default: return <Circle className="w-5 h-5 text-muted-foreground" />;
     }
   };
 
@@ -37,22 +37,22 @@ export function MaterialCard({ material, onDelete }: MaterialCardProps) {
   };
 
   return (
-    <Card className="bg-gray-800 border-gray-600 hover:bg-gray-750 transition-colors">
+    <Card className="bg-card border-border hover:bg-accent transition-colors">
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {getTypeIcon(material.type)}
             <div>
-              <h4 className="font-semibold text-white">{material.title}</h4>
+              <h4 className="font-semibold text-foreground">{material.title}</h4>
               {material.description && (
-                <p className="text-sm text-gray-400 mt-1">{material.description}</p>
+                <p className="text-sm text-muted-foreground mt-1">{material.description}</p>
               )}
               {safeHref(material.url) && (
                 <a
                   href={safeHref(material.url)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-poker-accent hover:text-poker-accent/80 mt-1 inline-flex items-center gap-1"
+                  className="text-sm text-primary hover:text-primary/80 mt-1 inline-flex items-center gap-1"
                 >
                   <ExternalLink className="w-3 h-3" />
                   Abrir link

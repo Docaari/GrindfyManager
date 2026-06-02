@@ -17,18 +17,18 @@ export function StudyFilters({ searchQuery, onSearchChange, selectedCategory, on
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
         <Input
           placeholder="Buscar estudos..."
-          className="pl-10 bg-poker-surface border-gray-600 text-white"
+          className="pl-10 bg-card border-gray-600 text-white"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
         />
       </div>
 
       <Select value={selectedCategory} onValueChange={onCategoryChange}>
-        <SelectTrigger className="w-full sm:w-48 bg-poker-surface border-gray-600 text-white">
+        <SelectTrigger className="w-full sm:w-48 bg-card border-gray-600 text-white">
           <Filter className="w-4 h-4 mr-2" />
           <SelectValue placeholder="Categoria" />
         </SelectTrigger>
-        <SelectContent className="bg-poker-surface border-gray-600">
+        <SelectContent className="bg-card border-gray-600">
           <SelectItem value="all">Todas</SelectItem>
           {CATEGORIES.map(category => (
             <SelectItem key={category} value={category}>

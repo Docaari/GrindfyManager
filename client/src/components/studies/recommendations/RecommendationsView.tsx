@@ -129,7 +129,7 @@ export function RecommendationsView() {
               aria-pressed={filter === f}
               className={`text-xs px-2 py-1 rounded border ${
                 filter === f
-                  ? 'bg-poker-accent text-black border-poker-accent'
+                  ? 'bg-primary text-black border-primary'
                   : 'border-gray-700 text-gray-300 hover:bg-gray-800'
               }`}
             >
@@ -174,7 +174,7 @@ export function RecommendationsView() {
                 }
                 className={`rounded-xl border border-gray-700/80 bg-gray-900/40 p-4 transition-all duration-200 ${
                   r.cta_url
-                    ? 'cursor-pointer hover:-translate-y-0.5 hover:bg-gray-800/60 hover:border-gray-600 hover:shadow-lg hover:shadow-black/20 focus:outline-none focus:ring-2 focus:ring-poker-accent/40'
+                    ? 'cursor-pointer hover:-translate-y-0.5 hover:bg-gray-800/60 hover:border-gray-600 hover:shadow-lg hover:shadow-black/20 focus:outline-none focus:ring-2 focus:ring-primary/40'
                     : ''
                 }`}
               >
@@ -195,7 +195,7 @@ export function RecommendationsView() {
                   aria-hidden
                 >
                   <div
-                    className="h-full bg-poker-accent"
+                    className="h-full bg-primary"
                     style={{ width: `${pct}%` }}
                   />
                 </div>
@@ -207,7 +207,7 @@ export function RecommendationsView() {
                       e.stopPropagation();
                       navigate(r.cta_url!);
                     }}
-                    className="text-xs px-3 py-1.5 rounded bg-poker-accent text-black font-semibold"
+                    className="text-xs px-3 py-1.5 rounded bg-primary text-black font-semibold"
                   >
                     {ctaLabelFor(r.cta_action)}
                   </button>

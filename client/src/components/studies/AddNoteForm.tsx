@@ -67,11 +67,11 @@ export function AddNoteForm({ studyCardId, onClose }: AddNoteFormProps) {
           name="title"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-white">Título</FormLabel>
+              <FormLabel className="text-foreground">Título</FormLabel>
               <FormControl>
                 <Input
                   {...field}
-                  className="bg-gray-800 border-gray-600 text-white"
+                  className="bg-muted border-border text-foreground"
                   placeholder="Ex: Descobertas sobre 3bet calling ranges"
                 />
               </FormControl>
@@ -85,11 +85,11 @@ export function AddNoteForm({ studyCardId, onClose }: AddNoteFormProps) {
           name="content"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-white">Conteúdo</FormLabel>
+              <FormLabel className="text-foreground">Conteúdo</FormLabel>
               <FormControl>
                 <Textarea
                   {...field}
-                  className="bg-gray-800 border-gray-600 text-white"
+                  className="bg-muted border-border text-foreground"
                   placeholder="Descreva suas descobertas, insights e pontos importantes..."
                   rows={8}
                 />
@@ -104,11 +104,11 @@ export function AddNoteForm({ studyCardId, onClose }: AddNoteFormProps) {
           name="tags"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-white">Tags (opcional)</FormLabel>
+              <FormLabel className="text-foreground">Tags (opcional)</FormLabel>
               <FormControl>
                 <Input
                   {...field}
-                  className="bg-gray-800 border-gray-600 text-white"
+                  className="bg-muted border-border text-foreground"
                   placeholder="Ex: 3bet, ranges, BTN vs BB"
                 />
               </FormControl>
@@ -118,12 +118,12 @@ export function AddNoteForm({ studyCardId, onClose }: AddNoteFormProps) {
         />
 
         <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={onClose} className="text-white border-gray-600">
+          <Button type="button" variant="outline" onClick={onClose} className="text-foreground border-border">
             Cancelar
           </Button>
           <Button
             type="submit"
-            className="bg-poker-accent hover:bg-poker-accent/90 text-black font-semibold"
+            className="bg-primary hover:bg-primary/90 text-black font-semibold"
             disabled={createNoteMutation.isPending}
           >
             {createNoteMutation.isPending ? "Criando..." : "Criar Anotação"}

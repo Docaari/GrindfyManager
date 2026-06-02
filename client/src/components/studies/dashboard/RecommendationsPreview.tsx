@@ -26,7 +26,7 @@ export function RecommendationsPreview({ items }: RecommendationsPreviewProps) {
 
   if (!top.length) {
     return (
-      <div data-testid="recommendations-preview-empty" className="text-xs text-gray-500">
+      <div data-testid="recommendations-preview-empty" className="text-xs text-muted-foreground">
         Voce esta em dia. Continue estudando.
       </div>
     );
@@ -40,10 +40,10 @@ export function RecommendationsPreview({ items }: RecommendationsPreviewProps) {
           type="button"
           data-testid={`dashboard-rec-${r.id}`}
           onClick={() => r.cta_url && navigate(r.cta_url)}
-          className="w-full text-left rounded-md border border-gray-700 bg-gray-800/70 px-3 py-2 hover:bg-gray-800"
+          className="w-full text-left rounded-md border border-border bg-muted px-3 py-2 hover:bg-accent"
         >
-          <div className="text-sm font-medium text-white">{r.title}</div>
-          <div className="text-[11px] text-gray-400">
+          <div className="text-sm font-medium text-foreground">{r.title}</div>
+          <div className="text-[11px] text-muted-foreground">
             score {r.priority_score} · {r.type}
           </div>
         </button>

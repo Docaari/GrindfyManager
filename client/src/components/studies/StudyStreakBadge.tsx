@@ -66,7 +66,7 @@ const STATE_LABEL: Record<StreakState, string> = {
 };
 
 const STATE_CLASS: Record<StreakState, string> = {
-  inactive: 'bg-gray-700 text-gray-300',
+  inactive: 'bg-muted text-muted-foreground',
   starting: 'bg-blue-600/30 text-blue-300 border border-blue-500/40',
   building: 'bg-yellow-600/30 text-yellow-300 border border-yellow-500/40',
   fire: 'bg-orange-600/30 text-orange-300 border border-orange-500/40',

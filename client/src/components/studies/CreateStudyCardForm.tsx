@@ -53,7 +53,7 @@ function WeeklyStudyPlanForm({ form }: { form: any }) {
     <div className="space-y-4">
       {/* Dias da Semana */}
       <div>
-        <FormLabel className="text-white text-sm font-medium mb-3 block">
+        <FormLabel className="text-foreground text-sm font-medium mb-3 block">
           Dias sugeridos para estudo
         </FormLabel>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -63,11 +63,11 @@ function WeeklyStudyPlanForm({ form }: { form: any }) {
                 id={day.key}
                 checked={selectedDays.includes(day.key)}
                 onCheckedChange={() => handleDayToggle(day.key)}
-                className="border-gray-600"
+                className="border-border"
               />
               <Label
                 htmlFor={day.key}
-                className="text-sm text-white cursor-pointer"
+                className="text-sm text-foreground cursor-pointer"
               >
                 {day.label}
               </Label>
@@ -84,12 +84,12 @@ function WeeklyStudyPlanForm({ form }: { form: any }) {
             name="studyStartTime"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-white">Horário de início</FormLabel>
+                <FormLabel className="text-foreground">Horário de início</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
                     type="time"
-                    className="bg-gray-800 border-gray-600 text-white"
+                    className="bg-muted border-border text-foreground"
                     placeholder="10:00"
                   />
                 </FormControl>
@@ -103,14 +103,14 @@ function WeeklyStudyPlanForm({ form }: { form: any }) {
             name="studyDuration"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-white">Duração (minutos)</FormLabel>
+                <FormLabel className="text-foreground">Duração (minutos)</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
                     type="number"
                     min="15"
                     max="480"
-                    className="bg-gray-800 border-gray-600 text-white"
+                    className="bg-muted border-border text-foreground"
                     placeholder="90"
                     onChange={(e) => field.onChange(parseInt(e.target.value) || 60)}
                   />
@@ -131,7 +131,7 @@ function WeeklyStudyPlanForm({ form }: { form: any }) {
               checked={isRecurring}
               onCheckedChange={handleRecurringToggle}
             />
-            <Label htmlFor="recurring" className="text-white">
+            <Label htmlFor="recurring" className="text-foreground">
               Estudo recorrente
             </Label>
           </div>
@@ -142,14 +142,14 @@ function WeeklyStudyPlanForm({ form }: { form: any }) {
               name="weeklyFrequency"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-white">Frequência por semana</FormLabel>
+                  <FormLabel className="text-foreground">Frequência por semana</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
                       type="number"
                       min="1"
                       max="7"
-                      className="bg-gray-800 border-gray-600 text-white w-24"
+                      className="bg-muted border-border text-foreground w-24"
                       placeholder="2"
                       onChange={(e) => field.onChange(parseInt(e.target.value) || 2)}
                     />
@@ -169,11 +169,11 @@ function WeeklyStudyPlanForm({ form }: { form: any }) {
           name="studyDescription"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-white">Descrição opcional</FormLabel>
+              <FormLabel className="text-foreground">Descrição opcional</FormLabel>
               <FormControl>
                 <Input
                   {...field}
-                  className="bg-gray-800 border-gray-600 text-white"
+                  className="bg-muted border-border text-foreground"
                   placeholder="Ex: Aula da Apollo, Teoria ICM, etc."
                 />
               </FormControl>
@@ -224,11 +224,11 @@ export function CreateStudyCardForm({ onClose, onSubmit }: CreateStudyCardFormPr
             name="title"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-white">Título do Estudo</FormLabel>
+                <FormLabel className="text-foreground">Título do Estudo</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
-                    className="bg-gray-800 border-gray-600 text-white"
+                    className="bg-muted border-border text-foreground"
                     placeholder="Ex: Defesa contra 3bet"
                   />
                 </FormControl>
@@ -242,14 +242,14 @@ export function CreateStudyCardForm({ onClose, onSubmit }: CreateStudyCardFormPr
             name="category"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-white">Categoria</FormLabel>
+                <FormLabel className="text-foreground">Categoria</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
-                    <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                    <SelectTrigger className="bg-muted border-border text-foreground">
                       <SelectValue placeholder="Selecione uma categoria" />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent className="bg-poker-surface border-gray-600">
+                  <SelectContent className="bg-card border-border">
                     {CATEGORIES.map(category => (
                       <SelectItem key={category} value={category}>
                         {category}
@@ -269,14 +269,14 @@ export function CreateStudyCardForm({ onClose, onSubmit }: CreateStudyCardFormPr
             name="difficulty"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-white">Dificuldade</FormLabel>
+                <FormLabel className="text-foreground">Dificuldade</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
-                    <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                    <SelectTrigger className="bg-muted border-border text-foreground">
                       <SelectValue placeholder="Selecione a dificuldade" />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent className="bg-poker-surface border-gray-600">
+                  <SelectContent className="bg-card border-border">
                     <SelectItem value="Iniciante">Iniciante</SelectItem>
                     <SelectItem value="Intermediário">Intermediário</SelectItem>
                     <SelectItem value="Avançado">Avançado</SelectItem>
@@ -292,14 +292,14 @@ export function CreateStudyCardForm({ onClose, onSubmit }: CreateStudyCardFormPr
             name="priority"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-white">Prioridade</FormLabel>
+                <FormLabel className="text-foreground">Prioridade</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
-                    <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                    <SelectTrigger className="bg-muted border-border text-foreground">
                       <SelectValue placeholder="Selecione a prioridade" />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent className="bg-poker-surface border-gray-600">
+                  <SelectContent className="bg-card border-border">
                     <SelectItem value="Baixa">Baixa</SelectItem>
                     <SelectItem value="Média">Média</SelectItem>
                     <SelectItem value="Alta">Alta</SelectItem>
@@ -315,13 +315,13 @@ export function CreateStudyCardForm({ onClose, onSubmit }: CreateStudyCardFormPr
             name="estimatedTime"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-white">Tempo estimado (min)</FormLabel>
+                <FormLabel className="text-foreground">Tempo estimado (min)</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
                     type="number"
                     min="1"
-                    className="bg-gray-800 border-gray-600 text-white"
+                    className="bg-muted border-border text-foreground"
                     placeholder="30"
                     onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                   />
@@ -337,11 +337,11 @@ export function CreateStudyCardForm({ onClose, onSubmit }: CreateStudyCardFormPr
           name="description"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-white">Descrição</FormLabel>
+              <FormLabel className="text-foreground">Descrição</FormLabel>
               <FormControl>
                 <Textarea
                   {...field}
-                  className="bg-gray-800 border-gray-600 text-white"
+                  className="bg-muted border-border text-foreground"
                   placeholder="Descreva o que você quer estudar..."
                   rows={3}
                 />
@@ -356,11 +356,11 @@ export function CreateStudyCardForm({ onClose, onSubmit }: CreateStudyCardFormPr
           name="objectives"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-white">Objetivos</FormLabel>
+              <FormLabel className="text-foreground">Objetivos</FormLabel>
               <FormControl>
                 <Textarea
                   {...field}
-                  className="bg-gray-800 border-gray-600 text-white"
+                  className="bg-muted border-border text-foreground"
                   placeholder="Liste seus objetivos de aprendizado..."
                   rows={3}
                 />
@@ -371,8 +371,8 @@ export function CreateStudyCardForm({ onClose, onSubmit }: CreateStudyCardFormPr
         />
 
         {/* Seção de Planejamento Semanal */}
-        <div className="space-y-4 border-t border-gray-700 pt-4">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+        <div className="space-y-4 border-t border-border pt-4">
+          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
             <Calendar className="w-5 h-5" />
             Planejamento Semanal (Opcional)
           </h3>
@@ -381,10 +381,10 @@ export function CreateStudyCardForm({ onClose, onSubmit }: CreateStudyCardFormPr
         </div>
 
         <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={onClose} className="text-white border-gray-600">
+          <Button type="button" variant="outline" onClick={onClose} className="text-foreground border-border">
             Cancelar
           </Button>
-          <Button type="submit" className="bg-poker-accent hover:bg-poker-accent/90 text-black font-semibold">
+          <Button type="submit" className="bg-primary hover:bg-primary/90 text-black font-semibold">
             Criar Estudo
           </Button>
         </div>

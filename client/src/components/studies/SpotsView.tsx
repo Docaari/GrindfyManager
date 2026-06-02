@@ -249,12 +249,12 @@ export function SpotsView() {
   return (
     <div data-testid="studies-view-spots" className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-semibold text-white">Spots</h2>
+        <h2 className="text-2xl font-semibold text-foreground">Spots</h2>
         <button
           type="button"
           data-testid="spots-show-all-toggle"
           onClick={toggleShowAll}
-          className="text-xs text-gray-400 hover:text-white"
+          className="text-xs text-muted-foreground hover:text-foreground"
         >
           {showAll ? 'Mostrar somente pendentes' : 'Mostrar todos (incluindo vinculados)'}
         </button>
@@ -281,13 +281,13 @@ export function SpotsView() {
               type="button"
               data-testid={`spot-card-${s.id}`}
               onClick={() => openSpotModal(s)}
-              className="group text-left rounded-xl border border-gray-700/80 bg-gray-800/60 p-0 overflow-hidden flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-600 hover:shadow-lg hover:shadow-black/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-poker-accent/50"
+              className="group text-left rounded-xl border border-border bg-muted p-0 overflow-hidden flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:shadow-lg hover:shadow-black/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
               <div className="relative bg-black/40 aspect-[4/3] w-full overflow-hidden flex items-center justify-center">
                 {/* Placeholder atras da imagem — aparece se a img falhar/zerar. */}
                 <div
                   aria-hidden
-                  className="absolute inset-0 grid place-items-center text-gray-600"
+                  className="absolute inset-0 grid place-items-center text-muted-foreground"
                 >
                   <Bookmark className="w-8 h-8" />
                 </div>
@@ -302,11 +302,11 @@ export function SpotsView() {
                 />
               </div>
               <div className="p-3">
-                <div className="text-sm font-semibold text-white line-clamp-2">
+                <div className="text-sm font-semibold text-foreground line-clamp-2">
                   {s.notes?.trim() || 'Sem nota'}
                 </div>
                 {s.conclusion && (
-                  <div className="text-xs text-gray-400 mt-1 line-clamp-2">
+                  <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
                     {s.conclusion}
                   </div>
                 )}
@@ -323,16 +323,16 @@ export function SpotsView() {
           aria-label="Revisar spot"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
         >
-          <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-full max-w-2xl">
-            <div className="p-4 border-b border-gray-800">
-              <div className="text-sm font-semibold text-white">
+          <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-2xl">
+            <div className="p-4 border-b border-border">
+              <div className="text-sm font-semibold text-foreground">
                 Revisao: {activeSpot.type} {activeSpot.spot ? `· ${activeSpot.spot}` : ''}
               </div>
-              <div className="text-xs text-gray-400 mt-1">{activeSpot.conclusion}</div>
+              <div className="text-xs text-muted-foreground mt-1">{activeSpot.conclusion}</div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
               <div className="md:col-span-2 space-y-3">
-                <div className="bg-black/40 rounded border border-gray-800 overflow-hidden flex items-center justify-center max-h-[420px]">
+                <div className="bg-black/40 rounded border border-border overflow-hidden flex items-center justify-center max-h-[420px]">
                   <img
                     src={`/api/starred-hands/${activeSpot.id}/image`}
                     alt={`Spot ${activeSpot.type ?? ''} ${activeSpot.spot ?? ''}`.trim()}
@@ -349,7 +349,7 @@ export function SpotsView() {
                   onChange={(id) => setLinkedThemeId(id)}
                 />
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-300">
+                  <label className="text-xs font-medium text-foreground">
                     Nota (max 500)
                   </label>
                   <textarea
@@ -357,17 +357,17 @@ export function SpotsView() {
                     value={editedNotes}
                     onChange={(e) => setEditedNotes(e.target.value.slice(0, 500))}
                     rows={3}
-                    className="w-full rounded bg-gray-800 border border-gray-700 text-white text-sm p-2 resize-none"
+                    className="w-full rounded bg-muted border border-border text-foreground text-sm p-2 resize-none"
                     placeholder="Anote duvidas, leituras, ranges..."
                   />
-                  <div className="flex items-center justify-between text-xs text-gray-500">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>{editedNotes.length} / 500</span>
                     <button
                       type="button"
                       data-testid="spot-notes-save"
                       onClick={saveNotes}
                       disabled={savingNotes || editedNotes === (activeSpot.notes ?? '')}
-                      className="px-2 py-1 rounded bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50"
+                      className="px-2 py-1 rounded bg-muted text-foreground hover:bg-accent disabled:opacity-50"
                     >
                       {savingNotes ? 'Salvando...' : 'Salvar nota'}
                     </button>
@@ -382,7 +382,7 @@ export function SpotsView() {
                 />
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2 p-4 border-t border-gray-800">
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-border">
               <button
                 type="button"
                 onClick={() => {
@@ -390,7 +390,7 @@ export function SpotsView() {
                   setLinkedThemeId(null);
                   setEditedNotes('');
                 }}
-                className="px-3 py-1.5 rounded border border-gray-700 text-sm text-gray-300 hover:bg-gray-800"
+                className="px-3 py-1.5 rounded border border-border text-sm text-foreground hover:bg-accent"
               >
                 Fechar
               </button>
@@ -399,7 +399,7 @@ export function SpotsView() {
                 data-testid="spot-link-submit"
                 disabled={reviewMutation.isPending}
                 onClick={submitReview}
-                className="px-3 py-1.5 rounded bg-poker-accent text-black text-sm font-semibold"
+                className="px-3 py-1.5 rounded bg-primary text-black text-sm font-semibold"
               >
                 {reviewMutation.isPending ? 'Salvando...' : 'Salvar revisao'}
               </button>

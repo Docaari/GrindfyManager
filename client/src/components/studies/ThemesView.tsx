@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { parseSearch } from '@/lib/url';
+import { cn } from '@/lib/utils';
+import { tokens } from '@/lib/ui-tokens';
 import { EmptyState } from './EmptyState';
 import { ThemeFormDialog, type ThemeFormValues } from './ThemeFormDialog';
 
@@ -129,11 +131,11 @@ export function ThemesView() {
   return (
     <div data-testid="studies-view-temas" className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-semibold text-white">Temas</h2>
+        <h2 className="text-2xl font-semibold text-foreground">Temas</h2>
         <Button
           data-testid="themes-create-button"
           onClick={openCreate}
-          className="bg-poker-accent text-black font-semibold hover:bg-poker-accent/90"
+          className="bg-primary text-black font-semibold hover:bg-primary/90"
         >
           <Plus className="w-4 h-4 mr-2" />
           Novo tema
@@ -143,14 +145,19 @@ export function ThemesView() {
       {fromStats && (
         <div
           data-testid="themes-filter-badge"
-          className="mb-4 flex items-center gap-2 rounded border border-yellow-600/40 bg-yellow-900/30 px-3 py-2 text-sm text-yellow-200"
+          className={cn(
+            'mb-4 flex items-center gap-2 rounded border px-3 py-2 text-sm',
+            tokens.color.warn.bg,
+            tokens.color.warn.text,
+            tokens.color.warn.border,
+          )}
         >
           <span>Filtrando por leaks ativos</span>
           <button
             type="button"
             data-testid="themes-filter-clear"
             onClick={clearFilter}
-            className="ml-auto text-xs underline hover:text-yellow-100"
+            className="ml-auto text-xs underline hover:text-foreground"
           >
             <X className="inline-block w-3 h-3 mr-1" /> Limpar filtro
           </button>
@@ -158,13 +165,13 @@ export function ThemesView() {
       )}
 
       <div className="relative mb-4 max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           data-testid="themes-search-input"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Buscar por nome..."
-          className="pl-10 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+          className="pl-10 bg-card border-border text-foreground placeholder:text-muted-foreground"
         />
       </div>
 
@@ -200,7 +207,7 @@ export function ThemesView() {
                 data-testid={`theme-card-${t.id}`}
                 onClick={() => navigate(`/estudos/temas/${t.id}`)}
                 style={{ ['--accent' as any]: accent }}
-                className="group relative text-left rounded-xl border border-gray-700/80 bg-gray-800/60 p-4 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-600 hover:bg-gray-800 hover:shadow-lg hover:shadow-black/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50"
+                className="group relative text-left rounded-xl border border-border bg-card p-4 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-accent hover:bg-accent hover:shadow-lg hover:shadow-black/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50"
               >
                 {/* Faixa de cor do tema */}
                 <span
@@ -221,7 +228,7 @@ export function ThemesView() {
                         </span>
                       )}
                     </span>
-                    <span className="text-sm font-semibold text-white truncate">
+                    <span className="text-sm font-semibold text-foreground truncate">
                       {t.name}
                     </span>
                   </div>
@@ -237,11 +244,11 @@ export function ThemesView() {
 
                 {/* Progresso */}
                 <div className="pl-1 space-y-1">
-                  <div className="flex items-center justify-between text-[11px] text-gray-400">
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                     <span>Progresso</span>
-                    <span className="font-mono text-gray-300">{progress}%</span>
+                    <span className="font-mono text-foreground">{progress}%</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-gray-700/60 overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
                       style={{ width: `${progress}%`, backgroundColor: accent }}

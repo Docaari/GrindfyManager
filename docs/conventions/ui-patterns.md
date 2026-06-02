@@ -439,11 +439,49 @@ Anti-pattern: criar componente local "porque eh mais rapido" quando Foundation j
 
 ---
 
-## 16. Historico de revisoes
+## 16. Studies — 5 regras de ouro do modulo
+
+Sprint Estudos-UX (founder, ADR-239). O modulo de Estudos foi auditado e
+modernizado; o reviewer reprova drift que viole estas regras:
+
+1. **Tokens semanticos, zero raw.** Proibido `bg-gray-*`, `text-white`,
+   `bg-[#hex]`, e a camada legada **`poker-*`** (migrada para os canonicos em
+   2026-06). Use `bg-card` / `bg-background` / `border-border` /
+   `text-foreground` / `text-muted-foreground`, e `tokens.color.{action,success,
+   danger,warn,info}` para destaques. CTA primario = `bg-primary text-primary-
+   foreground`. (Em DARK, `poker-bg≡background`, `poker-surface≡card`,
+   `poker-accent≡primary` — por isso o swap foi visualmente neutro.)
+
+2. **Progressive disclosure por dominio.** Tela com >3 dominios distintos de
+   info (stats / MDA / spots / aulas) usa **`<Tabs>`** (ex: ThemeDetailView);
+   detalhe expansivel dentro de um dominio usa **`<Collapsible>`**. Nunca
+   empilhar 5+ secoes abertas separadas so por `border-t`. Ao migrar para Tabs
+   com sub-secoes testadas, use `forceMount` para manter o DOM montado
+   (ErrorBoundary por secao + data-testid presentes em qualquer aba).
+
+3. **Um header, um CTA primario.** Toda view usa `<PageHeader title subtitle
+   actions>`. Exatamente 1 CTA primario por tela; verbo+objeto PT-BR
+   ("Registrar estudo"). Acoes secundarias = `outline`/`ghost`.
+
+4. **Densidade de leitura.** Studies e conteudo, nao cockpit: `gap-6`/
+   `space-y-6` entre secoes; cards `p-4`/`p-6`. Forms agrupados em secoes
+   nomeadas com `<Card>`. Preferir componentes shadcn (`<Select>`, `<Input>`,
+   `<Button>`); excecao tolerada: `<select>` nativo onde testes usam
+   `userEvent.selectOptions` (Radix Select quebra esse driver — lesson #27).
+
+5. **Modais via shadcn.** Toda sobreposicao usa `<Dialog>`/`<Sheet>`/
+   `<AlertDialog>` — nunca `fixed inset-0` na mao. Form >10 campos ou
+   multi-etapa = pagina dedicada (StudySessionForm/MdaReadForm). Icones via
+   `lucide-react`, nunca `"X"`/`"▼"` textuais.
+
+---
+
+## 17. Historico de revisoes
 
 | Data | Versao | Autor | Mudanca |
 |---|---|---|---|
 | 2026-05-02 | 1.0 | Sprint UI-FND-1 | Versao inicial — tokens + EmptyState + FilterChip + PageHeader documentados |
+| 2026-06-02 | 1.1 | Sprint Estudos-UX | §16 Studies — 5 regras de ouro (tokens/Tabs/PageHeader/densidade/Dialog); migracao poker-* (ADR-239) |
 
 ---
 

@@ -133,7 +133,7 @@ export function OnboardingWizard({ open, onOpenChange }: OnboardingWizardProps) 
               key={n}
               data-testid={`onboarding-dot-${n}`}
               className={`w-2 h-2 rounded-full ${
-                n === step ? 'bg-poker-accent' : 'bg-gray-600'
+                n === step ? 'bg-primary' : 'bg-gray-600'
               }`}
             />
           ))}
@@ -183,7 +183,7 @@ export function OnboardingWizard({ open, onOpenChange }: OnboardingWizardProps) 
                 type="button"
                 data-testid="onboarding-finish"
                 onClick={close}
-                className="px-4 py-2 rounded bg-poker-accent text-black font-semibold"
+                className="px-4 py-2 rounded bg-primary text-black font-semibold"
               >
                 Concluir
               </button>
@@ -217,7 +217,7 @@ export function OnboardingWizard({ open, onOpenChange }: OnboardingWizardProps) 
                 type="button"
                 data-testid="onboarding-next"
                 onClick={next}
-                className="px-3 py-1.5 rounded bg-poker-accent text-black text-sm font-semibold"
+                className="px-3 py-1.5 rounded bg-primary text-black text-sm font-semibold"
               >
                 Proximo
               </button>

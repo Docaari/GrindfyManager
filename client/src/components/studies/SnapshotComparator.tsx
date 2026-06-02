@@ -93,7 +93,7 @@ export default function SnapshotComparator({ open, onOpenChange, ids }: Props) {
         </DialogHeader>
 
         {compareMutation.isPending && (
-          <p className="text-sm text-gray-400">Carregando comparacao...</p>
+          <p className="text-sm text-muted-foreground">Carregando comparacao...</p>
         )}
 
         {error && (
@@ -104,11 +104,11 @@ export default function SnapshotComparator({ open, onOpenChange, ids }: Props) {
 
         {payload && (
           <div className="space-y-3">
-            <div className="text-xs text-gray-400">
+            <div className="text-xs text-muted-foreground">
               Layout: {payload.layoutName}
             </div>
 
-            <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 border-b border-gray-700/40 pb-1">
+            <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground border-b border-border pb-1">
               <div className="col-span-3">Stat</div>
               <div className="col-span-2 text-right">Target</div>
               <div className="col-span-2 text-right">A</div>
@@ -142,23 +142,23 @@ export default function SnapshotComparator({ open, onOpenChange, ids }: Props) {
                     data-testid={`compare-row-${d.key}`}
                     className="grid grid-cols-12 gap-2 text-sm items-center"
                   >
-                    <div className="col-span-3 font-mono text-gray-300 text-xs">{d.key}</div>
+                    <div className="col-span-3 font-mono text-foreground text-xs">{d.key}</div>
                     <div
                       data-testid={`compare-target-${d.key}`}
-                      className="col-span-2 text-right text-gray-500 font-mono text-xs"
+                      className="col-span-2 text-right text-muted-foreground font-mono text-xs"
                     >
                       {targetStr}
                     </div>
-                    <div className="col-span-2 text-right text-gray-200">
+                    <div className="col-span-2 text-right text-foreground">
                       {fmt(d.a)}
                       {d.aSampleSize ? (
-                        <span className="text-[9px] text-gray-500 ml-1">n={d.aSampleSize}</span>
+                        <span className="text-[9px] text-muted-foreground ml-1">n={d.aSampleSize}</span>
                       ) : null}
                     </div>
-                    <div className="col-span-2 text-right text-gray-200">
+                    <div className="col-span-2 text-right text-foreground">
                       {fmt(d.b)}
                       {d.bSampleSize ? (
-                        <span className="text-[9px] text-gray-500 ml-1">n={d.bSampleSize}</span>
+                        <span className="text-[9px] text-muted-foreground ml-1">n={d.bSampleSize}</span>
                       ) : null}
                     </div>
                     <div

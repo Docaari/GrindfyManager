@@ -49,7 +49,7 @@ export function ContinueWhereLeftOff({ themes }: ContinueWhereLeftOffProps) {
 
   if (!top.length) {
     return (
-      <div data-testid="continue-empty" className="text-xs text-gray-500">
+      <div data-testid="continue-empty" className="text-xs text-muted-foreground">
         Sem temas recentes.
       </div>
     );
@@ -68,20 +68,20 @@ export function ContinueWhereLeftOff({ themes }: ContinueWhereLeftOffProps) {
           type="button"
           data-testid={`studies-dashboard-card-continue-item-${t.id}`}
           onClick={() => go(t)}
-          className="w-full text-left rounded-md border border-gray-700 bg-gray-800/70 px-3 py-2 hover:bg-gray-800 transition-colors"
+          className="w-full text-left rounded-md border border-border bg-muted px-3 py-2 hover:bg-accent transition-colors"
         >
           <div className="flex items-center justify-between">
-            <div className="text-sm font-medium text-white">
+            <div className="text-sm font-medium text-foreground">
               {t.emoji ? `${t.emoji} ` : ''}
               {t.name}
             </div>
-            <div className="text-[11px] text-gray-400">{t.progress ?? 0}%</div>
+            <div className="text-[11px] text-muted-foreground">{t.progress ?? 0}%</div>
           </div>
           {t.lastTab?.name && (
-            <div className="text-[11px] text-gray-500 mt-1">Aba: {t.lastTab.name}</div>
+            <div className="text-[11px] text-muted-foreground mt-1">Aba: {t.lastTab.name}</div>
           )}
           {t.lastVisitedAt && (
-            <div className="text-[11px] text-gray-500 mt-1">{relativeTime(t.lastVisitedAt)}</div>
+            <div className="text-[11px] text-muted-foreground mt-1">{relativeTime(t.lastVisitedAt)}</div>
           )}
         </button>
       ))}
