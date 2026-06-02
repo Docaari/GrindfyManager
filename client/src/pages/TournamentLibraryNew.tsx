@@ -24,6 +24,8 @@ import { GRADE_COLORS, GRADE_ORDER } from "@shared/library-grades";
 import { SPEED_BUCKETS } from "@shared/scoring";
 import { OverviewPanel } from "@/components/library/OverviewPanel";
 import { SavedHighlightsStrip } from "@/components/library/SavedHighlightsStrip";
+import { computeTop3 } from "@/lib/libraryTop3";
+import { timeBinLabel } from "@shared/time-bin";
 
 // Tipo para os filtros (definindo aqui para remover dependência externa)
 type TournamentLibraryFiltersType = {
@@ -86,6 +88,9 @@ interface TournamentGroup {
   profitPerTableHour?: number | null;
   durationCoverage?: number;
   deepStackRate?: number;
+  // Sprint torneios-library-grouping: dimensoes novas da familia.
+  timeBin?: string | null;
+  fieldBucket?: string | null;
 }
 
 interface LibraryInsight {
@@ -134,6 +139,37 @@ const formatCurrency = (value: number) => {
 const getSiteColor = getLibrarySiteColor;
 const getCategoryColor = getLibraryCategoryColor;
 const getSpeedColor = getLibrarySpeedColor;
+
+// Sprint torneios-library-grouping: tags rotuladas que DEFINEM a familia
+// (founder). Substitui os badges crus "Vanilla"/"Normal" por 6 dimensoes:
+// Tipo, Velocidade, ABI, Med. Participantes, Plataforma, Faixa de horario.
+function FamilyTags({ group }: { group: TournamentGroup }) {
+  const hasTime = !!group.timeBin && group.timeBin !== "sem-horario";
+  return (
+    <div className="flex flex-wrap gap-1" data-testid="library-family-tags">
+      <Badge className={`text-xs font-medium ${getCategoryColor(group.category)}`}>
+        Tipo: {group.category}
+      </Badge>
+      <Badge className={`text-xs font-medium ${getSpeedColor(group.speed)}`}>
+        Vel.: {group.speed}
+      </Badge>
+      <Badge className="text-xs font-medium bg-gray-700 text-gray-200">
+        ABI: {group.buyInTier ?? formatCurrency(group.avgBuyin)}
+      </Badge>
+      <Badge className="text-xs font-medium bg-gray-700 text-gray-200">
+        Méd. Part.: {group.avgFieldSize > 0 ? group.avgFieldSize.toLocaleString() : "—"}
+      </Badge>
+      <Badge className={`text-xs font-medium ${getSiteColor(group.site)}`}>
+        {group.site}
+      </Badge>
+      {hasTime && (
+        <Badge className="text-xs font-medium bg-gray-700 text-gray-200">
+          {timeBinLabel(group.timeBin as string)}
+        </Badge>
+      )}
+    </div>
+  );
+}
 
 // RF-05 + RF-06 (UI-T1-Library): conteudo do modal de detalhe extraido para
 // componente proprio. Permite useState isolado para sort + export sem hooks
@@ -714,6 +750,13 @@ export default function TournamentLibraryNew() {
   }, [filteredAndSortedGroups]);
   const totalGroups = libraryGroups?.length || 0;
 
+  // Sprint torneios-library-grouping: Top 3 (nivel nome+buy-in) por score blend
+  // (freq x ROI x lucro). Derivado das familias filtradas — sem fetch novo.
+  const top3 = useMemo(
+    () => computeTop3(filteredAndSortedGroups as any),
+    [filteredAndSortedGroups],
+  );
+
   const filtersActive = hasActiveFilters(filters, searchTerm);
 
   const handleClearFilters = useCallback(() => {
@@ -964,6 +1007,76 @@ export default function TournamentLibraryNew() {
           </div>
         </div>
       </div>
+
+      {/* Sprint torneios-library-grouping: Top 3 torneios (nome+buy-in) por
+          score blend (frequencia x ROI x lucro). Destaca os "pao-com-manteiga". */}
+      {top3.length > 0 && (
+        <div className="mb-6" data-testid="library-top3-strip">
+          <div className="flex items-center gap-2 mb-3">
+            <Trophy className="w-4 h-4 text-[#24c25e]" />
+            <h3 className="text-lg font-bold">Top 3 — seus torneios mais fortes</h3>
+            <span className="text-xs text-gray-500">frequência × ROI × lucro</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {top3.map((c, i) => {
+              const roiPos = (c.roi ?? 0) >= 0;
+              const pphOk = c.profitPerTableHour != null && (c.durationCoverage ?? 0) >= 0.6;
+              return (
+                <div
+                  key={c.id}
+                  data-testid="library-top3-card"
+                  className="bg-gradient-to-br from-gray-800 to-gray-800/40 border border-[#24c25e]/30 rounded-xl p-4"
+                >
+                  <div className="flex items-start gap-2 mb-2">
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#24c25e] text-black font-bold text-xs shrink-0">
+                      {i + 1}
+                    </span>
+                    <p className="font-bold text-white text-sm line-clamp-2 leading-tight" title={c.groupName}>
+                      {c.groupName}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    <Badge className={`text-[10px] ${getSiteColor(c.site)}`}>{c.site}</Badge>
+                    {c.buyInTier && (
+                      <Badge className="text-[10px] bg-gray-700 text-gray-200">{c.buyInTier}</Badge>
+                    )}
+                    {c.timeBin && (
+                      <Badge className="text-[10px] bg-gray-700 text-gray-200">{timeBinLabel(c.timeBin)}</Badge>
+                    )}
+                    {c.lowConfidence && (
+                      <Badge className="text-[10px] bg-amber-900/60 text-amber-300 border border-amber-600/40">amostra baixa</Badge>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-center">
+                    <div className="bg-gray-900/40 rounded-lg p-2">
+                      <div className="text-white font-bold text-sm">{c.volume.toLocaleString()}</div>
+                      <div className="text-[10px] text-gray-400">Volume</div>
+                    </div>
+                    <div className="bg-gray-900/40 rounded-lg p-2">
+                      <div className={`font-bold text-sm ${roiPos ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatPercentage(c.roi)}
+                      </div>
+                      <div className="text-[10px] text-gray-400">ROI</div>
+                    </div>
+                    <div className="bg-gray-900/40 rounded-lg p-2">
+                      <div className={`font-bold text-sm ${(c.avgProfit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatCurrency(c.avgProfit)}
+                      </div>
+                      <div className="text-[10px] text-gray-400">Lucro Médio</div>
+                    </div>
+                    <div className="bg-gray-900/40 rounded-lg p-2">
+                      <div className={`font-bold text-sm ${pphOk ? ((c.profitPerTableHour as number) >= 0 ? 'text-emerald-400' : 'text-red-400') : 'text-gray-500'}`}>
+                        {pphOk ? `${formatCurrency(c.profitPerTableHour as number)}/h` : '—'}
+                      </div>
+                      <div className="text-[10px] text-gray-400">Lucro/hora</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Fase 2 (library-evolution): Destaques e Vazamentos — onde voce ganha/
           perde acima/abaixo da sua media, com significancia estatistica. */}
@@ -1510,6 +1623,29 @@ export default function TournamentLibraryNew() {
                     </div>
                   </div>
 
+                  {/* Sprint torneios-library-grouping: Lucro Medio/torneio +
+                      Lucro/hora SEMPRE visiveis (ambos os modos). "/h" so com
+                      cobertura de duracao >= 60% (senao "—", honesto). */}
+                  {(() => {
+                    const pphOk = group.profitPerTableHour != null && (group.durationCoverage ?? 0) >= 0.6;
+                    return (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="text-center bg-gray-800/30 rounded-lg p-2">
+                          <div className={`font-bold ${group.avgProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {formatCurrency(group.avgProfit)}
+                          </div>
+                          <div className="text-xs text-gray-400">Lucro Médio</div>
+                        </div>
+                        <div className="text-center bg-gray-800/30 rounded-lg p-2">
+                          <div className={`font-bold ${pphOk ? ((group.profitPerTableHour as number) >= 0 ? 'text-emerald-400' : 'text-red-400') : 'text-gray-500'}`}>
+                            {pphOk ? `${formatCurrency(group.profitPerTableHour as number)}/h` : '—'}
+                          </div>
+                          <div className="text-xs text-gray-400">Lucro/hora</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* RF-02: Compact mode mostra so Volume isolado + tags + outlier.
                       Detail mode adiciona 3-grids de stats (15 datapoints totais). */}
                   {densityMode === 'compact' ? (
@@ -1518,14 +1654,7 @@ export default function TournamentLibraryNew() {
                         <span className="text-gray-400">Volume</span>
                         <span className="text-white font-bold">{group.volume.toLocaleString()}</span>
                       </div>
-                      <div className="flex flex-wrap gap-1">
-                        <Badge className={`text-xs font-medium ${getCategoryColor(group.category)}`}>
-                          {group.category}
-                        </Badge>
-                        <Badge className={`text-xs font-medium ${getSpeedColor(group.speed)}`}>
-                          {group.speed}
-                        </Badge>
-                      </div>
+                      <FamilyTags group={group} />
                     </>
                   ) : (
                     <>
@@ -1588,15 +1717,8 @@ export default function TournamentLibraryNew() {
                         </div>
                       </div>
 
-                      {/* Tags */}
-                      <div className="flex flex-wrap gap-1">
-                        <Badge className={`text-xs font-medium ${getCategoryColor(group.category)}`}>
-                          {group.category}
-                        </Badge>
-                        <Badge className={`text-xs font-medium ${getSpeedColor(group.speed)}`}>
-                          {group.speed}
-                        </Badge>
-                      </div>
+                      {/* Tags que definem a familia (Tipo/Vel/ABI/Med.Part/Plataforma/Horario) */}
+                      <FamilyTags group={group} />
 
                       {/* Outlier alert */}
                       {group.outlierDependent && (

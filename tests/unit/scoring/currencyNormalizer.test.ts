@@ -126,20 +126,20 @@ describe('QW-1 RF-01: comentario JSDoc na convencao (validacao soft via runtime 
 // ===========================================================================
 
 describe('QW-1: normalizeBucketRange continua alinhado com BUYIN_BUCKETS', () => {
-  it('22 USD -> bucket "$22-54.99"', () => {
-    expect(normalizeBucketRange(22)).toBe('$22-54.99');
+  it('22 USD -> bucket "$16-29"', () => {
+    expect(normalizeBucketRange(22)).toBe('$16-29');
   });
 
-  it('5 USD -> bucket "$5-10.99"', () => {
-    expect(normalizeBucketRange(5)).toBe('$5-10.99');
+  it('5 USD -> bucket "$1-6"', () => {
+    expect(normalizeBucketRange(5)).toBe('$1-6');
   });
 
-  it('1 USD -> bucket "$0-1.99"', () => {
-    expect(normalizeBucketRange(1)).toBe('$0-1.99');
+  it('1 USD -> bucket "$1-6"', () => {
+    expect(normalizeBucketRange(1)).toBe('$1-6');
   });
 
-  it('300 USD -> bucket "$220+"', () => {
-    expect(normalizeBucketRange(300)).toBe('$220+');
+  it('300 USD -> bucket "$251-350"', () => {
+    expect(normalizeBucketRange(300)).toBe('$251-350');
   });
 });
 
@@ -148,16 +148,16 @@ describe('QW-1: normalizeBucketRange continua alinhado com BUYIN_BUCKETS', () =>
 // ===========================================================================
 
 describe('QW-1: bucketizeBuyIn usa nova convencao internamente', () => {
-  it('110 BRL com BRL=5.0 -> 22 USD -> bucket "$22-54.99"', () => {
+  it('110 BRL com BRL=5.0 -> 22 USD -> bucket "$16-29"', () => {
     const r = bucketizeBuyIn(110, 'BRL', { BRL: 5.0 });
     expect(r.usd).toBeCloseTo(22, 5);
-    expect(r.bucket).toBe('$22-54.99');
+    expect(r.bucket).toBe('$16-29');
   });
 
-  it('22 BRL com BRL=5.0 -> 4.4 USD -> bucket "$2-4.99"', () => {
+  it('22 BRL com BRL=5.0 -> 4.4 USD -> bucket "$1-6"', () => {
     const r = bucketizeBuyIn(22, 'BRL', { BRL: 5.0 });
     expect(r.usd).toBeCloseTo(4.4, 5);
-    expect(r.bucket).toBe('$2-4.99');
+    expect(r.bucket).toBe('$1-6');
   });
 
   it('aceita amount como string', () => {

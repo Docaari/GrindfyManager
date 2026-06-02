@@ -19,11 +19,13 @@ import {
 } from './tournamentTypes';
 import { detectAddonReaFromName, type DetectedFlags } from './addon-rea-detector';
 
-// Satellite — matches "SAT", "Sat to", "Satellite to", "Sub para", "Step to".
-// Word boundaries previnem match em palavras como "Saturday", "Sample".
-// Includes BR variants used in suprema (Sub-satelite, Satelite).
+// Satellite — Sprint torneios-library-grouping: cobertura ampliada. Antes
+// caia em Vanilla varios satelites comuns. Agora casa (boundaries previnem
+// "Saturday"/"Sample"): satellite(s), satelite(s)/satélite(s), sat/sats (bare),
+// sat/seat to, sub-sat to, step to, seats (plural), mega sat(ellite).
+// "Mega" puro NAO casa de proposito (evita falso-positivo "Mega Deep/Stack").
 const SATELLITE_REGEX =
-  /(?<![A-Za-z])(satellite|sat[\s\-]?to|satelite|sat[eé]lite|sub[\s\-]?sat[\s\-]?to|step[\s\-]?to)(?![A-Za-z])/i;
+  /(?<![A-Za-z])(satellites?|satelites?|sat[eé]lites?|sats?|sat[\s\-]?to|sub[\s\-]?sat[\s\-]?to|step[\s\-]?to|seats?[\s\-]?to|seats|mega[\s\-]?sat(?:ellite)?s?)(?![A-Za-z])/i;
 
 const SATELLITE_BLOCKLIST = /(Saturday|Sample|Sat\s*\d{1,2}\b|saturate)/i;
 

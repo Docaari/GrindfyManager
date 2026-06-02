@@ -15,6 +15,10 @@
  * variantes de mesma serie. Ver plano keen-jumping-petal.
  */
 import { bucketBuyIn } from "../scoring/buildScoringInput";
+import { FIELD_BUCKETS } from "../scoring/scoringConstants";
+import { enrichTournamentTypeFields } from "../../shared/tournament-type-detector";
+import { detectSpeedFromName, fastestSpeed } from "../../shared/speed-detector";
+import { timeBin2h } from "../../shared/time-bin";
 
 export interface GroupedSpecific {
   fineKey: string;
@@ -30,6 +34,10 @@ export interface GroupedFamily {
   buyInTier: string;
   type: string;
   speed: string;
+  // Sprint torneios-library-grouping: faixa de field-size + janela de horario
+  // passam a definir a familia (founder: field e horario importam).
+  fieldBucket: string;
+  timeBin: string;
   representative: any;
   tournaments: any[];
   specifics: GroupedSpecific[];
@@ -42,8 +50,32 @@ export interface GroupedFamily {
  * o filtro inArray(tournaments.speed, ...)).
  */
 export function normalizeSpeed(t: any): string {
-  const raw = (t?.speed ?? "").toString().trim();
-  return raw || "Normal";
+  // Sprint torneios-library-grouping: read-side derive. Antes confiava cego no
+  // campo gravado (Hyper sub-detectado em imports antigos -> tudo "Normal").
+  // Agora pega a velocidade MAIS RAPIDA entre o valor gravado e o derivado do
+  // nome, corrigindo dado legado sem re-import.
+  const raw = (t?.speed ?? "").toString().trim() || "Normal";
+  const fromName = detectSpeedFromName(t?.name ?? "");
+  return fastestSpeed(raw, fromName);
+}
+
+/**
+ * Faixa de field-size (reusa FIELD_BUCKETS do scoring). "sem-field" quando o
+ * torneio nao tem fieldSize (comum em CSV sem essa coluna) — assim grupos com
+ * field conhecido nao se misturam com os sem dado.
+ */
+export function fieldBucketOf(t: any): string {
+  const fs = Number(t?.fieldSize ?? t?.fieldSizeEstimate ?? NaN);
+  if (!Number.isFinite(fs) || fs <= 0) return "sem-field";
+  for (const b of FIELD_BUCKETS) {
+    if (fs >= b.min && fs < b.max) return b.bucket;
+  }
+  return FIELD_BUCKETS[FIELD_BUCKETS.length - 1].bucket;
+}
+
+/** Janela de ~2h derivada de datePlayed (NO_TIME_BIN quando ausente). */
+export function timeBinOf(t: any): string {
+  return timeBin2h(t?.datePlayed ?? t?.startTime ?? null);
 }
 
 /**
@@ -65,10 +97,12 @@ export function buyInTier(raw: number): string {
 }
 
 function typePrimary(t: any): string {
-  const ty = (t.type ?? "").toString().trim();
-  if (ty) return ty;
-  const cat = (t.category ?? "").toString().trim();
-  return cat || "Vanilla";
+  // Sprint torneios-library-grouping: read-side derive via SSoT
+  // enrichTournamentTypeFields. Eleva Vanilla->Satellite quando o nome indica
+  // (corrige satelites que cairam em Vanilla por deteccao antiga no import),
+  // resolve Bounty->PKO etc. Mantem PKO/Mystery explicitos.
+  const cat = (t.type ?? t.category ?? "").toString().trim();
+  return enrichTournamentTypeFields({ name: t?.name ?? "", category: cat }).type;
 }
 
 /**
@@ -125,7 +159,11 @@ export function groupTournaments(tournaments: any[]): GroupedFamily[] {
     const tier = buyInTier(parseFloat(String(t.buyIn ?? 0)));
     const type = typePrimary(t);
     const speed = normalizeSpeed(t);
-    const familyKey = `${site}|${tier}|${type}|${speed}`;
+    const fieldBucket = fieldBucketOf(t);
+    const timeBin = timeBinOf(t);
+    // 6 dimensoes definem a familia (founder): site, ABI, tipo, velocidade,
+    // faixa de field-size, janela de horario (~2h).
+    const familyKey = `${site}|${tier}|${type}|${speed}|${fieldBucket}|${timeBin}`;
 
     let fam = familyMap.get(familyKey);
     if (!fam) {
@@ -135,6 +173,8 @@ export function groupTournaments(tournaments: any[]): GroupedFamily[] {
         buyInTier: tier,
         type,
         speed,
+        fieldBucket,
+        timeBin,
         representative: t,
         tournaments: [],
         specifics: [],

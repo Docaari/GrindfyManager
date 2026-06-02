@@ -93,30 +93,24 @@ describe('normalizeBuyInToUSD - edge cases', () => {
 // ===========================================================================
 
 describe('normalizeBucketRange - integracao com BUYIN_BUCKETS', () => {
-  it('22 USD -> bucket "$11-21.99" ou "$22-54.99" (boundary)', () => {
-    // 22 USD esta no comeco da faixa "$22-54.99"
-    const bucket = normalizeBucketRange(22);
-    expect(bucket).toContain('22');
+  it('22 USD -> bucket "$16-29"', () => {
+    expect(normalizeBucketRange(22)).toBe('$16-29');
   });
 
-  it('5 USD -> bucket "$5-10.99"', () => {
-    const bucket = normalizeBucketRange(5);
-    expect(bucket?.toLowerCase()).toContain('5');
+  it('5 USD -> bucket "$1-6"', () => {
+    expect(normalizeBucketRange(5)).toBe('$1-6');
   });
 
-  it('1 USD -> bucket "$0-1.99"', () => {
-    const bucket = normalizeBucketRange(1);
-    expect(bucket?.toLowerCase()).toMatch(/0-1\.99|0\.00-1/);
+  it('1 USD -> bucket "$1-6"', () => {
+    expect(normalizeBucketRange(1)).toBe('$1-6');
   });
 
-  it('300 USD -> bucket "$220+"', () => {
-    const bucket = normalizeBucketRange(300);
-    expect(bucket?.toLowerCase()).toContain('220');
+  it('300 USD -> bucket "$251-350"', () => {
+    expect(normalizeBucketRange(300)).toBe('$251-350');
   });
 
-  it('100 USD -> bucket "$55-109.99" (limite superior)', () => {
-    const bucket = normalizeBucketRange(100);
-    expect(bucket).toBeDefined();
+  it('100 USD -> bucket "$71-130"', () => {
+    expect(normalizeBucketRange(100)).toBe('$71-130');
   });
 });
 

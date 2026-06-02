@@ -115,8 +115,8 @@ describe('scoringConstants - GRADE_THRESHOLDS', () => {
 // ===========================================================================
 
 describe('scoringConstants - BUYIN_BUCKETS', () => {
-  it('exatamente 8 faixas conforme spec', () => {
-    expect(BUYIN_BUCKETS.length).toBe(8);
+  it('exatamente 11 faixas conforme spec (Sprint torneios-library-grouping)', () => {
+    expect(BUYIN_BUCKETS.length).toBe(11);
   });
 
   it('cada bucket tem { range, min, max }', () => {
@@ -138,17 +138,17 @@ describe('scoringConstants - BUYIN_BUCKETS', () => {
     for (let i = 1; i < sorted.length; i++) {
       expect(sorted[i].min).toBe(sorted[i - 1].max);
     }
-    // Ultima faixa max = Infinity (ou >= 220)
-    expect(sorted[sorted.length - 1].max).toBeGreaterThanOrEqual(220);
+    // Ultima faixa max = Infinity (ou >= 1000)
+    expect(sorted[sorted.length - 1].max).toBeGreaterThanOrEqual(1000);
   });
 
-  it('range "$0-1.99" comeca em 0', () => {
-    const b = BUYIN_BUCKETS.find((x) => x.range.includes('0-1.99'));
+  it('primeira faixa "$1-6" comeca em 0', () => {
+    const b = BUYIN_BUCKETS.find((x) => x.range === '$1-6');
     expect(b?.min).toBe(0);
   });
 
-  it('range "$220+" e o ultimo (max grande)', () => {
-    const last = BUYIN_BUCKETS.find((x) => x.range.includes('220+') || x.min === 220);
+  it('range "$1K+" e o ultimo (max grande)', () => {
+    const last = BUYIN_BUCKETS.find((x) => x.range.includes('1K+') || x.min === 1000);
     expect(last).toBeDefined();
   });
 });

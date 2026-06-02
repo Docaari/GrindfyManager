@@ -39,15 +39,23 @@ export const COLD_START_PARTIAL_THRESHOLD = 50;  // 20-49 = full + flag
 // =============================================================================
 // Buckets de buy-in (em USD; mutuamente exclusivos, cobrem dominio)
 // =============================================================================
+// Sprint torneios-library-grouping: faixas de ABI redefinidas pelo founder.
+// Contiguas (sem gap). "$351-599" cobre o vao 561-599 que o founder aproximou
+// como "351-560 / 600-1K" (relabel honesto p/ nao deixar buy-ins orfaos).
+// Qualquer mudanca de label AQUI deve refletir nas SQL CASE de storage.ts
+// (buyinTierCaseExpr ~3685 + getAnalyticsByBuyinRangeV2 ~5214).
 export const BUYIN_BUCKETS: Array<{ range: string; min: number; max: number }> = [
-  { range: "$0-1.99", min: 0, max: 2 },
-  { range: "$2-4.99", min: 2, max: 5 },
-  { range: "$5-10.99", min: 5, max: 11 },
-  { range: "$11-21.99", min: 11, max: 22 },
-  { range: "$22-54.99", min: 22, max: 55 },
-  { range: "$55-109.99", min: 55, max: 110 },
-  { range: "$110-219.99", min: 110, max: 220 },
-  { range: "$220+", min: 220, max: Number.POSITIVE_INFINITY },
+  { range: "$1-6", min: 0, max: 7 },
+  { range: "$7-15", min: 7, max: 16 },
+  { range: "$16-29", min: 16, max: 30 },
+  { range: "$30-49", min: 30, max: 50 },
+  { range: "$50-70", min: 50, max: 71 },
+  { range: "$71-130", min: 71, max: 131 },
+  { range: "$131-250", min: 131, max: 251 },
+  { range: "$251-350", min: 251, max: 351 },
+  { range: "$351-599", min: 351, max: 600 },
+  { range: "$600-1K", min: 600, max: 1000 },
+  { range: "$1K+", min: 1000, max: Number.POSITIVE_INFINITY },
 ];
 
 // =============================================================================

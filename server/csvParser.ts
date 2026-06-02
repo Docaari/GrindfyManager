@@ -5,6 +5,7 @@ import csv from "csv-parser";
 // (the only .xlsx path) to keep it out of the hot import graph.
 import { detectAddonReaFromName } from "../shared/addon-rea-detector";
 import { detectSatelliteFromName, detectIsFlightFromName, detectStackDepthFromName } from "../shared/tournament-type-detector";
+import { classifySpeed } from "../shared/speed-detector";
 
 export interface ParsedTournament {
   userId: string; // 🎯 ETAPA 2.2: Este campo é preenchido pelo contexto de autenticação, nunca pelos dados CSV
@@ -283,22 +284,9 @@ export class PokerCSVParser {
   }
 
   private static detectCoinSpeed(name: string): string {
-    const upperName = name.toUpperCase();
-
-    if (upperName.includes('HYPER')) {
-      return 'Hyper';
-    }
-
-    if (upperName.includes('SPRINT') || 
-        upperName.includes('TURBO') || 
-        upperName.includes('BOLT') || 
-        upperName.includes('RÁPIDO') || 
-        upperName.includes('RAPIDO') ||
-        upperName.includes('FLASH')) {
-      return 'Turbo';
-    }
-
-    return 'Normal';
+    // CoinPoker: keywords Sprint/Bolt/Flash/Rapido ja cobertas pelo detector
+    // compartilhado (TURBO_RE) + Hyper. Mantido como metodo p/ os callsites.
+    return classifySpeed(name);
   }
 
   // 🎯 ETAPA 2.2: userId é sempre do contexto de autenticação (userPlatformId), nunca dos dados CSV
@@ -1978,18 +1966,13 @@ export class PokerCSVParser {
   }
 
   private static detectSpeed(speed: any, name: any): string {
-    const speedUpper = (speed || '').toString().toUpperCase();
-    const nameUpper = (name || '').toString().toUpperCase();
-
-    if (speedUpper.includes('SUPER TURBO') || nameUpper.includes('SUPER TURBO')) {
-      return 'Hyper';
-    }
-
-    if (speedUpper.includes('TURBO') || nameUpper.includes('TURBO')) {
-      return 'Turbo';
-    }
-
-    return 'Normal';
+    // Sprint torneios-library-grouping: delega ao detector compartilhado
+    // (shared/speed-detector). Antes so "SUPER TURBO" virava Hyper — nomes
+    // "Hyper"/"Hyper-Turbo"/"Hyperturbo" caiam em Turbo (Hyper sub-detectado).
+    return classifySpeed(
+      (speed ?? '').toString(),
+      (name ?? '').toString(),
+    );
   }
 
   private static detectCurrency(value: any): string {
