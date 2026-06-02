@@ -1,0 +1,69 @@
+%% Fase F #12 — Game Selection Score (Softness) — ADR-237
+%% Eixo SEPARADO/aditivo. Camada ACIMA do computeTournamentScore (espelha applyTicketBoost / ADR-186).
+%% Fluxo: input REAL -> computeSoftness (6 indicadores) -> score/tier -> campo softness no SelectorTournament -> badge UI.
+flowchart TB
+    subgraph route["server/routes/tournament-selector.ts — loop ~326-417 (Suprema + library)"]
+        built["built = buildSupremaScoringInput / buildLibraryScoringInput<br/><i>sct.name, sct.site, buyInUSD, sct.timeOfDayBucket, currency</i>"]
+        gtdRaw["guaranteed raw<br/><i>s.guaranteed (BRL) / l.guaranteed</i>"]
+        gtdUsd["guaranteedUSD = normalizeBuyInToUSD(raw, currency, exchangeRates)<br/><i>lesson #6 — FX antes do ratio</i>"]
+        scorer["computeTournamentScore(enrichedSct, bundle)<br/><b>BYTE-IDENTICO — NAO TOCADO (D-6)</b>"]
+        ticket["applyTicketBoost (ADR-186)<br/><i>camada acima — precedente</i>"]
+        softCall["softness = computeSoftness(input) — best-effort<br/><i>mesmo ponto do ticket boost (D-1)</i>"]
+        catchNull["catch -> log (lesson #9) + softness: null<br/><i>selector continua 200 (D-6)</i>"]
+        push["scored.push SelectorTournament<br/>{ score, grade, signals, ..., <b>softness</b> }"]
+    end
+
+    built --> gtdUsd
+    gtdRaw --> gtdUsd
+    built --> scorer --> ticket --> push
+    built --> softCall
+    gtdUsd --> softCall
+    softCall -->|"throw"| catchNull --> push
+    softCall -->|"ok"| push
+
+    subgraph detector["server/scoring/softnessDetector.ts (PURO, sem I/O, sem bundle)"]
+        input["SoftnessInput { name, site, buyInUSD, guaranteedUSD, timeOfDayBucket }"]
+        normName["normalizeNameForSoftness(name)<br/><i>stripAccents NFD + lowercase (D-3)</i>"]
+
+        i1{"satellite?<br/>regex name<br/>(weak, 15)"}
+        i2{"overlay?<br/>gtdUSD&gt;0 &amp; gtdUSD/buyInUSD &gt;= 100<br/>(strong, 30)"}
+        i3{"sportsbook?<br/>site in SOFTNESS_SPORTSBOOK_SITES<br/>(weak, 15)"}
+        i4{"multiday?<br/>regex name<br/>(weak, 10)"}
+        i5{"primetime?<br/>noite-nobre (strong,25) / noite-cedo (weak,10)<br/>(D-5)"}
+        i6{"regional?<br/>regex name — falso-positivo BR (D-3)<br/>(weak, 5)"}
+
+        collect["indicators[] = só os que bateram<br/><i>presenca individual — lesson #8</i>"]
+        sum["computeSoftnessScore: soma ponderada<br/>clamp(0,100) — sem renormalizacao (D-2)"]
+        tier{"tier?"}
+        result["SoftnessResult<br/>{ score, tier, matchedCount,<br/>overallConfidence, indicators[] }"]
+    end
+
+    input --> normName
+    normName --> i1 & i4 & i6
+    input --> i2 & i3 & i5
+    i1 & i2 & i3 & i4 & i5 & i6 -->|"matched"| collect
+    collect --> sum --> tier
+    tier -->|"score>=50"| moleT["mole — Field mole (verde)"]
+    tier -->|"score>=25"| medioT["medio — Field medio (ambar)"]
+    tier -->|"score<25"| duroT["duro — badge OCULTO (D-5)"]
+    moleT & medioT & duroT --> result
+
+    softCall -.->|"chama"| input
+    result -.->|"retorna"| softCall
+
+    subgraph consts["server/scoring/softnessConstants.ts (NOVO — NAO toca scoringConstants.ts)"]
+        c["pesos (30/25/15/15/10/5) + OVERLAY_RATIO=100<br/>+ 3 regex + SOFTNESS_SPORTSBOOK_SITES (Suprema fora — D-3)<br/>+ tiers mole>=50 / medio>=25 / duro<25"]
+    end
+    consts -.->|"alimenta"| detector
+
+    subgraph shared["shared/scoring.ts (tipos aditivos — lesson #7)"]
+        types["SoftnessIndicatorKey | SoftnessTier | SoftnessConfidence<br/>SoftnessIndicator | SoftnessResult<br/><b>SelectorTournament.softness?: SoftnessResult | null</b>"]
+    end
+    result -.->|"shape"| types
+    push -->|"payload GET /api/tournament-selector (sem endpoint novo)"| ui
+
+    subgraph ui["client — exibicao (useQuery NAO muda; softness vem no payload)"]
+        card["SelectorCard.tsx (RF-04)<br/>softness-badge (tier) + softness-breakdown<br/>+ softness-estimated-note (weak = 'estimado por nome', lesson #11)<br/>null -> nenhum softness-* no DOM"]
+        modal["SelectorDetailsModal.tsx (RF-05)<br/>secao 'Softness do field': 6 indicadores (bateu/nao)<br/>+ legenda honestidade (* = estimado por nome)"]
+    end
+    ui --> card & modal

@@ -42,6 +42,12 @@ import {
   applyTicketBoost,
   type ScoringBuildResult,
 } from "../scoring/buildScoringInput";
+// Fase F #12 (ADR-237) — Game Selection Score (softness). Eixo SEPARADO,
+// camada ACIMA do scorer (mesmo molde do ticket boost). NAO toca o caminho
+// calibrado de computeTournamentScore.
+import { computeSoftness } from "../scoring/softnessDetector";
+import { normalizeBuyInToUSD } from "../scoring/currencyNormalizer";
+import type { SoftnessResult } from "../../shared/scoring";
 // Sprint TS-3 RF-04 (ADR-178): tristate bankroll filter + telemetria.
 import {
   applyBankrollMode,
@@ -323,6 +329,35 @@ export async function handleTournamentSelector(
     return { bankrollOk: false, warning: "out_of_bankroll" };
   }
 
+  // Fase F #12 (ADR-237 D-6) — softness best-effort. Erro no detector ->
+  // softness null + log ANTES do fallback (lesson #9); selector segue 200.
+  function softnessFor(
+    built: ScoringBuildResult,
+    rawGuaranteed: unknown,
+  ): SoftnessResult | null {
+    try {
+      const gtdNum = parseFloat(String(rawGuaranteed ?? "0"));
+      const guaranteedUSD = normalizeBuyInToUSD(
+        Number.isFinite(gtdNum) ? gtdNum : 0,
+        built.currency,
+        exchangeRates,
+      );
+      return computeSoftness({
+        name: built.sct.name,
+        site: built.sct.site,
+        buyInUSD: built.buyInUSD,
+        guaranteedUSD,
+        timeOfDayBucket: built.sct.timeOfDayBucket,
+      });
+    } catch (err) {
+      console.error(
+        "[tournament-selector] computeSoftness falhou; softness=null (best-effort)",
+        err,
+      );
+      return null;
+    }
+  }
+
   for (const s of (supremaList || []) as any[]) {
     const built = buildSupremaScoringInput(s, date, exchangeRates);
     // Sprint D / RF-03.4 — enriquece SCT com availableTicket antes do score.
@@ -370,6 +405,7 @@ export async function handleTournamentSelector(
       // Sprint D / RF-03.4 — passa ticket info pro UI badge.
       availableTicket: enrichedSct.availableTicket ?? null,
       ticketBoost: boosted.ticketBoost ?? 0,
+      softness: softnessFor(built, s.guaranteed),
     } as any);
   }
 
@@ -413,6 +449,7 @@ export async function handleTournamentSelector(
       alreadyInGrid: plannedLibraryIds.has(l.id),
       availableTicket: enrichedSct.availableTicket ?? null,
       ticketBoost: boosted.ticketBoost ?? 0,
+      softness: softnessFor(built, l.guaranteed),
     } as any);
   }
 
