@@ -47,7 +47,8 @@ export const COLD_START_PARTIAL_THRESHOLD = 50;  // 20-49 = full + flag
 export const BUYIN_BUCKETS: Array<{ range: string; min: number; max: number }> = [
   { range: "$1-6", min: 0, max: 7 },
   { range: "$7-15", min: 7, max: 16 },
-  { range: "$16-29", min: 16, max: 30 },
+  { range: "$16-19", min: 16, max: 20 },
+  { range: "$20-29", min: 20, max: 30 },
   { range: "$30-49", min: 30, max: 50 },
   { range: "$50-70", min: 50, max: 71 },
   { range: "$71-130", min: 71, max: 131 },

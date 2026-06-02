@@ -115,8 +115,8 @@ describe('scoringConstants - GRADE_THRESHOLDS', () => {
 // ===========================================================================
 
 describe('scoringConstants - BUYIN_BUCKETS', () => {
-  it('exatamente 11 faixas conforme spec (Sprint torneios-library-grouping)', () => {
-    expect(BUYIN_BUCKETS.length).toBe(11);
+  it('exatamente 12 faixas conforme spec (Sprint torneios-library-grouping)', () => {
+    expect(BUYIN_BUCKETS.length).toBe(12);
   });
 
   it('cada bucket tem { range, min, max }', () => {

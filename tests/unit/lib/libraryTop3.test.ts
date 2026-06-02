@@ -9,7 +9,7 @@ function fam(over: Partial<Top3Input> = {}): Top3Input {
     id: Math.random().toString(36).slice(2),
     groupName: "Bounty Builder",
     site: "PokerStars",
-    buyInTier: "$16-29",
+    buyInTier: "$20-29",
     avgBuyin: 22,
     timeBin: "12-14",
     volume: 50,

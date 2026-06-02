@@ -557,6 +557,9 @@ function GroupDetailDialogContent({ group }: GroupDetailDialogContentProps) {
 export default function TournamentLibraryNew() {
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
+  // Sprint torneios-library-grouping: filtro por faixa de horario (timeBin).
+  // [] = todas. Client-side sobre o timeBin ja vindo do backend.
+  const [selectedTimeBins, setSelectedTimeBins] = useState<string[]>([]);
   // RF-03 (L5): sort em URL. Hidrata state inicial dos query params no mount.
   // Default sem param = confidence/desc (mantem comportamento atual).
   const VALID_SORT_KEYS = new Set([
@@ -713,13 +716,32 @@ export default function TournamentLibraryNew() {
         matchesVolume = group.volume >= filters.minimumVolume;
       }
 
-      return matchesSearch && matchesBuyinRange && matchesRoi && matchesProfit && matchesVolume;
+      const matchesTime =
+        selectedTimeBins.length === 0 ||
+        selectedTimeBins.includes((group as any).timeBin ?? "sem-horario");
+
+      return matchesSearch && matchesBuyinRange && matchesRoi && matchesProfit && matchesVolume && matchesTime;
     })
     .sort((a, b) => {
       const aValue = getSortValue(a, sortBy);
       const bValue = getSortValue(b, sortBy);
       return sortOrder === "desc" ? bValue - aValue : aValue - bValue;
-    }), [libraryGroups, searchTerm, filters, sortBy, sortOrder]);
+    }), [libraryGroups, searchTerm, filters, sortBy, sortOrder, selectedTimeBins]);
+
+  // Faixas de horario presentes nos dados (ordenadas por hora). Para os chips
+  // do filtro de horario. "sem-horario" entra por ultimo quando existe.
+  const availableTimeBins = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of libraryGroups || []) {
+      const tb = (g as any).timeBin;
+      if (tb) set.add(tb);
+    }
+    return Array.from(set).sort((a, b) => {
+      if (a === "sem-horario") return 1;
+      if (b === "sem-horario") return -1;
+      return parseInt(a, 10) - parseInt(b, 10);
+    });
+  }, [libraryGroups]);
 
   // Get unique values for filters
   const sites = useMemo(() => Array.from(new Set((libraryGroups || []).map(g => g.site))), [libraryGroups]);
@@ -768,6 +790,7 @@ export default function TournamentLibraryNew() {
       roiFilter: "all", profitFilter: "all", volumeFilter: "all", minimumVolume: null,
     });
     setSearchTerm("");
+    setSelectedTimeBins([]);
     setSortBy("confidence");
     setSortOrder("desc");
   }, []);
@@ -1007,6 +1030,49 @@ export default function TournamentLibraryNew() {
           </div>
         </div>
       </div>
+
+      {/* Sprint torneios-library-grouping: filtro por faixa de horario (~2h). */}
+      {availableTimeBins.length > 1 && (
+        <div className="mb-4" data-testid="library-timebin-filter">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm text-gray-400">Faixa de horário</span>
+            {selectedTimeBins.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedTimeBins([])}
+                className="text-xs text-gray-500 hover:text-white underline"
+              >
+                limpar
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {availableTimeBins.map((tb) => {
+              const active = selectedTimeBins.includes(tb);
+              return (
+                <button
+                  key={tb}
+                  type="button"
+                  data-testid={`library-timebin-chip-${tb}`}
+                  aria-pressed={active}
+                  onClick={() =>
+                    setSelectedTimeBins((prev) =>
+                      prev.includes(tb) ? prev.filter((x) => x !== tb) : [...prev, tb],
+                    )
+                  }
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                    active
+                      ? "bg-[#24c25e] text-black"
+                      : "bg-gray-700 text-gray-200 hover:bg-gray-600"
+                  }`}
+                >
+                  {timeBinLabel(tb)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Sprint torneios-library-grouping: Top 3 torneios (nome+buy-in) por
           score blend (frequencia x ROI x lucro). Destaca os "pao-com-manteiga". */}

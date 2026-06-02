@@ -126,8 +126,8 @@ describe('QW-1 RF-01: comentario JSDoc na convencao (validacao soft via runtime 
 // ===========================================================================
 
 describe('QW-1: normalizeBucketRange continua alinhado com BUYIN_BUCKETS', () => {
-  it('22 USD -> bucket "$16-29"', () => {
-    expect(normalizeBucketRange(22)).toBe('$16-29');
+  it('22 USD -> bucket "$20-29"', () => {
+    expect(normalizeBucketRange(22)).toBe('$20-29');
   });
 
   it('5 USD -> bucket "$1-6"', () => {
@@ -148,10 +148,10 @@ describe('QW-1: normalizeBucketRange continua alinhado com BUYIN_BUCKETS', () =>
 // ===========================================================================
 
 describe('QW-1: bucketizeBuyIn usa nova convencao internamente', () => {
-  it('110 BRL com BRL=5.0 -> 22 USD -> bucket "$16-29"', () => {
+  it('110 BRL com BRL=5.0 -> 22 USD -> bucket "$20-29"', () => {
     const r = bucketizeBuyIn(110, 'BRL', { BRL: 5.0 });
     expect(r.usd).toBeCloseTo(22, 5);
-    expect(r.bucket).toBe('$16-29');
+    expect(r.bucket).toBe('$20-29');
   });
 
   it('22 BRL com BRL=5.0 -> 4.4 USD -> bucket "$1-6"', () => {

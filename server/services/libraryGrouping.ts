@@ -96,6 +96,22 @@ export function buyInTier(raw: number): string {
   return bucketBuyIn(canonicalBuyIn(raw));
 }
 
+// Sprint torneios-library-grouping (ajuste founder): torneios desconsiderados
+// na Biblioteca de Torneios. PLO (variante Omaha) fora do escopo MTT-Holdem;
+// Freeroll / buy-in 0 nao tem ABI/ROI significativo. Escopo = SO a biblioteca
+// (nao mexe no historico/dashboard).
+const LIBRARY_PLO_RE = /\bplo/i; // PLO, PLO8, PLO5, PLO Hi/Lo — boundary evita "diplomat"
+const LIBRARY_FREEROLL_RE = /\bfree\s?roll/i;
+
+export function isExcludedFromLibrary(t: any): boolean {
+  const name = (t?.name ?? "").toString();
+  if (LIBRARY_PLO_RE.test(name)) return true;
+  if (LIBRARY_FREEROLL_RE.test(name)) return true;
+  const buyIn = parseFloat(String(t?.buyIn ?? 0));
+  if (!Number.isFinite(buyIn) || buyIn <= 0) return true;
+  return false;
+}
+
 function typePrimary(t: any): string {
   // Sprint torneios-library-grouping: read-side derive via SSoT
   // enrichTournamentTypeFields. Eleva Vanilla->Satellite quando o nome indica

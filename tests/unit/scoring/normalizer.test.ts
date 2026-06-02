@@ -93,8 +93,8 @@ describe('normalizeBuyInToUSD - edge cases', () => {
 // ===========================================================================
 
 describe('normalizeBucketRange - integracao com BUYIN_BUCKETS', () => {
-  it('22 USD -> bucket "$16-29"', () => {
-    expect(normalizeBucketRange(22)).toBe('$16-29');
+  it('22 USD -> bucket "$20-29"', () => {
+    expect(normalizeBucketRange(22)).toBe('$20-29');
   });
 
   it('5 USD -> bucket "$1-6"', () => {

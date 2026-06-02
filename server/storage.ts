@@ -202,7 +202,7 @@ import { nanoid } from "nanoid";
 import { normalizeTournamentTypePayload } from "./storage/normalizeTournamentTypePayload";
 import { getDisplayRegistrationTime } from "@shared/grade-time";
 import { ensureLibraryEntryForPlannedSafe } from "./services/libraryAutoPopulate";
-import { groupTournaments, stripNameNoise, canonicalBuyIn, type GroupedFamily, type GroupedSpecific } from "./services/libraryGrouping";
+import { groupTournaments, stripNameNoise, canonicalBuyIn, isExcludedFromLibrary, type GroupedFamily, type GroupedSpecific } from "./services/libraryGrouping";
 import { timeBinLabel, NO_TIME_BIN } from "../shared/time-bin";
 import { confidenceGradeForVolume, MIN_GROUP_VISIBLE, FAMILY_GROUP_FLOOR } from "@shared/library-grades";
 import { computeLibraryInsights, type DimensionBucket, type Insight } from "./insights/libraryInsights";
@@ -3425,10 +3425,14 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       userId,
     );
 
+    // Sprint torneios-library-grouping (ajuste founder): desconsidera PLO /
+    // Freeroll / buy-in 0 da biblioteca (nao do historico/dashboard).
+    const eligibleTournaments = allTournaments.filter((t: any) => !isExcludedFromLibrary(t));
+
     // Sprint library-evolution Fase 1: agrupamento deterministico 2 niveis
     // (familia coarse -> especificos fine). Substitui o matcher guloso O(n^2)
     // order-dependent + o piso rigido de 50. Ver server/services/libraryGrouping.ts.
-    const families = groupTournaments(allTournaments);
+    const families = groupTournaments(eligibleTournaments);
 
     // Familias visiveis: >= FAMILY_GROUP_FLOOR torneios (lowConfidence se
     // < MIN_GROUP_VISIBLE). Antes da reforma um grinder com milhares de
@@ -3710,7 +3714,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       CASE
         WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 7 THEN '$1-6'
         WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 16 THEN '$7-15'
-        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 30 THEN '$16-29'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 20 THEN '$16-19'
+        WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 30 THEN '$20-29'
         WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 50 THEN '$30-49'
         WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 71 THEN '$50-70'
         WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 131 THEN '$71-130'
@@ -5221,7 +5226,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
    *
    * Diferente de getAnalyticsByBuyinRange (que usa labels antigos $0-$5, $5-$10... para o dashboard),
    * este metodo usa as fronteiras documentadas em BUYIN_BUCKETS:
-   *   $1-6, $7-15, $16-29, $30-49, $50-70, $71-130, $131-250, $251-350, $351-599, $600-1K, $1K+
+   *   $1-6, $7-15, $16-19, $20-29, $30-49, $50-70, $71-130, $131-250, $251-350, $351-599, $600-1K, $1K+
    */
   async getAnalyticsByBuyinRangeV2(userId: string, period = "180d", filters: any = {}): Promise<any[]> {
     try {
@@ -5241,7 +5246,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         CASE
           WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 7 THEN '$1-6'
           WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 16 THEN '$7-15'
-          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 30 THEN '$16-29'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 20 THEN '$16-19'
+          WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 30 THEN '$20-29'
           WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 50 THEN '$30-49'
           WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 71 THEN '$50-70'
           WHEN CAST(${tournaments.buyIn} AS DECIMAL) < 131 THEN '$71-130'

@@ -5,6 +5,7 @@ import {
   nameSignature,
   groupTournaments,
   normalizeSpeed,
+  isExcludedFromLibrary,
 } from "../../server/services/libraryGrouping";
 
 // Minimal tournament factory matching the DB shape consumed by grouping.
@@ -45,9 +46,13 @@ describe("canonicalBuyIn — snap de ruido de fee/arredondamento", () => {
 });
 
 describe("buyInTier — reutiliza BUYIN_BUCKETS", () => {
-  it("$21.60 e $22 caem no mesmo tier ($16-29) via canonicalBuyIn", () => {
+  it("$21.60 e $22 caem no mesmo tier ($20-29) via canonicalBuyIn", () => {
     expect(buyInTier(21.6)).toBe(buyInTier(22));
-    expect(buyInTier(22)).toBe("$16-29");
+    expect(buyInTier(22)).toBe("$20-29");
+  });
+  it("split $16-19 vs $20-29: $18 e $22 em tiers diferentes", () => {
+    expect(buyInTier(18)).toBe("$16-19");
+    expect(buyInTier(22)).toBe("$20-29");
   });
   it("$5 e $500 caem em tiers diferentes", () => {
     expect(buyInTier(5)).not.toBe(buyInTier(500));
@@ -208,6 +213,25 @@ describe("groupTournaments — 2 niveis familia -> especifico", () => {
       t({ speed: "Normal", name: "Sunday Hyper Bounty" }),
     ]);
     expect(fam.speed).toBe("Hyper");
+  });
+});
+
+describe("isExcludedFromLibrary — PLO / Freeroll / buy-in 0", () => {
+  it("exclui PLO no nome (variantes)", () => {
+    expect(isExcludedFromLibrary({ name: "$22 PLO", buyIn: "22" })).toBe(true);
+    expect(isExcludedFromLibrary({ name: "Daily PLO8 Hi/Lo", buyIn: "11" })).toBe(true);
+    expect(isExcludedFromLibrary({ name: "PLO5 Bounty", buyIn: "55" })).toBe(true);
+  });
+  it("exclui Freeroll e buy-in 0", () => {
+    expect(isExcludedFromLibrary({ name: "Sunday Freeroll", buyIn: "0" })).toBe(true);
+    expect(isExcludedFromLibrary({ name: "Free Roll Daily", buyIn: "0" })).toBe(true);
+    expect(isExcludedFromLibrary({ name: "Bounty Builder", buyIn: "0" })).toBe(true);
+    expect(isExcludedFromLibrary({ name: "Bounty Builder", buyIn: "0.00" })).toBe(true);
+  });
+  it("NAO exclui Holdem normal nem nomes parecidos", () => {
+    expect(isExcludedFromLibrary({ name: "Bounty Builder", buyIn: "22" })).toBe(false);
+    expect(isExcludedFromLibrary({ name: "Diplomat Special", buyIn: "11" })).toBe(false); // 'plo' nao em boundary
+    expect(isExcludedFromLibrary({ name: "Sunday Million", buyIn: "109" })).toBe(false);
   });
 });
 

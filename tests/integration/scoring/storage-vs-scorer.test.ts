@@ -31,7 +31,8 @@ describe('CRITICAL #1: BUYIN_BUCKETS labels devem alinhar com getAnalyticsByBuyi
     const expectedLabels = [
       '$1-6',
       '$7-15',
-      '$16-29',
+      '$16-19',
+      '$20-29',
       '$30-49',
       '$50-70',
       '$71-130',
@@ -102,7 +103,7 @@ describe('CRITICAL #1+#2 integration: playerBundle propaga labels de scoringCons
     const { storage } = await import('../../../server/storage');
 
     const fakeBuyInResult = [
-      { range: '$16-29', sample: 134, roi: 16.8 },
+      { range: '$20-29', sample: 134, roi: 16.8 },
     ];
 
     const spies = [
@@ -124,7 +125,7 @@ describe('CRITICAL #1+#2 integration: playerBundle propaga labels de scoringCons
     try {
       (playerBundleCache as any).__resetForTest?.();
       const bundle = await playerBundleCache.getOrLoad('USER-CRIT', 180);
-      expect(bundle.byBuyIn[0].range).toBe('$16-29');
+      expect(bundle.byBuyIn[0].range).toBe('$20-29');
       const labels = BUYIN_BUCKETS.map((b) => b.range);
       expect(labels).toContain(bundle.byBuyIn[0].range);
     } finally {
