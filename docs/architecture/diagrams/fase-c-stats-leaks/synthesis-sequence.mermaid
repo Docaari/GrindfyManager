@@ -1,0 +1,61 @@
+%% ADR-231 — getStatsLeaks: síntese comportamental de 3 sinais (Fase C #3)
+%% Storage orquestra 3 leituras (try/catch por fonte, lesson #9) -> helper puro
+%% consolida por statId -> ranqueia por severity -> top N. Sem migration, sem DB no helper.
+sequenceDiagram
+    actor Consumer as Consumer (1 de 5)<br/><i>auto-suggest / biblioteca / estudo / planning / plano-semanal</i>
+    participant Storage as storage.getStatsLeaks(userId, top)<br/><i>server/storage.ts</i>
+    participant DB as PostgreSQL<br/><i>via Drizzle</i>
+    participant Helper as synthesizeLeaks(inputs, top)<br/><i>server/coach/leaks/detectLeaks.ts (PURO)</i>
+    participant Catalog as getStatById<br/><i>shared/hud-stat-catalog.ts</i>
+
+    Consumer->>Storage: getStatsLeaks(userId, top=3|5)
+    Note over Storage: deriva currentMonth = YYYY-MM (UTC)<br/>cutoff60 = now - 60d (STAT_ANALYSIS_WINDOW_DAYS)
+
+    rect rgb(238, 246, 255)
+        Note over Storage,DB: 3 leituras independentes — cada uma em try/catch (lesson #9)
+        Storage->>DB: S1 SELECT coach_leak_focus WHERE userId AND status='active'
+        alt query S1 ok
+            DB-->>Storage: coachLeaks[]
+        else query S1 lança
+            Note over Storage: console.error("getStatsLeaks.coachLeaks.error", {...})
+            Storage->>Storage: degrada S1 -> []
+        end
+
+        Storage->>DB: S2 SELECT study_sessions_v2 WHERE userId AND mode='stat_analysis'<br/>AND deleted_at IS NULL AND (started_at IS NULL OR started_at >= cutoff60)
+        alt query S2 ok
+            DB-->>Storage: statAnalysisSessions[] (statId, statAnalysisEntries)
+        else query S2 lança
+            Note over Storage: console.error("getStatsLeaks.statAnalysis.error", {...})
+            Storage->>Storage: degrada S2 -> []
+        end
+
+        Storage->>DB: S3 SELECT user_focus_stats WHERE userId AND month = currentMonth
+        alt query S3 ok
+            DB-->>Storage: focusStats[] (statId)
+        else query S3 lança
+            Note over Storage: console.error("getStatsLeaks.focusStats.error", {...})
+            Storage->>Storage: degrada S3 -> []
+        end
+    end
+
+    Storage->>Helper: synthesizeLeaks({ coachLeaks, statAnalysisSessions, focusStats, currentMonth }, top)
+    Note over Helper: helper PURO — sem DB, sem drizzle,<br/>sem @shared/schema (lesson #36)
+
+    alt top <= 0 ou NaN
+        Helper-->>Storage: [] (early return)
+    else top >= 1
+        Note over Helper: 1) S2/S3: valida statId (catálogo OU CUSTOM_STAT_RE); inválido -> descarta (D-A5)
+        Helper->>Catalog: getStatById(statId)  %% S2/S3 enriquecimento
+        Catalog-->>Helper: StatField | undefined
+
+        Note over Helper: 2) S1: match baselineStatKey<br/>exato -> trim().toLowerCase() (D-A7)
+        Helper->>Catalog: getStatById(baselineStatKey [norm])
+        Catalog-->>Helper: StatField | undefined (casa -> funde; senão -> leak:&lt;code&gt;)
+
+        Note over Helper: 3) consolida por statId; severity = scoreS1(10) + scoreS2(3/sessão+1/entry, cap 30) + scoreS3(2)
+        Note over Helper: 4) descarta severity===0; benchmark = (targetMin+targetMax)/2 quando catálogo, senão null
+        Note over Helper: 5) ordena severity DESC, desempate chave ASC (determinístico); value=null, delta=null
+        Helper-->>Storage: StatLeak[].slice(0, top)
+    end
+
+    Storage-->>Consumer: StatLeak[]  (>= 0 itens; [] = degrade gracioso preservado)

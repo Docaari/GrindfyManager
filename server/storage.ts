@@ -206,6 +206,10 @@ import { groupTournaments, stripNameNoise, canonicalBuyIn, type GroupedFamily, t
 import { confidenceGradeForVolume, MIN_GROUP_VISIBLE, FAMILY_GROUP_FLOOR } from "@shared/library-grades";
 import { computeLibraryInsights, type DimensionBucket, type Insight } from "./insights/libraryInsights";
 import { savedTournamentHighlights } from "@shared/schema";
+// Fase C #3 (ADR-231) — síntese comportamental de leaks (helper puro).
+import { synthesizeLeaks } from "./coach/leaks/detectLeaks";
+import { STAT_ANALYSIS_WINDOW_DAYS } from "./coach/leaks/constants";
+import type { StatLeak } from "./coach/leaks/types";
 
 // Utility function to build period conditions with custom date range support
 function buildPeriodCondition(period: string, filters: any) {
@@ -1034,7 +1038,7 @@ export interface IStorage {
   }): Promise<StudyThemeSpotLink & { alreadyLinked?: boolean }>;
   unlinkSpotFromTheme(linkId: string, userId: string): Promise<boolean>;
   getLinkedSpots(themeId: string): Promise<any[]>;
-  getStatsLeaks(userId: string, top: number): Promise<any[]>;
+  getStatsLeaks(userId: string, top: number): Promise<StatLeak[]>;
   getStaleSpots(userId: string, days: number): Promise<any[]>;
   getDormantThemes(userId: string, days: number, maxProgress?: number): Promise<any[]>;
   getStudyStreak(userId: string): Promise<{
@@ -9799,10 +9803,90 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     }));
   }
 
-  async getStatsLeaks(_userId: string, _top: number): Promise<any[]> {
-    // TODO Sprint Studies-Reform-Backend: detectar leaks via hud_stats_snapshots
-    // ou stats_analyzer_history. Por enquanto retorna [] (frontend tolera).
-    return [];
+  async getStatsLeaks(userId: string, top: number): Promise<StatLeak[]> {
+    // Fase C #3 (ADR-231) — síntese comportamental de 3 sinais já capturados.
+    // Orquestra: lê S1/S2/S3 (cada uma em try/catch — lesson #9: loga ANTES de
+    // degradar a fonte para []), monta inputs crus e delega ao helper puro.
+
+    // currentMonth = YYYY-MM (UTC) — reusa o helper local formatYearMonthUTC
+    // (SSoT do formato neste arquivo). Helper de síntese não chama new Date().
+    const now = new Date();
+    const currentMonth = formatYearMonthUTC(now);
+
+    // S2 — janela 60d. startedAt nullable -> NULL conta (D-A2).
+    const cutoff = new Date(
+      now.getTime() - STAT_ANALYSIS_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+    );
+
+    // As 3 fontes são independentes -> leitura concorrente (allSettled). Cada
+    // rejeição degrada SÓ a sua fonte e loga ANTES do fallback (lesson #9); as
+    // outras 2 ainda alimentam o helper. Tudo rejeita -> 3 arrays vazios.
+    const [s1, s2, s3] = await Promise.allSettled([
+      db
+        .select()
+        .from(coachLeakFocus)
+        .where(
+          and(
+            eq(coachLeakFocus.userId, userId),
+            eq(coachLeakFocus.status, "active"),
+          ),
+        ),
+      db
+        .select()
+        .from(studySessionsV2)
+        .where(
+          and(
+            eq(studySessionsV2.userId, userId),
+            eq(studySessionsV2.mode, "stat_analysis"),
+            isNull(studySessionsV2.deletedAt),
+            or(
+              isNull(studySessionsV2.startedAt),
+              gte(studySessionsV2.startedAt, cutoff),
+            ),
+          ),
+        ),
+      db
+        .select()
+        .from(userFocusStats)
+        .where(
+          and(
+            eq(userFocusStats.userId, userId),
+            eq(userFocusStats.month, currentMonth),
+          ),
+        ),
+    ]);
+
+    // Extrai + mapeia por fonte; rejeição -> log (lesson #9) + [].
+    const pick = <T>(
+      res: PromiseSettledResult<any>,
+      label: string,
+      mapper: (r: any) => T,
+    ): T[] => {
+      if (res.status === "fulfilled") return (res.value ?? []).map(mapper);
+      console.error(`getStatsLeaks.${label}.error`, { userId, err: res.reason });
+      return [];
+    };
+
+    const coachLeaks = pick(s1, "coachLeakFocus", (r: any) => ({
+      leakCode: r.leakCode,
+      description: r.description,
+      baselineStatKey: r.baselineStatKey,
+      status: r.status,
+    }));
+    const statAnalysisSessions = pick(s2, "statAnalysis", (r: any) => ({
+      statId: r.statId ?? null,
+      statAnalysisEntries: Array.isArray(r.statAnalysisEntries)
+        ? r.statAnalysisEntries
+        : null,
+    }));
+    const focusStats = pick(s3, "userFocusStats", (r: any) => ({
+      statId: r.statId,
+    }));
+
+    return synthesizeLeaks(
+      { coachLeaks, statAnalysisSessions, focusStats, currentMonth },
+      top,
+    );
   }
 
   async getStaleSpots(userId: string, days: number): Promise<any[]> {
