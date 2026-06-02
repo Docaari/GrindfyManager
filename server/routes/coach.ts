@@ -25,6 +25,8 @@ import {
   handleGetOnboarding,
   handlePatchOnboarding,
   handleCompleteOnboarding,
+  handleGetStructuredProfile,
+  handlePutStructuredProfile,
   handleGetNudges,
   handleNudgeDismiss,
   handleNudgeSnooze,
@@ -1071,6 +1073,13 @@ export function registerCoachRoutes(app: Express): void {
   app.post('/api/coach/onboarding/complete', requireAuth, async (req: any, res: any) => {
     await handleCompleteOnboarding(req, res);
   });
+  // #9 — perfil estruturado editavel ("O que o Coach sabe de voce").
+  app.get('/api/coach/structured-profile', requireAuth, async (req: any, res: any) => {
+    await handleGetStructuredProfile(req, res);
+  });
+  app.put('/api/coach/structured-profile', requireAuth, async (req: any, res: any) => {
+    await handlePutStructuredProfile(req, res);
+  });
   app.get('/api/coach/level-estimate', requireAuth, async (req: any, res: any) => {
     await handleGetLevelEstimate(req, res);
   });
@@ -1918,6 +1927,8 @@ export {
   handleGetOnboarding,
   handlePatchOnboarding,
   handleCompleteOnboarding,
+  handleGetStructuredProfile,
+  handlePutStructuredProfile,
   handleGetNudges,
   handleNudgeDismiss,
   handleNudgeSnooze,

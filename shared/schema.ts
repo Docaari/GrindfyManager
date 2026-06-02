@@ -4695,6 +4695,10 @@ export const userCoachPreferences = pgTable("user_coach_preferences", {
   nudgeBDownswing: boolean("nudge_b_downswing").notNull().default(true),
   nudgeBLife: boolean("nudge_b_life").notNull().default(false),
   nudgeBMental: boolean("nudge_b_mental").notNull().default(false),
+  // Coach AI UX Overhaul (#8) — follow-up de compromissos (accountability).
+  // Default TRUE: o jogador se comprometeu explicitamente -> cobrar e esperado.
+  // Migration 0092.
+  nudgeBFollowup: boolean("nudge_b_followup").notNull().default(true),
 
   quietHoursStart: integer("quiet_hours_start").notNull().default(21),
   quietHoursEnd: integer("quiet_hours_end").notNull().default(9),
@@ -4803,6 +4807,8 @@ export const updateCoachPreferencesSchema = z.object({
   reportWeeklyEnabled: z.boolean().optional(),
   nudgeBGapcheck: z.boolean().optional(),
   nudgeBImport: z.boolean().optional(),
+  // Coach AI UX Overhaul (#8) — toggle do follow-up de compromissos.
+  nudgeBFollowup: z.boolean().optional(),
   // Sprint AI-1C (ADR-159) — opt-in Daily Debrief + Monthly Report.
   reportDailyEnabled: z.boolean().optional(),
   reportMonthlyEnabled: z.boolean().optional(),
@@ -4950,6 +4956,35 @@ export const coachLeakFocus = pgTable("coach_leak_focus", {
 
 export type CoachLeakFocus = typeof coachLeakFocus.$inferSelect;
 export type InsertCoachLeakFocus = typeof coachLeakFocus.$inferInsert;
+
+// -----------------------------------------------------------------------------
+// coach_commitments — Coach AI UX Overhaul (#8) — loop de accountability.
+// Migration 0092. O jogador se compromete ("vou estudar PKO essa semana") e o
+// Coach cobra no vencimento (tick B-FOLLOWUP) + injeta os abertos no contexto do
+// chat (fecha o loop). status: active|done|missed|cancelled. Sem CHECK no DB
+// (Zod-only). FK user cascade.
+// -----------------------------------------------------------------------------
+export const coachCommitments = pgTable("coach_commitments", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull()
+    .references(() => users.userPlatformId, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  category: varchar("category", { length: 24 }), // study|volume|grind|mental|other (nullable)
+  dueDate: date("due_date").notNull(),           // YYYY-MM-DD (UTC) — quando cobrar
+  status: varchar("status", { length: 16 }).notNull().default("active"),
+  source: varchar("source", { length: 24 }).notNull().default("tool"), // tool|chat|manual
+  chatSessionId: varchar("chat_session_id"),
+  followedUpAt: timestamp("followed_up_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_coach_commitments_user_status").on(table.userId, table.status),
+  index("idx_coach_commitments_due").on(table.status, table.dueDate),
+]);
+
+export type CoachCommitment = typeof coachCommitments.$inferSelect;
+export type InsertCoachCommitment = typeof coachCommitments.$inferInsert;
 
 // =============================================================================
 // coach_lesson_recommendations — Sprint home-reform-4 / Item 4 (ADR-111)

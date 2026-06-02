@@ -467,6 +467,82 @@ export async function handleCompleteOnboarding(req: any, res: any, injectedStora
 }
 
 // =============================================================================
+// #9 — "O que o Coach sabe de voce": GET/PUT do perfil estruturado editavel.
+// Expoe os campos seguros do aiStructuredProfile (o que alimenta o contexto do
+// agente). Da transparencia + controle ao jogador (confianca = coach que lembra).
+// =============================================================================
+const structuredProfilePatchSchema = z
+  .object({
+    tomPreferido: z.enum(TOM_ENUM).optional(),
+    focoDoMes: z.string().max(200).nullable().optional(),
+    metas: z.array(onboardingMetaPatchSchema).max(3).optional(),
+    stakesTipico: z.string().max(50).nullable().optional(),
+    volumeTipicoMes: z.number().int().min(0).nullable().optional(),
+    perfilDeclarado: z.enum(PERFIL_DECLARADO_ENUM).nullable().optional(),
+    redesPrincipais: z.array(z.string()).optional(),
+    padroesConhecidos: z.array(z.string().max(200)).max(10).optional(),
+    nivel: z.enum(NIVEL_ENUM).optional(),
+    nivelConfirmado: z.boolean().optional(),
+  })
+  .strict();
+
+export async function handleGetStructuredProfile(req: any, res: any, injectedStorage?: any): Promise<void> {
+  const userId = reqUserId(req);
+  if (!req?.user || !userId) {
+    res.status(401).json({ message: "Nao autenticado" });
+    return;
+  }
+  try {
+    const store = await resolveOnboardingStorage(injectedStorage);
+    const profile = await store.getAiStructuredProfile(userId);
+    res.status(200).json({ structuredProfile: profile });
+  } catch (err) {
+    console.error("coach.structured_profile.get.error", { userId, err });
+    res.status(500).json({ message: "Erro interno" });
+  }
+}
+
+export async function handlePutStructuredProfile(req: any, res: any, injectedStorage?: any): Promise<void> {
+  const userId = reqUserId(req);
+  if (!req?.user || !userId) {
+    res.status(401).json({ message: "Nao autenticado" });
+    return;
+  }
+  const parsed = structuredProfilePatchSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "validation_failed", details: parsed.error.issues });
+    return;
+  }
+  const body = parsed.data;
+  try {
+    const store = await resolveOnboardingStorage(injectedStorage);
+    const delta: any = {};
+    if (body.tomPreferido !== undefined) delta.tomPreferido = body.tomPreferido;
+    if (body.focoDoMes !== undefined) {
+      delta.focoDoMes = body.focoDoMes == null ? null : clampStr(body.focoDoMes, 200);
+      delta.focoDoMesDefinidoEm = new Date().toISOString();
+    }
+    if (body.metas !== undefined) delta.metas = buildMetas(body.metas);
+    if (body.stakesTipico !== undefined) delta.stakesTipico = body.stakesTipico == null ? null : clampStr(body.stakesTipico, 50);
+    if (body.volumeTipicoMes !== undefined) delta.volumeTipicoMes = body.volumeTipicoMes;
+    if (body.perfilDeclarado !== undefined) delta.perfilDeclarado = body.perfilDeclarado;
+    if (body.redesPrincipais !== undefined) delta.redesPrincipais = clampRedes(body.redesPrincipais);
+    if (body.padroesConhecidos !== undefined) delta.padroesConhecidos = body.padroesConhecidos.slice(0, 10);
+    if (body.nivel !== undefined) delta.nivel = body.nivel;
+    if (body.nivelConfirmado !== undefined) delta.nivelConfirmado = body.nivelConfirmado;
+    // tom espelhado nas prefs (paridade com o onboarding).
+    if (body.tomPreferido !== undefined) {
+      try { await store.upsertCoachPreferences(userId, { coachTone: body.tomPreferido }); } catch (e) { console.error("coach.structured_profile.tone_mirror.error", { userId, e }); }
+    }
+    const updated = await store.updateAiStructuredProfile(userId, delta);
+    res.status(200).json({ structuredProfile: updated });
+  } catch (err) {
+    console.error("coach.structured_profile.put.error", { userId, err });
+    res.status(500).json({ message: "Erro interno" });
+  }
+}
+
+// =============================================================================
 // Anti-fadiga telemetry endpoints
 // =============================================================================
 function categoryFromNudge(row: any): NudgeCategory | null {

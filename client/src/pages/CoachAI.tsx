@@ -67,6 +67,7 @@ import { LENS_PLACEHOLDER } from '@/lib/coachLensMeta';
 // Sprint AI-1B — timeline (reports + nudges) + quick suggestions anti-blank-page.
 import NudgeCard from '@/components/coach/NudgeCard';
 import { CoachReportCtaButtons, type CoachReportCta } from '@/components/coach/CoachReportCtaButtons';
+import { CoachKnowledgePanel } from '@/components/coach/CoachKnowledgePanel';
 import { getFallbackSuggestions } from '@/lib/quickSuggestionsFallback';
 // Sprint Mini Player 2 (CRITICAL-2) — Spotify connection panel em Preferencias.
 import { SpotifyConnectionPanel } from '@/components/settings/SpotifyConnectionPanel';
@@ -1119,6 +1120,7 @@ export default function CoachAI() {
           <CoachAuditPanel />
         </TabsContent>
         <TabsContent value="prefs" data-testid="coach-ai-tabpanel-prefs" className="h-full m-0 overflow-auto">
+          <div className="p-4"><CoachKnowledgePanel /></div>
           <CoachPreferencesPanel />
         </TabsContent>
       </div>
