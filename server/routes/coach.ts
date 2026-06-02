@@ -1137,6 +1137,7 @@ function buildPrefsResponse(prefs: any, timezone: string) {
       bDownswing: prefs.nudgeBDownswing,
       bLife: prefs.nudgeBLife,
       bMental: prefs.nudgeBMental,
+      bFollowup: prefs.nudgeBFollowup,
     },
     quietHours: {
       startHour: prefs.quietHoursStart,
@@ -1161,6 +1162,7 @@ function buildPrefsResponse(prefs: any, timezone: string) {
     reportWeeklyEnabled: prefs.reportWeeklyEnabled ?? false,
     nudgeBGapcheck: prefs.nudgeBGapcheck ?? true,
     nudgeBImport: prefs.nudgeBImport ?? true,
+    nudgeBFollowup: prefs.nudgeBFollowup ?? true,
     // Sprint AI-1C (ADR-159) — opt-in Daily Debrief + Monthly Report.
     reportDailyEnabled: prefs.reportDailyEnabled ?? false,
     reportMonthlyEnabled: prefs.reportMonthlyEnabled ?? false,

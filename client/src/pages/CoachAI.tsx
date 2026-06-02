@@ -733,7 +733,7 @@ function CoachAuditPanel() {
 // -----------------------------------------------------------------------------
 // Preferencias de nudge — consome GET / PUT /api/coach/preferences
 // -----------------------------------------------------------------------------
-const NUDGE_KEYS = ['bSnapshot', 'bLeak', 'bStudy', 'bVolume', 'bGrade', 'bDownswing', 'bLife', 'bMental'] as const;
+const NUDGE_KEYS = ['bSnapshot', 'bLeak', 'bStudy', 'bVolume', 'bGrade', 'bDownswing', 'bLife', 'bMental', 'bFollowup'] as const;
 type NudgeKey = (typeof NUDGE_KEYS)[number];
 
 const NUDGE_LABELS: Record<NudgeKey, string> = {
@@ -745,6 +745,7 @@ const NUDGE_LABELS: Record<NudgeKey, string> = {
   bDownswing: 'Alerta de downswing',
   bLife: 'Vida fora do poker',
   bMental: 'Cuidado mental',
+  bFollowup: 'Cobranca de compromissos',
 };
 
 type FrozenCategoryEntry = { frozenAt?: string; reason?: string; dismissRate?: number; windowDays?: number };
@@ -856,6 +857,7 @@ function CoachPreferencesPanel() {
       nudgeBDownswing: nudges.bDownswing,
       nudgeBLife: nudges.bLife,
       nudgeBMental: nudges.bMental,
+      nudgeBFollowup: nudges.bFollowup,
       quietHoursStart: quietStart,
       quietHoursEnd: quietEnd,
       maxNudgesPerDay: perDay,
