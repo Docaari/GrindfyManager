@@ -359,6 +359,7 @@ function ChatPanel() {
     isStreaming,
     streamedText,
     streamError,
+    pendingUserMessage,
     sendMessage,
     startNewConversation,
     archiveSession,
@@ -367,7 +368,7 @@ function ChatPanel() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamedText]);
+  }, [messages, streamedText, pendingUserMessage, isStreaming]);
 
   // #2 — chegou de /coach-ai/onboarding com ?session=<id> -> abre a sessao recem
   // criada (com o 1o insight personalizado). Roda uma vez.
@@ -438,7 +439,7 @@ function ChatPanel() {
         </div>
 
         <ScrollArea className="flex-1 p-4">
-          {messages.length === 0 && !streamedText ? (
+          {messages.length === 0 && !streamedText && !pendingUserMessage && !isStreaming ? (
             <div className="flex flex-col items-center justify-center h-full py-20 text-center">
               <Sparkles size={48} className="text-green-600/40 mb-4" />
               <h3 className="text-lg font-medium text-gray-300 mb-2">Grindfy AI</h3>
@@ -458,6 +459,16 @@ function ChatPanel() {
               {messages.map((msg) => (
                 <MessageBubble key={msg.id} message={msg} />
               ))}
+              {/* Render otimista da mensagem do usuario (aparece NA HORA, antes
+                  de persistir / do 1o token). Some quando a query de mensagens
+                  ja tem a versao real (clear no 'done' apos refetch). */}
+              {pendingUserMessage && (
+                <div data-testid="coach-pending-user-msg" className="flex w-full mb-4 justify-end">
+                  <div className="max-w-[80%] rounded-lg px-4 py-3 text-sm bg-green-600/20 border border-green-600/30">
+                    <p className="whitespace-pre-wrap">{pendingUserMessage}</p>
+                  </div>
+                </div>
+              )}
               {isStreaming && streamedText && (
                 <div className="flex w-full mb-4 justify-start">
                   <div className="max-w-[80%] rounded-lg px-4 py-3 text-sm bg-gray-800 border border-gray-700 text-gray-200">
@@ -468,6 +479,16 @@ function ChatPanel() {
                       <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                       <span className="text-xs text-gray-500">digitando...</span>
                     </div>
+                  </div>
+                </div>
+              )}
+              {/* Indicador "pensando" ANTES do 1o token (e durante execucao de
+                  tool, quando nao ha texto saindo) — evita sensacao de travado. */}
+              {isStreaming && !streamedText && (
+                <div data-testid="coach-thinking-indicator" className="flex w-full mb-4 justify-start">
+                  <div className="rounded-lg px-4 py-3 text-sm bg-gray-800 border border-gray-700 text-gray-400 flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin text-green-400" />
+                    <span className="text-xs">Grindfy AI esta pensando…</span>
                   </div>
                 </div>
               )}
