@@ -26,14 +26,26 @@ export interface GenerateDailyDebriefArgs {
 }
 
 export interface DailyDebriefResult {
-  content: ReportContent;
-  markdown: string;
-  status: "ready" | "degraded";
+  content?: ReportContent;
+  markdown?: string;
+  status: "ready" | "degraded" | "skipped";
+  // #12 — debrief inteligente: sessao trivial (abaixo do threshold de torneios)
+  // nao vira relatorio. O reportJobRunner marca o job 'skipped' sem persistir.
+  suppressed?: boolean;
   model: string | null;
   usage?: any;
   costUsdEstimate?: number | null;
   degradedReason?: string | null;
   reportId?: string | null;
+}
+
+// #12 — threshold de relevancia: minimo de torneios no dia pra gerar debrief.
+// Default 1 (suprime sessao completada sem nenhum torneio registrado). Env
+// COACH_DAILY_DEBRIEF_MIN_TOURNAMENTS=0 restaura o comportamento antigo.
+function minTournamentsThreshold(): number {
+  const raw = Number(process.env.COACH_DAILY_DEBRIEF_MIN_TOURNAMENTS);
+  if (!Number.isFinite(raw) || raw < 0) return 1;
+  return Math.floor(raw);
 }
 
 async function resolveStorage(injected?: any): Promise<any> {
@@ -249,6 +261,22 @@ export async function generateDailyDebrief(args: GenerateDailyDebriefArgs): Prom
   }
 
   const followUp = await gatherFollowUp(storage, userId, aiProfile);
+
+  // #12 — debrief inteligente: abaixo do threshold de torneios E sem follow-up
+  // (leak focus ativo / metas) -> nao gera relatorio (corta spam pro grinder de
+  // alto volume). Suprime ANTES do LLM (custo zero); preserva o debrief quando
+  // ha um loop aberto a fechar.
+  if (agg.tournamentsCount < minTournamentsThreshold() && !followUp) {
+    return {
+      suppressed: true,
+      status: "skipped",
+      markdown: "",
+      model: null,
+      usage: null,
+      costUsdEstimate: 0,
+      degradedReason: null,
+    };
+  }
 
   // Tom + nivel (perfil estruturado tem prioridade; fallback coachTone).
   let tone: "gentle" | "balanced" | "direct" = "balanced";

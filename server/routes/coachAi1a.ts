@@ -60,7 +60,43 @@ async function resolveOnboardingStorage(injectedStorage?: any): Promise<any> {
     updateNudgeLogStatus: (id: string, status: string, extra: any) =>
       (storage as any).updateNudgeLogStatus(id, status, extra),
     checkAndFreezeCategory: (uid: string, cat: any) => (storage as any).checkAndFreezeCategory(uid, cat),
+    // #2 — 1o insight: criar sessao de chat + mensagem de boas-vindas no complete.
+    createChatSession: (input: any) => (storage as any).createChatSession(input),
+    insertChatMessage: (input: any) => (storage as any).insertChatMessage(input),
   };
+}
+
+// #2 — primeiro insight personalizado pos-onboarding (deterministico, sem LLM
+// pra ser instantaneo e confiavel). Referencia o que o jogador acabou de contar
+// + oferece acoes concretas (tools), criando o "aha moment" no pico de atencao.
+const NIVEL_LABEL: Record<string, string> = {
+  sem_dados: "comecando",
+  iniciando: "iniciante",
+  micro_ascensao: "micro em ascensao",
+  mid_consistente: "mid consistente",
+  high_stakes: "high stakes",
+  recreativo_serio: "recreativo serio",
+};
+
+function buildOnboardingFirstMessage(profile: any): string {
+  const lines: string[] = [];
+  lines.push("Show, configurei teu perfil!");
+  const nivel = profile?.nivel ? (NIVEL_LABEL[String(profile.nivel)] ?? String(profile.nivel)) : null;
+  if (nivel) lines.push(`Pelo que me contou, teu nivel ta em **${nivel}**.`);
+  const foco = typeof profile?.focoDoMes === "string" ? profile.focoDoMes.trim() : "";
+  if (foco) lines.push(`Teu foco do mes: **${foco}**.`);
+  const metas = Array.isArray(profile?.metas)
+    ? profile.metas.map((m: any) => String(m?.texto ?? "").trim()).filter(Boolean).slice(0, 3)
+    : [];
+  if (metas.length) lines.push(`Tuas metas: ${metas.join("; ")}.`);
+  lines.push("");
+  lines.push("Ja da pra comecar agora — eu nao so respondo, eu **ajo** sobre teus dados. Posso:");
+  lines.push("- puxar teus **3 maiores leaks** agora");
+  lines.push("- **montar tua grade** da semana");
+  lines.push("- analisar tua **variancia** do mes");
+  lines.push("");
+  lines.push("Por onde quer comecar?");
+  return lines.join("\n");
 }
 
 function reqUserId(req: any): string | null {
@@ -401,9 +437,107 @@ export async function handleCompleteOnboarding(req: any, res: any, injectedStora
       onboardingDraft: null,
     });
 
-    res.status(200).json({ structuredProfile: finalProfile, preferences });
+    // #2 — aha moment: cria a 1a sessao de chat ja com um insight personalizado
+    // (best-effort — falha aqui NAO falha o onboarding).
+    let chatSessionId: string | null = null;
+    try {
+      const session = await store.createChatSession?.({
+        userId,
+        coachType: "technical",
+        title: "Bem-vindo ao Grindfy AI",
+      });
+      chatSessionId = session?.id ?? null;
+      if (chatSessionId) {
+        await store.insertChatMessage?.({
+          chatSessionId,
+          role: "assistant",
+          content: buildOnboardingFirstMessage(finalProfile),
+        });
+      }
+    } catch (err) {
+      console.error("coach.onboarding.first_insight.error", { userId, err });
+      chatSessionId = null;
+    }
+
+    res.status(200).json({ structuredProfile: finalProfile, preferences, chatSessionId });
   } catch (err: any) {
     console.error("coach.onboarding.complete.error", { err });
+    res.status(500).json({ message: "Erro interno" });
+  }
+}
+
+// =============================================================================
+// #9 — "O que o Coach sabe de voce": GET/PUT do perfil estruturado editavel.
+// Expoe os campos seguros do aiStructuredProfile (o que alimenta o contexto do
+// agente). Da transparencia + controle ao jogador (confianca = coach que lembra).
+// =============================================================================
+const structuredProfilePatchSchema = z
+  .object({
+    tomPreferido: z.enum(TOM_ENUM).optional(),
+    focoDoMes: z.string().max(200).nullable().optional(),
+    metas: z.array(onboardingMetaPatchSchema).max(3).optional(),
+    stakesTipico: z.string().max(50).nullable().optional(),
+    volumeTipicoMes: z.number().int().min(0).nullable().optional(),
+    perfilDeclarado: z.enum(PERFIL_DECLARADO_ENUM).nullable().optional(),
+    redesPrincipais: z.array(z.string()).optional(),
+    padroesConhecidos: z.array(z.string().max(200)).max(10).optional(),
+    nivel: z.enum(NIVEL_ENUM).optional(),
+    nivelConfirmado: z.boolean().optional(),
+  })
+  .strict();
+
+export async function handleGetStructuredProfile(req: any, res: any, injectedStorage?: any): Promise<void> {
+  const userId = reqUserId(req);
+  if (!req?.user || !userId) {
+    res.status(401).json({ message: "Nao autenticado" });
+    return;
+  }
+  try {
+    const store = await resolveOnboardingStorage(injectedStorage);
+    const profile = await store.getAiStructuredProfile(userId);
+    res.status(200).json({ structuredProfile: profile });
+  } catch (err) {
+    console.error("coach.structured_profile.get.error", { userId, err });
+    res.status(500).json({ message: "Erro interno" });
+  }
+}
+
+export async function handlePutStructuredProfile(req: any, res: any, injectedStorage?: any): Promise<void> {
+  const userId = reqUserId(req);
+  if (!req?.user || !userId) {
+    res.status(401).json({ message: "Nao autenticado" });
+    return;
+  }
+  const parsed = structuredProfilePatchSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    res.status(400).json({ message: "validation_failed", details: parsed.error.issues });
+    return;
+  }
+  const body = parsed.data;
+  try {
+    const store = await resolveOnboardingStorage(injectedStorage);
+    const delta: any = {};
+    if (body.tomPreferido !== undefined) delta.tomPreferido = body.tomPreferido;
+    if (body.focoDoMes !== undefined) {
+      delta.focoDoMes = body.focoDoMes == null ? null : clampStr(body.focoDoMes, 200);
+      delta.focoDoMesDefinidoEm = new Date().toISOString();
+    }
+    if (body.metas !== undefined) delta.metas = buildMetas(body.metas);
+    if (body.stakesTipico !== undefined) delta.stakesTipico = body.stakesTipico == null ? null : clampStr(body.stakesTipico, 50);
+    if (body.volumeTipicoMes !== undefined) delta.volumeTipicoMes = body.volumeTipicoMes;
+    if (body.perfilDeclarado !== undefined) delta.perfilDeclarado = body.perfilDeclarado;
+    if (body.redesPrincipais !== undefined) delta.redesPrincipais = clampRedes(body.redesPrincipais);
+    if (body.padroesConhecidos !== undefined) delta.padroesConhecidos = body.padroesConhecidos.slice(0, 10);
+    if (body.nivel !== undefined) delta.nivel = body.nivel;
+    if (body.nivelConfirmado !== undefined) delta.nivelConfirmado = body.nivelConfirmado;
+    // tom espelhado nas prefs (paridade com o onboarding).
+    if (body.tomPreferido !== undefined) {
+      try { await store.upsertCoachPreferences(userId, { coachTone: body.tomPreferido }); } catch (e) { console.error("coach.structured_profile.tone_mirror.error", { userId, e }); }
+    }
+    const updated = await store.updateAiStructuredProfile(userId, delta);
+    res.status(200).json({ structuredProfile: updated });
+  } catch (err) {
+    console.error("coach.structured_profile.put.error", { userId, err });
     res.status(500).json({ message: "Erro interno" });
   }
 }

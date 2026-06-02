@@ -91,6 +91,20 @@ function pickDominantBucket(tournament: SelectorTournament): DominantBucket | nu
   };
 }
 
+// Fase F #12 (ADR-237 D-5) — softness na UI. tier 'duro' => badge OCULTO
+// (reduz ruido). Proxies weak rotulam "estimado por nome" (lesson #11).
+const SOFTNESS_TIER_LABEL: Record<string, string> = {
+  mole: "Field mole",
+  medio: "Field médio",
+  duro: "Field duro",
+};
+
+const SOFTNESS_TIER_CLASS: Record<string, string> = {
+  mole: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  medio: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  duro: "bg-muted text-muted-foreground",
+};
+
 function isColdStart(profile?: SelectorCardProps["playerProfile"]): boolean {
   if (!profile) return false;
   const total = profile.totalTournaments ?? null;
@@ -210,6 +224,43 @@ export function SelectorCard({
             <p className="text-sm text-muted-foreground italic mt-2" data-testid="selector-card-rationale">
               {tournament.rationale}
             </p>
+
+            {/* Fase F #12 (ADR-237 D-5) — softness do field. null/undefined =>
+                nada no DOM. tier 'duro' => badge oculto (reduz ruido). */}
+            {tournament.softness && tournament.softness.tier !== "duro" && (
+              <div className="mt-2 space-y-1">
+                <span
+                  data-testid="softness-badge"
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    SOFTNESS_TIER_CLASS[tournament.softness.tier] ?? ""
+                  }`}
+                >
+                  {SOFTNESS_TIER_LABEL[tournament.softness.tier] ?? tournament.softness.tier}
+                </span>
+                {tournament.softness.indicators.length > 0 && (
+                  <ul
+                    data-testid="softness-breakdown"
+                    className="text-xs text-muted-foreground space-y-0.5"
+                  >
+                    {tournament.softness.indicators.map((ind) => (
+                      <li key={ind.key}>
+                        {ind.label}
+                        {ind.evidence ? ` (${ind.evidence})` : ""}
+                        {ind.confidence === "weak" ? " *" : ""}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {tournament.softness.overallConfidence === "weak" && (
+                  <p
+                    data-testid="softness-estimated-note"
+                    className="text-[11px] text-muted-foreground italic"
+                  >
+                    * estimado por nome
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Sprint D / RF-03.4 (ADR-186) — badge ticket disponivel. */}
             {tournament.availableTicket && (

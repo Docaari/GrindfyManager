@@ -146,6 +146,45 @@ export interface SelectorTournament {
   } | null;
   /** +10 quando availableTicket presente, 0 senao. */
   ticketBoost?: number;
+  /**
+   * Fase F #12 (ADR-237 D-4) — Game Selection Score (softness). Eixo SEPARADO,
+   * aditivo (lesson #7). NAO afeta score/grade/signals/confidence/ordenacao/
+   * filtros/cache key. `null` quando o detector falhou (best-effort, lesson #9).
+   */
+  softness?: SoftnessResult | null;
+}
+
+// ---------------------------------------------------------------------------
+// Fase F #12 — Game Selection Score (softness) — ADR-237 (D-4).
+// Eixo SEPARADO do score 0-100 calibrado: responde "esse field esta MOLE?".
+// Tipos aditivos (lesson #7) — consumidores antigos ignoram `softness`.
+// ---------------------------------------------------------------------------
+export type SoftnessIndicatorKey =
+  | "satellite"
+  | "overlay"
+  | "sportsbook"
+  | "multiday"
+  | "primetime"
+  | "regional";
+export type SoftnessTier = "mole" | "medio" | "duro";
+export type SoftnessConfidence = "strong" | "weak";
+
+export interface SoftnessIndicator {
+  key: SoftnessIndicatorKey;
+  label: string; // PT-BR (ex: "Garantido alto vs buy-in")
+  confidence: SoftnessConfidence;
+  weight: number; // peso aplicado (0-30)
+  evidence?: string; // ex: "gtd/buy-in = 200x" ou "site GGNetwork"
+}
+
+export interface SoftnessResult {
+  score: number; // 0-100
+  tier: SoftnessTier;
+  matchedCount: number;
+  /** 'strong' se algum indicador strong (overlay ou prime-nobre) bateu; senao 'weak'. */
+  overallConfidence: SoftnessConfidence;
+  /** apenas os indicadores que bateram. */
+  indicators: SoftnessIndicator[];
 }
 
 export interface SelectorPlayerProfile {

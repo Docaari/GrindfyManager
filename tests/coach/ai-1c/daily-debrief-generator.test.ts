@@ -29,8 +29,13 @@ function makeMockStorage(sessions: any[] = [], tourneysBySession: Record<string,
   };
 }
 
-describe("generateDailyDebrief — sem sessao no dia", () => {
-  it("retorna content reportType='daily' + dataSufficiency='low' + sessionSummary zerado", async () => {
+describe("generateDailyDebrief — sem sessao no dia (#12 debrief inteligente)", () => {
+  // Coach AI UX Overhaul #12: por padrao (threshold=1) uma sessao trivial / 0
+  // torneios NAO vira relatorio (suppressed) — corta o spam pro grinder de alto
+  // volume. O reportJobRunner marca o job 'skipped' sem persistir.
+  it("0 torneios -> suppressed=true, status='skipped', sem content (default threshold=1)", async () => {
+    const prev = process.env.COACH_DAILY_DEBRIEF_MIN_TOURNAMENTS;
+    delete process.env.COACH_DAILY_DEBRIEF_MIN_TOURNAMENTS;
     const storage = makeMockStorage([]);
     const { generateDailyDebrief } = await import("../../../server/services/dailyDebriefGenerator");
     const r = await generateDailyDebrief({
@@ -38,14 +43,32 @@ describe("generateDailyDebrief — sem sessao no dia", () => {
       periodStart: "2026-05-20",
       injectedStorage: storage,
     });
-    expect(r.content.reportType).toBe("daily");
-    expect(r.content.periodStart).toBe("2026-05-20");
-    expect(r.content.periodEnd).toBe("2026-05-20");
-    expect(r.content.dataSufficiency).toBe("low");
-    expect(r.content.sessionSummary?.sessionsCount).toBe(0);
-    expect(r.content.sessionSummary?.tournamentsCount).toBe(0);
-    expect(r.status).toBe("ready"); // sem dado nao chama LLM, nao degrada
+    expect(r.suppressed).toBe(true);
+    expect(r.status).toBe("skipped");
+    expect(r.content).toBeUndefined();
     expect(r.costUsdEstimate).toBe(0);
+    if (prev === undefined) delete process.env.COACH_DAILY_DEBRIEF_MIN_TOURNAMENTS;
+    else process.env.COACH_DAILY_DEBRIEF_MIN_TOURNAMENTS = prev;
+  });
+
+  it("COACH_DAILY_DEBRIEF_MIN_TOURNAMENTS=0 restaura o debrief 'ready' (back-compat)", async () => {
+    const prev = process.env.COACH_DAILY_DEBRIEF_MIN_TOURNAMENTS;
+    process.env.COACH_DAILY_DEBRIEF_MIN_TOURNAMENTS = "0";
+    const storage = makeMockStorage([]);
+    const { generateDailyDebrief } = await import("../../../server/services/dailyDebriefGenerator");
+    const r = await generateDailyDebrief({
+      userId: "USER-1",
+      periodStart: "2026-05-20",
+      injectedStorage: storage,
+    });
+    expect(r.suppressed).toBeFalsy();
+    expect(r.content?.reportType).toBe("daily");
+    expect(r.content?.dataSufficiency).toBe("low");
+    expect(r.content?.sessionSummary?.tournamentsCount).toBe(0);
+    expect(r.status).toBe("ready");
+    expect(r.costUsdEstimate).toBe(0);
+    if (prev === undefined) delete process.env.COACH_DAILY_DEBRIEF_MIN_TOURNAMENTS;
+    else process.env.COACH_DAILY_DEBRIEF_MIN_TOURNAMENTS = prev;
   });
 });
 

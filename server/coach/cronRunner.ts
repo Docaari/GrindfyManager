@@ -28,6 +28,11 @@ import { bImportTick } from "./jobs/bImport";
 import { bDownswingTick } from "./jobs/bDownswing";
 import { bVolumeTick } from "./jobs/bVolume";
 import { bGradeTick } from "./jobs/bGrade";
+// Coach AI UX Overhaul (Wave 3 / #7) — B-MENTAL + B-LIFE (opt-in, default off).
+import { bMentalTick } from "./jobs/bMental";
+import { bLifeTick } from "./jobs/bLife";
+// Coach AI UX Overhaul (Wave 4 / #8) — B-FOLLOWUP (accountability de compromissos).
+import { bFollowupTick } from "./jobs/bFollowup";
 // EST-5 (ADR-226) — Interactive Monday Ritual (recap de segunda 9h local).
 import { weeklyReviewMondayTick } from "./jobs/weeklyReviewMonday";
 // Sprint D / RF-03.1 (ADR-184) — housekeeping, fora do gate COACH_NUDGES_ENABLED.
@@ -149,6 +154,34 @@ export function startCoachCrons(): void {
       await withAdvisoryLock("cron:coach-b-grade", () => bGradeTick({}));
     } catch (err) {
       console.error("coach.cron.b_grade.tick.error", { err });
+    }
+  });
+
+  // Coach AI UX Overhaul (Wave 3 / #7) — B-MENTAL (C-game recorrente, 20h local)
+  // + B-LIFE (volume sem folga, 11h local). Opt-in: o toggle nasce false, entao
+  // so disparam pra quem ativou. Gateados pelo kill switch global (acima).
+  cron.schedule("0 * * * *", async () => {
+    try {
+      await withAdvisoryLock("cron:coach-b-mental", () => bMentalTick({}));
+    } catch (err) {
+      console.error("coach.cron.b_mental.tick.error", { err });
+    }
+  });
+
+  cron.schedule("0 * * * *", async () => {
+    try {
+      await withAdvisoryLock("cron:coach-b-life", () => bLifeTick({}));
+    } catch (err) {
+      console.error("coach.cron.b_life.tick.error", { err });
+    }
+  });
+
+  // Coach AI UX Overhaul (#8) — cobranca de compromissos vencidos (accountability).
+  cron.schedule("0 * * * *", async () => {
+    try {
+      await withAdvisoryLock("cron:coach-b-followup", () => bFollowupTick({}));
+    } catch (err) {
+      console.error("coach.cron.b_followup.tick.error", { err });
     }
   });
 

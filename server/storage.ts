@@ -145,10 +145,13 @@ import {
   coachActions,
   coachLeakFocus,
   coachNudgeLog,
+  coachCommitments,
   type CoachAction,
   type InsertCoachAction,
   type CoachLeakFocus,
   type InsertCoachLeakFocus,
+  type CoachCommitment,
+  type InsertCoachCommitment,
   type CoachNudgeLog,
   type InsertCoachNudgeLog,
   // Sprint home-reform-4 / Item 4 (ADR-111) — coach lesson recommendations.
@@ -11995,6 +11998,86 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     } catch (err) {
       console.error("storage.createCoachLeakFocus.error", { err });
       throw err;
+    }
+  }
+
+  // ---- Coach AI UX Overhaul (#8) — accountability commitments ----
+  async createCoachCommitment(input: Partial<InsertCoachCommitment>): Promise<CoachCommitment> {
+    try {
+      const id = nanoid();
+      const [row] = await db
+        .insert(coachCommitments)
+        .values({
+          id,
+          userId: input.userId!,
+          text: input.text!,
+          category: input.category ?? null,
+          dueDate: input.dueDate!,
+          status: input.status ?? "active",
+          source: input.source ?? "tool",
+          chatSessionId: input.chatSessionId ?? null,
+        } as InsertCoachCommitment)
+        .returning();
+      return row!;
+    } catch (err) {
+      console.error("storage.createCoachCommitment.error", { err });
+      throw err;
+    }
+  }
+
+  async listOpenCoachCommitments(userId: string, limit = 10): Promise<CoachCommitment[]> {
+    try {
+      return await db
+        .select()
+        .from(coachCommitments)
+        .where(and(eq(coachCommitments.userId, userId), eq(coachCommitments.status, "active")))
+        .orderBy(asc(coachCommitments.dueDate))
+        .limit(limit);
+    } catch (err) {
+      console.error("storage.listOpenCoachCommitments.error", { userId, err });
+      return [];
+    }
+  }
+
+  // due_date <= asOf (YYYY-MM-DD), status active, ainda nao cobrado (tick B-FOLLOWUP).
+  async listDueCoachCommitments(asOf: string, limit = 200): Promise<CoachCommitment[]> {
+    try {
+      return await db
+        .select()
+        .from(coachCommitments)
+        .where(
+          and(
+            eq(coachCommitments.status, "active"),
+            lte(coachCommitments.dueDate, asOf),
+            isNull(coachCommitments.followedUpAt),
+          ),
+        )
+        .orderBy(asc(coachCommitments.dueDate))
+        .limit(limit);
+    } catch (err) {
+      console.error("storage.listDueCoachCommitments.error", { err });
+      return [];
+    }
+  }
+
+  async markCoachCommitmentFollowedUp(id: string): Promise<void> {
+    try {
+      await db
+        .update(coachCommitments)
+        .set({ followedUpAt: new Date(), updatedAt: new Date() })
+        .where(eq(coachCommitments.id, id));
+    } catch (err) {
+      console.error("storage.markCoachCommitmentFollowedUp.error", { id, err });
+    }
+  }
+
+  async updateCoachCommitmentStatus(id: string, status: string): Promise<void> {
+    try {
+      const set: any = { status, updatedAt: new Date() };
+      if (status === "done") set.completedAt = new Date();
+      await db.update(coachCommitments).set(set).where(eq(coachCommitments.id, id));
+    } catch (err) {
+      console.error("storage.updateCoachCommitmentStatus.error", { id, err });
     }
   }
 

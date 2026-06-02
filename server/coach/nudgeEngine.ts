@@ -30,7 +30,9 @@ export type NudgeCategory =
   | "B-MENTAL"
   // Sprint AI-1B (ADR-157) — gap-check D-3 pre-Weekly + cobranca de import standalone.
   | "B-GAPCHECK"
-  | "B-IMPORT";
+  | "B-IMPORT"
+  // Coach AI UX Overhaul (#8) — follow-up de compromissos (accountability).
+  | "B-FOLLOWUP";
 
 export type NudgeDenyReason =
   | "nudges_globally_disabled"
@@ -65,6 +67,7 @@ const CATEGORY_TOGGLE_MAP: Record<NudgeCategory, keyof CoachPreferences> = {
   "B-MENTAL": "nudgeBMental",
   "B-GAPCHECK": "nudgeBGapcheck",
   "B-IMPORT": "nudgeBImport",
+  "B-FOLLOWUP": "nudgeBFollowup",
 };
 
 export function categoryToToggle(category: NudgeCategory): keyof CoachPreferences {

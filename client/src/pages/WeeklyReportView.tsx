@@ -14,10 +14,11 @@
 // =============================================================================
 
 import { useQuery } from "@tanstack/react-query";
-import { useParams, useLocation, Link } from "wouter";
+import { useParams } from "wouter";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { apiRequest } from "@/lib/queryClient";
+import { CoachReportCtaButtons } from "@/components/coach/CoachReportCtaButtons";
 
 const SECTION_LABELS: Record<string, string> = {
   volumeResults: "Volume + Resultados",
@@ -38,7 +39,6 @@ function Section({ id, content }: { id: string; content: any }) {
 
 export default function WeeklyReportView() {
   const params = useParams<{ id: string }>();
-  const [, setLocation] = useLocation();
   const reportId = params?.id;
 
   const { data: report, isLoading } = useQuery<any>({
@@ -65,13 +65,6 @@ export default function WeeklyReportView() {
   const sectionIds = ["volumeResults", "bankroll", "selection", "study", "mentalOps"]
     .filter((id) => sections[id] != null);
 
-  const handleCta = (cta: any) => {
-    if (cta?.kind === "tool" && cta.toolName) {
-      // ADR-146 — NAO auto-executa. Navega pro chat com a tool pre-armada.
-      const hint = encodeURIComponent(JSON.stringify({ tool: cta.toolName, payloadHint: cta.payloadHint ?? null }));
-      setLocation(`/coach-ai?tab=chat&tool=${cta.toolName}&armed=${hint}`);
-    }
-  };
 
   return (
     <div data-testid="weekly-report-view" className="mx-auto max-w-3xl space-y-4 p-6">
@@ -190,33 +183,7 @@ export default function WeeklyReportView() {
         </div>
       ) : null}
 
-      {Array.isArray(content.cta) && content.cta.length ? (
-        <div className="flex flex-wrap gap-2">
-          {content.cta.map((cta: any, i: number) =>
-            cta?.kind === "link" && typeof cta.href === "string" ? (
-              <Link
-                key={i}
-                href={cta.href}
-                data-testid="weekly-report-cta"
-                data-href={cta.href}
-                className="rounded-md border border-gray-600 px-3 py-1 text-xs text-gray-200 hover:bg-gray-700"
-              >
-                {cta.label}
-              </Link>
-            ) : (
-              <button
-                key={i}
-                type="button"
-                data-testid="weekly-report-cta"
-                onClick={() => handleCta(cta)}
-                className="rounded-md bg-green-600/20 px-3 py-1 text-xs text-green-400 hover:bg-green-600/30"
-              >
-                {cta?.label ?? "Ação"}
-              </button>
-            ),
-          )}
-        </div>
-      ) : null}
+      <CoachReportCtaButtons ctas={content.cta} testId="weekly-report-cta" />
     </div>
   );
 }
