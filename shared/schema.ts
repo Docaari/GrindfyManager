@@ -25,6 +25,7 @@ import {
 import { LIBRARY_CATEGORY_IDS, type LibraryCategoryId } from "./library-categories";
 import type { MdaImage } from "./mda";
 import { tiltTypeSchema, type TiltTypeId } from "./tilt-types";
+import { coldStopCommitZod } from "./cold-stop-commit";
 
 // Session storage table (mandatory for Replit Auth)
 export const sessions = pgTable(
@@ -1965,6 +1966,7 @@ const sessionIntentionZod = z.object({
   focus: z.string().trim().min(1).max(200),
   tiltPlan: z.string().trim().min(1).max(200),
   stopCriteria: z.string().trim().min(1).max(200),
+  coldStopCommit: coldStopCommitZod, // Fase D #5 (ADITIVO, opcional — ADR-235 D-3)
 });
 
 const blocksCompletedZod = z

@@ -31,6 +31,7 @@ import { handleSkipAllBreaksToday as handleSkipAllBreaksTodayHandler } from "@/c
 import { getCurrentHourKey, getBrtMinute } from "@/components/grind-session/break-clock-helpers";
 import { useBreakAutoOpenWiring } from "@/hooks/useBreakAutoOpenWiring";
 import SupremaImportModal from "@/components/SupremaImportModal";
+import { StopRemainingIndicator } from "@/components/grind-session-live/StopRemainingIndicator";
 import { buildSupremaMatchKey, buildSupremaMatchKeysFromSession } from "@/lib/supremaDedupe";
 import { Download, X, Camera } from "lucide-react";
 import { LateRegAlertManager } from "@/lib/lateRegAlerts";
@@ -925,6 +926,24 @@ export default function GrindSessionLive() {
     queryKey: [`/api/break-feedbacks`, activeSession?.id],
     queryFn: async () => { if (!activeSession?.id) return []; return await apiRequest("GET", `/api/break-feedbacks?sessionId=${activeSession.id}`); },
     enabled: !!activeSession?.id, staleTime: 30000,
+  });
+
+  // Fase D #5 (RF-03): status de stops para o indicador "quanto falta".
+  // Reusa GET /api/user-settings/stops (stopLossUsd + currentDayDeltaUsd via stopService).
+  const { data: stopStatus } = useQuery<{
+    stopLossUsd: number | null;
+    currentDayDeltaUsd: number;
+  }>({
+    queryKey: ["/api/user-settings/stops"],
+    queryFn: async () => {
+      try {
+        return await apiRequest("GET", "/api/user-settings/stops");
+      } catch {
+        return { stopLossUsd: null, currentDayDeltaUsd: 0 } as any;
+      }
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 
   // Spot screenshots — pending count para counter X/10 do paster.
@@ -2540,6 +2559,16 @@ export default function GrindSessionLive() {
         onOpenLessonPicker={() => setLessonPickerOpen(true)}
         isAudioPlaying={!!audioCtx?.isPlaying}
       />
+
+      {/* Fase D #5 (RF-03): indicador leve "quanto falta" para o stop-loss do dia. */}
+      {activeSession && stopStatus?.stopLossUsd != null && (
+        <div className="mb-4">
+          <StopRemainingIndicator
+            stopLossUsd={stopStatus.stopLossUsd}
+            currentDayDeltaUsd={stopStatus.currentDayDeltaUsd ?? 0}
+          />
+        </div>
+      )}
 
       {/* Calculadoras — abrem em popup (mesma janela de /calculadoras).
           Abaixo do header, acima dos prints de spots. */}

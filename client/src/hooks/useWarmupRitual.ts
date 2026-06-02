@@ -22,8 +22,17 @@
 import { useCallback, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import type { SessionIntentionPayload } from "@/components/warmup/IntentionBlock";
+import type {
+  SessionIntentionPayload,
+  ColdStopCommitPayload,
+} from "@/components/warmup/IntentionBlock";
 import type { WarmupMode } from "@/components/warmup/durations";
+
+/** Sub-objeto persistido em sessionIntention.coldStopCommit (ADR-235 D-3). */
+export interface ColdStopCommit extends ColdStopCommitPayload {
+  /** Timestamp ISO do momento em que o jogador comitou o stop a frio. */
+  committedAt: string;
+}
 
 const DRAFT_KEY = "warmup-ritual-draft";
 const DRAFT_TTL_MS = 30 * 60 * 1000; // 30min
@@ -101,6 +110,9 @@ export function useWarmupRitual() {
   const [blocksData, setBlocksData] = useState<Record<number, BlockData>>({});
   const [mode, setMode] = useState<WarmupMode | null>(null);
   const ritualStartedAtRef = useRef<string | null>(null);
+  // Cold-stop commit (Fase D #5 / ADR-235 D-3). Guardado em ref para ser injetado
+  // em sessionIntention no POST final sem disparar re-render.
+  const coldStopCommitRef = useRef<ColdStopCommit | null>(null);
 
   const invalidateWarmupQueries = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["/api/warmup-rituals/latest"] });
@@ -135,6 +147,7 @@ export function useWarmupRitual() {
   const start = useCallback((modeArg?: WarmupMode) => {
     const startedAt = new Date().toISOString();
     ritualStartedAtRef.current = startedAt;
+    coldStopCommitRef.current = null;
     setStatus("running");
     setCurrentBlock(1);
     setEmotionalCheckScore(null);
@@ -266,8 +279,17 @@ export function useWarmupRitual() {
     [emotionalCheckScore, overrideUsed, blocksData, invalidateWarmupQueries],
   );
 
+  // Registra o cold-stop commit (chamado pelo IntentionBlock via onCommitColdStop).
+  // Carimba committedAt (ISO) no momento do commit (D-3).
+  const setColdStopCommit = useCallback((payload: ColdStopCommitPayload) => {
+    coldStopCommitRef.current = {
+      ...payload,
+      committedAt: new Date().toISOString(),
+    };
+  }, []);
+
   const completeRitual = useCallback(
-    async (intention: SessionIntentionPayload): Promise<void> => {
+    async (intention: SessionIntentionPayload | null): Promise<void> => {
       const startedAt = ritualStartedAtRef.current ?? new Date().toISOString();
       const completedAt = new Date().toISOString();
       const startedAtMs = new Date(startedAt).getTime();
@@ -283,6 +305,12 @@ export function useWarmupRitual() {
         durationSeconds: (b as any).durationSeconds ?? 0,
         ...(b as any),
       }));
+      // Injeta coldStopCommit no sessionIntention quando o jogador comitou (D-3).
+      // Sem commit -> mantém o intention original (back-compat: null permanece null).
+      const commit = coldStopCommitRef.current;
+      const sessionIntention = commit
+        ? { ...(intention ?? {}), coldStopCommit: commit }
+        : intention;
       try {
         await apiRequest("POST", "/api/warmup-rituals", {
           startedAt,
@@ -293,10 +321,11 @@ export function useWarmupRitual() {
           decisionToPlay: true,
           overrideUsed,
           blocksCompleted: blocks,
-          sessionIntention: intention,
+          sessionIntention,
         });
         clearDraft();
         ritualStartedAtRef.current = null;
+        coldStopCommitRef.current = null;
         setStatus("completed");
         invalidateWarmupQueries();
       } catch {
@@ -343,6 +372,7 @@ export function useWarmupRitual() {
     resume,
     abort,
     completeRitual,
+    setColdStopCommit,
     restoreDraft,
   };
 }

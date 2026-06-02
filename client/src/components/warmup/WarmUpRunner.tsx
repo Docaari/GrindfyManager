@@ -17,14 +17,16 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { apiRequest } from "@/lib/queryClient";
 import { useWarmupRitual } from "@/hooks/useWarmupRitual";
 import { formatMmSs } from "@/lib/timeFormat";
 import { useWarmupTelemetry } from "@/hooks/useWarmupTelemetry";
 import { PhysicalSetupBlock } from "./PhysicalSetupBlock";
 import { EmotionalCheckBlock } from "./EmotionalCheckBlock";
 import { WeeklyFocusBlock } from "./WeeklyFocusBlock";
-import { IntentionBlock } from "./IntentionBlock";
+import { IntentionBlock, type ColdStopCommitPayload } from "./IntentionBlock";
 import { PFCDrillBlock } from "./PFCDrillBlock";
 import { MODE_CONFIGS, totalSeconds, type WarmupMode } from "./durations";
 
@@ -54,6 +56,29 @@ export function WarmUpRunner({
   const ritual = useWarmupRitual();
   const { track } = useWarmupTelemetry();
   const [showAbortConfirm, setShowAbortConfirm] = useState(false);
+
+  // ABI (USD) p/ a sugestão do stop-loss a frio (Fase D #5 / ADR-235 D-2/D-5).
+  // FX já resolvido server-side (lesson #6) — abiUsd chega pronto em USD; null degrada.
+  const { data: stopsData } = useQuery<any>({
+    queryKey: ["/api/user-settings/stops"],
+    queryFn: async () => apiRequest("GET", "/api/user-settings/stops"),
+    staleTime: 60_000,
+  });
+  const abiUsd: number | null =
+    typeof stopsData?.abiUsd === "number" ? stopsData.abiUsd : null;
+
+  // Comitar o stop a frio: grava IMEDIATAMENTE via PUT (RF-01) + guarda o snapshot
+  // (committedAt carimbado no hook) para o POST final do ritual (D-3).
+  const handleCommitColdStop = (payload: ColdStopCommitPayload) => {
+    ritual.setColdStopCommit(payload);
+    apiRequest("PUT", "/api/user-settings/stops", {
+      stopLossUsd: payload.committedUsd,
+    }).catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error("[warmup] cold-stop PUT falhou:", e);
+    });
+    track("cold_stop_committed", { basis: payload.basis });
+  };
   const cfg = MODE_CONFIGS[mode];
   const totalSec = totalSeconds(mode);
 
@@ -256,7 +281,11 @@ export function WarmUpRunner({
           />
         )}
         {ritual.currentBlock === 4 && (
-          <IntentionBlock onSubmit={handleIntentionSubmit} />
+          <IntentionBlock
+            onSubmit={handleIntentionSubmit}
+            abiUsd={abiUsd}
+            onCommitColdStop={handleCommitColdStop}
+          />
         )}
         {ritual.currentBlock === 5 && (
           <PFCDrillBlock
