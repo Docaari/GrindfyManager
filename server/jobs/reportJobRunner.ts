@@ -44,24 +44,12 @@ const ELIGIBLE_PLAN_OR_TIER = new Set(["trial", "admin", "pro", "premium"]);
  * 'premium') que deve ser gravado em `subscription_plan_at_enqueue`, ou `null`
  * se o user NAO eh elegivel. Erro de resolveUserTier -> null (safe-deny, logado).
  */
+// Coach AI UX Overhaul (Wave 5 / #5 dedup) — delega ao helper compartilhado
+// server/coach/planEligibility.ts (fonte unica). A copia local era byte-identica
+// e era um risco de divergencia silenciosa (CLAUDE.md §10 / bug latente AI-1B).
 async function resolveEligibleTierSnapshot(userId: string, rawPlan?: string | null): Promise<string | null> {
-  const plan = String(rawPlan ?? "").toLowerCase();
-  if (plan === "admin") return "admin";
-  if (plan === "trial") return "trial";
-  if (plan === "pro" || plan === "premium") return plan; // defensivo: ja eh tier
-  if (plan === "active") {
-    try {
-      const { resolveUserTier } = await import("../coachAccess");
-      const tier = await resolveUserTier({ userPlatformId: userId, subscriptionPlan: "active" });
-      if (tier === "pro" || tier === "premium" || tier === "admin") return tier;
-      return null; // 'free' (active mas sem subscription pro/premium ativa)
-    } catch (err) {
-      console.error("report.eligibility.tier.error", { userId, err: err instanceof Error ? err.message : String(err) });
-      return null; // safe-deny (lesson #9)
-    }
-  }
-  // 'expired' | 'free' | '' | desconhecido -> nao elegivel
-  return null;
+  const { resolveEligiblePlanTier } = await import("../coach/planEligibility");
+  return resolveEligiblePlanTier(userId, rawPlan);
 }
 
 /**
