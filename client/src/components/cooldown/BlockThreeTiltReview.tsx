@@ -1,13 +1,23 @@
 import { BlockTimer } from "./BlockTimer";
+import {
+  TILT_TYPE_CATALOG,
+  getTiltType,
+  suggestTiltType,
+  type TiltTypeId,
+} from "@shared/tilt-types";
 
 // =============================================================================
-// BlockThreeTiltReview — Sprint Cooldown-2
+// BlockThreeTiltReview — Sprint Cooldown-2 + Fase C #4 (ADR-232)
 //
 // Spec: Docs/specs/cooldown-refactor-plan.md (RF-02 Bloco 3)
+//     + Docs/specs/sprint-fase-c-4-tilt-tipado-2026-06-02.md (RF-02/03/05)
 //
 // 3 sliders 0-10 (feltTilt, keptTilting, presence) + checklist 9 triggers
 // multi-select + textarea action (max 500). BlockTimer 3min.
 // Validacao soft (avanco sempre permitido).
+//
+// Fase C #4: seletor dos 7 tipos de tilt + card de antidoto do tipo selecionado.
+// Sugestao heuristica pre-destacada (suggestTiltType), NUNCA auto-grava (lesson #11).
 // =============================================================================
 
 export type TiltAssessmentValue = {
@@ -16,6 +26,8 @@ export type TiltAssessmentValue = {
   presence: number;
   triggers: string[];
   action: string;
+  // Fase C #4 — tipo de tilt selecionado (1 dos 7) ou null (nao tipificou).
+  tiltType?: TiltTypeId | null;
 };
 
 export interface BlockThreeTiltReviewProps {
@@ -94,6 +106,18 @@ export function BlockThreeTiltReview({
     update({ triggers: nextTriggers });
   };
 
+  // Fase C #4 — so tipifica quando ha tilt declarado (feltTilt>0 || keptTilting>0).
+  const hasTilt = value.feltTilt > 0 || value.keptTilting > 0;
+  // Sugestao heuristica pre-destacada (NAO auto-grava — lesson #11).
+  const suggestion = suggestTiltType({
+    triggers: value.triggers,
+    feltTilt: value.feltTilt,
+    keptTilting: value.keptTilting,
+    presence: value.presence,
+  });
+  // Antidoto do tipo selecionado (RF-03) — null se nao tipificou (sem decorativo).
+  const selectedMeta = value.tiltType ? getTiltType(value.tiltType) : undefined;
+
   return (
     <div data-testid="cooldown-block-3" className="space-y-4">
       <div className="flex items-center justify-between">
@@ -146,6 +170,51 @@ export function BlockThreeTiltReview({
           })}
         </div>
       </div>
+
+      {hasTilt && (
+        <div data-testid="tilt-type-selector" className="space-y-2">
+          <div className="text-sm font-medium">Que tipo de tilt foi esse?</div>
+          {suggestion && value.tiltType == null && (
+            <div className="text-xs text-muted-foreground">
+              Parece tilt de {getTiltType(suggestion)?.label}? Selecione para confirmar.
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {TILT_TYPE_CATALOG.map((t) => {
+              const selected = value.tiltType === t.id;
+              const suggested = suggestion === t.id && value.tiltType == null;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  data-testid={`tilt-type-option-${t.id}`}
+                  onClick={() => update({ tiltType: t.id })}
+                  aria-pressed={selected}
+                  className={`rounded border p-2 text-left text-sm cursor-pointer ${
+                    selected
+                      ? "border-primary bg-primary/10"
+                      : suggested
+                        ? "border-primary/50 bg-primary/5"
+                        : "border-muted"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {selectedMeta && (
+        <div
+          data-testid="tilt-antidote-card"
+          className="rounded border border-primary/40 bg-primary/5 p-3 text-sm"
+        >
+          <div className="font-medium">Antidoto — {selectedMeta.label}</div>
+          <p className="mt-1 text-muted-foreground">{selectedMeta.antidote}</p>
+        </div>
+      )}
 
       <div className="space-y-1">
         <label className="text-sm font-medium">

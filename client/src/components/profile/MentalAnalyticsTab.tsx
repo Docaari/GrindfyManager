@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { getTiltType, type TiltTypeId } from "@shared/tilt-types";
 
 // =============================================================================
 // MentalAnalyticsTab — Sprint Cooldown-2 + Fase B (lead measures)
@@ -72,6 +73,16 @@ interface AbGameDistributionData {
   avgBGamePerSession: number;
   abShare: { aGamePct: number; bGamePct: number };
   cGameThemes: AbGameThemeItem[];
+}
+
+// Fase C #4 (ADR-232 D-5) — espelho local do shape server TiltTypeDistribution.
+interface TiltTypeDistributionData {
+  period: Period;
+  totalAssessments: number;
+  typedCount: number;
+  dominant: TiltTypeId | null;
+  distribution: Array<{ tiltType: TiltTypeId; count: number; sharePct: number }>;
+  dataSufficiency: "ok" | "low";
 }
 
 function Skeleton({ className }: { className?: string }) {
@@ -350,6 +361,64 @@ function AbGameDistributionWidget({
   );
 }
 
+// Fase C #4 (ADR-232 — RF-04/05): "Seu tilt mais frequente" + antidoto do dominante.
+function TiltDominantWidget({
+  data,
+  isLoading,
+  isError,
+}: {
+  data?: TiltTypeDistributionData;
+  isLoading: boolean;
+  isError: boolean;
+}) {
+  if (isLoading) return <Skeleton />;
+  if (isError) {
+    return (
+      <div
+        data-testid="mental-tilt-dominant-error"
+        className="text-sm text-red-500"
+      >
+        Erro ao carregar tipos de tilt. Tente novamente.
+      </div>
+    );
+  }
+
+  const dominant = data?.dominant ?? null;
+  const meta = dominant ? getTiltType(dominant) : undefined;
+  const share = dominant
+    ? data?.distribution?.find((d) => d.tiltType === dominant)?.sharePct ?? 0
+    : 0;
+  const sharePctInt = Math.round(share * 100);
+  const isLow = data?.dataSufficiency === "low";
+
+  return (
+    <div data-testid="mental-tilt-dominant" className="rounded border p-4">
+      <div className="text-sm font-medium">Seu tilt mais frequente</div>
+
+      {meta == null ? (
+        // Empty state — sem antidoto decorativo (lesson #11).
+        <div className="mt-2 text-xs text-muted-foreground">
+          Sem tipos de tilt registrados nesse periodo. Tipifique o tilt no
+          cool-down para acompanhar.
+        </div>
+      ) : (
+        <>
+          <div className="mt-2 text-2xl font-bold">{meta.label}</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {sharePctInt}% dos episodios tipificados
+          </div>
+          {isLow && (
+            <div className="mt-1 text-xs text-amber-600">
+              Amostra pequena, continue registrando.
+            </div>
+          )}
+          <p className="mt-2 text-sm text-muted-foreground">{meta.antidote}</p>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function MentalAnalyticsTab(_props: MentalAnalyticsTabProps = {}) {
   // Hooks first
   const [period, setPeriod] = useState<Period>("30d");
@@ -394,13 +463,21 @@ export function MentalAnalyticsTab(_props: MentalAnalyticsTabProps = {}) {
       apiRequest("GET", `/api/analytics/abgame-distribution?period=${period}`),
   });
 
+  // Fase C #4 — RF-04
+  const tiltTypeDistribution = useQuery<TiltTypeDistributionData>({
+    queryKey: ["mental-analytics", "tilt-type-distribution", period],
+    queryFn: () =>
+      apiRequest("GET", `/api/analytics/tilt-type-distribution?period=${period}`),
+  });
+
   const anyError =
     compliance.isError ||
     distribution.isError ||
     impact.isError ||
     lessons.isError ||
     warmupCompliance.isError ||
-    abGame.isError;
+    abGame.isError ||
+    tiltTypeDistribution.isError;
 
   return (
     <div className="space-y-4">
@@ -478,6 +555,11 @@ export function MentalAnalyticsTab(_props: MentalAnalyticsTabProps = {}) {
           data={abGame.data}
           isLoading={abGame.isLoading}
           isError={abGame.isError}
+        />
+        <TiltDominantWidget
+          data={tiltTypeDistribution.data}
+          isLoading={tiltTypeDistribution.isLoading}
+          isError={tiltTypeDistribution.isError}
         />
       </div>
     </div>

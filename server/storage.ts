@@ -206,6 +206,8 @@ import { groupTournaments, stripNameNoise, canonicalBuyIn, type GroupedFamily, t
 import { confidenceGradeForVolume, MIN_GROUP_VISIBLE, FAMILY_GROUP_FLOOR } from "@shared/library-grades";
 import { computeLibraryInsights, type DimensionBucket, type Insight } from "./insights/libraryInsights";
 import { savedTournamentHighlights } from "@shared/schema";
+// Fase C #4 (ADR-232) — catalogo de tilt tipado (validacao de tiltType na agregacao).
+import { isValidTiltType, type TiltTypeId } from "@shared/tilt-types";
 // Fase C #3 (ADR-231) — síntese comportamental de leaks (helper puro).
 import { synthesizeLeaks } from "./coach/leaks/detectLeaks";
 import { STAT_ANALYSIS_WINDOW_DAYS } from "./coach/leaks/constants";
@@ -1211,6 +1213,17 @@ export interface AbGameDistribution {
   avgBGamePerSession: number; // 0 se journaledSessions=0
   abShare: { aGamePct: number; bGamePct: number }; // soma 1 quando a+b>0; {0,0} senao
   cGameThemes: Array<{ token: string; count: number }>; // tokenizeLessons([...cGames,...lessons]), top-30
+}
+
+// Fase C #4 (ADR-232 D-5) — distribuicao de tipos de tilt na janela. Read-only.
+// PII (R5): action/notas (texto livre) NUNCA entram aqui — so enum + contagens.
+export interface TiltTypeDistribution {
+  period: "7d" | "30d" | "90d";
+  totalAssessments: number; // cool-downs com tilt declarado (feltTilt>0 || keptTilting>0)
+  typedCount: number; // subset com tiltType nao-null e valido (SO explicito — D-4)
+  dominant: TiltTypeId | null; // maior count; null se typedCount===0 OU empate no topo
+  distribution: Array<{ tiltType: TiltTypeId; count: number; sharePct: number }>; // desc; sharePct = count/typedCount
+  dataSufficiency: "ok" | "low"; // "low" quando typedCount < 3
 }
 
 export class DatabaseStorage implements IStorage {
@@ -8375,6 +8388,83 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       avgBGamePerSession,
       abShare,
       cGameThemes,
+    };
+  }
+
+  // Fase C #4 (ADR-232 / RF-04) — distribuicao de tipos de tilt na janela.
+  // Espelha getAbGameDistribution: scan cooldown_logs (completedAt!=null AND
+  // startedAt>=cutoff) lendo tiltSelfAssessment jsonb + agregacao JS.
+  // D-4: conta SO tiltType explicito (nao deriva heuristica pros legados).
+  // PII (R5): action/notas NUNCA lidos para a resposta (so contam contagens).
+  async getTiltTypeDistribution(
+    userId: string,
+    period: "7d" | "30d" | "90d",
+  ): Promise<TiltTypeDistribution> {
+    const cutoff = this.periodCutoff(period);
+
+    const rows = await db
+      .select({ tiltSelfAssessment: cooldownLogs.tiltSelfAssessment })
+      .from(cooldownLogs)
+      .where(
+        and(
+          eq(cooldownLogs.userId, userId),
+          isNotNull(cooldownLogs.completedAt),
+          gte(cooldownLogs.startedAt, cutoff),
+        ),
+      );
+
+    let totalAssessments = 0;
+    const counts = new Map<TiltTypeId, number>();
+
+    for (const r of rows as any[]) {
+      const t = r?.tiltSelfAssessment;
+      if (t == null || typeof t !== "object") continue; // null/ausente/nao-objeto — ignora (lesson #9)
+
+      const feltTilt = typeof t.feltTilt === "number" ? t.feltTilt : 0;
+      const keptTilting = typeof t.keptTilting === "number" ? t.keptTilting : 0;
+
+      // So conta cool-downs com tilt declarado (feltTilt>0 || keptTilting>0).
+      const hasTilt = feltTilt > 0 || keptTilting > 0;
+      if (!hasTilt) continue;
+
+      totalAssessments += 1;
+
+      // D-4: so tiltType explicito e valido entra em typedCount/distribution.
+      const tiltType = t.tiltType;
+      if (typeof tiltType === "string" && isValidTiltType(tiltType)) {
+        counts.set(tiltType as TiltTypeId, (counts.get(tiltType as TiltTypeId) ?? 0) + 1);
+      }
+    }
+
+    let typedCount = 0;
+    for (const c of counts.values()) typedCount += c;
+
+    const distribution = Array.from(counts.entries())
+      .map(([tiltType, count]) => ({
+        tiltType,
+        count,
+        sharePct: typedCount > 0 ? count / typedCount : 0,
+      }))
+      // count desc; desempate por tiltType asc (ordem estável/determinística).
+      .sort((a, b) => b.count - a.count || (a.tiltType < b.tiltType ? -1 : a.tiltType > b.tiltType ? 1 : 0));
+
+    // dominant: maior count; null se typedCount===0 OU empate no topo.
+    let dominant: TiltTypeId | null = null;
+    if (distribution.length > 0) {
+      const top = distribution[0];
+      const tiedAtTop = distribution.filter((d) => d.count === top.count).length;
+      dominant = tiedAtTop === 1 ? top.tiltType : null;
+    }
+
+    const dataSufficiency: "ok" | "low" = typedCount < 3 ? "low" : "ok";
+
+    return {
+      period,
+      totalAssessments,
+      typedCount,
+      dominant,
+      distribution,
+      dataSufficiency,
     };
   }
 

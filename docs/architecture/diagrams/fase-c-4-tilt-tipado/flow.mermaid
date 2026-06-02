@@ -1,0 +1,71 @@
+%% Fase C #4 — Tilt tipado (7 tipos) + antídoto (ADR-232)
+%% Fluxo 1: cool-down captura -> tipa (heurística sugere / jogador confirma) -> antídoto
+%% Fluxo 2: agregação read-only -> aba Mental do perfil
+%% Fonte de verdade: shared/tilt-types.ts (catálogo estático + suggestTiltType)
+
+flowchart TD
+    subgraph cooldown["Cool-down — BlockThreeTiltReview.tsx (estende TiltAssessmentValue.tiltType)"]
+        A["Jogador preenche sliders<br/>feltTilt / keptTilting / presence<br/>+ triggers[] + action"]
+        B{"feltTilt&gt;0<br/>OU keptTilting&gt;0?"}
+        C["Sem tilt declarado:<br/>tiltType ignorado<br/>(não persiste)"]
+        D["suggestTiltType(value)<br/><i>shared/tilt-types.ts — pura</i>"]
+        E{"sugestão != null?"}
+        F["Chip pré-destacado:<br/>'Parece tilt de ___?'<br/>(NÃO auto-grava — lesson #11)"]
+        G["Seletor dos 7 tipos<br/>tilt-type-option-{id}<br/>sem pré-seleção"]
+        H{"Jogador<br/>seleciona/confirma<br/>tipo?"}
+        I["tiltType = null<br/>(sem antídoto — RF-03)"]
+        J["tiltType escolhido<br/>(escolha vence sugestão)"]
+        K["tilt-antidote-card:<br/>getTiltType(id).antidote<br/>(estático do catálogo, sem LLM)"]
+    end
+
+    A --> B
+    B -->|"Não"| C
+    B -->|"Sim"| D
+    D --> E
+    E -->|"Sim"| F
+    E -->|"Não"| G
+    F --> H
+    G --> H
+    H -->|"Não"| I
+    H -->|"Sim"| J
+    J --> K
+
+    subgraph persist["Persistência (sem migration)"]
+        P["PATCH /api/cooldown-logs/:id<br/>tiltSelfAssessment.tiltType<br/>dentro do jsonb existente"]
+    end
+
+    C --> P
+    J --> P
+
+    subgraph agg["Agregação read-only — cooldownAnalytics.ts (reusa helpers Fase B)"]
+        Q["GET /api/analytics/tilt-type-distribution<br/>requireAuth + ownership + cache 300s"]
+        R["storage.getTiltTypeDistribution(userId, period)<br/>scan cooldown_logs jsonb"]
+        S{"tiltType<br/>não-null e válido?"}
+        T["conta em typedCount + distribution<br/>(SÓ explícito — D-4)"]
+        U["fora da distribution<br/>(só totalAssessments se tilt declarado)"]
+        V["dominant = maior count<br/>(empate -> null)<br/>sharePct = count/typedCount<br/>dataSufficiency = typedCount&lt;3 ? 'low' : 'ok'"]
+        W["PII: action/notas NUNCA<br/>na resposta (só enum + contagens)"]
+    end
+
+    P -.->|"dado persistido alimenta"| R
+    Q --> R
+    R --> S
+    S -->|"Sim"| T
+    S -->|"Não / legado"| U
+    T --> V
+    U --> V
+    V --> W
+
+    subgraph mental["Aba Mental do perfil — MentalAnalyticsTab.tsx (7º widget)"]
+        X["TiltDominantWidget<br/>mental-tilt-dominant<br/>useQuery(tilt-type-distribution)"]
+        Y{"typedCount&gt;0<br/>e dominant?"}
+        Z["dominante + sharePct<br/>+ antídoto do dominante<br/>(getTiltType(dominant).antidote)"]
+        AA["dataSufficiency 'low':<br/>'amostra pequena, continue registrando'"]
+        AB["empty state<br/>(sem antídoto decorativo — lesson #11)"]
+    end
+
+    W --> X
+    X --> Y
+    Y -->|"Sim + ok"| Z
+    Y -->|"Sim + low"| AA
+    Y -->|"Não"| AB
