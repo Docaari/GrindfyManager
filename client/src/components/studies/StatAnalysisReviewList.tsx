@@ -86,8 +86,8 @@ export default function StatAnalysisReviewList({ themeId, statId }: Props): JSX.
                 </span>
               </div>
               <div className="space-y-3">
-                {group.sessions.flatMap((session) =>
-                  session.entries.map((entry) => (
+                {(Array.isArray(group.sessions) ? group.sessions : []).flatMap((session) =>
+                  (Array.isArray(session.entries) ? session.entries : []).map((entry) => (
                     <div
                       key={entry.id}
                       className="rounded border border-border/60 p-2 text-sm space-y-1"

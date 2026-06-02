@@ -48,6 +48,9 @@ import { StudiesDashboard } from '@/components/studies/dashboard/StudiesDashboar
 import { RecommendationsView } from '@/components/studies/recommendations/RecommendationsView';
 // Sprint Spot-Anki-Reentry-3 RF-3: pagina de revisao espacada (Anki-style).
 import { ReentryQueuePage } from '@/pages/studies/Reentry';
+// Sprint Estudos-WS-Fix: ErrorBoundary por-view — um crash de view (ex: detalhe
+// de tema) deixa de white-screenar o app inteiro; em DEV mostra o stack do erro.
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
@@ -398,7 +401,12 @@ export default function Studies() {
           className={`flex-1 min-w-0 ${showBottomNav ? 'pb-20' : ''}`}
           data-testid="studies-main"
         >
-          {renderView()}
+          {/* key={view}: ao navegar para outra view o boundary reseta (uma view
+              que crashou nao "gruda" o erro depois de sair dela). Fallback pesado
+              default -> mostra mensagem + stack em DEV em vez de tela branca. */}
+          <ErrorBoundary key={view} fallbackMessage="Erro ao abrir esta seção de Estudos">
+            {renderView()}
+          </ErrorBoundary>
         </main>
       </div>
       {showBottomNav && <StudiesBottomNav />}

@@ -31,7 +31,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -154,5 +154,42 @@ describe('EST-3 StudySessionForm — jogadas (até 10, RF-08)', () => {
     await userEvent.click(addBtn);
     expect(screen.getByTestId('play-entry-error-0')).toBeInTheDocument();
     expect(screen.getByTestId('play-entry-learned-0')).toBeInTheDocument();
+  });
+});
+
+// Sprint Estudos-UX-Fix BUG-A (lesson #21): sem invalidar o cache apos o POST,
+// a sessao/analise recem-criada nao aparece na lista de Sessoes nem na
+// StatAnalysisReviewList do tema (queries stale sob staleTime 5min).
+describe('EST-3 StudySessionForm — invalida cache apos registrar (BUG-A)', () => {
+  it('invalida study-sessions + stat-analysis/by-theme + focus-stats no sucesso', async () => {
+    const qcMod = await import('@/lib/queryClient');
+    const spy = vi
+      .spyOn(qcMod.queryClient, 'invalidateQueries')
+      .mockImplementation(() => Promise.resolve());
+
+    const StudySessionForm = await loadForm();
+    renderWithQuery(<StudySessionForm initialMode="stat_analysis" statId="vpip" themeId="theme_1" />);
+
+    const form = await screen.findByTestId('study-session-form');
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(mockApiRequest).toHaveBeenCalledWith(
+        'POST',
+        '/api/study-sessions',
+        expect.any(Object),
+      );
+    });
+    await waitFor(() => {
+      const firstKeys = spy.mock.calls
+        .map((c: any) => (Array.isArray(c[0]?.queryKey) ? c[0].queryKey[0] : null))
+        .filter(Boolean);
+      // Keys exatas (TanStack v5 prefix-match cobre [..., themeId, statId]).
+      expect(firstKeys).toContain('/api/study-sessions');
+      expect(firstKeys).toContain('/api/study-sessions/stat-analysis/by-theme');
+      expect(firstKeys).toContain('/api/home/focus-stats');
+    });
+
+    spy.mockRestore();
   });
 });
