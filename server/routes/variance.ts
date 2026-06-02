@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth";
 import { storage } from "../storage";
+import { buildBankrollHealth } from "../services/bankrollHealth";
 import {
   ALLOWED_PROFILE_LETTERS,
   DEFAULT_PLAYERS_AVG,
@@ -274,6 +275,64 @@ router.get(
     } catch (err) {
       console.error("[variance] buckets-aggregate failed", err);
       return res.status(500).json({ message: "Internal server error" });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /bankroll-health (Fase D #8 / ADR-236 D-5)
+// Painel BRM/RoR ao vivo: banca real → varianceEngine. Read-only.
+// Reusa cache (D-6) com key dedicada brm:${userId}; invalidacao grati via
+// invalidateHistoricalStatsCache (generation por-userId busta brm: tambem).
+// ---------------------------------------------------------------------------
+
+router.get(
+  "/bankroll-health",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const userId = userIdFrom(req);
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const cache = getCacheMap(req);
+      const cacheKey = `brm:${userId}`;
+      const cached = cache.get(cacheKey);
+      const gen = getGeneration(userId);
+
+      if (
+        cached &&
+        cached.expiresAt > Date.now() &&
+        cached.generation === gen
+      ) {
+        return res.json(cached.data);
+      }
+
+      const result = await buildBankrollHealth(userId);
+
+      cache.set(cacheKey, {
+        data: result,
+        expiresAt: Date.now() + CACHE_TTL_MS,
+        generation: gen,
+      });
+
+      return res.json(result);
+    } catch (err) {
+      // lesson #9 — log antes do fallback. Degrada para 200 gracioso (o card
+      // sabe esconder); preferimos nao 500 nesta superficie de diagnostico.
+      console.error("[variance] bankroll-health failed", err);
+      return res.json({
+        bankrollUsd: 0,
+        roiMean: null,
+        stdDev: null,
+        riskOfRuinPct: null,
+        classification: null,
+        dataSufficiency: "none",
+        sampleSize: 0,
+        bisOfMargin: null,
+        groupsUsed: 0,
+      });
     }
   },
 );
