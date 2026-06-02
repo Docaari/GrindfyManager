@@ -26,7 +26,7 @@ import {
   STUDY_SESSION_STATUSES,
   statAnalysisEntrySchema,
 } from "@shared/schema";
-import { getStatById } from "@shared/hud-stat-catalog";
+import { isValidStatId } from "../coach/statId";
 import { detectMimeFromBuffer, extFromMime } from "../services/spotImageStorage/mime";
 import { statImageStorage } from "../services/statAnalysisImageStorage";
 
@@ -118,18 +118,9 @@ const patchBodySchema = z.object({
   statAnalysisEntries: z.array(statAnalysisEntrySchema).max(10).nullable().optional(),
 }).strict();
 
-// Sprint EST-3 (ADR-222 / RF-01) — valida statId: catalog id OU custom_*
-// (^custom_[A-Za-z0-9_-]{1,48}$). Bloqueia path traversal / chars invalidos.
-// TODO(EST-3 MEDIUM-1): custom_* validado so por shape; o irmao statsAnalyzer
-// (handleGetStatsLinkedThemes) checa ownership via getUserCustomStatIds(userId).
-// Sem ownership, um custom_* inexistente cria grupo orfao na revisao (UI degrada
-// via getStatById ?? id cru — sem dano de seguranca, statId nunca toca o FS).
-const CUSTOM_STAT_RE = /^custom_[A-Za-z0-9_-]{1,48}$/;
-function isValidStatId(statId: string): boolean {
-  if (typeof statId !== "string" || statId.length === 0) return false;
-  if (statId.startsWith("custom_")) return CUSTOM_STAT_RE.test(statId);
-  return !!getStatById(statId);
-}
+// Sprint EST-3 (ADR-222 / RF-01) — valida statId: catalog id OU custom_*.
+// MDA-1 (D-5 / MEDIUM-1): validacao compartilhada via ../coach/statId
+// (isValidStatId), evitando divergencia entre MDA + study-sessions.
 
 const STAT_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB (D-3)
 

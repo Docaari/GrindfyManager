@@ -26,6 +26,8 @@ import { track } from '@/lib/telemetry';
 import type { StudySessionLegacyStatus } from '@shared/schema';
 import { SessionTimer } from './SessionTimer';
 import { NotesBlock } from './NotesBlock';
+// Sprint MDA-1 (ADR-230 / RF-06) — painel "MDA da populacao" durante a sessao.
+import { MdaPopulationPanel } from './MdaPopulationPanel';
 
 interface ThemeRow {
   id: string;
@@ -206,6 +208,13 @@ export function StudySessionPage({ sessionId }: Props): JSX.Element {
       <div className="rounded-lg border border-border bg-card p-6">
         <NotesBlock sessionId={sessionId} readOnly={isReadOnly} />
       </div>
+
+      {/* Sprint MDA-1 (ADR-230 / RF-06) — MDA da populacao do tema da sessao. */}
+      {session.themeId && (
+        <div className="mt-4">
+          <MdaPopulationPanel themeId={session.themeId} />
+        </div>
+      )}
     </div>
   );
 }

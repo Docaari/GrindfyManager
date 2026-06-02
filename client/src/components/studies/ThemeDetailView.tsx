@@ -43,6 +43,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ThemeFormDialog, type ThemeFormValues } from './ThemeFormDialog';
 import StatAnalysisReviewList from './StatAnalysisReviewList';
+// Sprint MDA-1 (ADR-230 / RF-05) — MDAs da populacao tagueados ao tema.
+import { MdaReadsSection } from './MdaReadsSection';
 
 interface ThemeRow {
   id: string;
@@ -395,6 +397,11 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
         <div data-testid="theme-stat-analysis-review" className="pt-4 border-t border-border">
           <h3 className="text-sm font-medium mb-3">Revisao por stat</h3>
           <StatAnalysisReviewList themeId={themeId} />
+        </div>
+
+        {/* Sprint MDA-1 (ADR-230 / RF-05) — MDAs da populacao tagueados ao tema. */}
+        <div className="pt-4 border-t border-border">
+          <MdaReadsSection themeId={themeId} />
         </div>
       </div>
 

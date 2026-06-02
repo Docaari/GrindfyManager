@@ -36,6 +36,9 @@ import StudySessionPage from '@/components/studies/StudySessionPage';
 // Sprint EST-3 (ADR-222 / RF-08): form de registro unificado + detalhe v2.
 import StudySessionForm from '@/components/studies/StudySessionForm';
 import SessaoDetailPage from '@/components/studies/SessaoDetailPage';
+// Sprint MDA-1 (ADR-230 / RF-07): form + detalhe do MDA (Tendencias da Populacao).
+import MdaReadForm from '@/components/studies/MdaReadForm';
+import MdaReadDetailView from '@/components/studies/MdaReadDetailView';
 import type { StudySessionMode } from '@shared/schema';
 import { StatsView } from '@/components/studies/StatsView';
 import { SpotsView } from '@/components/studies/SpotsView';
@@ -55,6 +58,8 @@ type ViewKey =
   | 'sessao-detail'
   | 'analise-detail'
   | 'registrar'
+  | 'mda-registrar'
+  | 'mda-detail'
   | 'sessoes'
   | 'stats'
   | 'spots'
@@ -139,10 +144,48 @@ function parseRegistrarParams(): {
   }
 }
 
+// Sprint MDA-1 (RF-07): extrai readId de '/estudos/mda/:id' (exclui /registrar).
+function extractMdaReadIdFromPath(path: string): string | null {
+  const stripped = path.split('?')[0].replace(/\/+$/, '');
+  const m = stripped.match(/^\/estudos\/mda\/([^/]+)$/);
+  if (!m) return null;
+  const id = m[1];
+  if (id === 'registrar') return null;
+  return id;
+}
+
+// Sprint MDA-1 (RF-07): themeId pre-selecionado via ?themeId= no form do MDA.
+function parseMdaThemeId(): string | undefined {
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    return sp.get('themeId') || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// MDA-1 HIGH-2: readId via ?id= -> modo edicao do form (paralelo a parseMdaThemeId).
+function parseMdaReadId(): string | undefined {
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    return sp.get('id') || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function viewFromPath(path: string): ViewKey {
   const stripped = path.split('?')[0];
   if (stripped === '/estudos' || stripped === '/estudos/' || stripped.startsWith('/estudos/dashboard')) {
     return 'dashboard';
+  }
+  // MDA-1: /estudos/mda/registrar (form) e /estudos/mda/:id (detalhe). Checar
+  // ANTES de /estudos/temas (namespace distinto) e do generico.
+  if (stripped.startsWith('/estudos/mda/registrar') || stripped === '/estudos/mda') {
+    return 'mda-registrar';
+  }
+  if (stripped.startsWith('/estudos/mda/')) {
+    return extractMdaReadIdFromPath(stripped) ? 'mda-detail' : 'mda-registrar';
   }
   if (stripped.startsWith('/estudos/temas')) {
     return extractThemeIdFromPath(stripped) ? 'tema-detail' : 'temas';
@@ -277,6 +320,27 @@ export default function Studies() {
         return (
           <div data-testid="studies-view-analise-detail">
             <SessaoDetailPage sessionId={sessionId} />
+          </div>
+        );
+      }
+      case 'mda-registrar': {
+        // Sprint MDA-1 RF-07: form de registro do MDA (pre-preenche ?themeId=).
+        // HIGH-2: ?id= -> modo edicao (form hidrata + PATCH ao salvar).
+        const themeId = parseMdaThemeId();
+        const editId = parseMdaReadId();
+        return (
+          <div data-testid="studies-view-mda-registrar">
+            <MdaReadForm initialThemeId={themeId} readId={editId} />
+          </div>
+        );
+      }
+      case 'mda-detail': {
+        // Sprint MDA-1 RF-07: detalhe do MDA.
+        const readId = extractMdaReadIdFromPath(location || '/estudos/mda');
+        if (!readId) return <Redirect to="/estudos/dashboard" />;
+        return (
+          <div data-testid="studies-view-mda-detail">
+            <MdaReadDetailView readId={readId} />
           </div>
         );
       }

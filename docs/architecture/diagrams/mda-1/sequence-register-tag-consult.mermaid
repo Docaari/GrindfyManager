@@ -1,0 +1,119 @@
+%% MDA-1 (ADR-230) — Fluxo: registrar MDA -> upload de prints (2-passos) ->
+%% tagear N temas -> consultar via by-theme (ThemeDetailView + painel de estudo).
+%% Reuso: createSpotImageStorage(ADR-057), junction N:N idempotente, injectedStorage(#34).
+sequenceDiagram
+    actor User as Jogador MTT
+    participant FE as MdaReadForm (FE)
+    participant API as routes/mda.ts
+    participant CAT as statId.ts (catalog/custom_*)
+    participant ST as storage.ts
+    participant IMG as LocalFs mda store (private-uploads/mda)
+    participant DB as mda_reads + mda_read_themes
+
+    Note over User,DB: 1) Criar MDA + tagear N temas (write-tools reuso / diff idempotente)
+
+    User->>FE: "Registrar MDA" (?themeId=t1 pre-preenche) + title + spot + tendencia + temas [t1,t2] + stat opcional
+    FE->>API: POST /api/mda-reads { title, spotContext?, filters?, tendencyText?, statId?, themeIds:[t1,t2], images? }
+    API->>API: Zod parse (insertMdaReadSchema) — title req, themeIds min1/max20, images cap8
+    alt themeIds vazio
+        API-->>FE: 400 (Zod min 1)
+    else themeIds > 20
+        API-->>FE: 400 (Zod max 20)
+    else statId invalido (nao catalog, nao custom_*)
+        API->>CAT: isValidStatId(statId)
+        CAT-->>API: false
+        API-->>FE: 400 INVALID_STAT_ID
+    else temas de outro user
+        API->>ST: validar ownership dos themeIds (user)
+        ST-->>API: tema nao pertence ao user
+        API-->>FE: 403/400 (ownership de tema)
+    else valido
+        API->>ST: createMdaRead({ ...campos, themeIds, images normaliza id via nanoid })
+        ST->>ST: db.transaction? (lesson #32 fallback gentil se indisponivel)
+        ST->>DB: INSERT mda_reads (1 row) + INSERT mda_read_themes (2 rows, UNIQUE idempotente)
+        DB-->>ST: read + themeIds
+        ST-->>API: { id, ...read, themeIds:[t1,t2] }
+        API-->>FE: 201 { id } -> FE inicia upload dos prints (passo 2)
+    end
+
+    Note over User,DB: 2) Upload de prints — 2-passos (read criado ANTES; igual EST-3)
+
+    User->>FE: anexa print(s) das stats da populacao
+    loop por arquivo (cap 8)
+        FE->>API: POST /api/mda-reads/:id/images (multipart "file")
+        API->>API: _imageUpload: multer mem 5MB + detectMimeFromBuffer (PNG/JPEG/WebP) + rate limit
+        alt > 5MB
+            API-->>FE: 413/400 (limiter)
+        else magic-byte invalido (extensao falsa)
+            API-->>FE: 400 INVALID_MIME
+        else ja tem 8 prints
+            API-->>FE: 400/409 (cap 8)
+        else ok
+            API->>ST: getMdaReadById(id, userId) (ownership)
+            alt nao-owner / inexistente
+                API-->>FE: 404 (nao confirma existencia)
+            else ok
+                API->>IMG: put({ userId, readId, ext, buffer }) -> key
+                IMG-->>API: { key }
+                API->>ST: addMdaReadImage(id, userId, { id:nanoid, key, caption })
+                alt DB falhou (orfa)
+                    API->>IMG: rollbackMdaImage(key) best-effort
+                    API-->>FE: 500
+                else ok
+                    API-->>FE: 200 { id, url } (key -> URL servivel)
+                end
+            end
+        end
+    end
+    FE->>FE: redireciona ao detalhe /estudos/mda/:id
+
+    Note over User,DB: 3) Consultar por tema — ThemeDetailView (RF-05)
+
+    User->>FE: abre tema /estudos/temas/t1 (MdaReadsSection)
+    FE->>API: GET /api/mda-reads/by-theme?themeId=t1
+    alt sem themeId
+        API-->>FE: 400
+    else ok
+        API->>ST: getMdaReadsByTheme(userId, t1)
+        ST->>DB: JOIN mda_read_themes x mda_reads WHERE user_id,theme_id=t1, deleted_at IS NULL (idx user_id,theme_id)
+        DB-->>ST: reads (keys cruas)
+        ST-->>API: MdaRead[] (keys cruas)
+        API->>API: mapImagesToUrls (keys -> URLs servives; nunca keys cruas)
+        API-->>FE: 200 cards [thumbnail + title + tendencia truncada + stat badge]
+    end
+    User->>FE: click card -> /estudos/mda/:id (MdaReadDetailView)
+    FE->>API: <img> GET /api/mda-reads/:id/images/:imageId
+    API->>ST: getMdaReadImageKey(id, userId, imageId) (ownership)
+    alt nao-owner
+        API-->>FE: 404 (cross-user nao vaza)
+    else ok
+        API->>IMG: get(key)
+        IMG-->>API: buffer + mime
+        API-->>FE: 200 binario (Cache-Control: private, max-age=300)
+    end
+
+    Note over User,DB: 4) Consultar DURANTE a sessao de estudo (RF-06 — valor central)
+
+    User->>FE: sessao de estudo /estudos/sessao/:id (tema t2) -> painel "MDA da populacao" (MdaReadsSection compacto)
+    FE->>API: GET /api/mda-reads/by-theme?themeId=t2
+    API->>ST: getMdaReadsByTheme(userId, t2)
+    ST->>DB: JOIN ... theme_id=t2 (mesmo read aparece em t1 E t2 — N:N)
+    DB-->>ST: reads
+    ST-->>API: MdaRead[]
+    API->>API: mapImagesToUrls
+    API-->>FE: 200 -> exploit do field na mao enquanto estuda t2
+
+    Note over User,DB: 5) Re-tagueio (PATCH diff) + delete de tema (cleanup app-level)
+
+    User->>FE: PATCH MDA: themeIds [t2] (era [t1,t2])
+    FE->>API: PATCH /api/mda-reads/:id (strict) { themeIds:[t2] }
+    API->>ST: updateMdaRead(id, userId, { themeIds:[t2] })
+    ST->>DB: diff junction — DELETE (mda_read_id,t1); manter (mda_read_id,t2) idempotente (#33)
+    DB-->>ST: ok -> card some de t1, fica em t2
+    ST-->>API: read atualizado
+    API-->>FE: 200
+    User->>FE: deleta tema t2
+    FE->>API: DELETE /api/study-themes/t2
+    API->>ST: deleteTheme(userId, t2)
+    ST->>DB: DELETE study_themes + DELETE mda_read_themes WHERE theme_id=t2 (cleanup app-level, sem FK)
+    Note over DB: read sobrevive se ainda tagueado a outro tema (aqui ficou orfao de tema)
