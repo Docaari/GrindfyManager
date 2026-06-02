@@ -48,6 +48,9 @@ export function useCoachChat(coachType: CoachType, options?: UseCoachChatOptions
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedText, setStreamedText] = useState('');
   const [streamError, setStreamError] = useState<string | null>(null);
+  // Render otimista: a mensagem do usuario aparece NA HORA (antes de persistir /
+  // antes do 1o token), independente da query de mensagens / activeSessionId.
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // Fetch sessions for the current coach type
@@ -99,6 +102,7 @@ export function useCoachChat(coachType: CoachType, options?: UseCoachChatOptions
     setIsStreaming(true);
     setStreamedText('');
     setStreamError(null);
+    setPendingUserMessage(message); // feedback visual imediato
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -139,6 +143,7 @@ export function useCoachChat(coachType: CoachType, options?: UseCoachChatOptions
         const errorData = await response.json().catch(() => ({ message: 'Erro ao enviar mensagem' }));
         setStreamError(errorData.message || `Erro ${response.status}`);
         setIsStreaming(false);
+        setPendingUserMessage(null);
         return;
       }
 
@@ -146,6 +151,7 @@ export function useCoachChat(coachType: CoachType, options?: UseCoachChatOptions
       if (!reader) {
         setStreamError('Streaming nao suportado');
         setIsStreaming(false);
+        setPendingUserMessage(null);
         return;
       }
 
@@ -177,30 +183,29 @@ export function useCoachChat(coachType: CoachType, options?: UseCoachChatOptions
               accumulated += event.content;
               setStreamedText(accumulated);
             } else if (event.type === 'done') {
-              // Streaming complete - refresh data
+              // Streaming complete. NAO limpamos streamedText/pendingUserMessage
+              // de imediato — primeiro garantimos que a query de mensagens ja
+              // tem a versao persistida (evita "flash" de tela vazia, sobretudo
+              // em sessao nova). So entao trocamos o render otimista pelo real.
               setIsStreaming(false);
-              setStreamedText('');
 
-              // If we didn't have a session before, set the new one
+              const sid = activeSessionId || event.sessionId || null;
               if (!activeSessionId && event.sessionId) {
                 setActiveSessionId(event.sessionId);
               }
 
-              // Invalidate queries to get fresh data
               queryClient.invalidateQueries({ queryKey: [`/api/coach/sessions?coachType=${coachType}`] });
-              if (activeSessionId) {
-                queryClient.invalidateQueries({ queryKey: [`/api/coach/sessions/${activeSessionId}/messages`] });
+              if (sid) {
+                try {
+                  await queryClient.invalidateQueries({ queryKey: [`/api/coach/sessions/${sid}/messages`] });
+                } catch { /* segue pro clear de qualquer forma */ }
               }
-              // Also invalidate messages for any new session
-              if (event.sessionId) {
-                queryClient.invalidateQueries({ queryKey: [`/api/coach/sessions/${event.sessionId}/messages`] });
-                if (!activeSessionId) {
-                  setActiveSessionId(event.sessionId);
-                }
-              }
+              setStreamedText('');
+              setPendingUserMessage(null);
             } else if (event.type === 'error') {
               setStreamError(event.message);
               setIsStreaming(false);
+              setPendingUserMessage(null);
             }
           } catch {
             // Ignore malformed JSON
@@ -217,6 +222,7 @@ export function useCoachChat(coachType: CoachType, options?: UseCoachChatOptions
         setStreamError(err.message || 'Erro de conexao');
       }
       setIsStreaming(false);
+      setPendingUserMessage(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachType, activeSessionId, isStreaming, queryClient, options?.pageContext]);
@@ -226,6 +232,7 @@ export function useCoachChat(coachType: CoachType, options?: UseCoachChatOptions
     abortRef.current?.abort();
     setIsStreaming(false);
     setStreamedText('');
+    setPendingUserMessage(null);
   }, []);
 
   // Start a new conversation (clear active session)
@@ -233,6 +240,7 @@ export function useCoachChat(coachType: CoachType, options?: UseCoachChatOptions
     setActiveSessionId(null);
     setStreamedText('');
     setStreamError(null);
+    setPendingUserMessage(null);
   }, []);
 
   return {
@@ -245,6 +253,7 @@ export function useCoachChat(coachType: CoachType, options?: UseCoachChatOptions
     isStreaming,
     streamedText,
     streamError,
+    pendingUserMessage,
     sendMessage,
     cancelStream,
     startNewConversation,
