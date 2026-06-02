@@ -36,6 +36,29 @@ import {
 
 const VALID_COACH_TYPES = ['mental', 'tournament', 'technical'];
 
+// Coach AI UX Overhaul (Wave 3 / #6) — teaser de tool no Free. O tier free nao
+// tem tools (exportToolsForAnthropic retorna []), entao quando o jogador pede
+// algo que e uma ACAO (montar grade, registrar leak...) o agente so explica.
+// Aqui detectamos a intencao e anexamos 1 upsell contextual ao fim da resposta
+// ("isso eu FACO no Pro"). null = sem intencao de tool -> sem teaser.
+const FREE_TOOL_TEASERS: Array<{ re: RegExp; what: string }> = [
+  { re: /\b(montar?\s+(a\s+)?grade|minha\s+grade|monta\s+a?\s*grade|sele[çc][aã]o\s+de\s+torneio)\b/i, what: "monto tua grade direto na tua conta" },
+  { re: /\bleaks?\b/i, what: "registro teu foco de leak do mes e te cobro nele" },
+  { re: /\b(vari[aâ]ncia|variance|risco de ru[ií]na|downswing esperado)\b/i, what: "rodo a analise de variancia dos teus dados" },
+  { re: /\brake\b/i, what: "calculo teu rake efetivo por site" },
+  { re: /\b(meta de carreira|minha carreira|objetivo de carreira)\b/i, what: "registro e acompanho tua meta de carreira" },
+];
+
+export function buildFreeToolTeaser(message: string): string | null {
+  if (typeof message !== "string") return null;
+  const hit = FREE_TOOL_TEASERS.find((t) => t.re.test(message));
+  if (!hit) return null;
+  return (
+    `\n\n---\nNo **Pro** eu nao so explico — eu ${hit.what}, com confirmacao antes de agir. ` +
+    `[Ver planos](/subscriptions)`
+  );
+}
+
 // Sprint coach-launch-fix (P0 #4): modelo Anthropic configuravel via env
 // COACH_CHAT_MODEL. Default = claude-sonnet-4-6 (modelo atual em CLAUDE.md).
 // O modelo `claude-sonnet-4-5-20250514` mencionado no codigo legado NAO EXISTE.
@@ -487,6 +510,16 @@ export async function handleCoachChat(req: any, res: any, coachStorage: any): Pr
     }
 
     streamFinished = true;
+
+    // #6 — teaser de tool no Free: a resposta saiu, mas free nao age. Se a
+    // mensagem tinha intencao de tool, anexa 1 upsell contextual ao fim.
+    if (!aborted && tier === 'free') {
+      const teaser = buildFreeToolTeaser(message);
+      if (teaser) {
+        assistantContent += teaser;
+        try { res.write(`data: ${JSON.stringify({ type: 'text', content: teaser })}\n\n`); } catch { /* response fechada */ }
+      }
+    }
   } catch (streamError: any) {
     lastError = streamError;
     if (!aborted) {

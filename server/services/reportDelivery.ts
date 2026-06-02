@@ -20,7 +20,9 @@
 
 import { sendReportEmail } from "./reportEmailSender";
 
-type ReportType = "weekly" | "daily" | "monthly";
+// Coach AI UX Overhaul (Wave 3 / GAP-quarterly) — quarterly entra na entrega
+// tripla (antes recebia SO email via reportJobRunner; faltava in-app + chat).
+type ReportType = "weekly" | "daily" | "monthly" | "quarterly";
 
 const DEEP_LINK_PREFIX = "/coach-ai/relatorio/";
 
@@ -46,6 +48,10 @@ const NOTIF_TEMPLATES: Record<ReportType, { title: string; message: string }> = 
     title: "Seu relatório semanal está pronto",
     message: "Terminei seus números da semana e os próximos passos. Veja no Coach AI.",
   },
+  quarterly: {
+    title: "Sua revisão trimestral está pronta",
+    message: "Fechei a revisão de carreira do trimestre. Abra no Coach AI.",
+  },
 };
 
 // Template PT-BR da mensagem de chat por tipo (recebe o deep link já montado).
@@ -54,11 +60,17 @@ const CHAT_TEMPLATES: Record<ReportType, (link: string) => string> = {
   monthly: (link) => `Seu relatório mensal está pronto — abra a retrospectiva do mês em ${link}`,
   weekly: (link) =>
     `Terminei seu relatório semanal — veja seus números da semana e os próximos passos em ${link}`,
+  quarterly: (link) =>
+    `Sua revisão trimestral de carreira está pronta — abra em ${link}`,
 };
 
-const EMAIL_KIND_BY_TYPE: Record<ReportType, "report_weekly" | "report_monthly" | null> = {
+const EMAIL_KIND_BY_TYPE: Record<
+  ReportType,
+  "report_weekly" | "report_monthly" | "report_quarterly" | null
+> = {
   weekly: "report_weekly",
   monthly: "report_monthly",
+  quarterly: "report_quarterly",
   daily: null, // daily não tem email
 };
 
