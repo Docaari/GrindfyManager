@@ -267,6 +267,36 @@ export async function assembleContext(
     }
   } catch { /* graceful degradation */ }
 
+  // Coach AI UX Overhaul (#8) — compromissos abertos do jogador (accountability).
+  // O agente deve cobrar/checar quando relevante (fechar o loop do que ele mesmo
+  // se comprometeu). Best-effort — falha nao quebra o context.
+  try {
+    const open = (await (storage as any).listOpenCoachCommitments?.(userId, 5)) ?? [];
+    const lines = (Array.isArray(open) ? open : [])
+      .map((c: any) => `- "${String(c?.text ?? "").slice(0, 140)}" (ate ${c?.dueDate})`)
+      .filter(Boolean);
+    if (lines.length > 0) {
+      systemParts.push(
+        `\n## Compromissos abertos do jogador (cobre/cheque quando fizer sentido):\n${lines.join("\n")}`,
+      );
+    }
+  } catch { /* graceful degradation */ }
+
+  // Coach AI UX Overhaul (#10) — benchmark vs populacao. Quando ha intel de pool
+  // BR seeded, sinaliza ao agente que ele pode comparar o jogador ao field via a
+  // tool query_pool_intelligence (gancho de retencao do nicho MTT).
+  try {
+    const pool = await (storage as any).queryTournamentPoolIntelligence?.({});
+    const poolRows = pool?.rows ?? [];
+    if (Array.isArray(poolRows) && poolRows.length > 0) {
+      systemParts.push(
+        `\n## Benchmark vs field (BR): ha intel de pool de ${poolRows.length} torneio(s) disponivel. ` +
+          `Quando o jogador perguntar "como estou vs o field/populacao", use a tool ` +
+          `query_pool_intelligence e compare ITM%/ROI dele com o field — com fonte e N.`,
+      );
+    }
+  } catch { /* graceful degradation */ }
+
   // Sprint D / RF-03.3 (ADR-185) — bloco DINAMICO de tickets ativos. Gated
   // por keyword (ticket/satelite/grade/selecionar torneio) OR surface
   // (tournament-selector | grade-planner). Best-effort — falha vira null.

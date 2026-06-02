@@ -42,7 +42,7 @@ interface OnboardingWizardProps {
   initialStep?: number;
   draft?: OnboardingDraft | null;
   levelEstimate?: LevelEstimate | null;
-  onCompleted?: () => void;
+  onCompleted?: (chatSessionId?: string | null) => void;
 }
 
 const NIVEL_HUMAN_LABEL: Record<string, string> = {
@@ -253,9 +253,11 @@ export function OnboardingWizard(props: OnboardingWizardProps): JSX.Element {
       body.quietHours = { startHour: quietStart, endHour: quietEnd };
     }
     try {
-      await apiRequest('POST', '/api/coach/onboarding/complete', body);
+      // #2 — a resposta traz chatSessionId (1a sessao com insight). Repassa pro
+      // parent navegar direto pra ela.
+      const resp: any = await apiRequest('POST', '/api/coach/onboarding/complete', body);
       toast({ title: 'Perfil configurado!' });
-      props.onCompleted?.();
+      props.onCompleted?.(resp?.chatSessionId ?? null);
     } catch (err: any) {
       toast({ title: 'Nao consegui finalizar', variant: 'destructive' });
     } finally {

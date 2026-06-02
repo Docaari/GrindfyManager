@@ -63,8 +63,11 @@ import {
 // Sprint AI-1A follow-up (RF-07): banner de onboarding no topo da aba Chat.
 import OnboardingBanner from '@/components/coach/OnboardingBanner';
 import { CoachLensChips } from '@/components/coach-ai/CoachLensChips';
+import { LENS_PLACEHOLDER } from '@/lib/coachLensMeta';
 // Sprint AI-1B — timeline (reports + nudges) + quick suggestions anti-blank-page.
 import NudgeCard from '@/components/coach/NudgeCard';
+import { CoachReportCtaButtons, type CoachReportCta } from '@/components/coach/CoachReportCtaButtons';
+import { CoachKnowledgePanel } from '@/components/coach/CoachKnowledgePanel';
 import { getFallbackSuggestions } from '@/lib/quickSuggestionsFallback';
 // Sprint Mini Player 2 (CRITICAL-2) — Spotify connection panel em Preferencias.
 import { SpotifyConnectionPanel } from '@/components/settings/SpotifyConnectionPanel';
@@ -292,12 +295,15 @@ function SessionSidebar({
 // -----------------------------------------------------------------------------
 type QuickSuggestion = { id: string; text: string; sendOnClick?: boolean };
 
-function QuickSuggestionChips({ route, onPick }: { route: string; onPick: (text: string) => void }) {
+function QuickSuggestionChips({ route, coachType, onPick }: { route: string; coachType?: CoachType; onPick: (text: string) => void }) {
+  // #11 — a lente ativa entra na queryKey + no endpoint, entao trocar de lente
+  // re-busca chips sob medida (e o cache do servidor tambem eh por lente).
+  const lensQuery = coachType ? `&lens=${encodeURIComponent(coachType)}` : '';
   const { data, isLoading } = useQuery<{ suggestions?: QuickSuggestion[] } | null>({
-    queryKey: ['/api/coach/suggestions', route],
+    queryKey: ['/api/coach/suggestions', route, coachType ?? null],
     queryFn: async () => {
       try {
-        return await apiRequest('GET', `/api/coach/suggestions?route=${encodeURIComponent(route)}`);
+        return await apiRequest('GET', `/api/coach/suggestions?route=${encodeURIComponent(route)}${lensQuery}`);
       } catch {
         return null; // fallback estatico abaixo
       }
@@ -310,7 +316,7 @@ function QuickSuggestionChips({ route, onPick }: { route: string; onPick: (text:
   const suggestions: QuickSuggestion[] =
     (data && Array.isArray((data as any).suggestions) && (data as any).suggestions.length > 0)
       ? (data as any).suggestions
-      : (getFallbackSuggestions(route) as any);
+      : (getFallbackSuggestions(route, coachType) as any);
 
   if (!suggestions || suggestions.length === 0) return null;
   return (
@@ -363,6 +369,20 @@ function ChatPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamedText]);
 
+  // #2 — chegou de /coach-ai/onboarding com ?session=<id> -> abre a sessao recem
+  // criada (com o 1o insight personalizado). Roda uma vez.
+  const didInitSessionFromUrl = useRef(false);
+  useEffect(() => {
+    if (didInitSessionFromUrl.current) return;
+    try {
+      const sid = new URLSearchParams(window.location.search).get('session');
+      if (sid) {
+        setActiveSessionId(sid);
+        didInitSessionFromUrl.current = true;
+      }
+    } catch { /* noop */ }
+  }, [setActiveSessionId]);
+
   const handleSend = useCallback(() => {
     const trimmed = inputValue.trim();
     if (!trimmed || isStreaming) return;
@@ -399,8 +419,8 @@ function ChatPanel() {
         <CoachLensChips
           coachType={coachType}
           onChangeCoachType={(value) => {
+            // #4 — NAO limpar o input ao trocar de lente (perda de texto digitado).
             setCoachType(value);
-            setInputValue('');
           }}
         />
 
@@ -423,11 +443,13 @@ function ChatPanel() {
               <Sparkles size={48} className="text-green-600/40 mb-4" />
               <h3 className="text-lg font-medium text-gray-300 mb-2">Grindfy AI</h3>
               <p className="text-sm text-gray-500 max-w-md">
-                Pergunte qualquer coisa sobre seu jogo, sua banca, sua grade ou seu mental.
-                O Grindfy AI ve seus dados e usa ferramentas para o detalhe.
+                Nao so respondo — eu <span className="text-gray-300">ajo</span> sobre seus dados:
+                monto sua grade, registro um foco de leak, calculo seu rake, analiso sua variancia.
+                Peca direto, ou comece por aqui:
               </p>
               <QuickSuggestionChips
                 route="/coach-ai"
+                coachType={coachType}
                 onPick={(text) => { setInputValue(text); textareaRef.current?.focus(); }}
               />
             </div>
@@ -466,7 +488,7 @@ function ChatPanel() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Mensagem para o Grindfy AI..."
+              placeholder={LENS_PLACEHOLDER[coachType]}
               className="flex-1 bg-gray-800 border-gray-700 text-gray-100 placeholder:text-gray-500 resize-none min-h-[44px] max-h-[120px]"
               rows={1}
               disabled={isStreaming}
@@ -551,7 +573,7 @@ function ReportDiscoverabilityBanner({ onGoToPreferences }: { onGoToPreferences:
 }
 
 type TimelineItem =
-  | { kind: 'report'; id: string; reportType: string; periodStart: string; periodEnd: string; status: string; summaryLine?: string; generatedAt?: string; readAt?: string | null; dismissedAt?: string | null }
+  | { kind: 'report'; id: string; reportType: string; periodStart: string; periodEnd: string; status: string; summaryLine?: string; ctas?: CoachReportCta[]; generatedAt?: string; readAt?: string | null; dismissedAt?: string | null }
   | { kind: 'nudge'; id: string; category: string; status: string; title?: string | null; bodyPreview?: string | null; sentAt?: string | null; engagedAt?: string | null; dismissedAt?: string | null; snoozeUntil?: string | null; chatSessionId?: string | null; triggeredByEvent?: string | null };
 
 function ReportsPanel() {
@@ -595,29 +617,42 @@ function ReportsPanel() {
       ) : null}
       {items.map((it) =>
         it.kind === 'report' ? (
-          <button
+          <div
             key={`r-${it.id}`}
-            type="button"
             data-testid="coach-timeline-item-report"
-            data-href={`/coach-ai/relatorio/${it.id}`}
-            onClick={() => setLocation(`/coach-ai/relatorio/${it.id}`)}
-            className="w-full text-left rounded-lg border border-gray-700 bg-gray-800/50 p-4 hover:bg-gray-800"
+            className="rounded-lg border border-gray-700 bg-gray-800/50 p-4"
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-gray-200">
-                {(it.reportType === 'daily' ? 'Debrief diário'
-                  : it.reportType === 'monthly' ? 'Relatório mensal'
-                  : it.reportType === 'quarterly' ? 'Revisão trimestral'
-                  : 'Relatório semanal')} — {it.periodStart} a {it.periodEnd}
-              </span>
-              {it.status === 'degraded' ? (
-                <span className="shrink-0 rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] text-amber-300">
-                  modo simplificado
+            {/* Header clicavel -> detalhe do relatorio (separado dos CTAs pra
+                nao aninhar interativos — #1). */}
+            <button
+              type="button"
+              data-testid="coach-timeline-report-open"
+              data-href={`/coach-ai/relatorio/${it.id}`}
+              onClick={() => setLocation(`/coach-ai/relatorio/${it.id}`)}
+              className="w-full text-left rounded hover:opacity-90"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-gray-200">
+                  {(it.reportType === 'daily' ? 'Debrief diário'
+                    : it.reportType === 'monthly' ? 'Relatório mensal'
+                    : it.reportType === 'quarterly' ? 'Revisão trimestral'
+                    : 'Relatório semanal')} — {it.periodStart} a {it.periodEnd}
                 </span>
-              ) : null}
-            </div>
-            {it.summaryLine ? <p className="mt-1 text-xs text-gray-400">{it.summaryLine}</p> : null}
-          </button>
+                {it.status === 'degraded' ? (
+                  <span className="shrink-0 rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] text-amber-300">
+                    modo simplificado
+                  </span>
+                ) : null}
+              </div>
+              {it.summaryLine ? <p className="mt-1 text-xs text-gray-400">{it.summaryLine}</p> : null}
+            </button>
+            {/* #1 — CTAs acionaveis direto na timeline (fecha o loop). */}
+            {Array.isArray(it.ctas) && it.ctas.length > 0 ? (
+              <div className="mt-3">
+                <CoachReportCtaButtons ctas={it.ctas} />
+              </div>
+            ) : null}
+          </div>
         ) : (
           <div key={`n-${it.id}`} data-testid="coach-timeline-item-nudge">
             <NudgeCard nudge={it} />
@@ -1085,6 +1120,7 @@ export default function CoachAI() {
           <CoachAuditPanel />
         </TabsContent>
         <TabsContent value="prefs" data-testid="coach-ai-tabpanel-prefs" className="h-full m-0 overflow-auto">
+          <div className="p-4"><CoachKnowledgePanel /></div>
           <CoachPreferencesPanel />
         </TabsContent>
       </div>

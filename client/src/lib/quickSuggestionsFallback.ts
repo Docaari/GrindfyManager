@@ -6,6 +6,9 @@
 // mapa por rota. Mesma forma dos itens do endpoint: { id, text, sendOnClick }.
 // =============================================================================
 
+import { getLensSuggestions } from '@/lib/coachLensMeta';
+import type { CoachType } from '@/hooks/useCoachChat';
+
 export type QuickSuggestion = { id: string; text: string; sendOnClick: true };
 
 function s(id: string, text: string): QuickSuggestion {
@@ -76,15 +79,25 @@ export const QUICK_SUGGESTIONS_FALLBACK: Record<string, QuickSuggestion[]> = {
     s("st-batem", "Meus stats batem com o esperado?"),
     s("st-fora", "Algum stat fora do padrão?"),
   ],
+  // #3 — empty-state vende ACAO (demonstra tools), nao chat passivo.
   "/coach-ai": [
-    s("ca-week", "O que mudou na minha semana?"),
-    s("ca-leaks", "Quais meus leaks?"),
-    s("ca-next", "Sugira meu próximo passo"),
+    s("ca-grade", "Monta minha grade de amanha"),
+    s("ca-leaks", "Quais meus 3 maiores leaks?"),
+    s("ca-downswing", "To em downswing, o que faco?"),
+    s("ca-field", "Como ta meu ROI vs o field BR?"),
   ],
 };
 
-export function getFallbackSuggestions(route?: string | null): QuickSuggestion[] {
+export function getFallbackSuggestions(
+  route?: string | null,
+  coachType?: CoachType | null,
+): QuickSuggestion[] {
   const r = (route ?? "").trim().split("?")[0];
+  // #11 — no chat (/coach-ai) a lente ativa muda os chips de forma visivel.
+  if ((r === "/coach-ai" || !r) && coachType) {
+    const lens = getLensSuggestions(coachType);
+    if (lens.length > 0) return lens.map((l) => s(l.id, l.text));
+  }
   if (!r) return QUICK_SUGGESTIONS_FALLBACK["/coach-ai"] ?? GENERIC;
   return QUICK_SUGGESTIONS_FALLBACK[r] ?? GENERIC;
 }

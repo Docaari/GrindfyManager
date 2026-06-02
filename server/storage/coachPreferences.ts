@@ -46,6 +46,8 @@ export interface CoachPreferences {
   reportWeeklyEnabled: boolean;
   nudgeBGapcheck: boolean;
   nudgeBImport: boolean;
+  // Coach AI UX Overhaul (#8) — follow-up de compromissos (accountability).
+  nudgeBFollowup: boolean;
   // Sprint AI-1C (ADR-159) — opt-in Daily Debrief + Monthly Report.
   reportDailyEnabled: boolean;
   reportMonthlyEnabled: boolean;
@@ -87,6 +89,7 @@ export const COACH_PREFS_DEFAULTS: CoachPreferences = {
   reportWeeklyEnabled: true,
   nudgeBGapcheck: true,
   nudgeBImport: true,
+  nudgeBFollowup: true,
   reportDailyEnabled: true,
   reportMonthlyEnabled: true,
   reportQuarterlyEnabled: false,
@@ -132,6 +135,7 @@ export function normalizeCoachPreferences(row: any): CoachPreferences {
       row?.reportWeeklyEnabled ?? COACH_PREFS_DEFAULTS.reportWeeklyEnabled,
     nudgeBGapcheck: row?.nudgeBGapcheck ?? COACH_PREFS_DEFAULTS.nudgeBGapcheck,
     nudgeBImport: row?.nudgeBImport ?? COACH_PREFS_DEFAULTS.nudgeBImport,
+    nudgeBFollowup: row?.nudgeBFollowup ?? COACH_PREFS_DEFAULTS.nudgeBFollowup,
     reportDailyEnabled:
       row?.reportDailyEnabled ?? COACH_PREFS_DEFAULTS.reportDailyEnabled,
     reportMonthlyEnabled:

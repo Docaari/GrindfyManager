@@ -43,7 +43,9 @@ export function CoachOnboarding(): JSX.Element {
             mode={mode}
             draft={data?.draft ?? null}
             levelEstimate={data?.levelEstimate ?? null}
-            onCompleted={() => navigate('/coach-ai')}
+            onCompleted={(chatSessionId) =>
+              navigate(chatSessionId ? `/coach-ai?session=${chatSessionId}` : '/coach-ai')
+            }
           />
         </div>
       </div>

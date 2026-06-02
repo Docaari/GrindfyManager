@@ -1,0 +1,40 @@
+%% Coach AI UX Overhaul (ADR-238) — fluxo das 12 melhorias
+flowchart TD
+    subgraph Chat["Chat (/coach-ai)"]
+        ES["Empty-state vende AÇÃO #3"]
+        LENS["Lente -> placeholder + chips #11<br/>(input preservado #4)"]
+        TEASER["Free: teaser de tool #6<br/>buildFreeToolTeaser -> /subscriptions"]
+        ES --> LENS
+    end
+
+    subgraph Onboarding["Onboarding"]
+        OB["complete -> 1º insight #2<br/>cria sessão + msg, ?session="]
+        OB --> Chat
+    end
+
+    subgraph Reports["Relatórios"]
+        TL["Timeline: CTAs acionáveis #1<br/>CoachReportCtaButtons (top-2 cta)"]
+        DD["Daily debrief inteligente #12<br/>suppress se trivial E sem follow-up"]
+        QD["Quarterly: entrega tripla<br/>deliverReport (GAP)"]
+    end
+
+    subgraph Proatividade["Nudges (cronRunner)"]
+        BM["B-MENTAL #7<br/>getAbGameDistribution cGame>=2"]
+        BL["B-LIFE #7<br/>>=6/7 dias sem folga"]
+        BF["B-FOLLOWUP #8<br/>compromisso vencido"]
+    end
+
+    subgraph Memoria["Memória + Accountability"]
+        SP["#9 structured-profile editável<br/>CoachKnowledgePanel"]
+        COM["#8 coach_commitments<br/>log_commitment + contexto"]
+        BENCH["#10 benchmark vs field BR<br/>query_pool_intelligence no contexto"]
+    end
+
+    COM --> BF
+    SP -.alimenta.-> CTX["coachContext (system dinâmico)"]
+    COM -.bloco compromissos.-> CTX
+    BENCH -.bloco field.-> CTX
+    CTX --> Chat
+
+    classDef done fill:#16341f,stroke:#3fb950,color:#e6edf3;
+    class ES,LENS,TEASER,OB,TL,DD,QD,BM,BL,BF,SP,COM,BENCH done;

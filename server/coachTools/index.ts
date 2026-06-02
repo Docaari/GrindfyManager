@@ -56,6 +56,8 @@ import { startGrindSessionTool } from './handlers/startGrindSession';
 import { logSessionCompletedTool } from './handlers/logSessionCompleted';
 import { logLeakFocusTool } from './handlers/logLeakFocus';
 import { logStudySessionTool } from './handlers/logStudySession';
+// Coach AI UX Overhaul (#8) — accountability commitment.
+import { logCommitmentTool } from './handlers/logCommitment';
 // AI-2A — write tools + diagnostic tools (9 novas).
 import { bulkProposeGradeTool } from './handlers/bulkProposeGrade';
 import { scheduleStudyBlockTool } from './handlers/scheduleStudyBlock';
@@ -114,6 +116,7 @@ safeRegister(startGrindSessionTool as unknown as CoachTool);
 safeRegister(logSessionCompletedTool as unknown as CoachTool);
 safeRegister(logLeakFocusTool as unknown as CoachTool);
 safeRegister(logStudySessionTool as unknown as CoachTool);
+safeRegister(logCommitmentTool as unknown as CoachTool);
 
 // AI-2A — write tools (RF-02..05) + diagnostic tools (RF-06.1..5) — 9 tools.
 safeRegister(bulkProposeGradeTool as unknown as CoachTool);
@@ -152,6 +155,7 @@ export {
   logSessionCompletedTool,
   logLeakFocusTool,
   logStudySessionTool,
+  logCommitmentTool,
   bulkQueryDimensionsTool,
   // AI-2A
   bulkProposeGradeTool,
@@ -192,6 +196,7 @@ export const coachTools = [
   logSessionCompletedTool,
   logLeakFocusTool,
   logStudySessionTool,
+  logCommitmentTool,
   bulkQueryDimensionsTool,
   bulkProposeGradeTool,
   scheduleStudyBlockTool,
