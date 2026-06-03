@@ -11,9 +11,9 @@ import { nanoid } from "nanoid";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { detectLeaks } from "../coachLeakDetection";
 import { STAT_INDEX_BY_ID } from "@shared/hud-stat-catalog";
 import { detectMimeFromBuffer, extFromMime } from "../services/spotImageStorage/mime";
+import { gatherUserLeaks, mapLeakToStudyTopic } from "../services/studyLeaksService";
 
 // HIGH-6 reviewer: rate limiter para PATCH /api/study-themes/:id.
 // 30 req/min por IP — protege contra abuso (cada PATCH faz validacao + cache invalidation).
@@ -102,74 +102,17 @@ function detectEditorImageExt(buffer: Buffer): "png" | "jpeg" | "webp" | "gif" |
   return null;
 }
 
-// Mapping from leak type to study topic (same as client-side helper)
-function mapLeakToStudyTopic(leak: { type: string; data?: any }): string {
-  if (leak.type === 'roi_by_format') {
-    const speed = leak.data?.speed;
-    const category = leak.data?.category;
-    if (speed === 'Turbo' || speed === 'Hyper') return 'ICM e Push/Fold em Turbo';
-    if (category === 'PKO') return 'Estrategia PKO e Bounty';
-    return 'Game Selection e Analise de Formato';
-  }
-  if (leak.type === 'weak_site') return 'Adaptacao Multi-Site';
-  if (leak.type === 'early_bust') return 'Jogo Early Game e Sobrevivencia';
-  if (leak.type === 'low_ft_conversion') return 'Final Table Play e ICM';
-  if (leak.type === 'declining_trend') return 'Revisao de Estrategia e Volume';
-  if (leak.type === 'insufficient_volume') return 'Disciplina de Volume e Grind';
-  if (leak.type === 'no_study') return 'Rotina de Estudo e Evolucao';
-  return 'Estudo Geral de Poker';
-}
-
 export function registerStudiesV2Routes(app: Express): void {
   // FP-16 RF-01: Study suggestions based on leaks
   app.get("/api/study/suggestions", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
 
-      // Fetch analytics data for leak detection (reuse same queries as coachContext)
-      const [dashboardStats, analyticsByCategory, analyticsBySite, analyticsByMonth] = await Promise.all([
-        storage.getDashboardStats(userId, 'all'),
-        storage.getAnalyticsByCategory(userId, 'all'),
-        storage.getAnalyticsBySite(userId, 'all'),
-        storage.getAnalyticsByMonth(userId, 'all'),
-      ]);
-
-      const totalTournaments = (dashboardStats as any)?.count || 0;
-
-      if (totalTournaments === 0) {
-        return res.json([]);
-      }
-
-      // Check last study session for no_study leak
-      let lastStudySessionDays: number | undefined;
-      try {
-        const [lastSession] = await db.select({ date: studySessions.date })
-          .from(studySessions)
-          .where(eq(studySessions.userId, userId))
-          .orderBy(desc(studySessions.date))
-          .limit(1);
-        if (lastSession) {
-          const daysDiff = Math.floor((Date.now() - new Date(lastSession.date).getTime()) / (1000 * 60 * 60 * 24));
-          lastStudySessionDays = daysDiff;
-        } else {
-          lastStudySessionDays = 999; // Never studied
-        }
-      } catch { /* graceful */ }
-
-      const leaks = detectLeaks({
-        analyticsByCategory: analyticsByCategory || [],
-        analyticsBySite: analyticsBySite || [],
-        overallRoi: (dashboardStats as any)?.roi || 0,
-        earlyFinishRate: (dashboardStats as any)?.earlyFinishRate || 0,
-        finalTables: (dashboardStats as any)?.finalTables || 0,
-        cravadas: (dashboardStats as any)?.firstPlaceCount || 0,
-        analyticsByMonth: analyticsByMonth || [],
-        totalTournaments,
-        lastStudySessionDays,
-      });
+      // Fonte unica: studyLeaksService (mesmo gather usado por /leaks/active).
+      const leaks = await gatherUserLeaks(userId);
 
       // Return top 3 leaks with mapped study topic
-      const suggestions = leaks.slice(0, 3).map(leak => ({
+      const suggestions = leaks.slice(0, 3).map((leak) => ({
         type: leak.type,
         description: leak.description,
         severity: leak.severity,
