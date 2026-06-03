@@ -205,7 +205,9 @@ import { nanoid } from "nanoid";
 import { normalizeTournamentTypePayload } from "./storage/normalizeTournamentTypePayload";
 import { getDisplayRegistrationTime } from "@shared/grade-time";
 import { ensureLibraryEntryForPlannedSafe } from "./services/libraryAutoPopulate";
-import { groupTournaments, stripNameNoise, canonicalBuyIn, isExcludedFromLibrary, type GroupedFamily, type GroupedSpecific } from "./services/libraryGrouping";
+import { groupTournaments, stripNameNoise, canonicalBuyIn, isExcludedFromLibrary, parseFamilyKey, type GroupedFamily, type GroupedSpecific } from "./services/libraryGrouping";
+import { dayOfWeek } from "../shared/day-of-week";
+import { type GroupDim, DEFAULT_RECIPE } from "../shared/library-grouping-dims";
 import { timeBinLabel, NO_TIME_BIN } from "../shared/time-bin";
 import { confidenceGradeForVolume, MIN_GROUP_VISIBLE, FAMILY_GROUP_FLOOR } from "@shared/library-grades";
 import { computeLibraryInsights, type DimensionBucket, type Insight } from "./insights/libraryInsights";
@@ -3370,7 +3372,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     });
   }
 
-  async getTournamentLibrary(userId: string, period: string = "all", filters: any = {}): Promise<any[]> {
+  async getTournamentLibrary(userId: string, period: string = "all", filters: any = {}, recipe: GroupDim[] = DEFAULT_RECIPE): Promise<any[]> {
     // Base condition - always filter by user
     const baseConditions = [
       eq(tournaments.userId, userId),
@@ -3430,12 +3432,24 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     // Sprint torneios-library-grouping (ajuste founder): desconsidera PLO /
     // Freeroll / buy-in 0 da biblioteca (nao do historico/dashboard).
-    const eligibleTournaments = allTournaments.filter((t: any) => !isExcludedFromLibrary(t));
+    let eligibleTournaments = allTournaments.filter((t: any) => !isExcludedFromLibrary(t));
+
+    // Sprint torneios-custom-families: filtro por dia da semana (em-memoria, sobre
+    // o conjunto elegivel, ANTES de agrupar). Vazio/ausente nao filtra.
+    const daysOfWeek: string[] = Array.isArray(filters?.daysOfWeek) ? filters.daysOfWeek : [];
+    if (daysOfWeek.length > 0) {
+      const daySet = new Set(daysOfWeek);
+      eligibleTournaments = eligibleTournaments.filter((t: any) =>
+        daySet.has(dayOfWeek(t.datePlayed ?? (t as any).startTime ?? null)),
+      );
+    }
 
     // Sprint library-evolution Fase 1: agrupamento deterministico 2 niveis
     // (familia coarse -> especificos fine). Substitui o matcher guloso O(n^2)
     // order-dependent + o piso rigido de 50. Ver server/services/libraryGrouping.ts.
-    const families = groupTournaments(eligibleTournaments);
+    // Sprint torneios-custom-families: `recipe` define quais dimensoes compoem a
+    // familia (default = as 6 legadas, chave byte-compativel).
+    const families = groupTournaments(eligibleTournaments, recipe);
 
     // Familias visiveis: >= FAMILY_GROUP_FLOOR torneios (lowConfidence se
     // < MIN_GROUP_VISIBLE). Antes da reforma um grinder com milhares de
@@ -4009,21 +4023,26 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     familyKey: string,
   ): Promise<{ found: boolean; metrics: any; recentResults: any[] }> {
     try {
-      const site = String(familyKey).split("|")[0];
+      // Sprint torneios-custom-families: re-deriva a receita embutida na chave.
+      // Chave legada -> DEFAULT_RECIPE + site (1o segmento, prefiltro SQL). Chave
+      // g1: sem a dim site -> sem prefiltro por site (scan mais largo, correto).
+      const { recipe, site } = parseFamilyKey(familyKey);
+      const conditions = [
+        eq(tournaments.userId, userId),
+        isNull(tournaments.grindSessionId),
+      ];
+      if (site != null) conditions.push(eq(tournaments.site, site));
+
       const rows = await this.normalizeTournamentsToUsd(
         await db
           .select()
           .from(tournaments)
-          .where(and(
-            eq(tournaments.userId, userId),
-            isNull(tournaments.grindSessionId),
-            eq(tournaments.site, site),
-          ))
+          .where(and(...conditions))
           .orderBy(desc(tournaments.datePlayed)),
         userId,
       );
 
-      const fam = groupTournaments(rows).find((f) => f.familyKey === familyKey);
+      const fam = groupTournaments(rows, recipe).find((f) => f.familyKey === familyKey);
       if (!fam) return { found: false, metrics: null, recentResults: [] };
 
       const list = fam.tournaments;
