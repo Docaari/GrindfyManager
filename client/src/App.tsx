@@ -114,7 +114,7 @@ function Router() {
         <AnalyticsTracker>
           <NotificationBanner />
           <NotificationModals />
-          <div className="flex h-screen bg-poker-bg">
+          <div className="flex h-screen bg-background">
             <Sidebar />
             <div className="flex-1 overflow-auto">
               <Suspense fallback={<PageLoader />}>

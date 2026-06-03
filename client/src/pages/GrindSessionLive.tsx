@@ -2360,7 +2360,7 @@ export default function GrindSessionLive() {
     return (
       <div className="p-6 text-white" aria-live="polite">
         <div className="mb-6"><Skeleton className="h-8 w-48 bg-gray-700 mb-2" /><Skeleton className="h-4 w-96 bg-gray-700" /></div>
-        <Card className="bg-poker-surface border-gray-700 max-w-2xl mx-auto"><CardContent className="p-6 space-y-4"><Skeleton className="h-6 w-48 mx-auto bg-gray-700" /><Skeleton className="h-4 w-64 mx-auto bg-gray-700" /><div className="grid grid-cols-3 gap-4 mt-4"><Skeleton className="h-16 w-full bg-gray-700" /><Skeleton className="h-16 w-full bg-gray-700" /><Skeleton className="h-16 w-full bg-gray-700" /></div></CardContent></Card>
+        <Card className="bg-card border-gray-700 max-w-2xl mx-auto"><CardContent className="p-6 space-y-4"><Skeleton className="h-6 w-48 mx-auto bg-gray-700" /><Skeleton className="h-4 w-64 mx-auto bg-gray-700" /><div className="grid grid-cols-3 gap-4 mt-4"><Skeleton className="h-16 w-full bg-gray-700" /><Skeleton className="h-16 w-full bg-gray-700" /><Skeleton className="h-16 w-full bg-gray-700" /></div></CardContent></Card>
       </div>
     );
   }
@@ -2644,7 +2644,7 @@ export default function GrindSessionLive() {
 
       {/* Edit limit de telas em tempo real (Em Andamento card) */}
       <Dialog open={screenCapDialogOpen} onOpenChange={setScreenCapDialogOpen}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-sm">
+        <DialogContent className="bg-card border-gray-700 text-white max-w-sm">
           <DialogHeader>
             <DialogTitle>Alterar limite de telas</DialogTitle>
             <DialogDescription className="text-gray-400">
@@ -2950,8 +2950,8 @@ export default function GrindSessionLive() {
 
       {/* Break Management Dialog */}
       <Dialog open={showBreakManagementDialog} onOpenChange={setShowBreakManagementDialog}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-2xl">
-          <DialogHeader><DialogTitle className="text-xl flex items-center"><Coffee className="w-6 h-6 mr-3 text-poker-accent" />Gerenciamento de Breaks</DialogTitle></DialogHeader>
+        <DialogContent className="bg-card border-gray-700 text-white max-w-2xl">
+          <DialogHeader><DialogTitle className="text-xl flex items-center"><Coffee className="w-6 h-6 mr-3 text-primary" />Gerenciamento de Breaks</DialogTitle></DialogHeader>
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold text-poker-gold mb-4">Breaks Registrados Hoje</h3>

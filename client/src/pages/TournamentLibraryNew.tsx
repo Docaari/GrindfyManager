@@ -348,7 +348,7 @@ function GroupDetailDialogContent({ group }: GroupDetailDialogContentProps) {
       {/* Summary Stats - Linha 1 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
         <div className="bg-gray-800/50 rounded-lg p-3 text-center">
-          <div className="text-poker-accent font-bold text-lg">{group.volume}</div>
+          <div className="text-primary font-bold text-lg">{group.volume}</div>
           <div className="text-xs text-gray-400">Torneios</div>
         </div>
         <div className="bg-gray-800/50 rounded-lg p-3 text-center">
@@ -938,7 +938,7 @@ export default function TournamentLibraryNew() {
           </div>
         </div>
         {/* Filtros expandidos (header + 3 secoes + ROI/Volume/Buy-in) */}
-        <div className="bg-poker-surface border border-gray-700 rounded-2xl mb-8 p-6 space-y-4">
+        <div className="bg-card border border-gray-700 rounded-2xl mb-8 p-6 space-y-4">
           <div className="flex items-center justify-between mb-3">
             <Skeleton className="h-6 w-24 bg-gray-700" />
             <Skeleton className="h-9 w-48 bg-gray-700" />
@@ -961,7 +961,7 @@ export default function TournamentLibraryNew() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
-            <Card key={i} className="bg-poker-surface border-gray-700">
+            <Card key={i} className="bg-card border-gray-700">
               <CardHeader className="pb-3">
                 <div className="flex items-start gap-3">
                   <Skeleton className="h-9 w-9 bg-gray-700 rounded-lg shrink-0" />
@@ -1279,7 +1279,7 @@ export default function TournamentLibraryNew() {
       {/* RF-01 (L1): Filtros uniformes — sem 7 gradientes ad-hoc.
           Estilo neutro padrao + cor so no chip ATIVO via tokens.color.
           Header da pagina e secoes internas usam mesmo background. */}
-      <div className="bg-poker-surface border border-gray-700 rounded-2xl mb-8">
+      <div className="bg-card border border-gray-700 rounded-2xl mb-8">
         {/* Header fixo */}
         <div className="p-6 pb-3">
           <div className="flex items-center justify-between">
@@ -1289,9 +1289,9 @@ export default function TournamentLibraryNew() {
               </div>
               <h3 className="text-lg font-semibold text-white">Filtros</h3>
               {filtersActive && (
-                <div className="flex items-center gap-2 px-3 py-1 rounded-lg border border-poker-accent/40 bg-poker-accent/10">
-                  <div className="w-2 h-2 bg-poker-accent rounded-full animate-pulse"></div>
-                  <span className="text-sm text-poker-accent font-medium">Filtros ativos</span>
+                <div className="flex items-center gap-2 px-3 py-1 rounded-lg border border-primary/40 bg-primary/10">
+                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+                  <span className="text-sm text-primary font-medium">Filtros ativos</span>
                 </div>
               )}
             </div>
@@ -1310,7 +1310,7 @@ export default function TournamentLibraryNew() {
                 <input
                   type="text"
                   placeholder="Buscar grupo..."
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 pr-9 text-sm text-white placeholder-gray-500 focus:border-poker-accent focus:ring-1 focus:ring-poker-accent w-48"
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 pr-9 text-sm text-white placeholder-gray-500 focus:border-primary focus:ring-1 focus:ring-primary w-48"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -1347,7 +1347,7 @@ export default function TournamentLibraryNew() {
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
                         active
                           ? `${tokens.color.info.bg} ${tokens.color.info.text} ${tokens.color.info.border}`
-                          : 'bg-poker-surface text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white'
+                          : 'bg-card text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white'
                       }`}
                     >
                       {opt.label}
@@ -1378,7 +1378,7 @@ export default function TournamentLibraryNew() {
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
                           active
                             ? `${tokens.color.success.bg} ${tokens.color.success.text} ${tokens.color.success.border}`
-                            : 'bg-poker-surface text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white'
+                            : 'bg-card text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white'
                         }`}
                       >
                         {site}
@@ -1407,7 +1407,7 @@ export default function TournamentLibraryNew() {
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
                           active
                             ? `${tokens.color.accent.bg} ${tokens.color.accent.text} ${tokens.color.accent.border}`
-                            : 'bg-poker-surface text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white'
+                            : 'bg-card text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white'
                         }`}
                       >
                         {cat}
@@ -1436,7 +1436,7 @@ export default function TournamentLibraryNew() {
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
                           active
                             ? `${tokens.color.warn.bg} ${tokens.color.warn.text} ${tokens.color.warn.border}`
-                            : 'bg-poker-surface text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white'
+                            : 'bg-card text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white'
                         }`}
                       >
                         {spd}
@@ -1472,7 +1472,7 @@ export default function TournamentLibraryNew() {
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
                           active
                             ? `${tokens.color[tone].bg} ${tokens.color[tone].text} ${tokens.color[tone].border}`
-                            : 'bg-poker-surface text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white'
+                            : 'bg-card text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white'
                         }`}
                       >
                         {opt.label}
@@ -1505,7 +1505,7 @@ export default function TournamentLibraryNew() {
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
                           active
                             ? `${tokens.color.info.bg} ${tokens.color.info.text} ${tokens.color.info.border}`
-                            : 'bg-poker-surface text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white'
+                            : 'bg-card text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white'
                         }`}
                       >
                         {opt.label}
@@ -1524,7 +1524,7 @@ export default function TournamentLibraryNew() {
                   <input
                     type="number"
                     placeholder="Min $"
-                    className="flex-1 bg-poker-surface border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-poker-accent focus:outline-none"
+                    className="flex-1 bg-card border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-primary focus:outline-none"
                     value={filters.buyinRange.min || ''}
                     onChange={(e) => setFilters(prev => ({
                       ...prev,
@@ -1535,7 +1535,7 @@ export default function TournamentLibraryNew() {
                   <input
                     type="number"
                     placeholder="Max $"
-                    className="flex-1 bg-poker-surface border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-poker-accent focus:outline-none"
+                    className="flex-1 bg-card border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-primary focus:outline-none"
                     value={filters.buyinRange.max || ''}
                     onChange={(e) => setFilters(prev => ({
                       ...prev,
@@ -1554,7 +1554,7 @@ export default function TournamentLibraryNew() {
                   <input
                     type="number"
                     placeholder="Min"
-                    className="flex-1 bg-poker-surface border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-poker-accent focus:outline-none"
+                    className="flex-1 bg-card border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-primary focus:outline-none"
                     value={filters.fieldSizeRange.min ?? ''}
                     onChange={(e) => setFilters(prev => ({
                       ...prev,
@@ -1565,7 +1565,7 @@ export default function TournamentLibraryNew() {
                   <input
                     type="number"
                     placeholder="Max"
-                    className="flex-1 bg-poker-surface border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-poker-accent focus:outline-none"
+                    className="flex-1 bg-card border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-primary focus:outline-none"
                     value={filters.fieldSizeRange.max ?? ''}
                     onChange={(e) => setFilters(prev => ({
                       ...prev,
@@ -1586,7 +1586,7 @@ export default function TournamentLibraryNew() {
             onClick={() => setFiltersExpanded(!filtersExpanded)}
             data-testid="library-filters-toggle"
             aria-expanded={filtersExpanded}
-            className="group inline-flex items-center gap-2 px-4 h-9 bg-poker-surface border border-gray-600 rounded-lg text-sm font-medium text-gray-300 hover:border-gray-500 hover:text-white transition-all duration-200"
+            className="group inline-flex items-center gap-2 px-4 h-9 bg-card border border-gray-600 rounded-lg text-sm font-medium text-gray-300 hover:border-gray-500 hover:text-white transition-all duration-200"
           >
             {filtersExpanded ? (
               <>
@@ -1624,7 +1624,7 @@ export default function TournamentLibraryNew() {
             <div className="flex items-center gap-4 flex-wrap">
               {/* RF-02 (L3): Density toggle */}
               <div
-                className="inline-flex items-center bg-poker-surface border border-gray-600 rounded-lg p-0.5"
+                className="inline-flex items-center bg-card border border-gray-600 rounded-lg p-0.5"
                 role="group"
                 aria-label="Densidade dos cards"
                 data-testid="library-density-toggle"
@@ -1687,7 +1687,7 @@ export default function TournamentLibraryNew() {
 
           {/* Cards de Grupo com Metricas Estatisticas */}
           {filteredAndSortedGroups.length === 0 ? (
-        <Card className="bg-poker-surface border-gray-700">
+        <Card className="bg-card border-gray-700">
           <CardContent className="p-12">
             {filtersActive ? (
               // RF-06 (G6) + RF-11 (UI-T1-Library): EmptyState canonico — filtros zerados
@@ -1724,7 +1724,7 @@ export default function TournamentLibraryNew() {
             return (
               <Dialog key={group.id}>
               <DialogTrigger asChild>
-              <Card className="bg-poker-surface border-gray-700 hover:border-[#24c25e] transition-all duration-300 cursor-pointer hover:shadow-lg hover:shadow-[#24c25e]/20 relative overflow-hidden">
+              <Card className="bg-card border-gray-700 hover:border-[#24c25e] transition-all duration-300 cursor-pointer hover:shadow-lg hover:shadow-[#24c25e]/20 relative overflow-hidden">
                 <CardHeader className="pb-3">
                   {/* Header: Badge + Name + Site */}
                   <div className="flex items-start gap-3">
@@ -1892,7 +1892,7 @@ export default function TournamentLibraryNew() {
                 </CardContent>
               </Card>
               </DialogTrigger>
-                    <DialogContent className="max-w-6xl max-h-[80vh] bg-poker-surface border-gray-700">
+                    <DialogContent className="max-w-6xl max-h-[80vh] bg-card border-gray-700">
                       <GroupDetailDialogContent group={group} />
                     </DialogContent>
               </Dialog>

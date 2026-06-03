@@ -133,7 +133,7 @@ export default function TournamentLibraryFilters({
           <Filter className="w-4 h-4 mr-2" />
           Filtros
           {hasActiveFilters() && (
-            <Badge variant="secondary" className="ml-2 bg-poker-green text-white">
+            <Badge variant="secondary" className="ml-2 bg-primary text-white">
               {getActiveFiltersCount()}
             </Badge>
           )}
@@ -159,7 +159,7 @@ export default function TournamentLibraryFilters({
 
       {/* Filter Panel */}
       {isExpanded && (
-        <Card className="bg-poker-surface border-gray-700">
+        <Card className="bg-card border-gray-700">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg text-white">Filtros Avançados</CardTitle>
           </CardHeader>
@@ -184,7 +184,7 @@ export default function TournamentLibraryFilters({
                     className={cn(
                       "text-xs",
                       localFilters.period === period.value 
-                        ? "bg-poker-green hover:bg-poker-green/90" 
+                        ? "bg-primary hover:bg-primary/90" 
                         : "border-gray-600 text-gray-300 hover:bg-gray-700"
                     )}
                   >
@@ -207,7 +207,7 @@ export default function TournamentLibraryFilters({
                     className={cn(
                       "text-xs",
                       localFilters.sites.includes(site)
-                        ? "bg-poker-green hover:bg-poker-green/90"
+                        ? "bg-primary hover:bg-primary/90"
                         : "border-gray-600 text-gray-300 hover:bg-gray-700"
                     )}
                   >
@@ -230,7 +230,7 @@ export default function TournamentLibraryFilters({
                     className={cn(
                       "text-xs",
                       localFilters.categories.includes(category)
-                        ? "bg-poker-green hover:bg-poker-green/90"
+                        ? "bg-primary hover:bg-primary/90"
                         : "border-gray-600 text-gray-300 hover:bg-gray-700"
                     )}
                   >
@@ -253,7 +253,7 @@ export default function TournamentLibraryFilters({
                     className={cn(
                       "text-xs",
                       localFilters.speeds.includes(speed)
-                        ? "bg-poker-green hover:bg-poker-green/90"
+                        ? "bg-primary hover:bg-primary/90"
                         : "border-gray-600 text-gray-300 hover:bg-gray-700"
                     )}
                   >
@@ -395,7 +395,7 @@ export default function TournamentLibraryFilters({
                   size="sm"
                   onClick={applyFilters}
                   disabled={!hasLocalChanges()}
-                  className="text-xs bg-poker-green hover:bg-poker-green/90"
+                  className="text-xs bg-primary hover:bg-primary/90"
                 >
                   Aplicar Mudanças
                 </Button>

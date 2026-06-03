@@ -50,7 +50,7 @@ export default function TemplateCard({ template, onEdit, onAddToPlan }: Template
       case "ggpoker":
         return "bg-green-600";
       default:
-        return "bg-poker-green";
+        return "bg-primary";
     }
   };
 
@@ -80,7 +80,7 @@ export default function TemplateCard({ template, onEdit, onAddToPlan }: Template
   const profit = parseFloat(template.totalProfit);
 
   return (
-    <Card className="bg-poker-surface border-gray-700 hover:border-gray-600 transition-colors">
+    <Card className="bg-card border-gray-700 hover:border-gray-600 transition-colors">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -192,7 +192,7 @@ export default function TemplateCard({ template, onEdit, onAddToPlan }: Template
           {onAddToPlan ? (
             <Button
               onClick={() => onAddToPlan(template)}
-              className="flex-1 bg-poker-green hover:bg-poker-green-light text-white text-sm"
+              className="flex-1 bg-primary hover:bg-poker-green-light text-white text-sm"
               size="sm"
             >
               <Plus className="h-3 w-3 mr-1" />
@@ -200,7 +200,7 @@ export default function TemplateCard({ template, onEdit, onAddToPlan }: Template
             </Button>
           ) : (
             <Button
-              className="flex-1 bg-poker-green hover:bg-poker-green-light text-white text-sm"
+              className="flex-1 bg-primary hover:bg-poker-green-light text-white text-sm"
               size="sm"
             >
               <Calendar className="h-3 w-3 mr-1" />

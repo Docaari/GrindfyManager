@@ -48,7 +48,7 @@ export function DashboardGoodMorningSplash({
         data-testid="dashboard-good-morning-cta"
         onClick={() => clearMutation.mutate()}
         disabled={clearMutation.isPending}
-        className="rounded-md bg-poker-green px-6 py-3 text-white font-semibold hover:bg-poker-green/90 disabled:opacity-60"
+        className="rounded-md bg-primary px-6 py-3 text-white font-semibold hover:bg-primary/90 disabled:opacity-60"
       >
         {clearMutation.isPending ? "..." : "Pronto para a proxima?"}
       </button>

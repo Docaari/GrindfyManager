@@ -184,7 +184,7 @@ export function TournamentAlertDialog({
         if (e.key === 'Escape') onOpenChange(false);
       }}
     >
-      <div className="bg-poker-surface border border-gray-700 text-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-4">
+      <div className="bg-card border border-gray-700 text-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-4">
         <div className="flex items-center justify-between mb-3">
           <h2 id="tournament-alert-dialog-title" className="text-base font-semibold">
             Criar alerta de torneio

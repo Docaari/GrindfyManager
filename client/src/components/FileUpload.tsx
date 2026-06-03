@@ -115,7 +115,7 @@ export default function FileUpload({
     <div className={cn("space-y-4", className)}>
       <Card className={cn(
         "border-2 border-dashed transition-colors cursor-pointer",
-        isDragOver ? "border-poker-green bg-poker-green/10" : "border-gray-600",
+        isDragOver ? "border-primary bg-primary/10" : "border-gray-600",
         isUploading && "pointer-events-none opacity-50"
       )}>
         <CardContent
@@ -138,7 +138,7 @@ export default function FileUpload({
               <div className="space-y-2">
                 <Button
                   onClick={() => document.getElementById('file-input')?.click()}
-                  className="bg-poker-green hover:bg-poker-green-light text-white"
+                  className="bg-primary hover:bg-poker-green-light text-white"
                   disabled={isUploading}
                 >
                   <Upload className="h-4 w-4 mr-2" />
@@ -152,7 +152,7 @@ export default function FileUpload({
           ) : (
             <div className="space-y-4">
               <div className="flex items-center justify-center space-x-3">
-                <File className="h-8 w-8 text-poker-green" />
+                <File className="h-8 w-8 text-primary" />
                 <div className="text-left">
                   <p className="text-white font-medium">{selectedFile.name}</p>
                   <p className="text-gray-400 text-sm">{formatFileSize(selectedFile.size)}</p>
@@ -176,7 +176,7 @@ export default function FileUpload({
                   </div>
                   <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-poker-green transition-all duration-300 rounded-full"
+                      className="h-full bg-primary transition-all duration-300 rounded-full"
                       style={{ width: `${uploadProgress.percentage}%` }}
                     />
                   </div>
@@ -202,7 +202,7 @@ export default function FileUpload({
               ) : (
                 <Button
                   onClick={handleUpload}
-                  className="bg-poker-green hover:bg-poker-green-light text-white"
+                  className="bg-primary hover:bg-poker-green-light text-white"
                   disabled={isUploading}
                 >
                   {isUploading ? (

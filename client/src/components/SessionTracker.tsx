@@ -154,14 +154,14 @@ export default function SessionTracker({ session, tournaments }: SessionTrackerP
   return (
     <div className="space-y-6">
       {/* Active Tournaments */}
-      <Card className="bg-poker-surface border-gray-700">
+      <Card className="bg-card border-gray-700">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-white">Active Tournaments</CardTitle>
             <Button
               onClick={() => setShowAddForm(!showAddForm)}
               size="sm"
-              className="bg-poker-green hover:bg-poker-green-light text-white"
+              className="bg-primary hover:bg-poker-green-light text-white"
             >
               <Plus className="h-4 w-4 mr-1" />
               Add Tournament
@@ -196,7 +196,7 @@ export default function SessionTracker({ session, tournaments }: SessionTrackerP
                     <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                       <SelectValue placeholder="Site" />
                     </SelectTrigger>
-                    <SelectContent className="bg-poker-surface border-gray-700">
+                    <SelectContent className="bg-card border-gray-700">
                       <SelectItem value="PokerStars">PokerStars</SelectItem>
                       <SelectItem value="PartyPoker">PartyPoker</SelectItem>
                       <SelectItem value="888poker">888poker</SelectItem>
@@ -211,7 +211,7 @@ export default function SessionTracker({ session, tournaments }: SessionTrackerP
                     <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-poker-surface border-gray-700">
+                    <SelectContent className="bg-card border-gray-700">
                       <SelectItem value="MTT">MTT</SelectItem>
                       <SelectItem value="SNG">SNG</SelectItem>
                       <SelectItem value="Spin & Go">Spin & Go</SelectItem>
@@ -225,7 +225,7 @@ export default function SessionTracker({ session, tournaments }: SessionTrackerP
                     <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-poker-surface border-gray-700">
+                    <SelectContent className="bg-card border-gray-700">
                       <SelectItem value="Vanilla">Vanilla</SelectItem>
                       <SelectItem value="PKO">PKO</SelectItem>
                       <SelectItem value="Mystery">Mystery</SelectItem>
@@ -239,7 +239,7 @@ export default function SessionTracker({ session, tournaments }: SessionTrackerP
                     <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-poker-surface border-gray-700">
+                    <SelectContent className="bg-card border-gray-700">
                       <SelectItem value="Regular">Regular</SelectItem>
                       <SelectItem value="Turbo">Turbo</SelectItem>
                       <SelectItem value="Hyper">Hyper</SelectItem>
@@ -251,7 +251,7 @@ export default function SessionTracker({ session, tournaments }: SessionTrackerP
                   <Button
                     onClick={handleAddTournament}
                     disabled={addTournamentMutation.isPending}
-                    className="bg-poker-green hover:bg-poker-green-light text-white"
+                    className="bg-primary hover:bg-poker-green-light text-white"
                   >
                     Add Tournament
                   </Button>
@@ -333,7 +333,7 @@ export default function SessionTracker({ session, tournaments }: SessionTrackerP
 
       {/* Session Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-poker-surface border-gray-700">
+        <Card className="bg-card border-gray-700">
           <CardContent className="p-4 text-center">
             <Clock className="h-8 w-8 mx-auto mb-2 text-poker-gold" />
             <div className="text-2xl font-mono text-white mb-1">{sessionTime}</div>
@@ -341,7 +341,7 @@ export default function SessionTracker({ session, tournaments }: SessionTrackerP
           </CardContent>
         </Card>
 
-        <Card className="bg-poker-surface border-gray-700">
+        <Card className="bg-card border-gray-700">
           <CardContent className="p-4 text-center">
             <DollarSign className="h-8 w-8 mx-auto mb-2 text-poker-gold" />
             <div className="text-2xl font-mono text-white mb-1">
@@ -351,7 +351,7 @@ export default function SessionTracker({ session, tournaments }: SessionTrackerP
           </CardContent>
         </Card>
 
-        <Card className="bg-poker-surface border-gray-700">
+        <Card className="bg-card border-gray-700">
           <CardContent className="p-4 text-center">
             <Trophy className="h-8 w-8 mx-auto mb-2 text-poker-gold" />
             <div className="text-2xl font-mono text-white mb-1">{sessionTournaments.length}</div>

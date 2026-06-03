@@ -71,7 +71,7 @@ export function VisualizationDialog({ showSelection, onSelectionChange, showGuid
   return (
     <>
       <Dialog open={showSelection} onOpenChange={onSelectionChange}>
-        <DialogContent className="sm:max-w-[500px] bg-poker-surface border-gray-700">
+        <DialogContent className="sm:max-w-[500px] bg-card border-gray-700">
           <DialogHeader>
             <DialogTitle className="text-white">Escolha a Duração</DialogTitle>
             <DialogDescription className="text-gray-400">
@@ -110,7 +110,7 @@ export function VisualizationDialog({ showSelection, onSelectionChange, showGuid
       </Dialog>
 
       <Dialog open={showGuide} onOpenChange={onGuideChange}>
-        <DialogContent className="sm:max-w-[600px] bg-poker-surface border-gray-700">
+        <DialogContent className="sm:max-w-[600px] bg-card border-gray-700">
           <DialogHeader>
             <DialogTitle className="text-white">
               Guia de Visualização - {duration} minutos
@@ -123,7 +123,7 @@ export function VisualizationDialog({ showSelection, onSelectionChange, showGuid
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Progresso</span>
-                <span className="text-poker-accent">
+                <span className="text-primary">
                   {currentStep + 1} / {currentSteps.length}
                 </span>
               </div>
@@ -142,7 +142,7 @@ export function VisualizationDialog({ showSelection, onSelectionChange, showGuid
               </p>
               {isRunning && (
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-poker-accent">
+                  <div className="text-2xl font-bold text-primary">
                     {formatTime(timeLeft)}
                   </div>
                   <div className="text-sm text-gray-400">tempo restante</div>

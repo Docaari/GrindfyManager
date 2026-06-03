@@ -135,7 +135,7 @@ export default function AlertsPanel({
   };
 
   return (
-    <Card className="bg-poker-surface border-gray-700 mb-6">
+    <Card className="bg-card border-gray-700 mb-6">
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
         <CollapsibleTrigger asChild>
           <CardHeader className="cursor-pointer hover:bg-gray-800/50 transition-colors py-3 px-4">

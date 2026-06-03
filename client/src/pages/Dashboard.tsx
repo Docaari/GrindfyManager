@@ -425,7 +425,7 @@ export default function Dashboard() {
               queryClient.invalidateQueries({ queryKey: ["/api/dashboard/performance"] });
               queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
             }}
-            className="bg-poker-green text-white hover:bg-poker-green/90 px-6 py-3"
+            className="bg-primary text-white hover:bg-primary/90 px-6 py-3"
           >
             Tentar novamente
           </Button>
@@ -466,7 +466,7 @@ export default function Dashboard() {
             </p>
             <Button
               onClick={() => navigate('/upload')}
-              className="bg-poker-green text-white hover:bg-poker-green/90 px-6 py-3"
+              className="bg-primary text-white hover:bg-primary/90 px-6 py-3"
             >
               Importar Torneios
             </Button>

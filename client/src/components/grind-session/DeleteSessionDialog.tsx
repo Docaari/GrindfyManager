@@ -21,7 +21,7 @@ export default function DeleteSessionDialog({
 }: DeleteSessionDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[400px] bg-poker-surface border-gray-700">
+      <DialogContent className="sm:max-w-[400px] bg-card border-gray-700">
         <DialogHeader>
           <DialogTitle className="text-white">Excluir Sessão</DialogTitle>
           <DialogDescription className="text-gray-400">

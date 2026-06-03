@@ -50,6 +50,7 @@ export function SpotifyConnectionPanel() {
   const [premiumGateOpen, setPremiumGateOpen] = React.useState(false);
   const [premiumGateName, setPremiumGateName] = React.useState("");
   const [isMobile, setIsMobile] = React.useState(false);
+  const [connectError, setConnectError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setIsMobile(isMobileViewport());
@@ -68,6 +69,7 @@ export function SpotifyConnectionPanel() {
   const displayName = status?.displayName ?? "";
 
   const handleConnect = async () => {
+    setConnectError(null);
     try {
       const result = await initiateSpotifyAuth();
       // HIGH-5: propagar token pro AudioPlayerContext criar o driver real.
@@ -94,6 +96,13 @@ export function SpotifyConnectionPanel() {
       } else {
         // eslint-disable-next-line no-console
         console.warn("Spotify connect failed", err);
+        // Surface the reason instead of failing silently — o host_mismatch
+        // (abrir em localhost em vez de 127.0.0.1) e o caso mais comum.
+        setConnectError(
+          err instanceof Error
+            ? err.message
+            : "Falha ao conectar Spotify. Tente novamente.",
+        );
       }
     }
   };
@@ -147,6 +156,15 @@ export function SpotifyConnectionPanel() {
           {isMobile && (
             <p className="text-xs text-muted-foreground">
               Spotify disponivel apenas em desktop (Chrome/Edge/Firefox).
+            </p>
+          )}
+          {connectError && (
+            <p
+              data-testid="spotify-connect-error"
+              role="alert"
+              className="text-xs text-destructive"
+            >
+              {connectError}
             </p>
           )}
         </div>

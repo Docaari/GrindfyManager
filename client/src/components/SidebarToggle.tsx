@@ -10,7 +10,7 @@ export default function SidebarToggle() {
       variant="ghost"
       size="sm"
       onClick={toggleSidebar}
-      className="fixed top-4 left-4 z-50 bg-poker-surface border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-700 shadow-lg"
+      className="fixed top-4 left-4 z-50 bg-card border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-700 shadow-lg"
     >
       {isCollapsed ? <Menu className="h-4 w-4" /> : <X className="h-4 w-4" />}
     </Button>

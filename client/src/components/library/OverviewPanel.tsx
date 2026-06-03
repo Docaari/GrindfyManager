@@ -63,7 +63,7 @@ export function OverviewPanel() {
           <Upload className="w-4 h-4" /> Overview (CSV grande)
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto bg-poker-surface border-gray-700">
+      <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto bg-card border-gray-700">
         <DialogHeader>
           <DialogTitle className="text-white">Overview — melhores torneios por plataforma</DialogTitle>
           <DialogDescription className="text-gray-400">

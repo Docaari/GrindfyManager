@@ -427,7 +427,7 @@ function RegisteredCard({
           </div>
           {/* Item 9: Buy-in with currency */}
           <div className="text-xs text-gray-400 mt-1">
-            Buy-in: <span className="text-poker-green font-medium">{formatBuyIn(tournament.buyIn, tournament.site || '')}</span>
+            Buy-in: <span className="text-primary font-medium">{formatBuyIn(tournament.buyIn, tournament.site || '')}</span>
             {guaranteedValue && guaranteedValue > 0 && (
               <span className="ml-3 text-blue-400">| <span className="font-medium">{currency.symbol}{formatNumberWithDots(guaranteedValue)} GTD</span></span>
             )}
@@ -779,7 +779,7 @@ function UpcomingCard({
           )}
           {/* Item 9: Buy-in with currency */}
           <div className="text-gray-200 ml-7 text-lg font-bold">
-            Buy-in: <span className="text-poker-green font-semibold">{formatBuyIn(tournament.buyIn, tournament.site || '')}</span>
+            Buy-in: <span className="text-primary font-semibold">{formatBuyIn(tournament.buyIn, tournament.site || '')}</span>
             {guaranteedValue && guaranteedValue > 0 && (
               <span className="ml-3 text-blue-400">| <span className="font-semibold">{getCurrencyForSite(tournament.site || '').symbol}{formatNumberWithDots(guaranteedValue)} GTD</span></span>
             )}
@@ -900,7 +900,7 @@ function CompletedCard({
           {/* #6 + #47: Time and name on separate lines */}
           <div className="mb-2 mt-4">
             <div className="flex items-center gap-3">
-              <Trophy className="w-4 h-4 text-poker-accent flex-shrink-0" />
+              <Trophy className="w-4 h-4 text-primary flex-shrink-0" />
               <time dateTime={tournament.time || ''} className="text-emerald-400 font-mono text-sm font-bold">
                 {tournament.time || '\u2014'}
               </time>
@@ -952,7 +952,7 @@ function CompletedCard({
           </div>
           {/* Item 9: Buy-in with currency */}
           <div className="text-sm text-gray-200 ml-7">
-            Buy-in: <span className="text-poker-green font-semibold">{formatBuyIn(tournament.buyIn, tournament.site || '')}</span>
+            Buy-in: <span className="text-primary font-semibold">{formatBuyIn(tournament.buyIn, tournament.site || '')}</span>
             {guaranteedValue && guaranteedValue > 0 && (
               <span className="ml-3 text-blue-400">| <span className="font-semibold">{getCurrencyForSite(tournament.site || '').symbol}{formatNumberWithDots(guaranteedValue)} GTD</span></span>
             )}

@@ -47,7 +47,7 @@ export default function MetricsCard({
   };
 
   return (
-    <Card className={cn("bg-poker-surface border-gray-700", className)}>
+    <Card className={cn("bg-card border-gray-700", className)}>
       <CardContent className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-gray-400 text-sm font-medium">{title}</h3>

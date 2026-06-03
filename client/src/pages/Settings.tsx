@@ -442,7 +442,7 @@ export default function Settings() {
       </div>
 
       {/* Interface Settings Section */}
-      <Card className="bg-poker-surface border-gray-700">
+      <Card className="bg-card border-gray-700">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <Sidebar className="h-5 w-5 text-blue-400" />
@@ -463,7 +463,7 @@ export default function Settings() {
               <Switch
                 checked={autoCollapseForGrind}
                 onCheckedChange={setAutoCollapseForGrind}
-                className="data-[state=checked]:bg-poker-green"
+                className="data-[state=checked]:bg-primary"
               />
             </div>
           </div>
@@ -471,7 +471,7 @@ export default function Settings() {
       </Card>
 
       {/* Alert Settings Section (RF-09) */}
-      <Card className="bg-poker-surface border-gray-700">
+      <Card className="bg-card border-gray-700">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <Bell className="h-5 w-5 text-yellow-400" />
@@ -496,7 +496,7 @@ export default function Settings() {
               <Switch
                 checked={lateRegAlertEnabled}
                 onCheckedChange={setLateRegAlertEnabled}
-                className="data-[state=checked]:bg-poker-green"
+                className="data-[state=checked]:bg-primary"
               />
             </div>
 
@@ -512,7 +512,7 @@ export default function Settings() {
               <Switch
                 checked={lateRegAlertSound}
                 onCheckedChange={setLateRegAlertSound}
-                className="data-[state=checked]:bg-poker-green"
+                className="data-[state=checked]:bg-primary"
               />
             </div>
 
@@ -552,7 +552,7 @@ export default function Settings() {
       </Card>
 
       {/* RF-07/RF-08 — Alertas e Voz (Sprint Alarmes 2.0) */}
-      <Card className="bg-poker-surface border-gray-700" data-testid="settings-tts-section">
+      <Card className="bg-card border-gray-700" data-testid="settings-tts-section">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <Mic className="h-5 w-5 text-amber-400" />
@@ -716,7 +716,7 @@ export default function Settings() {
               data-testid="tts-redact-buyin"
               checked={ttsRedactBuyIn}
               onCheckedChange={setTtsRedactBuyIn}
-              className="data-[state=checked]:bg-poker-green"
+              className="data-[state=checked]:bg-primary"
             />
           </div>
 
@@ -735,7 +735,7 @@ export default function Settings() {
       </Card>
 
       {/* Exchange Rates Section */}
-      <Card className="bg-poker-surface border-gray-700">
+      <Card className="bg-card border-gray-700">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <DollarSign className="h-5 w-5 text-green-400" />
@@ -818,7 +818,7 @@ export default function Settings() {
       </Card>
 
       {/* Bankroll Section (RF-06) */}
-      <Card className="bg-poker-surface border-gray-700" data-testid="bankroll-settings-section">
+      <Card className="bg-card border-gray-700" data-testid="bankroll-settings-section">
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
             <CardTitle className="text-white flex items-center gap-2">
@@ -1087,7 +1087,7 @@ export default function Settings() {
       <BankrollMovementDialog open={showMovementDialog} onOpenChange={setShowMovementDialog} />
 
       {/* Data Management Section */}
-      <Card className="bg-poker-surface border-gray-700">
+      <Card className="bg-card border-gray-700">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <Trash2 className="h-5 w-5 text-red-400" />
@@ -1162,7 +1162,7 @@ export default function Settings() {
       </Card>
 
       {/* Future Settings Sections */}
-      <Card className="bg-poker-surface border-gray-700">
+      <Card className="bg-card border-gray-700">
         <CardHeader>
           <CardTitle className="text-white">Outras Configurações</CardTitle>
         </CardHeader>

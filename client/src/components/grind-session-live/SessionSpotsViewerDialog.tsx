@@ -178,7 +178,7 @@ export default function SessionSpotsViewerDialog({
     <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
       <DialogContent
         data-testid="spot-viewer-dialog"
-        className="bg-poker-surface border-gray-700 text-white max-w-3xl"
+        className="bg-card border-gray-700 text-white max-w-3xl"
       >
         <DialogHeader>
           <DialogTitle>
@@ -212,7 +212,7 @@ export default function SessionSpotsViewerDialog({
                     type="button"
                     data-testid={`spot-viewer-thumb-${s.id}`}
                     onClick={() => setActiveId(s.id)}
-                    className="group rounded border border-gray-700 bg-gray-900/70 p-2 text-left hover:border-poker-accent transition-colors"
+                    className="group rounded border border-gray-700 bg-gray-900/70 p-2 text-left hover:border-primary transition-colors"
                   >
                     <div className="aspect-video w-full overflow-hidden rounded bg-gray-800 flex items-center justify-center">
                       {imgError[s.id] ? (

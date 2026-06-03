@@ -23,7 +23,7 @@ export function DeleteDialog({
 }: DeleteDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-sm">
+      <DialogContent className="bg-card border-gray-700 text-white max-w-sm">
         <DialogHeader>
           <DialogTitle className="text-red-400">Confirmar Exclus&#227;o</DialogTitle>
         </DialogHeader>

@@ -203,7 +203,7 @@ export function NewsPreferencesDialog({
                               <div className="text-sm flex items-center gap-2">
                                 <span>{src.name}</span>
                                 {detected && (
-                                  <span className="text-[10px] uppercase border border-poker-accent text-poker-accent rounded-md px-1.5 py-0.5">
+                                  <span className="text-[10px] uppercase border border-primary text-primary rounded-md px-1.5 py-0.5">
                                     Voce joga aqui
                                   </span>
                                 )}

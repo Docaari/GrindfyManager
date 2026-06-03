@@ -151,13 +151,13 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
   };
 
   return (
-    <div className="bg-gradient-to-br from-poker-surface/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl mb-8 shadow-xl">
+    <div className="bg-gradient-to-br from-card/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl mb-8 shadow-xl">
       {/* Header fixo - sempre visível */}
       <div className="p-8 pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-poker-green/20 rounded-lg">
-              <Filter className="h-5 w-5 text-poker-green" />
+            <div className="p-2 bg-primary/20 rounded-lg">
+              <Filter className="h-5 w-5 text-primary" />
             </div>
             <h3 className="text-lg font-semibold text-white">Filtros</h3>
           </div>
@@ -168,9 +168,9 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
             return value && (Array.isArray(value) ? value.length > 0 : true);
           }).length > 0 && (
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-poker-green/20 px-3 py-1.5 rounded-lg border border-poker-green/30">
-                <div className="w-2 h-2 bg-poker-green rounded-full animate-pulse"></div>
-                <span className="text-sm text-poker-green font-medium">
+              <div className="flex items-center gap-2 bg-primary/20 px-3 py-1.5 rounded-lg border border-primary/30">
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+                <span className="text-sm text-primary font-medium">
                   {Object.keys(filters).filter(key => {
                     const value = filters[key as keyof typeof filters];
                     return value && (Array.isArray(value) ? value.length > 0 : true);
@@ -257,7 +257,7 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
                           type="date"
                           value={tempDateRange.from}
                           onChange={(e) => setTempDateRange(prev => ({ ...prev, from: e.target.value }))}
-                          className="bg-gray-800 border-gray-600 text-white focus:border-poker-green"
+                          className="bg-gray-800 border-gray-600 text-white focus:border-primary"
                         />
                         <CalendarIcon className="absolute right-3 top-3 h-4 w-4 text-gray-400 pointer-events-none" />
                       </div>
@@ -271,7 +271,7 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
                           type="date"
                           value={tempDateRange.to}
                           onChange={(e) => setTempDateRange(prev => ({ ...prev, to: e.target.value }))}
-                          className="bg-gray-800 border-gray-600 text-white focus:border-poker-green"
+                          className="bg-gray-800 border-gray-600 text-white focus:border-primary"
                         />
                         <CalendarIcon className="absolute right-3 top-3 h-4 w-4 text-gray-400 pointer-events-none" />
                       </div>
@@ -296,7 +296,7 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
                     <Button
                       onClick={handleApplyDateRange}
                       disabled={!isValidDateRange(tempDateRange.from, tempDateRange.to)}
-                      className="bg-poker-green text-white hover:bg-poker-green/90 disabled:opacity-50"
+                      className="bg-primary text-white hover:bg-primary/90 disabled:opacity-50"
                     >
                       Aplicar
                     </Button>
@@ -521,7 +521,7 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
           <div className="bg-gray-800/30 backdrop-blur-sm border border-gray-600/40 rounded-xl p-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-poker-green rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
                 <span className="text-sm font-medium text-gray-300">Filtros Especiais Ativos:</span>
               </div>
 
@@ -562,12 +562,12 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
       <div className="flex justify-center p-4 pt-0">
         <button
           onClick={() => setFiltersExpanded(!filtersExpanded)}
-          className="group flex items-center justify-center w-16 h-10 bg-gradient-to-r from-poker-surface/70 to-gray-800/70 backdrop-blur-sm border border-gray-600/50 rounded-lg hover:from-poker-surface/90 hover:to-gray-800/90 hover:border-gray-500/70 transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-poker-green/10"
+          className="group flex items-center justify-center w-16 h-10 bg-gradient-to-r from-card/70 to-gray-800/70 backdrop-blur-sm border border-gray-600/50 rounded-lg hover:from-card/90 hover:to-gray-800/90 hover:border-gray-500/70 transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-primary/10"
         >
           {filtersExpanded ? (
-            <ChevronUp className="h-6 w-6 text-gray-300 group-hover:text-poker-green transition-all duration-300 transform group-hover:scale-110" />
+            <ChevronUp className="h-6 w-6 text-gray-300 group-hover:text-primary transition-all duration-300 transform group-hover:scale-110" />
           ) : (
-            <ChevronDown className="h-6 w-6 text-gray-300 group-hover:text-poker-green transition-all duration-300 transform group-hover:scale-110" />
+            <ChevronDown className="h-6 w-6 text-gray-300 group-hover:text-primary transition-all duration-300 transform group-hover:scale-110" />
           )}
         </button>
       </div>

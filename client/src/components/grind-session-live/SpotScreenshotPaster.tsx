@@ -228,7 +228,7 @@ export default function SpotScreenshotPaster(props: SpotScreenshotPasterProps) {
           type="button"
           onClick={onCounterClick}
           data-testid="spot-viewer-trigger"
-          className="rounded-md focus:outline-none focus:ring-2 focus:ring-poker-accent"
+          className="rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
           aria-label="Ver prints da sessao"
         >
           <Badge

@@ -92,11 +92,12 @@ const _color = {
     bg: 'bg-blue-500/15',
     border: 'border-blue-500/40',
   },
-  /** CTA primario de marca Grindfy (poker-accent). */
+  /** CTA primario de marca Grindfy (== primary; era poker-accent, migrado em
+   * 2026-06 — mesmos valores HSL em dark, ver ADR-239). */
   action: {
-    text: 'text-poker-accent',
-    bg: 'bg-poker-accent/15',
-    border: 'border-poker-accent/40',
+    text: 'text-primary',
+    bg: 'bg-primary/15',
+    border: 'border-primary/40',
   },
   neutral: {
     text: 'text-muted-foreground',

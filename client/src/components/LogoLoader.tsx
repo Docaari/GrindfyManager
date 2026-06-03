@@ -53,7 +53,7 @@ export function LogoLoader({
 
   return (
     <div
-      className="bg-poker-bg flex min-h-screen w-full items-center justify-center"
+      className="bg-background flex min-h-screen w-full items-center justify-center"
       role="status"
       aria-label={label ?? 'Carregando'}
     >

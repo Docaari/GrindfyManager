@@ -20,7 +20,7 @@ export function AchievementsDialog({ open, onOpenChange, achievements }: Achieve
           Conquistas
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] bg-poker-surface border-gray-700">
+      <DialogContent className="sm:max-w-[600px] bg-card border-gray-700">
         <DialogHeader>
           <DialogTitle className="text-white flex items-center gap-2">
             <Trophy className="w-5 h-5 text-yellow-400" />

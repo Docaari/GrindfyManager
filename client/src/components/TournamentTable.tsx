@@ -332,7 +332,7 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent className="bg-poker-surface border-gray-700">
+                      <DropdownMenuContent className="bg-card border-gray-700">
                         {onEdit && (
                           <DropdownMenuItem
                             onClick={() => onEdit(tournament)}

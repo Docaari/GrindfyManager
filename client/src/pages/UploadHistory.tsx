@@ -135,7 +135,7 @@ export default function UploadHistory() {
       />
 
       {/* File Upload Section - Modernized */}
-      <Card className="bg-poker-surface border-gray-700 shadow-lg">
+      <Card className="bg-card border-gray-700 shadow-lg">
         <CardHeader className="text-center">
           <CardTitle className="text-white flex items-center justify-center gap-3 text-xl">
             <Upload className="h-6 w-6 text-poker-gold" />
@@ -184,7 +184,7 @@ export default function UploadHistory() {
       <div className="space-y-4">
         <h2 className="text-xl font-semibold text-white text-center">Estatísticas Resumidas</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-poker-surface border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl">
+          <Card className="bg-card border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl">
             <CardHeader className="text-center pb-3">
               <div className="mx-auto w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mb-2">
                 <Database className="h-6 w-6 text-blue-400" />
@@ -203,7 +203,7 @@ export default function UploadHistory() {
             </CardContent>
           </Card>
 
-          <Card className="bg-poker-surface border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl">
+          <Card className="bg-card border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl">
             <CardHeader className="text-center pb-3">
               <div className="mx-auto w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mb-2">
                 <CheckCircle className="h-6 w-6 text-green-400" />
@@ -222,7 +222,7 @@ export default function UploadHistory() {
             </CardContent>
           </Card>
 
-          <Card className="bg-poker-surface border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl">
+          <Card className="bg-card border-gray-700 shadow-lg transition-all duration-200 hover:shadow-xl">
             <CardHeader className="text-center pb-3">
               <div className="mx-auto w-12 h-12 bg-poker-gold/20 rounded-full flex items-center justify-center mb-2">
                 <Upload className="h-6 w-6 text-poker-gold" />
@@ -244,7 +244,7 @@ export default function UploadHistory() {
       </div>
 
       {/* Histórico de Uploads - Modernizado */}
-      <Card className="bg-poker-surface border-gray-700 shadow-lg">
+      <Card className="bg-card border-gray-700 shadow-lg">
         <CardHeader className="text-center">
           <CardTitle className="text-white flex items-center justify-center gap-3 text-xl">
             <Database className="h-6 w-6 text-poker-gold" />
@@ -439,7 +439,7 @@ function GranularDataCleanup() {
   });
 
   return (
-    <Card className="bg-poker-surface border-gray-700 shadow-lg">
+    <Card className="bg-card border-gray-700 shadow-lg">
       <CardHeader className="text-center">
         <CardTitle className="text-white flex items-center justify-center gap-3 text-xl">
           <Trash2 className="h-6 w-6 text-red-400" />

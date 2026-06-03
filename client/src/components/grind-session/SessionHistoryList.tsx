@@ -116,7 +116,7 @@ export default function SessionHistoryList({
       {historyLoading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <Card key={i} className="bg-poker-surface border-gray-700">
+            <Card key={i} className="bg-card border-gray-700">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <Skeleton className="h-5 w-32 bg-gray-700" />

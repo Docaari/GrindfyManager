@@ -173,12 +173,13 @@ describe('RF-01 — tokens.color (D4 + R8 resolved)', () => {
     });
   });
 
-  it('action token usa cor de marca poker-accent (D4)', () => {
-    // ADR-078 secao 2.1: action = {text:'text-poker-accent', bg:'bg-poker-accent/15', border:'border-poker-accent/40'}.
+  it('action token usa cor de marca primary (ex-poker-accent, ADR-239)', () => {
+    // ADR-239: poker-accent migrado para primary (mesmos valores HSL em dark).
+    // action = {text:'text-primary', bg:'bg-primary/15', border:'border-primary/40'}.
     const action = (tokens.color as any).action;
-    expect(action.text).toMatch(/poker-accent/);
-    expect(action.bg).toMatch(/poker-accent/);
-    expect(action.border).toMatch(/poker-accent/);
+    expect(action.text).toMatch(/primary/);
+    expect(action.bg).toMatch(/primary/);
+    expect(action.border).toMatch(/primary/);
   });
 });
 

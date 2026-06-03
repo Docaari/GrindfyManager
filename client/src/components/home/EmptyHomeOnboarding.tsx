@@ -54,7 +54,7 @@ function Step(props: StepProps): JSX.Element {
         <div
           className={`flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold ${
             props.completed
-              ? `bg-poker-accent text-white`
+              ? `bg-primary text-white`
               : 'bg-muted text-muted-foreground border border-border'
           }`}
         >

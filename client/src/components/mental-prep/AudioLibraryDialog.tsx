@@ -9,7 +9,7 @@ interface AudioLibraryDialogProps {
 export function AudioLibraryDialog({ open, onOpenChange }: AudioLibraryDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] bg-poker-surface border-gray-700">
+      <DialogContent className="sm:max-w-[500px] bg-card border-gray-700">
         <DialogHeader>
           <DialogTitle className="text-white">Biblioteca de Audios</DialogTitle>
           <DialogDescription className="text-gray-400">

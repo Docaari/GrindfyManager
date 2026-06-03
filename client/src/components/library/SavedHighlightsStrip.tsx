@@ -24,7 +24,7 @@ function DetailDialog({ highlight }: { highlight: SavedHighlight }) {
     queryFn: async () => (await apiRequest("GET", `/api/library/highlights/${highlight.id}/details`)) as { highlight: SavedHighlight } & Details,
   });
   return (
-    <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto bg-poker-surface border-gray-700">
+    <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto bg-card border-gray-700">
       <DialogHeader>
         <DialogTitle className="text-white">{highlight.groupName || highlight.familyKey}</DialogTitle>
       </DialogHeader>

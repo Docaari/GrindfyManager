@@ -34,7 +34,7 @@ export default function Calculadoras() {
   const [activeTab, setActiveTab] = useState("size-geometrico");
 
   return (
-    <div className="min-h-screen bg-poker-dark text-white">
+    <div className="min-h-screen bg-background text-white">
       <div className="container mx-auto px-4 sm:px-6 py-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-white mb-1">Calculadoras</h1>

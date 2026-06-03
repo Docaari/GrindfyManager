@@ -152,7 +152,7 @@ function TabsBar({ active, counts, onSelect }: TabsBarProps): JSX.Element {
             data-testid={`news-tab-${tab}`}
             className={`text-[10px] uppercase rounded-md px-2 py-0.5 border ${
               isActive
-                ? 'bg-poker-accent text-black border-poker-accent'
+                ? 'bg-primary text-black border-primary'
                 : 'border-border text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -328,7 +328,7 @@ function Carousel({ items, isRead, onItemClick }: CarouselProps): JSX.Element {
                 aria-label={`Ir para ${idx + 1} de ${total}`}
                 aria-pressed={isActiveDot}
                 className={`h-1.5 rounded-full transition-all ${
-                  isActiveDot ? 'w-4 bg-poker-accent' : 'w-1.5 bg-border hover:bg-muted-foreground'
+                  isActiveDot ? 'w-4 bg-primary' : 'w-1.5 bg-border hover:bg-muted-foreground'
                 }`}
               />
             );

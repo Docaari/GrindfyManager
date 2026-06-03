@@ -211,7 +211,7 @@ export default function SessionHistory() {
       <div className="p-6 text-white">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-poker-accent mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
             <p className="text-gray-400">Carregando histórico de sessões...</p>
           </div>
         </div>
@@ -233,10 +233,10 @@ export default function SessionHistory() {
 
       {/* Sprint Bankroll-Reports-Detail (RF-11 + RF-14): historico unificado
           + filtros (Tudo / Sessoes / Reports) + botao "Ver detalhes da banca". */}
-      <Card className="bg-poker-surface border-gray-700 mb-6">
+      <Card className="bg-card border-gray-700 mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-poker-accent" />
+            <Wallet className="w-5 h-5 text-primary" />
             Linha do tempo da banca
           </CardTitle>
         </CardHeader>
@@ -258,10 +258,10 @@ export default function SessionHistory() {
       </Card>
 
       {/* Filter Controls */}
-      <Card className="bg-poker-surface border-gray-700 mb-6">
+      <Card className="bg-card border-gray-700 mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-poker-accent" />
+            <Calendar className="w-5 h-5 text-primary" />
             Filtros
           </CardTitle>
         </CardHeader>
@@ -279,7 +279,7 @@ export default function SessionHistory() {
                 max="365"
               />
             </div>
-            <Button className="bg-poker-accent hover:bg-poker-accent/80">
+            <Button className="bg-primary hover:bg-primary/80">
               Aplicar Filtro
             </Button>
           </div>
@@ -289,7 +289,7 @@ export default function SessionHistory() {
       {/* Sessions List (cards detalhados — apenas entries de sessao) */}
       <div className="space-y-4">
         {legacySessions.length === 0 ? (
-          <Card className="bg-poker-surface border-gray-700">
+          <Card className="bg-card border-gray-700">
             <CardContent className="p-8 text-center">
               <Trophy className="w-12 h-12 text-gray-500 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-gray-300 mb-2">Nenhuma Sessão Concluída</h3>
@@ -301,12 +301,12 @@ export default function SessionHistory() {
         ) : (
           legacySessions.map((session: SessionHistoryData) => {
             return (
-              <Card key={session.id} className="bg-poker-surface border-gray-700 hover:border-poker-accent/50 transition-colors">
+              <Card key={session.id} className="bg-card border-gray-700 hover:border-primary/50 transition-colors">
                 <CardHeader className="bg-[#1f1f1f] border-b border-gray-600">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <CardTitle className="flex items-center gap-2 text-white font-bold">
-                        <Clock className="w-5 h-5 text-poker-accent" />
+                        <Clock className="w-5 h-5 text-primary" />
                         {formatDate(session.date)}
                       </CardTitle>
                       <CardDescription className="text-gray-400 mt-1 flex items-center gap-4">
@@ -327,7 +327,7 @@ export default function SessionHistory() {
                           onClick={() => {
                             handleEditSession(session);
                           }}
-                          className="h-9 w-9 p-0 border-gray-600 hover:bg-poker-accent/20 bg-gray-700 text-white hover:border-poker-accent"
+                          className="h-9 w-9 p-0 border-gray-600 hover:bg-primary/20 bg-gray-700 text-white hover:border-primary"
                           title="Editar sessão"
                         >
                           <Edit3 className="h-4 w-4" />
@@ -401,7 +401,7 @@ export default function SessionHistory() {
                 {/* Tournament Type and Speed Percentages - Always Show */}
                 <div className="mt-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <Trophy className="w-4 h-4 text-poker-accent" />
+                    <Trophy className="w-4 h-4 text-primary" />
                     <span className="text-sm font-medium text-gray-300">Distribuição da Grade Executada</span>
                   </div>
                   
@@ -462,7 +462,7 @@ export default function SessionHistory() {
                 {session.breakCount && session.breakCount > 0 && (
                   <div className="mt-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <Coffee className="w-4 h-4 text-poker-accent" />
+                      <Coffee className="w-4 h-4 text-primary" />
                       <span className="text-sm font-medium text-gray-300">Estado Mental Médio</span>
                       <span className="text-xs text-gray-500">({session.breakCount} medições)</span>
                     </div>
@@ -493,12 +493,12 @@ export default function SessionHistory() {
 
                 {/* Preparation Notes Preview */}
                 {session.preparationNotes && (
-                  <div className="mt-4 p-3 bg-gray-800/30 rounded-lg border-l-4 border-poker-accent">
+                  <div className="mt-4 p-3 bg-gray-800/30 rounded-lg border-l-4 border-primary">
                     <div className="flex items-center gap-2 mb-2">
-                      <FileText className="w-4 h-4 text-poker-accent" />
+                      <FileText className="w-4 h-4 text-primary" />
                       <span className="text-sm font-medium text-gray-300">Notas de Preparação</span>
                       {session.preparationPercentage && (
-                        <span className="text-xs text-poker-accent font-medium">
+                        <span className="text-xs text-primary font-medium">
                           {session.preparationPercentage}% preparado
                         </span>
                       )}
@@ -513,16 +513,16 @@ export default function SessionHistory() {
               <CardContent className="bg-[#1f1f1f]">
                 <Tabs defaultValue="performance" className="w-full">
                   <TabsList className="grid w-full grid-cols-4 bg-gray-800">
-                    <TabsTrigger value="performance" className="data-[state=active]:bg-poker-accent">
+                    <TabsTrigger value="performance" className="data-[state=active]:bg-primary">
                       Performance
                     </TabsTrigger>
-                    <TabsTrigger value="mental" className="data-[state=active]:bg-poker-accent">
+                    <TabsTrigger value="mental" className="data-[state=active]:bg-primary">
                       Estado Mental
                     </TabsTrigger>
-                    <TabsTrigger value="preparation" className="data-[state=active]:bg-poker-accent">
+                    <TabsTrigger value="preparation" className="data-[state=active]:bg-primary">
                       Preparação
                     </TabsTrigger>
-                    <TabsTrigger value="objectives" className="data-[state=active]:bg-poker-accent">
+                    <TabsTrigger value="objectives" className="data-[state=active]:bg-primary">
                       Objetivos
                     </TabsTrigger>
                   </TabsList>
@@ -616,12 +616,12 @@ export default function SessionHistory() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="bg-gray-800 p-4 rounded-lg">
                           <Label className="text-sm text-gray-400">Nível de Preparação</Label>
-                          <div className="text-3xl font-bold text-poker-accent mt-1">
+                          <div className="text-3xl font-bold text-primary mt-1">
                             {session.preparationPercentage || 0}%
                           </div>
                           <div className="w-full bg-gray-700 rounded-full h-2 mt-2">
                             <div 
-                              className="bg-poker-accent h-2 rounded-full" 
+                              className="bg-primary h-2 rounded-full" 
                               style={{ width: `${session.preparationPercentage || 0}%` }}
                             ></div>
                           </div>
@@ -693,7 +693,7 @@ export default function SessionHistory() {
 
       {/* Edit Session Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white max-w-2xl">
+        <DialogContent className="bg-card border-gray-700 text-white max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">Editar Sessão</DialogTitle>
           </DialogHeader>
@@ -788,7 +788,7 @@ export default function SessionHistory() {
                 <Button
                   onClick={handleSaveEdit}
                   disabled={updateSessionMutation.isPending}
-                  className="bg-poker-accent hover:bg-poker-accent/80"
+                  className="bg-primary hover:bg-primary/80"
                 >
                   <Save className="h-4 w-4 mr-2" />
                   {updateSessionMutation.isPending ? "Salvando..." : "Salvar"}
@@ -801,7 +801,7 @@ export default function SessionHistory() {
 
       {/* Delete Session Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="bg-poker-surface border-gray-700 text-white">
+        <DialogContent className="bg-card border-gray-700 text-white">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-red-400">Excluir Sessão</DialogTitle>
           </DialogHeader>

@@ -113,7 +113,7 @@ export default function QuickNoteDialog({
     >
       <DialogContent
         data-testid="spot-note-dialog"
-        className="bg-poker-surface border-gray-700 text-white max-w-md"
+        className="bg-card border-gray-700 text-white max-w-md"
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           textareaRef.current?.focus();
