@@ -105,21 +105,64 @@ describe('StudySessionForm — blocos especificos por tipo', () => {
     await waitFor(() => {
       expect(screen.getByTestId('field-drill-platform')).toBeInTheDocument();
     });
+    // tournament_review eh standalone (sempre no select) e mostra spots dificeis.
     await userEvent.selectOptions(
       screen.getByTestId('study-session-mode-select'),
-      'hand_review',
+      'tournament_review',
     );
     await waitFor(() => {
       expect(screen.getByTestId('difficult-spots-block')).toBeInTheDocument();
     });
     expect(screen.queryByTestId('field-drill-platform')).not.toBeInTheDocument();
   });
+
+  it('esconde modos CTA-only (aula/revisao de maos/analise de stat) do select standalone', async () => {
+    const StudySessionForm = await loadForm();
+    renderWithQuery(<StudySessionForm initialMode="other" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('study-session-mode-select')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('option', { name: 'Aula' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Revisao de maos' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Analise de stat' })).not.toBeInTheDocument();
+    // standalone presentes
+    expect(screen.getByRole('option', { name: 'Drill GTO' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Outro' })).toBeInTheDocument();
+  });
+});
+
+describe('StudySessionForm — guard client-side (C1/L1)', () => {
+  it('bloqueia submit de drill_gto sem tema e nao chama o POST', async () => {
+    const StudySessionForm = await loadForm();
+    renderWithQuery(<StudySessionForm initialMode="drill_gto" />);
+    await userEvent.click(await screen.findByTestId('study-session-submit'));
+    await waitFor(() => {
+      expect(screen.getByTestId('study-session-form-error')).toBeInTheDocument();
+    });
+    const postCall = mockApiRequest.mock.calls.find(
+      (c: any) => c[0] === 'POST' && c[1] === '/api/study-sessions',
+    );
+    expect(postCall).toBeUndefined();
+  });
+
+  it('other registra sem tema (catch-all) — POST dispara', async () => {
+    const StudySessionForm = await loadForm();
+    renderWithQuery(<StudySessionForm initialMode="other" />);
+    await userEvent.click(await screen.findByTestId('study-session-submit'));
+    await waitFor(() => {
+      const postCall = mockApiRequest.mock.calls.find(
+        (c: any) => c[0] === 'POST' && c[1] === '/api/study-sessions',
+      );
+      expect(postCall).toBeTruthy();
+    });
+  });
 });
 
 describe('StudySessionForm — submit inclui campos por tipo', () => {
   it('drill_gto envia drillPlatform + drillAccuracy quando preenchidos', async () => {
     const StudySessionForm = await loadForm();
-    renderWithQuery(<StudySessionForm initialMode="drill_gto" />);
+    // themeId satisfaz o guard (drill_gto exige tema).
+    renderWithQuery(<StudySessionForm initialMode="drill_gto" themeId="theme_1" />);
     const platform = await screen.findByTestId('field-drill-platform');
     const accuracy = await screen.findByTestId('field-drill-accuracy');
     await userEvent.clear(accuracy);

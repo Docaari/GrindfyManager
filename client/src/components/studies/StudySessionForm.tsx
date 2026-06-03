@@ -29,7 +29,22 @@ import type { StudySessionMode } from '@shared/schema';
 
 const STAT_ENTRIES_CAP = 10;
 const DIFFICULT_SPOTS_CAP = 5;
-const NOTES_MAX = 500;
+const NOTES_MAX = 2000;
+
+// Modos selecionaveis a mao (funcionam standalone). lesson / hand_review /
+// stat_analysis exigem dados que o form nao coleta (lessonId / starredHandIds /
+// statId) — so entram via CTA (initialMode + query params). Esconde-los do
+// select evita o 400 garantido (MISSING_LESSON / MISSING_HAND_IDS / MISSING_STAT).
+const STANDALONE_MODES: Array<{ value: StudySessionMode; label: string }> = [
+  { value: 'drill_gto', label: 'Drill GTO' },
+  { value: 'tournament_review', label: 'Revisao de torneio' },
+  { value: 'other', label: 'Outro' },
+];
+const CTA_ONLY_LABELS: Record<string, string> = {
+  lesson: 'Aula',
+  hand_review: 'Revisao de maos',
+  stat_analysis: 'Analise de stat',
+};
 
 // Classes dark consistentes com ThemesView (o tema escuro do app). bg-background
 // / bg-card do shadcn renderizam mal aqui; usamos cinzas explicitos.
@@ -109,6 +124,7 @@ export default function StudySessionForm({
   const [drillAccuracy, setDrillAccuracy] = useState<string>('');
   const [difficultSpots, setDifficultSpots] = useState<DifficultSpotDraft[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string>('');
 
   // Dropdown de temas — fetch cru (NAO apiRequest), com try/catch -> [] (jsdom
   // sem fetch nao quebra; mock de apiRequest dos testes nao registra esta call).
@@ -135,6 +151,38 @@ export default function StudySessionForm({
     [selectedThemeId, themeId],
   );
 
+  // Opcoes do select: standalone + (se o form foi aberto via CTA num modo
+  // CTA-only) a opcao desse modo, pra refletir o estado e permitir submit.
+  const modeOptions = useMemo(() => {
+    const opts = [...STANDALONE_MODES];
+    if (initialMode in CTA_ONLY_LABELS) {
+      opts.unshift({ value: initialMode, label: CTA_ONLY_LABELS[initialMode] });
+    }
+    return opts;
+  }, [initialMode]);
+
+  // Guard client-side (L1): bloqueia o submit com mensagem clara ANTES do POST
+  // quando falta um campo que o backend exige pro modo (C1) — feedback instantaneo
+  // em vez de esperar o 400.
+  function clientGuard(): string | null {
+    if (mode === 'drill_gto' && !effectiveThemeId) {
+      return 'Drill GTO precisa de um tema. Selecione um tema acima.';
+    }
+    if (mode === 'stat_analysis') {
+      if (!effectiveThemeId) return 'Analise de stat precisa de um tema.';
+      if (!statId) {
+        return 'Analise de stat precisa de uma stat — use "Analisar esta stat" na pagina do tema.';
+      }
+    }
+    if (mode === 'lesson' && !lessonId) {
+      return 'Registro de aula precisa vir da pagina da aula.';
+    }
+    if (mode === 'hand_review') {
+      return 'Revisao de maos precisa de spots marcados — registre a partir de um spot.';
+    }
+    return null;
+  }
+
   function addPlay() {
     setEntries((prev) => (prev.length >= STAT_ENTRIES_CAP ? prev : [...prev, { filters: '', errorText: '', learnedText: '' }]));
   }
@@ -157,6 +205,12 @@ export default function StudySessionForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const guard = clientGuard();
+    if (guard) {
+      setFormError(guard);
+      return;
+    }
+    setFormError('');
     setSubmitting(true);
     try {
       const payload: Record<string, any> = {
@@ -169,7 +223,10 @@ export default function StudySessionForm({
       if (notes.trim() !== '') payload.notes = notes.trim().slice(0, NOTES_MAX);
       if (mode === 'stat_analysis') {
         if (statId) payload.statId = statId;
-        payload.statAnalysisEntries = entries;
+        // M3: descarta jogadas totalmente vazias (addPlay cria linha em branco).
+        payload.statAnalysisEntries = entries.filter(
+          (en) => en.filters.trim() !== '' || en.errorText.trim() !== '' || en.learnedText.trim() !== '',
+        );
       }
       if (mode === 'drill_gto') {
         if (drillPlatform !== '') payload.drillPlatform = drillPlatform;
@@ -223,15 +280,15 @@ export default function StudySessionForm({
         <select
           data-testid="study-session-mode-select"
           value={mode}
-          onChange={(e) => setMode(e.target.value as StudySessionMode)}
+          onChange={(e) => {
+            setMode(e.target.value as StudySessionMode);
+            setFormError('');
+          }}
           className={INPUT_CLS}
         >
-          <option value="drill_gto">Drill GTO</option>
-          <option value="tournament_review">Revisao de torneio</option>
-          <option value="hand_review">Revisao de maos</option>
-          <option value="lesson">Aula</option>
-          <option value="stat_analysis">Analise de stat</option>
-          <option value="other">Outro</option>
+          {modeOptions.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
         </select>
       </div>
 
@@ -453,6 +510,15 @@ export default function StudySessionForm({
           className={INPUT_CLS}
         />
       </div>
+
+      {formError ? (
+        <p
+          data-testid="study-session-form-error"
+          className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300"
+        >
+          {formError}
+        </p>
+      ) : null}
 
       <button
         type="submit"

@@ -2619,7 +2619,9 @@ export const insertStudySessionV2Schema = z.object({
     start: z.string(),
     end: z.string(),
   })).nullable().optional(),
-  notes: z.string().max(500).nullable().optional(),
+  // Sprint Estudos-Flow-Review (M1): notas de sessao ate 2000 chars (coluna
+  // `text`, sem migration). 500 era apertado para anotacoes de estudo.
+  notes: z.string().max(2000).nullable().optional(),
   attachments: z.array(z.object({
     key: z.string(),
     url: z.string(),

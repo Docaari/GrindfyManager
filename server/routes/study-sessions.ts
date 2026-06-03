@@ -94,7 +94,7 @@ const createBodyBaseSchema = z.object({
     start: z.string(),
     end: z.string(),
   })).nullable().optional(),
-  notes: z.string().max(500).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
   attachments: z.array(z.object({
     key: z.string(),
     url: z.string(),
@@ -105,7 +105,7 @@ const createBodyBaseSchema = z.object({
 // PATCH so aceita campos editaveis (RF-1: NAO permite mudar mode/source/duration).
 // Sprint EST-3 (ADR-222 / D-4): statId imutavel (checado fora do parse) + campos B.
 const patchBodySchema = z.object({
-  notes: z.string().max(500).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
   themeId: z.string().nullable().optional(),
   wasProductive: z.boolean().nullable().optional(),
   attachments: z.array(z.object({
@@ -128,7 +128,7 @@ const finalizeBodySchema = z.object({
   endedAt: z.coerce.date(),
   durationMinutes: z.number().int().min(1).max(1440),
   wasProductive: z.boolean().nullable().optional(),
-  notes: z.string().max(500).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
   idlePeriods: z.array(z.object({
     start: z.string(),
     end: z.string(),
@@ -152,9 +152,10 @@ function validateModeRequirements(body: z.infer<typeof createBodyBaseSchema>): {
   if (mode === "hand_review" && (!Array.isArray(starredHandIds) || starredHandIds.length === 0)) {
     return { ok: false, code: "MISSING_HAND_IDS", message: "hand_review exige >=1 starredHandId" };
   }
-  if (mode === "other" && !themeId) {
-    return { ok: false, code: "MISSING_THEME", message: "other exige themeId" };
-  }
+  // Sprint Estudos-Flow-Review (C1): `other` eh o catch-all — NAO exige tema.
+  // Forcar themeId aqui fazia o modo default do form (other) dar 400 silencioso
+  // quando o jogador so queria registrar um estudo avulso. themeId continua
+  // opcional/aceito; o ownership check (THEME_FORBIDDEN) ainda roda quando enviado.
   // Sprint EST-3 (ADR-222 / RF-01) — stat_analysis exige themeId + statId valido.
   if (mode === "stat_analysis") {
     if (!themeId) {

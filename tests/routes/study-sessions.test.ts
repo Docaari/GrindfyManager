@@ -263,11 +263,11 @@ describe('POST /api/study-sessions — Validacao Zod (RF-1.3)', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('400 quando notes > 500 chars', async () => {
+  it('400 quando notes > 2000 chars', async () => {
     getStudyThemeByIdMock.mockResolvedValue({ id: 'th-1', userId: 'USER-0001' });
     const route: any = await loadRoute();
     const handler = route.handleCreateStudySession;
-    const longNotes = 'x'.repeat(600);
+    const longNotes = 'x'.repeat(2100);
     const { req, res } = makeReqRes({
       userId: 'USER-0001',
       body: {
