@@ -66,6 +66,8 @@ import { registerStudySessionsRoutes } from "./study-sessions";
 import { registerFocusStatsAutoSuggestRoutes } from "./focus-stats-auto-suggest";
 // Sprint MDA-1 (ADR-230): /api/mda-reads (Tendencias da Populacao).
 import { registerMdaRoutes } from "./mda";
+// Biblioteca Premium curada (ADR-240): /api/library/premium.
+import { registerPremiumLibraryRoutes } from "./premiumLibrary";
 // Sprint Estudos-Coach-Biblio-2: /api/biblioteca/recommendations, /api/study-weekly-plan, /api/coach/session-insights.
 import { registerBibliotecaRecommendationsRoutes } from "./biblioteca-recommendations";
 import { registerStudyWeeklyPlanRoutes } from "./study-weekly-plan";
@@ -320,6 +322,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Sprint MDA-1 (ADR-230) — Registro de MDA (Tendencias da Populacao).
   registerMdaRoutes(app);
+
+  // Biblioteca Premium curada (ADR-240) — vitrine global + painel cross-user.
+  registerPremiumLibraryRoutes(app);
 
   // METAS-1 fatia-1 (ADR-229) — Ferramenta de Metas 4DX (placar + CRUD + snapshots).
   registerGoalsRoutes(app, requireAuth);

@@ -1,0 +1,64 @@
+%% Biblioteca Premium curada — modelo de dados (ADR-240, migration 0093)
+%% Tabela NOVA premium_library_highlights espelha saved_tournament_highlights
+%% + rastreabilidade de curadoria. Relacoes conceituais (ponteiros frouxos,
+%% SEM FK rigida — padrao tabelas 0088-0092). Permissao premium_library_curate
+%% seedada em permissions e concedida via user_permissions.
+erDiagram
+    users ||--o{ saved_tournament_highlights : "salva (1:N, por user)"
+    users ||--o{ premium_library_highlights : "curou (curated_by, ponteiro frouxo)"
+    users |o--o{ premium_library_highlights : "origem import (source_user_id, frouxo)"
+    saved_tournament_highlights |o--o{ premium_library_highlights : "importado de (source_highlight_id, frouxo)"
+    users ||--o{ user_permissions : "tem (1:N)"
+    permissions ||--o{ user_permissions : "concede (1:N)"
+
+    users {
+        varchar user_platform_id PK "USER-XXXX (unique)"
+        varchar email UK "atribuicao cross-user"
+        varchar username UK "atribuicao cross-user (nullable)"
+        varchar subscription_plan "trial|active|expired|admin"
+    }
+
+    permissions {
+        varchar id PK "nanoid"
+        varchar name UK "ex: premium_library_curate"
+        varchar description "texto legivel (nullable)"
+        timestamp created_at "defaultNow"
+    }
+
+    user_permissions {
+        varchar id PK "nanoid"
+        varchar user_id FK "-> users.user_platform_id"
+        varchar permission_id FK "-> permissions.id"
+        boolean granted "default true"
+        varchar status "active|expired|pending"
+    }
+
+    saved_tournament_highlights {
+        varchar id PK "nanoid"
+        varchar user_id "dono do destaque pessoal"
+        varchar site "plataforma"
+        varchar family_key "site|... (agrupamento)"
+        varchar group_name "nullable"
+        varchar buy_in_tier "nullable"
+        varchar type "nullable"
+        jsonb metrics "snapshot pessoal"
+        jsonb reasons "[{kind,label}] nullable"
+        varchar source "overview|library (default overview)"
+        timestamp created_at "defaultNow"
+    }
+
+    premium_library_highlights {
+        varchar id PK "nanoid"
+        varchar site "not null — filtro ?site="
+        varchar family_key UK "UNIQUE global (dedup)"
+        varchar group_name "nullable"
+        varchar buy_in_tier "nullable"
+        varchar type "nullable"
+        jsonb metrics "snapshot na promocao (copia)"
+        jsonb reasons "[{kind,label}] nullable (copia)"
+        varchar source "library|import (default library)"
+        varchar curated_by "not null — user_platform_id do curador"
+        varchar source_user_id "nullable — dono do highlight importado"
+        varchar source_highlight_id "nullable — id da row pessoal de origem"
+        timestamp created_at "defaultNow — ordenacao default"
+    }

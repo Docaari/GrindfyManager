@@ -487,6 +487,36 @@ export function requirePermission(permissionName: string) {
   };
 }
 
+// Granular per-user permission middleware (ADR-240, Decisao 2 — fail-closed).
+// Isolado de requirePermission (zero regressao nos callers legados). Autoriza
+// sse super-admin OU req.user.permissions inclui o nome concedido; senao 403.
+export function requireGranularPermission(permissionName: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      AuthService.logAccess(null, 'permission_denied', permissionName, req);
+      return res.status(401).json({ message: 'Usuário não autenticado' });
+    }
+
+    if (isSuperAdmin(req.user.email)) {
+      AuthService.logAccess(req.user.userPlatformId, 'permission_granted', permissionName, req);
+      return next();
+    }
+
+    const granted = Array.isArray(req.user.permissions)
+      && req.user.permissions.includes(permissionName);
+    if (granted) {
+      AuthService.logAccess(req.user.userPlatformId, 'permission_granted', permissionName, req);
+      return next();
+    }
+
+    AuthService.logAccess(req.user.userPlatformId, 'permission_denied', permissionName, req);
+    return res.status(403).json({
+      message: 'Permissão de curadoria necessária',
+      requiredPermission: permissionName,
+    });
+  };
+}
+
 // Middleware: require active subscription (trial or paid)
 export function requireActiveSubscription(req: Request, res: Response, next: NextFunction) {
   if (!req.user) {

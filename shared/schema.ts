@@ -432,6 +432,35 @@ export type SavedTournamentHighlight = typeof savedTournamentHighlights.$inferSe
 export type InsertSavedTournamentHighlight = typeof savedTournamentHighlights.$inferInsert;
 
 // =============================================================================
+// Biblioteca Premium curada (ADR-240, Migration 0093)
+// Vitrine GLOBAL de familias de torneios promovidas por curadores (permissao
+// premium_library_curate). Espelha saved_tournament_highlights (snapshot
+// congelado de metrics/reasons) + rastreabilidade de curadoria. Dedup global
+// por UNIQUE(family_key) — uma familia entra na Premium 1x.
+// =============================================================================
+export const premiumLibraryHighlights = pgTable("premium_library_highlights", {
+  id: varchar("id").primaryKey().notNull(),
+  site: varchar("site").notNull(),
+  familyKey: varchar("family_key").notNull(),
+  groupName: varchar("group_name"),
+  buyInTier: varchar("buy_in_tier"),
+  type: varchar("type"),
+  metrics: jsonb("metrics"),
+  reasons: jsonb("reasons"),
+  source: varchar("source").default("library"), // 'library' | 'import'
+  curatedBy: varchar("curated_by").notNull(),
+  sourceUserId: varchar("source_user_id"),
+  sourceHighlightId: varchar("source_highlight_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("uq_premium_highlight_family").on(table.familyKey),
+  index("idx_premium_highlight_site").on(table.site),
+  index("idx_premium_highlight_created").on(table.createdAt),
+]);
+export type PremiumLibraryHighlight = typeof premiumLibraryHighlights.$inferSelect;
+export type InsertPremiumLibraryHighlight = typeof premiumLibraryHighlights.$inferInsert;
+
+// =============================================================================
 // Sprint Flight-1 — tournament_series (ADR-090, ADR-091, Migration 0029)
 // =============================================================================
 

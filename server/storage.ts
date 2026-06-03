@@ -17187,3 +17187,7 @@ attachGoalsStorage(storage as any);
 // MDA-1 (ADR-230) — mda_reads CRUD + junction N:N idempotente + imagens jsonb.
 import { attachMdaStorage } from "./storage/mdaStorage";
 attachMdaStorage(storage as any);
+
+// Premium Library (ADR-240) — vitrine global curada + painel cross-user.
+import { attachPremiumLibraryStorage } from "./storage/premiumLibraryStorage";
+attachPremiumLibraryStorage(storage as any);
