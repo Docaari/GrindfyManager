@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -24,13 +25,40 @@ import { GRADE_COLORS, GRADE_ORDER } from "@shared/library-grades";
 import { SPEED_BUCKETS } from "@shared/scoring";
 import { OverviewPanel } from "@/components/library/OverviewPanel";
 import { SavedHighlightsStrip } from "@/components/library/SavedHighlightsStrip";
+import { WorkspaceCardsStrip } from "@/components/library/WorkspaceCardsStrip";
 import { PremiumLibraryStrip } from "@/components/library/PremiumLibraryStrip";
 import { PremiumCuratorPanel } from "@/components/library/PremiumCuratorPanel";
+import { WorkspaceAdminPanel } from "@/components/library/WorkspaceAdminPanel";
 import { PremiumPromoteButton } from "@/components/library/PremiumPromoteButton";
 import { useAuth } from "@/contexts/AuthContext";
-import { Crown } from "lucide-react";
+import { Crown, Users, Trash2, Save } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { computeTop3 } from "@/lib/libraryTop3";
 import { timeBinLabel } from "@shared/time-bin";
+import { type GroupDim, CANONICAL_DIM_ORDER, DEFAULT_RECIPE } from "@shared/library-grouping-dims";
+import { DAY_KEYS, dayOfWeekLabel } from "@shared/day-of-week";
+
+// Sprint torneios-custom-families: rotulos PT-BR das dimensoes da receita.
+const DIM_LABELS: Record<GroupDim, string> = {
+  site: "Site",
+  abi: "ABI",
+  type: "Tipo",
+  speed: "Velocidade",
+  fieldBucket: "Field",
+  timeBin: "Horário",
+  dayOfWeek: "Dia",
+};
+
+// Ordem de exibicao dos chips de dia (Seg..Dom para UX, embora DAY_KEYS comece em dom).
+const DOW_DISPLAY_ORDER = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"];
+
+interface GroupingView {
+  id: string;
+  name: string;
+  dims: GroupDim[];
+  filters?: any;
+  createdAt?: string | null;
+}
 
 // Tipo para os filtros (definindo aqui para remover dependência externa)
 type TournamentLibraryFiltersType = {
@@ -96,6 +124,8 @@ interface TournamentGroup {
   // Sprint torneios-library-grouping: dimensoes novas da familia.
   timeBin?: string | null;
   fieldBucket?: string | null;
+  // Sprint torneios-custom-families: dia da semana ("ter" | "sem-dia").
+  dayOfWeek?: string | null;
 }
 
 interface LibraryInsight {
@@ -150,6 +180,7 @@ const getSpeedColor = getLibrarySpeedColor;
 // Tipo, Velocidade, ABI, Med. Participantes, Plataforma, Faixa de horario.
 function FamilyTags({ group }: { group: TournamentGroup }) {
   const hasTime = !!group.timeBin && group.timeBin !== "sem-horario";
+  const hasDay = !!group.dayOfWeek && group.dayOfWeek !== "sem-dia";
   return (
     <div className="flex flex-wrap gap-1" data-testid="library-family-tags">
       <Badge className={`text-xs font-medium ${getCategoryColor(group.category)}`}>
@@ -170,6 +201,11 @@ function FamilyTags({ group }: { group: TournamentGroup }) {
       {hasTime && (
         <Badge className="text-xs font-medium bg-gray-700 text-gray-200">
           {timeBinLabel(group.timeBin as string)}
+        </Badge>
+      )}
+      {hasDay && (
+        <Badge className="text-xs font-medium bg-gray-700 text-gray-200">
+          {dayOfWeekLabel(group.dayOfWeek as string)}
         </Badge>
       )}
     </div>
@@ -583,10 +619,23 @@ function GroupDetailDialogContent({ group, isCurator = false }: GroupDetailDialo
 
 export default function TournamentLibraryNew() {
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   // ADR-240: curador = permissao concedida (NAO hasPermission, que e fail-open).
   const isCurator = (user?.permissions ?? []).includes("premium_library_curate");
+  // Fase 4: admin de workspace — permissao concedida OU superadmin (sempre).
+  const isWorkspaceAdmin =
+    isSuperAdmin() || (user?.permissions ?? []).includes("workspace_admin");
   const [curatorPanelOpen, setCuratorPanelOpen] = useState(false);
+  const [workspacePanelOpen, setWorkspacePanelOpen] = useState(false);
+  // Sprint torneios-custom-families: receita de agrupamento + filtro por dia.
+  const [recipe, setRecipe] = useState<GroupDim[]>(DEFAULT_RECIPE);
+  const [daysOfWeek, setDaysOfWeek] = useState<string[]>([]);
+  // Dialog de salvar visao.
+  const [saveViewOpen, setSaveViewOpen] = useState(false);
+  const [saveViewName, setSaveViewName] = useState("");
+  const [saveViewError, setSaveViewError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   // Sprint torneios-library-grouping: filtro por faixa de horario (timeBin).
   // [] = todas. Client-side sobre o timeBin ja vindo do backend.
@@ -672,7 +721,7 @@ export default function TournamentLibraryNew() {
   });
 
   const { data: libraryGroups, isLoading, isError, refetch } = useQuery({
-    queryKey: ["/api/tournament-library-grouped", filters],
+    queryKey: ["/api/tournament-library-grouped", filters, recipe, daysOfWeek],
     queryFn: async () => {
       // roiFilter NAO vai pro backend: ROI e metrica de GRUPO (nao coluna de
       // torneio) -> nao vira predicado SQL. Filtro fica client-side (abaixo).
@@ -688,6 +737,10 @@ export default function TournamentLibraryNew() {
         period: filters.period,
         filters: JSON.stringify(filterParams)
       });
+      // Sprint torneios-custom-families: receita + filtro por dia (backend tolera
+      // groupBy default; envia sempre por simplicidade).
+      if (recipe.length > 0) params.set("groupBy", recipe.join(","));
+      if (daysOfWeek.length > 0) params.set("daysOfWeek", daysOfWeek.join(","));
 
       return await apiRequest('GET', `/api/tournament-library-grouped?${params}`) as TournamentGroup[];
     },
@@ -714,6 +767,65 @@ export default function TournamentLibraryNew() {
       };
     },
   });
+
+  // Sprint torneios-custom-families (Fase 2): visoes de agrupamento salvas.
+  const { data: groupingViews } = useQuery({
+    queryKey: ["/api/library/grouping-views"],
+    queryFn: async () => (await apiRequest("GET", "/api/library/grouping-views")) as GroupingView[],
+  });
+
+  const saveViewMutation = useMutation({
+    mutationFn: async (name: string) =>
+      apiRequest("POST", "/api/library/grouping-views", { name, dims: recipe, filters }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/library/grouping-views"] });
+      setSaveViewOpen(false);
+      setSaveViewName("");
+      setSaveViewError(null);
+      toast({ title: "Visão salva" });
+    },
+    onError: (e: any) => {
+      if (e?.conflict === "duplicate_name" || /409/.test(String(e?.message))) {
+        setSaveViewError("nome já existe");
+      } else {
+        setSaveViewError(null);
+        toast({ title: "Não foi possível salvar a visão", variant: "destructive" });
+      }
+    },
+  });
+
+  const deleteViewMutation = useMutation({
+    mutationFn: async (id: string) => apiRequest("DELETE", `/api/library/grouping-views/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/library/grouping-views"] });
+      toast({ title: "Visão removida" });
+    },
+    onError: () => toast({ title: "Não foi possível remover a visão", variant: "destructive" }),
+  });
+
+  // Toggle de uma dimensao da receita, mantendo a ordem canonica. Nunca vazio:
+  // limpar tudo cai no DEFAULT_RECIPE.
+  const toggleRecipeDim = useCallback((dim: GroupDim) => {
+    setRecipe((prev) => {
+      const has = prev.includes(dim);
+      const next = CANONICAL_DIM_ORDER.filter((d) =>
+        d === dim ? !has : prev.includes(d),
+      );
+      return next.length === 0 ? DEFAULT_RECIPE : next;
+    });
+  }, []);
+
+  const toggleDay = useCallback((key: string) => {
+    setDaysOfWeek((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  }, []);
+
+  // Aplica uma visao salva: substitui recipe + filters (quando presentes).
+  const applyView = useCallback((view: GroupingView) => {
+    if (Array.isArray(view.dims) && view.dims.length > 0) setRecipe(view.dims);
+    if (view.filters && typeof view.filters === "object") {
+      setFilters((prev) => ({ ...prev, ...view.filters }));
+    }
+  }, []);
 
   // Apply client-side filtering and sorting (memoized)
   const filteredAndSortedGroups = useMemo(() => (libraryGroups || [])
@@ -836,6 +948,7 @@ export default function TournamentLibraryNew() {
     setSelectedTimeBins([]);
     setNameFilters([]);
     setNameDraft("");
+    setDaysOfWeek([]);
     setSortBy("confidence");
     setSortOrder("desc");
   }, []);
@@ -1052,7 +1165,32 @@ export default function TournamentLibraryNew() {
                 </DialogContent>
               </Dialog>
             )}
-            <OverviewPanel />
+            {isWorkspaceAdmin && (
+              <Dialog open={workspacePanelOpen} onOpenChange={setWorkspacePanelOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    data-testid="open-workspace-admin-panel"
+                    className="gap-1 border-blue-500/50 text-blue-300 hover:bg-blue-900/20"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    Workspaces
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto bg-card border-gray-700">
+                  <DialogHeader>
+                    <DialogTitle className="text-white">Workspaces de contas</DialogTitle>
+                    <DialogDescription>
+                      Agrupe contas para compartilhar os cards salvos entre elas.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <WorkspaceAdminPanel />
+                </DialogContent>
+              </Dialog>
+            )}
+            <OverviewPanel recipe={recipe} filters={filters} />
           </div>
         </div>
       </div>
@@ -1062,6 +1200,9 @@ export default function TournamentLibraryNew() {
 
       {/* Fase 5/6: destaques salvos (familias) fixados no topo, por plataforma. */}
       <SavedHighlightsStrip sites={filters.sites} />
+
+      {/* Fase 4: cards salvos por contas vinculadas (workspace) — read-only. */}
+      <WorkspaceCardsStrip sites={filters.sites} />
 
       {/* KPIs */}
       <div className="bg-gray-800 rounded-xl p-6 mb-6">
@@ -1105,6 +1246,172 @@ export default function TournamentLibraryNew() {
           </div>
         </div>
       </div>
+
+      {/* Sprint torneios-custom-families: construtor de receita + visoes salvas. */}
+      <div className="mb-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <div className="text-sm font-semibold text-gray-300">Agrupar por</div>
+          {/* Visoes salvas */}
+          <div className="flex items-center gap-2">
+            <Select
+              onValueChange={(id) => {
+                const v = (groupingViews || []).find((x) => x.id === id);
+                if (v) applyView(v);
+              }}
+            >
+              <SelectTrigger
+                className="bg-gray-700 border-gray-600 text-white w-44"
+                data-testid="views-select"
+              >
+                <SelectValue placeholder="Visões" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700">
+                {(groupingViews || []).length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-gray-400">Nenhuma visão salva</div>
+                ) : (
+                  (groupingViews || []).map((v) => (
+                    <div key={v.id} className="flex items-center gap-1 pr-1">
+                      <SelectItem value={v.id} className="flex-1">{v.name}</SelectItem>
+                      <button
+                        type="button"
+                        data-testid={`view-delete-${v.id}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          deleteViewMutation.mutate(v.id);
+                        }}
+                        className="text-gray-500 hover:text-red-400 shrink-0 p-1"
+                        aria-label={`Remover visão ${v.name}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid="views-save-btn"
+              onClick={() => {
+                setSaveViewName("");
+                setSaveViewError(null);
+                setSaveViewOpen(true);
+              }}
+              className="gap-1 border-gray-600 text-gray-200 hover:bg-gray-700"
+            >
+              <Save className="w-3.5 h-3.5" /> Salvar visão atual
+            </Button>
+          </div>
+        </div>
+
+        {/* Toggles de dimensao */}
+        <div className="flex flex-wrap gap-2">
+          {CANONICAL_DIM_ORDER.map((dim) => {
+            const active = recipe.includes(dim);
+            return (
+              <button
+                key={dim}
+                type="button"
+                data-testid={`recipe-dim-${dim}`}
+                aria-pressed={active}
+                onClick={() => toggleRecipeDim(dim)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+                  active
+                    ? `${tokens.color.action.bg} ${tokens.color.action.text} ${tokens.color.action.border}`
+                    : "bg-card text-gray-300 border-gray-600 hover:border-gray-500 hover:text-white"
+                }`}
+              >
+                {DIM_LABELS[dim]}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Filtro por dia da semana */}
+        <div className="mt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm text-gray-400">Dia da semana</span>
+            {daysOfWeek.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setDaysOfWeek([])}
+                className="text-xs text-gray-500 hover:text-white underline"
+              >
+                limpar
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {DOW_DISPLAY_ORDER.map((key) => {
+              const active = daysOfWeek.includes(key);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  data-testid={`dow-chip-${key}`}
+                  aria-pressed={active}
+                  onClick={() => toggleDay(key)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                    active
+                      ? "bg-[#24c25e] text-black"
+                      : "bg-gray-700 text-gray-200 hover:bg-gray-600"
+                  }`}
+                >
+                  {dayOfWeekLabel(key)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Dialog: salvar visao atual */}
+      <Dialog open={saveViewOpen} onOpenChange={setSaveViewOpen}>
+        <DialogContent className="max-w-md bg-card border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Salvar visão de agrupamento</DialogTitle>
+            <DialogDescription>
+              Salva a receita atual ({recipe.map((d) => DIM_LABELS[d]).join(" · ")}) e os filtros.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={saveViewName}
+              onChange={(e) => {
+                setSaveViewName(e.target.value);
+                setSaveViewError(null);
+              }}
+              placeholder="Nome da visão"
+              data-testid="views-save-name-input"
+              className="bg-gray-800 border-gray-700 text-white"
+            />
+            {saveViewError && (
+              <p className="text-sm text-red-400" data-testid="views-save-error">{saveViewError}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSaveViewOpen(false)}
+                className="border-gray-600 text-gray-300"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                data-testid="views-save-confirm"
+                disabled={!saveViewName.trim() || saveViewMutation.isPending}
+                onClick={() => saveViewMutation.mutate(saveViewName.trim())}
+              >
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Sprint torneios-library-grouping: filtro por TAGS no nome (contem/nao-contem). */}
       <div className="mb-4" data-testid="library-nametag-filter">
