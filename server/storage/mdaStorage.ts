@@ -315,6 +315,11 @@ export async function softDeleteMdaRead(
       WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
     ` as any,
   );
+  // Limpa as tags N:N orfas (espelha o delete de tema em studies-v2.ts) — sem
+  // isso, mda_read_themes acumula linhas apontando para um read soft-deletado.
+  await db.execute(
+    sql`DELETE FROM mda_read_themes WHERE mda_read_id = ${id} AND user_id = ${userId}` as any,
+  );
   return { keys };
 }
 

@@ -299,9 +299,14 @@ export async function handleDeleteStudyNote(
   }
 }
 
-// Studies routes resolve the owning user the same way the rest of this module does
-// (legacy Replit-auth shape fallback to the JWT user id). Keep consistent so the
-// ownership checks below match how getStudyCards / createStudyCard store the id.
+// TODO(HIGH-2 auditoria Estudos): este modulo legacy (study_cards/materials/notes)
+// chaveia ownership por `user.id` (DB row id), enquanto study_themes /
+// study_sessions_v2 / MDA / links usam `user.userPlatformId` (USER-XXXX). Cada
+// tabela e internamente consistente (nao quebra hoje), mas qualquer JOIN futuro
+// cards<->themes/sessions falha silenciosamente (chaves diferentes p/ o mesmo
+// user). O `claims?.sub` (shape Replit) e sempre undefined -> `|| u.id` sempre
+// vence. Padronizar em userPlatformId exige MIGRACAO DE DADOS (re-key das linhas
+// existentes) -> requer aprovacao do founder antes de flipar. Ver issue HIGH-2.
 function studiesUserId(req: any): string | null {
   const u = req?.user as any;
   return u?.claims?.sub || u?.id || null;

@@ -19,7 +19,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 interface StudyThemeLite {
@@ -67,6 +68,7 @@ function previewUrl(file: File): string {
 
 export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const isEdit = !!readId;
 
   const [title, setTitle] = useState("");
@@ -91,6 +93,7 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
   const { data: themesData } = useQuery<StudyThemeLite[]>({
     queryKey: ["/api/study-themes"],
     queryFn: () => apiRequest("GET", "/api/study-themes"),
+    staleTime: 30_000,
   });
   const themes: StudyThemeLite[] = Array.isArray(themesData) ? themesData : [];
 
@@ -157,7 +160,20 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
       return { ...(saved ?? {}), id: savedId };
     },
     onSuccess: (saved: any) => {
+      // Lesson #21: invalida por prefixo (v5 prefix-match) — a lista do painel do
+      // tema (by-theme) e o detalhe do read podem estar stale apos salvar/editar.
+      queryClient.invalidateQueries({ queryKey: ["/api/mda-reads/by-theme"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/mda-reads"] });
       if (saved?.id) navigate(`/estudos/mda/${saved.id}`);
+    },
+    onError: (err: any) => {
+      // Falha silenciosa antes: o botao reabilitava sem explicacao, e o fluxo
+      // 2-passos (read criado + upload de print) podia ter sucesso parcial.
+      toast({
+        title: "Erro ao salvar MDA",
+        description: err?.message ?? "Tente novamente.",
+        variant: "destructive",
+      });
     },
   });
 

@@ -3,7 +3,7 @@
 //
 // GET    /api/study/streak                 -> streak counter + heatmap
 // POST   /api/study/streak/bump            -> bump (idempotente por dia)
-// GET    /api/dashboard/leaks/active       -> [] (TODO backend leak detection)
+// GET    /api/dashboard/leaks/active       -> leaks reais (studyLeaksService)
 // GET    /api/dashboard/leaks/delta        -> {} (TODO backend leak delta)
 // GET    /api/dashboard/insights/week      -> { themes, spots, hours }
 // GET    /api/study-snapshots              -> [] (TODO snapshots table)
@@ -18,6 +18,8 @@ import { storage } from '../storage';
 // Sprint Estudos-Habito-1 (P0 #3): unifica streak no service novo (incrementa
 // freezes + race-safe via SELECT FOR UPDATE).
 import { bumpStudyStreak as bumpStudyStreakService } from '../services/studyStreak';
+// HIGH-1 (auditoria Estudos): leaks reais (mesma fonte de /api/study/suggestions).
+import { gatherUserLeaks, mapLeakToStudyTopic } from '../services/studyLeaksService';
 
 const bumpLimit = rateLimit({
   windowMs: 60 * 1000,
@@ -80,8 +82,25 @@ export async function handleLeaksActive(req: Request, res: Response): Promise<vo
     res.status(401).json({ message: 'Nao autenticado' });
     return;
   }
-  // TODO Sprint Studies-Reform-Backend: ler de hud_stats_snapshots / stats_analyzer.
-  res.status(200).json([]);
+  try {
+    // HIGH-1: deteccao real (detectLeaks) em vez do stub []. `id` = tipo do leak
+    // (o StatsView so precisa de id + severity p/ habilitar "Sugerir temas").
+    const leaks = await gatherUserLeaks(userPlatformId);
+    const active = leaks.map((leak) => ({
+      id: leak.type,
+      severity: leak.severity,
+      description: leak.description,
+      suggestedTopic: mapLeakToStudyTopic(leak),
+    }));
+    res.status(200).json(active);
+  } catch (err) {
+    // Lesson #9: loga antes do fallback — distingue "sem leaks" de "DB explodiu".
+    console.error('[study-misc] leaksActive failed', {
+      userPlatformId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    res.status(200).json([]);
+  }
 }
 
 export async function handleLeaksDelta(req: Request, res: Response): Promise<void> {

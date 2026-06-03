@@ -100,7 +100,7 @@ function formatDate(iso?: string | null): string {
 export default function SessaoDetailPage({ sessionId }: Props): JSX.Element {
   const [, navigate] = useLocation();
 
-  const { data: session, isLoading } = useQuery<SessionDetail>({
+  const { data: session, isLoading, isError, refetch } = useQuery<SessionDetail>({
     queryKey: ['/api/study-sessions', sessionId, 'detail'],
     queryFn: () => apiRequest('GET', `/api/study-sessions/${sessionId}/detail`),
     enabled: !!sessionId,
@@ -114,9 +114,41 @@ export default function SessaoDetailPage({ sessionId }: Props): JSX.Element {
     enabled: !!session?.themeId,
   });
 
-  if (isLoading || !session) {
+  if (isLoading) {
     return (
       <div className="h-32 rounded-lg bg-muted/30 animate-pulse m-4" aria-hidden />
+    );
+  }
+
+  // Erro de fetch OU sessao inexistente (404) — antes caia no skeleton infinito.
+  if (isError || !session) {
+    return (
+      <div
+        data-testid="session-detail-error"
+        className="space-y-4 p-4 sm:p-6 max-w-2xl mx-auto"
+      >
+        <button
+          type="button"
+          onClick={() => navigate('/estudos/sessoes')}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+        <div className="rounded-lg border border-border bg-card p-6 text-center space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Nao foi possivel carregar esta sessao. Ela pode ter sido removida ou
+            houve um erro de conexao.
+          </p>
+          <button
+            type="button"
+            data-testid="session-detail-retry"
+            onClick={() => refetch()}
+            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:opacity-90"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
     );
   }
 
