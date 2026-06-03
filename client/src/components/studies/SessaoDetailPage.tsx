@@ -21,12 +21,18 @@
  * session-detail-entry-{id}); #9 query tolerante; #13 apiRequest direto.
  */
 
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Upload, Loader2 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { getStatById } from '@shared/hud-stat-catalog';
+
+// H1 (Sprint Estudos-Flow-Review): upload de prints (jogada + solucao GTO) por
+// entry de stat_analysis. Endpoint POST /:id/stat-analysis/entries/:entryId/image
+// (multer campo "file" + body.slot play|solution; magic-bytes; 5MB).
+const MAX_IMG = 5 * 1024 * 1024;
+const ACCEPT_MIME = 'image/png,image/jpeg,image/webp';
 
 interface SessionEntry {
   id: string;
@@ -113,6 +119,37 @@ export default function SessaoDetailPage({ sessionId }: Props): JSX.Element {
     staleTime: 30_000,
     enabled: !!session?.themeId,
   });
+
+  // H1: estado do upload de print por (entryId:slot).
+  const qc = useQueryClient();
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string>('');
+
+  async function handleUpload(entryId: string, slot: 'play' | 'solution', file: File) {
+    setUploadError('');
+    if (file.size > MAX_IMG) {
+      setUploadError('Imagem maior que 5MB.');
+      return;
+    }
+    const key = `${entryId}:${slot}`;
+    setUploadingKey(key);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('slot', slot);
+      await apiRequest(
+        'POST',
+        `/api/study-sessions/${sessionId}/stat-analysis/entries/${entryId}/image`,
+        fd,
+      );
+      // Re-fetch o detalhe -> URLs servíveis das imagens recem-enviadas.
+      qc.invalidateQueries({ queryKey: ['/api/study-sessions', sessionId, 'detail'] });
+    } catch (err: any) {
+      setUploadError(err?.message ? String(err.message) : 'Erro ao enviar imagem.');
+    } finally {
+      setUploadingKey(null);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -278,6 +315,14 @@ export default function SessaoDetailPage({ sessionId }: Props): JSX.Element {
           {statLabel ? (
             <h3 className="text-sm font-semibold">Stat: {statLabel}</h3>
           ) : null}
+          {uploadError ? (
+            <p
+              data-testid="session-detail-upload-error"
+              className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300"
+            >
+              {uploadError}
+            </p>
+          ) : null}
           {entries.map((entry) => (
             <div
               key={entry.id}
@@ -289,13 +334,45 @@ export default function SessaoDetailPage({ sessionId }: Props): JSX.Element {
               ) : null}
               {entry.errorText ? <p>Erro: {entry.errorText}</p> : null}
               {entry.learnedText ? <p>Aprendizado: {entry.learnedText}</p> : null}
-              <div className="flex gap-2">
-                {entry.playImageUrl ? (
-                  <img src={entry.playImageUrl} alt="Jogada" className="h-20 rounded" />
-                ) : null}
-                {entry.solutionImageUrl ? (
-                  <img src={entry.solutionImageUrl} alt="Solucao" className="h-20 rounded" />
-                ) : null}
+              <div className="flex flex-wrap gap-4">
+                {(['play', 'solution'] as const).map((slot) => {
+                  const url = slot === 'play' ? entry.playImageUrl : entry.solutionImageUrl;
+                  const label = slot === 'play' ? 'Jogada' : 'Solucao GTO';
+                  const busy = uploadingKey === `${entry.id}:${slot}`;
+                  return (
+                    <div key={slot} className="space-y-1">
+                      {url ? (
+                        <img src={url} alt={label} className="h-20 rounded border border-border" />
+                      ) : (
+                        <div className="grid h-20 w-28 place-items-center rounded border border-dashed border-border text-[10px] text-muted-foreground">
+                          Sem print
+                        </div>
+                      )}
+                      <label
+                        data-testid={`session-detail-upload-${slot}-${entry.id}`}
+                        className="inline-flex cursor-pointer items-center gap-1 rounded border border-border px-2 py-1 text-[11px] hover:bg-muted"
+                      >
+                        {busy ? (
+                          <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                        ) : (
+                          <Upload className="h-3 w-3" aria-hidden />
+                        )}
+                        {url ? `Trocar ${label.toLowerCase()}` : `Add ${label.toLowerCase()}`}
+                        <input
+                          type="file"
+                          accept={ACCEPT_MIME}
+                          className="hidden"
+                          disabled={busy}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleUpload(entry.id, slot, f);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

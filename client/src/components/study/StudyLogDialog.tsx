@@ -60,7 +60,10 @@ export interface StudyLogDialogProps {
 }
 
 function isThemeRequired(mode: Mode): boolean {
-  return mode === "drill_gto" || mode === "other" || mode === "lesson";
+  // Sprint Estudos-Flow-Review (C1): paridade com validateModeRequirements do
+  // backend — so drill_gto exige tema. `other` virou catch-all (sem exigencia);
+  // `lesson` exige lessonId (nao tema); hand_review exige starredHandIds.
+  return mode === "drill_gto";
 }
 
 export function StudyLogDialog({
@@ -319,13 +322,13 @@ export function StudyLogDialog({
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium">Notas (max 500)</label>
+            <label className="text-sm font-medium">Notas (max 2000)</label>
             <textarea
               data-testid="study-log-notes-input"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full p-2 border rounded h-20"
-              maxLength={500}
+              className="w-full p-2 border rounded h-24"
+              maxLength={2000}
             />
           </div>
 
