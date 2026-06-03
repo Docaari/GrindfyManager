@@ -56,8 +56,10 @@ export function WorkspaceAdminPanel() {
       toast({ title: "Conta vinculada" });
     },
     onError: (e: any) => {
-      // 409 -> conta já está em um workspace (UNIQUE user_id).
-      const conflict = e?.conflict === "already_in_workspace" || /409/.test(String(e?.message));
+      // 409 -> conta já está em um workspace (UNIQUE user_id). apiRequest anexa
+      // o corpo parseado em e.response.data (queryClient.ts).
+      const conflict =
+        e?.response?.status === 409 || e?.response?.data?.conflict === "already_in_workspace";
       toast({
         title: conflict ? "Conta já está em um workspace" : "Não foi possível vincular a conta",
         variant: "destructive",

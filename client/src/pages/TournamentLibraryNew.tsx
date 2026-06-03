@@ -785,7 +785,10 @@ export default function TournamentLibraryNew() {
       toast({ title: "Visão salva" });
     },
     onError: (e: any) => {
-      if (e?.conflict === "duplicate_name" || /409/.test(String(e?.message))) {
+      // apiRequest anexa o corpo parseado em e.response.data (queryClient.ts).
+      const status = e?.response?.status;
+      const conflict = e?.response?.data?.conflict;
+      if (status === 409 || conflict === "duplicate_name") {
         setSaveViewError("nome já existe");
       } else {
         setSaveViewError(null);
