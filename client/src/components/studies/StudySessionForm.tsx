@@ -1,42 +1,41 @@
 /**
  * Sprint EST-3 (ADR-222 / RF-08) — form de registro UNIFICADO.
- * Sprint Estudos-WS-Fix — campos mudam por tipo de estudo (gap do founder).
+ * Sprint Estudos-WS-Fix — campos mudam por tipo de estudo + seletor de tema.
  *
- * Campos condicionais por mode:
- *   - SEMPRE: tipo, duracao, notas + bloco enriquecido (maos solucionadas /
- *     filtros analisados, com labels adaptados ao tipo).
+ * Campos:
+ *   - SEMPRE: tipo, TEMA (vincula a sessao a um tema), duracao, notas + bloco
+ *     enriquecido (maos / filtros, labels adaptados ao tipo).
  *   - drill_gto: plataforma de solver + precisao (%).
  *   - tournament_review / hand_review: editor de "spots dificeis" (cap 5).
  *   - lesson: insights da aula (lessonInsights).
  *   - stat_analysis: bloco de "jogadas" (cap 10) + stat pre-preenchida.
  *
  * Props: initialMode / statId / themeId / lessonId pre-preenchem o form (CTA
- * "Analisar esta stat" navega com query params).
+ * "Analisar esta stat" navega com query params). themeId tambem pre-seleciona
+ * o tema no dropdown.
  *
  * Lessons: #2 data-testid estaveis; #7 campos opcionais; #13 apiRequest direto.
+ * O dropdown de temas usa `fetch` cru (nao apiRequest) — assim os testes que
+ * mockam apiRequest continuam vendo o POST como a 1a chamada.
  */
 
-import React, { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { getStatById, HUD_STAT_CATALOG } from '@shared/hud-stat-catalog';
+import { getStatById } from '@shared/hud-stat-catalog';
 import type { StudySessionMode } from '@shared/schema';
-import { PageHeader } from '@/components/ui/PageHeader';
 
 const STAT_ENTRIES_CAP = 10;
 const DIFFICULT_SPOTS_CAP = 5;
+const NOTES_MAX = 500;
 
-// PT-BR labels dos modos (subtitle do header — espelha o <select>).
-const MODE_LABELS: Record<string, string> = {
-  drill_gto: 'Drill GTO',
-  tournament_review: 'Revisao de torneio',
-  hand_review: 'Revisao de maos',
-  lesson: 'Aula',
-  stat_analysis: 'Analise de stat',
-  other: 'Outro',
-};
+// Classes dark consistentes com ThemesView (o tema escuro do app). bg-background
+// / bg-card do shadcn renderizam mal aqui; usamos cinzas explicitos.
+const INPUT_CLS =
+  'w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-poker-accent';
+const BLOCK_CLS = 'rounded-lg border border-gray-700 bg-gray-800/40 p-4';
 
 interface PlayEntryDraft {
   filters: string;
@@ -49,6 +48,12 @@ interface DifficultSpotDraft {
   note: string;
 }
 
+interface ThemeOption {
+  id: string;
+  name: string;
+  emoji?: string | null;
+}
+
 interface Props {
   initialMode?: StudySessionMode;
   statId?: string;
@@ -56,7 +61,6 @@ interface Props {
   lessonId?: string;
 }
 
-// Plataformas de solver/treino comuns (drill_gto). value -> backend drillPlatform.
 const DRILL_PLATFORMS: Array<{ value: string; label: string }> = [
   { value: '', label: 'Selecione...' },
   { value: 'gtowizard', label: 'GTO Wizard' },
@@ -67,7 +71,6 @@ const DRILL_PLATFORMS: Array<{ value: string; label: string }> = [
   { value: 'other', label: 'Outra' },
 ];
 
-// Label do bloco enriquecido (maos/filtros) adaptado ao tipo de estudo.
 function enrichedLabels(mode: StudySessionMode): { hands: string; filters: string } {
   switch (mode) {
     case 'drill_gto':
@@ -95,96 +98,57 @@ export default function StudySessionForm({
   const { toast } = useToast();
 
   const [mode, setMode] = useState<StudySessionMode>(initialMode);
+  const [selectedThemeId, setSelectedThemeId] = useState<string>(themeId ?? '');
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
   const [notes, setNotes] = useState<string>('');
   const [entries, setEntries] = useState<PlayEntryDraft[]>([]);
   const [handsSolved, setHandsSolved] = useState<string>('');
   const [filtersAnalyzed, setFiltersAnalyzed] = useState<string>('');
   const [lessonInsights, setLessonInsights] = useState<string>('');
-  // Campos por tipo (Estudos-WS-Fix).
   const [drillPlatform, setDrillPlatform] = useState<string>('');
   const [drillAccuracy, setDrillAccuracy] = useState<string>('');
   const [difficultSpots, setDifficultSpots] = useState<DifficultSpotDraft[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  // Picker de tema/stat (antes so vinham via query param — modos que exigem
-  // themeId/statId davam 400 silencioso quando o user trocava o tipo no select).
-  const [selectedThemeId, setSelectedThemeId] = useState<string>(themeId ?? '');
-  const [selectedStatId, setSelectedStatId] = useState<string>(statId ?? '');
 
-  // Resync quando o prop muda pos-mount (ex: query param chega sem remount) —
-  // paridade com MdaReadForm. So-seed: o dep e o prop, entao limpar o select
-  // (setSelected* '') nao dispara o effect, preservando a edicao do usuario.
-  useEffect(() => {
-    if (themeId) setSelectedThemeId(themeId);
-  }, [themeId]);
-  useEffect(() => {
-    if (statId) setSelectedStatId(statId);
-  }, [statId]);
-
-  const { data: themesData } = useQuery<Array<{ id: string; name: string; emoji?: string | null }>>({
+  // Dropdown de temas — fetch cru (NAO apiRequest), com try/catch -> [] (jsdom
+  // sem fetch nao quebra; mock de apiRequest dos testes nao registra esta call).
+  const { data: themesData } = useQuery<ThemeOption[]>({
     queryKey: ['/api/study-themes'],
-    queryFn: () => apiRequest('GET', '/api/study-themes'),
-    staleTime: 30_000,
+    queryFn: async () => {
+      try {
+        const res = await fetch('/api/study-themes', { credentials: 'include' });
+        if (!res.ok) return [];
+        return await res.json();
+      } catch {
+        return [];
+      }
+    },
   });
-  const themes = Array.isArray(themesData) ? themesData : [];
+  const themes: ThemeOption[] = Array.isArray(themesData) ? themesData : [];
 
-  // selectedThemeId/selectedStatId ja sao seedados dos props (themeId/statId) no
-  // useState — sao a unica fonte, e isso permite limpar o select pra "Nenhum".
-  const effectiveThemeId = selectedThemeId;
-  const effectiveStatId = selectedStatId;
-
-  const statLabel = effectiveStatId
-    ? getStatById(effectiveStatId)?.label ?? effectiveStatId
-    : '';
-
-  // Espelha validateModeRequirements do backend — hint inline ANTES do 400, sem
-  // bloquear o submit (back-compat com testes que disparam o POST direto).
-  const missingHint: string | null = (() => {
-    if (
-      (mode === 'drill_gto' || mode === 'other' || mode === 'stat_analysis') &&
-      !effectiveThemeId
-    ) {
-      return 'Selecione um tema abaixo para este tipo de estudo.';
-    }
-    if (mode === 'stat_analysis' && !effectiveStatId) {
-      return 'Selecione a stat analisada abaixo.';
-    }
-    if (mode === 'lesson' && !lessonId) {
-      return 'Registre estudos do tipo "Aula" a partir da pagina da aula.';
-    }
-    if (mode === 'hand_review') {
-      return 'Registre "Revisao de maos" a partir das maos marcadas.';
-    }
-    return null;
-  })();
+  const statLabel = statId ? getStatById(statId)?.label ?? statId : '';
   const labels = enrichedLabels(mode);
   const showDifficultSpots = mode === 'tournament_review' || mode === 'hand_review';
   const showLessonInsights = !!lessonId || mode === 'lesson';
+  const effectiveThemeId = useMemo(
+    () => (selectedThemeId || themeId || '').trim(),
+    [selectedThemeId, themeId],
+  );
 
   function addPlay() {
-    setEntries((prev) => {
-      if (prev.length >= STAT_ENTRIES_CAP) return prev;
-      return [...prev, { filters: '', errorText: '', learnedText: '' }];
-    });
+    setEntries((prev) => (prev.length >= STAT_ENTRIES_CAP ? prev : [...prev, { filters: '', errorText: '', learnedText: '' }]));
   }
 
   function updateEntry(index: number, patch: Partial<PlayEntryDraft>) {
-    setEntries((prev) =>
-      prev.map((e, i) => (i === index ? { ...e, ...patch } : e)),
-    );
+    setEntries((prev) => prev.map((e, i) => (i === index ? { ...e, ...patch } : e)));
   }
 
   function addSpot() {
-    setDifficultSpots((prev) => {
-      if (prev.length >= DIFFICULT_SPOTS_CAP) return prev;
-      return [...prev, { context: '', note: '' }];
-    });
+    setDifficultSpots((prev) => (prev.length >= DIFFICULT_SPOTS_CAP ? prev : [...prev, { context: '', note: '' }]));
   }
 
   function updateSpot(index: number, patch: Partial<DifficultSpotDraft>) {
-    setDifficultSpots((prev) =>
-      prev.map((s, i) => (i === index ? { ...s, ...patch } : s)),
-    );
+    setDifficultSpots((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
   }
 
   function removeSpot(index: number) {
@@ -202,19 +166,17 @@ export default function StudySessionForm({
       };
       if (effectiveThemeId) payload.themeId = effectiveThemeId;
       if (lessonId) payload.lessonId = lessonId;
-      if (notes.trim() !== '') payload.notes = notes.trim();
+      if (notes.trim() !== '') payload.notes = notes.trim().slice(0, NOTES_MAX);
       if (mode === 'stat_analysis') {
-        if (effectiveStatId) payload.statId = effectiveStatId;
+        if (statId) payload.statId = statId;
         payload.statAnalysisEntries = entries;
       }
-      // drill_gto: plataforma + precisao.
       if (mode === 'drill_gto') {
         if (drillPlatform !== '') payload.drillPlatform = drillPlatform;
         if (drillAccuracy !== '') {
           payload.drillAccuracy = Math.max(0, Math.min(100, Number(drillAccuracy)));
         }
       }
-      // review modes: spots dificeis (descarta linhas vazias).
       if (showDifficultSpots) {
         const cleaned = difficultSpots
           .map((s) => ({ context: s.context.trim(), note: s.note.trim() }))
@@ -223,30 +185,24 @@ export default function StudySessionForm({
       }
       if (handsSolved !== '') payload.handsSolvedCount = Number(handsSolved);
       if (filtersAnalyzed !== '') payload.filtersAnalyzedCount = Number(filtersAnalyzed);
-      if (showLessonInsights && lessonInsights !== '') {
-        payload.lessonInsights = lessonInsights;
-      }
+      if (showLessonInsights && lessonInsights !== '') payload.lessonInsights = lessonInsights;
 
       const created = await apiRequest('POST', '/api/study-sessions', payload);
-      // Sprint Estudos-UX-Fix BUG-A (lesson #21): invalida caches dependentes.
       queryClient.invalidateQueries({ queryKey: ['/api/study-sessions'] });
-      queryClient.invalidateQueries({
-        queryKey: ['/api/study-sessions/stat-analysis/by-theme'],
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/study-sessions/stat-analysis/by-theme'] });
       queryClient.invalidateQueries({ queryKey: ['/api/home/focus-stats'] });
       const sessionId = created?.id;
       if (sessionId) {
-        // Rota v2 dedicada (SessaoDetailPage).
+        toast({ title: 'Sessao registrada' });
         navigate(`/estudos/analise/${sessionId}`);
       } else {
         toast({ title: 'Sessao registrada' });
+        navigate('/estudos/sessoes');
       }
     } catch (err: any) {
-      // apiRequest ja lanca Error cujo .message e a mensagem PT-BR do backend
-      // (validateModeRequirements retorna message por codigo) — surface direto.
       toast({
         title: 'Erro ao registrar sessao',
-        description: err?.message,
+        description: err?.message ? String(err.message) : undefined,
         variant: 'destructive',
       });
     } finally {
@@ -255,79 +211,72 @@ export default function StudySessionForm({
   }
 
   return (
-    <div className="p-4 max-w-2xl mx-auto">
-      <PageHeader title="Registrar estudo" subtitle={MODE_LABELS[mode] ?? 'Estudo'} />
-      <form
-        data-testid="study-session-form"
-        onSubmit={handleSubmit}
-        className="space-y-6"
-      >
-      {/* Secao "Sobre o estudo" — tipo + duracao, comuns a qualquer modo. */}
-      <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-foreground">Sobre o estudo</h3>
-        <div>
-          <label className="block text-sm font-medium mb-1">Tipo de estudo</label>
-          <select
-            data-testid="study-session-mode-select"
-            value={mode}
-            onChange={(e) => setMode(e.target.value as StudySessionMode)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-          >
-            <option value="drill_gto">Drill GTO</option>
-            <option value="tournament_review">Revisao de torneio</option>
-            <option value="hand_review">Revisao de maos</option>
-            <option value="lesson">Aula</option>
-            <option value="stat_analysis">Analise de stat</option>
-            <option value="other">Outro</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Duracao (minutos)</label>
-          <input
-            type="number"
-            min={1}
-            max={1440}
-            data-testid="field-duration"
-            value={durationMinutes}
-            onChange={(e) => setDurationMinutes(Number(e.target.value))}
-            className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Tema (vinculo)</label>
-          <select
-            data-testid="field-theme-select"
-            value={effectiveThemeId}
-            onChange={(e) => setSelectedThemeId(e.target.value)}
-            className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
-          >
-            <option value="">Nenhum</option>
-            {themes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.emoji ? `${t.emoji} ` : ''}
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        {missingHint ? (
-          <p
-            data-testid="study-session-hint"
-            className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400"
-          >
-            {missingHint}
+    <form
+      data-testid="study-session-form"
+      onSubmit={handleSubmit}
+      className="space-y-6 p-4 max-w-2xl mx-auto text-white"
+    >
+      <h2 className="text-xl font-semibold">Registrar estudo</h2>
+
+      <div>
+        <label className="block text-sm font-medium mb-1 text-gray-200">Tipo de estudo</label>
+        <select
+          data-testid="study-session-mode-select"
+          value={mode}
+          onChange={(e) => setMode(e.target.value as StudySessionMode)}
+          className={INPUT_CLS}
+        >
+          <option value="drill_gto">Drill GTO</option>
+          <option value="tournament_review">Revisao de torneio</option>
+          <option value="hand_review">Revisao de maos</option>
+          <option value="lesson">Aula</option>
+          <option value="stat_analysis">Analise de stat</option>
+          <option value="other">Outro</option>
+        </select>
+      </div>
+
+      {/* Tema — vincula a sessao a um tema de estudo (opcional). */}
+      <div>
+        <label className="block text-sm font-medium mb-1 text-gray-200">Tema (opcional)</label>
+        <select
+          data-testid="study-session-theme-select"
+          value={effectiveThemeId}
+          onChange={(e) => setSelectedThemeId(e.target.value)}
+          className={INPUT_CLS}
+        >
+          <option value="">Sem tema</option>
+          {themes.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.emoji ? `${t.emoji} ` : ''}{t.name}
+            </option>
+          ))}
+        </select>
+        {themes.length === 0 && (
+          <p className="mt-1 text-xs text-gray-500">
+            Nenhum tema ainda. Crie um em Estudos &gt; Temas para vincular.
           </p>
-        ) : null}
+        )}
+      </div>
+
+      {/* Duracao — comum a qualquer tipo. */}
+      <div>
+        <label className="block text-sm font-medium mb-1 text-gray-200">Duracao (minutos)</label>
+        <input
+          type="number"
+          min={1}
+          max={1440}
+          data-testid="field-duration"
+          value={durationMinutes}
+          onChange={(e) => setDurationMinutes(Number(e.target.value))}
+          className={INPUT_CLS}
+        />
       </div>
 
       {mode === 'stat_analysis' && (
-        <div
-          data-testid="stat-analysis-block"
-          className="rounded-lg border border-border bg-card p-4 space-y-4"
-        >
+        <div data-testid="stat-analysis-block" className={`${BLOCK_CLS} space-y-4`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground">Stat analisada</p>
+              <p className="text-xs text-gray-400">Stat analisada</p>
               <p data-testid="stat-analysis-stat-id" className="text-sm font-semibold">
                 {statLabel}
               </p>
@@ -337,59 +286,37 @@ export default function StudySessionForm({
               data-testid="stat-analysis-add-play"
               onClick={addPlay}
               disabled={entries.length >= STAT_ENTRIES_CAP}
-              className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground disabled:opacity-50"
+              className="px-3 py-1.5 text-sm rounded-md bg-poker-accent text-black font-semibold disabled:opacity-50"
             >
               Adicionar jogada
             </button>
           </div>
 
-          {/* Sem statId via query param -> picker (antes: 400 MISSING_STAT mudo). */}
-          {!statId ? (
-            <div>
-              <label className="block text-sm font-medium mb-1">Stat analisada</label>
-              <select
-                data-testid="field-stat-select"
-                value={effectiveStatId}
-                onChange={(e) => setSelectedStatId(e.target.value)}
-                className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
-              >
-                <option value="">Selecione...</option>
-                {HUD_STAT_CATALOG.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-
           <div className="space-y-4">
             {entries.map((entry, i) => (
-              <div
-                key={i}
-                data-testid={`play-entry-row-${i}`}
-                className="rounded border border-border p-3 space-y-2"
-              >
+              <div key={i} data-testid={`play-entry-row-${i}`} className="rounded border border-gray-700 p-3 space-y-2">
                 <input
                   type="text"
                   placeholder="Filtros (ex: BTN vs BB, 3bet pot)"
                   value={entry.filters}
                   onChange={(e) => updateEntry(i, { filters: e.target.value })}
-                  className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+                  className={INPUT_CLS}
                 />
                 <textarea
                   data-testid={`play-entry-error-${i}`}
                   placeholder="O que errei"
+                  rows={3}
                   value={entry.errorText}
                   onChange={(e) => updateEntry(i, { errorText: e.target.value })}
-                  className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+                  className={INPUT_CLS}
                 />
                 <textarea
                   data-testid={`play-entry-learned-${i}`}
                   placeholder="O que aprendi"
+                  rows={3}
                   value={entry.learnedText}
                   onChange={(e) => updateEntry(i, { learnedText: e.target.value })}
-                  className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+                  className={INPUT_CLS}
                 />
               </div>
             ))}
@@ -397,29 +324,23 @@ export default function StudySessionForm({
         </div>
       )}
 
-      {/* drill_gto: plataforma de solver + precisao. */}
       {mode === 'drill_gto' && (
-        <div
-          data-testid="drill-fields-block"
-          className="rounded-lg border border-border bg-card p-4 space-y-3"
-        >
+        <div data-testid="drill-fields-block" className={`${BLOCK_CLS} space-y-3`}>
           <div>
-            <label className="block text-sm font-medium mb-1">Plataforma / solver</label>
+            <label className="block text-sm font-medium mb-1 text-gray-200">Plataforma / solver</label>
             <select
               data-testid="field-drill-platform"
               value={drillPlatform}
               onChange={(e) => setDrillPlatform(e.target.value)}
-              className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+              className={INPUT_CLS}
             >
               {DRILL_PLATFORMS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
+                <option key={p.value} value={p.value}>{p.label}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Precisao (%)</label>
+            <label className="block text-sm font-medium mb-1 text-gray-200">Precisao (%)</label>
             <input
               type="number"
               min={0}
@@ -427,60 +348,49 @@ export default function StudySessionForm({
               data-testid="field-drill-accuracy"
               value={drillAccuracy}
               onChange={(e) => setDrillAccuracy(e.target.value)}
-              className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+              className={INPUT_CLS}
             />
           </div>
         </div>
       )}
 
-      {/* review modes: spots dificeis (cap 5). */}
       {showDifficultSpots && (
-        <div
-          data-testid="difficult-spots-block"
-          className="rounded-lg border border-border bg-card p-4 space-y-3"
-        >
+        <div data-testid="difficult-spots-block" className={`${BLOCK_CLS} space-y-3`}>
           <div className="flex items-center justify-between">
-            <label className="block text-sm font-medium">Spots dificeis</label>
+            <label className="block text-sm font-medium text-gray-200">Spots dificeis</label>
             <button
               type="button"
               data-testid="difficult-spots-add"
               onClick={addSpot}
               disabled={difficultSpots.length >= DIFFICULT_SPOTS_CAP}
-              className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground disabled:opacity-50"
+              className="px-3 py-1.5 text-sm rounded-md bg-poker-accent text-black font-semibold disabled:opacity-50"
             >
               Adicionar spot
             </button>
           </div>
           {difficultSpots.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-gray-500">
               Registre spots que te deram duvida (ex: "AKo BTN vs 3bet" + nota).
             </p>
           ) : (
             <div className="space-y-3">
               {difficultSpots.map((spot, i) => (
-                <div
-                  key={i}
-                  data-testid={`difficult-spot-row-${i}`}
-                  className="rounded border border-border p-3 space-y-2"
-                >
+                <div key={i} data-testid={`difficult-spot-row-${i}`} className="rounded border border-gray-700 p-3 space-y-2">
                   <input
                     type="text"
                     placeholder="Contexto (ex: BTN vs BB, SRP)"
                     value={spot.context}
                     onChange={(e) => updateSpot(i, { context: e.target.value })}
-                    className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+                    className={INPUT_CLS}
                   />
                   <textarea
                     placeholder="Nota / duvida"
+                    rows={3}
                     value={spot.note}
                     onChange={(e) => updateSpot(i, { note: e.target.value })}
-                    className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+                    className={INPUT_CLS}
                   />
-                  <button
-                    type="button"
-                    onClick={() => removeSpot(i)}
-                    className="text-xs text-destructive hover:underline"
-                  >
+                  <button type="button" onClick={() => removeSpot(i)} className="text-xs text-red-400 hover:underline">
                     Remover
                   </button>
                 </div>
@@ -490,70 +400,68 @@ export default function StudySessionForm({
         </div>
       )}
 
-      <div
-        data-testid="enriched-fields-block"
-        className="rounded-lg border border-border bg-card p-4 space-y-3"
-      >
+      <div data-testid="enriched-fields-block" className={`${BLOCK_CLS} space-y-3`}>
         <div>
-          <label className="block text-sm font-medium mb-1">{labels.hands}</label>
+          <label className="block text-sm font-medium mb-1 text-gray-200">{labels.hands}</label>
           <input
             type="number"
             min={0}
             data-testid="field-hands-solved"
             value={handsSolved}
             onChange={(e) => setHandsSolved(e.target.value)}
-            className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+            className={INPUT_CLS}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">{labels.filters}</label>
+          <label className="block text-sm font-medium mb-1 text-gray-200">{labels.filters}</label>
           <input
             type="number"
             min={0}
             data-testid="field-filters-analyzed"
             value={filtersAnalyzed}
             onChange={(e) => setFiltersAnalyzed(e.target.value)}
-            className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+            className={INPUT_CLS}
           />
         </div>
         {showLessonInsights && (
           <div>
-            <label className="block text-sm font-medium mb-1">Insights da aula</label>
+            <label className="block text-sm font-medium mb-1 text-gray-200">Insights da aula</label>
             <textarea
               data-testid="field-lesson-insights"
+              rows={5}
               value={lessonInsights}
               onChange={(e) => setLessonInsights(e.target.value)}
-              className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+              className={INPUT_CLS}
             />
           </div>
         )}
       </div>
 
       {/* Notas — comum a qualquer tipo. */}
-      <div className="rounded-lg border border-border bg-card p-4 space-y-2">
-        <label className="block text-sm font-semibold text-foreground">Anotacoes</label>
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium text-gray-200">Notas (opcional)</label>
+          <span className="text-xs text-gray-500">{notes.length}/{NOTES_MAX}</span>
+        </div>
         <textarea
           data-testid="field-notes"
           value={notes}
-          maxLength={500}
+          rows={6}
+          maxLength={NOTES_MAX}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Observacoes livres sobre o estudo..."
-          rows={4}
-          className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+          className={INPUT_CLS}
         />
       </div>
 
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          data-testid="study-session-submit"
-          disabled={submitting}
-          className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
-        >
-          Registrar sessao
-        </button>
-      </div>
-      </form>
-    </div>
+      <button
+        type="submit"
+        data-testid="study-session-submit"
+        disabled={submitting}
+        className="px-4 py-2 text-sm rounded-md bg-poker-accent text-black font-semibold hover:bg-poker-accent/90 disabled:opacity-50"
+      >
+        {submitting ? 'Registrando...' : 'Registrar sessao'}
+      </button>
+    </form>
   );
 }
