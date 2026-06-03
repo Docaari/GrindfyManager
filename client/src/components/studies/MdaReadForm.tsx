@@ -202,7 +202,7 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={120}
-          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm"
+          className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder:text-gray-500"
           placeholder="BTN vs BB SRP — pop overfolda turn"
         />
       </div>
@@ -217,7 +217,7 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
           value={spotContext}
           onChange={(e) => setSpotContext(e.target.value)}
           maxLength={200}
-          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm"
+          className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder:text-gray-500"
         />
       </div>
 
@@ -231,7 +231,7 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
           value={filters}
           onChange={(e) => setFilters(e.target.value)}
           maxLength={500}
-          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm"
+          className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder:text-gray-500"
         />
       </div>
       </div>
@@ -250,7 +250,7 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
           onChange={(e) => setTendencyText(e.target.value)}
           maxLength={2000}
           rows={3}
-          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm"
+          className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder:text-gray-500"
         />
       </div>
 
@@ -264,7 +264,7 @@ export function MdaReadForm({ initialThemeId, readId }: MdaReadFormProps) {
           value={statId}
           onChange={(e) => setStatId(e.target.value)}
           maxLength={64}
-          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm"
+          className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder:text-gray-500"
           placeholder="ex: vpip"
         />
       </div>
