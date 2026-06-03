@@ -1,0 +1,123 @@
+%% Biblioteca Premium curada — fluxos de sequencia (ADR-240)
+%% (a) curador promove familia -> premium
+%% (b) usuario comum lista premium
+%% (c) curador abre painel cross-user e importa highlight de outra conta
+%% Guards: requireGranularPermission('premium_library_curate') nas escritas
+%% e cross-user; requireAuth nas leituras publicas.
+
+sequenceDiagram
+    autonumber
+
+    %% ============================================================
+    %% FLUXO (a): Curador promove uma familia -> Premium (RF-01)
+    %% ============================================================
+    actor Curator as Curador
+    participant Web as TournamentLibraryNew (front)
+    participant Auth as requireGranularPermission
+    participant API as premiumLibrary.ts
+    participant ST as storage
+    participant DB as PostgreSQL
+
+    Note over Curator,DB: (a) Promover familia a Premium
+    Curator->>Web: Clica "Adicionar a Premium" no card de familia
+    Web->>API: POST /api/library/premium {site, familyKey, groupName, metrics, reasons}
+    API->>Auth: checa permissao
+    Auth->>Auth: isSuperAdmin(email) OU permissions.includes('premium_library_curate')
+    alt nao autorizado
+        Auth-->>Web: 403 {requiredPermission}
+    else autorizado
+        Auth->>API: next()
+        API->>API: Zod parse (site + familyKey required, senao 400)
+        API->>ST: promotePremiumHighlight({site, familyKey, ..., curatedBy, source:'library'})
+        ST->>DB: INSERT premium_library_highlights (UNIQUE family_key)
+        alt familyKey ja na Premium (23505)
+            DB-->>ST: erro UNIQUE
+            ST-->>API: { conflict: true }
+            API-->>Web: 409 already_in_premium
+        else nova familia
+            DB-->>ST: row criada
+            ST-->>API: row
+            API-->>Web: 200 row (curatedBy preenchido)
+        end
+    end
+
+    %% ============================================================
+    %% FLUXO (b): Usuario comum lista a Premium (RF-02) + drill-down (RF-03)
+    %% ============================================================
+    actor User as Usuario comum
+    participant Web2 as PremiumLibraryStrip (front)
+
+    Note over User,DB: (b) Listar Premium (todos) + drill-down do viewer
+    User->>Web2: Abre aba Torneios (faixa Premium)
+    Web2->>API: GET /api/library/premium?site=ggpoker (requireAuth)
+    API->>ST: listPremiumHighlights(site?)
+    ST->>DB: SELECT * WHERE site=? ORDER BY created_at DESC
+    DB-->>ST: rows
+    ST-->>API: rows
+    API-->>Web2: 200 [rows]  (vazio -> [] -> faixa nao renderiza)
+    User->>Web2: Clica num card Premium
+    Web2->>API: GET /api/library/premium/:id/details (requireAuth)
+    API->>ST: getPremiumHighlight(id)
+    ST->>DB: SELECT WHERE id=?
+    alt :id inexistente
+        DB-->>ST: null
+        ST-->>API: null
+        API-->>Web2: 404
+    else existe
+        DB-->>ST: row (familyKey)
+        ST-->>API: row
+        API->>ST: getFamilyDetails(viewerUserId, row.familyKey)
+        ST->>DB: SELECT tournaments WHERE user_id=viewer AND grind_session_id IS NULL
+        DB-->>ST: historico do viewer
+        ST-->>API: {found, metrics, recentResults}
+        API-->>Web2: 200 {highlight, found, metrics, recentResults}
+        Note right of Web2: found:false se a familia<br/>nao esta no historico do viewer (aviso)
+    end
+
+    %% ============================================================
+    %% FLUXO (c): Curador abre painel cross-user e importa (RF-06 + RF-07)
+    %% ============================================================
+    participant Panel as PremiumCuratorPanel (front)
+
+    Note over Curator,DB: (c) Painel cross-user + importar highlight de outra conta
+    Curator->>Panel: Abre "Curadoria" (botao so visivel a curador)
+    Panel->>API: GET /api/library/premium/curator/highlights?site=&userId=&limit=50&offset=0
+    API->>Auth: requireGranularPermission
+    alt user comum (anti-IDOR)
+        Auth-->>Panel: 403
+    else curador
+        Auth->>API: next()
+        API->>ST: listAllSavedHighlightsForCuration({site,userId,limit,offset})
+        ST->>DB: SELECT s.* , u.username, u.email FROM saved_tournament_highlights s JOIN users u ON s.user_id=u.user_platform_id
+        DB-->>ST: highlights de TODAS as contas
+        ST->>DB: SELECT family_key FROM premium_library_highlights (set para alreadyInPremium)
+        DB-->>ST: familyKeys ja premium
+        ST-->>API: items[] (+ attribution + alreadyInPremium)
+        API-->>Panel: 200 {items, total}
+        Curator->>Panel: Clica "Importar para Premium" (desabilitado se alreadyInPremium)
+        Panel->>API: POST /api/library/premium/import {sourceHighlightId}
+        API->>Auth: requireGranularPermission
+        Auth->>API: next() (curador)
+        API->>ST: getSavedHighlightByIdAnyUser(sourceHighlightId)
+        ST->>DB: SELECT WHERE id=? (SEM escopo owner)
+        alt sourceHighlightId inexistente
+            DB-->>ST: null
+            ST-->>API: null
+            API-->>Panel: 404
+        else existe
+            DB-->>ST: row fonte (snapshot)
+            ST-->>API: row fonte
+            API->>ST: promotePremiumHighlight({...copia, curatedBy, sourceUserId:row.userId, sourceHighlightId, source:'import'})
+            ST->>DB: INSERT premium_library_highlights (UNIQUE family_key)
+            alt familyKey ja na Premium
+                DB-->>ST: erro UNIQUE
+                ST-->>API: { conflict: true }
+                API-->>Panel: 409 already_in_premium
+            else nova
+                DB-->>ST: row Premium criada
+                ST-->>API: row
+                API-->>Panel: 200 row (source='import', sourceUserId/sourceHighlightId)
+                Note right of Panel: snapshot e COPIA — deletar o<br/>highlight pessoal depois nao afeta a Premium
+            end
+        end
+    end

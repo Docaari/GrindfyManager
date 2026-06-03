@@ -24,6 +24,11 @@ import { GRADE_COLORS, GRADE_ORDER } from "@shared/library-grades";
 import { SPEED_BUCKETS } from "@shared/scoring";
 import { OverviewPanel } from "@/components/library/OverviewPanel";
 import { SavedHighlightsStrip } from "@/components/library/SavedHighlightsStrip";
+import { PremiumLibraryStrip } from "@/components/library/PremiumLibraryStrip";
+import { PremiumCuratorPanel } from "@/components/library/PremiumCuratorPanel";
+import { PremiumPromoteButton } from "@/components/library/PremiumPromoteButton";
+import { useAuth } from "@/contexts/AuthContext";
+import { Crown } from "lucide-react";
 import { computeTop3 } from "@/lib/libraryTop3";
 import { timeBinLabel } from "@shared/time-bin";
 
@@ -187,9 +192,10 @@ type SortOrder = 'asc' | 'desc';
 
 interface GroupDetailDialogContentProps {
   group: TournamentGroup;
+  isCurator?: boolean;
 }
 
-function GroupDetailDialogContent({ group }: GroupDetailDialogContentProps) {
+function GroupDetailDialogContent({ group, isCurator = false }: GroupDetailDialogContentProps) {
   const [modalSortColumn, setModalSortColumn] = useState<ModalSortColumn>('date');
   const [modalSortOrder, setModalSortOrder] = useState<SortOrder>('desc');
 
@@ -319,18 +325,39 @@ function GroupDetailDialogContent({ group }: GroupDetailDialogContentProps) {
               Lista detalhada de todos os torneios desta categoria
             </DialogDescription>
           </div>
-          {/* RF-05 (L7): Exportar CSV no header do modal */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleExportCSV}
-            data-testid="library-modal-export-csv"
-            className="shrink-0 border-gray-600 text-gray-200 hover:bg-gray-700"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Exportar CSV
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* ADR-240: promover esta familia a Biblioteca Premium (so curador). */}
+            <PremiumPromoteButton
+              isCurator={isCurator}
+              family={{
+                site: group.site,
+                familyKey: group.id,
+                groupName: group.groupName,
+                buyInTier: group.buyInTier ?? null,
+                type: group.category ?? null,
+                metrics: {
+                  roi: group.roi,
+                  volume: group.volume,
+                  avgBuyin: group.avgBuyin,
+                  profitPerTableHour: group.profitPerTableHour ?? null,
+                  avgFieldSize: group.avgFieldSize,
+                },
+                reasons: [],
+              }}
+            />
+            {/* RF-05 (L7): Exportar CSV no header do modal */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleExportCSV}
+              data-testid="library-modal-export-csv"
+              className="border-gray-600 text-gray-200 hover:bg-gray-700"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Exportar CSV
+            </Button>
+          </div>
         </div>
         <div className="flex gap-2 mt-2">
           <Badge className={`text-xs font-medium ${getSiteColor(group.site)}`}>
@@ -556,6 +583,10 @@ function GroupDetailDialogContent({ group }: GroupDetailDialogContentProps) {
 
 export default function TournamentLibraryNew() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  // ADR-240: curador = permissao concedida (NAO hasPermission, que e fail-open).
+  const isCurator = (user?.permissions ?? []).includes("premium_library_curate");
+  const [curatorPanelOpen, setCuratorPanelOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   // Sprint torneios-library-grouping: filtro por faixa de horario (timeBin).
   // [] = todas. Client-side sobre o timeBin ja vindo do backend.
@@ -995,9 +1026,39 @@ export default function TournamentLibraryNew() {
             <h2 className="text-2xl font-bold mb-2">Biblioteca de Torneios</h2>
             <p className="text-gray-400">Analise estatistica de performance por grupo de torneio</p>
           </div>
-          <OverviewPanel />
+          <div className="flex items-center gap-2">
+            {isCurator && (
+              <Dialog open={curatorPanelOpen} onOpenChange={setCuratorPanelOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    data-testid="open-curator-panel"
+                    className="gap-1 border-amber-500/50 text-amber-300 hover:bg-amber-900/20"
+                  >
+                    <Crown className="w-3.5 h-3.5" />
+                    Curadoria
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto bg-poker-surface border-gray-700">
+                  <DialogHeader>
+                    <DialogTitle className="text-white">Curadoria da Biblioteca Premium</DialogTitle>
+                    <DialogDescription>
+                      Destaques pessoais de todas as contas. Importe os melhores para a Premium global.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <PremiumCuratorPanel />
+                </DialogContent>
+              </Dialog>
+            )}
+            <OverviewPanel />
+          </div>
         </div>
       </div>
+
+      {/* ADR-240: faixa global Biblioteca Premium curada, acima dos destaques pessoais. */}
+      <PremiumLibraryStrip sites={filters.sites} isCurator={isCurator} />
 
       {/* Fase 5/6: destaques salvos (familias) fixados no topo, por plataforma. */}
       <SavedHighlightsStrip sites={filters.sites} />
@@ -1893,7 +1954,7 @@ export default function TournamentLibraryNew() {
               </Card>
               </DialogTrigger>
                     <DialogContent className="max-w-6xl max-h-[80vh] bg-poker-surface border-gray-700">
-                      <GroupDetailDialogContent group={group} />
+                      <GroupDetailDialogContent group={group} isCurator={isCurator} />
                     </DialogContent>
               </Dialog>
           );
