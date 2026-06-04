@@ -189,7 +189,7 @@ export function WeekGrid({
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-auto scroll-smooth">
+    <div className="flex-1 overflow-x-auto scroll-smooth">
       <div className="min-w-[800px]">
         <table className="w-full border-collapse">
           {/* Header */}

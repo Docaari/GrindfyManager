@@ -988,25 +988,26 @@ export default function GradePlanner() {
                   <div className="h-[calc(100vh-280px)]">{bibliotecaContent}</div>
                 </TabsContent>
                 <TabsContent value="grade" className="mt-0">
-                  <div className="h-[calc(100vh-280px)] flex flex-col overflow-hidden">
-                    {gradeContent}
-                  </div>
+                  {gradeContent}
                 </TabsContent>
               </Tabs>
             ) : (
               <PanelGroup
                 direction="horizontal"
-                className="h-[calc(100vh-240px)] min-h-[480px]"
+                className="min-h-[800px]"
               >
-                {/* Grade à ESQUERDA (espelha o modal Detalhe do Dia). Painel
-                    com altura de viewport → scroll interno (vertical horarios +
-                    horizontal dias) em vez de esticar a pagina. */}
+                {/* Grade à ESQUERDA (espelha o modal Detalhe do Dia).
+                    NAO capar altura nem aninhar overflow vertical: react-beautiful-dnd
+                    NAO suporta scroll container aninhado — capar viewport (h-[calc])
+                    + WeekGrid overflow-auto matava o drag (regressao a6b2925c).
+                    Painel cresce com o conteudo → scroll vertical fica na pagina;
+                    WeekGrid faz so scroll horizontal (overflow-x-auto). */}
                 <Panel
                   defaultSize={70}
                   minSize={45}
                   className={libraryCollapsed ? "" : "pr-2"}
                 >
-                  <div className="h-full flex flex-col overflow-hidden pb-2">
+                  <div className="h-full overflow-auto pb-2">
                     {gradeContent}
                   </div>
                 </Panel>
