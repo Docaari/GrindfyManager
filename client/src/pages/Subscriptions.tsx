@@ -76,6 +76,12 @@ export default function Subscriptions() {
     onSuccess: (data: any) => {
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        toast({
+          title: 'Erro',
+          description: 'Resposta de checkout inválida. Tente novamente.',
+          variant: 'destructive',
+        });
       }
     },
     onError: (error: any) => {
@@ -123,6 +129,12 @@ export default function Subscriptions() {
     onSuccess: (data: any) => {
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível abrir o portal. Tente novamente.',
+          variant: 'destructive',
+        });
       }
     },
     onError: (error: any) => {

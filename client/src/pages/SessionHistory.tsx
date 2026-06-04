@@ -55,6 +55,9 @@ interface SessionHistoryData {
 
 export default function SessionHistory() {
   const [filterPeriod, setFilterPeriod] = useState("30");
+  // appliedPeriod="" => sem filtro (mostra tudo). Só passa a filtrar quando o
+  // usuário clica "Aplicar Filtro" (evita esconder sessões antigas por padrão).
+  const [appliedPeriod, setAppliedPeriod] = useState("");
   const [editingSession, setEditingSession] = useState<SessionHistoryData | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -110,6 +113,31 @@ export default function SessionHistory() {
     () => (sessions ?? []).filter((s: any) => s?.type !== "manual_report"),
     [sessions],
   );
+
+  // "Aplicar Filtro" — filtro client-side por período (dias). Mantém entries
+  // sem data válida (não esconde por falta de timestamp).
+  const cutoffMs = useMemo(() => {
+    const days = parseInt(appliedPeriod, 10);
+    if (!Number.isFinite(days) || days <= 0) return null;
+    return Date.now() - days * 24 * 60 * 60 * 1000;
+  }, [appliedPeriod]);
+
+  const visibleUnified: UnifiedHistoryEntry[] = useMemo(() => {
+    if (cutoffMs == null) return unifiedEntries;
+    return unifiedEntries.filter((e) => {
+      const t = new Date(e.occurredAt).getTime();
+      return !Number.isFinite(t) || t >= cutoffMs;
+    });
+  }, [unifiedEntries, cutoffMs]);
+
+  const visibleLegacy: SessionHistoryData[] = useMemo(() => {
+    if (cutoffMs == null) return legacySessions;
+    return legacySessions.filter((s: any) => {
+      const d = s?.occurredAt ?? s?.startTime ?? s?.date;
+      const t = d ? new Date(d).getTime() : NaN;
+      return !Number.isFinite(t) || t >= cutoffMs;
+    });
+  }, [legacySessions, cutoffMs]);
 
   const updateSessionMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<SessionHistoryData> }) => {
@@ -242,7 +270,7 @@ export default function SessionHistory() {
         </CardHeader>
         <CardContent>
           <SessionHistoryUnified
-            entries={unifiedEntries}
+            entries={visibleUnified}
             onViewBankrollDetail={(entry) =>
               setBankrollDetailEntry({
                 type: entry.type,
@@ -279,16 +307,28 @@ export default function SessionHistory() {
                 max="365"
               />
             </div>
-            <Button className="bg-primary hover:bg-primary/80">
+            <Button
+              className="bg-primary hover:bg-primary/80"
+              onClick={() => setAppliedPeriod(filterPeriod)}
+            >
               Aplicar Filtro
             </Button>
+            {appliedPeriod !== "" && (
+              <Button
+                variant="outline"
+                onClick={() => setAppliedPeriod("")}
+                className="border-gray-600 text-white"
+              >
+                Limpar
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
       {/* Sessions List (cards detalhados — apenas entries de sessao) */}
       <div className="space-y-4">
-        {legacySessions.length === 0 ? (
+        {visibleLegacy.length === 0 ? (
           <Card className="bg-card border-gray-700">
             <CardContent className="p-8 text-center">
               <Trophy className="w-12 h-12 text-gray-500 mx-auto mb-4" />
@@ -299,7 +339,7 @@ export default function SessionHistory() {
             </CardContent>
           </Card>
         ) : (
-          legacySessions.map((session: SessionHistoryData) => {
+          visibleLegacy.map((session: SessionHistoryData) => {
             return (
               <Card key={session.id} className="bg-card border-gray-700 hover:border-primary/50 transition-colors">
                 <CardHeader className="bg-[#1f1f1f] border-b border-gray-600">
