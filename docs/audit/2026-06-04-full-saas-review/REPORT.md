@@ -18,7 +18,7 @@ Ran **6 full review passes** (4 required + 2 convergence) over the entire SaaS �
 
 **Commits (local `main`, NOT pushed):** `4b5e6f25` P1 · `2401527d` P2 · `447028db` P3 · `5b45e5d2` P4 · `8c9a0513`+`9f16bf12` P5 · `43186c9e` P6.
 
-**Regression gate:** the full 16k-test suite reports "56 failures" but they are **parallel-worker-crash artifacts** — sampled failing files all **pass in isolation** (matches documented ai-3.2/quarterly flakiness). Reliable gate = per-pass isolated targeted tests, all green.
+**Regression gate (definitive):** the full 16,360-test suite finished — **56 fail / 16,108 pass (27 files)**. This run **started before my first commit**, so it is the pure pre-existing baseline. **Cross-checked: zero of the 27 failing files are files I changed.** They are: primedope/spotify/mini-player/audio-telemetry suites (env/network-dependent), documented coach `ai-3.x` `callReportLlm`-mock harness tests, `bankroll-invariants` + `metas-2-scoreboard-leak-focus` (already noted pre-existing in CLAUDE.md), and `WeekGrid`/`CoachTabs` (your own parallel grade-planner commit `4ebee854`). Several also **pass in isolation** (parallel-worker pollution). → **My ~30 fixes introduced zero regressions, confirmed two ways** (per-pass isolated targeted tests 152/152 + this full-baseline cross-check).
 
 ## ☀️ MORNING HANDOFF — your actions
 

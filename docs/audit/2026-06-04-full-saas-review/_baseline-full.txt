@@ -53165,3 +53165,2625 @@ stderr | tests/integration/api/cooldown-finish-marks-session-completed.test.ts >
      ✓ payload com 3 secoes diferentes mapeia "Probe River" para 3 statIds distintos  2117ms
      ✓ payload SEM section preserva comportamento legacy (zero boost/penalty)  600ms
      ✓ cache HIT retorna stats com section preservado SEM invocar LLM  321ms
+
+<--- Last few GCs --->
+
+[87024:000001B1B3118000] 28815164 ms: Scavenge (interleaved) 3987.9 (4037.9) -> 3972.8 (4037.9) MB, pooled: 0 MB, 14.41 / 0.00 ms  (average mu = 0.622, current mu = 0.605) allocation failure; 
+[87024:000001B1B3118000] 28819897 ms: Mark-Compact 4562.8 (4611.7) -> 4128.7 (4251.9) MB, pooled: 0 MB, 4469.72 / 0.00 ms  (average mu = 0.469, current mu = 0.362) allocation failure; scavenge might not succeed
+
+FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 00007FF6A9AEC36F node::OnFatalError+1343
+ 2: 00007FF6AA734D77 v8::Function::NewInstance+423
+ 3: 00007FF6AA535467 v8::base::AddressSpaceReservation::AddressSpaceReservation+322071
+ 4: 00007FF6AA533106 v8::base::AddressSpaceReservation::AddressSpaceReservation+313014
+ 5: 00007FF6AA54D7BA X509_STORE_set_cleanup+5098
+ 6: 00007FF6AA559C56 uv_timer_set_repeat+20694
+ 7: 00007FF6AA12CD47 v8::String::Utf8Value::~Utf8Value+143495
+ 8: 000001B1EB87733A 
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 56 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |server| tests/integration/primedope-smoke.test.ts > PrimeDope smoke E2E > full flow: simulate -> persist -> list -> pin
+AssertionError: expected 400 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 400
+
+ ❯ tests/integration/primedope-smoke.test.ts:166:24
+    164|     // STEP 1 — simulate
+    165|     const sim = await supertest(app).post('/api/primedope/simulate').s…
+    166|     expect(sim.status).toBe(200);
+       |                        ^
+    167|     expect(sim.body.source).toBe('primedope');
+    168|     expect(storageMock.insertPrimedopeRun).toHaveBeenCalledTimes(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/56]⎯
+
+ FAIL  |server| tests/services/coachRecommendation.test.ts > recommendLessonForUser — Tier 1 (Coach IA) > Anthropic responde JSON valido com lesson_id no catalog -> source=coach
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+ ❯ tests/services/coachRecommendation.test.ts:217:32
+    215|     const result = await recommendLessonForUser(buildInput());
+    216|
+    217|     expect(messagesCreateMock).toHaveBeenCalledTimes(1);
+       |                                ^
+    218|     expect(result?.source).toBe('coach');
+    219|     expect(result?.lessonId).toBe('L2');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/56]⎯
+
+ FAIL  |server| tests/services/coachRecommendation.test.ts > recommendLessonForUser — Tier 1 (Coach IA) > Anthropic responde reason > 240 chars -> trunca para 240
+AssertionError: expected 'fallback_leak_tag' to be 'coach' // Object.is equality
+
+Expected: "coach"
+Received: "fallback_leak_tag"
+
+ ❯ tests/services/coachRecommendation.test.ts:232:28
+    230|     );
+    231|     const result = await recommendLessonForUser(buildInput());
+    232|     expect(result?.source).toBe('coach');
+       |                            ^
+    233|     expect((result?.reason ?? '').length).toBeLessThanOrEqual(240);
+    234|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/56]⎯
+
+ FAIL  |server| tests/services/coachRecommendation.test.ts > recommendLessonForUser — Tier 1 (Coach IA) > Anthropic responde reason < 20 chars -> substitui por reason fallback template
+AssertionError: expected 'fallback_leak_tag' to be 'coach' // Object.is equality
+
+Expected: "coach"
+Received: "fallback_leak_tag"
+
+ ❯ tests/services/coachRecommendation.test.ts:244:28
+    242|     );
+    243|     const result = await recommendLessonForUser(buildInput());
+    244|     expect(result?.source).toBe('coach');
+       |                            ^
+    245|     expect((result?.reason ?? '').length).toBeGreaterThanOrEqual(20);
+    246|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/56]⎯
+
+ FAIL  |server| tests/services/coachRecommendation.test.ts > recommendLessonForUser — idempotencia (puro, sem side-effect DB) > mesmas inputs (Tier 1) -> mesma saida; Anthropic chamado uma vez por call
+AssertionError: expected "vi.fn()" to be called 2 times, but got 0 times
+ ❯ tests/services/coachRecommendation.test.ts:525:32
+    523|     // 2 chamadas independentes do servico = 2 chamadas Anthropic.
+    524|     // A idempotencia verdadeira (1 rec/semana) eh garantida pelo cron…
+    525|     expect(messagesCreateMock).toHaveBeenCalledTimes(2);
+       |                                ^
+    526|   });
+    527| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/56]⎯
+
+ FAIL  |server| tests/storage/study-habit.test.ts > storage.getStudyHabit(userId) (RF-2) > retorna shape completo {streakDays, todayMinutes, goalMinutes, freezesUsedThisMonth, freezesRemaining, todayMet}
+AssertionError: expected { streakDays: 5, …(6) } to match object { streakDays: 5, …(4) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "freezesRemaining": 1,
+-   "freezesUsedThisMonth": 1,
++   "freezesRemaining": 2,
++   "freezesUsedThisMonth": 0,
+    "goalMinutes": 30,
+    "streakDays": 5,
+    "todayMinutes": 18,
+  }
+
+ ❯ tests/storage/study-habit.test.ts:81:15
+     79|
+     80|     const r = await (storage as any).getStudyHabit('USER-0001');
+     81|     expect(r).toMatchObject({
+       |               ^
+     82|       streakDays: 5,
+     83|       todayMinutes: expect.any(Number),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/56]⎯
+
+ FAIL  |server| tests/coach/ai-0a/tournament-scoring-service.test.ts > tournamentScoringService.rankTournamentsForContext (ADR-147 §1) > DRY com row CRU de library (sem buckets, currency:BRL) + bundle realista
+AssertionError: expected '$71-130' to be '$110-219.99' // Object.is equality
+
+Expected: "$110-219.99"
+Received: "$71-130"
+
+ ❯ tests/coach/ai-0a/tournament-scoring-service.test.ts:242:35
+    240|     const built = buildLibraryScoringInput(cruRow, {});
+    241|     // O SCT correto carrega os buckets DERIVADOS — nao undefined.
+    242|     expect(built.sct.buyInBucket).toBe('$110-219.99');
+       |                                   ^
+    243|     expect(built.sct.timeOfDayBucket).toBe('noite-nobre');
+    244|     expect(built.sct.fieldBucket).toBe('grande');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/56]⎯
+
+ FAIL  |server| tests/coach/ai-3.1/call-report-llm-integration.test.ts > RF-06 integration — dailyDebriefGenerator usa callReportLlm > dailyDebriefGenerator chama callReportLlm (nao SDK direto)
+AssertionError: expected "vi.fn()" to be called at least once
+ ❯ tests/coach/ai-3.1/call-report-llm-integration.test.ts:168:30
+    166|     }).catch(() => {});
+    167|
+    168|     expect(callReportLlmSpy).toHaveBeenCalled();
+       |                              ^
+    169|   });
+    170| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/56]⎯
+
+ FAIL  |server| tests/coach/ai-3/quarterlyReportGenerator.parallel.test.ts > generateQuarterlyReport — RF-06 gather paralelo (Promise.all wave) > operações independentes disparadas em paralelo (timestamps próximos)
+AssertionError: expected 333 to be less than 250
+ ❯ tests/coach/ai-3/quarterlyReportGenerator.parallel.test.ts:108:26
+    106|     // Sanity: wall-clock total deve ser próximo de 1 wave (~50-150ms),
+    107|     // NÃO soma das 5 (~250ms+).
+    108|     expect(totalElapsed).toBeLessThan(250);
+       |                          ^
+    109|
+    110|     errSpy.mockRestore();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/56]⎯
+
+ FAIL  |server| tests/coach/ai-3.2/cgame-persist-inline.test.ts > RF-C5 — disparo correto do updateCgameRecent > quarterly invoca updateCgameRecent fire-and-forget (nao bloqueia return)
+AssertionError: expected 689 to be less than 180
+ ❯ tests/coach/ai-3.2/cgame-persist-inline.test.ts:97:21
+     95|     // Fire-and-forget: return NAO aguarda os 200ms do updateCgameRece…
+     96|     // Tolerar ate 180ms (deve ser bem menor).
+     97|     expect(elapsed).toBeLessThan(180);
+       |                     ^
+     98|   });
+     99| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/56]⎯
+
+ FAIL  |server| tests/coach/ai-3.2/recommend-lesson-callreportllm.test.ts > RF-B2 — recommendLessonForUser delega para callReportLlm > invoca callReportLlm 1x com systemPrompt + userPromptBuilder + model + maxTokens
+AssertionError: expected "vi.fn()" to be called at least once
+ ❯ tests/coach/ai-3.2/recommend-lesson-callreportllm.test.ts:60:31
+     58|     }
+     59|
+     60|     expect(callReportLlmMock).toHaveBeenCalled();
+       |                               ^
+     61|     const call = callReportLlmMock.mock.calls[0][0] as any;
+     62|     expect(typeof call.systemPrompt).toBe("string");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/56]⎯
+
+ FAIL  |server| tests/coach/ai-3.2/recommend-lesson-callreportllm.test.ts > RF-B2 — recommendLessonForUser delega para callReportLlm > NAO importa @anthropic-ai/sdk diretamente (paridade quarterly)
+AssertionError: expected "vi.fn()" to be called at least once
+ ❯ tests/coach/ai-3.2/recommend-lesson-callreportllm.test.ts:102:31
+    100|     }
+    101|
+    102|     expect(callReportLlmMock).toHaveBeenCalled();
+       |                               ^
+    103|   });
+    104| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/56]⎯
+
+ FAIL  |server| tests/coach/ai-3.2/weekly-generator-callreportllm.test.ts > RF-B1 — weeklyReportGenerator delega para callReportLlm > invoca callReportLlm 1x com systemPrompt + bundle + model + maxTokens
+AssertionError: expected "vi.fn()" to be called at least once
+ ❯ tests/coach/ai-3.2/weekly-generator-callreportllm.test.ts:83:31
+     81|     } as any);
+     82|
+     83|     expect(callReportLlmMock).toHaveBeenCalled();
+       |                               ^
+     84|     const call = callReportLlmMock.mock.calls[0][0] as any;
+     85|     expect(typeof call.systemPrompt).toBe("string");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/56]⎯
+
+ FAIL  |server| tests/coach/ai-3.2/weekly-generator-callreportllm.test.ts > RF-B1 — weeklyReportGenerator delega para callReportLlm > NAO importa @anthropic-ai/sdk diretamente em weeklyReportGenerator (paridade quarterly)
+AssertionError: expected "vi.fn()" to be called at least once
+ ❯ tests/coach/ai-3.2/weekly-generator-callreportllm.test.ts:126:31
+    124|
+    125|     // Generator NAO threw + callReportLlm foi chamado.
+    126|     expect(callReportLlmMock).toHaveBeenCalled();
+       |                               ^
+    127|     expect(result).toBeDefined();
+    128|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/56]⎯
+
+ FAIL  |server| tests/coach/ai-3.2/weekly-generator-callreportllm.test.ts > RF-B1 — weeklyReportGenerator: degradedReason paridade > callReportLlm retorna degradedReason='llm_failed_3x' → weekly status='degraded'
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/coach/ai-3.2/weekly-generator-callreportllm.test.ts:160:91
+    158|
+    159|     // Status degraded + degradedReason preservado.
+    160|     expect(result.status === "degraded" || result.content?.generation?…
+       |                                                                                           ^
+    161|   });
+    162|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/56]⎯
+
+ FAIL  |server| tests/coach/ai-3.2/weekly-generator-callreportllm.test.ts > RF-B1 — weeklyReportGenerator: degradedReason paridade > callReportLlm retorna degradedReason='llm_parse_error' → weekly status='degraded'
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/coach/ai-3.2/weekly-generator-callreportllm.test.ts:190:91
+    188|     } as any);
+    189|
+    190|     expect(result.status === "degraded" || result.content?.generation?…
+       |                                                                                           ^
+    191|   });
+    192| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/56]⎯
+
+ FAIL  |server| tests/coach/ai-3.2/weekly-generator-callreportllm.test.ts > RF-B1 — weeklyReportGenerator passa parseOnError='fallback-degraded' > callsite usa fail-soft pattern (nao 'throw')
+AssertionError: expected "vi.fn()" to be called at least once
+ ❯ tests/coach/ai-3.2/weekly-generator-callreportllm.test.ts:220:31
+    218|     } as any);
+    219|
+    220|     expect(callReportLlmMock).toHaveBeenCalled();
+       |                               ^
+    221|     const call = callReportLlmMock.mock.calls[0][0] as any;
+    222|     expect(call.parseOnError === "fallback-degraded" || call.parseOnEr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/56]⎯
+
+ FAIL  |server| tests/integration/api/primedope.test.ts > POST /api/primedope/simulate > payload valido retorna 200 + SimulationResult
+AssertionError: expected 400 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 400
+
+ ❯ tests/integration/api/primedope.test.ts:142:22
+    140|       .post('/api/primedope/simulate')
+    141|       .send(validSimulatePayload);
+    142|     expect(r.status).toBe(200);
+       |                      ^
+    143|     expect(r.body.source).toBe('primedope');
+    144|     expect(typeof r.body.latencyMs).toBe('number');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/56]⎯
+
+ FAIL  |server| tests/integration/api/primedope.test.ts > POST /api/primedope/simulate > rate limit 1 req/10s: 2a request consecutiva retorna 429 com retryAfterMs
+AssertionError: expected 400 to be 429 // Object.is equality
+
+- Expected
++ Received
+
+- 429
++ 400
+
+ ❯ tests/integration/api/primedope.test.ts:156:22
+    154|     await supertest(app).post('/api/primedope/simulate').send(validSim…
+    155|     const r = await supertest(app).post('/api/primedope/simulate').sen…
+    156|     expect(r.status).toBe(429);
+       |                      ^
+    157|     expect(r.body.retryAfterMs).toBeGreaterThan(0);
+    158|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/56]⎯
+
+ FAIL  |server| tests/integration/api/primedope.test.ts > POST /api/primedope/simulate > cache hit (source=cache) NAO consome rate limit
+AssertionError: expected 400 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 400
+
+ ❯ tests/integration/api/primedope.test.ts:171:22
+    169|     const r = await supertest(app).post('/api/primedope/simulate').sen…
+    170|     // 2a req tambem cache hit -> nao 429 (skip rate limit em cache hi…
+    171|     expect(r.status).toBe(200);
+       |                      ^
+    172|   });
+    173|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/56]⎯
+
+ FAIL  |server| tests/integration/api/primedope.test.ts > POST /api/primedope/simulate > force=true bypass cache propaga para runSimulation
+AssertionError: expected "vi.fn()" to be called with arguments: [ ObjectContaining {"force": true} ]
+
+Number of calls: 0
+
+ ❯ tests/integration/api/primedope.test.ts:184:31
+    182|       .post('/api/primedope/simulate')
+    183|       .send({ ...validSimulatePayload, force: true });
+    184|     expect(runSimulationMock).toHaveBeenCalledWith(
+       |                               ^
+    185|       expect.objectContaining({ force: true })
+    186|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/56]⎯
+
+ FAIL  |server| tests/integration/api/primedope.test.ts > POST /api/primedope/simulate > error UPSTREAM_4XX_SCHEMA -> 502 com errorType + inputHash + timestamp
+AssertionError: expected 400 to be 502 // Object.is equality
+
+- Expected
++ Received
+
+- 502
++ 400
+
+ ❯ tests/integration/api/primedope.test.ts:202:22
+    200|       .send(validSimulatePayload);
+    201|
+    202|     expect(r.status).toBe(502);
+       |                      ^
+    203|     expect(r.body.errorType).toBe('upstream_4xx_schema_change');
+    204|     expect(r.body.inputHash).toBeTruthy();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/56]⎯
+
+ FAIL  |server| tests/integration/api/primedope.test.ts > GET /api/primedope/chart/:hash > hash valido sha256 mas arquivo ausente -> 404 + emit primedope_chart_proxy_miss
+AssertionError: expected undefined to be truthy
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ tests/integration/api/primedope.test.ts:224:21
+    222|       (c) => c[0] === 'primedope_chart_proxy_miss'
+    223|     );
+    224|     expect(emitted).toBeTruthy();
+       |                     ^
+    225|     expect(emitted?.[1]).toEqual(expect.objectContaining({ hash: valid…
+    226|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/56]⎯
+
+ FAIL  |server| tests/integration/invariants/bankroll-invariants.test.ts > Invariante 4: occurred_at <= now() (validado no Zod) > Zod schema rejeita occurredAt no futuro
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/integration/invariants/bankroll-invariants.test.ts:188:23
+    186|       occurredAt: tomorrow,
+    187|     });
+    188|     expect(r.success).toBe(false);
+       |                       ^
+    189|   });
+    190|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/56]⎯
+
+ FAIL  |server| tests/integration/routes/metas-2-scoreboard-leak-focus.test.ts > METAS-2 scoreboard — meta de processo via motor (RF-03) > motor no_plan (planned=null, low) -> compliancePct=null, dataSufficiency=low, current via fallback agregacao direta, 200
+AssertionError: current via fallback agregacao direta quando motor degrada: expected 1 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 1
+
+ ❯ tests/integration/routes/metas-2-scoreboard-leak-focus.test.ts:305:85
+    303|     expect(m.dataSufficiency).toBe('low');
+    304|     // current cai no fallback de agregacao direta (DEC-A5) — nao fica…
+    305|     expect(m.current, 'current via fallback agregacao direta quando mo…
+       |                                                                                     ^
+    306|   });
+    307|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/56]⎯
+
+ FAIL  |server| tests/unit/bankroll-reports/dashboardService.profit-with-manual-reports.test.ts > dashboardService.getRoiByPlatform — inclui manual_reports (RF-08) > soma deltaUsd de manual_reports na profitUSD por plataforma
+AssertionError: expected 60 to be close to 10, received difference is 50, but expected 0.05
+ ❯ tests/unit/bankroll-reports/dashboardService.profit-with-manual-reports.test.ts:74:26
+     72|     // RED: profit ainda nao soma manual_reports — deveria incluir del…
+     73|     // profit base 60 USD - 50 USD manual_report = 10 USD
+     74|     expect(ps.profitUSD).toBeCloseTo(10, 1);
+       |                          ^
+     75|   });
+     76|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/56]⎯
+
+ FAIL  |server| tests/unit/bankroll-reports/dashboardService.profit-with-manual-reports.test.ts > dashboardService.getRoiByPlatform — inclui manual_reports (RF-08) > manual_report sem profit pre-existente: profitUSD = manual_report delta
+AssertionError: expected undefined to be defined
+ ❯ tests/unit/bankroll-reports/dashboardService.profit-with-manual-reports.test.ts:90:16
+     88|
+     89|     const gg = result.platforms.find((p: any) => p.site === 'GGNetwork…
+     90|     expect(gg).toBeDefined();
+       |                ^
+     91|     expect(gg.profitUSD).toBeCloseTo(100, 1);
+     92|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/56]⎯
+
+ FAIL  |server| tests/unit/bankroll-reports/dashboardService.profit-with-manual-reports.test.ts > dashboardService.getRoiByPlatform — inclui manual_reports (RF-08) > FX-aware (#6): re-converte via fxResolver quando usdAmount ausente (legacy tx)
+AssertionError: expected undefined to be close to 20, received difference is NaN, but expected 0.05
+ ❯ tests/unit/bankroll-reports/dashboardService.profit-with-manual-reports.test.ts:107:27
+    105|     const result = await svc.getRoiByPlatform('USER-0001', { period: '…
+    106|     const ps = result.platforms.find((p: any) => p.site === 'PokerStar…
+    107|     expect(ps?.profitUSD).toBeCloseTo(20, 1);
+       |                           ^
+    108|   });
+    109|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/56]⎯
+
+ FAIL  |server| tests/unit/bankroll-reports/dashboardService.profit-with-manual-reports.test.ts > dashboardService.getRoiByPlatform — inclui manual_reports (RF-08) > manual_report direction=out subtrai (delta negativo)
+AssertionError: expected undefined to be close to -20, received difference is NaN, but expected 0.05
+ ❯ tests/unit/bankroll-reports/dashboardService.profit-with-manual-reports.test.ts:134:27
+    132|     const result = await svc.getRoiByPlatform('USER-0001', { period: '…
+    133|     const ps = result.platforms.find((p: any) => p.site === 'PokerStar…
+    134|     expect(ps?.profitUSD).toBeCloseTo(-20, 1);
+       |                           ^
+    135|   });
+    136|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/56]⎯
+
+ FAIL  |server| tests/unit/bankroll-reports/dashboardService.profit-with-manual-reports.test.ts > dashboardService.getRoiByPlatform — inclui manual_reports (RF-08) > multiplas wallets/plataformas: cada manual_report agrega sob seu site
+AssertionError: expected undefined to be close to 100, received difference is NaN, but expected 0.05
+ ❯ tests/unit/bankroll-reports/dashboardService.profit-with-manual-reports.test.ts:169:27
+    167|     const ps = result.platforms.find((p: any) => p.site === 'PokerStar…
+    168|     const gg = result.platforms.find((p: any) => p.site === 'GGNetwork…
+    169|     expect(ps?.profitUSD).toBeCloseTo(100, 1);
+       |                           ^
+    170|     expect(gg?.profitUSD).toBeCloseTo(-200, 1);
+    171|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/56]⎯
+
+ FAIL  |server| tests/unit/bankroll-reports/dashboardService.profit-with-manual-reports.test.ts > dashboardService.getRoiByPlatform — inclui manual_reports (RF-08) > session_result e manual_report somam juntos no profitUSD
+AssertionError: expected 60 to be close to 90, received difference is 30, but expected 0.05
+ ❯ tests/unit/bankroll-reports/dashboardService.profit-with-manual-reports.test.ts:190:27
+    188|     const ps = result.platforms.find((p: any) => p.site === 'PokerStar…
+    189|     // 60 + 30 = 90
+    190|     expect(ps?.profitUSD).toBeCloseTo(90, 1);
+       |                           ^
+    191|   });
+    192| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/56]⎯
+
+ FAIL  |server| tests/unit/ux-sprint1/library-tooltips.test.ts > getConfidenceTooltip > deve retornar tooltip correto para grade A
+AssertionError: expected 'A — 500+ torneios, altamente confiável' to contain '2000+'
+
+Expected: "2000+"
+Received: "A — 500+ torneios, altamente confiável"
+
+ ❯ tests/unit/ux-sprint1/library-tooltips.test.ts:48:21
+     46|   it('deve retornar tooltip correto para grade A', () => {
+     47|     const tooltip = getConfidenceTooltip('A');
+     48|     expect(tooltip).toContain('2000+');
+       |                     ^
+     49|     expect(tooltip).toContain('altamente confiavel');
+     50|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/56]⎯
+
+ FAIL  |server| tests/unit/ux-sprint1/library-tooltips.test.ts > getConfidenceTooltip > deve retornar tooltip correto para grade B
+AssertionError: expected 'B — 200-499 torneios, confiável' to contain '1000-1999'
+
+Expected: "1000-1999"
+Received: "B — 200-499 torneios, confiável"
+
+ ❯ tests/unit/ux-sprint1/library-tooltips.test.ts:54:21
+     52|   it('deve retornar tooltip correto para grade B', () => {
+     53|     const tooltip = getConfidenceTooltip('B');
+     54|     expect(tooltip).toContain('1000-1999');
+       |                     ^
+     55|     expect(tooltip).toContain('confiavel');
+     56|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/56]⎯
+
+ FAIL  |server| tests/unit/ux-sprint1/library-tooltips.test.ts > getConfidenceTooltip > deve retornar tooltip correto para grade C
+AssertionError: expected 'C — 100-199 torneios, moderado' to contain '500-999'
+
+Expected: "500-999"
+Received: "C — 100-199 torneios, moderado"
+
+ ❯ tests/unit/ux-sprint1/library-tooltips.test.ts:60:21
+     58|   it('deve retornar tooltip correto para grade C', () => {
+     59|     const tooltip = getConfidenceTooltip('C');
+     60|     expect(tooltip).toContain('500-999');
+       |                     ^
+     61|     expect(tooltip).toContain('moderado');
+     62|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/56]⎯
+
+ FAIL  |server| tests/unit/ux-sprint1/library-tooltips.test.ts > getConfidenceTooltip > deve retornar tooltip correto para grade D
+AssertionError: expected 'D — 50-99 torneios, baixa confiabilid…' to contain '200-499'
+
+Expected: "200-499"
+Received: "D — 50-99 torneios, baixa confiabilidade"
+
+ ❯ tests/unit/ux-sprint1/library-tooltips.test.ts:66:21
+     64|   it('deve retornar tooltip correto para grade D', () => {
+     65|     const tooltip = getConfidenceTooltip('D');
+     66|     expect(tooltip).toContain('200-499');
+       |                     ^
+     67|     expect(tooltip).toContain('baixa confiabilidade');
+     68|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/56]⎯
+
+ FAIL  |server| tests/unit/ux-sprint1/library-tooltips.test.ts > getConfidenceTooltip > deve retornar tooltip correto para grade F
+AssertionError: expected 'F — 30-49 torneios, dados insuficient…' to contain '50-199'
+
+Expected: "50-199"
+Received: "F — 30-49 torneios, dados insuficientes"
+
+ ❯ tests/unit/ux-sprint1/library-tooltips.test.ts:72:21
+     70|   it('deve retornar tooltip correto para grade F', () => {
+     71|     const tooltip = getConfidenceTooltip('F');
+     72|     expect(tooltip).toContain('50-199');
+       |                     ^
+     73|     expect(tooltip).toContain('dados insuficientes');
+     74|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/56]⎯
+
+ FAIL  |client| tests/components/PrimedopeResult.native.test.tsx > <PrimedopeResult> — native output format (RF-03) > drawdown section > renders drawdown card with median, p95, worst
+TestingLibraryElementError: Unable to find an element by: [data-testid="primedope-result-drawdown"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33mclass[39m=[32m"space-y-4"[39m
+      [33mdata-testid[39m=[32m"primedope-result"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex items-center justify-between"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-2"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"rounded bg-emerald-200 px-2 py-1 text-xs text-emerald-900"[39m
+            [33mdata-testid[39m=[32m"primedope-source-badge"[39m
+          [36m>[39m
+            [0mNativo[0m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"rounded bg-emerald-200 px-2 py-1 text-xs font-medium text-emerald-900"[39m
+            [33mdata-testid[39m=[32m"primedope-risk-badge"[39m
+          [36m>[39m
+            [0mBaixo risco[0m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</header>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"grid grid-cols-2 gap-3 md:grid-cols-4"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"rounded border border-border bg-card p-3"[39m
+          [33mdata-testid[39m=[32m"primedope-result-card-ev"[39m
+          [33mtitle[39m=[32m"Valor esperado medio (mean das simulacoes)"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+          [36m>[39m
+            [0mEV[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xl font-semibold"[39m
+          [36m>[39m
+            [0m$10.798[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"rounded border border-border bg-card p-3"[39m
+          [33mdata-testid[39m=[32m"primedope-result-card-roi"[39m
+          [33mtitle[39m=[32m"ROI medio (mean). Distribuicao MTT eh skewed, veja tambem ROI mediana abaixo."[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+          [36m>[39m
+            [0mROI medio[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xl font-semibold"[39m
+          [36m>[39m
+            [0m15.0%[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"rounded border border-border bg-card p-3"[39m
+          [33mdata-testid[39m=[32m"primedope-result-card-sd"[39m
+          [33mtitle[39m=[32m"Desvio padrao da distribuicao de profit USD"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+          [36m>[39m
+            [0mSD[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xl font-semibold"[39m
+          [36m>[39m
+            [0m$7.200[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"rounded border border-border bg-card p-3"[39m
+          [33mdata-testid[39m=[32m"primedope-result-card-profit-chance"[39m
+          [33mtitle[39m=[32m"% de simulacoes que terminaram com profit > 0"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+          [36m>[39m
+            [0mChance de Lucro[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xl font-semibold"[39m
+          [36m>[39m
+            [0m93.2%[0m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"rounded border border-border bg-card p-3"[39m
+        [33mdata-testid[39m=[32m"primedope-result-confidence-table"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mb-2 text-sm font-medium"[39m
+        [36m>[39m
+          [0mIntervalos de confianca[0m
+        [36m</div>[39m
+        [36m<table[39m
+          [33mclass[39m=[32m"w-full text-xs"[39m
+        [36m>[39m
+          [36m<thead>[39m
+            [36m<tr[39m
+              [33mclass[39m=[32m"text-muted-foreground"[39m
+            [36m>[39m
+              [36m<th[39m
+                [33mclass[39m=[32m"text-left"[39m
+              [36m>[39m
+                [0mFaixa[0m
+              [36m</th>[39m
+              [36m<th[39m
+                [33mclass[39m=[32m"text-right"[39m
+              [36m>[39m
+                [0mMin[0m
+              [36m</th>[39m
+              [36m<th[39m
+                [33mclass[39m=[32m"text-right"[39m
+              [36m>[39m
+                [0mMax[0m
+              [36m</th>[39m
+            [36m</tr>[39m
+          [36m</thead>[39m
+          [36m<tbody>[39m
+            [36m<tr[39m
+              [33mdata-testid[39m=[32m"primedope-ci-band-70"[39m
+            [36m>[39m
+              [36m<td>[39m
+                [0m70%[0m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"text-right"[39m
+              [36m>[39m
+                [0m$3.627[0m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"text-right"[39m
+              [36m>[39m
+                [0m$17.627[0m
+              [36m</td>[39m
+            [36m</tr>[39m
+            [36m<tr[39m
+              [33mdata-testid[39m=[32m"primedope-ci-band-95"[39m
+            [36m>[39m
+              [36m<td>[39m
+                [0m95%[0m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"text-right"[39m
+              [36m>[39m
+                [0m-$3.171[0m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"text-right"[39m
+              [36m>[39m
+                [0m$25.227[0m
+              [36m</td>[39m
+            [36m</tr>[39m
+            [36m<tr[39m
+              [33mdata-testid[39m=[32m"primedope-ci-band-997"[39m
+            [36m>[39m
+              [36m<td>[39m
+                [0m99.7%[0m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"text-right"[39m
+              [36m>[39m
+                [0m-$12.000[0m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"text-right"[39m
+              [36m>[39m
+                [0m$33.000[0m
+              [36m</td>[39m
+            [36m</tr>[39m
+          [36m</tbody>[39m
+        [36m</table>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"grid grid-cols-1 gap-3 md:grid-cols-3"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"rounded border border-red-300 bg-red-50 p-4"[39m
+          [33mdata-testid[39m=[32m"scenario-card-pessimista"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm font-medium text-red-700"[39m
+          [36m>[39m
+            [0mPessimista[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xl font-semibold text-red-700"[39m
+          [36m>[39m
+            [0m-$3.171[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+          [36m>[39m
+            [0m1 a cada 40 [0m
+            [0mtrimestres[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"rounded border border-blue-300 bg-blue-50 p-4"[39m
+          [33mdata-testid[39m=[32m"scenario-card-mediana"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm font-medium text-blue-700"[39m
+          [36m>[39m
+            [0mResultado tipico[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xl font-semibold text-blue-700"[39m
+          [36m>[39m
+            [0m+$10.327[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+          [36m>[39m
+            [0mMediana (50%)[0m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"rounded border border-green-300 bg-green-50 p-4"[39m
+          [33mdata-testid[39m=[32m"scenario-card-otimista"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-sm font-medium text-green-700"[39m
+          [36m>[39m
+            [0mOtimista[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xl font-semibold text-green-700"[39m
+          [36m>[39m
+            [0m+$25.227[0m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+          [36m>[39m
+            [0m1 a cada 40 [0m
+            [0mtrimestres[0m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"rounded border border-border bg-card p-4 space-y-3"[39m
+        [33mdata-testid[39m=[32m"drawdown-card"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"text-sm font-medium"[39m
+        [36m>[39m
+          [0mDrawdown esperado[0m
+        [36m</div>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+        [36m>[39m
+          [0mMaior queda do pico ao vale no periodo simulado.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-3"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-1"[39m
+            [33mdata-testid[39m=[32m"drawdown-tipico"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex justify-between text-sm"[39m
+            [36m>[39m
+              [36m<span>[39m
+                [0mTipico[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"font-semibold"[39m
+              [36m>[39m
+                [0m$2.787[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"h-2 w-full rounded bg-muted"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"h-2 rounded bar bg-red-400"[39m
+                [33mdata-testid[39m=[32m"drawdown-bar-tipico"[39m
+                [33mrole[39m=[32m"progressbar"[39m
+                [33mstyle[39m=[32m"width: 15%;"[39m
+              [36m/>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-1"[39m
+            [33mdata-testid[39m=[32m"drawdown-preparar"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex justify-between text-sm"[39m
+            [36m>[39m
+              [36m<span>[39m
+                [0mPreparar (95%)[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"font-semibold"[39m
+              [36m>[39m
+                [0m$6.737[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"h-2 w-full rounded bg-muted"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"h-2 rounded bar bg-red-400"[39m
+                [33mdata-testid[39m=[32m"drawdown-bar-preparar"[39m
+                [33mrole[39m=[32m"progressbar"[39m
+                [33mstyle[39m=[32m"width: 37%;"[39m
+              [36m/>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-1"[39m
+            [33mdata-testid[39m=[32m"drawdown-pior"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex justify-between text-sm"[39m
+            [36m>[39m
+              [36m<span>[39m
+                [0mPior raro[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"font-semibold"[39m
+              [36m>[39m
+                [0m$18.273[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"h-2 w-full rounded bg-muted"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"h-2 rounded bar bg-red-400"[39m
+                [33mdata-testid[39m=[32m"drawdown-bar-pior"[39m
+                [33mrole[39m=[32m"progressbar"[39m
+                [33mstyle[39m=[32m"width: 100%;"[39m
+              [36m/>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mdata-testid[39m=[32m"variance-histogram"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mstyle[39m=[32m"display: none;"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-green-500"[39m
+            [33mdata-color[39m=[32m"green"[39m
+            [33mdata-testid[39m=[32m"histogram-bar-0"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-green-500"[39m
+            [33mdata-color[39m=[32m"green"[39m
+            [33mdata-testid[39m=[32m"histogram-bar-1"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"text-green-500"[39m
+            [33mdata-color[39m=[32m"green"[39m
+            [33mdata-testid[39m=[32m"histogram-bar-2"[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"recharts-responsive-container"[39m
+          [33mstyle[39m=[32m"width: 100%; height: 300px; min-width: 0px;"[39m
+        [36m/>[39m
+        [36m<div[39m
+          [33mdata-testid[39m=[32m"histogram-median-line"[39m
+          [33mstyle[39m=[32m"display: none;"[39m
+        [36m/>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"rounded border border-border bg-card p-4 space-y-2"[39m
+        [33mdata-testid[39m=[32m"group-contributions"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"text-sm font-medium"[39m
+        [36m>[39m
+          [0mContribuicao por Grupo[0m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-2"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-1"[39m
+            [33mdata-testid[39m=[32m"group-contribution-row-0"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center justify-between text-sm"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"font-medium"[39m
+              [36m>[39m
+                [0mG2 Mid Vanilla[0m
+              [36m</span>[39m
+              [36m<span>[39m
+                [0m336[0m
+              [36m</span>[39m
+              [36m<span>[39m
+                [0m$24.864[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-green-600"[39m
+              [36m>[39m
+                [0m+$3.730[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"h-1.5 w-full rounded bg-muted"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"h-1.5 rounded bar bg-green-500"[39m
+                [33mrole[39m=[32m"progressbar"[39m
+                [33mstyle[39m=[32m"width: 100%;"[39m
+              [36m/>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"space-y-1"[39m
+            [33mdata-testid[39m=[32m"group-contribution-row-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center justify-between text-sm"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"font-medium"[39m
+              [36m>[39m
+                [0mG1 High mix[0m
+              [36m</span>[39m
+              [36m<span>[39m
+                [0m60[0m
+              [36m</span>[39m
+              [36m<span>[39m
+                [0m$9.780[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-green-600"[39m
+              [36m>[39m
+                [0m+$1.467[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"h-1.5 w-full rounded bg-muted"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"h-1.5 rounded bar bg-green-500"[39m
+                [33mrole[39m=[32m"progressbar"[39m
+                [33mstyle[39m=[32m"width: 39%;"[39m
+              [36m/>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between text-sm font-bold border-t pt-2"[39m
+            [33mdata-testid[39m=[32m"group-contribution-total"[39m
+          [36m>[39m
+            [36m<span>[39m
+              [0mTOTAL[0m
+            [36m</span>[39m
+            [36m<span>[39m
+              [0m396[0m
+            [36m</span>[39m
+            [36m<span>[39m
+              [0m$34.644[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-green-600"[39m
+            [36m>[39m
+              [0m+$5.197[0m
+            [36m</span>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</section>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ tests/components/PrimedopeResult.native.test.tsx:167:32
+    165|       render(<PrimedopeResult result={nativeResultPayload as any} />);
+    166|
+    167|       const ddSection = screen.getByTestId('primedope-result-drawdown'…
+       |                                ^
+    168|       expect(ddSection).toBeInTheDocument();
+    169|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/56]⎯
+
+ FAIL  |client| client/src/lib/audio-telemetry.test.ts > audio-telemetry.emitAudioEvent (RF-04.2 / ADR-191) > emit default (fetch keepalive) → POST /api/user-activity com body shape correto
+AssertionError: expected 'unknown' to be 'mini_player' // Object.is equality
+
+Expected: "mini_player"
+Received: "unknown"
+
+ ❯ client/src/lib/audio-telemetry.test.ts:64:23
+     62|     const body = JSON.parse(opts.body);
+     63|     expect(body.action).toBe('audio_driver_active');
+     64|     expect(body.page).toBe('mini_player');
+       |                       ^
+     65|     expect(body.metadata.driver).toBe('spotify');
+     66|     expect(body.metadata.v).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[38/56]⎯
+
+ FAIL  |client| client/src/lib/audio-telemetry.test.ts > audio-telemetry.emitAudioEvent (RF-04.2 / ADR-191) > offline (navigator.onLine=false): enfileira em localStorage backlog em vez de fetch
+AssertionError: expected null to be truthy
+
+- Expected:
+true
+
++ Received:
+null
+
+ ❯ client/src/lib/audio-telemetry.test.ts:117:20
+    115|     expect((globalThis as any).fetch).not.toHaveBeenCalled();
+    116|     const stored = localStorage.getItem('mini_player:audio_telemetry_b…
+    117|     expect(stored).toBeTruthy();
+       |                    ^
+    118|     const parsed = JSON.parse(stored!);
+    119|     expect(Array.isArray(parsed)).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39/56]⎯
+
+ FAIL  |client| client/src/lib/audio-telemetry.test.ts > audio-telemetry.emitAudioEvent (RF-04.2 / ADR-191) > backlog cap 100: 101o evento descarta o mais antigo (FIFO)
+TypeError: Cannot read properties of null (reading 'length')
+ ❯ client/src/lib/audio-telemetry.test.ts:134:19
+    132|     }
+    133|     const parsed = JSON.parse(localStorage.getItem('mini_player:audio_…
+    134|     expect(parsed.length).toBe(100);
+       |                   ^
+    135|     expect(parsed[0].metadata.i).toBe(1); // 0 foi descartado
+    136|     expect(parsed[99].metadata.i).toBe(100);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[40/56]⎯
+
+ FAIL  |client| tests/client/mini-player/MiniPlayerExpanded.test.tsx > <MiniPlayerExpanded> (RF-04) > botao minimize (chevron-down) muda displayMode -> "bar"
+Error: Unable to perform pointer interaction as the element has `pointer-events: none`:
+
+BUTTON(testId=mini-player-expanded-minimize)(label=Minimizar)
+ ❯ assertPointerEvents node_modules/@testing-library/user-event/dist/esm/utils/pointer/cssPointerEvents.js:45:15
+ ❯ Object.enter node_modules/@testing-library/user-event/dist/esm/system/pointer/pointer.js:50:17
+ ❯ PointerHost.move node_modules/@testing-library/user-event/dist/esm/system/pointer/index.js:51:85
+ ❯ pointerAction node_modules/@testing-library/user-event/dist/esm/pointer/index.js:57:39
+ ❯ Object.pointer node_modules/@testing-library/user-event/dist/esm/pointer/index.js:25:15
+ ❯ Object.asyncWrapper node_modules/@testing-library/react/dist/pure.js:87:22
+ ❯ tests/client/mini-player/MiniPlayerExpanded.test.tsx:136:5
+    134|     const user = await setup();
+    135|     const min = screen.getByTestId('mini-player-expanded-minimize');
+    136|     await user.click(min);
+       |     ^
+    137|     expect(screen.getByTestId('mode').textContent).toBe('bar');
+    138|     expect(screen.queryByTestId('mini-player-expanded')).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[41/56]⎯
+
+ FAIL  |client| tests/client/mini-player/MiniPlayerExpanded.test.tsx > <MiniPlayerExpanded> (RF-04) > click no backdrop minimiza para "bar"
+Error: Unable to perform pointer interaction as the element has `pointer-events: none`:
+
+DIV(testId=mini-player-expanded-backdrop)
+ ❯ assertPointerEvents node_modules/@testing-library/user-event/dist/esm/utils/pointer/cssPointerEvents.js:45:15
+ ❯ Object.enter node_modules/@testing-library/user-event/dist/esm/system/pointer/pointer.js:50:17
+ ❯ PointerHost.move node_modules/@testing-library/user-event/dist/esm/system/pointer/index.js:51:85
+ ❯ pointerAction node_modules/@testing-library/user-event/dist/esm/pointer/index.js:57:39
+ ❯ Object.pointer node_modules/@testing-library/user-event/dist/esm/pointer/index.js:25:15
+ ❯ Object.asyncWrapper node_modules/@testing-library/react/dist/pure.js:87:22
+ ❯ tests/client/mini-player/MiniPlayerExpanded.test.tsx:144:5
+    142|     const user = await setup();
+    143|     const backdrop = screen.getByTestId('mini-player-expanded-backdrop…
+    144|     await user.click(backdrop);
+       |     ^
+    145|     expect(screen.getByTestId('mode').textContent).toBe('bar');
+    146|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[42/56]⎯
+
+ FAIL  |client| tests/client/mini-player/useMiniPlayerHeight.test.tsx > useMiniPlayerHeight (RF-11) > retorna 0 quando displayMode === "hidden" (desktop)
+AssertionError: expected '48' to be '0' // Object.is equality
+
+Expected: "0"
+Received: "48"
+
+ ❯ tests/client/mini-player/useMiniPlayerHeight.test.tsx:80:54
+     78|     const { AudioPlayerProvider } = loadModules();
+     79|     render(<AudioPlayerProvider><Probe /></AudioPlayerProvider>);
+     80|     expect(screen.getByTestId('height').textContent).toBe('0');
+       |                                                      ^
+     81|   });
+     82|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[43/56]⎯
+
+ FAIL  |client| tests/client/mini-player-1.2/MiniPlayerBar.cnHelper.test.tsx > <MiniPlayerBar> RF-02 cn() helper migration > source contem chamada cn(...) com animate-spin-slow conditional
+AssertionError: expected '// MiniPlayerBar — Sprint Mini Player…' to contain 'animate-spin-slow'
+
+- Expected
++ Received
+
+- animate-spin-slow
++ // MiniPlayerBar — Sprint Mini Player 1 / RF-01..RF-13 + MP-MODERN.
++ // Barra persistente cross-page (renderizada em App.tsx dentro do
++ // AudioPlayerProvider). 9 controles + keyboard shortcuts + glassmorphism +
++ // responsive 3 breakpoints (mobile <768 / tablet 768-1023 / desktop >=1024).
++ //
++ // Sprint MP-MODERN (ADR-209) — redesign visual + UX hardening:
++ //   RF-01 hero artwork responsive + pulse-subtle (no spin)
++ //   RF-02 progress bar gradient + mm:ss + scrub tooltip + thumb h-3
++ //   RF-03 controls pill + toggle destacado bg-white
++ //   RF-04 sidebar 3 dividers
++ //   RF-06 EmptyStateCTA quando !activeTrack (early return removido)
++ 
++ import React, { Suspense, useEffect, useState } from "react";
++ import {
++   AlertTriangle,
++   BookOpen,
++   ChevronUp,
++   HelpCircle,
++   ListMusic,
++   Loader2,
++   Music,
++   Pause,
++   Play,
++   RotateCcw,
++   RotateCw,
++   SkipBack,
++   SkipForward,
++   X,
++ } from "lucide-react";
++ // Sprint Mini Player 3.2 / W-B5 — PT-BR error message mapping.
++ import { mapAudioErrorToMessage } from "@/lib/audio-engine/errorMessages";
++ import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
++ // Sprint MP-VALIDATION / RF-01 — emit dot-namespace audio.* events.
++ import { emitAudioEvent } from "@/lib/activity-telemetry";
++ // Sprint UX-GLOBAL-BUTTONS — Spotify connect global no mini player.
++ import {
++   initiateSpotifyAuth,
++   invalidateSpotifyStatus,
++   SpotifyPremiumRequiredError,
++ } from "@/lib/spotify/auth";
++ import { SPOTIFY_SEARCH_ELIGIBLE_TIERS } from "@/lib/spotify/tierEligibility";
++ // Sprint UX-GLOBAL-BUTTONS — LessonPickerDialog lazy global (antes so /grind-live).
++ const LessonPickerDialog = React.lazy(() =>
++   import("./LessonPickerDialog").then((m) => ({ default: m.LessonPickerDialog })),
++ );
++ import { useMiniPlayerHeight } from "@/hooks/useMiniPlayerHeight";
++ import { sanitizeCoverUrl } from "@/lib/audio-engine/sanitizeCoverUrl";
++ import { cn } from "@/lib/utils";
++ import { VolumeControl } from "./VolumeControl";
++ // Sprint Mini Player 2 (CRITICAL-2) — Sleep Timer control wired in mini player.
++ import { SleepTimerControl } from "./SleepTimerControl";
++ // Sprint Mini Player 3 (MP3.1 R1 fix CRITICAL-1) — useKeyboardShortcuts hook +
++ // ShortcutsHelpPopover rendering.
++ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
++ import { ShortcutsHelpPopover } from "./ShortcutsHelpPopover";
++ // Sprint Mini Player 3 (MP3.1 R1 fix CRITICAL-2) — Queue UI.
++ import { QueuePopover } from "./QueuePopover";
++ // Sprint Mini Player 3.1 Wave B / TIER 3 #7 — onboarding tooltip primeira vez.
++ import { MiniPlayerOnboarding } from "./MiniPlayerOnboarding";
++ // Sprint SPOTIFY-DEEP / RF-04 — botao "Buscar Spotify" + dialog.
++ // R1 fix HIGH-1 (lesson #1 + #29): substitui wrappers try/catch (violavam
++ // Rules of Hooks — render N lancava, N+1 nao -> ordem inconsistente) por
++ // padrao ErrorBoundary local. Hooks `useSpotifyStatus`/`useAuth` chamados em
++ // sub-componente isolado; quando providers ausentes (test legacy sem
++ // QueryClientProvider/AuthProvider), boundary captura e devolve defaults.
++ import { Search as SearchIcon } from "lucide-react";
++ import { useSpotifyStatus } from "@/hooks/useSpotifyStatus";
++ import { useAuth } from "@/contexts/AuthContext";
++ import { SpotifySearchDialog } from "./SpotifySearchDialog";
++ 
++ // =============================================================================
++ // HIGH-1 fix: ErrorBoundary local — captura "No QueryClient set" / "useAuth
++ // must be used within AuthProvider" em tests legacy sem providers, devolve
++ // defaults safely. Hook chamado SEMPRE no mesmo sub-componente (Rules of
++ // Hooks OK). Lesson #29.
++ // =============================================================================
++ type SpotifyAuthSnapshot = {
++   isConnected: boolean;
++   productTier: string | null;
++   tier: string;
++   isAdmin: boolean;
++   userId: string | null;
++ };
++ 
++ const DEFAULT_SPOTIFY_AUTH: SpotifyAuthSnapshot = {
++   isConnected: false,
++   productTier: null,
++   tier: "",
++   isAdmin: false,
++   userId: null,
++ };
++ 
++ class SpotifyAuthBoundary extends React.Component<
++   { onSnapshot: (s: SpotifyAuthSnapshot) => void; children: React.ReactNode },
++   { failed: boolean }
++ > {
++   state = { failed: false };
++   static getDerivedStateFromError() {
++     return { failed: true };
++   }
++   componentDidCatch() {
++     this.props.onSnapshot(DEFAULT_SPOTIFY_AUTH);
++   }
++   render() {
++     if (this.state.failed) return null;
++     return this.props.children as any;
++   }
++ }
++ 
++ function SpotifyAuthReader({
++   onSnapshot,
++ }: {
++   onSnapshot: (s: SpotifyAuthSnapshot) => void;
++ }) {
++   // Hooks chamados sempre, no mesmo componente (Rules of Hooks ok).
++   const status = useSpotifyStatus();
++   const auth = useAuth();
++   React.useEffect(() => {
++     const tier = String((auth as any)?.user?.subscriptionPlan ?? "").toLowerCase();
++     onSnapshot({
++       isConnected: !!status?.isConnected,
++       productTier: status?.productTier ?? null,
++       tier,
++       isAdmin: !!(auth as any)?.isAdmin,
++       userId: (auth as any)?.user?.userPlatformId ?? null,
++     });
++   }, [
++     status?.isConnected,
++     status?.productTier,
++     (auth as any)?.user?.subscriptionPlan,
++     (auth as any)?.isAdmin,
++     (auth as any)?.user?.userPlatformId,
++     onSnapshot,
++   ]);
++   return null;
++ }
++ // Sprint MP-MODERN / RF-06 — empty state CTA quando !activeTrack.
++ import { EmptyStateCTA } from "./EmptyStateCTA";
++ // Sprint MP-MODERN / RF-05 — expanded dialog co-localizado para testes RTL
++ // que renderizam apenas <MiniPlayerBar /> (sem precisar montar tambem o
++ // dialog em App.tsx).
++ import { ExpandedPlayerDialog } from "./ExpandedPlayerDialog";
++ 
++ const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
++ 
++ type Viewport = "mobile" | "tablet" | "desktop";
++ 
++ function detectViewport(): Viewport {
++   if (typeof window === "undefined") return "desktop";
++   const w = window.innerWidth ?? 1024;
++   if (w >= 1024) return "desktop";
++   if (w >= 768) return "tablet";
++   return "mobile";
++ }
++ 
++ function useViewport(): Viewport {
++   const [vp, setVp] = useState<Viewport>(detectViewport);
++   useEffect(() => {
++     if (typeof window === "undefined") return;
++     const onResize = () => setVp(detectViewport());
++     window.addEventListener("resize", onResize);
++     return () => window.removeEventListener("resize", onResize);
++   }, []);
++   return vp;
++ }
++ 
++ function usePrefersReducedMotion(): boolean {
++   const [reduced, setReduced] = useState<boolean>(() => {
++     if (typeof window === "undefined" || !window.matchMedia) return false;
++     try {
++       return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
++     } catch {
++       return false;
++     }
++   });
++   useEffect(() => {
++     if (typeof window === "undefined" || !window.matchMedia) return;
++     try {
++       const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
++       const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
++       if (typeof mq.addEventListener === "function") {
++         mq.addEventListener("change", handler);
++         return () => mq.removeEventListener("change", handler);
++       }
++     } catch {
++       // ignore
++     }
++   }, []);
++   return reduced;
++ }
++ 
++ // Sprint MP-MODERN / RF-02 — helper mm:ss (`00:00`, `05:42`, `60:00`).
++ export function formatMmSs(sec: number | undefined | null): string {
++   if (typeof sec !== "number" || !isFinite(sec) || sec < 0) return "--:--";
++   const total = Math.floor(sec);
++   const m = Math.floor(total / 60);
++   const s = total % 60;
++   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
++ }
++ 
++ export function MiniPlayerBar() {
++   const ctxRaw = useAudioPlayer() as any;
++   const {
++     activeTrack,
++     isPlaying,
++     currentSeconds,
++     durationSeconds,
++     displayMode,
++     speed,
++     toggle,
++     close,
++     seek,
++     setSpeed,
++     skipBack,
++     skipForward,
++     playNext,
++     playPrevious,
++     toggleMute,
++     setDisplayMode,
++     courseContext,
++     // Sprint Mini Player 2 (CRITICAL-2 + RF-NEW.1).
++     sleepTimerMinutes,
++     sleepTimerRemainingSeconds,
++     setSleepTimer,
++     cancelSleepTimer,
++     // MP3.1 R1 fix CRITICAL-1: volume + setVolume pra useKeyboardShortcuts.
++     volume,
++     setVolume,
++     // MP3.1 R1 fix CRITICAL-2: queue surface.
++     queueItems,
++     repeatMode,
++     shuffleEnabled,
++     removeFromQueue,
++     clearQueue,
++     setRepeatMode,
++     toggleShuffle,
++     skipToQueueItem,
++     reorderQueue,
++     // MP3.1 Wave B / TIER 3 #5 + #6.
++     loadError,
++     retryCurrent,
++     clearLoadError,
++     isBuffering,
++   } = ctxRaw;
++   // Sprint MP-VALIDATION / RF-01 — back-compat com mocks de teste que expoem
++   // `togglePlayPause` em vez de `toggle`. Fallback graceful.
++   const togglePlayPauseFn: () => void =
++     typeof toggle === "function"
++       ? toggle
++       : typeof ctxRaw?.togglePlayPause === "function"
++         ? ctxRaw.togglePlayPause
++         : () => {};
++ 
++   const vp = useViewport();
++   const reducedMotion = usePrefersReducedMotion();
++   // Sets CSS variable --mini-player-height for layouts that reserve space
++   // via `padding-bottom: var(--mini-player-height)` (RF-11).
++   useMiniPlayerHeight();
++ 
++   // MP3.1 R1 fix CRITICAL-1: state local pro ShortcutsHelpPopover + QueuePopover.
++   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
++   const [queueOpen, setQueueOpen] = useState(false);
++   // Sprint UX-GLOBAL-BUTTONS — picker de aulas global + Spotify connecting state.
++   const [pickerOpen, setPickerOpen] = useState(false);
++   const [spotifyConnecting, setSpotifyConnecting] = useState(false);
++   // Sprint SPOTIFY-DEEP / RF-04 — state local SpotifySearchDialog.
++   const [spotifySearchOpen, setSpotifySearchOpen] = useState(false);
++   // R1 fix HIGH-1 (lesson #29): hooks chamados via SpotifyAuthReader dentro
++   // de SpotifyAuthBoundary — quando providers ausentes (tests legacy sem
++   // QueryClientProvider/AuthProvider), boundary captura e devolve defaults.
++   // Render do MiniPlayerBar permanece consistente em hook count/order.
++   const [authSnapshot, setAuthSnapshot] = useState<SpotifyAuthSnapshot>(
++     DEFAULT_SPOTIFY_AUTH,
++   );
++   const handleAuthSnapshot = React.useCallback((s: SpotifyAuthSnapshot) => {
++     setAuthSnapshot((prev) => {
++       // shallow compare evita render loop.
++       if (
++         prev.isConnected === s.isConnected &&
++         prev.productTier === s.productTier &&
++         prev.tier === s.tier &&
++         prev.isAdmin === s.isAdmin &&
++         prev.userId === s.userId
++       ) {
++         return prev;
++       }
++       return s;
++     });
++   }, []);
++   const spotifyStatus = {
++     isConnected: authSnapshot.isConnected,
++     productTier: authSnapshot.productTier,
++   };
++   const tierLower = authSnapshot.tier;
++   const tierEligibleForSearch = SPOTIFY_SEARCH_ELIGIBLE_TIERS.has(tierLower);
++   // Sprint MP-MODERN / RF-02 — scrub preview tooltip state.
++   const [scrubPreviewSec, setScrubPreviewSec] = useState<number | null>(null);
++   const [scrubPreviewLeftPct, setScrubPreviewLeftPct] = useState<number>(0);
++ 
++   const activeSource: string | null = ctxRaw?.activeSource ?? activeTrack?.source ?? null;
++ 
++   // Sprint SPOTIFY-DEEP / RF-04 — handler abre dialog + emite telemetria.
++   const openSpotifySearch = React.useCallback(
++     (source: "mini_player_button" | "keyboard_shortcut") => {
++       if (!spotifyStatus.isConnected || !tierEligibleForSearch) return;
++       try {
++         void emitAudioEvent("audio.spotify_search_open", {
++           source,
++           tier: tierLower || "unknown",
++           spotifyConnected: spotifyStatus.isConnected,
++         });
++       } catch {
++         // never throw
++       }
++       setSpotifySearchOpen(true);
++     },
++     [spotifyStatus.isConnected, tierEligibleForSearch, tierLower],
++   );
++ 
++   // Cmd/Ctrl+/ atalho global (Q4 default — ADR-208 §8).
++   useEffect(() => {
++     if (typeof window === "undefined") return;
++     const handler = (e: KeyboardEvent) => {
++       if (e.key === "/" && (e.metaKey || e.ctrlKey)) {
++         if (!spotifyStatus.isConnected || !tierEligibleForSearch) return;
++         e.preventDefault();
++         openSpotifySearch("keyboard_shortcut");
++       }
++     };
++     window.addEventListener("keydown", handler);
++     return () => window.removeEventListener("keydown", handler);
++   }, [openSpotifySearch, spotifyStatus.isConnected, tierEligibleForSearch]);
++ 
++   // MP3.1 R1 fix CRITICAL-1: useKeyboardShortcuts handler unico (lesson #1 —
++   // sempre roda antes do early return).
++   useKeyboardShortcuts({
++     toggle,
++     skipBack,
++     skipForward,
++     setVolume,
++     volume,
++     toggleMute,
++     seek,
++     durationSeconds,
++     displayMode: displayMode as any,
++     setDisplayMode: setDisplayMode as any,
++     close,
++     shortcutsHelpOpen,
++     setShortcutsHelpOpen,
++   });
++ 
++   // Sprint MP-MODERN / RF-06 — lesson #1 hooks order:
++   //   1. displayMode==='hidden' -> null (zero render)
++   //   2. !activeTrack -> EmptyStateCTA (RF-06)
++   //   3. else -> bar normal.
++   // Os hooks acima rodam SEMPRE; early return so DEPOIS.
++   if (displayMode === "hidden") return null;
++   if (!activeTrack) return <EmptyStateCTA />;
++ 
++   const sanitizedCoverUrl = sanitizeCoverUrl(activeTrack.coverUrl);
++   const hasPrev = !!(courseContext && courseContext.currentIndex > 0);
++   const hasNext = !!(
++     courseContext &&
++     courseContext.currentIndex < (courseContext.lessons?.length ?? 0) - 1
++   );
++   // Sprint MP-VALIDATION / RF-01 — quando NEM courseContext NEM queueItems sao
++   // arrays/definidos (cenario test mock minimalista), liberamos botoes p/ emitir
++   // telemetria. Producao do AudioPlayerProvider sempre fornece queueItems[] OR
++   // courseContext, mantendo behavior original.
++   const navContextDefined =
++     courseContext !== undefined || Array.isArray(queueItems);
++   const showPrevNext = vp === "desktop";
++   const showVolume = vp !== "mobile";
++   const showSpeed = vp !== "mobile";
++ 
++   // Prev: if currentSeconds > 3, seek to 0; else playPrevious.
++   function handlePrev() {
++     if (currentSeconds > 3) {
++       seek(0);
++     } else {
++       playPrevious();
++     }
++   }
++   const prevDisabled = navContextDefined && !hasPrev && currentSeconds <= 3;
++   const nextDisabled = navContextDefined && !hasNext;
++ 
++   // Sprint MP-MODERN / RF-01 — cover state for data-attribute.
++   const coverState: "playing" | "idle" = isPlaying ? "playing" : "idle";
++   const coverResponsiveClasses =
++     "h-12 w-12 md:h-14 md:w-14 lg:h-16 lg:w-16 rounded-md object-cover mini-player-cover";
++ 
++   // Sprint MP-MODERN / RF-02 — handlers de scrub preview tooltip.
++   function handleProgressMouseMove(e: React.MouseEvent<HTMLDivElement>) {
++     const el = e.currentTarget;
++     const rect = el.getBoundingClientRect();
++     if (!rect.width || rect.width <= 0) return;
++     const ratio = Math.min(
++       1,
++       Math.max(0, (e.clientX - rect.left) / rect.width),
++     );
++     const dur = typeof durationSeconds === "number" ? durationSeconds : 0;
++     if (dur <= 0) return;
++     setScrubPreviewSec(ratio * dur);
++     setScrubPreviewLeftPct(ratio * 100);
++   }
++ 
++   function handleProgressMouseLeave() {
++     setScrubPreviewSec(null);
++   }
++ 
++   const currentLabel = formatMmSs(currentSeconds);
++   const durationLabel = formatMmSs(durationSeconds);
++ 
++   return (
++     <div
++       data-testid="mini-player-bar"
++       data-mini-player-mode="active"
++       role="complementary"
++       aria-label="Player de audio persistente"
++       data-reduced-motion={reducedMotion ? "true" : "false"}
++       className={
++         "fixed bottom-0 left-0 right-0 z-40 px-3 py-2 flex items-center gap-3 " +
++         "bg-gray-900/60 backdrop-blur-glass border-t border-white/10 text-white mini-player-bar" +
++         (reducedMotion ? " motion-reduce" : "")
++       }
++       style={{
++         backdropFilter: "blur(20px) saturate(180%)",
++         WebkitBackdropFilter: "blur(20px) saturate(180%)",
++       }}
++     >
++       {/* HIGH-1 fix: hooks isolados em ErrorBoundary local — lesson #29. */}
++       <SpotifyAuthBoundary onSnapshot={handleAuthSnapshot}>
++         <SpotifyAuthReader onSnapshot={handleAuthSnapshot} />
++       </SpotifyAuthBoundary>
++       <div className="flex items-center gap-3 min-w-0">
++         {/* Sprint MP-MODERN / RF-01 — hero artwork responsive + pulse-subtle. */}
++         {sanitizedCoverUrl ? (
++           <img
++             src={sanitizedCoverUrl}
++             alt=""
++             data-cover-state={coverState}
++             className={cn(
++               coverResponsiveClasses,
++               isPlaying && !reducedMotion && "animate-pulse-subtle",
++               isPlaying && "shadow-lg ring-1 ring-blue-500/30",
++               !isPlaying && "shadow-md",
++             )}
++           />
++         ) : (
++           <div
++             data-cover-state={coverState}
++             aria-hidden="true"
++             className={cn(
++               coverResponsiveClasses,
++               "bg-gray-700",
++               isPlaying && !reducedMotion && "animate-pulse-subtle",
++               isPlaying && "shadow-lg ring-1 ring-blue-500/30",
++               !isPlaying && "shadow-md",
++             )}
++           />
++         )}
++         <div className="min-w-0">
++           <div className="text-sm text-white truncate">
++             {activeTrack.title ?? ""}
++           </div>
++           {/* D8 (B-ARTIST-1): linha secundaria source-agnostic — Spotify mostra
++               artist; library mostra courseTitle. Trunca via CSS, nunca no dado. */}
++           {activeTrack.artist ?? activeTrack.courseTitle ? (
++             <div className="text-xs text-gray-400 truncate">
++               {activeTrack.artist ?? activeTrack.courseTitle}
++             </div>
++           ) : null}
++         </div>
++       </div>
++ 
++       {/* Sprint MP-MODERN / RF-03 — controls pill wrapper bg-white/5 rounded-full. */}
++       <div
++         data-testid="mini-player-controls-pill"
++         className="flex items-center gap-1 bg-white/5 rounded-full px-2 py-1"
++       >
++         {showPrevNext && (
++           <button
++             type="button"
++             data-testid="mini-player-prev"
++             aria-label="Aula anterior"
++             title="Aula anterior"
++             className="h-8 w-8 flex items-center justify-center hover:bg-white/10 rounded-full text-white disabled:opacity-40 disabled:cursor-not-allowed"
++             onClick={() => {
++               try {
++                 void emitAudioEvent("audio.prev", {
++                   from_track_id: activeTrack?.trackId ?? activeTrack?.lessonId ?? null,
++                   reason: "user",
++                 });
++               } catch {
++                 // never throw
++               }
++               handlePrev();
++             }}
++             disabled={prevDisabled}
++           >
++             <SkipBack className="w-4 h-4" />
++           </button>
++         )}
++         <button
++           type="button"
++           data-testid="mini-player-back15"
++           aria-label="Voltar 15 segundos"
++           title="Voltar 15s"
++           className="h-8 w-8 flex items-center justify-center hover:bg-white/10 rounded-full text-white"
++           onClick={() => skipBack(15)}
++         >
++           <RotateCcw className="w-4 h-4" />
++         </button>
++         <button
++           type="button"
++           data-testid="mini-player-toggle"
++           aria-label={isPlaying ? "Pausar" : "Tocar"}
++           title={isPlaying ? "Pausar (Espaco)" : "Tocar (Espaco)"}
++           className="h-10 w-10 flex items-center justify-center bg-white text-gray-900 hover:bg-gray-100 rounded-full relative"
++           onClick={() => {
++             try {
++               void emitAudioEvent(
++                 isPlaying ? "audio.pause" : "audio.play",
++                 {
++                   track_id: activeTrack?.trackId ?? activeTrack?.lessonId ?? null,
++                   source_driver: ctxRaw?.activeSource ?? activeTrack?.source ?? null,
++                 },
++                 { feature: ctxRaw?.activeSource ?? "internal_mp4" },
++               );
++             } catch {
++               // never throw
++             }
++             togglePlayPauseFn();
++           }}
++         >
++           {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
++           {isBuffering ? (
++             <span
++               data-testid="audio-buffering-spinner"
++               aria-label="Carregando"
++               className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-full"
++             >
++               <Loader2 className="w-4 h-4 animate-spin" />
++             </span>
++           ) : null}
++         </button>
++         <button
++           type="button"
++           data-testid="mini-player-forward15"
++           aria-label="Avancar 15 segundos"
++           title="Avancar 15s"
++           className="h-8 w-8 flex items-center justify-center hover:bg-white/10 rounded-full text-white"
++           onClick={() => skipForward(15)}
++         >
++           <RotateCw className="w-4 h-4" />
++         </button>
++         {showPrevNext && (
++           <button
++             type="button"
++             data-testid="mini-player-next"
++             aria-label="Proxima aula"
++             title="Proxima aula"
++             className="h-8 w-8 flex items-center justify-center hover:bg-white/10 rounded-full text-white disabled:opacity-40 disabled:cursor-not-allowed"
++             onClick={() => {
++               try {
++                 void emitAudioEvent("audio.next", {
++                   from_track_id: activeTrack?.trackId ?? activeTrack?.lessonId ?? null,
++                   reason: "user",
++                 });
++               } catch {
++                 // never throw
++               }
++               try {
++                 playNext?.();
++               } catch {
++                 /* swallow */
++               }
++             }}
++             disabled={nextDisabled}
++           >
++             <SkipForward className="w-4 h-4" />
++           </button>
++         )}
++       </div>
++ 
++       {/* Sprint MP-MODERN / RF-02 — progress bar wrapper com mm:ss + scrub tooltip.
++           Wrapper recebe testid `mini-player-progress` (matches h-1/mini-player-range
++           via classe inerte). Input interno mantem testid legado `mini-player-seek`
++           para back-compat com tests MiniPlayerControls / MiniPlayerLayout. */}
++       <div
++         data-testid="mini-player-progress"
++         className="mini-player-range h-1 flex-1 mx-2 flex flex-col justify-center relative"
++         onMouseMove={handleProgressMouseMove}
++         onMouseLeave={handleProgressMouseLeave}
++       >
++         {scrubPreviewSec !== null ? (
++           <span
++             data-testid="mini-player-scrub-tooltip"
++             className="absolute -top-7 -translate-x-1/2 bg-gray-900/90 text-white text-[10px] px-1.5 py-0.5 rounded shadow whitespace-nowrap pointer-events-none"
++             style={{ left: `${scrubPreviewLeftPct}%` }}
++             aria-hidden="true"
++           >
++             {formatMmSs(scrubPreviewSec)}
++           </span>
++         ) : null}
++         <input
++           data-testid="mini-player-seek"
++           aria-label="Posicao na aula"
++           aria-valuetext={`${currentLabel} de ${durationLabel}`}
++           type="range"
++           min={0}
++           max={Math.max(durationSeconds || 0, 1)}
++           step={1}
++           value={Math.min(currentSeconds || 0, durationSeconds || 0)}
++           onChange={(e) => {
++             try {
++               void emitAudioEvent(
++                 "audio.seek",
++                 {
++                   track_id: activeTrack?.trackId ?? activeTrack?.lessonId ?? null,
++                   to_seconds: parseFloat(e.target.value),
++                 },
++               );
++             } catch {
++               // never throw
++             }
++             seek(parseFloat(e.target.value));
++           }}
++           className="mini-player-range w-full"
++         />
++         <div className="flex justify-between text-[10px] text-gray-400 mt-0.5 font-mono tabular-nums">
++           <span data-testid="mini-player-time-current">
++             {durationSeconds && durationSeconds > 0 ? currentLabel : "--:--"}
++           </span>
++           <span data-testid="mini-player-time-duration">
++             {durationSeconds && durationSeconds > 0 ? durationLabel : "--:--"}
++           </span>
++         </div>
++       </div>
++ 
++       {/* Sprint MP-MODERN / RF-04 — sidebar 3 grupos com dividers aria-hidden. */}
++       <div className="flex items-center gap-1">
++         {/* Grupo 1 — audio adjust */}
++         <div className="flex items-center gap-1">
++           {showVolume && <VolumeControl hideSlider={vp === "tablet"} />}
++           <SleepTimerControl
++             activeMinutes={sleepTimerMinutes}
++             remainingSeconds={sleepTimerRemainingSeconds}
++             onActivate={setSleepTimer}
++             onCancel={cancelSleepTimer}
++           />
++           {/* MP3 RF-02: Spotify SDK setSpeed no-op. Hide select para evitar UI mentirosa. */}
++           {showSpeed && activeTrack?.source !== "spotify" && (
++             <select
++               data-testid="mini-player-speed"
++               aria-label={`Velocidade ${speed}x`}
++               title={`Velocidade ${speed}x`}
++               className="bg-transparent text-white text-xs border border-white/20 rounded px-2 py-1"
++               value={String(speed)}
++               onChange={(e) => setSpeed(parseFloat(e.target.value))}
++             >
++               {SPEEDS.map((s) => (
++                 <option key={s} value={String(s)}>
++                   {s}x
++                 </option>
++               ))}
++             </select>
++           )}
++         </div>
++         <div
++           data-testid="mini-player-sidebar-divider-audio"
++           aria-hidden="true"
++           className="h-6 w-px bg-white/10 mx-1"
++         />
++         {/* Grupo 2 — queue */}
++         <button
++           type="button"
++           data-testid="mini-player-queue-button"
++           aria-label="Fila de reproducao"
++           title="Fila"
++           className="p-2 hover:bg-white/10 rounded-md text-white relative hidden md:inline-flex items-center justify-center"
++           onClick={() => setQueueOpen((o) => !o)}
++         >
++           <ListMusic className="w-4 h-4" />
++           {queueItems && queueItems.length > 0 ? (
++             <span
++               data-testid="mini-player-queue-count"
++               className="absolute -top-1 -right-1 rounded-full bg-blue-500 px-1 text-[10px] text-white"
++             >
++               {queueItems.length}
++             </span>
++           ) : null}
++         </button>
++         <div
++           data-testid="mini-player-sidebar-divider-queue"
++           aria-hidden="true"
++           className="h-6 w-px bg-white/10 mx-1"
++         />
++         {/* Grupo 3 — utils (help + lessons + spotify) */}
++         <div className="flex items-center gap-1">
++           <button
++             type="button"
++             data-testid="mini-player-help-button"
++             aria-label="Atalhos de teclado"
++             title="Atalhos (?)"
++             className="p-2 hover:bg-white/10 rounded-md text-white"
++             onClick={(e) => {
++               // W-B3 LOW-1: stopPropagation evita ghost focus do onboarding outside-click.
++               e.stopPropagation();
++               try {
++                 if (localStorage.getItem("audio.onboarding.seen.v1") !== "true") {
++                   localStorage.setItem("audio.onboarding.seen.v1", "true");
++                   window.dispatchEvent(new Event("audio.onboarding.dismiss"));
++                 }
++               } catch {
++                 // ignore
++               }
++               setShortcutsHelpOpen((o) => !o);
++             }}
++           >
++             <HelpCircle className="w-4 h-4" />
++           </button>
++           <button
++             type="button"
++             data-testid="mini-player-lessons-button"
++             aria-label="Abrir biblioteca de aulas"
++             title="Aulas"
++             className="p-2 hover:bg-white/10 rounded-md text-white hidden md:inline-flex items-center justify-center"
++             onClick={() => {
++               try {
++                 void emitAudioEvent("audio.picker_open", {
++                   source_driver: activeSource,
++                 });
++               } catch {
++                 // never throw
++               }
++               setPickerOpen(true);
++             }}
++           >
++             <BookOpen className="w-4 h-4" />
++           </button>
++           {/* Sprint SPOTIFY-DEEP / RF-04 — Buscar no Spotify (Cmd/Ctrl+/). */}
++           {spotifyStatus.isConnected ? (
++             <button
++               type="button"
++               data-testid="mini-player-spotify-search-btn"
++               aria-label="Buscar musica no Spotify"
++               title={
++                 tierEligibleForSearch
++                   ? "Buscar no Spotify (Cmd/Ctrl+/)"
++                   : "Apenas Premium ou Trial Grindfy"
++               }
++               disabled={!tierEligibleForSearch}
++               onClick={() => openSpotifySearch("mini_player_button")}
++               className="p-2 hover:bg-white/10 rounded-md text-white items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
++             >
++               <SearchIcon className="w-4 h-4" />
++             </button>
++           ) : null}
++           {!spotifyStatus.isConnected &&
++           ctxRaw?.isSpotifyConnected !== true &&
++           activeSource !== "spotify" ? (
++             <button
++               type="button"
++               data-testid="mini-player-spotify-connect"
++               aria-label="Conectar Spotify"
++               title={spotifyConnecting ? "Conectando..." : "Conectar Spotify"}
++               disabled={spotifyConnecting}
++               className="p-2 hover:bg-white/10 rounded-md text-white hidden md:inline-flex items-center justify-center disabled:opacity-40 disabled:cursor-wait"
++               onClick={async () => {
++                 try {
++                   void emitAudioEvent("audio.spotify_connect_click", {
++                     source_driver: activeSource,
++                   });
++                 } catch {
++                   // never throw
++                 }
++                 setSpotifyConnecting(true);
++                 try {
++                   const result = await initiateSpotifyAuth();
++                   // Propaga token pro AudioPlayerContext criar o driver real
++                   // (sem isso o OAuth conclui mas nada toca + botao persiste).
++                   if (result?.accessToken && ctxRaw?.connectSpotify) {
++                     try {
++                       ctxRaw.connectSpotify(
++                         result.accessToken,
++                         result.expiresIn,
++                         result.displayName,
++                       );
++                     } catch (e) {
++                       // eslint-disable-next-line no-console
++                       console.warn("[MiniPlayerBar] connectSpotify falhou:", e);
++                     }
++                   }
++                   invalidateSpotifyStatus();
++                 } catch (err) {
++                   if (err instanceof SpotifyPremiumRequiredError) {
++                     // eslint-disable-next-line no-console
++                     console.warn("[MiniPlayerBar] Spotify Premium necessario");
++                   } else {
++                     // eslint-disable-next-line no-console
++                     console.warn("[MiniPlayerBar] Spotify connect falhou:", err);
++                   }
++                 } finally {
++                   setSpotifyConnecting(false);
++                 }
++               }}
++             >
++               {spotifyConnecting ? (
++                 <Loader2 className="w-4 h-4 animate-spin" />
++               ) : (
++                 <Music className="w-4 h-4" />
++               )}
++             </button>
++           ) : (
++             <span
++               data-testid="mini-player-spotify-badge"
++               aria-label="Spotify conectado"
++               title="Tocando via Spotify"
++               className="p-2 text-green-400 hidden md:inline-flex items-center justify-center"
++             >
++               <Music className="w-4 h-4" />
++             </span>
++           )}
++         </div>
++         <div
++           data-testid="mini-player-sidebar-divider-utils"
++           aria-hidden="true"
++           className="h-6 w-px bg-white/10 mx-1"
++         />
++         {/* Grupo 4 — window controls (expand + close) */}
++         <button
++           type="button"
++           data-testid="mini-player-expand"
++           aria-label="Expandir player"
++           title="Expandir"
++           className="p-2 hover:bg-white/10 rounded-md text-white"
++           onClick={() => setDisplayMode("expanded")}
++         >
++           <ChevronUp className="w-4 h-4" />
++         </button>
++         <button
++           type="button"
++           data-testid="mini-player-close"
++           aria-label="Fechar player"
++           title="Fechar (Esc)"
++           className="p-2 hover:bg-white/10 rounded-md text-white ml-1"
++           onClick={() => close()}
++         >
++           <X className="w-4 h-4" />
++         </button>
++       </div>
++       {/* MP3.1 Wave B / TIER 3 #5: error banner driver-agnostic. */}
++       {loadError ? (
++         <div
++           data-testid="audio-error-banner"
++           role="alert"
++           className="absolute bottom-full left-0 right-0 mb-1 mx-3 flex items-center gap-2 rounded-md bg-red-600/90 px-3 py-2 text-xs text-white"
++         >
++           <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
++           <span className="flex-1">
++             {mapAudioErrorToMessage(loadError as any)}
++           </span>
++           <button
++             type="button"
++             data-testid="audio-error-retry"
++             className="px-2 py-1 rounded-md bg-white/15 hover:bg-white/25"
++             onClick={() => retryCurrent()}
++           >
++             Tentar novamente
++           </button>
++           <button
++             type="button"
++             data-testid="audio-error-skip"
++             aria-label="Pular para proxima"
++             className="px-2 py-1 rounded-md bg-white/15 hover:bg-white/25"
++             onClick={() => {
++               clearLoadError();
++               playNext();
++             }}
++           >
++             Pular
++           </button>
++         </div>
++       ) : null}
++       {/* MP3.1 R1 fix CRITICAL-1: ShortcutsHelpPopover toggla via tecla `?`. */}
++       <ShortcutsHelpPopover
++         open={shortcutsHelpOpen}
++         onOpenChange={setShortcutsHelpOpen}
++       />
++       {/* MP3.1 Wave B / TIER 3 #7: onboarding tooltip primeira vez. */}
++       <MiniPlayerOnboarding />
++       {/* MP3.1 R1 fix CRITICAL-2: QueuePopover renderiza fila + controls. */}
++       <QueuePopover
++         open={queueOpen}
++         onOpenChange={setQueueOpen}
++         queue={(queueItems ?? []) as any}
++         repeatMode={repeatMode}
++         shuffleEnabled={shuffleEnabled}
++         onRemove={removeFromQueue}
++         onReorder={reorderQueue}
++         onClear={clearQueue}
++         onSkip={skipToQueueItem}
++         onRepeatChange={setRepeatMode}
++         onToggleShuffle={toggleShuffle}
++       />
++       {pickerOpen ? (
++         <Suspense fallback={null}>
++           <LessonPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} />
++         </Suspense>
++       ) : null}
++       {/* Sprint SPOTIFY-DEEP / RF-04 — SpotifySearchDialog state local. */}
++       {spotifySearchOpen ? (
++         <SpotifySearchDialog
++           open={spotifySearchOpen}
++           onOpenChange={setSpotifySearchOpen}
++         />
++       ) : null}
++       {/* Sprint MP-MODERN / RF-05 — expanded dialog. */}
++       <ExpandedPlayerDialog />
++     </div>
++   );
++ }
++
+
+ ❯ tests/client/mini-player-1.2/MiniPlayerBar.cnHelper.test.tsx:117:17
+    115|     // animate-spin-slow ainda deve existir no source (caso contrario …
+    116|     // engoliu a classe).
+    117|     expect(src).toContain('animate-spin-slow');
+       |                 ^
+    118|   });
+    119|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[44/56]⎯
+
+ FAIL  |client| tests/client/mini-player-1.2/MiniPlayerBar.cnHelper.test.tsx > <MiniPlayerBar> RF-02 cn() helper migration > comportamento identico: isPlaying=true + cover -> img contem animate-spin-slow
+AssertionError: expected 'h-12 w-12 md:h-14 md:w-14 lg:h-16 lg:…' to match /animate-spin-slow/
+
+- Expected:
+/animate-spin-slow/
+
++ Received:
+"h-12 w-12 md:h-14 md:w-14 lg:h-16 lg:w-16 rounded-md object-cover mini-player-cover animate-pulse-subtle shadow-lg ring-1 ring-blue-500/30"
+
+ ❯ tests/client/mini-player-1.2/MiniPlayerBar.cnHelper.test.tsx:133:28
+    131|     const img = bar.querySelector('img');
+    132|     expect(img).not.toBeNull();
+    133|     expect(img!.className).toMatch(/animate-spin-slow/);
+       |                            ^
+    134|   });
+    135|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[45/56]⎯
+
+ FAIL  |client| tests/client/mini-player-1.1/MiniPlayerBar.coverDedup.test.tsx > MiniPlayerBar cover (RF-02 + RF-10) > RF-10: cover img mantem className animate-spin-slow
+AssertionError: expected 'h-12 w-12 md:h-14 md:w-14 lg:h-16 lg:…' to match /animate-spin-slow/
+
+- Expected:
+/animate-spin-slow/
+
++ Received:
+"h-12 w-12 md:h-14 md:w-14 lg:h-16 lg:w-16 rounded-md object-cover mini-player-cover animate-pulse-subtle shadow-lg ring-1 ring-blue-500/30"
+
+ ❯ tests/client/mini-player-1.1/MiniPlayerBar.coverDedup.test.tsx:83:28
+     81|     const img = bar.querySelector('img');
+     82|     expect(img).not.toBeNull();
+     83|     expect(img!.className).toMatch(/animate-spin-slow/);
+       |                            ^
+     84|   });
+     85|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[46/56]⎯
+
+ FAIL  |client| tests/client/mini-player-3/auth-popup-fallback.test.tsx > initiateSpotifyAuth — popup blocked fallback (RF-06.1) > popup.closed=true em <1.5s sem postMessage -> fallback redirect
+AssertionError: expected null to be truthy
+
+- Expected:
+true
+
++ Received:
+null
+
+ ❯ tests/client/mini-player-3/auth-popup-fallback.test.tsx:112:17
+    110|     // saveOAuthSnapshot + window.location.href = authUrl.
+    111|     const raw = sessionStorage.getItem(SS_KEY);
+    112|     expect(raw).toBeTruthy();
+       |                 ^
+    113|     expect(hrefSpy).toHaveBeenCalledWith(
+    114|       expect.stringMatching(/accounts\.spotify\.com\/authorize/),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[47/56]⎯
+
+ FAIL  |client| tests/components/grade-planner/CoachTabs.test.tsx > GradePlanner — RF-09 rename "Simulador PrimeDope" > container coach-variance-panel renderiza com novo header "Simulador PrimeDope"
+AssertionError: expected 'Calculadora de Variância MTTEstima a …' to match /Simulador PrimeDope/
+
+- Expected:
+/Simulador PrimeDope/
+
++ Received:
+"Calculadora de Variância MTTEstima a variância esperada do seu volume via Monte Carlo (10.000 simulações)Primedope"
+
+ ❯ tests/components/grade-planner/CoachTabs.test.tsx:260:37
+    258|
+    259|     const panel = screen.getByTestId('coach-variance-panel');
+    260|     expect(panel.textContent ?? '').toMatch(/Simulador PrimeDope/);
+       |                                     ^
+    261|   });
+    262|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[48/56]⎯
+
+ FAIL  |client| client/src/components/settings/SpotifyConnectionPanel.test.tsx > SpotifyConnectionPanel — connected (RF-01.6) > mostra "Conectado como <displayName>" + data-testid="spotify-connection-status"
+TestingLibraryElementError: Unable to find an element by: [data-testid="spotify-connection-status"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33mclass[39m=[32m"space-y-3"[39m
+    [36m>[39m
+      [36m<h3[39m
+        [33mclass[39m=[32m"text-lg font-medium"[39m
+      [36m>[39m
+        [0mSpotify[0m
+      [36m</h3>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-1"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Conectar Spotify"[39m
+          [33mclass[39m=[32m"rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"[39m
+          [33mdata-testid[39m=[32m"spotify-connect-button"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mConectar Spotify[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</section>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33mclass[39m=[32m"space-y-3"[39m
+    [36m>[39m
+      [36m<h3[39m
+        [33mclass[39m=[32m"text-lg font-medium"[39m
+      [36m>[39m
+        [0mSpotify[0m
+      [36m</h3>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-1"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Conectar Spotify"[39m
+          [33mclass[39m=[32m"rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"[39m
+          [33mdata-testid[39m=[32m"spotify-connect-button"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mConectar Spotify[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</section>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ client/src/components/settings/SpotifyConnectionPanel.test.tsx:127:33
+    125|     const { SpotifyConnectionPanel } = await loadComponent();
+    126|     render(wrap(<SpotifyConnectionPanel />));
+    127|     const status = await screen.findByTestId('spotify-connection-statu…
+       |                                 ^
+    128|     expect(status).toBeInTheDocument();
+    129|     expect(status.textContent).toMatch(/Player1/);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[49/56]⎯
+
+ FAIL  |client| client/src/components/settings/SpotifyConnectionPanel.test.tsx > SpotifyConnectionPanel — connected (RF-01.6) > botao Desconectar exibe confirm modal antes de chamar disconnectSpotify
+TestingLibraryElementError: Unable to find an element by: [data-testid="spotify-disconnect-button"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33mclass[39m=[32m"space-y-3"[39m
+    [36m>[39m
+      [36m<h3[39m
+        [33mclass[39m=[32m"text-lg font-medium"[39m
+      [36m>[39m
+        [0mSpotify[0m
+      [36m</h3>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-1"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Conectar Spotify"[39m
+          [33mclass[39m=[32m"rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"[39m
+          [33mdata-testid[39m=[32m"spotify-connect-button"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mConectar Spotify[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</section>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33mclass[39m=[32m"space-y-3"[39m
+    [36m>[39m
+      [36m<h3[39m
+        [33mclass[39m=[32m"text-lg font-medium"[39m
+      [36m>[39m
+        [0mSpotify[0m
+      [36m</h3>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-1"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Conectar Spotify"[39m
+          [33mclass[39m=[32m"rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"[39m
+          [33mdata-testid[39m=[32m"spotify-connect-button"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mConectar Spotify[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</section>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ client/src/components/settings/SpotifyConnectionPanel.test.tsx:139:40
+    137|     render(wrap(<SpotifyConnectionPanel />));
+    138|
+    139|     const btnDisconnect = await screen.findByTestId('spotify-disconnec…
+       |                                        ^
+    140|     fireEvent.click(btnDisconnect);
+    141|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[50/56]⎯
+
+ FAIL  |client| client/src/components/settings/SpotifyConnectionPanel.test.tsx > SpotifyConnectionPanel — connected (RF-01.6) > confirmar modal → chama disconnectSpotify
+TestingLibraryElementError: Unable to find an element by: [data-testid="spotify-disconnect-button"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33mclass[39m=[32m"space-y-3"[39m
+    [36m>[39m
+      [36m<h3[39m
+        [33mclass[39m=[32m"text-lg font-medium"[39m
+      [36m>[39m
+        [0mSpotify[0m
+      [36m</h3>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-1"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Conectar Spotify"[39m
+          [33mclass[39m=[32m"rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"[39m
+          [33mdata-testid[39m=[32m"spotify-connect-button"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mConectar Spotify[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</section>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33mclass[39m=[32m"space-y-3"[39m
+    [36m>[39m
+      [36m<h3[39m
+        [33mclass[39m=[32m"text-lg font-medium"[39m
+      [36m>[39m
+        [0mSpotify[0m
+      [36m</h3>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"space-y-1"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Conectar Spotify"[39m
+          [33mclass[39m=[32m"rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"[39m
+          [33mdata-testid[39m=[32m"spotify-connect-button"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mConectar Spotify[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</section>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ client/src/components/settings/SpotifyConnectionPanel.test.tsx:158:34
+    156|     render(wrap(<SpotifyConnectionPanel />));
+    157|
+    158|     fireEvent.click(await screen.findByTestId('spotify-disconnect-butt…
+       |                                  ^
+    159|
+    160|     // confirm
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[51/56]⎯
+
+ FAIL  |client| client/src/pages/__tests__/Bankroll.empty-wallets.test.tsx > RF-04 Bankroll — sem wallets ativas > renderiza secondary link "Saber mais"
+Error: [2mexpect([22m[31mreceived[39m[2m).toBeInTheDocument()[22m
+
+[31mreceived[39m value must be an HTMLElement or an SVGElement.
+Received has type:  Null
+Received has value: [31mnull[39m
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"p-6 space-y-6 max-w-6xl mx-auto"[39m
+      [36m>[39m
+        [36m<header[39m
+          [33mclass[39m=[32m"flex items-center gap-3 rounded-lg border bg-card p-5"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"h-10 w-10 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-wallet h-5 w-5 text-primary"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"24"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"24"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</div>[39m
+          [36m<div>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"text-2xl font-semibold tracking-tight"[39m
+            [36m>[39m
+              [0mBanca[0m
+            [36m</h1>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-xs text-muted-foreground"[39m
+            [36m>[39m
+              [0mConfiguracao inicial — adicione sua primeira carteira[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</header>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex flex-col items-center justify-center text-center mx-auto py-16 px-6 max-w-xl"[39m
+          [33mdata-area[39m=[32m"bankroll-empty"[39m
+          [33mdata-testid[39m=[32m"empty-state"[39m
+          [33mdata-variant[39m=[32m"default"[39m
+          [33mrole[39m=[32m"status"[39m
+        [36m>[39m
+          [36m<h3[39m
+            [33mclass[39m=[32m"font-semibold text-foreground mb-2 text-lg"[39m
+          [36m>[39m
+            [0mSua banca espera por voce[0m
+          [36m</h3>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"text-muted-foreground mb-6"[39m
+            [33mstyle[39m=[32m"font-size: 14px;"[39m
+          [36m>[39m
+            [0mCrie sua primeira carteira para acompanhar saldos, transacoes e regras de banca.[0m
+          [36m</p>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-col sm:flex-row items-center gap-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-label[39m=[32m"Criar primeira carteira"[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"[39m
+              [33mdata-testid[39m=[32m"empty-state-cta"[39m
+            [36m>[39m
+              [0mCriar primeira carteira[0m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"rounded-lg border bg-card overflow-hidden"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-col md:flex-row min-h-[400px]"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mdata-count[39m=[32m"0"[39m
+              [33mdata-testid[39m=[32m"wallet-list-mock"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mdata-testid[39m=[32m"wallet-list-mock-create"[39m
+              [36m>[39m
+                [0mNova[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex-1"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"p-8 text-center text-sm text-muted-foreground"[39m
+              [36m>[39m
+                [0mCrie sua primeira carteira para comecar.[0m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<section[39m
+          [33mclass[39m=[32m"rounded-lg border bg-card p-5"[39m
+        [36m>[39m
+          [36m<h2[39m
+            [33mclass[39m=[32m"text-lg font-semibold mb-3"[39m
+          [36m>[39m
+            [0mHistorico consolidado[0m
+          [36m</h2>[39m
+          [36m<div[39m
+            [33mdata-testid[39m=[32m"bankroll-history-table-mock"[39m
+          [36m/>[39m
+        [36m</section>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+ ❯ client/src/pages/__tests__/Bankroll.empty-wallets.test.tsx:177:20
+    175|     await waitFor(() => {
+    176|       const link = screen.queryByTestId('empty-state-secondary-link');
+    177|       expect(link).toBeInTheDocument();
+       |                    ^
+    178|       expect(link!.textContent).toMatch(/Saber mais/i);
+    179|     });
+ ❯ runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[52/56]⎯
+
+ FAIL  |client| client/src/lib/audio-engine/SpotifyAudioDriver.test.ts > SpotifyAudioDriver event adapter (RF-01.3) > on("ended") dispara quando player_state_changed.position >= duration AND paused=true
+AssertionError: expected "vi.fn()" to be called at least once
+ ❯ client/src/lib/audio-engine/SpotifyAudioDriver.test.ts:389:21
+    387|       paused: true,
+    388|     });
+    389|     expect(handler).toHaveBeenCalled();
+       |                     ^
+    390|   });
+    391|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[53/56]⎯
+
+ FAIL  |client| client/src/hooks/__tests__/usePrimedopeSimulation.test.tsx > usePrimedopeSimulation — RF-07 invalida home-overview no onSuccess > mutation success -> queryClient.invalidateQueries(["/api/home/overview"])
+AssertionError: expected 0 to be greater than or equal to 1
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div />[39m
+  [36m</body>[39m
+[36m</html>[39m
+ ❯ client/src/hooks/__tests__/usePrimedopeSimulation.test.tsx:130:40
+    128|         return false;
+    129|       });
+    130|       expect(homeOverviewCalls.length).toBeGreaterThanOrEqual(1);
+       |                                        ^
+    131|     });
+    132|   });
+ ❯ runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[54/56]⎯
+
+ FAIL  |client| client/src/components/grade-planner/__tests__/WeekGrid.empty-state.test.tsx > RF-02 WeekGrid — empty state NAO aparece (regras de negocio) > NAO renderiza empty state quando ha perfil ativo (mesmo sem torneios)
+ FAIL  |client| client/src/components/grade-planner/__tests__/WeekGrid.empty-state.test.tsx > RF-02 WeekGrid — empty state NAO aparece (regras de negocio) > NAO renderiza empty state quando perfil B ativo em qualquer dia
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/@tanstack/react-query/src/QueryClientProvider.tsx:18:10
+ ❯ useBaseQuery node_modules/@tanstack/react-query/src/useBaseQuery.ts:54:17
+ ❯ useQuery node_modules/@tanstack/react-query/src/useQuery.ts:51:9
+ ❯ useDayDetail client/src/hooks/useDayDetail.ts:88:10
+     86|   dayOfWeek,
+     87| }: UseDayDetailOptions) {
+     88|   return useQuery<DayDetailResponse, Error>({
+       |          ^
+     89|     queryKey: ["day-detail", profileLetter, dayOfWeek],
+     90|     enabled:
+ ❯ DayHoverTooltip client/src/components/grade/DayHoverTooltip.tsx:41:17
+ ❯ renderWithHooks node_modules/react-dom/cjs/react-dom.development.js:15486:18
+ ❯ mountIndeterminateComponent node_modules/react-dom/cjs/react-dom.development.js:20103:13
+ ❯ beginWork node_modules/react-dom/cjs/react-dom.development.js:21626:16
+ ❯ beginWork$1 node_modules/react-dom/cjs/react-dom.development.js:27465:14
+ ❯ performUnitOfWork node_modules/react-dom/cjs/react-dom.development.js:26599:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[55/56]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: [vitest-pool]: Worker forks emitted error.
+ ❯ EventEmitter.<anonymous> node_modules/vitest/dist/chunks/cli-api.Cjt90eJu.js:3445:22
+ ❯ EventEmitter.emit node:events:508:28
+ ❯ ChildProcess.emitUnexpectedExit node_modules/vitest/dist/chunks/cli-api.Cjt90eJu.js:3012:22
+ ❯ ChildProcess.emit node:events:508:28
+ ❯ Process.ChildProcess._handle.onexit node:internal/child_process:294:12
+
+Caused by: Error: Worker exited unexpectedly
+ ❯ ChildProcess.emitUnexpectedExit node_modules/vitest/dist/chunks/cli-api.Cjt90eJu.js:3011:33
+ ❯ ChildProcess.emit node:events:508:28
+ ❯ Process.ChildProcess._handle.onexit node:internal/child_process:294:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  27 failed | 1260 passed | 15 skipped (1303)
+      Tests  56 failed | 16108 passed | 79 skipped | 110 todo (16360)
+     Errors  1 error
+   Start at  10:05:37
+   Duration  29021.79s (transform 128.63s, setup 379.02s, import 252.12s, tests 7197.56s, environment 533.33s)
+
