@@ -24,18 +24,25 @@ import {
   WIG_HORIZONS,
   GOAL_CADENCES,
 } from "@shared/goals";
+import { HORIZON_LABEL, todayYmd, localYmd } from "@/components/metas/metaUi";
 
 type Kind = "wig" | "measure";
 
-const SOURCE_METRIC_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "sessions_per_week", label: "Sessoes por semana" },
-  { value: "grind_days", label: "Dias de grind" },
-  { value: "study_minutes_week", label: "Minutos de estudo / semana" },
-  { value: "study_sessions_count", label: "Sessoes de estudo" },
-  { value: "bankroll_usd", label: "Banca (USD)" },
-  { value: "roi_pct", label: "ROI %" },
-  { value: "abi", label: "ABI (buy-in medio)" },
-  { value: "itm_pct", label: "ITM %" },
+// ADR-241 — catalogo de metricas. `kinds` = onde a metrica e permitida (resultado
+// = so WIG, RF-04). `grind` = suporta fonte selecionavel Grind|Historico
+// (profit/volume); as demais sao Historico (getPerformanceByPeriod com FX).
+type MetricDef = { base: string; label: string; kinds: Kind[]; grind: boolean };
+const METRICS: MetricDef[] = [
+  { base: "sessions_per_week", label: "Sessoes por semana", kinds: ["measure"], grind: false },
+  { base: "grind_days", label: "Dias de grind", kinds: ["measure"], grind: false },
+  { base: "study_minutes_week", label: "Minutos de estudo / semana", kinds: ["measure"], grind: false },
+  { base: "study_sessions_count", label: "Sessoes de estudo", kinds: ["measure"], grind: false },
+  { base: "bankroll_usd", label: "Banca (USD)", kinds: ["measure", "wig"], grind: false },
+  { base: "volume", label: "Volume (torneios)", kinds: ["measure", "wig"], grind: true },
+  { base: "profit", label: "Profit (USD)", kinds: ["wig"], grind: true },
+  { base: "roi_pct", label: "ROI %", kinds: ["wig"], grind: false },
+  { base: "itm_pct", label: "ITM %", kinds: ["wig"], grind: false },
+  { base: "abi", label: "ABI (buy-in medio)", kinds: ["wig"], grind: false },
 ];
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -55,31 +62,28 @@ const UNIT_LABEL: Record<string, string> = {
   days: "dias",
   boolean: "sim/nao",
 };
-const HORIZON_LABEL: Record<string, string> = {
-  week: "Semana",
-  month: "Mes",
-  quarter: "Trimestre",
-  season: "Temporada (ano)",
-};
-
 const selectCls =
   "mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
-function todayYmd(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 function plusDaysYmd(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return localYmd(d);
+}
+
+function initialKind(): Kind {
+  if (typeof window === "undefined") return "measure";
+  const k = new URLSearchParams(window.location.search).get("kind");
+  return k === "wig" ? "wig" : "measure";
 }
 
 export function MetasNovaPage() {
   const [, navigate] = useLocation();
-  const [kind, setKind] = useState<Kind>("measure");
+  const [kind, setKind] = useState<Kind>(initialKind);
   const [title, setTitle] = useState("");
-  const [sourceMetric, setSourceMetric] = useState("study_minutes_week");
+  // sourceMetric guarda a BASE; a fonte (grind/history) e separada (ADR-241).
+  const [sourceMetric, setSourceMetric] = useState(() => (initialKind() === "wig" ? "profit" : "study_minutes_week"));
+  const [dataSource, setDataSource] = useState<"grind" | "history">("history");
   const [targetValue, setTargetValue] = useState("300");
   const [baselineValue, setBaselineValue] = useState("0");
   const [startDate, setStartDate] = useState(todayYmd());
@@ -91,7 +95,17 @@ export function MetasNovaPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const horizonOptions = kind === "wig" ? WIG_HORIZONS : GOAL_HORIZONS;
+  const metricsForKind = METRICS.filter((m) => m.kinds.includes(kind));
+  const selectedMetric = METRICS.find((m) => m.base === sourceMetric);
   const queryClient = useQueryClient();
+
+  // Troca de tipo (WIG/medida): se a metrica atual nao vale no novo tipo, reseta.
+  function switchKind(next: Kind) {
+    setKind(next);
+    if (next === "wig" && !(WIG_HORIZONS as readonly string[]).includes(horizon)) setHorizon("quarter");
+    const stillValid = METRICS.find((m) => m.base === sourceMetric)?.kinds.includes(next);
+    if (!stillValid) setSourceMetric(next === "wig" ? "profit" : "study_minutes_week");
+  }
 
   const mutation = useMutation({
     mutationFn: async (payload: any) => apiRequest("POST", "/api/goals", payload),
@@ -115,7 +129,9 @@ export function MetasNovaPage() {
       category,
       // titulo vazio cai no fallback (contrato dos testes metas-1 — submit sempre POSTa).
       title: title.trim() || (kind === "wig" ? "Nova WIG" : "Nova medida"),
-      sourceMetric,
+      // ADR-241 — encoda a fonte selecionavel (base@grind/base@history) so para
+      // metricas grind-capable; as demais vao como base (default historico).
+      sourceMetric: selectedMetric?.grind ? `${sourceMetric}@${dataSource}` : sourceMetric,
       targetValue: Number(targetValue),
       unit,
       horizon: safeHorizon,
@@ -141,10 +157,7 @@ export function MetasNovaPage() {
             type="button"
             data-testid="metas-kind-wig"
             aria-pressed={kind === "wig"}
-            onClick={() => {
-              setKind("wig");
-              if (!(WIG_HORIZONS as readonly string[]).includes(horizon)) setHorizon("quarter");
-            }}
+            onClick={() => switchKind("wig")}
             className={cn(
               "flex-1 rounded-md border px-3 py-2 text-sm font-medium transition",
               kind === "wig"
@@ -158,7 +171,7 @@ export function MetasNovaPage() {
             type="button"
             data-testid="metas-kind-measure"
             aria-pressed={kind === "measure"}
-            onClick={() => setKind("measure")}
+            onClick={() => switchKind("measure")}
             className={cn(
               "flex-1 rounded-md border px-3 py-2 text-sm font-medium transition",
               kind === "measure"
@@ -183,7 +196,7 @@ export function MetasNovaPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="metas-source-metric">Metrica (fonte de dado)</Label>
+            <Label htmlFor="metas-source-metric">Metrica</Label>
             <select
               id="metas-source-metric"
               data-testid="metas-field-source-metric"
@@ -191,9 +204,9 @@ export function MetasNovaPage() {
               onChange={(e) => setSourceMetric(e.target.value)}
               className={selectCls}
             >
-              {SOURCE_METRIC_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
+              {metricsForKind.map((m) => (
+                <option key={m.base} value={m.base}>
+                  {m.label}
                 </option>
               ))}
             </select>
@@ -215,6 +228,26 @@ export function MetasNovaPage() {
             </select>
           </div>
         </div>
+
+        {/* ADR-241 — fonte do dado selecionavel (so metricas grind-capable). */}
+        {selectedMetric?.grind ? (
+          <div>
+            <Label htmlFor="metas-data-source">Fonte do dado</Label>
+            <select
+              id="metas-data-source"
+              data-testid="metas-field-data-source"
+              value={dataSource}
+              onChange={(e) => setDataSource(e.target.value as "grind" | "history")}
+              className={selectCls}
+            >
+              <option value="grind">Grind ao vivo (/grind)</option>
+              <option value="history">Historico importado (/upload)</option>
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Grind = sessoes que voce registrou ao vivo. Historico = tudo que voce importou via CSV.
+            </p>
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-3">
           <div>

@@ -37,6 +37,7 @@ const Settings = lazy(() => import("@/pages/Settings"));
 const Studies = lazy(() => import("@/pages/Studies"));
 const MetasPage = lazy(() => import("@/pages/metas/MetasPage"));
 const MetasNovaPage = lazy(() => import("@/pages/metas/MetasNovaPage"));
+const AnaliseMental = lazy(() => import("@/pages/AnaliseMental"));
 const AdminUsers = lazy(() => import("@/pages/AdminUsers"));
 const AdminBugs = lazy(() => import("@/pages/AdminBugs"));
 const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
@@ -144,6 +145,7 @@ function Router() {
                   {/* METAS-1 fatia-1 (ADR-229): rota mais especifica /nova ANTES da generica. */}
                   <Route path="/metas/nova" component={() => (<ProtectedRoute><MetasNovaPage /></ProtectedRoute>)} />
                   <Route path="/metas" component={() => (<ProtectedRoute><MetasPage /></ProtectedRoute>)} />
+                  <Route path="/analise-mental" component={() => (<ProtectedRoute><AnaliseMental /></ProtectedRoute>)} />
                   <Route path="/admin/dashboard" component={() => (<ProtectedRoute><AdminDashboard /></ProtectedRoute>)} />
                   <Route path="/admin/users" component={() => (<ProtectedRoute><AdminUsers /></ProtectedRoute>)} />
                   <Route path="/admin/bugs" component={() => (<ProtectedRoute><AdminBugs /></ProtectedRoute>)} />

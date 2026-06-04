@@ -148,6 +148,9 @@ export function attachGoalsStorage(storage: any): void {
       cadence: input.cadence ?? null,
       direction: input.direction ?? "up",
       horizon: input.horizon,
+      // ADR-241 — inicio + prazo explicitos (nullable; leitura aplica fallback).
+      startDate: input.startDate ?? null,
+      deadline: input.deadline ?? null,
       status: input.status ?? "active",
       origin: input.origin ?? "manual",
     };
@@ -210,6 +213,9 @@ export function attachGoalsStorage(storage: any): void {
     if (patch.title !== undefined) set.title = patch.title;
     if (patch.targetValue !== undefined) set.targetValue = patch.targetValue;
     if (patch.targetDeadline !== undefined) set.targetDeadline = patch.targetDeadline;
+    // ADR-241 — start_date/deadline editaveis na medida (existem em `goals`).
+    if (patch.startDate !== undefined) set.startDate = patch.startDate;
+    if (patch.deadline !== undefined) set.deadline = patch.deadline;
     if (patch.status !== undefined) set.status = patch.status;
     const rows = await db
       .update(goals)
@@ -389,6 +395,26 @@ export function attachGoalsStorage(storage: any): void {
       RETURNING *
     ` as any);
     return normalizeWigRow(firstRow(execRows(result)));
+  };
+
+  // Soft-delete de WIG (career_goals) — paridade com archiveGoal das medidas.
+  // career_goals NAO esta no drizzle (R1) -> UPDATE via RAW SQL parametrizado.
+  // ATENCAO: career_goals (migration 0071) NAO tem coluna archived_at e o CHECK
+  // de status so aceita ('active','achieved','abandoned','expired') — 'archived'
+  // violaria o constraint. Soft-delete da WIG = status='abandoned' (estado de
+  // remocao valido no schema; some do scoreboard que filtra status='active').
+  // Ownership por user_id.
+  storage.archiveWig = async (
+    userId: string,
+    careerGoalId: string,
+    injectedDb?: any,
+  ): Promise<void> => {
+    const db = await resolveDb(injectedDb);
+    await db.execute(sql`
+      UPDATE career_goals
+      SET status = 'abandoned', updated_at = NOW()
+      WHERE user_id = ${userId} AND id = ${careerGoalId}
+    ` as any);
   };
 
   // -------------------------------------------------------------------------

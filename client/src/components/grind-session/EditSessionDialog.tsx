@@ -2,7 +2,6 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Slider } from "@/components/ui/slider";
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import {
   Trophy,
@@ -11,9 +10,13 @@ import {
   DollarSign,
   Award,
   Users,
+  Clock,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { SessionHistoryData } from "./types";
+import MentalEvolutionEditor, {
+  type MentalEvolutionEditorHandle,
+} from "./MentalEvolutionEditor";
 
 interface LoadingButtonProps {
   isLoading: boolean;
@@ -79,6 +82,8 @@ interface EditSessionDialogProps {
   isSaving: boolean;
   showSuccess: boolean;
   onSave: () => void;
+  // ADR-242 — ref para o editor de evolucao mental (draft da serie de breaks).
+  mentalEvolutionRef?: React.Ref<MentalEvolutionEditorHandle>;
 }
 
 export default function EditSessionDialog({
@@ -98,6 +103,7 @@ export default function EditSessionDialog({
   isSaving,
   showSuccess,
   onSave,
+  mentalEvolutionRef,
 }: EditSessionDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -166,6 +172,29 @@ export default function EditSessionDialog({
                       )}
                     </div>
                     <div className="field-hint">Total de torneios jogados na sessão</div>
+                  </div>
+
+                  <div className="metric-field">
+                    <label className="field-label">Duração (min)</label>
+                    <div className="input-with-icon">
+                      <Input
+                        type="number"
+                        min="0"
+                        value={editData.duration ?? ""}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          updateField('duration', raw === "" ? "" : parseInt(raw) || 0);
+                          showFieldSaved('duration');
+                        }}
+                        className="field-input"
+                        placeholder="Tempo de sessão em minutos"
+                      />
+                      <Clock className="input-icon" />
+                      {savedField === 'duration' && (
+                        <span className="field-feedback-icon text-green-400">ok</span>
+                      )}
+                    </div>
+                    <div className="field-hint">Tempo total da sessão (minutos)</div>
                   </div>
 
                   <div className="metric-field">
@@ -282,135 +311,15 @@ export default function EditSessionDialog({
                 </div>
               </div>
 
-              {/* Seção de Estado Mental */}
+              {/* Seção de Estado Mental — ADR-242: serie editavel + medias derivadas */}
               <div className="section">
-                <h3 className="section-title">🧠 Estado Mental (1-10)</h3>
-                <div className="mental-grid">
-                  <div className="mental-field">
-                    <label className="field-label">⚡ Energia</label>
-                    <div className={getSliderClassName('energiaMedia', editData.energiaMedia || 5)}>
-                      <Slider
-                        value={[editData.energiaMedia || 5]}
-                        onValueChange={([value]) => {
-                          updateField('energiaMedia', value);
-                          showFieldSaved('energiaMedia');
-                        }}
-                        max={10}
-                        min={1}
-                        step={1}
-                        className="mental-slider"
-                      />
-                      <div className="slider-value">
-                        {editData.energiaMedia || 5}
-                      </div>
-                    </div>
-                    <div className="slider-indicators">
-                      <span className="text-xs text-gray-500">Cansado</span>
-                      <span className="text-xs text-gray-500">Neutro</span>
-                      <span className="text-xs text-gray-500">Energizado</span>
-                    </div>
-                  </div>
-
-                  <div className="mental-field">
-                    <label className="field-label">🎯 Foco</label>
-                    <div className={getSliderClassName('focoMedio', editData.focoMedio || 5)}>
-                      <Slider
-                        value={[editData.focoMedio || 5]}
-                        onValueChange={([value]) => {
-                          updateField('focoMedio', value);
-                          showFieldSaved('focoMedio');
-                        }}
-                        max={10}
-                        min={1}
-                        step={1}
-                        className="mental-slider"
-                      />
-                      <div className="slider-value">
-                        {editData.focoMedio || 5}
-                      </div>
-                    </div>
-                    <div className="slider-indicators">
-                      <span className="text-xs text-gray-500">Disperso</span>
-                      <span className="text-xs text-gray-500">Neutro</span>
-                      <span className="text-xs text-gray-500">Focado</span>
-                    </div>
-                  </div>
-
-                  <div className="mental-field">
-                    <label className="field-label">💪 Confiança</label>
-                    <div className={getSliderClassName('confiancaMedia', editData.confiancaMedia || 5)}>
-                      <Slider
-                        value={[editData.confiancaMedia || 5]}
-                        onValueChange={([value]) => {
-                          updateField('confiancaMedia', value);
-                          showFieldSaved('confiancaMedia');
-                        }}
-                        max={10}
-                        min={1}
-                        step={1}
-                        className="mental-slider"
-                      />
-                      <div className="slider-value">
-                        {editData.confiancaMedia || 5}
-                      </div>
-                    </div>
-                    <div className="slider-indicators">
-                      <span className="text-xs text-gray-500">Inseguro</span>
-                      <span className="text-xs text-gray-500">Neutro</span>
-                      <span className="text-xs text-gray-500">Confiante</span>
-                    </div>
-                  </div>
-
-                  <div className="mental-field">
-                    <label className="field-label">🧠 Int. Emocional</label>
-                    <div className={getSliderClassName('inteligenciaEmocionalMedia', editData.inteligenciaEmocionalMedia || 5)}>
-                      <Slider
-                        value={[editData.inteligenciaEmocionalMedia || 5]}
-                        onValueChange={([value]) => {
-                          updateField('inteligenciaEmocionalMedia', value);
-                          showFieldSaved('inteligenciaEmocionalMedia');
-                        }}
-                        max={10}
-                        min={1}
-                        step={1}
-                        className="mental-slider"
-                      />
-                      <div className="slider-value">
-                        {editData.inteligenciaEmocionalMedia || 5}
-                      </div>
-                    </div>
-                    <div className="slider-indicators">
-                      <span className="text-xs text-gray-500">Reativo</span>
-                      <span className="text-xs text-gray-500">Neutro</span>
-                      <span className="text-xs text-gray-500">Controlado</span>
-                    </div>
-                  </div>
-
-                  <div className="mental-field">
-                    <label className="field-label">📱 Interferências</label>
-                    <div className={getSliderClassName('interferenciasMedia', editData.interferenciasMedia || 5)}>
-                      <Slider
-                        value={[editData.interferenciasMedia || 5]}
-                        onValueChange={([value]) => {
-                          updateField('interferenciasMedia', value);
-                          showFieldSaved('interferenciasMedia');
-                        }}
-                        max={10}
-                        min={1}
-                        step={1}
-                        className="mental-slider"
-                      />
-                      <div className="slider-value">
-                        {editData.interferenciasMedia || 5}
-                      </div>
-                    </div>
-                    <div className="slider-indicators">
-                      <span className="text-xs text-gray-500">Muitas</span>
-                      <span className="text-xs text-gray-500">Algumas</span>
-                      <span className="text-xs text-gray-500">Nenhuma</span>
-                    </div>
-                  </div>
-                </div>
+                <h3 className="section-title">Estado Mental (evolucao por medicao)</h3>
+                {editingSession?.id ? (
+                  <MentalEvolutionEditor
+                    ref={mentalEvolutionRef}
+                    sessionId={editingSession.id}
+                  />
+                ) : null}
               </div>
 
               {/* Seção de Notas e Objetivos */}

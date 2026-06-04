@@ -1869,6 +1869,29 @@ export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit
   interferencias: z.number().int().min(0).max(10),
 });
 
+// ADR-242 — bulk-replace atomico da serie de break feedbacks de uma sessao.
+// O conjunto inteiro e a fonte de verdade: id presente = update, id ausente =
+// insert, id no DB ausente no payload = delete, breaks: [] = remove todos.
+// userId/sessionId NUNCA vem do payload (imutaveis, herdados da sessao validada).
+export const bulkReplaceBreakFeedbackItemSchema = z
+  .object({
+    id: z.string().optional(),
+    breakTime: z.union([z.string(), z.date()]),
+    foco: z.number().int().min(0).max(10),
+    energia: z.number().int().min(0).max(10),
+    confianca: z.number().int().min(0).max(10),
+    inteligenciaEmocional: z.number().int().min(0).max(10),
+    interferencias: z.number().int().min(0).max(10),
+    notes: z.string().max(500).nullable().optional(),
+  })
+  .strict();
+
+export const bulkReplaceBreakFeedbacksSchema = z
+  .object({
+    breaks: z.array(bulkReplaceBreakFeedbackItemSchema),
+  })
+  .strict();
+
 export const insertSessionTournamentSchemaBase = createInsertSchema(sessionTournaments).omit({
   id: true,
   createdAt: true,
@@ -5853,6 +5876,10 @@ export const goals = pgTable(
     cadence: varchar("cadence", { length: 8 }),
     direction: varchar("direction", { length: 4 }).notNull().default("up"),
     horizon: varchar("horizon", { length: 8 }).notNull(),
+    // ADR-241 (migration 0094): inicio + prazo EXPLICITOS. Nullable (legado
+    // back-fillado em leitura: startDate ?? createdAt; deadline derivado do horizon).
+    startDate: date("start_date"),
+    deadline: date("deadline"),
     status: varchar("status", { length: 12 }).notNull().default("active"),
     origin: varchar("origin", { length: 24 }).notNull().default("manual"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -5932,6 +5959,34 @@ export const goalProgressSnapshots = pgTable(
   ],
 );
 
+// --- goal_daily_logs: relatorio diario do "calendario de metas" (ADR-241) ---
+// 1 row/user/dia (chave UTC via ymdUtc). measures_exercised = quais medidas de
+// direcao o jogador exerceu no dia. Enums Zod-only (sem CHECK DB).
+export const goalDailyLogs = pgTable(
+  "goal_daily_logs",
+  {
+    id: varchar("id").primaryKey().notNull(),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.userPlatformId, { onDelete: "cascade" }),
+    logDate: date("log_date").notNull(),
+    measuresExercised: jsonb("measures_exercised").notNull().default([]),
+    note: text("note"),
+    tournamentsPlayed: integer("tournaments_played"),
+    studyHours: numeric("study_hours"),
+    studyContent: text("study_content"),
+    learning: text("learning"),
+    didGood: text("did_good"),
+    didBad: text("did_bad"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("goal_daily_logs_user_date_unique").on(t.userId, t.logDate),
+    index("idx_goal_daily_logs_user_date").on(t.userId, t.logDate),
+  ],
+);
+
 export const goalsRelations = relations(goals, ({ one }) => ({
   user: one(users, { fields: [goals.userId], references: [users.userPlatformId] }),
 }));
@@ -5941,4 +5996,6 @@ export type InsertGoal = typeof goals.$inferInsert;
 export type GoalWigMetaRow = typeof goalWigMeta.$inferSelect;
 export type GoalLinkRow = typeof goalLinks.$inferSelect;
 export type GoalSnapshotRow = typeof goalProgressSnapshots.$inferSelect;
+export type GoalDailyLogRow = typeof goalDailyLogs.$inferSelect;
+export type InsertGoalDailyLog = typeof goalDailyLogs.$inferInsert;
 

@@ -128,6 +128,171 @@ export async function handleUpdateGrindSession(req: any, res: any): Promise<void
 }
 
 // =============================================================================
+// ADR-242 — Evolucao Mental Editavel na Sessao (bulk-replace + medias derivadas)
+//
+// PUT /api/grind-sessions/:id/break-feedbacks
+//   - Substitui o conjunto inteiro de breaks da sessao numa transacao
+//     (id presente = update, id ausente = insert, id no DB ausente no payload =
+//     delete, breaks: [] = remove todos).
+//   - Recalcula e persiste as 5 medias derivadas + retorna serie ASC + medias +
+//     breakCount (derivado).
+//   - Ownership ANTES de mutar (404 nao-dono); clamp 0-10 por item; Zod .strict().
+//   - lesson #32 (db.transaction fallback gentil), #34 (injectedStorage), #21
+//     (cache prefix-invalidation no client).
+// =============================================================================
+export async function handlePutSessionBreakFeedbacks(
+  req: any,
+  res: any,
+  injectedStorage?: any,
+): Promise<void> {
+  const userId = userIdOfReq(req);
+  if (!userId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const id = req?.params?.id;
+  if (!id) {
+    res.status(400).json({ message: "id obrigatorio" });
+    return;
+  }
+
+  const store = injectedStorage ?? (await import("../storage")).storage;
+
+  try {
+    // Ownership ANTES de qualquer mutacao (padrao audit grind-sessions.ts:1219).
+    const session = await store.getGrindSession(id);
+    if (!session || session.userId !== userId) {
+      res.status(404).json({ message: "Sessao nao encontrada" });
+      return;
+    }
+
+    // Validacao Zod (.strict()) — clamp por item ANTES do parse (defense-in-depth,
+    // paridade com POST). Mantem os campos do item para que .strict() rejeite chaves
+    // desconhecidas; apenas sobrepoe as 5 metricas clampadas.
+    const { bulkReplaceBreakFeedbacksSchema } = await import("@shared/schema");
+    const rawBreaks: any[] = Array.isArray(req.body?.breaks) ? req.body.breaks : null;
+    let parsed: { breaks: any[] };
+    if (req.body && Array.isArray(req.body.breaks)) {
+      const clampedBody = {
+        ...req.body,
+        breaks: rawBreaks!.map((item: any) => ({
+          ...item,
+          ...clampBreakFeedback(item ?? {}),
+        })),
+      };
+      parsed = bulkReplaceBreakFeedbacksSchema.parse(clampedBody);
+    } else {
+      // forca falha Zod (body sem breaks)
+      parsed = bulkReplaceBreakFeedbacksSchema.parse(req.body);
+    }
+
+    // Estado atual no DB (ORDER BY breakTime DESC do storage real).
+    const existing: any[] = await store.getBreakFeedbacks(userId, id);
+    const existingById = new Map<string, any>();
+    for (const row of existing) existingById.set(row.id, row);
+
+    const payloadIds = new Set<string>(
+      parsed.breaks.filter((b) => b.id).map((b) => b.id as string),
+    );
+
+    // Runner do diff: roda dentro da tx quando disponivel (lesson #32).
+    // Propaga `tx` como ULTIMO arg OPCIONAL aos 4 metodos de storage para que
+    // DELETE/INSERT/UPDATE + updateGrindSession (medias) commitem atomicamente.
+    // Quando `tx` eh undefined (testes, db.transaction indisponivel), NAO eh
+    // passado adiante — preserva a aridade que os testes inspecionam (lesson #32).
+    const runDiff = async (tx?: any) => {
+      // DELETE: id no DB ausente no payload.
+      for (const row of existing) {
+        if (!payloadIds.has(row.id)) {
+          if (tx) await store.deleteBreakFeedback(row.id, tx);
+          else await store.deleteBreakFeedback(row.id);
+        }
+      }
+
+      // INSERT / UPDATE.
+      for (const item of parsed.breaks) {
+        const breakTime = coerceBreakTime(item.breakTime, item.id ? existingById.get(item.id) : null);
+        const metrics = {
+          foco: item.foco,
+          energia: item.energia,
+          confianca: item.confianca,
+          inteligenciaEmocional: item.inteligenciaEmocional,
+          interferencias: item.interferencias,
+        };
+        const notes = item.notes ?? null;
+
+        if (item.id && existingById.has(item.id)) {
+          const data = { ...metrics, breakTime, notes };
+          if (tx) await store.updateBreakFeedback(item.id, data, tx);
+          else await store.updateBreakFeedback(item.id, data);
+        } else {
+          const insert = { userId, sessionId: id, breakTime, ...metrics, notes };
+          if (tx) await store.createBreakFeedback(insert, tx);
+          else await store.createBreakFeedback(insert);
+        }
+      }
+
+      // Recalculo das medias derivadas sobre o conjunto FINAL (Decisao 2).
+      const { computeMediasFromBreaks } = await import(
+        "../coach/grind/computeMediasFromBreaks"
+      );
+      const medias = computeMediasFromBreaks(parsed.breaks as any);
+      if (tx) await store.updateGrindSession(id, medias, tx);
+      else await store.updateGrindSession(id, medias);
+      return medias;
+    };
+
+    const txAvailable = db && typeof (db as any).transaction === "function";
+    let medias: any;
+    if (txAvailable) {
+      medias = await (db as any).transaction(async (tx: any) => runDiff(tx));
+    } else {
+      medias = await runDiff();
+    }
+
+    // Serie final ASC por breakTime (Q-04) + breakCount derivado.
+    const finalBreaks = await store.getBreakFeedbacks(userId, id);
+    const sortedAsc = [...finalBreaks].sort(
+      (a, b) => new Date(a.breakTime).getTime() - new Date(b.breakTime).getTime(),
+    );
+
+    try {
+      invalidateHomeOverviewCache(userId);
+    } catch (err: any) {
+      console.error("[handlePutSessionBreakFeedbacks] invalidateHomeOverviewCache failed:", err?.message);
+    }
+    try {
+      invalidateDashboardQuickStatsCache(userId);
+    } catch (err: any) {
+      console.error("[handlePutSessionBreakFeedbacks] invalidateDashboardQuickStatsCache failed:", err?.message);
+    }
+
+    res.status(200).json({
+      breaks: sortedAsc,
+      medias,
+      breakCount: sortedAsc.length,
+    });
+  } catch (err: any) {
+    console.error("[handlePutSessionBreakFeedbacks] failed:", err?.message ?? err);
+    res.status(400).json({ message: "Failed to update break feedbacks" });
+  }
+}
+
+// breakTime ISO -> Date; fallback para o break existente (id conhecido) ou now.
+function coerceBreakTime(value: any, existing: any | null): Date {
+  if (value instanceof Date && !isNaN(value.getTime())) return value;
+  if (typeof value === "string") {
+    const d = new Date(value);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (existing?.breakTime) {
+    const d = new Date(existing.breakTime);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date();
+}
+
+// =============================================================================
 // ADR-040 — Reconciliacao de banca ao fim da sessao
 // =============================================================================
 
@@ -1401,6 +1566,12 @@ export function registerGrindSessionRoutes(app: Express): void {
         message: "Failed to create break feedback"
       });
     }
+  });
+
+  // ADR-242 — bulk-replace atomico da serie de break feedbacks de uma sessao.
+  // Sub-path de 2 segmentos: nao colide com PUT /api/grind-sessions/:id.
+  app.put('/api/grind-sessions/:id/break-feedbacks', requireAuth, async (req: any, res) => {
+    await handlePutSessionBreakFeedbacks(req, res);
   });
 
   // Session tournament routes

@@ -21,6 +21,7 @@ import { computeBreakdowns } from "@/components/grind-session/breakdownHelpers";
 import { getCurrencyForSite } from "@shared/platform-currency";
 import SessionHistoryList from "@/components/grind-session/SessionHistoryList";
 import EditSessionDialog from "@/components/grind-session/EditSessionDialog";
+import type { MentalEvolutionEditorHandle } from "@/components/grind-session/MentalEvolutionEditor";
 import DeleteSessionDialog from "@/components/grind-session/DeleteSessionDialog";
 import RegisterSessionDialog from "@/components/grind-session/RegisterSessionDialog";
 import SessionDetailsDialog from "@/components/grind-session/SessionDetailsDialog";
@@ -110,6 +111,9 @@ export default function GrindSession() {
 
   // Edit/Delete session states
   const [editingSession, setEditingSession] = useState<SessionHistoryData | null>(null);
+  // ADR-242 — ref para o editor de evolucao mental (draft da serie de breaks).
+  // O save global ("Salvar Alteracoes") dispara a persistencia da serie junto.
+  const mentalEvolutionRef = useRef<MentalEvolutionEditorHandle | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<SessionHistoryData | null>(null);
@@ -1022,26 +1026,19 @@ export default function GrindSession() {
     localStorage.removeItem('warmUpIntegration');
   };
 
-  // Edit session mutation
+  // Edit session mutation.
+  // ADR-242 fix-wave (MEDIUM-1): o orquestrador `handleSaveEdit` controla TODA a
+  // UX pos-save (toast, fechar modal, limpar editingSession) de forma sequencial
+  // — a sessao persiste ANTES da serie de breaks, e o modal so fecha quando AMBOS
+  // confirmam. Por isso esta mutation NAO fecha o modal nem dispara toast no
+  // onSuccess (evita 2 onSuccess concorrentes + unmount do editor durante o save
+  // da serie + toast duplicado). Mantem so a invalidacao da query de historico.
   const editSessionMutation = useMutation({
     mutationFn: async (data: { id: string; sessionData: any }) => {
       return apiRequest("PUT", `/api/grind-sessions/${data.id}`, data.sessionData);
     },
     onSuccess: () => {
-      toast({
-        title: "Sessão atualizada!",
-        description: "As informações da sessão foram atualizadas com sucesso.",
-      });
-      setIsEditDialogOpen(false);
-      setEditingSession(null);
       queryClient.invalidateQueries({ queryKey: ["/api/grind-sessions/history"] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erro ao atualizar sessão",
-        description: error.message || "Algo deu errado ao atualizar a sessão.",
-        variant: "destructive",
-      });
     },
   });
 
@@ -1108,10 +1105,20 @@ export default function GrindSession() {
     setIsDeleteDialogOpen(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingSession) return;
 
-    const { isValid, errors } = createSessionValidator().validate(editData);
+    // Valida apenas os campos que o usuario realmente mudou — evita que dado
+    // legado inconsistente (ex: fts>volume herdado) bloqueie a edicao de outro
+    // campo (ex: profit). Bug relatado: editar profit de dia negativo nao salvava.
+    const changedFields = (
+      ["volume", "profit", "abiMed", "fts", "cravadas"] as const
+    ).filter((f) => editData[f] !== (initialSession as any)[f]);
+
+    const { isValid, errors } = createSessionValidator().validate(
+      editData,
+      changedFields,
+    );
 
     if (!isValid) {
       Object.entries(errors).forEach(([field]) => {
@@ -1128,40 +1135,82 @@ export default function GrindSession() {
     setIsSaving(true);
     setShowSuccess(false);
 
-    editSessionMutation.mutate({
-      id: editingSession.id,
-      sessionData: {
-        volume: editData.volume,
-        profit: String(editData.profit || 0),
-        abiMed: String(editData.abiMed || 0),
-        roi: String(editData.roi || 0),
-        fts: editData.fts,
-        cravadas: editData.cravadas,
-        energiaMedia: String(editData.energiaMedia || 5),
-        focoMedio: String(editData.focoMedio || 5),
-        confiancaMedia: String(editData.confiancaMedia || 5),
-        inteligenciaEmocionalMedia: String(editData.inteligenciaEmocionalMedia || 5),
-        interferenciasMedia: String(editData.interferenciasMedia || 5),
-        preparationNotes: editData.preparationNotes,
-        dailyGoals: editData.dailyGoals,
-        finalNotes: editData.finalNotes,
-        objectiveCompleted: editData.objectiveCompleted,
-      }
-    }, {
-      onSuccess: () => {
-        clearAutoSave();
-        setIsSaving(false);
-        setShowSuccess(true);
-        setTimeout(() => {
-          setShowSuccess(false);
-          setIsEditDialogOpen(false);
-        }, 2000);
-      },
-      onError: () => {
-        setIsSaving(false);
-        setShowSuccess(false);
-      }
+    const durationRaw = (editData as any).duration;
+    const durationParsed =
+      durationRaw === "" || durationRaw == null
+        ? undefined
+        : Number(durationRaw);
+
+    // ADR-242 fix-wave (MEDIUM-1 + MEDIUM-2): fluxo async unico e sequencial.
+    // 1) persiste a SESSAO; 2) persiste a SERIE de breaks (bulk endpoint que
+    //    recalcula as medias derivadas na mesma tx). So fecha o modal/limpa o
+    //    editor quando AMBOS confirmam. Se qualquer um falhar, o modal NAO fecha
+    //    (usuario pode retentar) e a falha eh sinalizada com toast destrutivo
+    //    distinto (sem checkmark de sucesso total — nada de "Salvo" silencioso).
+    try {
+      await editSessionMutation.mutateAsync({
+        id: editingSession.id,
+        sessionData: {
+          volume: editData.volume,
+          ...(durationParsed != null && Number.isFinite(durationParsed)
+            ? { duration: durationParsed }
+            : {}),
+          profit: String(editData.profit || 0),
+          abiMed: String(editData.abiMed || 0),
+          roi: String(editData.roi || 0),
+          fts: editData.fts,
+          cravadas: editData.cravadas,
+          // ADR-242 (RF-07): as 5 medias *Media agora sao DERIVADAS da serie de
+          // breaks e persistidas pelo bulk endpoint. O PUT legado nao as envia.
+          preparationNotes: editData.preparationNotes,
+          dailyGoals: editData.dailyGoals,
+          finalNotes: editData.finalNotes,
+          objectiveCompleted: editData.objectiveCompleted,
+        },
+      });
+    } catch (err: any) {
+      // Falha do save da SESSAO: modal permanece aberto, sem checkmark.
+      console.error("[handleSaveEdit] session save failed:", err);
+      setIsSaving(false);
+      setShowSuccess(false);
+      toast({
+        title: "Erro ao atualizar sessão",
+        description: err?.message || "Algo deu errado ao atualizar a sessão.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // ADR-242 (Q-03 salvar junto): a serie so eh persistida APOS a sessao salvar.
+    try {
+      await mentalEvolutionRef.current?.saveDraft();
+    } catch (err: any) {
+      // MEDIUM-2: a sessao salvou mas a serie mental falhou — NAO mostrar sucesso
+      // total. Diferencia o resultado e mantem o modal aberto para retentar.
+      console.error("[handleSaveEdit] mental evolution save failed:", err);
+      setIsSaving(false);
+      setShowSuccess(false);
+      toast({
+        title: "Sessão salva, mas a evolução mental falhou",
+        description: "A sessão foi atualizada, mas não conseguimos salvar a evolução mental. Tente salvar novamente.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Sucesso total: ambos persistiram.
+    clearAutoSave();
+    setIsSaving(false);
+    setShowSuccess(true);
+    toast({
+      title: "Sessão atualizada!",
+      description: "As informações da sessão foram atualizadas com sucesso.",
     });
+    setTimeout(() => {
+      setShowSuccess(false);
+      setIsEditDialogOpen(false);
+      setEditingSession(null);
+    }, 2000);
   };
 
   const handleConfirmDelete = () => {
@@ -1500,6 +1549,7 @@ export default function GrindSession() {
         isSaving={isSaving}
         showSuccess={showSuccess}
         onSave={handleSaveEdit}
+        mentalEvolutionRef={mentalEvolutionRef}
       />
 
       {/* Delete Session Dialog */}

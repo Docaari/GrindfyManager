@@ -14,11 +14,15 @@
 // numeric da coluna = string JS -> parseFloat na boundary, NUNCA Number() cego.
 // =============================================================================
 
-import { GOALS_SOURCE_METRIC_MAP } from "./sourceMetricMap";
+import { GOALS_SOURCE_METRIC_MAP, parseMetricSource } from "./sourceMetricMap";
 import { num } from "./num";
 
 export interface AggregateWindow {
   weekStartDate: string; // YYYY-MM-DD (UTC)
+  // ADR-241 — janela completa da meta (inicio->agora) p/ metricas de RESULTADO
+  // (profit/volume cumulativos da WIG). Ausente -> usa a semana corrente.
+  rangeStartYmd?: string;
+  rangeEndYmd?: string;
 }
 
 export interface AggregateResult {
@@ -33,6 +37,10 @@ export interface AggregateDeps {
   getWallets?: (userId: string) => Promise<any[]>;
   fxToUsd?: (amountNative: number, currency: string) => Promise<number | null>;
   getPerformanceByPeriod?: (userId: string, window: AggregateWindow) => Promise<any>;
+  // ADR-241 — fonte 'grind' das metricas de resultado: sessoes de grind na janela
+  // da meta (profitLoss USD-equiv) + count de session_tournaments dessa janela.
+  getGrindSessionsInRange?: (userId: string, fromYmd: string, toYmd: string) => Promise<any[]>;
+  getSessionTournamentCountInRange?: (userId: string, fromYmd: string, toYmd: string) => Promise<number>;
 }
 
 const LOW_SAMPLE_THRESHOLD = 2; // < 2 amostras -> dataSufficiency 'low' (D9)
@@ -43,9 +51,28 @@ export async function aggregateCurrentValue(
   window: AggregateWindow,
   deps: AggregateDeps = {},
 ): Promise<AggregateResult> {
-  const spec = GOALS_SOURCE_METRIC_MAP[sourceMetric];
+  const { base, source } = parseMetricSource(sourceMetric);
+  const spec = GOALS_SOURCE_METRIC_MAP[base];
   if (!spec) {
     return { value: null, dataSufficiency: "low", note: "no_data_source" };
+  }
+
+  // ADR-241 — fonte 'grind' (profit/volume): agrega da janela completa da meta.
+  if (source === "grind" && (base === "profit" || base === "volume")) {
+    const fromYmd = window.rangeStartYmd ?? window.weekStartDate;
+    const toYmd = window.rangeEndYmd ?? window.weekStartDate;
+    // Metrica de RESULTADO cumulativa (WIG, janela longa): 1 sessao ja e dado
+    // valido — 'low' so quando NAO ha dado nenhum (reviewer MEDIUM: evita badge
+    // "amostra fraca" enganoso em WIG de profit/volume com poucas sessoes).
+    if (base === "profit") {
+      const rows = (await deps.getGrindSessionsInRange?.(userId, fromYmd, toYmd)) ?? [];
+      const completed = rows.filter((r: any) => r?.status === "completed");
+      const value = completed.reduce((sum: number, r: any) => sum + num(r?.profitLoss), 0);
+      return { value, dataSufficiency: completed.length === 0 ? "low" : "ok" };
+    }
+    // volume = count de session_tournaments registrados na janela.
+    const count = (await deps.getSessionTournamentCountInRange?.(userId, fromYmd, toYmd)) ?? 0;
+    return { value: count, dataSufficiency: count === 0 ? "low" : "ok" };
   }
 
   switch (spec.kind) {
@@ -53,7 +80,7 @@ export async function aggregateCurrentValue(
       const rows = (await deps.getGrindSessions?.(userId, window)) ?? [];
       const completed = rows.filter((r: any) => r?.status === "completed");
       let value: number;
-      if (sourceMetric === "grind_days") {
+      if (base === "grind_days") {
         const days = new Set(
           completed.map((r: any) => {
             const d = r?.date instanceof Date ? r.date : new Date(r?.date);
@@ -75,7 +102,7 @@ export async function aggregateCurrentValue(
         (r: any) => !r?.deletedAt,
       );
       let value: number;
-      if (sourceMetric === "study_sessions_count") {
+      if (base === "study_sessions_count") {
         value = rows.length;
       } else {
         value = rows.reduce((sum: number, r: any) => sum + num(r?.durationMinutes), 0);

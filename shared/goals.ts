@@ -46,6 +46,7 @@ export const NON_CONTROLLABLE_SOURCE_METRICS = [
 export const YMD = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 // medida de direcao (D2) — POST /api/goals (goalKind='measure')
+// ADR-241: startDate (inicio) + deadline (prazo) EXPLICITOS e opcionais.
 export const createMeasureSchema = z
   .object({
     goalType: z.enum(GOAL_TYPES),
@@ -57,6 +58,8 @@ export const createMeasureSchema = z
     cadence: z.enum(GOAL_CADENCES),
     horizon: z.enum(GOAL_HORIZONS),
     direction: z.enum(["up", "down"]).default("up"),
+    startDate: YMD.optional(),
+    deadline: YMD.optional(),
   })
   .strict();
 
@@ -71,6 +74,7 @@ export const createWigSchema = z
     targetValue: z.number(),
     unit: z.enum(GOAL_UNITS),
     horizon: z.enum(WIG_HORIZONS),
+    startDate: YMD.optional(), // inicio explicito (default createdAt no read)
     targetDeadline: YMD, // handler valida >= +90d → wig_deadline_too_short
   })
   .strict();
@@ -82,9 +86,59 @@ export const patchGoalSchema = z
     title: z.string().min(1).max(120).optional(),
     targetValue: z.number().optional(),
     targetDeadline: YMD.optional(),
+    startDate: YMD.optional(),
+    deadline: YMD.optional(),
     status: z.enum(["active", "achieved", "abandoned", "archived"]).optional(),
   })
   .strict();
+
+// ---------------------------------------------------------------------------
+// Relatorio diario do "calendario de metas" (ADR-241).
+// 1 row/user/dia. measures_exercised = quais medidas de direcao foram exercidas.
+// ---------------------------------------------------------------------------
+export const goalDailyLogMeasureSchema = z.object({
+  measureId: z.string().min(1).max(48),
+  sourceMetric: z.string().max(48).optional(),
+  value: z.number().nullable().optional(),
+});
+
+// Body do PUT /api/goals/daily-logs/:date — a data vem na URL (param), nao no body.
+export const upsertGoalDailyLogSchema = z
+  .object({
+    measuresExercised: z.array(goalDailyLogMeasureSchema).max(10).optional(),
+    note: z.string().max(2000).nullable().optional(),
+    tournamentsPlayed: z.number().int().min(0).max(1000).nullable().optional(),
+    studyHours: z.number().min(0).max(24).nullable().optional(),
+    studyContent: z.string().max(2000).nullable().optional(),
+    learning: z.string().max(2000).nullable().optional(),
+    didGood: z.string().max(2000).nullable().optional(),
+    didBad: z.string().max(2000).nullable().optional(),
+  })
+  .strict();
+
+export type GoalDailyLogMeasure = z.infer<typeof goalDailyLogMeasureSchema>;
+export type UpsertGoalDailyLog = z.infer<typeof upsertGoalDailyLogSchema>;
+
+// SSoT do predicado "dia preenchido" (ADR-241) — usado pelo calendario (cor da
+// celula), pelo streak de consistencia e por qualquer agregacao. Evita drift
+// entre client e server (antes duplicado em GoalsCalendar.logIsFilled +
+// goals.ts:dailyLogIsFilled). Opera na forma camelCase canonica do storage.
+export function isDailyLogFilled(log: any): boolean {
+  if (!log) return false;
+  const me = log.measuresExercised;
+  const tp = log.tournamentsPlayed;
+  const sh = log.studyHours;
+  const txt = (v: any) => typeof v === "string" && v.trim().length > 0;
+  return Boolean(
+    (Array.isArray(me) && me.length > 0) ||
+      txt(log.note) ||
+      (tp != null && Number(tp) > 0) ||
+      (sh != null && Number(sh) > 0) ||
+      txt(log.learning) ||
+      txt(log.didGood) ||
+      txt(log.didBad),
+  );
+}
 
 export type GoalType = (typeof GOAL_TYPES)[number];
 export type GoalCategory = (typeof GOAL_CATEGORIES)[number];

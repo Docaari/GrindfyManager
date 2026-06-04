@@ -138,7 +138,8 @@
       "Bash(findstr :3000)",
       "Bash(git checkout *)",
       "Bash(findstr /I \"node tsx\")",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(Get-ChildItem *)"
     ]
   }
 }

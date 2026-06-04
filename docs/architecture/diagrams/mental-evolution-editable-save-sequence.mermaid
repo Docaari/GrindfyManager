@@ -1,0 +1,52 @@
+%% ADR-242: Evolucao Mental Editavel na Sessao
+%% Sequencia do "Salvar Alteracoes" do modal: draft local -> bulk endpoint ->
+%% transacao (diff INSERT/UPDATE/DELETE) -> recalculo de medias derivadas ->
+%% resposta (serie ASC + medias + breakCount) -> invalidacao de cache.
+sequenceDiagram
+    actor User as Jogador
+    participant Modal as EditSessionDialog<br/>(MentalEvolutionEditor)
+    participant RQ as TanStack Query<br/>(useMutation)
+    participant API as PUT /api/grind-sessions/:id/break-feedbacks
+    participant Store as storage (injectedStorage?)
+    participant DB as PostgreSQL<br/>(db.transaction)
+
+    Note over Modal: Estado draft local da serie de breaks<br/>(editar/adicionar/remover sem persistir)
+    User->>Modal: Edita/adiciona/remove medicoes
+    Modal->>Modal: Atualiza draft + grafico Recharts reflete em tempo real
+    User->>Modal: Clica "Salvar Alteracoes"
+
+    Modal->>RQ: mutate({ breaks: draft[] })
+    RQ->>API: PUT /:id/break-feedbacks<br/>{ breaks:[{id?,breakTime,5 metricas,notes}] } (JWT)
+
+    Note over API: clampBreakFeedback por item (0-10, default 5)<br/>+ bulkReplaceBreakFeedbacksSchema.parse (.strict())
+    API->>API: Zod parse + clamp ANTES de operar
+
+    API->>Store: getGrindSession(:id) (ownership ANTES de mutar)
+    Store->>DB: SELECT grind_sessions WHERE id
+    DB-->>Store: session | null
+    Store-->>API: session
+    alt !session OU session.userId !== userId
+        API-->>RQ: 404 { message: "Sessao nao encontrada" }
+        RQ-->>Modal: onError (toast PT-BR, draft preservado)
+    else ownership OK
+        Note over API,DB: lesson #32 — db.transaction com fallback gentil<br/>(txAvailable = db && typeof db.transaction === "function")
+        API->>DB: BEGIN (ou runner sem tx em ambiente de teste)
+        API->>Store: getBreakFeedbacks(userId, :id) [tx]
+        Store->>DB: SELECT break_feedbacks WHERE session_id
+        DB-->>Store: serie atual (ids no DB)
+        Note over API: Diff idempotente (lesson #33 p/ rows):<br/>id no payload e DB -> UPDATE; id ausente -> INSERT (nanoid);<br/>id no DB e ausente no payload -> DELETE
+        API->>Store: INSERT novos / UPDATE existentes / DELETE removidos [tx]
+        Store->>DB: INSERT / UPDATE / DELETE break_feedbacks
+        Note over API: Medias derivadas = media aritmetica das 5 metricas<br/>do conjunto final. Zero breaks -> medias null. breakCount = length
+        API->>Store: updateGrindSession(:id, { *Media as string | null }) [tx]
+        Store->>DB: UPDATE grind_sessions SET *_media
+        API->>DB: COMMIT
+        DB-->>API: ok
+        API->>Store: getBreakFeedbacks(userId, :id) -> reordena ASC por breakTime
+        Store-->>API: serie persistida
+        API-->>RQ: 200 { breaks(ASC), medias, breakCount }
+        RQ->>RQ: invalidateQueries ['break-feedbacks', sessionId] (prefixo, lesson #21)<br/>+ historico/sessoes (medias/breakCount)
+        Note over API: server tb invalida Home overview +<br/>dashboard quickStats cache (paridade PUT/DELETE sessao)
+        RQ-->>Modal: onSuccess -> grafico + medias derivadas read-only re-renderizam
+        Modal-->>User: Estado mental atualizado (sem reload)
+    end

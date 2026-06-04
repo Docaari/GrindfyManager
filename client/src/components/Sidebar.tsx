@@ -35,7 +35,9 @@ import {
   Layers,
   HelpCircle,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Target,
+  Activity
 } from 'lucide-react';
 
 /**
@@ -138,6 +140,9 @@ const Sidebar: React.FC = () => {
         { path: '/', icon: User, label: 'Inicio', adminOnly: false },
         { path: '/dashboard', icon: BarChart3, label: 'Dashboard', adminOnly: false },
         { path: '/bankroll', icon: Wallet, label: 'Banca', adminOnly: false },
+        // ADR-241 — Metas (placar + calendario) e Analise Mental (antes orfaos).
+        { path: '/metas', icon: Target, label: 'Metas', adminOnly: false },
+        { path: '/analise-mental', icon: Activity, label: 'Mental', adminOnly: false },
       ]
     },
     {

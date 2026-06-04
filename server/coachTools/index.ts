@@ -72,6 +72,8 @@ import { queryPoolIntelligenceTool } from './handlers/queryPoolIntelligence';
 import { defineCareerGoalTool } from './handlers/defineCareerGoal';
 import { evaluateCareerGoalTool } from './handlers/evaluateCareerGoal';
 import { logMentalHandTool } from './handlers/logMentalHand';
+// ADR-241 — relatorio diario do calendario de metas.
+import { logDailyGoalReportTool } from './handlers/logDailyGoalReport';
 import { computeIrpfSummaryTool } from './handlers/computeIrpfSummary';
 
 // -----------------------------------------------------------------------------
@@ -134,6 +136,8 @@ safeRegister(defineCareerGoalTool as unknown as CoachTool);
 safeRegister(evaluateCareerGoalTool as unknown as CoachTool);
 safeRegister(logMentalHandTool as unknown as CoachTool);
 safeRegister(computeIrpfSummaryTool as unknown as CoachTool);
+// ADR-241 — Metas: relatorio diario.
+safeRegister(logDailyGoalReportTool as unknown as CoachTool);
 
 export {
   readCooldownHistoryTool,
@@ -172,6 +176,7 @@ export {
   evaluateCareerGoalTool,
   logMentalHandTool,
   computeIrpfSummaryTool,
+  logDailyGoalReportTool,
 };
 
 // Agregado para introspeccao por testes (lesson #8 — testes validam presenca
@@ -212,4 +217,5 @@ export const coachTools = [
   evaluateCareerGoalTool,
   logMentalHandTool,
   computeIrpfSummaryTool,
+  logDailyGoalReportTool,
 ];

@@ -147,8 +147,7 @@ export const createSessionValidator = () => {
     volume: {
       required: false,
       min: 0,
-      max: 100,
-      message: "Volume deve estar entre 0 e 100"
+      message: "Volume não pode ser negativo"
     },
     profit: {
       required: false,
@@ -162,23 +161,39 @@ export const createSessionValidator = () => {
     fts: {
       required: false,
       min: 0,
-      validate: (value: number, data: any) =>
-        value <= data.volume || "FTs não pode ser maior que volume",
+      // ADR-242 fix-wave (LOW): normaliza `volume` para 0 quando ausente/NaN
+      // (sessao importada sem volume) — evita `value <= undefined` => erro espurio.
+      validate: (value: number, data: any) => {
+        const volume = Number(data?.volume);
+        const safeVolume = Number.isFinite(volume) ? volume : 0;
+        return value <= safeVolume || "FTs não pode ser maior que volume";
+      },
       message: "FTs inválido"
     },
     cravadas: {
       required: false,
       min: 0,
-      validate: (value: number, data: any) =>
-        value <= data.fts || "Cravadas não pode ser maior que FTs",
+      // ADR-242 fix-wave (LOW): normaliza `fts` para 0 quando ausente/NaN.
+      validate: (value: number, data: any) => {
+        const fts = Number(data?.fts);
+        const safeFts = Number.isFinite(fts) ? fts : 0;
+        return value <= safeFts || "Cravadas não pode ser maior que FTs";
+      },
       message: "Cravadas inválido"
     }
   };
 
-  const validate = (data: any): { isValid: boolean; errors: Record<string, string> } => {
+  // `onlyFields` (opcional): valida apenas o subconjunto informado. Usado no save
+  // para nao bloquear a edicao de um campo (ex: profit) por causa de dado legado
+  // inconsistente em campos que o usuario nem tocou (ex: fts>volume herdado).
+  const validate = (
+    data: any,
+    onlyFields?: string[],
+  ): { isValid: boolean; errors: Record<string, string> } => {
     const errors: Record<string, string> = {};
 
     Object.entries(schema).forEach(([field, rules]) => {
+      if (onlyFields && !onlyFields.includes(field)) return;
       const value = data[field as keyof typeof data];
       const r = rules as any;
 

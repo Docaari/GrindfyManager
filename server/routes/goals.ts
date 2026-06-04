@@ -22,8 +22,15 @@ import {
   CONTROLLABLE_SOURCE_METRICS,
   NON_CONTROLLABLE_SOURCE_METRICS,
   patchGoalSchema,
+  upsertGoalDailyLogSchema,
+  isDailyLogFilled,
 } from "../../shared/goals";
-import { GOALS_SOURCE_METRIC_MAP } from "../coach/goals/sourceMetricMap";
+import {
+  GOALS_SOURCE_METRIC_MAP,
+  parseMetricSource,
+  RESULT_ONLY_METRICS,
+  GRIND_CAPABLE_METRICS,
+} from "../coach/goals/sourceMetricMap";
 import { computeExpectedNow, deriveStatus } from "../coach/goals/computePace";
 import { aggregateCurrentValue, type AggregateDeps } from "../coach/goals/aggregateCurrentValue";
 import { num } from "../coach/goals/num";
@@ -41,6 +48,35 @@ import { isValidStatId } from "../coach/statId";
 
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// ADR-241 — duracao do horizon para derivar deadline quando a meta nao tem
+// `deadline` explicito (legado). Sem isso, span<=0 e a pace satura em target.
+const HORIZON_MS: Record<string, number> = {
+  week: 7 * 24 * 60 * 60 * 1000,
+  month: 30 * 24 * 60 * 60 * 1000,
+  quarter: 90 * 24 * 60 * 60 * 1000,
+  season: 365 * 24 * 60 * 60 * 1000,
+};
+
+function ymdToUtc(ymd: string): Date {
+  return new Date(`${ymd}T00:00:00.000Z`);
+}
+
+// Resolve [inicio, prazo] de uma medida: startDate ?? createdAt e deadline
+// explicito OU derivado do horizon a partir do inicio (ADR-241).
+function resolveGoalWindow(g: any, now: Date): { start: Date; deadline: Date } {
+  const start = g.startDate
+    ? ymdToUtc(g.startDate)
+    : g.createdAt
+      ? new Date(g.createdAt)
+      : now;
+  const deadline = g.deadline
+    ? ymdToUtc(g.deadline)
+    : new Date(start.getTime() + (HORIZON_MS[g.horizon] ?? HORIZON_MS.quarter));
+  return { start, deadline };
+}
 
 async function resolveStorage(injected?: any): Promise<any> {
   if (injected) return injected;
@@ -76,8 +112,10 @@ async function denyIfFreeTier(req: any, res: any, storage: any): Promise<boolean
     }
     return false;
   } catch (err) {
+    // MEDIUM (reviewer): falha de infra (DB/timeout) NAO e "sem permissao". 503
+    // distingue "indisponivel" de "free" — nao bloqueia Pro legitimo como 403.
     console.error("goals.tierGate.error", { err });
-    res.status(403).json({ message: "tier_not_eligible", code: "tier_not_eligible" });
+    res.status(503).json({ message: "tier_check_unavailable", code: "tier_check_unavailable" });
     return true;
   }
 }
@@ -96,6 +134,28 @@ export function registerGoalsRoutes(app: any, requireAuth: any): void {
   // 3. GET /api/goals/:id/snapshots (sub-path — ANTES de /:id puro)
   app.get("/api/goals/:id/snapshots", requireAuth, async (req: any, res: any) => {
     await handleGetSnapshots(req, res);
+  });
+
+  // 3b. GET /api/goals/:id/series (sub-path — serie planejado×executado p/ grafico)
+  app.get("/api/goals/:id/series", requireAuth, async (req: any, res: any) => {
+    await handleGetGoalSeries(req, res);
+  });
+
+  // 3d. ADR-241 — consistencia (streak + dias preenchidos) p/ o hero do placar.
+  app.get("/api/goals/consistency", requireAuth, async (req: any, res: any) => {
+    await handleGetConsistency(req, res);
+  });
+
+  // 3c. ADR-241 — relatorio diario do calendario de metas. Paths literais
+  // "daily-logs" registrados ANTES de /:id (DEC-A8) senao Express casa como :id.
+  app.get("/api/goals/daily-logs", requireAuth, async (req: any, res: any) => {
+    await handleListDailyLogs(req, res);
+  });
+  app.get("/api/goals/daily-logs/:date", requireAuth, async (req: any, res: any) => {
+    await handleGetDailyLog(req, res);
+  });
+  app.put("/api/goals/daily-logs/:date", requireAuth, async (req: any, res: any) => {
+    await handleUpsertDailyLog(req, res);
   });
 
   // 4. GET /api/goals (colecao)
@@ -132,12 +192,35 @@ export function registerGoalsRoutes(app: any, requireAuth: any): void {
 // ---------------------------------------------------------------------------
 function buildAggregateDeps(storage: any, userId: string): AggregateDeps {
   let fxRatesPromise: Promise<Record<string, number>> | null = null;
+  // Memoiza UM unico fetch de grind sessions por request (superset limit:1000).
+  // Antes 2-3 scans identicos por scoreboard (weekly + 2 grind deps). Mesmo
+  // padrao do fxRatesPromise. Cada dep filtra a janela que precisa em codigo.
+  let grindSessionsPromise: Promise<any[]> | null = null;
+  const allGrindSessions = (): Promise<any[]> => {
+    if (!grindSessionsPromise) {
+      grindSessionsPromise = Promise.resolve(storage.getGrindSessions?.(userId, { limit: 1000 })).then(
+        (r: any) => (Array.isArray(r) ? r : []),
+      );
+    }
+    return grindSessionsPromise;
+  };
+  // Filtra sessoes por janela de datas [fromYmd, toYmd] inclusivo. keepUndated:
+  // sem `date` -> mantem (weekly, defensivo) ou descarta (range de meta).
+  const sessionsInWindow = (rows: any[], fromYmd: string, toYmd: string, keepUndated: boolean): any[] => {
+    const start = new Date(`${fromYmd}T00:00:00.000Z`).getTime();
+    const end = new Date(`${toYmd}T00:00:00.000Z`).getTime() + DAY_MS; // +1 dia inclusivo
+    return rows.filter((s: any) => {
+      if (!s?.date) return keepUndated;
+      const t = (s.date instanceof Date ? s.date : new Date(s.date)).getTime();
+      if (Number.isNaN(t)) return keepUndated;
+      return t >= start && t < end;
+    });
+  };
 
   return {
-    // storage.getGrindSessions(uid, {limit}) — SEM janela. Busca com limit
-    // razoavel e filtra por `date` em [weekStart, weekStart+7d) UTC EM CODIGO.
-    getGrindSessions: async (uid, window) => {
-      const all = (await storage.getGrindSessions?.(uid, { limit: 500 })) ?? [];
+    // Sessoes da semana corrente [weekStart, weekStart+7d). Reusa o fetch unico.
+    getGrindSessions: async (_uid, window) => {
+      const all = await allGrindSessions();
       const start = new Date(`${window.weekStartDate}T00:00:00.000Z`).getTime();
       if (Number.isNaN(start)) return all;
       const end = start + WEEK_MS;
@@ -175,6 +258,20 @@ function buildAggregateDeps(storage: any, userId: string): AggregateDeps {
     // storage.getPerformanceByPeriod(uid, period:string) — period e STRING.
     // TODO(metas-1.1): periodo semanal Mon-Sun exato vs 7d rolling (decisao de produto).
     getPerformanceByPeriod: async (uid) => (await storage.getPerformanceByPeriod?.(uid, "7d")) ?? {},
+    // ADR-241 — fonte 'grind' das metricas de resultado (profit/volume): sessoes
+    // de grind na janela COMPLETA da meta (inicio->agora). Reusa o fetch unico.
+    getGrindSessionsInRange: async (_uid, fromYmd, toYmd) => {
+      return sessionsInWindow(await allGrindSessions(), fromYmd, toYmd, false);
+    },
+    // volume 'grind' = count de session_tournaments das sessoes da janela.
+    getSessionTournamentCountInRange: async (uid, fromYmd, toYmd) => {
+      const ids = sessionsInWindow(await allGrindSessions(), fromYmd, toYmd, false)
+        .map((s: any) => s.id)
+        .filter(Boolean);
+      if (ids.length === 0) return 0;
+      const tourneys = (await storage.getSessionTournamentsBySessionIds?.(uid, ids)) ?? [];
+      return Array.isArray(tourneys) ? tourneys.length : 0;
+    },
   };
 }
 
@@ -392,7 +489,14 @@ async function buildScoreboardEntry(
   let current: number | null = null;
   let dataSufficiency: "ok" | "low" = "ok";
   try {
-    const agg = await aggregateCurrentValue(userId, g.sourceMetric, { weekStartDate }, deps);
+    // ADR-241 — metricas de resultado (profit/volume) usam a janela COMPLETA da
+    // meta (inicio->agora); as demais ignoram range e usam a semana.
+    const agg = await aggregateCurrentValue(
+      userId,
+      g.sourceMetric,
+      { weekStartDate, rangeStartYmd: ymdUtc(g.createdAt), rangeEndYmd: ymdUtc(now) },
+      deps,
+    );
     current = agg?.value ?? null;
     dataSufficiency = agg?.dataSufficiency ?? "ok";
   } catch (err) {
@@ -424,7 +528,15 @@ async function aggregateCurrentForFallback(
   weekStartDate: string,
 ): Promise<number | null> {
   try {
-    const agg = await aggregateCurrentValue(userId, g.sourceMetric, { weekStartDate }, deps);
+    // HIGH (reviewer ADR-241): propaga a janela COMPLETA da meta (igual a via
+    // direta), senao uma futura medida grind-capable agregaria a semana no
+    // fallback e o `current` divergiria entre re-reads conforme o motor degrada.
+    const agg = await aggregateCurrentValue(
+      userId,
+      g.sourceMetric,
+      { weekStartDate, rangeStartYmd: ymdUtc(g.createdAt), rangeEndYmd: ymdUtc(new Date()) },
+      deps,
+    );
     return agg?.value ?? null;
   } catch (err) {
     console.error("goals.scoreboard.fallbackAggregate.error", { userId, goalRefId: g.refId, err });
@@ -454,6 +566,9 @@ export async function handleScoreboard(req: any, res: any, injectedStorage?: any
     // Normaliza medidas + WIGs numa lista unica (helper consolidado).
     const normalized: NormalizedGoal[] = [];
     for (const g of (rawGoals as any[]) ?? []) {
+      // ADR-241 — pace usa start_date/deadline explicitos (fallback createdAt +
+      // horizon). Antes deadline=now -> span<=0 -> expectedNow saturava em target.
+      const { start, deadline } = resolveGoalWindow(g, now);
       normalized.push({
         refId: g.id,
         kind: "measure",
@@ -461,8 +576,8 @@ export async function handleScoreboard(req: any, res: any, injectedStorage?: any
         sourceMetric: g.sourceMetric,
         baseline: num(g.baselineValue),
         target: num(g.targetValue),
-        createdAt: g.createdAt ? new Date(g.createdAt) : now,
-        deadline: g.targetDeadline ? new Date(g.targetDeadline) : now,
+        createdAt: start,
+        deadline,
         direction: g.direction ?? "up",
         horizon: g.horizon,
       });
@@ -669,6 +784,31 @@ async function createWigHandler(userId: string, body: any, storage: any, res: an
     res.status(422).json({ message: "wig_must_be_lag", code: "wig_must_be_lag" });
     return;
   }
+  // Campos obrigatorios da WIG (RF-01): title nao-vazio + targetValue e
+  // baselineValue numeros finitos. Sem isso, createWig escreveria career_goals
+  // com title NULL (CHECK) ou baseline_value NULL (NOT NULL em goal_wig_meta) ->
+  // 500 em prod. Recusa explicita ANTES do storage.
+  if (typeof body.title !== "string" || body.title.trim() === "") {
+    res.status(400).json({ message: "wig_title_required", code: "wig_title_required" });
+    return;
+  }
+  if (typeof body.targetValue !== "number" || !Number.isFinite(body.targetValue)) {
+    res.status(400).json({ message: "wig_target_value_required", code: "wig_target_value_required" });
+    return;
+  }
+  if (typeof body.baselineValue !== "number" || !Number.isFinite(body.baselineValue)) {
+    res.status(400).json({ message: "wig_baseline_value_required", code: "wig_baseline_value_required" });
+    return;
+  }
+  // ADR-241 — fonte 'grind' so vale p/ profit/volume (roi/abi/itm sem currency
+  // em session_tournaments). Aditivo: so dispara para sufixo @grind invalido.
+  if (typeof body.sourceMetric === "string" && !isLeakFocusMetric(body.sourceMetric)) {
+    const { base, source } = parseMetricSource(body.sourceMetric);
+    if (source === "grind" && !GRIND_CAPABLE_METRICS.has(base)) {
+      res.status(422).json({ message: "wig_no_data_source", code: "wig_no_data_source" });
+      return;
+    }
+  }
   // deadline >= +90 dias (D9). MEDIUM-3: normaliza "hoje" para meia-noite UTC
   // antes de subtrair, evitando off-by-1-dia conforme a hora do dia.
   const deadline = body.targetDeadline ? new Date(`${body.targetDeadline}T00:00:00.000Z`) : null;
@@ -729,6 +869,23 @@ async function createMeasureHandler(userId: string, body: any, storage: any, res
       return;
     }
     mapKey = "leak_focus_progress";
+  } else {
+    // ADR-241 — separa base@fonte. Metricas de RESULTADO (profit/roi/itm/abi) sao
+    // nao-controlaveis -> recusadas como MEDIDA (so WIG). Fonte 'grind' so vale
+    // para profit/volume (session_tournaments nao tem currency p/ roi/abi/itm).
+    const { base, source } = parseMetricSource(body.sourceMetric ?? "");
+    if (RESULT_ONLY_METRICS.has(base)) {
+      res.status(422).json({
+        message: "lead_not_controllable (A2: resultado nao e medida de direcao)",
+        code: "lead_not_controllable",
+      });
+      return;
+    }
+    if (source === "grind" && !GRIND_CAPABLE_METRICS.has(base)) {
+      res.status(422).json({ message: "lead_no_data_source", code: "lead_no_data_source" });
+      return;
+    }
+    mapKey = base;
   }
   // RF-05: precisa de fonte de dado mapeada.
   if (!GOALS_SOURCE_METRIC_MAP[mapKey]) {
@@ -787,10 +944,36 @@ export async function handlePatchGoal(req: any, res: any, injectedStorage?: any)
       return;
     }
     const userId = userIdFrom(req);
+    const goalId = req.params.id;
+
+    // Discrimina medida (tabela `goals`) vs WIG (career_goals + goal_wig_meta).
+    // Medida-PRIMEIRO (getGoal): se for medida, segue o caminho updateGoal. Caso
+    // contrario, tenta WIG (getWig). Ownership por userId em ambos os getters.
+    let isMeasure = true;
+    if (typeof storage.getGoal === "function") {
+      const measure = await storage.getGoal(userId, goalId);
+      isMeasure = !!measure;
+    }
+
+    if (!isMeasure && typeof storage.getWig === "function") {
+      const wig = await storage.getWig(userId, goalId);
+      if (!wig) {
+        res.status(404).json({ message: "goal_not_found", code: "goal_not_found" });
+        return;
+      }
+      // WIG: targetDeadline VALE (coluna career_goals.target_deadline existe).
+      // Passa o patch inteiro (title/targetValue/targetDeadline/status). O storage
+      // ja barra baselineValue (BaselineImmutableError) — mas o handler ja rejeitou
+      // baselineValue acima, entao o patch aqui nunca o contem.
+      const updatedWig = await storage.updateWig?.(userId, goalId, parsed.data);
+      res.status(200).json(updatedWig ?? { ok: true });
+      return;
+    }
+
     // MEDIUM-2: targetDeadline so vale para WIG (career_goals). A coluna NAO
     // existe em `goals` (medida) -> nunca repassar ao updateGoal de medida.
     const { targetDeadline, ...measurePatch } = parsed.data;
-    const updated = await storage.updateGoal?.(userId, req.params.id, measurePatch);
+    const updated = await storage.updateGoal?.(userId, goalId, measurePatch);
     res.status(200).json(updated ?? { ok: true });
   } catch (err: any) {
     if (err?.code === "baseline_immutable") {
@@ -810,10 +993,244 @@ export async function handleDeleteGoal(req: any, res: any, injectedStorage?: any
     const storage = await resolveStorage(injectedStorage);
     if (await denyIfFreeTier(req, res, storage)) return;
     const userId = userIdFrom(req);
-    await storage.archiveGoal?.(userId, req.params.id);
+    const goalId = req.params.id;
+
+    // Discrimina medida (tabela `goals`) vs WIG (career_goals). Medida-PRIMEIRO
+    // (getGoal): se for medida, archiveGoal. Caso contrario, tenta WIG (getWig) e
+    // soft-deleta via archiveWig. Ownership por userId em ambos os getters.
+    let isMeasure = true;
+    if (typeof storage.getGoal === "function") {
+      const measure = await storage.getGoal(userId, goalId);
+      isMeasure = !!measure;
+    }
+
+    if (!isMeasure && typeof storage.getWig === "function") {
+      const wig = await storage.getWig(userId, goalId);
+      if (!wig) {
+        res.status(404).json({ message: "goal_not_found", code: "goal_not_found" });
+        return;
+      }
+      await storage.archiveWig?.(userId, goalId);
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    await storage.archiveGoal?.(userId, goalId);
     res.status(200).json({ ok: true });
   } catch (err) {
     console.error("handleDeleteGoal.error", { err });
     res.status(500).json({ message: "delete_goal_failed" });
+  }
+}
+
+// ===========================================================================
+// ADR-241 — serie temporal planejado×executado (grafico do placar)
+// ===========================================================================
+// GET /api/goals/:id/series — le goal_progress_snapshots e projeta
+// [{weekStartDate, expected, executed}] ordenado por semana. Read-only.
+export async function handleGetGoalSeries(req: any, res: any, injectedStorage?: any): Promise<void> {
+  try {
+    const storage = await resolveStorage(injectedStorage);
+    const userId = userIdFrom(req);
+    const goalRefId = req.params.id;
+    const snapshots = (await storage.getSnapshotsForGoal?.(userId, goalRefId)) ?? [];
+    const series = (Array.isArray(snapshots) ? snapshots : [])
+      .map((s: any) => ({
+        weekStartDate: s.weekStartDate,
+        expected: s.expectedValue === null || s.expectedValue === undefined ? null : num(s.expectedValue),
+        executed: s.currentValue === null || s.currentValue === undefined ? null : num(s.currentValue),
+        compliancePct: s.compliancePct === null || s.compliancePct === undefined ? null : num(s.compliancePct),
+        status: s.status ?? null,
+      }))
+      .sort((a: any, b: any) => String(a.weekStartDate).localeCompare(String(b.weekStartDate)));
+    res.status(200).json({ series });
+  } catch (err) {
+    console.error("handleGetGoalSeries.error", { err });
+    res.status(500).json({ message: "goal_series_failed" });
+  }
+}
+
+// ===========================================================================
+// ADR-241 — relatorio diario (calendario de metas)
+// ===========================================================================
+
+// Metas ativas num dia: [start, deadline] contem `date` E status active.
+// Reusa listGoals(active) + listActiveWigs (sem query nova). Projeta shape
+// enxuto p/ a UI (sem P&L — RF-06).
+async function activeGoalsForDate(storage: any, userId: string, date: string): Promise<any[]> {
+  const now = new Date();
+  const dayMs = ymdToUtc(date).getTime();
+  const [rawGoals, rawWigs] = await Promise.all([
+    Promise.resolve(storage.listGoals?.(userId, { status: "active" })).catch(() => []),
+    Promise.resolve(storage.listActiveWigs?.(userId)).catch(() => []),
+  ]);
+  const out: any[] = [];
+  for (const g of (rawGoals as any[]) ?? []) {
+    const { start, deadline } = resolveGoalWindow(g, now);
+    if (dayMs >= start.getTime() && dayMs <= deadline.getTime()) {
+      out.push({
+        id: g.id,
+        kind: "measure",
+        title: g.title,
+        sourceMetric: g.sourceMetric,
+        cadence: g.cadence ?? null,
+        unit: g.unit ?? null,
+        target: g.targetValue === null || g.targetValue === undefined ? null : num(g.targetValue),
+      });
+    }
+  }
+  for (const w of (rawWigs as any[]) ?? []) {
+    out.push({
+      id: w.careerGoalId ?? w.id,
+      kind: "wig",
+      title: w.title,
+      sourceMetric: w.sourceMetric ?? null,
+      cadence: null,
+      unit: w.unit ?? null,
+      target: w.targetValue === null || w.targetValue === undefined ? null : num(w.targetValue),
+    });
+  }
+  return out;
+}
+
+// GET /api/goals/consistency — streak atual + dias preenchidos (semana/mes).
+// Gamificacao de PROCESSO (4DX) — nunca P&L. Read-only (todos os tiers).
+export async function handleGetConsistency(req: any, res: any, injectedStorage?: any): Promise<void> {
+  try {
+    const storage = await resolveStorage(injectedStorage);
+    const userId = userIdFrom(req);
+    const now = new Date();
+    const todayMs = ymdToUtc(ymdUtc(now)).getTime();
+    // Janela de 180 dias (reviewer MEDIUM: 70d truncava "melhor serie" de quem e
+    // muito consistente — penalizava justo quem a feature quer celebrar).
+    const CONSISTENCY_WINDOW_DAYS = 180;
+    const from = ymdUtc(new Date(todayMs - CONSISTENCY_WINDOW_DAYS * 24 * 60 * 60 * 1000));
+    const to = ymdUtc(now);
+    const logs = (await storage.listGoalDailyLogsInRange?.(userId, from, to)) ?? [];
+
+    // Set de dias UTC preenchidos.
+    const filled = new Set<string>();
+    for (const l of Array.isArray(logs) ? logs : []) {
+      const d = String(l.logDate ?? l.log_date ?? "").slice(0, 10);
+      if (d && isDailyLogFilled(l)) filled.add(d);
+    }
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    const ymdAt = (ms: number) => ymdUtc(new Date(ms));
+
+    // Streak atual: conta dias consecutivos preenchidos terminando hoje OU ontem
+    // (graca de 1 dia — ainda nao registrou hoje nao zera a serie).
+    let currentStreak = 0;
+    let cursor = filled.has(ymdAt(todayMs)) ? todayMs : todayMs - dayMs;
+    while (filled.has(ymdAt(cursor))) {
+      currentStreak += 1;
+      cursor -= dayMs;
+    }
+
+    // Maior streak na janela.
+    let longestStreak = 0;
+    let run = 0;
+    for (let ms = todayMs - CONSISTENCY_WINDOW_DAYS * dayMs; ms <= todayMs; ms += dayMs) {
+      if (filled.has(ymdAt(ms))) {
+        run += 1;
+        if (run > longestStreak) longestStreak = run;
+      } else {
+        run = 0;
+      }
+    }
+
+    // Dias preenchidos na semana corrente (segunda->hoje, UTC).
+    const dow = now.getUTCDay(); // 0=dom..6=sab
+    const daysSinceMonday = (dow + 6) % 7;
+    const mondayMs = todayMs - daysSinceMonday * dayMs;
+    let daysFilledThisWeek = 0;
+    for (let ms = mondayMs; ms <= todayMs; ms += dayMs) {
+      if (filled.has(ymdAt(ms))) daysFilledThisWeek += 1;
+    }
+    const daysElapsedThisWeek = daysSinceMonday + 1;
+
+    // Dias preenchidos no mes corrente.
+    const firstOfMonthMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+    let daysFilledThisMonth = 0;
+    for (let ms = firstOfMonthMs; ms <= todayMs; ms += dayMs) {
+      if (filled.has(ymdAt(ms))) daysFilledThisMonth += 1;
+    }
+    const daysElapsedThisMonth = now.getUTCDate();
+
+    res.status(200).json({
+      currentStreak,
+      longestStreak,
+      daysFilledThisWeek,
+      daysElapsedThisWeek,
+      daysFilledThisMonth,
+      daysElapsedThisMonth,
+    });
+  } catch (err) {
+    console.error("handleGetConsistency.error", { err });
+    res.status(500).json({ message: "consistency_failed" });
+  }
+}
+
+// GET /api/goals/daily-logs?from=&to= — logs do range (mes do calendario).
+export async function handleListDailyLogs(req: any, res: any, injectedStorage?: any): Promise<void> {
+  try {
+    const storage = await resolveStorage(injectedStorage);
+    const userId = userIdFrom(req);
+    const from = String(req.query?.from ?? "");
+    const to = String(req.query?.to ?? "");
+    if (!YMD_RE.test(from) || !YMD_RE.test(to)) {
+      res.status(400).json({ message: "invalid_range", code: "invalid_range" });
+      return;
+    }
+    const logs = (await storage.listGoalDailyLogsInRange?.(userId, from, to)) ?? [];
+    res.status(200).json({ logs });
+  } catch (err) {
+    console.error("handleListDailyLogs.error", { err });
+    res.status(500).json({ message: "daily_logs_failed" });
+  }
+}
+
+// GET /api/goals/daily-logs/:date — log do dia + metas ativas naquele dia.
+export async function handleGetDailyLog(req: any, res: any, injectedStorage?: any): Promise<void> {
+  try {
+    const storage = await resolveStorage(injectedStorage);
+    const userId = userIdFrom(req);
+    const date = String(req.params?.date ?? "");
+    if (!YMD_RE.test(date)) {
+      res.status(400).json({ message: "invalid_date", code: "invalid_date" });
+      return;
+    }
+    const [log, activeGoals] = await Promise.all([
+      Promise.resolve(storage.getGoalDailyLog?.(userId, date)).catch(() => null),
+      activeGoalsForDate(storage, userId, date).catch(() => []),
+    ]);
+    res.status(200).json({ date, log: log ?? null, activeGoals });
+  } catch (err) {
+    console.error("handleGetDailyLog.error", { err });
+    res.status(500).json({ message: "daily_log_failed" });
+  }
+}
+
+// PUT /api/goals/daily-logs/:date — upsert relatorio do dia (tier-gated).
+export async function handleUpsertDailyLog(req: any, res: any, injectedStorage?: any): Promise<void> {
+  try {
+    const storage = await resolveStorage(injectedStorage);
+    if (await denyIfFreeTier(req, res, storage)) return;
+    const userId = userIdFrom(req);
+    const date = String(req.params?.date ?? "");
+    if (!YMD_RE.test(date)) {
+      res.status(400).json({ message: "invalid_date", code: "invalid_date" });
+      return;
+    }
+    const parsed = upsertGoalDailyLogSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ message: "invalid_daily_log", code: "invalid_daily_log", issues: parsed.error.issues });
+      return;
+    }
+    const saved = await storage.upsertGoalDailyLog?.(userId, date, parsed.data);
+    res.status(200).json(saved ?? { ok: true });
+  } catch (err) {
+    console.error("handleUpsertDailyLog.error", { err });
+    res.status(500).json({ message: "upsert_daily_log_failed" });
   }
 }

@@ -535,7 +535,7 @@ export interface IStorage {
   ): Promise<number>;
   getGrindSession(id: string): Promise<GrindSession | undefined>;
   createGrindSession(session: InsertGrindSession): Promise<GrindSession>;
-  updateGrindSession(id: string, session: Partial<InsertGrindSession>): Promise<GrindSession>;
+  updateGrindSession(id: string, session: Partial<InsertGrindSession>, tx?: any): Promise<GrindSession>;
   deleteGrindSession(id: string): Promise<void>;
 
   // Preparation log operations
@@ -596,8 +596,25 @@ export interface IStorage {
     userId: string,
     sessionIds: string[],
   ): Promise<BreakFeedback[]>;
-  createBreakFeedback(feedback: InsertBreakFeedback): Promise<BreakFeedback>;
-  deleteBreakFeedback(id: string): Promise<void>;
+  createBreakFeedback(feedback: InsertBreakFeedback, tx?: any): Promise<BreakFeedback>;
+  // ADR-242 — bulk-replace edita reports de break existentes; ownership na rota.
+  updateBreakFeedback(
+    id: string,
+    data: Partial<
+      Pick<
+        BreakFeedback,
+        | "foco"
+        | "energia"
+        | "confianca"
+        | "inteligenciaEmocional"
+        | "interferencias"
+        | "breakTime"
+        | "notes"
+      >
+    >,
+    tx?: any,
+  ): Promise<BreakFeedback>;
+  deleteBreakFeedback(id: string, tx?: any): Promise<void>;
 
   // Session tournament operations
   getSessionTournaments(userId: string, sessionId?: string): Promise<SessionTournament[]>;
@@ -1903,8 +1920,12 @@ export class DatabaseStorage implements IStorage {
     return newSession;
   }
 
-  async updateGrindSession(id: string, session: Partial<InsertGrindSession>): Promise<GrindSession> {
-    const [updatedSession] = await db
+  // ADR-242: `tx` opcional (ultimo arg) p/ rodar dentro de db.transaction
+  // (atomicidade do bulk-replace de break feedbacks). Fallback gentil ao db
+  // global quando ausente (lesson #32).
+  async updateGrindSession(id: string, session: Partial<InsertGrindSession>, tx?: any): Promise<GrindSession> {
+    const exec = tx ?? db;
+    const [updatedSession] = await exec
       .update(grindSessions)
       .set({ ...session, updatedAt: new Date() })
       .where(eq(grindSessions.id, id))
@@ -4215,17 +4236,64 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .orderBy(desc(breakFeedbacks.breakTime));
   }
 
-  async createBreakFeedback(feedback: InsertBreakFeedback): Promise<BreakFeedback> {
+  // ADR-242: `tx` opcional (ultimo arg) p/ atomicidade do bulk-replace (lesson #32).
+  async createBreakFeedback(feedback: InsertBreakFeedback, tx?: any): Promise<BreakFeedback> {
+    const exec = tx ?? db;
     const id = nanoid();
-    const [created] = await db
+    const [created] = await exec
       .insert(breakFeedbacks)
       .values({ ...feedback, id })
       .returning();
     return created;
   }
 
-  async deleteBreakFeedback(id: string): Promise<void> {
-    await db.delete(breakFeedbacks).where(eq(breakFeedbacks.id, id));
+  // ADR-242 (RF-03): UPDATE ... WHERE id RETURNING. Ownership fica na rota
+  // (paridade com updateGrindSession). NAO altera userId/sessionId/id/createdAt.
+  async updateBreakFeedback(
+    id: string,
+    data: Partial<
+      Pick<
+        BreakFeedback,
+        | "foco"
+        | "energia"
+        | "confianca"
+        | "inteligenciaEmocional"
+        | "interferencias"
+        | "breakTime"
+        | "notes"
+      >
+    >,
+    tx?: any,
+  ): Promise<BreakFeedback> {
+    const exec = tx ?? db;
+    const allowed: Record<string, unknown> = {};
+    const editableFields = [
+      "foco",
+      "energia",
+      "confianca",
+      "inteligenciaEmocional",
+      "interferencias",
+      "breakTime",
+      "notes",
+    ] as const;
+    for (const field of editableFields) {
+      if (field in data) {
+        allowed[field] = (data as Record<string, unknown>)[field];
+      }
+    }
+
+    const [updated] = await exec
+      .update(breakFeedbacks)
+      .set(allowed)
+      .where(eq(breakFeedbacks.id, id))
+      .returning();
+    return updated;
+  }
+
+  // ADR-242: `tx` opcional (ultimo arg) p/ atomicidade do bulk-replace (lesson #32).
+  async deleteBreakFeedback(id: string, tx?: any): Promise<void> {
+    const exec = tx ?? db;
+    await exec.delete(breakFeedbacks).where(eq(breakFeedbacks.id, id));
   }
 
   // Session tournament operations
@@ -17184,6 +17252,9 @@ attachWeeklyReviewStorage(storage as any);
 // + goal_links + goal_progress_snapshots.
 import { attachGoalsStorage } from "./storage/goalsStorage";
 attachGoalsStorage(storage as any);
+// ADR-241 — relatorio diario do calendario de metas (goal_daily_logs).
+import { attachGoalDailyLogsStorage } from "./storage/goalDailyLogsStorage";
+attachGoalDailyLogsStorage(storage as any);
 // MDA-1 (ADR-230) — mda_reads CRUD + junction N:N idempotente + imagens jsonb.
 import { attachMdaStorage } from "./storage/mdaStorage";
 attachMdaStorage(storage as any);

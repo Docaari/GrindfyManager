@@ -35,6 +35,32 @@ export const GOALS_SOURCE_METRIC_MAP: Record<string, SourceMetricSpec> = {
   roi_pct: { kind: "performance", source: "getPerformanceByPeriod", perfField: "roi" },
   abi: { kind: "performance", source: "getPerformanceByPeriod", perfField: "abi" },
   itm_pct: { kind: "performance", source: "getPerformanceByPeriod", perfField: "itmPct" },
+  // ADR-241 — metricas de RESULTADO (so WIG). Fonte selecionavel via sufixo
+  // @grind / @history (parseMetricSource). profit/volume agregam de grind
+  // (profitLoss USD-equiv + count de session_tournaments) OU do historico.
+  profit: { kind: "performance", source: "getPerformanceByPeriod", perfField: "profit" },
+  volume: { kind: "performance", source: "getPerformanceByPeriod", perfField: "totalTournaments" },
   // METAS-2 fatia-2: raiz controlavel de leak_focus. statId alvo via sufixo.
   leak_focus_progress: { kind: "leak", source: "getStatsLeaks + coach_leak_focus + stat_analysis" },
 };
+
+// ADR-241 — fonte de dado selecionavel: "<base>@grind" | "<base>@history".
+// Sem sufixo -> 'history' (back-compat com roi_pct/abi/itm_pct legados). O '@'
+// nao conflita com o ':' do leak_focus_progress:<statId>.
+export type MetricSource = "grind" | "history";
+export function parseMetricSource(sourceMetric: string): { base: string; source: MetricSource } {
+  const at = sourceMetric.indexOf("@");
+  if (at === -1) return { base: sourceMetric, source: "history" };
+  const base = sourceMetric.slice(0, at);
+  const tail = sourceMetric.slice(at + 1);
+  return { base, source: tail === "grind" ? "grind" : "history" };
+}
+
+// Metricas de RESULTADO — so permitidas como WIG (RF-04: nao-controlaveis nao
+// podem ser medida de direcao). volume e controlavel -> nao entra aqui.
+export const RESULT_ONLY_METRICS = new Set(["profit", "roi_pct", "itm_pct", "abi"]);
+
+// Bases que suportam fonte 'grind' (profitLoss USD-equiv + count session_tournaments).
+// roi/itm/abi NAO: session_tournaments nao tem currency -> agregacao multi-moeda
+// nao confiavel; ficam so no historico (getPerformanceByPeriod com FX).
+export const GRIND_CAPABLE_METRICS = new Set(["profit", "volume"]);

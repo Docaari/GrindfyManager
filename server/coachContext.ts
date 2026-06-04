@@ -282,6 +282,35 @@ export async function assembleContext(
     }
   } catch { /* graceful degradation */ }
 
+  // ADR-241 — Metas & Relatorio do dia. O agente ve as metas ativas + se o
+  // jogador ja preencheu o relatorio do dia (calendario de metas) p/ cobrar a
+  // medida de direcao com linguagem A4 (sem culpa) e SEM P&L (RF-06).
+  // Best-effort — falha de leitura nao quebra o context.
+  try {
+    const today = new Date();
+    const ymd = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}-${String(today.getUTCDate()).padStart(2, "0")}`;
+    const [goalsRes, wigsRes, todayLog] = await Promise.all([
+      Promise.resolve((storage as any).listGoals?.(userId, { status: "active" })).catch(() => []),
+      Promise.resolve((storage as any).listActiveWigs?.(userId)).catch(() => []),
+      Promise.resolve((storage as any).getGoalDailyLog?.(userId, ymd)).catch(() => null),
+    ]);
+    const measures = (Array.isArray(goalsRes) ? goalsRes : []).slice(0, 5);
+    const wigs = (Array.isArray(wigsRes) ? wigsRes : []).slice(0, 2);
+    if (measures.length > 0 || wigs.length > 0) {
+      const lines: string[] = [];
+      for (const w of wigs) lines.push(`- [WIG] ${w.title}`);
+      for (const m of measures) {
+        const cad = m.cadence ? ` (${m.cadence})` : "";
+        lines.push(`- [medida] ${m.title}${cad} — alvo ${m.targetValue ?? "?"} ${m.unit ?? ""}`.trim());
+      }
+      const reported = todayLog ? "JA preencheu o relatorio de hoje" : "AINDA NAO preencheu o relatorio de hoje";
+      systemParts.push(
+        `\n## Metas & Relatorio do dia (cobre a medida de direcao com linguagem A4, sem culpa; NUNCA mostre P&L):\n` +
+          `${lines.join("\n")}\n${reported}. Use a tool log_daily_goal_report para registrar o relatorio do dia quando o jogador pedir.`,
+      );
+    }
+  } catch { /* graceful degradation */ }
+
   // Coach AI UX Overhaul (#10) — benchmark vs populacao. Quando ha intel de pool
   // BR seeded, sinaliza ao agente que ele pode comparar o jogador ao field via a
   // tool query_pool_intelligence (gancho de retencao do nicho MTT).
