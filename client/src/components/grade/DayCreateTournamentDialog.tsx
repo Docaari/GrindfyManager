@@ -9,7 +9,7 @@
 
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { X, ChevronDown } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { safeEmit } from "@/lib/safe-emit";
 import { DAYS_PT } from "@/lib/days-pt";
@@ -104,6 +104,28 @@ export function DayCreateTournamentDialog(
     }
     return out;
   }, [knownSites]);
+
+  // Combobox de plataforma: dropdown selecionavel + texto livre. (datalist
+  // nativo nao mostrava as opcoes de forma confiavel.)
+  const [siteOpen, setSiteOpen] = React.useState(false);
+  const siteBoxRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    if (!siteOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (siteBoxRef.current && !siteBoxRef.current.contains(e.target as Node)) {
+        setSiteOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [siteOpen]);
+
+  const siteSuggestions = React.useMemo(() => {
+    const q = site.trim().toLowerCase();
+    if (!q) return sitesForList;
+    return sitesForList.filter((s) => s.toLowerCase().includes(q));
+  }, [site, sitesForList]);
 
   const canSubmit =
     name.trim().length > 0 &&
@@ -228,20 +250,67 @@ export function DayCreateTournamentDialog(
                 <label className="block text-xs text-gray-400 mb-1">
                   Plataforma *
                 </label>
-                <input
-                  type="text"
-                  list="day-zoom-create-sites"
-                  data-testid="day-zoom-create-input-site"
-                  value={site}
-                  onChange={(e) => patch({ site: e.target.value })}
-                  placeholder="PokerStars"
-                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-emerald-500 outline-none"
-                />
-                <datalist id="day-zoom-create-sites">
-                  {sitesForList.map((s) => (
-                    <option key={s} value={s} />
-                  ))}
-                </datalist>
+                <div ref={siteBoxRef} className="relative">
+                  <input
+                    type="text"
+                    role="combobox"
+                    aria-expanded={siteOpen}
+                    aria-controls="day-zoom-create-site-list"
+                    autoComplete="off"
+                    data-testid="day-zoom-create-input-site"
+                    value={site}
+                    onChange={(e) => {
+                      patch({ site: e.target.value });
+                      setSiteOpen(true);
+                    }}
+                    onFocus={() => setSiteOpen(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setSiteOpen(false);
+                    }}
+                    placeholder="PokerStars"
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 pr-7 text-sm text-white focus:border-emerald-500 outline-none"
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    data-testid="day-zoom-create-site-toggle"
+                    onClick={() => setSiteOpen((v) => !v)}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-white"
+                    aria-label="Abrir lista de plataformas"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                  {siteOpen && siteSuggestions.length > 0 && (
+                    <ul
+                      id="day-zoom-create-site-list"
+                      role="listbox"
+                      className="absolute z-[70] mt-1 max-h-44 w-full overflow-auto rounded border border-gray-700 bg-gray-900 shadow-xl py-1"
+                    >
+                      {siteSuggestions.map((s) => (
+                        <li key={s}>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={s === site}
+                            data-testid={`day-zoom-create-site-option-${s}`}
+                            onMouseDown={(e) => {
+                              // antes do blur do input — registra o clique.
+                              e.preventDefault();
+                              patch({ site: s });
+                              setSiteOpen(false);
+                            }}
+                            className={
+                              "block w-full text-left px-2 py-1.5 text-sm hover:bg-emerald-600/20 " +
+                              (s === site ? "text-emerald-400" : "text-gray-200")
+                            }
+                          >
+                            {s}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-xs text-gray-400 mb-1">
