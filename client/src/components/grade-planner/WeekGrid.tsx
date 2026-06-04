@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useDragToScroll } from "@/hooks/useDragToScroll";
 import { Draggable } from "react-beautiful-dnd";
 import { StrictModeDroppable as Droppable } from "./StrictModeDroppable";
 import { Settings, Plus, Eye, X } from "lucide-react";
@@ -98,6 +99,10 @@ export function WeekGrid({
   const tournaments = Array.isArray(plannedTournaments) ? plannedTournaments : [];
   const TIME_SLOTS = generateTimeSlots(gradeStartHour, gradeEndHour);
   const { toast } = useToast();
+  // Pan-to-scroll horizontal: agarrar area vazia e arrastar para ver as
+  // colunas da direita (Dom/Sab). Nao briga com drag-and-drop de torneios
+  // (rbd) nem com clique em celula. Ver useDragToScroll.
+  const { ref: panRef, handlers: panHandlers } = useDragToScroll<HTMLDivElement>();
 
   // hooks ANTES de early return (lesson #1).
   const anyProfileActive = useMemo(() => {
@@ -189,7 +194,11 @@ export function WeekGrid({
   }
 
   return (
-    <div className="flex-1 overflow-x-auto scroll-smooth">
+    <div
+      ref={panRef}
+      {...panHandlers}
+      className="flex-1 overflow-x-auto scroll-smooth cursor-grab"
+    >
       <div className="min-w-[800px]">
         <table className="w-full border-collapse">
           {/* Header */}
