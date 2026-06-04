@@ -110,7 +110,7 @@ function ruleRoiDrop(input: HeuristicsInput): Heuristic | null {
     id: "roi-30d-vs-60d-drop",
     message: `ROI 30d caiu ${drop.toFixed(1)} pp vs 60d. Revisar selecao de torneios.`,
     severity: "caution",
-    ctaHref: "/tournament-selector",
+    ctaHref: "/grade-planner",
   };
 }
 

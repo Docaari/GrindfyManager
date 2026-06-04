@@ -59,7 +59,8 @@ export function registerAdminRoutes(app: Express): void {
         lastName: users.lastName,
         status: users.status,
         subscriptionPlan: users.subscriptionPlan,
-        createdAt: users.createdAt
+        createdAt: users.createdAt,
+        lastLogin: users.lastLogin
       }).from(users);
 
 

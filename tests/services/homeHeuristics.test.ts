@@ -85,7 +85,7 @@ describe('homeHeuristics — Regra 1: roi-30d-vs-60d-drop', () => {
     expect(r1?.severity).toBe('caution');
     expect(r1?.message).toMatch(/ROI 30d caiu/);
     expect(r1?.message).toMatch(/10\.0 pp|10 pp/); // 20 - 10 = 10pp
-    expect(r1?.ctaHref).toBe('/tournament-selector');
+    expect(r1?.ctaHref).toBe('/grade-planner'); // fix: /tournament-selector was a dead route (not in Wouter table); selector lives in /grade-planner
   });
 
   it('NAO dispara quando queda < 5pp', async () => {

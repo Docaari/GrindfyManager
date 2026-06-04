@@ -91,7 +91,7 @@ export const StopBanner: React.FC<StopBannerProps> = ({
       <div className="flex flex-wrap gap-3 pt-1">
         {isLoss ? (
           <Link
-            href="/study"
+            href="/estudos"
             data-testid="stop-banner-cta-secondary"
             className="text-xs underline hover:opacity-90"
           >
