@@ -1,0 +1,27 @@
+%% Auto-populate da biblioteca: decisao de dedup ANTES (key exata) vs DEPOIS (key canonica + sinal de lixeira)
+flowchart TD
+    start["createPlannedTournament<br/><i>POST rota / Series Day2 / coach register_tournament_in_grade</i>"] --> ff["ensureLibraryEntryForPlannedSafe<br/><i>fire-and-forget, nunca lanca</i>"]
+
+    ff --> linked{"planned ja tem<br/>libraryTemplateId?"}
+    linked -->|"Sim"| skip1["skip (idempotencia)"]
+    linked -->|"Nao"| insuf{"userId + name + site<br/>presentes?"}
+    insuf -->|"Nao"| skip2["skip (dado insuficiente)"]
+
+    insuf -->|"Sim"| split{"Estrategia de dedup"}
+
+    %% ===== ANTES =====
+    split -->|"ANTES"| qOld["query candidatos:<br/>(user_id, name, site, buy_in) EXATOS"]
+    qOld --> matchOld["filtra por time exato<br/>em memoria"]
+    matchOld --> stOld{"estado do match"}
+    stOld -->|"ativo"| linkOld["link → planned.libraryTemplateId"]
+    stOld -->|"so trashed"| skipOldTrash["skip (D5)"]
+    stOld -->|"nenhum"| createOld["create entry nova<br/><i>$21.60 != $22 → DUPLICA</i>"]
+
+    %% ===== DEPOIS =====
+    split -->|"DEPOIS"| qNew["query candidatos COARSE:<br/>(user_id, site) — idx_tournament_library_user_site"]
+    qNew --> keyNew["libraryCanonicalKey por candidato<br/><i>site|dia|timeBin|canonicalBuyIn|typePrimary</i>"]
+    keyNew --> matchNew["agrupa por key canonica<br/>(snap buy-in, speed/name fora)"]
+    matchNew --> stNew{"estado do match canonico"}
+    stNew -->|"ativo"| linkNew["link → planned.libraryTemplateId<br/><i>$21.60 casa $22 → LINK (nao duplica)</i>"]
+    stNew -->|"so trashed"| signalNew["registra SINAL lixeira-recriada (Fatia 5)<br/>+ skip (D5 mantida — NAO ressuscita)"]
+    stNew -->|"nenhum"| createNew["create entry nova<br/><i>PKO != Vanilla → create correto</i>"]

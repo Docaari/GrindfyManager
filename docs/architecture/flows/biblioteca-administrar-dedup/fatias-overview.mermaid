@@ -1,0 +1,40 @@
+%% Visao de alto nivel das 7 fatias e suas dependencias (ICE + ordem de entrega)
+graph TB
+    key["libraryCanonicalKey<br/><i>shared/library-canonical-key.ts</i><br/>site|dia|timeBin|canonicalBuyIn|typePrimary"]
+
+    subgraph helpers["Helpers reusados (NAO reimplementar)"]
+        cb["canonicalBuyIn (libraryGrouping)"]
+        tp["typePrimary via enrichTournamentTypeFields"]
+        tb["timeBin2h (shared/time-bin)"]
+        ns["nameSignature (libraryGrouping)"]
+    end
+    helpers --> key
+
+    subgraph must["MUST"]
+        f1["Fatia 1 — Unificar dedup<br/>ICE 8.0 · #1 · base de tudo"]
+        f2["Fatia 2 — Tela Administrar<br/>ICE 7.3 · so reusa endpoints"]
+        f3["Fatia 3 — Flag-and-confirm + merge<br/>ICE 6.3 · POST /merge"]
+    end
+
+    subgraph should["SHOULD"]
+        f4["Fatia 4 — Acoes em massa<br/>ICE 7.3 · bulk-trash / bulk-set-day"]
+        f5["Fatia 5 — Sinal lixeira-recriada<br/>ICE 6.7 · D5 + restaurar 1-clique"]
+        f7["Fatia 7 — Derivar dayOfWeek no import<br/>ICE 6.7 · reduz balde Sem dia"]
+    end
+
+    subgraph nice["NICE"]
+        f6["Fatia 6 — Backfill read-only de duplicatas<br/>ICE 6.3 · GET /duplicate-groups"]
+    end
+
+    key --> f1
+    f1 -->|"key canonica"| f3
+    f1 -->|"key canonica"| f5
+    f1 -->|"key canonica"| f6
+    f2 -->|"UI banner / linhas"| f3
+    f2 -->|"tela"| f4
+    f2 -->|"exibe sinal"| f5
+    f3 -->|"engine de deteccao"| f6
+    ns -.->|"classifica confianca<br/>Duplicata vs Parecidos"| f3
+
+    note["Fatia 7 independente (complementa D4/Fatia 2)"]
+    note -.-> f7

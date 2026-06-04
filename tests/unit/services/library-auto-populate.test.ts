@@ -21,6 +21,25 @@ const basePlanned: PlannedLike = {
   time: '20:00',
 };
 
+// Sprint biblioteca-administrar-dedup / RF-02: o match passou de `time` exato
+// para `libraryCanonicalKey`. Os candidate rows agora precisam carregar os
+// campos canonicos (name/site/buyIn/type/dayOfWeek) alem de id/time/deletedAt
+// para casar a key do `basePlanned`. Helper que monta um row com a MESMA key
+// canonica do basePlanned por default; overrides quebram a key de proposito.
+function row(overrides: Partial<LibraryDedupRow> = {}): LibraryDedupRow {
+  return {
+    id: 'tpl-a',
+    name: 'Bounty Hunter',
+    site: 'PokerStars',
+    buyIn: '50',
+    time: '20:00',
+    type: 'Vanilla',
+    dayOfWeek: null,
+    deletedAt: null,
+    ...overrides,
+  };
+}
+
 describe('decideLibraryAction', () => {
   it('skip quando planned ja tem libraryTemplateId', () => {
     const res = decideLibraryAction({ ...basePlanned, libraryTemplateId: 'tpl-x' }, []);
@@ -43,18 +62,19 @@ describe('decideLibraryAction', () => {
     expect(decideLibraryAction(basePlanned, [])).toEqual({ action: 'create' });
   });
 
-  it('create quando candidato existe mas o time difere', () => {
-    const rows: LibraryDedupRow[] = [{ id: 'tpl-a', time: '21:00', deletedAt: null }];
+  it('create quando candidato existe mas o timeBin difere', () => {
+    // 20:00 (bin 20-22) vs 23:00 (bin 22-24) → bins diferentes → key diferente.
+    const rows: LibraryDedupRow[] = [row({ id: 'tpl-a', time: '23:00' })];
     expect(decideLibraryAction(basePlanned, rows)).toEqual({ action: 'create' });
   });
 
-  it('link quando ha match ativo com mesmo time', () => {
-    const rows: LibraryDedupRow[] = [{ id: 'tpl-a', time: '20:00', deletedAt: null }];
+  it('link quando ha match ativo com a mesma key canonica', () => {
+    const rows: LibraryDedupRow[] = [row({ id: 'tpl-a' })];
     expect(decideLibraryAction(basePlanned, rows)).toEqual({ action: 'link', templateId: 'tpl-a' });
   });
 
   it('match por time null casa quando planned.time tambem e null', () => {
-    const rows: LibraryDedupRow[] = [{ id: 'tpl-a', time: null, deletedAt: null }];
+    const rows: LibraryDedupRow[] = [row({ id: 'tpl-a', time: null })];
     expect(decideLibraryAction({ ...basePlanned, time: null }, rows)).toEqual({
       action: 'link',
       templateId: 'tpl-a',
@@ -62,14 +82,14 @@ describe('decideLibraryAction', () => {
   });
 
   it('skip quando o unico match esta na lixeira (respeita exclusao do user)', () => {
-    const rows: LibraryDedupRow[] = [{ id: 'tpl-a', time: '20:00', deletedAt: new Date() }];
+    const rows: LibraryDedupRow[] = [row({ id: 'tpl-a', deletedAt: new Date() })];
     expect(decideLibraryAction(basePlanned, rows)).toEqual({ action: 'skip' });
   });
 
-  it('prefere o match ativo quando ha trashed + ativo no mesmo time (qualquer ordem)', () => {
+  it('prefere o match ativo quando ha trashed + ativo na mesma key (qualquer ordem)', () => {
     const trashedFirst: LibraryDedupRow[] = [
-      { id: 'tpl-trashed', time: '20:00', deletedAt: new Date() },
-      { id: 'tpl-active', time: '20:00', deletedAt: null },
+      row({ id: 'tpl-trashed', deletedAt: new Date() }),
+      row({ id: 'tpl-active', deletedAt: null }),
     ];
     expect(decideLibraryAction(basePlanned, trashedFirst)).toEqual({
       action: 'link',

@@ -70,12 +70,20 @@ function makeSessionTournament(overrides: Partial<SessionTournament> = {}): Sess
   };
 }
 
+// Sprint biblioteca-administrar-dedup / RF-03: a dedup de import passou da key
+// (name+site+buyIn, ignorando time) para `libraryCanonicalKey` (site, dayOfWeek,
+// timeBin de `time`, canonicalBuyIn, typePrimary). Para os candidatos existentes
+// casarem os session tournaments (que tem time '20:00' + type 'PKO' por default),
+// o factory passa a espelhar `time`/`type` do makeSessionTournament. Os testes de
+// "manter" continuam diferindo por site/buyIn (dimensoes da key).
 function makeExistingLibrary(overrides: Partial<ExistingLibraryItem> = {}): ExistingLibraryItem {
   return {
     id: 'lib-001',
     name: 'Existing Tournament',
     site: 'PokerStars',
     buyIn: '55.00',
+    time: '20:00',
+    type: 'PKO',
     externalId: null,
     deletedAt: null,
     userId: 'USER-0001',

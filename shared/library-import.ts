@@ -3,6 +3,7 @@
  */
 
 import { filterNewTournaments } from './library-dedup';
+import { libraryCanonicalKey } from './library-canonical-key';
 
 interface SessionTournament {
   id: string;
@@ -69,10 +70,12 @@ export function extractImportableTournaments(
     };
   });
 
-  // Internal deduplication (same tournament across sessions)
+  // Internal deduplication (same tournament across sessions) — usa a MESMA key
+  // canonica do resto do dedup (ADR-200 Parte A), nao a antiga (name|site|buyIn)
+  // que ignorava time/type/snap e podia self-duplicar o batch.
   const seen = new Set<string>();
   const unique = mapped.filter((t) => {
-    const key = `${t.name.toLowerCase()}|${t.site}|${t.buyIn}`;
+    const key = libraryCanonicalKey(t);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

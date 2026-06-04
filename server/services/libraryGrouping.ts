@@ -19,6 +19,11 @@ import { FIELD_BUCKETS } from "../scoring/scoringConstants";
 import { enrichTournamentTypeFields } from "../../shared/tournament-type-detector";
 import { detectSpeedFromName, fastestSpeed } from "../../shared/speed-detector";
 import { timeBin2h } from "../../shared/time-bin";
+// canonicalBuyIn extraido para shared/ (ADR-200 Parte A) para ser reusado pela
+// key canonica sem arrastar deps server-only. Re-exportado aqui para preservar
+// os call sites existentes (storage.ts, tests/services/libraryGrouping).
+import { canonicalBuyIn } from "../../shared/canonical-buy-in";
+export { canonicalBuyIn };
 
 export interface GroupedSpecific {
   fineKey: string;
@@ -76,20 +81,6 @@ export function fieldBucketOf(t: any): string {
 /** Janela de ~2h derivada de datePlayed (NO_TIME_BIN quando ausente). */
 export function timeBinOf(t: any): string {
   return timeBin2h(t?.datePlayed ?? t?.startTime ?? null);
-}
-
-/**
- * Snap de buy-in para inteiro "redondo" quando dentro da tolerancia relativa
- * de ±3% (com um floor minimo de $0.15 para capturar centavos de fee). Colapsa
- * ruido de fee ($20+$1.60 -> 21.60 -> 22) sem snapar buy-ins baixos legitimos
- * ($1.50 nao vira $2; $5.50 nao vira $6).
- */
-export function canonicalBuyIn(raw: number): number {
-  if (!Number.isFinite(raw) || raw <= 0) return 0;
-  const tol = Math.max(raw * 0.03, 0.15);
-  const rounded = Math.round(raw);
-  if (Math.abs(rounded - raw) <= tol) return rounded;
-  return raw;
 }
 
 export function buyInTier(raw: number): string {

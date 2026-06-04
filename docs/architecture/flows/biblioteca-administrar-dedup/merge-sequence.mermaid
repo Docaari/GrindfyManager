@@ -1,0 +1,42 @@
+%% Fluxo de merge (Fatia 3): re-aponte de libraryTemplateId ANTES do soft-delete, atomico (D3)
+sequenceDiagram
+    actor User as Jogador
+    participant UI as Tela Administrar<br/>(DuplicateGroupReview)
+    participant API as POST /api/tournament-library/merge<br/>(requireAuth)
+    participant ST as storage (injectedStorage?)
+    participant DB as PostgreSQL (tx)
+
+    User->>UI: Abre grupo de duplicatas (lado-a-lado)
+    UI->>UI: Sugere vencedora (mais completa > updatedAt)
+    User->>UI: Escolhe winner + confirma merge (1-clique)
+    UI->>API: { winnerId, loserIds[] }
+
+    API->>API: Zod parse + ownership (userId do JWT)
+    Note over API: winnerId ∉ loserIds; loserIds nao-vazio;<br/>todos ativos (nao trashed)
+    alt validacao falha
+        API-->>UI: 400 / 403-404 / 409 (loser ja trashed)
+    else validacao ok
+        API->>ST: merge(winnerId, loserIds, userId)
+        Note over ST,DB: txAvailable = db && typeof db.transaction === "function"<br/>(fallback gentil — lesson #32)
+        ST->>DB: BEGIN tx
+
+        rect rgb(235,245,255)
+        Note over ST,DB: ORDEM OBRIGATORIA (D3-d)
+        ST->>DB: 1. UPDATE planned_tournaments<br/>SET library_template_id = winnerId<br/>WHERE library_template_id IN (loserIds) AND user_id = ?
+        DB-->>ST: repointedPlannedCount
+        ST->>DB: 2. UPDATE winner SET guaranteed = MAX(preenchido do grupo) (D3-c)
+        ST->>DB: 3. UPDATE losers SET deleted_at = now() (soft-delete)
+        end
+
+        alt falha no re-aponte (passo 1)
+            DB-->>ST: erro
+            ST->>DB: ROLLBACK (nenhum soft-delete aplicado)
+            ST-->>API: throw
+            API-->>UI: 500 — Grade intacta
+        else sucesso
+            ST->>DB: COMMIT
+            ST-->>API: { mergedCount, repointedPlannedCount }
+            API-->>UI: { winnerId, mergedCount, repointedPlannedCount }
+            UI->>UI: invalida cache (prefixo queryKey — lesson #21)
+        end
+    end

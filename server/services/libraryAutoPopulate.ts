@@ -15,6 +15,7 @@ import { nanoid } from "nanoid";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db";
 import { plannedTournaments, tournamentLibrary } from "@shared/schema";
+import { libraryCanonicalKey } from "@shared/library-canonical-key";
 
 export interface PlannedLike {
   id?: string | null;
@@ -38,10 +39,19 @@ export interface PlannedLike {
   libraryTemplateId?: string | null;
 }
 
-/** Linha minima de tournament_library relevante para a decisao de dedup. */
+/**
+ * Linha de tournament_library relevante para a decisao de dedup. Carrega os
+ * campos canonicos (name/site/buyIn/time/type/dayOfWeek) porque o match agora e
+ * por `libraryCanonicalKey` (ADR-200 Parte A), nao mais por `time` exato.
+ */
 export interface LibraryDedupRow {
   id: string;
+  name?: string | null;
+  site?: string | null;
+  buyIn?: string | number | null;
   time: string | null;
+  type?: string | null;
+  dayOfWeek?: number | null;
   deletedAt: Date | null;
 }
 
@@ -51,13 +61,14 @@ export type LibraryAction =
   | { action: "create" };
 
 /**
- * Decisao pura de dedup. `candidates` ja vem filtrado por
- * (userId, name, site, buyIn) — aqui so casamos o `time` e o estado deletedAt.
+ * Decisao pura de dedup. `candidates` ja vem coarse por (userId, site) — aqui
+ * casamos pela key canonica (`libraryCanonicalKey`: snap de buy-in, type na key,
+ * timeBin de `time`, dayOfWeek na key; speed/name FORA) e pelo estado deletedAt.
  *
- * - planned ja linkado (libraryTemplateId) → skip
+ * - planned ja linkado (libraryTemplateId) → skip (idempotencia)
  * - sem userId/name/site → skip (dado insuficiente)
- * - match ativo → link (planned aponta pro template existente)
- * - match trashed → skip (respeita exclusao deliberada do user)
+ * - match ativo pela key canonica → link (planned aponta pro template existente)
+ * - so match trashed → skip (respeita exclusao deliberada do user — D5)
  * - sem match → create
  */
 export function decideLibraryAction(
@@ -67,8 +78,10 @@ export function decideLibraryAction(
   if (planned.libraryTemplateId) return { action: "skip" };
   if (!planned.userId || !planned.name || !planned.site) return { action: "skip" };
 
-  const timeStr = planned.time ?? null;
-  const matches = candidates.filter((row) => (row.time ?? null) === timeStr);
+  const plannedKey = libraryCanonicalKey(planned);
+  const matches = candidates.filter(
+    (row) => libraryCanonicalKey(row) === plannedKey,
+  );
   // Match ativo tem prioridade — independe da ordem dos rows da query.
   const active = matches.find((m) => !m.deletedAt);
   if (active) return { action: "link", templateId: active.id };
@@ -87,22 +100,26 @@ export async function ensureLibraryEntryForPlanned(
   if (planned.libraryTemplateId) return planned.libraryTemplateId;
   if (!planned.userId || !planned.name || !planned.site) return null;
 
-  const buyInStr = String(planned.buyIn ?? "0");
-  const timeStr = planned.time ?? null;
-
+  // Busca COARSE por (user_id, site) trazendo os campos canonicos — o match e
+  // por libraryCanonicalKey em memoria (ADR-200 Parte A). Inclui TRASHED de
+  // proposito (sem filtro deletedAt) para o `skip` da D5. Indice de suporte:
+  // idx_tournament_library_user_site (migration 0095).
   const candidates = await db
     .select({
       id: tournamentLibrary.id,
+      name: tournamentLibrary.name,
+      site: tournamentLibrary.site,
+      buyIn: tournamentLibrary.buyIn,
       time: tournamentLibrary.time,
+      type: tournamentLibrary.type,
+      dayOfWeek: tournamentLibrary.dayOfWeek,
       deletedAt: tournamentLibrary.deletedAt,
     })
     .from(tournamentLibrary)
     .where(
       and(
         eq(tournamentLibrary.userId, planned.userId),
-        eq(tournamentLibrary.name, planned.name),
         eq(tournamentLibrary.site, planned.site),
-        eq(tournamentLibrary.buyIn, buyInStr),
       ),
     );
 
@@ -119,16 +136,17 @@ export async function ensureLibraryEntryForPlanned(
     return decision.templateId;
   }
 
-  // action === "create"
+  // action === "create" — coercoes create-only (nao participam mais do dedup,
+  // que e por libraryCanonicalKey em memoria).
   const templateId = nanoid();
   await db.insert(tournamentLibrary).values({
     id: templateId,
     userId: planned.userId,
     name: planned.name,
     site: planned.site,
-    buyIn: buyInStr,
+    buyIn: String(planned.buyIn ?? "0"),
     guaranteed: planned.guaranteed != null ? String(planned.guaranteed) : null,
-    time: timeStr,
+    time: planned.time ?? null,
     type: planned.type ?? null,
     speed: planned.speed ?? null,
     fieldSize: planned.fieldSize ?? null,

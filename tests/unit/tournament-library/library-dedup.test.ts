@@ -163,12 +163,17 @@ describe('isDuplicateByFields', () => {
     expect(isDuplicateByFields(incoming, existing)).toBe(true);
   });
 
-  it('deve retornar false quando name difere', () => {
+  // Sprint biblioteca-administrar-dedup / RF-03: a key canonica NAO inclui o
+  // `name` (so site/dayOfWeek/timeBin/canonicalBuyIn/typePrimary). Nomes
+  // diferentes no mesmo slot/buy-in/type passam a casar como duplicata — a
+  // distincao "Duplicata vs Parecidos" (por nameSignature) e da Fatia 3, nao da
+  // key. Antes (key name+site+buyIn) isto retornava false.
+  it('considera duplicata quando so o name difere (name FORA da key canonica)', () => {
     const incoming = makeIncoming({ name: 'Daily $22', site: 'GGPoker', buyIn: '22.00' });
     const existing = [
       makeExisting({ name: 'Weekly $22', site: 'GGPoker', buyIn: '22.00' }),
     ];
-    expect(isDuplicateByFields(incoming, existing)).toBe(false);
+    expect(isDuplicateByFields(incoming, existing)).toBe(true);
   });
 
   it('deve retornar false quando site difere', () => {
