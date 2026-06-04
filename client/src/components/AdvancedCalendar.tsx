@@ -174,6 +174,9 @@ export default function AdvancedCalendar({ weekStart }: AdvancedCalendarProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar-categories'] });
+    },
+    onError: (err) => {
+      console.error('[AdvancedCalendar] falha ao deletar categoria', err);
     }
   });
 

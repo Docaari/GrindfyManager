@@ -112,7 +112,7 @@ function UpgradeCTA() {
         O catalogo Spotify esta disponivel para assinantes Pro+ do Grindfy.
       </p>
       <a
-        href="/billing"
+        href="/subscriptions"
         className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
       >
         Ver planos

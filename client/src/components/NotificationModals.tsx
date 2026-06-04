@@ -23,7 +23,7 @@ export const ExpiringSubscriptionModal: React.FC = () => {
   const handleRenew = () => {
     markAsRead(notification.id);
     setShowExpiringModal(false);
-    window.location.href = '/subscription';
+    window.location.href = '/subscriptions';
   };
 
   const handleRemindLater = () => {
@@ -104,7 +104,7 @@ export const ExpiredSubscriptionModal: React.FC = () => {
   const handleRenew = () => {
     markAsRead(notification.id);
     setShowExpiredModal(false);
-    window.location.href = '/subscription';
+    window.location.href = '/subscriptions';
   };
 
   const handleGoHome = () => {

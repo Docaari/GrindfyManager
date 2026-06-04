@@ -10,6 +10,7 @@
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 export interface CoachActionUndoBadgeProps {
   actionId: string;
@@ -42,6 +43,7 @@ export function CoachActionUndoBadge({
   );
   const [now, setNow] = React.useState(() => Date.now());
   const [undone, setUndone] = React.useState(false);
+  const [undoFailed, setUndoFailed] = React.useState(false);
 
   React.useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -49,17 +51,16 @@ export function CoachActionUndoBadge({
   }, []);
 
   const undoMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/coach/actions/${actionId}/undo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    },
+    // apiRequest attaches CSRF token + credentials (raw fetch → 403 from the
+    // global /api CSRF guard). Returns parsed JSON, throws on non-ok.
+    mutationFn: async () => apiRequest("POST", `/api/coach/actions/${actionId}/undo`),
     onSuccess: (data) => {
       setUndone(true);
+      setUndoFailed(false);
       queryClient.setQueryData(["coach-action", actionId], data);
+    },
+    onError: () => {
+      setUndoFailed(true);
     },
   });
 
@@ -77,6 +78,8 @@ export function CoachActionUndoBadge({
   } else if (expired) {
     buttonLabel = "Janela expirada";
     label = "Janela expirada";
+  } else if (undoFailed) {
+    label = "Falha ao desfazer — tente novamente";
   } else {
     label = `Confirmado. Desfazer em ${formatRemaining(remaining)}`;
   }

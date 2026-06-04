@@ -86,7 +86,7 @@ function LessonCard({ lesson }: { lesson: CoachLessonRecommendation }) {
         metadata: { intent: "coach_recommend_interest", slug: lesson.slug },
       },
       { silentMode: true },
-    ).catch(() => {});
+    ).catch((err) => console.warn('[CoachLessonRecommendationCard] event telemetry failed', err));
   }
 
   let cta: React.ReactNode;

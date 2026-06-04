@@ -112,6 +112,17 @@ export function registerAuthRoutes(app: Express): void {
     },
   });
 
+  // Refresh is CSRF-exempt (rotation must work without a CSRF token), so it
+  // needs its own IP-based throttle to blunt brute-force / refresh-storm abuse.
+  const refreshRateLimit = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 30, // generous: legit clients refresh ~1x/15min; 30 covers multi-tab
+    message: { message: 'Muitas tentativas de atualização. Tente novamente em alguns minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `rt:${req.ip}`,
+  });
+
   // Generate CSRF token endpoint
   app.get('/api/csrf-token', (_req: any, res: any) => {
     const token = crypto.randomBytes(32).toString('hex');
@@ -351,7 +362,7 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
-  app.post('/api/auth/refresh', async (req: any, res) => {
+  app.post('/api/auth/refresh', refreshRateLimit, async (req: any, res) => {
     try {
       // Accept refresh token from cookie or request body (backward compatibility)
       const refreshToken = req.cookies?.grindfy_refresh_token || req.body?.refreshToken;

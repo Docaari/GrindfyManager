@@ -52,7 +52,7 @@ export default function CalibrationDashboard() {
 
   useEffect(() => {
     if (role && !role.isAdmin) {
-      navigate("/inicio");
+      navigate("/home");
     }
   }, [role, navigate]);
 

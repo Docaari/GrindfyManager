@@ -13,6 +13,7 @@
 
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 export interface DiffPreview {
   added?: Record<string, unknown>;
@@ -55,17 +56,9 @@ export function CoachActionConfirmCard({
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
   const confirmMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/coach/actions/${actionId}/confirm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(text || `HTTP ${res.status}`);
-      }
-      return res.json();
-    },
+    // apiRequest attaches CSRF token + credentials (raw fetch was rejected by
+    // the global /api CSRF guard → 403). Returns parsed JSON, throws on non-ok.
+    mutationFn: async () => apiRequest("POST", `/api/coach/actions/${actionId}/confirm`),
     onSuccess: (data) => {
       setStatus("completed");
       queryClient.setQueryData(["coach-action", actionId], data);
@@ -77,13 +70,10 @@ export function CoachActionConfirmCard({
   });
 
   const cancelMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/coach/actions/${actionId}/cancel`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
+    mutationFn: async () => apiRequest("POST", `/api/coach/actions/${actionId}/cancel`),
+    onError: (err: any) => {
+      setStatus("error");
+      setErrorMsg(err?.message ?? "Erro ao cancelar");
     },
   });
 
