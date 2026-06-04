@@ -126,7 +126,10 @@ export function WalletCreateDialog({ open, onOpenChange, prefill }: Props) {
           <input
             data-testid="wallet-create-name-input"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setNameError(null);
+            }}
             className="w-full rounded border px-3 py-2 bg-background"
             placeholder="Ex: GG Main, Suprema X"
           />

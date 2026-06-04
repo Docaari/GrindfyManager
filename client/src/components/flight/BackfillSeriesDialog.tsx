@@ -32,23 +32,29 @@ export const BackfillSeriesDialog: React.FC<BackfillSeriesDialogProps> = ({
   const [createdSeriesId, setCreatedSeriesId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>(defaultSelectedTournamentIds);
   const [partialFailures, setPartialFailures] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!open) return null;
 
   async function handleCreateSeries(): Promise<void> {
-    const body: any = {
-      name: name || "Serie",
-      network,
-      totalDay1s,
-      day2DateTime: day2DateTime
-        ? new Date(day2DateTime).toISOString()
-        : new Date().toISOString(),
-      stackMode,
-    };
-    const created: any = await apiRequest("POST", "/api/tournament-series", body);
-    setCreatedSeriesId(created?.id ?? null);
-    setStep(2);
-    queryClient.invalidateQueries({ queryKey: ["tournament-series"] });
+    setIsSubmitting(true);
+    try {
+      const body: any = {
+        name: name || "Serie",
+        network,
+        totalDay1s,
+        day2DateTime: day2DateTime
+          ? new Date(day2DateTime).toISOString()
+          : new Date().toISOString(),
+        stackMode,
+      };
+      const created: any = await apiRequest("POST", "/api/tournament-series", body);
+      setCreatedSeriesId(created?.id ?? null);
+      setStep(2);
+      queryClient.invalidateQueries({ queryKey: ["tournament-series"] });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   async function handleLinkTournaments(): Promise<void> {
@@ -144,7 +150,8 @@ export const BackfillSeriesDialog: React.FC<BackfillSeriesDialogProps> = ({
                 data-testid="backfill-series-create-step1-btn"
                 type="button"
                 onClick={handleCreateSeries}
-                className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
               >
                 Criar serie + Avancar
               </button>

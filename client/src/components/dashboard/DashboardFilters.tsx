@@ -77,9 +77,18 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
     }));
     setShowDateModal(false);
 
-    // Invalidar queries principais apenas - mais eficiente
+    // Invalida stats + TODAS as analytics dependentes de filtro.
+    // As queries das tabs usam chaves distintas (/api/analytics/by-site, by-buyin,
+    // by-day, by-month, by-field, final-table, by-category, by-speed...), entao um
+    // invalidateQueries com queryKey ["/api/analytics"] NAO casa (primeiro elemento
+    // difere). Usa predicate para casar qualquer chave sob o prefixo /api/analytics.
     queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const first = query.queryKey?.[0];
+        return typeof first === "string" && first.startsWith("/api/analytics");
+      },
+    });
   };
 
   const handleCancelDateRange = () => {

@@ -44,6 +44,8 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   const [day2Status, setDay2Status] = useState(series.day2Status);
   const [notes, setNotes] = useState(series.notes ?? "");
   const [showStackWarning, setShowStackWarning] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
 
@@ -57,17 +59,25 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
   }
 
   async function handleSubmit(): Promise<void> {
-    const body: any = {
-      name,
-      totalDay1s,
-      day2DateTime: new Date(datetime).toISOString(),
-      stackMode,
-      day2Status,
-      notes: notes || null,
-    };
-    await apiRequest("PATCH", `/api/tournament-series/${series.id}`, body);
-    queryClient.invalidateQueries({ queryKey: ["tournament-series"] });
-    onOpenChange(false);
+    setSubmitting(true);
+    setError(null);
+    try {
+      const body: any = {
+        name,
+        totalDay1s,
+        day2DateTime: new Date(datetime).toISOString(),
+        stackMode,
+        day2Status,
+        notes: notes || null,
+      };
+      await apiRequest("PATCH", `/api/tournament-series/${series.id}`, body);
+      queryClient.invalidateQueries({ queryKey: ["tournament-series"] });
+      onOpenChange(false);
+    } catch (err: any) {
+      setError(err?.message ?? "Erro ao salvar a serie.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -156,6 +166,8 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
           className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white mb-4"
         />
 
+        {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
+
         <div className="flex justify-end gap-2">
           <button
             data-testid="edit-series-cancel"
@@ -169,7 +181,8 @@ export const EditSeriesDialog: React.FC<EditSeriesDialogProps> = ({
             data-testid="edit-series-submit"
             type="button"
             onClick={handleSubmit}
-            className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+            disabled={submitting}
+            className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
           >
             Salvar
           </button>

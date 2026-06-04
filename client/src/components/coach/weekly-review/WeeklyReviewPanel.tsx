@@ -128,9 +128,10 @@ function WeeklyReviewPanelInner(): JSX.Element {
             type="button"
             data-testid="weekly-review-confirm-upload"
             onClick={() => confirmMutation.mutate()}
-            className="mt-3 rounded bg-green-600/20 px-3 py-2 text-sm text-green-400"
+            disabled={confirmMutation.isPending}
+            className="mt-3 rounded bg-green-600/20 px-3 py-2 text-sm text-green-400 disabled:opacity-50"
           >
-            Ja importei — confirmar upload
+            {confirmMutation.isPending ? 'Confirmando...' : 'Ja importei — confirmar upload'}
           </button>
         </div>
       )}

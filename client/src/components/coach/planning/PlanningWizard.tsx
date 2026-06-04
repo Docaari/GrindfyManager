@@ -19,6 +19,7 @@ import React from 'react';
 import { Link } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 class PlanningErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -65,6 +66,7 @@ interface PlanningWizardProps {
 
 function PlanningWizardInner({ weekStartDate }: PlanningWizardProps): JSX.Element | null {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const planningUrl = `/api/coach/planning/${weekStartDate}`;
 
   const { data } = useQuery<PlanningSessionData | null>({
@@ -89,6 +91,7 @@ function PlanningWizardInner({ weekStartDate }: PlanningWizardProps): JSX.Elemen
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [planningUrl] });
     },
+    onError: () => toast({ title: 'Falha ao atualizar o passo', variant: 'destructive' }),
   });
 
   const steps = data?.steps ?? {};
@@ -132,7 +135,8 @@ function PlanningWizardInner({ weekStartDate }: PlanningWizardProps): JSX.Elemen
                 type="button"
                 data-testid={`planning-step-confirm-${step}`}
                 onClick={() => stepMutation.mutate({ step, action: 'confirm' })}
-                className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white"
+                disabled={stepMutation.isPending}
+                className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
               >
                 Confirmar
               </button>
@@ -140,7 +144,8 @@ function PlanningWizardInner({ weekStartDate }: PlanningWizardProps): JSX.Elemen
                 type="button"
                 data-testid={`planning-step-skip-${step}`}
                 onClick={() => stepMutation.mutate({ step, action: 'skip' })}
-                className="rounded bg-white/10 px-3 py-1 text-xs text-white/70"
+                disabled={stepMutation.isPending}
+                className="rounded bg-white/10 px-3 py-1 text-xs text-white/70 disabled:opacity-50"
               >
                 Pular
               </button>

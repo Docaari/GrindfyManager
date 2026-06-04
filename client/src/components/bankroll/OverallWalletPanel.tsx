@@ -112,6 +112,7 @@ export function OverallWalletPanel({ wallets }: Props) {
   });
 
   const isLoading = queries.some((q) => q.isLoading);
+  const hasError = queries.some((q) => q.isError);
 
   // Mapa walletId -> tx[]
   const txByWallet = useMemo(() => {
@@ -233,6 +234,15 @@ export function OverallWalletPanel({ wallets }: Props) {
           )}
         </div>
       </header>
+
+      {hasError && (
+        <div
+          data-testid="overall-wallet-error"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          Nao foi possivel carregar as movimentacoes de uma ou mais carteiras. Tente atualizar a pagina.
+        </div>
+      )}
 
       <div className="rounded-md border bg-card overflow-hidden">
         <div className="flex border-b border-border">

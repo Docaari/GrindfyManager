@@ -26,7 +26,7 @@ interface OnboardingState {
 
 export function CoachOnboarding(): JSX.Element {
   const [, navigate] = useLocation();
-  const { data, isLoading } = useQuery<OnboardingState>({
+  const { data, isLoading, isError } = useQuery<OnboardingState>({
     queryKey: ['/api/coach/onboarding'],
     queryFn: getQueryFn({ on401: 'throw' }),
   });
@@ -38,6 +38,12 @@ export function CoachOnboarding(): JSX.Element {
       <div className="max-w-2xl mx-auto py-8 px-4">
         <h1 className="text-xl font-semibold mb-4">Configurar perfil com o Grindfy AI</h1>
         {isLoading && <p className="text-sm text-gray-500">Carregando...</p>}
+        {isError && (
+          <div data-testid="coach-onboarding-error" className="text-sm text-red-400">
+            Erro ao carregar onboarding. Tente novamente mais tarde.
+          </div>
+        )}
+        {!isLoading && !isError && (
         <div data-testid="coach-onboarding-wizard">
           <OnboardingWizard
             mode={mode}
@@ -48,6 +54,7 @@ export function CoachOnboarding(): JSX.Element {
             }
           />
         </div>
+        )}
       </div>
     </div>
   );

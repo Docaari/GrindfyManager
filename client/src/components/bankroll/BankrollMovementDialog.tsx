@@ -62,6 +62,7 @@ export function BankrollMovementDialog({ open, onOpenChange }: Props) {
       try {
         queryClient.invalidateQueries({ queryKey: ["/api/bankroll"] });
         queryClient.invalidateQueries({ queryKey: ["/api/bankroll/history"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/bankroll/consolidated"] });
       } catch {}
       onOpenChange(false);
     } catch (err: any) {

@@ -282,6 +282,7 @@ export default function GradePlanner() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tournament-library"] });
     },
     onError: (error: any) => {
       // Sprint 1 RF-01: backend devolve {error:'validation', issues:[{field,message,code}]}
@@ -312,6 +313,7 @@ export default function GradePlanner() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tournament-library"] });
       toast({ title: "Torneio Atualizado", description: "Torneio atualizado com sucesso" });
       setIsEditDialogOpen(false);
       setEditingTournament(null);

@@ -18,6 +18,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -803,6 +804,7 @@ function frozenReasonLabel(reason?: string): string {
 
 function CoachPreferencesPanel() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { data, isLoading, isError } = useQuery<PrefsResponse>({
     queryKey: ['/api/coach/preferences'],
     queryFn: () => apiRequest('GET', '/api/coach/preferences'),
@@ -818,6 +820,7 @@ function CoachPreferencesPanel() {
     onSuccess: () => {
       try { queryClient.invalidateQueries({ queryKey: ['/api/coach/preferences'] }); } catch { /* noop */ }
     },
+    onError: () => toast({ title: 'Nao foi possivel reativar', variant: 'destructive' }),
   });
 
   const [nudges, setNudges] = useState<Record<NudgeKey, boolean>>(() =>
@@ -866,6 +869,7 @@ function CoachPreferencesPanel() {
     onSuccess: () => {
       try { queryClient.invalidateQueries({ queryKey: ['/api/coach/preferences'] }); } catch { /* noop */ }
     },
+    onError: () => toast({ title: 'Falha ao salvar preferencias', variant: 'destructive' }),
   });
 
   const handleSave = useCallback(() => {
