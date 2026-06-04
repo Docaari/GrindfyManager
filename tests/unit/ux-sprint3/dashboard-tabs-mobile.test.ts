@@ -80,16 +80,16 @@ describe('getPrimaryTabs', () => {
     expect(ids).toContain('por-abi');
   });
 
-  it('deve incluir tab "por-categoria" (Tipo)', () => {
+  it('deve incluir tab "por-tipo" (Tipo)', () => {
     const tabs = getPrimaryTabs();
     const ids = tabs.map((t: TabDefinition) => t.id);
-    expect(ids).toContain('por-categoria');
+    expect(ids).toContain('por-tipo');
   });
 
-  it('deve retornar tabs na ordem: evolution, por-site, por-abi, por-categoria', () => {
+  it('deve retornar tabs na ordem: evolution, por-site, por-abi, por-tipo', () => {
     const tabs = getPrimaryTabs();
     const ids = tabs.map((t: TabDefinition) => t.id);
-    expect(ids).toEqual(['evolution', 'por-site', 'por-abi', 'por-categoria']);
+    expect(ids).toEqual(['evolution', 'por-site', 'por-abi', 'por-tipo']);
   });
 });
 
@@ -103,10 +103,10 @@ describe('getSecondaryTabs', () => {
     expect(tabs).toHaveLength(4);
   });
 
-  it('deve incluir tab "por-velocidade" (Velocidade)', () => {
+  it('deve incluir tab "velocidade" (Velocidade)', () => {
     const tabs = getSecondaryTabs();
     const ids = tabs.map((t: TabDefinition) => t.id);
-    expect(ids).toContain('por-velocidade');
+    expect(ids).toContain('velocidade');
   });
 
   it('deve incluir tab "por-periodo" (Periodo)', () => {
@@ -127,10 +127,10 @@ describe('getSecondaryTabs', () => {
     expect(ids).toContain('por-posicao');
   });
 
-  it('deve retornar tabs na ordem: por-velocidade, por-periodo, por-participantes, por-posicao', () => {
+  it('deve retornar tabs na ordem: velocidade, por-periodo, por-participantes, por-posicao', () => {
     const tabs = getSecondaryTabs();
     const ids = tabs.map((t: TabDefinition) => t.id);
-    expect(ids).toEqual(['por-velocidade', 'por-periodo', 'por-participantes', 'por-posicao']);
+    expect(ids).toEqual(['velocidade', 'por-periodo', 'por-participantes', 'por-posicao']);
   });
 });
 
@@ -148,8 +148,8 @@ describe('getAllTabs', () => {
     const tabs = getAllTabs();
     const ids = tabs.map((t: TabDefinition) => t.id);
     expect(ids).toEqual([
-      'evolution', 'por-site', 'por-abi', 'por-categoria',
-      'por-velocidade', 'por-periodo', 'por-participantes', 'por-posicao',
+      'evolution', 'por-site', 'por-abi', 'por-tipo',
+      'velocidade', 'por-periodo', 'por-participantes', 'por-posicao',
     ]);
   });
 
@@ -178,12 +178,12 @@ describe('isSecondaryTab', () => {
     expect(isSecondaryTab('por-abi')).toBe(false);
   });
 
-  it('deve retornar false para "por-categoria" (tab primaria)', () => {
-    expect(isSecondaryTab('por-categoria')).toBe(false);
+  it('deve retornar false para "por-tipo" (tab primaria)', () => {
+    expect(isSecondaryTab('por-tipo')).toBe(false);
   });
 
-  it('deve retornar true para "por-velocidade" (tab secundaria)', () => {
-    expect(isSecondaryTab('por-velocidade')).toBe(true);
+  it('deve retornar true para "velocidade" (tab secundaria)', () => {
+    expect(isSecondaryTab('velocidade')).toBe(true);
   });
 
   it('deve retornar true para "por-periodo" (tab secundaria)', () => {
@@ -220,12 +220,12 @@ describe('getTabLabel', () => {
     expect(getTabLabel('por-abi')).toBe('ABI');
   });
 
-  it('deve retornar "Tipo" para tab "por-categoria"', () => {
-    expect(getTabLabel('por-categoria')).toBe('Tipo');
+  it('deve retornar "Tipo" para tab "por-tipo"', () => {
+    expect(getTabLabel('por-tipo')).toBe('Tipo');
   });
 
-  it('deve retornar "Velocidade" para tab "por-velocidade"', () => {
-    expect(getTabLabel('por-velocidade')).toBe('Velocidade');
+  it('deve retornar "Velocidade" para tab "velocidade"', () => {
+    expect(getTabLabel('velocidade')).toBe('Velocidade');
   });
 
   it('deve retornar "Periodo" para tab "por-periodo"', () => {
@@ -252,8 +252,8 @@ describe('getTabLabel', () => {
 describe('isValidTab', () => {
   it('deve retornar true para todas as 8 tabs validas', () => {
     const validIds = [
-      'evolution', 'por-site', 'por-abi', 'por-categoria',
-      'por-velocidade', 'por-periodo', 'por-participantes', 'por-posicao',
+      'evolution', 'por-site', 'por-abi', 'por-tipo',
+      'velocidade', 'por-periodo', 'por-participantes', 'por-posicao',
     ];
     for (const id of validIds) {
       expect(isValidTab(id)).toBe(true);

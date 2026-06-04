@@ -9,11 +9,11 @@ const PRIMARY_TABS: TabDefinition[] = [
   { id: 'evolution', label: 'Geral' },
   { id: 'por-site', label: 'Site' },
   { id: 'por-abi', label: 'ABI' },
-  { id: 'por-categoria', label: 'Tipo' },
+  { id: 'por-tipo', label: 'Tipo' },
 ];
 
 const SECONDARY_TABS: TabDefinition[] = [
-  { id: 'por-velocidade', label: 'Velocidade' },
+  { id: 'velocidade', label: 'Velocidade' },
   { id: 'por-periodo', label: 'Periodo' },
   { id: 'por-participantes', label: 'Participantes' },
   { id: 'por-posicao', label: 'Posicao' },

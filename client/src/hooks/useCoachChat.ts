@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, getCsrfToken } from '@/lib/queryClient';
 
@@ -48,6 +48,13 @@ export function useCoachChat(coachType: CoachType, options?: UseCoachChatOptions
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedText, setStreamedText] = useState('');
   const [streamError, setStreamError] = useState<string | null>(null);
+
+  // Trocar de lente (coachType) deve iniciar uma conversa nova: a sessão ativa
+  // pertence à lente anterior, e o servidor rejeita (400) um sessionId cujo
+  // coachType não bate com o request. Reseta para evitar o erro ao enviar.
+  useEffect(() => {
+    setActiveSessionId(null);
+  }, [coachType]);
   // Render otimista: a mensagem do usuario aparece NA HORA (antes de persistir /
   // antes do 1o token), independente da query de mensagens / activeSessionId.
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);

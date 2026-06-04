@@ -134,3 +134,20 @@ The full 16k-test suite was re-run for a global gate but **hung** (worker-fork c
 **Verification:** tsc 0. SessionHistory + subscription tests 46/46. Zero regressions.
 
 ---
+
+## PASS 6 — Final convergence + verify-all (read-only first)
+**Discovery:** 4 auditors. **VERIFY-ALL-FIXES verdict: "ALL SOUND" — zero issues across all 5 prior passes, no regressions.**
+
+### Fixed & committed
+- **P6-1 [HIGH]** `hooks/useCoachChat.ts` — switching coach lens (mental/tournament/technical) kept the previous lens's `activeSessionId`; server (`coach.ts:227`) returns **400 "CoachType da sessao nao corresponde"** on the next message → **chat breaks after switching lens**. Added `useEffect(() => setActiveSessionId(null), [coachType])` (fresh conversation per lens). coach-chat tests 35/35 green.
+- **P6-2 [MEDIUM]** Dashboard tab-ID mismatch — `dashboard-filter-helpers.ts` `VALID_TABS` + `dashboard-tabs-helpers.ts` used `por-categoria`/`por-velocidade`, but the page (`dashboardTabs`, `tabTypeMap`, render conditionals) uses `por-tipo`/`velocidade`. → URL/bookmark restore for those 2 tabs silently fell back to "evolution"; `isValidTab`/`getTabLabel` returned wrong. Aligned both helpers to the canonical page IDs. Updated `dashboard-tabs-mobile.test.ts` (20 stale-ID assertions, guarded the bug). 128/128 green.
+
+### Documented for founder review — NOT edited live (founder actively working in parallel; money/session-critical)
+- **P6-3 [MEDIUM/HIGH]** `components/grind-session-live/calculateSessionStats.ts:168-176` — when a tournament's currency has **no configured USD rate**, the code sets all USD values to **0** and flags `rateMissing=true`, but `rateMissing` is **never surfaced in any UI** (only in `calculateSessionStats.ts` + `types.ts`). So a session with a missing-rate currency shows **$0 profit silently** for those entries. **Recommended fix:** in the session-summary UI, when any tournament has `rateMissing`, show a warning banner ("Câmbio ausente para X — lucro não reconciliado em USD") instead of silently displaying $0. Left for founder (touches the live session-summary/money flow).
+
+### MEDIUM/LOW polish (documented, no broken flow)
+- GrindLive: disabled "Alerta" button lacks tooltip; REGISTRAR double-click guard; SessionHeader shortcut a11y. Bankroll: TransferDialog origin-change toast + FX warning persist-on-reopen. Dashboard: `TabPosition`/`ProfitChart`/`RoiByPlatformCard` defensive `?? 0` / `Array.isArray` guards (currently guarded by upstream `|| []`, low real risk).
+
+**Verification:** tsc 0. dashboard 128/128, coach-chat 35/35. Zero regressions.
+
+---

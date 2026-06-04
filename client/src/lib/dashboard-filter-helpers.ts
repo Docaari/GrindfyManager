@@ -20,8 +20,8 @@ const VALID_PERIODS = [
 ];
 
 const VALID_TABS = [
-  'evolution', 'por-site', 'por-abi', 'por-categoria',
-  'por-velocidade', 'por-periodo', 'por-participantes', 'por-posicao',
+  'evolution', 'por-site', 'por-abi', 'por-tipo',
+  'velocidade', 'por-periodo', 'por-participantes', 'por-posicao',
 ];
 
 const DEFAULTS: DashboardFilters = {
