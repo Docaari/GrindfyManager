@@ -35,6 +35,9 @@ import { DeleteDialog } from '@/components/grade-planner/DeleteDialog';
 import { EditDialog } from '@/components/grade-planner/EditDialog';
 // Sprint F4 → Sprint day-detail-zoom-1: DayDetailHost decide zoom vs drawer via ?detail=drawer.
 import { DayDetailHost } from '@/components/grade/DayDetailHost';
+// Modal enxuto de criar torneio (o mesmo do Detalhe do Dia) — usado no "+"
+// da celula e no botao "Novo Torneio". Plataforma e campo escrito (free text).
+import { DayCreateTournamentDialog } from '@/components/grade/DayCreateTournamentDialog';
 import { PrimedopePanel } from '@/components/primedope/PrimedopePanel';
 import { useBankroll } from '@/hooks/useBankroll';
 // Sprint coach-page-reform-1.
@@ -140,6 +143,12 @@ export default function GradePlanner() {
 
   // UX: Dialog de novo torneio com seletor de dia (independente do clique-na-celula)
   const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
+
+  // Modal enxuto de criar torneio (DayCreateTournamentDialog) — substitui o
+  // EditDialog antigo no "+" da celula e no botao "Novo Torneio".
+  const [createDialog, setCreateDialog] = useState<
+    { dayOfWeek: number; profileLetter: 'A' | 'B' | 'C'; suggestedSlot: string } | null
+  >(null);
 
   // ===========================================================================
   // Sprint day-detail-zoom-1 — DayDetailHost (zoom vs drawer) + Portal ref
@@ -512,34 +521,13 @@ export default function GradePlanner() {
       });
       return;
     }
-    const newTournament = {
+    // Modal enxuto (DayCreateTournamentDialog) — perfil ja garantido A/B/C
+    // pelo guard acima.
+    setCreateDialog({
       dayOfWeek,
-      time,
-      profile: activeProfile,
-    };
-    setEditingTournament(newTournament);
-    editForm.reset({
-      site: "",
-      time,
-      type: "Vanilla",
-      speed: "Normal",
-      name: "",
-      buyIn: "",
-      guaranteed: "",
-      prioridade: 2,
-      dayOfWeek,
-      gameType: null,
-      startingStack: null,
-      maxPlayers: null,
-      blindLevelMinutes: null,
-      lateRegMinutes: null,
-      alertMinutesBefore: null,
-      allowsAddOn: false,
-      addOnCost: null,
-      allowsReentry: false,
-      maxReentries: null,
+      profileLetter: activeProfile,
+      suggestedSlot: time,
     });
-    setTimeout(() => setIsEditDialogOpen(true), 50);
   };
 
   // Abre o dialog de novo torneio com seletor de dia (vindo do botao no header)
@@ -561,29 +549,18 @@ export default function GradePlanner() {
     const nextHour = (now.getHours() + 1) % 24;
     const defaultTime = `${String(nextHour).padStart(2, "0")}:00`;
 
-    setEditingTournament({ dayOfWeek: defaultDay });
-    editForm.reset({
-      site: "",
-      time: defaultTime,
-      type: "Vanilla",
-      speed: "Normal",
-      name: "",
-      buyIn: "",
-      guaranteed: "",
-      prioridade: 2,
+    // Garante um perfil A/B/C no dia default (modal enxuto e por dia/perfil).
+    // Se o dia estiver OFF/sem perfil, ativa A para o torneio ficar visivel.
+    let profile = getActiveProfile(defaultDay);
+    if (!profile || profile === 'OFF') {
+      executeProfileSwitch(defaultDay, 'A');
+      profile = 'A';
+    }
+    setCreateDialog({
       dayOfWeek: defaultDay,
-      gameType: null,
-      startingStack: null,
-      maxPlayers: null,
-      blindLevelMinutes: null,
-      lateRegMinutes: null,
-      alertMinutesBefore: null,
-      allowsAddOn: false,
-      addOnCost: null,
-      allowsReentry: false,
-      maxReentries: null,
+      profileLetter: profile,
+      suggestedSlot: defaultTime,
     });
-    setIsNewDialogOpen(true);
   };
 
   // Override edit submit to handle new tournaments (no id)
@@ -645,7 +622,7 @@ export default function GradePlanner() {
           return;
         }
         // Ignora se algum dialog ja esta aberto
-        if (isEditDialogOpen || isNewDialogOpen || isSettingsOpen || isDeleteDialogOpen) return;
+        if (isEditDialogOpen || createDialog !== null || isSettingsOpen || isDeleteDialogOpen) return;
         e.preventDefault();
         handleOpenNewDialog();
       }
@@ -653,7 +630,7 @@ export default function GradePlanner() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEditDialogOpen, isNewDialogOpen, isSettingsOpen, isDeleteDialogOpen]);
+  }, [isEditDialogOpen, createDialog, isSettingsOpen, isDeleteDialogOpen]);
 
   // =========================================================================
   // Drag & Drop handler
@@ -1139,17 +1116,30 @@ export default function GradePlanner() {
           editingTournament={editingTournament}
         />
 
-        {/* Dialog para criar novo torneio via botao do header — com seletor de dia */}
-        <EditDialog
-          open={isNewDialogOpen}
-          onOpenChange={setIsNewDialogOpen}
-          editForm={editForm}
-          onSubmit={handleFormSubmit}
-          onCancel={() => { setIsNewDialogOpen(false); setEditingTournament(null); }}
-          isPending={addPlannedMutation.isPending}
-          editingTournament={editingTournament}
-          showDayPicker={true}
-        />
+        {/* Modal enxuto de criar torneio (mesmo do Detalhe do Dia) — abre no
+            "+" da celula e no botao "Novo Torneio". Plataforma = campo escrito.
+            knownSites = plataformas ja usadas na grade (sugestoes do datalist). */}
+        {createDialog && (
+          <DayCreateTournamentDialog
+            open={true}
+            onOpenChange={(o) => { if (!o) setCreateDialog(null); }}
+            dayOfWeek={createDialog.dayOfWeek}
+            profileLetter={createDialog.profileLetter}
+            suggestedSlot={createDialog.suggestedSlot}
+            knownSites={Array.from(
+              new Set(
+                (Array.isArray(plannedTournaments) ? plannedTournaments : [])
+                  .map((t: any) => t.site)
+                  .filter((s: any): s is string => typeof s === 'string' && s.trim().length > 0),
+              ),
+            )}
+            onSaved={() => {
+              queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/active-days"] });
+              toast({ title: "Torneio adicionado" });
+            }}
+          />
+        )}
 
         {/* FP-04: Off Toggle Dialog */}
         <Dialog open={showOffDialog} onOpenChange={(open) => { if (!open) handleCancelOff(); }}>
