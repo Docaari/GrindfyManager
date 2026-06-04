@@ -1,7 +1,22 @@
 import type { Express } from "express";
+import { z } from "zod";
 import { requireAuth, requirePermission } from "../auth";
 import { storage } from "../storage";
 import { insertBugReportSchema } from "@shared/schema";
+
+// Admin-updatable fields only (no id/userId/timestamps). Enums mirror the
+// inline comments on the bug_reports columns in shared/schema.ts.
+const updateBugReportSchema = z
+  .object({
+    page: z.string().min(1),
+    description: z.string().min(1),
+    urgency: z.enum(["low", "medium", "high"]),
+    type: z.enum(["bug", "suggestion", "performance"]),
+    status: z.enum(["open", "in_progress", "resolved", "dismissed"]),
+    adminNotes: z.string().nullable(),
+  })
+  .strict()
+  .partial();
 
 export function registerBugReportRoutes(app: Express): void {
   // Create bug report
@@ -74,8 +89,15 @@ export function registerBugReportRoutes(app: Express): void {
   // Update bug report (admin only)
   app.put('/api/bug-reports/:id', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
-      const updates = req.body;
-      const bugReport = await storage.updateBugReport(req.params.id, updates);
+      const parsed = updateBugReportSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          message: 'Dados inválidos para atualização do relatório de bug',
+          errors: parsed.error.flatten(),
+        });
+      }
+
+      const bugReport = await storage.updateBugReport(req.params.id, parsed.data);
       res.json(bugReport);
     } catch (error) {
       res.status(500).json({ message: 'Falha ao atualizar relatório de bug' });

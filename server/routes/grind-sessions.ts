@@ -864,7 +864,7 @@ export function registerGrindSessionRoutes(app: Express): void {
         return null;
       });
 
-      if (!session) {
+      if (!session || session.userId !== userId) {
         return res.status(404).json({ message: "Session not found" });
       }
 

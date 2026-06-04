@@ -945,11 +945,15 @@ export function registerAdminRoutes(app: Express): void {
   // Create subscription renewal
   app.post('/api/admin/renew-subscription', requireAuth, requirePermission('admin_full'), async (req, res) => {
     try {
-      const { userId, planId, paymentMethod } = req.body;
-
-      if (!userId || !planId) {
-        return res.status(400).json({ message: 'ID do usuário e plano são obrigatórios' });
+      const parsed = z.object({
+        userId: z.string().min(1),
+        planId: z.string().min(1).max(64),
+        paymentMethod: z.string().optional(),
+      }).safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Dados inválidos: userId e planId (strings) são obrigatórios.' });
       }
+      const { userId, planId, paymentMethod } = parsed.data;
 
       // Apply plan permissions
       await applyPlanPermissions(userId, planId);

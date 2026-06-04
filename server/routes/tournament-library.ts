@@ -556,7 +556,7 @@ export function registerTournamentLibraryRoutes(app: Express): void {
       const [updated] = await db
         .update(tournamentLibrary)
         .set({ ...updates, updatedAt: new Date() })
-        .where(eq(tournamentLibrary.id, id))
+        .where(and(eq(tournamentLibrary.id, id), eq(tournamentLibrary.userId, userId)))
         .returning();
 
       res.json(updated);
@@ -595,7 +595,7 @@ export function registerTournamentLibraryRoutes(app: Express): void {
       const [updated] = await db
         .update(tournamentLibrary)
         .set({ deletedAt: new Date(), updatedAt: new Date() })
-        .where(eq(tournamentLibrary.id, id))
+        .where(and(eq(tournamentLibrary.id, id), eq(tournamentLibrary.userId, userId)))
         .returning();
 
       res.json(updated);
@@ -631,7 +631,7 @@ export function registerTournamentLibraryRoutes(app: Express): void {
       const [updated] = await db
         .update(tournamentLibrary)
         .set({ deletedAt: null, updatedAt: new Date() })
-        .where(eq(tournamentLibrary.id, id))
+        .where(and(eq(tournamentLibrary.id, id), eq(tournamentLibrary.userId, userId)))
         .returning();
 
       res.json(updated);
@@ -670,7 +670,7 @@ export function registerTournamentLibraryRoutes(app: Express): void {
 
       await db
         .delete(tournamentLibrary)
-        .where(eq(tournamentLibrary.id, id));
+        .where(and(eq(tournamentLibrary.id, id), eq(tournamentLibrary.userId, userId)));
 
       res.json({ message: "Tournament deleted permanently", id });
     } catch (error) {

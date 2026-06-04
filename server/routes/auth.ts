@@ -129,7 +129,7 @@ export function registerAuthRoutes(app: Express): void {
   app.get('/api/auth/user', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      const user = await storage.getUser(userId);
+      const user = await storage.getUserById(userId);
       res.json(user);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch user" });
@@ -635,7 +635,15 @@ export function registerAuthRoutes(app: Express): void {
   // Update user profile route
   app.patch('/api/auth/update-profile', requireAuth, async (req, res) => {
     try {
-      const { name, firstName, lastName } = req.body;
+      const parsed = z.object({
+        name: z.string().max(200).optional(),
+        firstName: z.string().max(120).optional(),
+        lastName: z.string().max(120).optional(),
+      }).safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Dados inválidos' });
+      }
+      const { name, firstName, lastName } = parsed.data;
       const userPlatformId = req.user!.userPlatformId;
 
       // Prepare update data
@@ -764,11 +772,11 @@ export function registerAuthRoutes(app: Express): void {
   // Email verification endpoints
   app.post('/api/auth/send-verification', async (req, res) => {
     try {
-      const { email } = req.body;
-
-      if (!email) {
-        return res.status(400).json({ message: 'E-mail é obrigatório' });
+      const parsed = z.object({ email: z.string().email() }).safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Email inválido' });
       }
+      const { email } = parsed.data;
 
       const sent = await EmailService.resendEmailVerification(email);
 
@@ -785,11 +793,11 @@ export function registerAuthRoutes(app: Express): void {
   // Verify reset token endpoint
   app.post('/api/auth/verify-reset-token', async (req, res) => {
     try {
-      const { token } = req.body;
-
-      if (!token) {
+      const parsed = z.object({ token: z.string().min(1) }).safeParse(req.body);
+      if (!parsed.success) {
         return res.status(400).json({ valid: false, message: 'Token é obrigatório' });
       }
+      const { token } = parsed.data;
 
       const tokenData = await EmailService.verifyPasswordResetToken(token);
 

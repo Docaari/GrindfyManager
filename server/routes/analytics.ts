@@ -666,6 +666,9 @@ export function registerAnalyticsRoutes(app: Express): void {
 
       res.json({ message: 'Activity tracked successfully' });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Dados inválidos', issues: error.issues });
+      }
       res.status(500).json({ message: 'Erro ao rastrear atividade' });
     }
   });

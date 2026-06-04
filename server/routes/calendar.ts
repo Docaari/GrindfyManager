@@ -107,7 +107,7 @@ async function generateWeeklyRoutine(userId: string, weekStart: Date) {
         const lastTournament = sortedTournaments[sortedTournaments.length - 1];
 
         // Calcular ABI médio
-        const totalBuyIn = dayTournaments.reduce((sum, t) => sum + parseFloat(t.buyIn), 0);
+        const totalBuyIn = dayTournaments.reduce((sum, t) => sum + parseFloat(t.buyIn || '0'), 0);
         const averageBuyIn = totalBuyIn / dayTournaments.length;
 
         // Calcular horários da sessão (igual à lógica da Grade)

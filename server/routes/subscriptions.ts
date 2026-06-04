@@ -373,6 +373,7 @@ export function registerSubscriptionRoutes(app: Express): void {
       }
     } catch (error) {
       // Log but don't fail — Stripe will retry
+      console.error('Stripe webhook processing error:', error);
     }
 
     // Always return 200 to acknowledge receipt
