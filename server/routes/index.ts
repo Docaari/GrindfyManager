@@ -68,6 +68,9 @@ import { registerFocusStatsAutoSuggestRoutes } from "./focus-stats-auto-suggest"
 import { registerMdaRoutes } from "./mda";
 // Biblioteca Premium curada (ADR-240): /api/library/premium.
 import { registerPremiumLibraryRoutes } from "./premiumLibrary";
+// Sprint torneios-custom-families: visões de agrupamento + admin de workspaces.
+import { registerGroupingViewsRoutes } from "./grouping-views";
+import { registerAdminWorkspaceRoutes } from "./adminWorkspaces";
 // Sprint Estudos-Coach-Biblio-2: /api/biblioteca/recommendations, /api/study-weekly-plan, /api/coach/session-insights.
 import { registerBibliotecaRecommendationsRoutes } from "./biblioteca-recommendations";
 import { registerStudyWeeklyPlanRoutes } from "./study-weekly-plan";
@@ -328,6 +331,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // METAS-1 fatia-1 (ADR-229) — Ferramenta de Metas 4DX (placar + CRUD + snapshots).
   registerGoalsRoutes(app, requireAuth);
+
+  // Sprint torneios-custom-families — visões de agrupamento (Fase 2) + admin de
+  // workspaces cross-conta (Fase 4, gated workspace_admin).
+  registerGroupingViewsRoutes(app, requireAuth);
+  registerAdminWorkspaceRoutes(app);
 
   // Sprint Estudos-Coach-Biblio-2 — RF-2/3/4 endpoints.
   registerBibliotecaRecommendationsRoutes(app);

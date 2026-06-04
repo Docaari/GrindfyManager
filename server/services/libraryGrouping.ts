@@ -19,6 +19,12 @@ import { FIELD_BUCKETS } from "../scoring/scoringConstants";
 import { enrichTournamentTypeFields } from "../../shared/tournament-type-detector";
 import { detectSpeedFromName, fastestSpeed } from "../../shared/speed-detector";
 import { timeBin2h } from "../../shared/time-bin";
+import { dayOfWeek } from "../../shared/day-of-week";
+import {
+  type GroupDim,
+  CANONICAL_DIM_ORDER,
+  DEFAULT_RECIPE,
+} from "../../shared/library-grouping-dims";
 
 export interface GroupedSpecific {
   fineKey: string;
@@ -38,6 +44,8 @@ export interface GroupedFamily {
   // passam a definir a familia (founder: field e horario importam).
   fieldBucket: string;
   timeBin: string;
+  // Sprint torneios-custom-families: dia da semana como dimensao opcional.
+  dayOfWeek: string;
   representative: any;
   tournaments: any[];
   specifics: GroupedSpecific[];
@@ -76,6 +84,11 @@ export function fieldBucketOf(t: any): string {
 /** Janela de ~2h derivada de datePlayed (NO_TIME_BIN quando ausente). */
 export function timeBinOf(t: any): string {
   return timeBin2h(t?.datePlayed ?? t?.startTime ?? null);
+}
+
+/** Dia da semana derivado de datePlayed (fallback startTime; NO_DAY quando ausente). */
+export function dayOfWeekOf(t: any): string {
+  return dayOfWeek(t?.datePlayed ?? t?.startTime ?? null);
 }
 
 /**
@@ -164,33 +177,91 @@ export function nameSignature(name: string): string {
 }
 
 /**
+ * Normaliza uma receita: descarta dims desconhecidas, deduplica e reordena pela
+ * ordem canonica. A receita e um CONJUNTO de dimensoes — `[timeBin,abi,site]` e
+ * `[site,abi,timeBin]` viram a mesma receita canonica `[site,abi,timeBin]` (e a
+ * mesma familyKey). Compartilhado com o parser de `groupBy` na rota.
+ */
+export function canonicalizeRecipe(recipe: GroupDim[]): GroupDim[] {
+  const seen = new Set<GroupDim>();
+  for (const d of recipe) {
+    if (CANONICAL_DIM_ORDER.includes(d)) seen.add(d);
+  }
+  return CANONICAL_DIM_ORDER.filter((d) => seen.has(d));
+}
+
+/**
+ * Re-deriva a receita embutida numa familyKey + o site (quando a dim site faz
+ * parte da receita). Chave legada (sem prefixo "g1:") -> DEFAULT_RECIPE + site do
+ * 1o segmento. Chave "g1:dims|valores" -> dims do header + site do indice de site.
+ */
+export function parseFamilyKey(familyKey: string): {
+  recipe: GroupDim[];
+  site: string | null;
+} {
+  const key = String(familyKey);
+  if (key.startsWith("g1:")) {
+    const sep = key.indexOf("|");
+    const header = sep >= 0 ? key.slice(3, sep) : key.slice(3);
+    const recipe = header.split(",").filter(Boolean) as GroupDim[];
+    const values = sep >= 0 ? key.slice(sep + 1).split("|") : [];
+    const siteIdx = recipe.indexOf("site");
+    const site = siteIdx >= 0 ? values[siteIdx] ?? null : null;
+    return { recipe, site };
+  }
+  return { recipe: DEFAULT_RECIPE, site: key.split("|")[0] };
+}
+
+/**
  * Agrupa torneios em familias (coarse) com especificos aninhados (fine).
  * Deterministico: o resultado independe da ordem das linhas de entrada.
+ *
+ * `recipe` define quais dimensoes compoem a familia. A receita DEFAULT (as 6
+ * legadas) produz a familyKey legada byte-a-byte (sem prefixo) — qualquer drift
+ * orfana saved_tournament_highlights / premium_library_highlights. Receitas
+ * customizadas usam chave auto-descritiva "g1:dims|valores".
  */
-export function groupTournaments(tournaments: any[]): GroupedFamily[] {
+export function groupTournaments(
+  tournaments: any[],
+  recipe: GroupDim[] = DEFAULT_RECIPE,
+): GroupedFamily[] {
   const familyMap = new Map<string, GroupedFamily>();
+  const canon = canonicalizeRecipe(recipe);
+  // Receita canonica == DEFAULT_RECIPE (as 6 legadas) -> chave sem prefixo.
+  const useDefault =
+    canon.length === DEFAULT_RECIPE.length &&
+    canon.every((d, i) => d === DEFAULT_RECIPE[i]);
 
   for (const t of tournaments) {
-    const site = (t.site ?? "Unknown").toString();
-    const tier = buyInTier(parseFloat(String(t.buyIn ?? 0)));
-    const type = typePrimary(t);
-    const speed = normalizeSpeed(t);
-    const fieldBucket = fieldBucketOf(t);
-    const timeBin = timeBinOf(t);
-    // 6 dimensoes definem a familia (founder): site, ABI, tipo, velocidade,
-    // faixa de field-size, janela de horario (~2h).
-    const familyKey = `${site}|${tier}|${type}|${speed}|${fieldBucket}|${timeBin}`;
+    // Mapa dim->valor computado UMA vez por torneio; reusado para a familyKey E
+    // para os campos nomeados de exibicao (sem re-derivar no caminho custom). A
+    // SEPARACAO e ditada exclusivamente pela familyKey/receita.
+    const dims: Record<GroupDim, string> = {
+      site: (t.site ?? "Unknown").toString(),
+      abi: buyInTier(parseFloat(String(t.buyIn ?? 0))),
+      type: typePrimary(t),
+      speed: normalizeSpeed(t),
+      fieldBucket: fieldBucketOf(t),
+      timeBin: timeBinOf(t),
+      dayOfWeek: dayOfWeekOf(t),
+    };
+
+    const familyKey = useDefault
+      ? // Byte-compat: identica a chave legada de 6 dimensoes.
+        `${dims.site}|${dims.abi}|${dims.type}|${dims.speed}|${dims.fieldBucket}|${dims.timeBin}`
+      : "g1:" + canon.join(",") + "|" + canon.map((d) => dims[d]).join("|");
 
     let fam = familyMap.get(familyKey);
     if (!fam) {
       fam = {
         familyKey,
-        site,
-        buyInTier: tier,
-        type,
-        speed,
-        fieldBucket,
-        timeBin,
+        site: dims.site,
+        buyInTier: dims.abi,
+        type: dims.type,
+        speed: dims.speed,
+        fieldBucket: dims.fieldBucket,
+        timeBin: dims.timeBin,
+        dayOfWeek: dims.dayOfWeek,
         representative: t,
         tournaments: [],
         specifics: [],

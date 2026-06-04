@@ -23,7 +23,11 @@ interface OverviewResult {
 const reasonIcon = (k: OverviewReason["kind"]) =>
   k === "roi" ? <TrendingUp className="w-3 h-3" /> : k === "low_variance" ? <ShieldCheck className="w-3 h-3" /> : <Clock className="w-3 h-3" />;
 
-export function OverviewPanel() {
+/**
+ * Sprint torneios-custom-families (Fase 3): recipe + filters atuais da pagina
+ * sao opcionalmente repassados para capturar no card salvo (reproduzivel).
+ */
+export function OverviewPanel({ recipe, filters }: { recipe?: string[]; filters?: any } = {}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -47,6 +51,8 @@ export function OverviewPanel() {
         buyInTier: fam.buyInTier, type: fam.type,
         metrics: { roi: fam.roi, volume: fam.volume, avgBuyin: fam.avgBuyin, profitPerTableHour: fam.profitPerTableHour, avgFieldSize: fam.avgFieldSize },
         reasons: fam.reasons, source: "overview",
+        ...(recipe ? { recipe } : {}),
+        ...(filters !== undefined ? { filters } : {}),
       }),
     onSuccess: (_d, fam) => {
       setSaved((s) => new Set(s).add(fam.familyKey));

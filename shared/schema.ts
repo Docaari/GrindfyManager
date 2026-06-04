@@ -422,6 +422,11 @@ export const savedTournamentHighlights = pgTable("saved_tournament_highlights", 
   // Motivos do destaque: [{ kind, label }] (ROI medio / baixa variancia / $/hora).
   reasons: jsonb("reasons"),
   source: varchar("source").default("overview"), // 'overview' | 'library'
+  // Sprint torneios-custom-families (Fase 3): receita + filtros usados ao salvar,
+  // para o card reproduzir o próprio agrupamento. NULL recipe => receita default
+  // legada (as 6 dims). GroupDim[] em recipe; conjunto de filtros em filters.
+  recipe: jsonb("recipe"),
+  filters: jsonb("filters"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   // Dedup: nao salvar a mesma familia 2x pro mesmo user.
@@ -459,6 +464,53 @@ export const premiumLibraryHighlights = pgTable("premium_library_highlights", {
 ]);
 export type PremiumLibraryHighlight = typeof premiumLibraryHighlights.$inferSelect;
 export type InsertPremiumLibraryHighlight = typeof premiumLibraryHighlights.$inferInsert;
+
+// =============================================================================
+// Sprint torneios-custom-families (Migration 0094)
+// =============================================================================
+
+// Fase 2 — Visões de agrupamento nomeadas (receitas reutilizáveis, PRIVADAS).
+// dims = GroupDim[] (ordem canônica); filters = conjunto de filtros opcional.
+export const tournamentGroupingViews = pgTable("tournament_grouping_views", {
+  id: varchar("id").primaryKey().notNull(),
+  userId: varchar("user_id").notNull(),
+  name: varchar("name").notNull(),
+  dims: jsonb("dims").notNull(),
+  filters: jsonb("filters"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_grouping_views_user").on(table.userId),
+  // 1 nome de visão por user.
+  uniqueIndex("uq_grouping_view_user_name").on(table.userId, table.name),
+]);
+export type TournamentGroupingView = typeof tournamentGroupingViews.$inferSelect;
+export type InsertTournamentGroupingView = typeof tournamentGroupingViews.$inferInsert;
+
+// Fase 4 — Workspace cross-conta (hub-and-spoke). Founder/superadmin vincula
+// contas direto; membros veem os cards salvos uns dos outros (snapshot
+// congelado). ≤1 workspace por user (UNIQUE em workspace_members.user_id).
+export const accountWorkspaces = pgTable("account_workspaces", {
+  id: varchar("id").primaryKey().notNull(),
+  name: varchar("name").notNull(),
+  createdBy: varchar("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type AccountWorkspace = typeof accountWorkspaces.$inferSelect;
+export type InsertAccountWorkspace = typeof accountWorkspaces.$inferInsert;
+
+export const workspaceMembers = pgTable("workspace_members", {
+  id: varchar("id").primaryKey().notNull(),
+  workspaceId: varchar("workspace_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  addedBy: varchar("added_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("uq_workspace_member_user").on(table.userId),
+  index("idx_workspace_member_ws").on(table.workspaceId),
+]);
+export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
+export type InsertWorkspaceMember = typeof workspaceMembers.$inferInsert;
 
 // =============================================================================
 // Sprint Flight-1 — tournament_series (ADR-090, ADR-091, Migration 0029)
