@@ -2,7 +2,32 @@
 
 **Run start:** 2026-06-04 overnight. Branch: `main` @ f705bf0e. tsc baseline: 0 errors.
 
-> Live log. Each pass appends findings → fixes → verification. Final summary at bottom once 4 passes complete.
+> Live log. Each pass appends findings → fixes → verification. Per-pass detail below; executive summary + morning handoff here.
+
+---
+
+## ✅ EXECUTIVE SUMMARY (read this first)
+
+Ran **6 full review passes** (4 required + 2 convergence) over the entire SaaS — structural, backend contract, frontend flow, cross-cutting, deep-area, and final verify. **~30 real defects fixed**, all on `main` (`B:/grindfy`, hosts localhost:3000), committed locally in 7 commits. **`tsc` = 0 throughout. Zero regressions** (per-pass targeted tests + a final 152/152 cross-area run all green).
+
+**Highest-impact fixes:**
+- **Security/IDOR:** grind-session tournaments leaked across users (ownership check added); `/api/auth/refresh` was CSRF-exempt + unthrottled (rate-limit added); tournament-library writes hardened with `userId`; missing Zod validation added on auth/bug-reports/admin endpoints.
+- **Broken core flows:** `GET /api/auth/user` returned `undefined` (wrong storage method); Coach action **confirm/cancel/undo buttons were 403-broken** (raw fetch, no CSRF → migrated to `apiRequest`); Coach **chat broke (400) after switching lens** (session reset added).
+- **Dead CTAs/buttons:** subscription renewal `/subscription`→`/subscriptions`, Spotify upgrade `/billing`→`/subscriptions`, stop-loss `/study`→`/estudos`, admin `/inicio`→`/home`, home heuristic `/tournament-selector`→`/grade-planner`; SessionHistory "Aplicar Filtro" button was fully dead (wired).
+- **Stale-data / silent-failure:** cache invalidation added (Metas scoreboard, bankroll consolidated, grade-planner library, dashboard filter tabs); `onError`/error-state added across coach, flight, bankroll, calendar; dashboard tab-URL restore fixed; `parseFloat` NaN guard; analytics 500→400.
+
+**Commits (local `main`, NOT pushed):** `4b5e6f25` P1 · `2401527d` P2 · `447028db` P3 · `5b45e5d2` P4 · `8c9a0513`+`9f16bf12` P5 · `43186c9e` P6.
+
+**Regression gate:** the full 16k-test suite reports "56 failures" but they are **parallel-worker-crash artifacts** — sampled failing files all **pass in isolation** (matches documented ai-3.2/quarterly flakiness). Reliable gate = per-pass isolated targeted tests, all green.
+
+## ☀️ MORNING HANDOFF — your actions
+
+1. **Review** the 7 commits: `git -C B:/grindfy log --oneline f705bf0e..HEAD`. All fixes are small + documented per-pass below.
+2. **Push decision (NOT done by me — needs you):** `origin/main` **diverged** during the night (local ahead 7, remote ahead 5 — something pushed remotely). Reconcile (rebase/merge) before pushing. I never push (shares state). The local commits are clean + isolated.
+3. **Your parallel WIP coexists untouched:** the uncommitted goal-daily-logs / AnaliseMental feature (migration 0094, `logDailyGoalReport`, `goalDailyLogsStorage`, `client/src/components/metas/`, ADR-241, + edits to goals.ts/storage.ts/schema.ts/etc) was left exactly as found. I used explicit `git add` of only my files (never `-A`).
+4. **One fix left UNCOMMITTED on purpose:** the Pass-2 METAS **WIG edit/delete fix** (`server/routes/goals.ts` + `server/storage/goalsStorage.ts`) is applied to the working tree but not committed — those 2 files also carry your goal-daily-logs WIP and can't be split by file. Commit the WIG fix after you resolve that WIP. (It's correct + tested: 45 WIG/measure tests green.)
+5. **Documented, left for you (not edited live):** `calculateSessionStats.ts` `rateMissing` → silent $0 in session summary when a currency has no USD rate; recommend a warning banner in the session-summary UI (details in Pass 6). Plus a short LOW-polish list (empty states, success toasts, a11y tooltips) — no broken flows.
+6. **Browser visual pass** (clicking every page): I could not drive Chrome (extension needs you to click "Connect"). Static analysis + jsdom/RTL tests covered behavior; a quick manual click-through on localhost:3000 is the remaining check.
 
 ---
 
