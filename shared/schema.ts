@@ -2507,6 +2507,33 @@ export type MdaReadThemeRow = typeof mdaReadThemes.$inferSelect;
 export type InsertMdaReadThemeRow = typeof mdaReadThemes.$inferInsert;
 
 // =============================================================================
+// Sprint theme-lesson-notes — anotacoes por aula vinculada ao tema.
+// =============================================================================
+// Tabela: theme_lesson_notes
+//   - 1 nota por aula por tema por usuario (UNIQUE user_id, theme_id, lesson_id).
+//   - lesson_id referencia library_lessons.id (sem FK rigida - ownership app-level).
+//   - content: JSONB array BlockNote (mesmo formato de stat_analysis_entries).
+//   - Migration: migrations/0096_theme_lesson_notes.sql
+// =============================================================================
+export const themeLessonNotes = pgTable("theme_lesson_notes", {
+  id: varchar("id", { length: 32 }).primaryKey().notNull(),
+  userId: varchar("user_id", { length: 32 }).notNull(),
+  themeId: varchar("theme_id", { length: 32 }).notNull(),
+  lessonId: varchar("lesson_id", { length: 32 }).notNull(),
+  title: varchar("title", { length: 120 }).notNull(),
+  content: jsonb("content").$type<any[]>().notNull().default(sql`'[]'::jsonb`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("unique_user_theme_lesson").on(table.userId, table.themeId, table.lessonId),
+  index("idx_theme_lesson_notes_user_theme").on(table.userId, table.themeId),
+  index("idx_theme_lesson_notes_user_lesson").on(table.userId, table.lessonId),
+]);
+
+export type ThemeLessonNoteRow = typeof themeLessonNotes.$inferSelect;
+export type InsertThemeLessonNoteRow = typeof themeLessonNotes.$inferInsert;
+
+// =============================================================================
 // Sprint Estudos-Habito-1 (ADR-126) — study_sessions_v2
 // =============================================================================
 // Tabela nova com schema completo para registro de sessoes de estudo:

@@ -49,6 +49,8 @@ import StatAnalysisReviewList from './StatAnalysisReviewList';
 import { MdaReadsSection } from './MdaReadsSection';
 // Sprint Estudos-WS-Fix — spots marcados vinculados ao tema.
 import ThemeLinkedSpotsSection from './ThemeLinkedSpotsSection';
+// Sprint theme-lesson-notes — notas de aulas vinculadas ao tema.
+import { ThemeLessonNotesSection } from './ThemeLessonNotesSection';
 
 interface ThemeRow {
   id: string;
@@ -441,26 +443,17 @@ export default function ThemeDetailView({ themeId }: Props): JSX.Element {
           </ErrorBoundary>
         </TabsContent>
 
-        {/* Sprint Estudos-WS-Fix — conteudo/aulas vinculadas. linkedLessons sao
-            slugs; em vez de deep-link (risco de 404, lesson #19) damos acesso a
-            Biblioteca. */}
+        {/* Sprint theme-lesson-notes — anotações por aula vinculada ao tema. */}
         <TabsContent value="aulas" forceMount className="mt-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Conteudo e aulas</h3>
-            <button
-              type="button"
-              data-testid="theme-content-library"
-              onClick={() => navigate('/biblioteca')}
-              className="rounded border border-dashed px-3 py-1 text-xs hover:bg-muted"
-            >
-              Ir para a Biblioteca
-            </button>
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {Array.isArray(theme.linkedLessons) && theme.linkedLessons.length > 0
-              ? `${theme.linkedLessons.length} aula(s) vinculada(s) a este tema.`
-              : 'Nenhuma aula vinculada ainda. Estude na Biblioteca e vincule o conteudo a este tema.'}
-          </p>
+          <ErrorBoundary
+            fallback={
+              <p className="text-sm text-muted-foreground">
+                Nao foi possivel carregar as notas de aulas agora.
+              </p>
+            }
+          >
+            <ThemeLessonNotesSection themeId={themeId} theme={theme} />
+          </ErrorBoundary>
         </TabsContent>
       </Tabs>
 

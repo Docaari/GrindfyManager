@@ -16936,6 +16936,34 @@ async function listUsersForWeeklyStudyPlanCron(): Promise<
 (storage as any).listCuratedStudyThemes = listCuratedStudyThemes;
 (storage as any).listLibraryLessonsCurated = listLibraryLessonsCurated;
 (storage as any).listStarredHandsRecent = listStarredHandsRecent;
+
+async function listLibraryLessonsForSearch(): Promise<any[]> {
+  try {
+    const rows = await db
+      .select({
+        id: libraryLessons.id,
+        title: libraryLessons.title,
+        slug: libraryLessons.slug,
+        courseId: libraryLessons.courseId,
+        courseSlug: libraryCourses.slug,
+      })
+      .from(libraryLessons)
+      .leftJoin(libraryCourses, eq(libraryCourses.id, libraryLessons.courseId))
+      .where(eq(libraryLessons.isPublished, true))
+      .limit(200);
+    return Array.isArray(rows) ? rows.map((r: any) => ({
+      id: r.id,
+      title: r.title,
+      slug: r.slug ?? null,
+      courseId: r.courseId ?? null,
+      courseSlug: r.courseSlug ?? null,
+    })) : [];
+  } catch (err) {
+    console.error("storage.listLibraryLessonsForSearch.error", { err });
+    return [];
+  }
+}
+(storage as any).listLibraryLessonsForSearch = listLibraryLessonsForSearch;
 (storage as any).getTournamentsByGrindSession = getTournamentsByGrindSession;
 (storage as any).getStarredHandsByGrindSession = getStarredHandsByGrindSession;
 (storage as any).listUsersForWeeklyStudyPlanCron = listUsersForWeeklyStudyPlanCron;
@@ -17258,6 +17286,10 @@ attachGoalDailyLogsStorage(storage as any);
 // MDA-1 (ADR-230) — mda_reads CRUD + junction N:N idempotente + imagens jsonb.
 import { attachMdaStorage } from "./storage/mdaStorage";
 attachMdaStorage(storage as any);
+
+// Sprint ThemeLessonNotes — anotacoes por aula vinculadas ao tema.
+import { attachThemeLessonNotesStorage } from "./storage/themeLessonNotesStorage";
+attachThemeLessonNotesStorage(storage as any);
 
 // Premium Library (ADR-240) — vitrine global curada + painel cross-user.
 import { attachPremiumLibraryStorage } from "./storage/premiumLibraryStorage";
