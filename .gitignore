@@ -39,3 +39,26 @@ uploads/
 logo-export/
 _thumb_*.png
 /Logo *.png
+
+# Ferramentas pessoais do founder na raiz (atalho de dev server, launcher do
+# Grindfy, atalhos/icones do Claude Chat). CONTINUAM NO DISCO e funcionando —
+# so nao entram no repo, para o `git status` ficar legivel entre sessoes.
+/start-grindfy.bat
+/startup.ps1
+/GrindfyLauncher.exe
+/GrindfyLauncher.cs
+/ClaudeChat.exe
+/*.ps1
+/*.ico
+/claude-chat-icon.png
+/mavis-icon-v3.png
+/matrix-media-*.png
+/icon-args.json
+
+# Config local de outras ferramentas de IA (por-maquina)
+.mavis/
+.opencode/
+
+# Scripts/SQL descartaveis de sessoes pontuais
+.tmp-*.mjs
+temp_fix_library.sql
