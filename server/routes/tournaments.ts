@@ -58,7 +58,9 @@ export function registerTournamentRoutes(app: Express): void {
       // importado (o painel exige digitar CONFIRMAR nesse modo). Sem `all`, a
       // regra antiga continua: filtro vazio e recusado para evitar apagar tudo
       // por acidente.
-      const deleteAll = all === true;
+      // Aceita boolean ou string: dependendo do transporte (JSON x form) o campo
+      // pode chegar como "true".
+      const deleteAll = all === true || all === 'true';
       if (!deleteAll && !sites?.length && !dateFrom && !dateTo) {
         return res.status(400).json({ message: 'Selecione ao menos um filtro (site ou período) — ou use "Remover tudo" para limpar o histórico inteiro.' });
       }
@@ -115,7 +117,8 @@ export function registerTournamentRoutes(app: Express): void {
       const { sites, dateFrom, dateTo, all } = req.body;
 
       // ADR-243: `all: true` -> contagem do historico inteiro (sem filtros).
-      const count = await storage.getFilteredTournamentsCount(userId, all === true
+      const previewAll = all === true || all === 'true';
+      const count = await storage.getFilteredTournamentsCount(userId, previewAll
         ? { sites: [], dateFrom: null, dateTo: null }
         : {
             sites: sites || [],

@@ -234,6 +234,25 @@ export function BulkDeleteTournamentsCard() {
           </div>
         )}
 
+        {/* No escopo "Tudo" os sites nao sao filtro — mas some-los deixava a tela
+            confusa ("os sites nem aparecem"). Lista-os como informacao: fica
+            explicito que a remocao cobre todos. */}
+        {isAll && siteRows.length > 0 && (
+          <div className="space-y-2" data-testid="bulk-delete-sites-readonly">
+            <Label className="text-gray-300">Sites incluídos (todos)</Label>
+            <div className="flex flex-wrap gap-2">
+              {siteRows.map((s) => (
+                <span
+                  key={s.site}
+                  className="px-3 py-1.5 rounded-full text-sm border bg-red-500/10 border-red-500/40 text-red-200"
+                >
+                  {s.site} <span className="text-red-300/60">({s.count.toLocaleString("pt-BR")})</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Sites como chips — opcional, refina o escopo */}
         {!isAll && siteRows.length > 0 && (
           <div className="space-y-2">
