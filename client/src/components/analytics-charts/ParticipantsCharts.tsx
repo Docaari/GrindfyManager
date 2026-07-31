@@ -2,6 +2,9 @@ import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Respon
 import { ChartTooltip } from './ChartTooltip';
 import { ChartPanel, panelItems } from './ChartPanel';
 import { AnalyticsChartsProps, generateTimeLabels, formatCurrencyBR, CHART_COLORS } from './chartUtils';
+// ADR-243: cor por FAIXA DE FIELD vem da mesma fonte que define os limites,
+// para rótulo e cor nunca divergirem entre backend e gráfico.
+import { FIELD_SIZE_BUCKET_COLORS } from '@shared/field-size-buckets';
 
 export default function ParticipantsCharts({ type, data, period = "all" }: AnalyticsChartsProps) {
   switch (type) {
@@ -27,7 +30,7 @@ export default function ParticipantsCharts({ type, data, period = "all" }: Analy
       );
 
       return (
-        <ChartPanel items={panelItems(volumeData, 'name', 'value', CHART_COLORS.buyins)} kind="number" showPercent unit="torneios">
+        <ChartPanel items={panelItems(volumeData, 'name', 'value', FIELD_SIZE_BUCKET_COLORS)} kind="number" showPercent unit="torneios">
         <ResponsiveContainer width="100%" height={400}>
             <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
               <Pie
@@ -46,7 +49,7 @@ export default function ParticipantsCharts({ type, data, period = "all" }: Analy
                 {volumeData.map((entry: any, index: number) => (
                   <Cell
                     key={`volume-cell-${index}`}
-                    fill={CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]}
+                    fill={FIELD_SIZE_BUCKET_COLORS[entry.name] ?? CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]}
                     stroke={index === maxVolumeIndex ? '#24c25e' : 'transparent'}
                     strokeWidth={index === maxVolumeIndex ? 3 : 0}
                   />
@@ -89,7 +92,7 @@ export default function ParticipantsCharts({ type, data, period = "all" }: Analy
       const yAxisMax = maxProfit <= 0 ? 0 : adaptiveMax;
 
       return (
-        <ChartPanel items={panelItems(profitData, 'range', 'profit', CHART_COLORS.default)} kind="currency">
+        <ChartPanel items={panelItems(profitData, 'range', 'profit', FIELD_SIZE_BUCKET_COLORS)} kind="currency">
         <ResponsiveContainer width="100%" height={400}>
             <BarChart data={profitData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -151,7 +154,7 @@ export default function ParticipantsCharts({ type, data, period = "all" }: Analy
       const roiYAxisMax = maxROI <= 0 ? 0 : roiAdaptiveMax;
 
       return (
-        <ChartPanel items={panelItems(roiData, 'range', 'roi', CHART_COLORS.default)} kind="percent">
+        <ChartPanel items={panelItems(roiData, 'range', 'roi', FIELD_SIZE_BUCKET_COLORS)} kind="percent">
         <ResponsiveContainer width="100%" height={400}>
             <BarChart data={roiData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -188,34 +191,16 @@ export default function ParticipantsCharts({ type, data, period = "all" }: Analy
     }
 
     case 'participantsITM': {
-      // ITM% por Faixa de Eliminação - usa posição como proxy
-      // Faixas mais próximas do topo (Top 5%, 5-10%) têm ITM% maior
-      const itmData = data.map((item: any) => {
-        const volume = parseInt(item.volume) || 0;
-        // Calcular ITM baseado na faixa: quanto menor a faixa (mais perto do topo),
-        // maior a probabilidade de ITM
-        const rangeLabel = item.fieldRange;
-        let itmRate = 0;
-
-        // Faixas de eliminação: quanto menor o %, mais perto do dinheiro
-        // Top 5% = ITM quase garantido (~95%)
-        // 50-75% = ITM garantido
-        // 75-100% = fora do dinheiro
-        if (rangeLabel === 'Top 5%') itmRate = 95;
-        else if (rangeLabel === '5-10%') itmRate = 80;
-        else if (rangeLabel === '10-15%') itmRate = 60;
-        else if (rangeLabel === '15-20%') itmRate = 45;
-        else if (rangeLabel === '20-30%') itmRate = 35;
-        else if (rangeLabel === '30-50%') itmRate = 25;
-        else if (rangeLabel === '50-75%') itmRate = 15;
-        else if (rangeLabel === '75-100%') itmRate = 5;
-
-        return {
-          range: rangeLabel,
-          itmRate,
-          volume
-        };
-      }).filter((item: any) => item.volume > 0);
+      // ADR-243: ITM REAL vindo do backend (`itmRate`, calculado sobre entradas
+      // com `gross_prize > 0`). O código anterior inventava o valor a partir do
+      // rótulo da faixa — 'Top 5%' virava 95% fixo, sem olhar o dado.
+      const itmData = data
+        .map((item: any) => ({
+          range: item.fieldRange,
+          itmRate: parseFloat(item.itmRate) || 0,
+          volume: parseInt(item.volume) || 0,
+        }))
+        .filter((item: any) => item.volume > 0);
 
       if (itmData.length === 0) {
         return (
@@ -226,7 +211,7 @@ export default function ParticipantsCharts({ type, data, period = "all" }: Analy
       }
 
       return (
-        <ChartPanel items={panelItems(itmData, 'range', 'itmRate', CHART_COLORS.default)} kind="percent">
+        <ChartPanel items={panelItems(itmData, 'range', 'itmRate', FIELD_SIZE_BUCKET_COLORS)} kind="percent">
         <ResponsiveContainer width="100%" height={400}>
             <BarChart data={itmData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />

@@ -15,7 +15,7 @@ interface TabParticipantsProps {
 export function TabParticipants({ fieldAnalytics, fieldLoading, monthAnalytics, monthLoading, period, filters }: TabParticipantsProps) {
   return (
     <>
-      <h3 className="text-xl font-bold text-white mb-8">👥 Análise Por Med. Participantes</h3>
+      <h3 className="text-xl font-bold text-white mb-8">👥 Análise por Tamanho de Field</h3>
 
       {/* LINHA 1 - DISTRIBUIÇÃO DE FIELD SIZE */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
@@ -23,10 +23,10 @@ export function TabParticipants({ fieldAnalytics, fieldLoading, monthAnalytics, 
           <CardHeader className="pb-6">
             <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
               <span className="text-3xl">📊</span>
-              Volume por Faixa
+              Volume por Tamanho de Field
             </CardTitle>
             <CardDescription className="text-gray-300 text-base">
-              Distribuição de torneios por número de participantes
+              Quantos torneios você joga em cada tamanho de campo
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
@@ -40,10 +40,10 @@ export function TabParticipants({ fieldAnalytics, fieldLoading, monthAnalytics, 
           <CardHeader className="pb-6">
             <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
               <span className="text-3xl">💰</span>
-              Lucro por Faixa
+              Lucro por Tamanho de Field
             </CardTitle>
             <CardDescription className="text-gray-300 text-base">
-              Performance de lucro por faixa de participantes
+              Onde o seu lucro é feito — e perdido — por tamanho de campo
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
@@ -60,10 +60,10 @@ export function TabParticipants({ fieldAnalytics, fieldLoading, monthAnalytics, 
           <CardHeader className="pb-6">
             <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
               <span className="text-3xl">📈</span>
-              ROI por Faixa
+              ROI por Tamanho de Field
             </CardTitle>
             <CardDescription className="text-gray-300 text-base">
-              Return on Investment por faixa de participantes
+              ROI por tamanho de campo: onde o investimento rende mais
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
@@ -77,10 +77,10 @@ export function TabParticipants({ fieldAnalytics, fieldLoading, monthAnalytics, 
           <CardHeader className="pb-6">
             <CardTitle className="text-white text-2xl font-bold flex items-center gap-3">
               <span className="text-3xl">🏆</span>
-              ITM% por Faixa
+              ITM% por Tamanho de Field
             </CardTitle>
             <CardDescription className="text-gray-300 text-base">
-              Taxa de chegada ao prêmio por faixa de participantes
+              Com que frequência você é premiado em cada tamanho de campo
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">

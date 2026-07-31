@@ -2649,81 +2649,106 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   // ETAPA 5: Analytics por faixa de field
+  /**
+   * Performance por TAMANHO DE FIELD (ADR-243).
+   *
+   * Antes esta função agrupava por percentual de eliminação (Top 5%, 5-10%, …),
+   * que responde "quão longe eu fui" — não "como eu performo conforme o tamanho
+   * do campo", que é a pergunta de seleção de torneio. As faixas agora vêm de
+   * `shared/field-size-buckets` (Low <200 · Medium 200-500 · Big 500-1500 ·
+   * Big Big 1500-5000 · Giant 5000+), fonte única compartilhada com a UI.
+   *
+   * Mudanças de critério, todas deliberadas:
+   *  - não exige mais `position` preenchida: volume e lucro por faixa não
+   *    dependem da colocação, e exigi-la descartava 349 torneios do GGNetwork
+   *    (o export da rede não traz posição);
+   *  - ITM vem do dado real (`gross_prize > 0`, com fallback `prize > 0` nas
+   *    linhas anteriores à Migration 0097) — o gráfico antigo usava percentuais
+   *    inventados no front (`Top 5%` = 95%);
+   *  - ROI e ITM usam as mesmas bases do resto do dashboard: investimento com
+   *    re-entradas e add-on, e ITM sobre ENTRADAS.
+   */
   async getAnalyticsByField(userId: string, period: string = "30d", filters: any = {}): Promise<any[]> {
+    const { FIELD_SIZE_BUCKETS, fieldSizeBucketSqlCase } = await import("@shared/field-size-buckets");
 
     const baseConditions = [
       eq(tournaments.userId, userId),
-      isNotNull(tournaments.position),
-      isNotNull(tournaments.fieldSize)
+      // CLAUDE.md 6.1: analytics opera sobre o historico importado.
+      isNull(tournaments.grindSessionId),
+      isNotNull(tournaments.fieldSize),
+      gt(tournaments.fieldSize, 0),
     ];
 
-    // Add period filter using the unified function
     const periodConditions = buildPeriodCondition(period, filters);
     baseConditions.push(...periodConditions);
 
-    // Add dashboard filters
     const dashboardFilters = buildFilters(filters);
     if (dashboardFilters) {
       baseConditions.push(dashboardFilters);
     }
 
     const whereCondition = and(...baseConditions);
+    const bucketExpr = sql.raw(fieldSizeBucketSqlCase("field_size"));
 
-    // Primeiro, buscar todos os torneios com position e fieldSize válidos
-    const allTournaments = await db
-      .select({
-        position: tournaments.position,
-        fieldSize: tournaments.fieldSize,
-        prize: tournaments.prize,
-        buyIn: tournaments.buyIn,
-      })
-      .from(tournaments)
-      .where(whereCondition);
-
-
-    // Processar no JavaScript para calcular percentuais de eliminação
-    const tournamentsWithPercentage = allTournaments.map(t => {
-      const eliminationPercentage = (t.position && t.fieldSize) ? (t.position / t.fieldSize) * 100 : 0;
-      return {
-        ...t,
-        eliminationPercentage
-      };
-    });
-
-    // Definir faixas de eliminação percentual
-    const fieldRanges = [
-      { label: 'Top 5%', min: 0, max: 5 },
-      { label: '5-10%', min: 5, max: 10 },
-      { label: '10-15%', min: 10, max: 15 },
-      { label: '15-20%', min: 15, max: 20 },
-      { label: '20-30%', min: 20, max: 30 },
-      { label: '30-50%', min: 30, max: 50 },
-      { label: '50-75%', min: 50, max: 75 },
-      { label: '75-100%', min: 75, max: 100 }
-    ];
-
-    // Agrupar por faixas de eliminação
-    const analytics = fieldRanges.map(range => {
-      const tournamentsInRange = tournamentsWithPercentage.filter(t => {
-        const eliminationPercentage = t.eliminationPercentage;
-        return eliminationPercentage >= range.min && eliminationPercentage < range.max;
+    let rows: any[] = [];
+    try {
+      rows = await db
+        .select({
+          bucket: bucketExpr,
+          volume: sql<number>`COUNT(DISTINCT COALESCE(${tournaments.seriesId}, ${tournaments.id}))::int`,
+          entries: sql<number>`SUM(1 + COALESCE(${tournaments.reentries}, 0))::int`,
+          profit: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)::text`,
+          invested: sql<string>`COALESCE(SUM(
+            CAST(${tournaments.buyIn} AS DECIMAL) * (1 + COALESCE(${tournaments.reentries}, 0))
+            + CASE WHEN ${tournaments.addOnTaken} = true THEN COALESCE(CAST(${tournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END
+          ), 0)::text`,
+          itmCount: sql<number>`COUNT(*) FILTER (
+            WHERE COALESCE(CAST(${tournaments.grossPrize} AS DECIMAL), CAST(${tournaments.prize} AS DECIMAL)) > 0
+          )::int`,
+          avgField: sql<number>`ROUND(AVG(${tournaments.fieldSize}))::int`,
+        })
+        .from(tournaments)
+        .where(whereCondition)
+        .groupBy(bucketExpr);
+    } catch (error) {
+      // Log antes do fallback (lesson #9): distingue "sem torneios" de "query quebrou".
+      console.error("analytics.by_field_size_failed", {
+        userId,
+        period,
+        err: (error as any)?.message ?? String(error),
       });
+      return [];
+    }
 
-      const volume = tournamentsInRange.length;
-      const profit = tournamentsInRange.reduce((sum, t) => sum + parseFloat(String(t.prize || '0')), 0);
-      const buyins = tournamentsInRange.reduce((sum, t) => sum + parseFloat(String(t.buyIn || '0')), 0);
-      const roi = buyins > 0 ? (profit / buyins) * 100 : 0;
+    const byLabel = new Map<string, any>();
+    for (const r of rows) {
+      if (r?.bucket) byLabel.set(String(r.bucket), r);
+    }
 
+    // Devolve SEMPRE as 5 faixas, na ordem do menor para o maior campo. Faixa sem
+    // torneio vem zerada — assim o eixo do gráfico não "pula" entre períodos.
+    return FIELD_SIZE_BUCKETS.map((b) => {
+      const r = byLabel.get(b.label);
+      const volume = Number(r?.volume ?? 0);
+      const entries = Number(r?.entries ?? 0);
+      const profit = parseFloat(String(r?.profit ?? "0"));
+      const invested = parseFloat(String(r?.invested ?? "0"));
+      const itmCount = Number(r?.itmCount ?? 0);
       return {
-        fieldRange: range.label,
-        volume: volume.toString(),
-        profit: profit.toString(),
-        buyins: buyins.toString(),
-        roi: roi.toString()
+        fieldRange: b.label,
+        bucketId: b.id,
+        volume: String(volume),
+        entries: String(entries),
+        profit: String(profit),
+        buyins: String(invested),
+        invested: String(invested),
+        roi: String(invested > 0 ? (profit / invested) * 100 : 0),
+        itmCount: String(itmCount),
+        itmRate: String(entries > 0 ? (itmCount / entries) * 100 : 0),
+        avgProfit: String(entries > 0 ? profit / entries : 0),
+        avgField: String(Number(r?.avgField ?? 0)),
       };
     });
-
-    return analytics;
   }
 
   // ETAPA 5: Analytics de posições finais - Mesa Final (1-18)
