@@ -182,7 +182,11 @@ export function DashboardMetrics({ stats, categoryAnalytics, speedAnalytics, isM
             {formatPercentage(stats?.earlyFinishRate || 0)}
           </div>
           <div className="weekly-card-label">Bust Early</div>
-          <div className="weekly-card-sublabel">Saiu nos 10% piores</div>
+          <div className="weekly-card-sublabel">
+            {stats?.finishSampleSize
+              ? `10% piores · ${stats.finishSampleSize} com posição`
+              : "Saiu nos 10% piores"}
+          </div>
         </div>
 
         <div className="weekly-summary-card metric-finish-rate">
@@ -193,7 +197,11 @@ export function DashboardMetrics({ stats, categoryAnalytics, speedAnalytics, isM
             {formatPercentage(stats?.lateFinishRate || 0)}
           </div>
           <div className="weekly-card-label">Deep Run</div>
-          <div className="weekly-card-sublabel">Top 10% do field</div>
+          <div className="weekly-card-sublabel">
+            {stats?.finishSampleSize
+              ? `top 10% · ${stats.finishSampleSize} com posição`
+              : "Top 10% do field"}
+          </div>
         </div>
 
         <div className="weekly-summary-card metric-fts">

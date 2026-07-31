@@ -3063,8 +3063,17 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           // Migration 0097) mantem o fallback prize > 0.
           itmCount: sql<number>`COUNT(DISTINCT CASE WHEN (CASE WHEN ${tournaments.grossPrize} IS NOT NULL THEN CAST(${tournaments.grossPrize} AS DECIMAL) > 0 ELSE CAST(${tournaments.prize} AS DECIMAL) > 0 END) THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
 
-          // FTs: eventos com posicao final 1-9 (em series, somente Day 2 tem posicao definida)
-          finalTablesCount: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.position} >= 1 AND ${tournaments.position} <= 9 AND ${tournaments.position} IS NOT NULL THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
+          // FTs: chegou à mesa final = posição dentro do tamanho REAL da mesa.
+          // ADR-243: era `position <= 9` fixo, o que contava o 7º/8º/9º lugar de
+          // um 6-max como mesa final. Agora usa `players_per_table` do export
+          // (fallback 9 quando a rede não informa). Conferido contra o painel do
+          // SharkScope no histórico do founder: regra antiga dava 34, a nova dá
+          // 28 — exatamente o número dele.
+          finalTablesCount: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.position} >= 1 AND ${tournaments.position} <= COALESCE(${tournaments.playersPerTable}, 9) THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
+
+          // Denominador das taxas de finalização: só torneios em que dá para
+          // calcular (posição + field conhecidos). Ver comentário no derive.
+          finishSampleSize: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.fieldSize} IS NOT NULL AND ${tournaments.fieldSize} >= 15 AND ${tournaments.position} IS NOT NULL AND ${tournaments.position} > 0 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
 
           // Cravadas: eventos com posicao 1
           firstPlaceCount: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.position} = 1 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
@@ -3352,13 +3361,21 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // 12. Lucro Médio/Dia: Lucro total dividido pelos dias jogados
     const avgProfitPerDay = daysPlayed > 0 ? profit / daysPlayed : 0;
 
-    // 13. Bust Early: Frequência em que saiu nos 10% piores (posição/fieldSize >= 90%)
+    // 13. Bust Early: frequência em que saiu nos 10% piores (posição/field >= 90%).
+    //
+    // ADR-243: o denominador passou de `count` (todos os torneios) para
+    // `finishSampleSize` (torneios com posição E field conhecidos). Motivo: 349
+    // dos 1.216 torneios do founder — todos do GGNetwork — não trazem posição no
+    // export, e contá-los no denominador diluía a taxa. O próprio SharkScope
+    // exibe "-" para essa conta em vez de misturar. Expomos o tamanho da amostra
+    // para a UI deixar claro sobre quantos torneios a taxa foi medida.
+    const finishSampleSize = Number(result.finishSampleSize || 0);
     const earlyFinishCount = Number(result.earlyFinishCount || 0);
-    const earlyFinishRate = count > 0 ? (earlyFinishCount / count) * 100 : 0;
+    const earlyFinishRate = finishSampleSize > 0 ? (earlyFinishCount / finishSampleSize) * 100 : 0;
 
     // 14. Deep Run: Frequência em que chegou no top 10% do field (posição/fieldSize <= 10%)
     const lateFinishCount = Number(result.lateFinishCount || 0);
-    const lateFinishRate = count > 0 ? (lateFinishCount / count) * 100 : 0;
+    const lateFinishRate = finishSampleSize > 0 ? (lateFinishCount / finishSampleSize) * 100 : 0;
 
 
     // 15. Big Hit: A maior premiação registrada dos torneios
@@ -3376,6 +3393,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       roi, // 4. ROI
       itm, // 5. ITM% (base = entradas, ADR-243)
       // ADR-243 — métricas de rotina (paridade SharkScope).
+      finishSampleSize,
       winningDays,
       losingDays,
       breakEvenDays,
