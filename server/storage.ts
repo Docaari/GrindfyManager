@@ -3181,9 +3181,17 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // 4. ROI: Profit / (Total investido: buy-in + reentradas em valor monetário)
     const roi = totalInvested > 0 ? (profit / totalInvested) * 100 : 0;
 
-    // 5. ITM: Percentual que ficou dentro da faixa de premiação
+    // 5. ITM: percentual de ENTRADAS que terminaram premiadas.
+    //
+    // ADR-243: o denominador passou de `count` (torneios) para `totalEntries`
+    // (torneios + reentradas), que e a convencao do SharkScope e a leitura
+    // correta do ponto de vista do jogador — cada bala paga e uma chance de
+    // cashar, entao re-entrar 3x e cashar 1x nao e "100% ITM".
+    // Medido no historico do founder (1.216 torneios / 1.489 entradas / 372
+    // premiados): base torneios dava 30,6%, base entradas da 25,0% e o
+    // SharkScope reporta 24,5% para o mesmo conjunto.
     const itmCount = Number(result.itmCount || 0);
-    const itm = count > 0 ? (itmCount / count) * 100 : 0;
+    const itm = totalEntries > 0 ? (itmCount / totalEntries) * 100 : 0;
 
     // 6. Reentradas: Quantidade total de reentradas feitas no torneio
     const reentries = totalReentries;
@@ -3251,7 +3259,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       profit, // 2. Lucro
       abi, // 3. ABI
       roi, // 4. ROI
-      itm, // 5. ITM%
+      itm, // 5. ITM% (base = entradas, ADR-243)
+      // ADR-243: denominador das frequencias exposto para a UI poder explicar
+      // "X premiados em Y entradas" em vez de so mostrar a porcentagem.
+      totalEntries,
       reentries, // 6. Reentradas
       avgProfitPerTournament, // 7. Lucro Médio/Torneio
       stakeRange, // 8. Stake Range
