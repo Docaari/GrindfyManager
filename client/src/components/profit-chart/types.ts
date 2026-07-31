@@ -28,6 +28,11 @@ export interface ComparisonDataItem {
   date: string;
   cumulative: number;
   daily: number;
+  /**
+   * Torneios jogados NESTE dia. Somado ao longo do periodo vira o volume real
+   * exibido na comparacao — antes o volume era o texto fixo "10 torneios".
+   */
+  count: number;
 }
 
 export interface ComparisonChartDataItem {

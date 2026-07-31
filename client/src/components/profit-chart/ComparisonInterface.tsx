@@ -15,11 +15,29 @@ interface ComparisonInterfaceProps {
   formatCurrency: (value: number) => string;
 }
 
+/** Volume real do periodo = soma dos torneios de cada dia. */
+function periodVolume(data: ComparisonDataItem[]): number {
+  if (!Array.isArray(data)) return 0;
+  return data.reduce((sum, d) => sum + (Number(d?.count) || 0), 0);
+}
+
+/** Lucro acumulado ao fim do periodo (0 quando nao houve torneio). */
+function periodProfit(data: ComparisonDataItem[]): number {
+  if (!Array.isArray(data) || data.length === 0) return 0;
+  return Number(data[data.length - 1]?.cumulative) || 0;
+}
+
 export function ComparisonInterface({ comparisonData, setComparisonData, onQuickComparison, onApplyComparison, loading, formatCurrency }: ComparisonInterfaceProps) {
+  const volume1 = periodVolume(comparisonData.period1.data);
+  const volume2 = periodVolume(comparisonData.period2.data);
+  // Mostra o painel assim que ha janela configurada — inclusive quando ela veio
+  // vazia, para o jogador ver "nenhum torneio" em vez de o painel sumir.
+  const hasComparison = !!(comparisonData.period1.from && comparisonData.period1.to);
+
   return (
     <>
       {/* Comparison Metrics */}
-      {comparisonData.period1.data.length > 0 && (
+      {hasComparison && (
         <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-4 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-3">
@@ -30,11 +48,13 @@ export function ComparisonInterface({ comparisonData, setComparisonData, onQuick
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Volume:</span>
-                  <span className="text-white font-medium">10 torneios</span>
+                  <span className="text-white font-medium" data-testid="comparison-volume-p1">
+                    {volume1 === 0 ? 'Nenhum torneio' : `${volume1.toLocaleString('pt-BR')} ${volume1 === 1 ? 'torneio' : 'torneios'}`}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Profit:</span>
-                  <span className="text-emerald-400 font-medium">{formatCurrency(comparisonData.period1.data[comparisonData.period1.data.length - 1]?.cumulative || 0)}</span>
+                  <span className="text-emerald-400 font-medium">{formatCurrency(periodProfit(comparisonData.period1.data))}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Período:</span>
@@ -50,11 +70,13 @@ export function ComparisonInterface({ comparisonData, setComparisonData, onQuick
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Volume:</span>
-                  <span className="text-white font-medium">10 torneios</span>
+                  <span className="text-white font-medium" data-testid="comparison-volume-p2">
+                    {volume2 === 0 ? 'Nenhum torneio' : `${volume2.toLocaleString('pt-BR')} ${volume2 === 1 ? 'torneio' : 'torneios'}`}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Profit:</span>
-                  <span className="text-orange-400 font-medium">{formatCurrency(comparisonData.period2.data[comparisonData.period2.data.length - 1]?.cumulative || 0)}</span>
+                  <span className="text-orange-400 font-medium">{formatCurrency(periodProfit(comparisonData.period2.data))}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Período:</span>

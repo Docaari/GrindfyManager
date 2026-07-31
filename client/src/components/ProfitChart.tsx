@@ -213,26 +213,34 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
 
   const activeChartData = comparisonMode ? comparisonChartData : chartData;
 
-  const calculateCumulativeData = (tourns: any[], _fromDate: string, _toDate: string): ComparisonDataItem[] => {
-    const dailyProfits = tourns.reduce((acc: Record<string, number>, t) => {
-      const date = (t.datePlayed || t.date).split('T')[0];
-      const profit = parseFloat(t.prize || t.result || 0) + parseFloat(t.bounty || 0);
-      if (!acc[date]) acc[date] = 0;
-      acc[date] += profit;
-      return acc;
-    }, {});
+  /** Dia do torneio em YYYY-MM-DD, ignorando a hora (datePlayed vem ISO completo). */
+  const dayKey = (t: any): string => String(t.datePlayed || t.date || '').split('T')[0];
 
-    const tournamentDates = tourns.map(t => (t.datePlayed || t.date).split('T')[0]).sort();
+  const calculateCumulativeData = (tourns: any[], _fromDate: string, _toDate: string): ComparisonDataItem[] => {
+    if (!Array.isArray(tourns) || tourns.length === 0) return [];
+
+    const dailyProfits: Record<string, number> = {};
+    const dailyCounts: Record<string, number> = {};
+    for (const t of tourns) {
+      const date = dayKey(t);
+      if (!date) continue;
+      const profit = parseFloat(t.prize || t.result || 0) + parseFloat(t.bounty || 0);
+      dailyProfits[date] = (dailyProfits[date] || 0) + (Number.isFinite(profit) ? profit : 0);
+      dailyCounts[date] = (dailyCounts[date] || 0) + 1;
+    }
+
+    const tournamentDates = tourns.map(dayKey).filter(Boolean).sort();
+    if (tournamentDates.length === 0) return [];
     const startDate = new Date(Math.min(...tournamentDates.map(d => new Date(d).getTime())));
     const endDate = new Date(Math.max(...tournamentDates.map(d => new Date(d).getTime())));
 
     let cumulative = 0;
-    const result = [];
+    const result: ComparisonDataItem[] = [];
     for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
       const dateStr = date.toISOString().split('T')[0];
       const dailyProfit = dailyProfits[dateStr] || 0;
       cumulative += dailyProfit;
-      result.push({ date: dateStr, cumulative, daily: dailyProfit });
+      result.push({ date: dateStr, cumulative, daily: dailyProfit, count: dailyCounts[dateStr] || 0 });
     }
     return result;
   };
@@ -254,19 +262,19 @@ export default function ProfitChart({ data, showComparison = false, tournaments 
   const applyComparison = async (p1From: string, p1To: string, p2From: string, p2To: string) => {
     setLoading(true);
     try {
-      let p1Tourns = tournaments.filter(t => { const d = t.datePlayed || t.date; return d >= p1From && d <= p1To; });
-      let p2Tourns = tournaments.filter(t => { const d = t.datePlayed || t.date; return d >= p2From && d <= p2To; });
+      // Comparacao por DIA: datePlayed vem ISO completo ("2026-07-31T14:00:00Z")
+      // e o input date manda "2026-07-31". Comparar as strings cruas excluia o
+      // ultimo dia da janela ("...T14:00" > "2026-07-31"). Agora corta a hora.
+      const inRange = (t: any, from: string, to: string) => {
+        const d = dayKey(t);
+        return !!d && d >= from && d <= to;
+      };
+      const p1Tourns = tournaments.filter(t => inRange(t, p1From, p1To));
+      const p2Tourns = tournaments.filter(t => inRange(t, p2From, p2To));
 
-      // Fallback: split available tournaments if no data in ranges
-      if (p1Tourns.length === 0 && p2Tourns.length === 0 && tournaments.length > 0) {
-        const half = Math.floor(tournaments.length / 2);
-        p1Tourns = tournaments.slice(0, half);
-        p2Tourns = tournaments.slice(half);
-      } else if (p2Tourns.length === 0 && p1Tourns.length > 0) {
-        const half = Math.floor(p1Tourns.length / 2);
-        p2Tourns = p1Tourns.slice(half);
-        p1Tourns = p1Tourns.slice(0, half);
-      }
+      // Sem fallback: quando a janela nao tem torneio, a comparacao mostra
+      // "nenhum torneio no periodo". A versao antiga partia o historico inteiro
+      // ao meio e exibia isso como se fossem os periodos pedidos.
 
       const period1Data = calculateCumulativeData(p1Tourns, p1From, p1To);
       const period2Data = calculateCumulativeData(p2Tourns, p2From, p2To);
