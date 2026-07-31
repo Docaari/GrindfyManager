@@ -64,6 +64,7 @@ import { registerAdminFxRoutes } from "./adminFx";
 // Sprint Estudos-Habito-1: /api/study-sessions + /api/users/me/study-habit + auto-suggest.
 import { registerStudySessionsRoutes } from "./study-sessions";
 import { registerFocusStatsAutoSuggestRoutes } from "./focus-stats-auto-suggest";
+import { registerLibrarySearchRoutes } from "./library-search";
 // Sprint MDA-1 (ADR-230): /api/mda-reads (Tendencias da Populacao).
 import { registerMdaRoutes } from "./mda";
 // Sprint theme-lesson-notes — anotacoes por aula vinculada ao tema (registrado ANTES de studies para evitar colisao /:id).
@@ -327,6 +328,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Sprint MDA-1 (ADR-230) — Registro de MDA (Tendencias da Populacao).
   registerMdaRoutes(app);
+  // Sprint theme-lesson-notes — busca de aulas para o seletor de nota.
+  registerLibrarySearchRoutes(app);
   // Sprint theme-lesson-notes — rotas ANTES de studies (evita colisao /:id).
   registerThemeLessonNotesRoutes(app);
 

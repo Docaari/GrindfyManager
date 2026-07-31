@@ -1,16 +1,12 @@
 /**
  * usePlatformsByPopularity — Sprint coach-page-reform-1 RF-05.2.
  * Spec: Docs/specs/sprint-coach-page-reform-1.md §RF-05.2 (Path B — hook client-side).
- * UX audit: Docs/ux-audit-2026-05-07/biblioteca-quick-filters.md §2.5.
  *
- * Calcula ordem dos chips de plataforma da Biblioteca:
- *   1. Sites do user (via /api/tournament-library) ordenados desc por count.
- *   2. Sites do enum global fallback que ainda nao apareceram.
- *   3. (Sites fora do enum oficial sao ignorados.)
+ * Mostra apenas sites que tem torneios na biblioteca do usuario.
+ * Ordenado por contagem (mais populares primeiro).
  *
- * Fallback global (founder confirmou):
- *   PokerStars, GGPoker, WPN, PartyPoker, 888poker, iPoker, CoinPoker,
- *   Chico, Bodog, Suprema, Revolution.
+ * Sites permitidos: PokerStars, GGPoker, WPN, PartyPoker, 888poker, iPoker,
+ *   CoinPoker, Chico, Bodog, WPT Global
  */
 
 import { useMemo } from 'react';
@@ -22,8 +18,8 @@ export interface UsePlatformsByPopularityResult {
   isLoading: boolean;
 }
 
-/** Lista global de fallback. Ordem aprovada pelo founder. */
-const FALLBACK_GLOBAL: string[] = [
+/** Sites permitidos na Biblioteca. */
+const ALLOWED_SITES: string[] = [
   'PokerStars',
   'GGPoker',
   'WPN',
@@ -33,12 +29,11 @@ const FALLBACK_GLOBAL: string[] = [
   'CoinPoker',
   'Chico',
   'Bodog',
-  'Suprema',
-  'Revolution',
+  'WPT',
 ];
 
-/** Conjunto oficial de sites (uniao do fallback). Sites fora desse conjunto sao ignorados. */
-const ENUM_OFFICIAL = new Set<string>(FALLBACK_GLOBAL);
+/** Conjunto de sites permitidos para filtragem. */
+const ALLOWED_SET = new Set<string>(ALLOWED_SITES);
 
 interface LibraryRow {
   id: string;
@@ -55,12 +50,12 @@ export function usePlatformsByPopularity(): UsePlatformsByPopularityResult {
   const sites = useMemo<string[]>(() => {
     const list = Array.isArray(query.data) ? query.data : [];
 
-    // Conta distinct sites (apenas os do enum oficial).
+    // Conta distinct sites (apenas os permitidos).
     const counts = new Map<string, number>();
     for (const row of list) {
       const site = typeof row?.site === 'string' ? row.site : '';
       if (!site) continue;
-      if (!ENUM_OFFICIAL.has(site)) continue;
+      if (!ALLOWED_SET.has(site)) continue;
       counts.set(site, (counts.get(site) ?? 0) + 1);
     }
 
@@ -72,17 +67,7 @@ export function usePlatformsByPopularity(): UsePlatformsByPopularityResult {
       })
       .map(([site]) => site);
 
-    // Append fallback global pulando os ja listados.
-    const seen = new Set(userSorted);
-    const result = [...userSorted];
-    for (const site of FALLBACK_GLOBAL) {
-      if (!seen.has(site)) {
-        result.push(site);
-        seen.add(site);
-      }
-    }
-
-    return result;
+    return userSorted;
   }, [query.data]);
 
   return { sites, isLoading: query.isLoading };

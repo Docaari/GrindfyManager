@@ -58,8 +58,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('Sidebar — item Flight aponta para /coach?tab=flights (RF-07.2)', () => {
-  it('renderiza link Flight com href /coach?tab=flights', async () => {
+describe('Sidebar — item Flight foi removido (acesso por Grade)', () => {
+  // Decisão do founder (2026-07-31): "Flight" e "Torneios" saíram da barra
+  // lateral porque os dois já são alcançáveis de dentro de "Grade" — eram porta
+  // duplicada para o mesmo destino. O teste antigo garantia a existência do
+  // item; agora garante o contrário, e que a porta legítima continua de pé.
+  it('não renderiza mais um item "Flight" na barra', async () => {
     const Sidebar = await loadSidebar();
     const { hook } = memoryLocation({ path: '/' });
     render(
@@ -68,17 +72,13 @@ describe('Sidebar — item Flight aponta para /coach?tab=flights (RF-07.2)', () 
       </Router>
     );
 
-    // Procura link Flight no sidebar — pode ser <a> ou Link Wouter.
-    const allAnchors = Array.from(document.querySelectorAll('a'));
-    const flightAnchor = allAnchors.find((a) => /Flight/i.test(a.textContent || ''));
-    expect(flightAnchor).toBeTruthy();
-
-    // href deve apontar para /coach?tab=flights.
-    const href = flightAnchor!.getAttribute('href') || '';
-    expect(href).toBe('/coach?tab=flights');
+    const flightAnchor = Array.from(document.querySelectorAll('a')).find((a) =>
+      /Flight/i.test(a.textContent || ''),
+    );
+    expect(flightAnchor).toBeUndefined();
   });
 
-  it('label "Flight" continua presente (mantido)', async () => {
+  it('mantém o acesso a "Grade", de onde os flights são abertos', async () => {
     const Sidebar = await loadSidebar();
     const { hook } = memoryLocation({ path: '/' });
     render(
@@ -86,6 +86,11 @@ describe('Sidebar — item Flight aponta para /coach?tab=flights (RF-07.2)', () 
         <Sidebar />
       </Router>
     );
-    expect(document.body.textContent).toMatch(/Flight/);
+
+    const gradeAnchor = Array.from(document.querySelectorAll('a')).find(
+      (a) => a.getAttribute('href') === '/coach',
+    );
+    expect(gradeAnchor).toBeTruthy();
+    expect(gradeAnchor!.textContent).toMatch(/Grade/i);
   });
 });

@@ -17,6 +17,8 @@ export interface BibliotecaPersistedFilters {
   filterCurrency: string;
   filterMinBuyIn: string;
   filterMaxBuyIn: string;
+  filterTimeFrom: string;
+  filterTimeTo: string;
   sortMode: string;
 }
 
@@ -29,6 +31,8 @@ export const DEFAULT_BIBLIOTECA_FILTERS: BibliotecaPersistedFilters = {
   filterCurrency: "",
   filterMinBuyIn: "",
   filterMaxBuyIn: "",
+  filterTimeFrom: "",
+  filterTimeTo: "",
   sortMode: "platform-buyin",
 };
 
@@ -53,6 +57,8 @@ export function readBibliotecaFilters(): BibliotecaPersistedFilters {
       filterCurrency: asStr(parsed.filterCurrency, ""),
       filterMinBuyIn: asStr(parsed.filterMinBuyIn, ""),
       filterMaxBuyIn: asStr(parsed.filterMaxBuyIn, ""),
+      filterTimeFrom: asStr(parsed.filterTimeFrom, ""),
+      filterTimeTo: asStr(parsed.filterTimeTo, ""),
       sortMode: asStr(parsed.sortMode, DEFAULT_BIBLIOTECA_FILTERS.sortMode),
     };
   } catch {

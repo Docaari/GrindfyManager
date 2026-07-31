@@ -1,14 +1,16 @@
 // =============================================================================
 // libraryAutoPopulate
 //
-// Garante que TODO torneio adicionado ao grade (planned_tournaments) tenha uma
-// entrada correspondente em tournament_library. Disparado de dentro de
-// storage.createPlannedTournament para cobrir todos os call sites — incluindo
-// os que nao passam pelo handler de rota (Tournament Series Day 2, coach tool
-// register_tournament_in_grade).
+// Quando um torneio e adicionado ao Grade Planner:
+// - Se existe entrada na Biblioteca com a mesma key canonica (sem dayOfWeek)
+//   → link (vincula ao existente)
+// - Se NAO existe na Biblioteca → cria nova entrada na Biblioteca
+// - A chave canonica NAO inclui dayOfWeek, então tournaments recorrentes
+//   (mesmo nome/buy-in/horario) em dias diferentes sao deduplicados.
 //
-// Dedup por (userId, name, site, buyIn, time) contra ativos + trashed.
-// Idempotente — pode rodar varias vezes pro mesmo planned.
+// Disparado de dentro de storage.createPlannedTournament para cobrir todos
+// os call sites — incluindo os que nao passam pelo handler de rota
+// (Tournament Series Day 2, coach tool register_tournament_in_grade).
 // =============================================================================
 
 import { nanoid } from "nanoid";
@@ -63,13 +65,18 @@ export type LibraryAction =
 /**
  * Decisao pura de dedup. `candidates` ja vem coarse por (userId, site) — aqui
  * casamos pela key canonica (`libraryCanonicalKey`: snap de buy-in, type na key,
- * timeBin de `time`, dayOfWeek na key; speed/name FORA) e pelo estado deletedAt.
+ * timeBin de `time`, dayOfWeek NAO na key) e pelo estado deletedAt.
  *
+ * Comportamento:
  * - planned ja linkado (libraryTemplateId) → skip (idempotencia)
  * - sem userId/name/site → skip (dado insuficiente)
  * - match ativo pela key canonica → link (planned aponta pro template existente)
  * - so match trashed → skip (respeita exclusao deliberada do user — D5)
- * - sem match → create
+ * - sem match → create (cria entrada na biblioteca para uso futuro)
+ *
+ * NOTE: A chave canonica NAO inclui dayOfWeek, então tournaments com o mesmo
+ * nome/buy-in/horario em dias diferentes compartilham a mesma key e sao
+ * deduplicados na Biblioteca.
  */
 export function decideLibraryAction(
   planned: PlannedLike,
@@ -87,6 +94,7 @@ export function decideLibraryAction(
   if (active) return { action: "link", templateId: active.id };
   // So restou match trashed → respeita a exclusao deliberada do user.
   if (matches.length > 0) return { action: "skip" };
+  // Sem match: cria na Biblioteca (sera deduplicado pela chave canonica)
   return { action: "create" };
 }
 
@@ -127,6 +135,7 @@ export async function ensureLibraryEntryForPlanned(
   if (decision.action === "skip") return null;
 
   if (decision.action === "link") {
+    // Vincula planned a entrada existente na Biblioteca
     if (planned.id) {
       await db
         .update(plannedTournaments)
@@ -136,8 +145,7 @@ export async function ensureLibraryEntryForPlanned(
     return decision.templateId;
   }
 
-  // action === "create" — coercoes create-only (nao participam mais do dedup,
-  // que e por libraryCanonicalKey em memoria).
+  // action === "create" — cria entrada na Biblioteca
   const templateId = nanoid();
   await db.insert(tournamentLibrary).values({
     id: templateId,
@@ -150,7 +158,7 @@ export async function ensureLibraryEntryForPlanned(
     type: planned.type ?? null,
     speed: planned.speed ?? null,
     fieldSize: planned.fieldSize ?? null,
-    source: "manual",
+    source: "grind-live",
     dayOfWeek: typeof planned.dayOfWeek === "number" ? planned.dayOfWeek : null,
     currency: planned.currency ?? "USD",
     allowsAddOn: planned.allowsAddOn ?? false,

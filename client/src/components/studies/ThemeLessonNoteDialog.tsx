@@ -93,16 +93,28 @@ export function ThemeLessonNoteDialog({
   const [lessonQuery, setLessonQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [lessonPopoverOpen, setLessonPopoverOpen] = useState(false);
+  // Captura o conteudo do editor apos cada auto-save do NoteEditor.
+  const [currentContent, setCurrentContent] = useState<any[]>([]);
 
   // Busca aulas da Biblioteca.
   const { data: lessons = [] } = useQuery<LibraryLessonSearchItem[]>({
     queryKey: ["/api/library/lessons/search", lessonQuery],
-    queryFn: () => apiRequest("GET", "/api/library/lessons/search?q="),
+    queryFn: () => apiRequest("GET", `/api/library/lessons/search?q=${encodeURIComponent(lessonQuery)}`),
     enabled: true,
     staleTime: 30_000,
   });
 
   // Pre-filtra por linkedLessons quando disponivel.
+
+  // Hydrate currentContent quando abre.
+  useEffect(() => {
+    if (!open) return;
+    if (isEdit) {
+      setCurrentContent(initialNote?.content ?? []);
+    } else {
+      setCurrentContent([]);
+    }
+  }, [open, isEdit, initialNote]);
   const filteredLessons = theme.linkedLessons && theme.linkedLessons.length > 0
     ? lessons.filter((l) => (theme.linkedLessons as string[]).includes(l.id))
     : lessons;
@@ -132,25 +144,16 @@ export function ThemeLessonNoteDialog({
     setLessonPopoverOpen(false);
   };
 
-  // Atualiza o editor quando initialNote muda (edit mode).
-  useEffect(() => {
-    if (isEdit && initialNote && editorRef.current) {
-      // O NoteEditor ja carrega initialContent via props; forcamos via
-      // uma abordagem simples: setamos o estado local e o editor responde.
-    }
-  }, [isEdit, initialNote]);
-
   const canSave = selectedLesson && title.trim().length > 0;
 
   const handleSave = async () => {
     if (!canSave || !selectedLesson) return;
     setSaving(true);
     try {
-      const content = initialNote?.content ?? [];
       await onSave({
         lessonId: selectedLesson.id,
         title: title.trim(),
-        content,
+        content: currentContent,
       });
       onOpenChange(false);
     } catch (err: any) {
@@ -264,11 +267,11 @@ export function ThemeLessonNoteDialog({
             <Label className="text-xs font-medium text-muted-foreground">Anotacoes</Label>
             <div data-testid="note-editor-wrapper" className="rounded border border-gray-700 overflow-hidden">
               <NoteEditor
+                key={isEdit ? `edit-${initialNote!.id}` : "new-note"}
                 tabId={isEdit ? initialNote!.id : "new-note"}
                 initialContent={isEdit ? (initialNote?.content ?? []) : []}
                 onSave={(_tabId, content) => {
-                  // Auto-save: o NoteEditor faz debounce internamente.
-                  // Guardamos o conteudo no estado local para enviar no save.
+                  setCurrentContent(content);
                 }}
                 readOnly={false}
               />

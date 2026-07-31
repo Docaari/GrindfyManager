@@ -17,15 +17,15 @@ import { useTournamentDialogForm } from "./useTournamentDialogForm";
 
 const COMMON_SITES = [
   "PokerStars",
-  "GGNetwork",
+  "GGPoker",
   "WPN",
   "PartyPoker",
   "888poker",
   "Bodog",
   "CoinPoker",
   "Chico",
-  "Revolution",
   "iPoker",
+  "WPT Global",
 ];
 
 const TYPE_OPTIONS = ["Vanilla", "PKO", "Mystery", "Satellite", "Bounty"];

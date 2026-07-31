@@ -3,12 +3,17 @@
  * Sprint biblioteca-administrar-dedup / Fatia 1 / ADR-200 Parte A.
  *
  * Unica definicao de "mesmo torneio" consumida por TODOS os caminhos de dedup:
+ *   - server/routes/tournament-library.ts (POST — dedup manual)
  *   - server/services/libraryAutoPopulate (decideLibraryAction / ensureLibraryEntryForPlanned)
  *   - shared/library-dedup (filterNewTournaments)
  *   - deteccao de grupos de merge + backfill + sinal de lixeira (fatias futuras)
  *
- * Formato (5 componentes separados por "|"):
- *   `${site}|${dayOfWeek}|${timeBin}|${canonicalBuyIn}|${typePrimary}`
+ * Formato (4 componentes separados por "|"):
+ *   `${site}|${timeBin}|${canonicalBuyIn}|${typePrimary}`
+ *
+ * NOTE: dayOfWeek NAO esta na key — torneios recorrentes (mesmo nome/horario)
+ * em dias diferentes compartilham a mesma key e sao deduplicados na biblioteca.
+ * O dayOfWeek e usado apenas no Grade Planner para agendar em dias especificos.
  *
  * Funcao PURA, deterministica, sem I/O, sem Date.now()/random (lesson #36).
  * REUSA (nao reimplementa):
@@ -20,9 +25,6 @@
 import { canonicalBuyIn } from "./canonical-buy-in";
 import { enrichTournamentTypeFields } from "./tournament-type-detector";
 import { timeBin2h, NO_TIME_BIN } from "./time-bin";
-
-/** Token usado quando dayOfWeek e null/ausente — isola das entries com dia. */
-export const NO_DAY = "sem-dia";
 
 /** Entry/planned-like minima relevante para a key canonica. */
 export interface CanonicalKeyEntry {
@@ -52,15 +54,10 @@ function timeBinFromTime(time: string | null | undefined): string {
 
 /**
  * Key canonica deterministica de uma entry de biblioteca/planned.
- * Ver ADR-200 Parte A para a derivacao de cada dimensao.
+ * Exclui dayOfWeek: mesmo torneio em dias diferentes (recorrente) tem a mesma key.
  */
 export function libraryCanonicalKey(entry: CanonicalKeyEntry): string {
   const site = (entry.site ?? "Unknown").toString();
-
-  const dayOfWeek =
-    typeof entry.dayOfWeek === "number" && Number.isFinite(entry.dayOfWeek)
-      ? String(entry.dayOfWeek)
-      : NO_DAY;
 
   const timeBin = timeBinFromTime(entry.time);
 
@@ -73,5 +70,5 @@ export function libraryCanonicalKey(entry: CanonicalKeyEntry): string {
     category: cat,
   }).type;
 
-  return `${site}|${dayOfWeek}|${timeBin}|${canonBuyIn}|${typePrimary}`;
+  return `${site}|${timeBin}|${canonBuyIn}|${typePrimary}`;
 }

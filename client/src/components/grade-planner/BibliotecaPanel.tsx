@@ -71,6 +71,8 @@ export function BibliotecaPanel({
   const [filterCurrency, setFilterCurrency] = useState<string>(persistedInit.filterCurrency);
   const [filterMinBuyIn, setFilterMinBuyIn] = useState<string>(persistedInit.filterMinBuyIn);
   const [filterMaxBuyIn, setFilterMaxBuyIn] = useState<string>(persistedInit.filterMaxBuyIn);
+  const [filterTimeFrom, setFilterTimeFrom] = useState<string>(persistedInit.filterTimeFrom);
+  const [filterTimeTo, setFilterTimeTo] = useState<string>(persistedInit.filterTimeTo);
   const [sortMode, setSortMode] = useState<string>(persistedInit.sortMode);
 
   // Persiste filtros a cada mudanca. `search` fica de fora de proposito —
@@ -89,9 +91,11 @@ export function BibliotecaPanel({
       filterCurrency,
       filterMinBuyIn,
       filterMaxBuyIn,
+      filterTimeFrom,
+      filterTimeTo,
       sortMode,
     });
-  }, [filterType, filterSpeed, filterSites, filterCurrency, filterMinBuyIn, filterMaxBuyIn, sortMode]);
+  }, [filterType, filterSpeed, filterSites, filterCurrency, filterMinBuyIn, filterMaxBuyIn, filterTimeFrom, filterTimeTo, sortMode]);
 
   // Manual add form state
   const [addSite, setAddSite] = useState("");
@@ -200,6 +204,8 @@ export function BibliotecaPanel({
       currencies: filterCurrency ? [filterCurrency] : undefined,
       minBuyIn: filterMinBuyIn ? parseFloat(filterMinBuyIn) : undefined,
       maxBuyIn: filterMaxBuyIn ? parseFloat(filterMaxBuyIn) : undefined,
+      startTime: filterTimeFrom || undefined,
+      endTime: filterTimeTo || undefined,
     });
 
     // Sort
@@ -258,12 +264,15 @@ export function BibliotecaPanel({
     setFilterCurrency(DEFAULT_BIBLIOTECA_FILTERS.filterCurrency);
     setFilterMinBuyIn(DEFAULT_BIBLIOTECA_FILTERS.filterMinBuyIn);
     setFilterMaxBuyIn(DEFAULT_BIBLIOTECA_FILTERS.filterMaxBuyIn);
+    setFilterTimeFrom(DEFAULT_BIBLIOTECA_FILTERS.filterTimeFrom);
+    setFilterTimeTo(DEFAULT_BIBLIOTECA_FILTERS.filterTimeTo);
     setSearch("");
   };
 
   const hasActiveFilters =
     filterType || filterSpeed || filterSites.length > 0 ||
-    filterCurrency || filterMinBuyIn || filterMaxBuyIn;
+    filterCurrency || filterMinBuyIn || filterMaxBuyIn ||
+    filterTimeFrom || filterTimeTo;
 
   // =========================================================================
   // Collapsed mode
@@ -456,6 +465,25 @@ export function BibliotecaPanel({
                 value={filterMaxBuyIn}
                 onChange={(e) => setFilterMaxBuyIn(e.target.value)}
                 placeholder="Buy-in max"
+                className="bg-gray-800 border-gray-600 text-xs h-8 flex-1"
+              />
+            </div>
+            {/* Time range */}
+            <div className="flex gap-2 items-center">
+              <span className="text-xs text-gray-400 whitespace-nowrap">Hor&aacute;rio:</span>
+              <Input
+                type="time"
+                value={filterTimeFrom}
+                onChange={(e) => setFilterTimeFrom(e.target.value)}
+                placeholder="De"
+                className="bg-gray-800 border-gray-600 text-xs h-8 flex-1"
+              />
+              <span className="text-xs text-gray-500">at&eacute;</span>
+              <Input
+                type="time"
+                value={filterTimeTo}
+                onChange={(e) => setFilterTimeTo(e.target.value)}
+                placeholder="At&eacute;"
                 className="bg-gray-800 border-gray-600 text-xs h-8 flex-1"
               />
             </div>

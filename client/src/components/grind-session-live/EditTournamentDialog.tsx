@@ -39,16 +39,14 @@ export default function EditTournamentDialog({
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-600">
                   <SelectItem value="PokerStars">PokerStars</SelectItem>
-                  <SelectItem value="GGNetwork">GGNetwork</SelectItem>
+                  <SelectItem value="GGPoker">GGPoker</SelectItem>
                   <SelectItem value="PartyPoker">PartyPoker</SelectItem>
                   <SelectItem value="888Poker">888Poker</SelectItem>
                   <SelectItem value="WPN">WPN</SelectItem>
                   <SelectItem value="iPoker">iPoker</SelectItem>
                   <SelectItem value="Chico">Chico</SelectItem>
                   <SelectItem value="CoinPoker">CoinPoker</SelectItem>
-                  <SelectItem value="Revolution">Revolution</SelectItem>
                   <SelectItem value="Bodog">Bodog</SelectItem>
-                  <SelectItem value="Suprema">Suprema</SelectItem>
                   <SelectItem value="WPT Global">WPT Global</SelectItem>
                 </SelectContent>
               </Select>

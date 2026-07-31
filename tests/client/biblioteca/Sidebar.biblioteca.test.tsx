@@ -55,14 +55,14 @@ vi.mock('@/components/ImprovementSuggestionModal', () => ({
 import Sidebar from '../../../client/src/components/Sidebar';
 
 describe('<Sidebar> — RF-12 naming "Torneios" + nova "Biblioteca"', () => {
-  it('deve renderizar item DADOS apontando para /library com label "Torneios"', () => {
+  it('NAO deve mais ter item /library na barra (acesso por Grade)', () => {
+    // Decisão do founder (2026-07-31): "Torneios" saiu da barra lateral porque a
+    // biblioteca de torneios já é alcançável de dentro de "Grade". O teste antes
+    // exigia o item; agora garante que ele não voltou.
     render(<Sidebar />);
-    // Buscar todos os links — esperamos pelo menos um para /library com texto Torneios
     const links = Array.from(document.querySelectorAll('a'));
-    const torneiosLink = links.find(
-      (a) => a.getAttribute('href') === '/library' && /torneios/i.test(a.textContent || '')
-    );
-    expect(torneiosLink).toBeDefined();
+    const libraryLink = links.find((a) => a.getAttribute('href') === '/library');
+    expect(libraryLink).toBeUndefined();
   });
 
   it('NAO deve mais ter item /library com texto exato "Biblioteca"', () => {

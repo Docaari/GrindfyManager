@@ -101,9 +101,7 @@ export default function AddTournamentDialog({
                 <option value="Chico">Chico</option>
                 <option value="iPoker">iPoker</option>
                 <option value="CoinPoker">CoinPoker</option>
-                <option value="Revolution">Revolution</option>
                 <option value="Bodog">Bodog</option>
-                <option value="Suprema">Suprema</option>
                 <option value="WPT Global">WPT Global</option>
               </select>
             </div>

@@ -13,6 +13,7 @@ import { validateGradeHours } from "@shared/grade-hours";
 import { extractImportableTournaments } from "@shared/library-import";
 import { processSupremaSync } from "@shared/library-suprema-sync";
 import { calculateProfileComparison } from "@shared/profile-comparison";
+import { libraryCanonicalKey } from "@shared/library-canonical-key";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { eq, and, isNull, isNotNull, lte, desc, inArray } from "drizzle-orm";
@@ -495,12 +496,36 @@ export function registerTournamentLibraryRoutes(app: Express): void {
   });
 
   // =========================================================================
-  // POST /api/tournament-library — Add tournament manually
+  // POST /api/tournament-library — Add tournament manually (dedup by canonical key)
   // =========================================================================
   app.post('/api/tournament-library', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
       const data = insertTournamentLibrarySchema.parse({ ...req.body, userId });
+
+      // Dedup: check if tournament with same canonical key already exists
+      const incomingKey = libraryCanonicalKey({
+        site: data.site,
+        buyIn: data.buyIn,
+        time: data.time,
+        type: data.type,
+        dayOfWeek: data.dayOfWeek ?? undefined,
+      });
+
+      const existing = await db
+        .select()
+        .from(tournamentLibrary)
+        .where(
+          and(
+            eq(tournamentLibrary.userId, userId),
+            isNull(tournamentLibrary.deletedAt),
+          )
+        );
+
+      const match = existing.find((t) => libraryCanonicalKey(t) === incomingKey);
+      if (match) {
+        return res.json(match); // Return existing, don't duplicate
+      }
 
       const [created] = await db
         .insert(tournamentLibrary)

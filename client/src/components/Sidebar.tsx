@@ -14,7 +14,6 @@ import {
   Calendar,
   PlayCircle,
   Brain,
-  Trophy,
   Settings,
   BookOpen,
   Calculator,
@@ -32,7 +31,6 @@ import {
   MessageSquare,
   Wallet,
   GraduationCap,
-  Layers,
   HelpCircle,
   ChevronDown,
   ChevronUp,
@@ -127,11 +125,17 @@ const Sidebar: React.FC = () => {
   const pendingSpotsCount = pendingSpotsState.count;
   const pendingSpotsBadgeText = pendingSpotsState.badgeText;
 
-  // Sidebar reform 2026-05-03 (Opcao A — workflow conservador).
-  // 5 grupos: VISAO / JOGAR / ESTUDAR / UTILIDADES / ADMIN.
-  // URLs preservadas (zero migration). Banca sobe pra Visao.
-  // Coach IA migra pra Estudar (transversal). Torneios vira Estudar (historico).
-  // Import migra pra Utilidades (acao esporadica).
+  // Sidebar reform 2026-05-03 (Opcao A — workflow conservador), revisada em
+  // 2026-07-31 a pedido do founder:
+  //   - grupo EM TESTE agrupa o que ainda nao esta validado em uso real
+  //     (Banca, Mental, Estudos, Coach IA, Biblioteca), separando o que ele usa
+  //     todo dia do que ainda esta amadurecendo;
+  //   - itens "Torneios" e "Flight" saem da barra: os dois ja tem acesso dentro
+  //     de "Grade" (aba de flights e a biblioteca de torneios), entao eram porta
+  //     duplicada para o mesmo lugar;
+  //   - grupo ESTUDAR deixa de existir, pois todos os seus itens ou viraram
+  //     EM TESTE ou foram removidos.
+  // URLs preservadas (zero migration) — mudou so o agrupamento.
   const menuSections = [
     {
       slug: 'visao',
@@ -139,10 +143,8 @@ const Sidebar: React.FC = () => {
       items: [
         { path: '/', icon: User, label: 'Inicio', adminOnly: false },
         { path: '/dashboard', icon: BarChart3, label: 'Dashboard', adminOnly: false },
-        { path: '/bankroll', icon: Wallet, label: 'Banca', adminOnly: false },
-        // ADR-241 — Metas (placar + calendario) e Analise Mental (antes orfaos).
+        // ADR-241 — Metas (placar + calendario).
         { path: '/metas', icon: Target, label: 'Metas', adminOnly: false },
-        { path: '/analise-mental', icon: Activity, label: 'Mental', adminOnly: false },
       ]
     },
     {
@@ -152,18 +154,17 @@ const Sidebar: React.FC = () => {
         { path: '/coach', icon: Calendar, label: 'Grade', adminOnly: false },
         { path: '/mental', icon: Brain, label: 'Warm Up', adminOnly: false },
         { path: '/grind', icon: Gamepad2, label: 'Grind', adminOnly: false },
-        // Sprint coach-page-reform-1 RF-07.2: aponta para aba dentro de /coach.
-        { path: '/coach?tab=flights', icon: Layers, label: 'Flight', adminOnly: false },
       ]
     },
     {
-      slug: 'estudar',
-      title: 'ESTUDAR',
+      slug: 'em-teste',
+      title: 'EM TESTE',
       items: [
+        { path: '/bankroll', icon: Wallet, label: 'Banca', adminOnly: false },
+        { path: '/analise-mental', icon: Activity, label: 'Mental', adminOnly: false },
         { path: '/estudos', icon: BookOpen, label: 'Estudos', adminOnly: false },
         { path: '/coach-ai', icon: MessageSquare, label: 'Coach IA', adminOnly: false },
         { path: '/biblioteca', icon: GraduationCap, label: 'Biblioteca', adminOnly: false },
-        { path: '/library', icon: Trophy, label: 'Torneios', adminOnly: false },
       ]
     },
     {
