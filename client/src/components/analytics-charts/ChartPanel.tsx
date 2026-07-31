@@ -70,8 +70,11 @@ export function ChartPanel({
   );
   const total = valid.reduce((a, i) => a + Number(i.value), 0);
 
+  // `h-full w-full` é obrigatório: vários gráficos usam
+  // `<ResponsiveContainer height="100%">`, que mede o PAI. Sem herdar a altura,
+  // este wrapper media 0 e o gráfico sumia da tela.
   return (
-    <div className={`relative ${className ?? ""}`}>
+    <div className={`relative h-full w-full ${className ?? ""}`}>
       {valid.length > 0 && (
         <div
           className="pointer-events-auto absolute left-0 top-0 z-10 rounded-lg border border-gray-700/70 bg-gray-900/80 px-3 py-2 shadow-lg backdrop-blur-sm"

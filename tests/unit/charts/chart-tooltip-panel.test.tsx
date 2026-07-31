@@ -122,6 +122,20 @@ describe("ChartPanel", () => {
     expect(screen.getByTestId("chart-value-list").textContent).toContain("69.6%");
   });
 
+  it("herda a altura do pai (ResponsiveContainer height=100% mede o pai)", () => {
+    // Sem `h-full w-full` o wrapper media 0 e os gráficos que usam altura
+    // percentual (velocidade, período, posição) sumiam da tela.
+    const { container } = render(
+      <ChartPanel items={items}>
+        <div />
+      </ChartPanel>,
+    );
+    const wrapper = container.firstChild as HTMLElement;
+    expect(wrapper.className).toContain("relative");
+    expect(wrapper.className).toContain("h-full");
+    expect(wrapper.className).toContain("w-full");
+  });
+
   it("sem itens não desenha a lista (não polui gráfico vazio)", () => {
     render(
       <ChartPanel items={[]}>

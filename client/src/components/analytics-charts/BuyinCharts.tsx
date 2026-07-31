@@ -58,7 +58,7 @@ export default function BuyinCharts({ type, data, period = "all" }: AnalyticsCha
 
     case 'buyinProfit':
       return (
-
+        <ChartPanel items={panelItems(data, 'buyinRange', 'profit', CHART_COLORS.buyins)} kind="currency">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -110,6 +110,7 @@ export default function BuyinCharts({ type, data, period = "all" }: AnalyticsCha
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+        </ChartPanel>
       );
 
     case 'buyinProfitWithValues': {
