@@ -26,16 +26,23 @@ export interface FieldSizeBucket {
   min: number;
   /** Limite superior (exclusivo). `null` = sem teto. */
   max: number | null;
-  /** Cor do menor (frio) ao maior (quente) campo. */
+  /**
+   * Cor da faixa. As faixas são ORDINAIS (tamanho crescente), então a paleta é
+   * de UMA matiz com luminosidade monotônica — não um arco-íris. Em fundo
+   * escuro a rampa cresce do escuro para o claro, mantendo o campo maior mais
+   * destacado. Validada com o validador de paleta (superfície #111827):
+   * lightness monotônica, gaps >= 0.06, matiz única (spread 3 graus) e o passo
+   * mais escuro em 2.19:1 contra o fundo.
+   */
   color: string;
 }
 
 export const FIELD_SIZE_BUCKETS: readonly FieldSizeBucket[] = Object.freeze([
-  Object.freeze({ id: "low", label: "Low (<200)", min: 0, max: 200, color: "#60a5fa" }),
-  Object.freeze({ id: "medium", label: "Medium (200-500)", min: 200, max: 500, color: "#34d399" }),
-  Object.freeze({ id: "big", label: "Big (500-1500)", min: 500, max: 1500, color: "#fbbf24" }),
-  Object.freeze({ id: "bigbig", label: "Big Big (1500-5000)", min: 1500, max: 5000, color: "#f97316" }),
-  Object.freeze({ id: "giant", label: "Giant (5000+)", min: 5000, max: null, color: "#ef4444" }),
+  Object.freeze({ id: "low", label: "Low (<200)", min: 0, max: 200, color: "#184f95" }),
+  Object.freeze({ id: "medium", label: "Medium (200-500)", min: 200, max: 500, color: "#256abf" }),
+  Object.freeze({ id: "big", label: "Big (500-1500)", min: 500, max: 1500, color: "#3987e5" }),
+  Object.freeze({ id: "bigbig", label: "Big Big (1500-5000)", min: 1500, max: 5000, color: "#6da7ec" }),
+  Object.freeze({ id: "giant", label: "Giant (5000+)", min: 5000, max: null, color: "#9ec5f4" }),
 ]);
 
 /** Faixa de um field. `null` quando o torneio não informa participantes. */
@@ -52,6 +59,29 @@ export function bucketForFieldSize(fieldSize: unknown): FieldSizeBucket | null {
 /** Rótulo da faixa, ou null. Atalho para uso em UI. */
 export function fieldSizeBucketLabel(fieldSize: unknown): string | null {
   return bucketForFieldSize(fieldSize)?.label ?? null;
+}
+
+/**
+ * Par divergente para valores COM SINAL (lucro, ROI) — polaridade não é ordem,
+ * então esses gráficos não usam a rampa das faixas.
+ *
+ * Escolhido com o validador: `emerald-500 x rose-500`, usado antes no app,
+ * reprova (ΔE 5.6 em deuteranopia, abaixo do piso 6 — indistinguíveis para quem
+ * não enxerga verde/vermelho). Este par passa todos os checks no fundo escuro,
+ * com ΔE 7.2, que é legal porque o sinal também é codificado pela posição da
+ * barra em relação ao zero e pelo valor no rótulo.
+ */
+export const DELTA_COLORS = Object.freeze({
+  positive: "#199e70",
+  negative: "#d03b3b",
+  neutral: "#6b7280",
+});
+
+/** Cor de um valor com sinal. */
+export function colorForSignedValue(value: unknown): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return DELTA_COLORS.neutral;
+  return n > 0 ? DELTA_COLORS.positive : DELTA_COLORS.negative;
 }
 
 /** Mapa rótulo -> cor, no formato que os gráficos consomem. */

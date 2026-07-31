@@ -4,7 +4,7 @@ import { ChartPanel, panelItems } from './ChartPanel';
 import { AnalyticsChartsProps, generateTimeLabels, formatCurrencyBR, CHART_COLORS } from './chartUtils';
 // ADR-243: cor por FAIXA DE FIELD vem da mesma fonte que define os limites,
 // para rótulo e cor nunca divergirem entre backend e gráfico.
-import { FIELD_SIZE_BUCKET_COLORS } from '@shared/field-size-buckets';
+import { FIELD_SIZE_BUCKET_COLORS, colorForSignedValue } from '@shared/field-size-buckets';
 
 export default function ParticipantsCharts({ type, data, period = "all" }: AnalyticsChartsProps) {
   switch (type) {
@@ -39,19 +39,22 @@ export default function ParticipantsCharts({ type, data, period = "all" }: Analy
                 cy="50%"
                 outerRadius={90}
                 dataKey="value"
-                fill="#ec4899"
                 label={({ percent }) => {
                   const percentage = percent * 100;
                   return percentage > 15 ? `${percentage.toFixed(1)}%` : '';
                 }}
                 labelLine={false}
               >
+                {/* Anel da cor da superfície separa as fatias (2px). O realce
+                    verde que a maior fatia tinha foi removido: verde lê como
+                    "bom", e a faixa de maior volume não é necessariamente a
+                    melhor — a lista de valores ao lado já diz qual é a maior. */}
                 {volumeData.map((entry: any, index: number) => (
                   <Cell
                     key={`volume-cell-${index}`}
                     fill={FIELD_SIZE_BUCKET_COLORS[entry.name] ?? CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]}
-                    stroke={index === maxVolumeIndex ? '#24c25e' : 'transparent'}
-                    strokeWidth={index === maxVolumeIndex ? 3 : 0}
+                    stroke="#111827"
+                    strokeWidth={2}
                   />
                 ))}
               </Pie>
@@ -114,11 +117,14 @@ export default function ParticipantsCharts({ type, data, period = "all" }: Analy
                     cursor={{ fill: 'rgba(148,163,184,0.08)' }}
                     content={<ChartTooltip kind="currency" />}
                   />
-              <Bar dataKey="profit" fill="#ec4899" maxBarSize={60} radius={[4, 4, 0, 0]}>
+              {/* Lucro tem POLARIDADE: cor divergente pelo sinal, não pela faixa.
+                  O par vem validado em `shared/field-size-buckets` — o
+                  verde/vermelho anterior reprovava em daltonismo. */}
+              <Bar dataKey="profit" maxBarSize={60} radius={[4, 4, 0, 0]}>
                 {profitData.map((entry: any, index: number) => (
                   <Cell
                     key={`profit-cell-${index}`}
-                    fill={entry.profit >= 0 ? '#10b981' : '#ef4444'}
+                    fill={colorForSignedValue(entry.profit)}
                   />
                 ))}
               </Bar>
@@ -176,11 +182,14 @@ export default function ParticipantsCharts({ type, data, period = "all" }: Analy
                     cursor={{ fill: 'rgba(148,163,184,0.08)' }}
                     content={<ChartTooltip kind="percent" />}
                   />
-              <Bar dataKey="roi" fill="#ec4899" maxBarSize={60} radius={[4, 4, 0, 0]}>
+              {/* ROI usa a MESMA escala divergente do lucro: mesmo conceito
+                  (positivo x negativo) tem que ter a mesma cor. Antes era
+                  azul/laranja, o que fazia o leitor reaprender a legenda. */}
+              <Bar dataKey="roi" maxBarSize={60} radius={[4, 4, 0, 0]}>
                 {roiData.map((entry: any, index: number) => (
                   <Cell
                     key={`roi-cell-${index}`}
-                    fill={entry.roi >= 0 ? '#3b82f6' : '#f59e0b'}
+                    fill={colorForSignedValue(entry.roi)}
                   />
                 ))}
               </Bar>
@@ -233,11 +242,16 @@ export default function ParticipantsCharts({ type, data, period = "all" }: Analy
                     cursor={{ fill: 'rgba(148,163,184,0.08)' }}
                     content={<ChartTooltip kind="percent" />}
                   />
-              <Bar dataKey="itmRate" fill="#ec4899" maxBarSize={60} radius={[4, 4, 0, 0]}>
+              {/* ITM não tem polaridade e ITM alto NÃO é sinônimo de bom — no
+                  histórico do founder a faixa Giant tem o maior ITM (35%) e o
+                  pior ROI (-31%). O semáforo verde/amarelo/vermelho anterior
+                  julgava o valor e induzia a conclusão errada. Aqui a cor
+                  identifica a FAIXA; a altura da barra já mostra a magnitude. */}
+              <Bar dataKey="itmRate" maxBarSize={60} radius={[4, 4, 0, 0]}>
                 {itmData.map((entry: any, index: number) => (
                   <Cell
                     key={`itm-cell-${index}`}
-                    fill={entry.itmRate >= 50 ? '#10b981' : entry.itmRate >= 25 ? '#f59e0b' : '#ef4444'}
+                    fill={FIELD_SIZE_BUCKET_COLORS[entry.range] ?? '#3987e5'}
                   />
                 ))}
               </Bar>
@@ -362,10 +376,10 @@ export default function ParticipantsCharts({ type, data, period = "all" }: Analy
               <Line
                 type="monotone"
                 dataKey="fieldSizeMedio"
-                stroke="#ec4899"
+                stroke="#3987e5"
                 strokeWidth={4}
-                dot={{ r: 6, strokeWidth: 2, fill: '#ec4899' }}
-                activeDot={{ r: 8, strokeWidth: 2, fill: '#ec4899' }}
+                dot={{ r: 6, strokeWidth: 2, fill: '#3987e5' }}
+                activeDot={{ r: 8, strokeWidth: 2, fill: '#3987e5' }}
               />
             </LineChart>
           </ResponsiveContainer>
