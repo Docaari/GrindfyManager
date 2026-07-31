@@ -10,6 +10,55 @@ import {
 import { parseFiltersParam, mapFiltersToBackendFormat } from "./helpers";
 import { invalidateUserTournamentCaches } from "../services/playerBundle";
 import { zodErrorResponse } from "../lib/zodErrorResponse";
+import { type GroupDim, DEFAULT_RECIPE } from "@shared/library-grouping-dims";
+import { DAY_KEYS } from "@shared/day-of-week";
+import { canonicalizeRecipe } from "../services/libraryGrouping";
+
+/**
+ * Parseia o param `groupBy` (csv) numa receita de dimensoes. Delega a validacao
+ * + dedup + reordenacao canonica ao `canonicalizeRecipe` (SSoT compartilhado com
+ * o agrupamento). Vazio / tudo-invalido -> DEFAULT_RECIPE (as 6 legadas).
+ */
+function parseGroupByRecipe(raw: unknown): GroupDim[] {
+  if (typeof raw !== "string" || !raw.trim()) return DEFAULT_RECIPE;
+  const canon = canonicalizeRecipe(raw.split(",").map((s) => s.trim()) as GroupDim[]);
+  return canon.length > 0 ? canon : DEFAULT_RECIPE;
+}
+
+/** Parseia o param `daysOfWeek` (csv) num array de DAY_KEYS validas. */
+function parseDaysOfWeek(raw: unknown): string[] {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((d) => DAY_KEYS.includes(d));
+}
+
+/**
+ * GET /api/tournament-library-grouped — view agregada por familias.
+ * Handler nomeado/testavel (lesson #34): injectedStorage opcional; em prod usa
+ * o storage importado. Sprint torneios-custom-families: aceita `groupBy` (receita
+ * de dimensoes) + `daysOfWeek` (filtro).
+ */
+export async function handleTournamentLibraryGrouped(
+  req: any,
+  res: any,
+  injectedStorage?: any,
+): Promise<void> {
+  const store = injectedStorage ?? storage;
+  try {
+    const userId = req.user.userPlatformId;
+    const period = (req.query.period as string) || "all";
+    const filters = parseFiltersParam(req.query.filters) || {};
+    filters.daysOfWeek = parseDaysOfWeek(req.query.daysOfWeek);
+    const recipe = parseGroupByRecipe(req.query.groupBy);
+
+    const library = await store.getTournamentLibrary(userId, period, filters, recipe);
+    res.json(library);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch tournament library" });
+  }
+}
 
 /**
  * ADR-243 — `dateTo` chega como `YYYY-MM-DD` (input de data). `new Date()` disso
@@ -223,18 +272,9 @@ export function registerTournamentRoutes(app: Express): void {
   });
 
   // Tournament Library - Agrupamento Inteligente (aggregated view for /library page)
-  app.get('/api/tournament-library-grouped', requireAuth, async (req: any, res) => {
-    try {
-      const userId = req.user.userPlatformId;
-      const period = req.query.period as string || "all";
-      const filters = parseFiltersParam(req.query.filters);
-
-      const library = await storage.getTournamentLibrary(userId, period, filters);
-      res.json(library);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch tournament library" });
-    }
-  });
+  app.get('/api/tournament-library-grouped', requireAuth, (req: any, res) =>
+    handleTournamentLibraryGrouped(req, res),
+  );
 
   // Fase 2 (library-evolution): insights "Destaques e Vazamentos" — dimensoes
   // (site/buyIn/type/speed/fieldSize/dia + conjuncoes) vs baseline do jogador.

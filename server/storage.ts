@@ -205,11 +205,13 @@ import { nanoid } from "nanoid";
 import { normalizeTournamentTypePayload } from "./storage/normalizeTournamentTypePayload";
 import { getDisplayRegistrationTime } from "@shared/grade-time";
 import { ensureLibraryEntryForPlannedSafe } from "./services/libraryAutoPopulate";
-import { groupTournaments, stripNameNoise, canonicalBuyIn, isExcludedFromLibrary, type GroupedFamily, type GroupedSpecific } from "./services/libraryGrouping";
+import { groupTournaments, stripNameNoise, canonicalBuyIn, isExcludedFromLibrary, parseFamilyKey, type GroupedFamily, type GroupedSpecific } from "./services/libraryGrouping";
+import { dayOfWeek } from "../shared/day-of-week";
+import { type GroupDim, DEFAULT_RECIPE } from "../shared/library-grouping-dims";
 import { timeBinLabel, NO_TIME_BIN } from "../shared/time-bin";
 import { confidenceGradeForVolume, MIN_GROUP_VISIBLE, FAMILY_GROUP_FLOOR } from "@shared/library-grades";
 import { computeLibraryInsights, type DimensionBucket, type Insight } from "./insights/libraryInsights";
-import { savedTournamentHighlights } from "@shared/schema";
+import { savedTournamentHighlights, tournamentGroupingViews, accountWorkspaces, workspaceMembers } from "@shared/schema";
 // Fase C #4 (ADR-232) — catalogo de tilt tipado (validacao de tiltType na agregacao).
 import { isValidTiltType, type TiltTypeId } from "@shared/tilt-types";
 // Fase C #3 (ADR-231) — síntese comportamental de leaks (helper puro).
@@ -3583,7 +3585,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     });
   }
 
-  async getTournamentLibrary(userId: string, period: string = "all", filters: any = {}): Promise<any[]> {
+  async getTournamentLibrary(userId: string, period: string = "all", filters: any = {}, recipe: GroupDim[] = DEFAULT_RECIPE): Promise<any[]> {
     // Base condition - always filter by user
     const baseConditions = [
       eq(tournaments.userId, userId),
@@ -3643,12 +3645,24 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
 
     // Sprint torneios-library-grouping (ajuste founder): desconsidera PLO /
     // Freeroll / buy-in 0 da biblioteca (nao do historico/dashboard).
-    const eligibleTournaments = allTournaments.filter((t: any) => !isExcludedFromLibrary(t));
+    let eligibleTournaments = allTournaments.filter((t: any) => !isExcludedFromLibrary(t));
+
+    // Sprint torneios-custom-families: filtro por dia da semana (em-memoria, sobre
+    // o conjunto elegivel, ANTES de agrupar). Vazio/ausente nao filtra.
+    const daysOfWeek: string[] = Array.isArray(filters?.daysOfWeek) ? filters.daysOfWeek : [];
+    if (daysOfWeek.length > 0) {
+      const daySet = new Set(daysOfWeek);
+      eligibleTournaments = eligibleTournaments.filter((t: any) =>
+        daySet.has(dayOfWeek(t.datePlayed ?? (t as any).startTime ?? null)),
+      );
+    }
 
     // Sprint library-evolution Fase 1: agrupamento deterministico 2 niveis
     // (familia coarse -> especificos fine). Substitui o matcher guloso O(n^2)
     // order-dependent + o piso rigido de 50. Ver server/services/libraryGrouping.ts.
-    const families = groupTournaments(eligibleTournaments);
+    // Sprint torneios-custom-families: `recipe` define quais dimensoes compoem a
+    // familia (default = as 6 legadas, chave byte-compativel).
+    const families = groupTournaments(eligibleTournaments, recipe);
 
     // Familias visiveis: >= FAMILY_GROUP_FLOOR torneios (lowConfidence se
     // < MIN_GROUP_VISIBLE). Antes da reforma um grinder com milhares de
@@ -4179,6 +4193,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     metrics?: any;
     reasons?: any;
     source?: string;
+    // Sprint torneios-custom-families (Fase 3): receita + filtros do card,
+    // para reproduzir o agrupamento. NULL recipe => receita default legada.
+    recipe?: any;
+    filters?: any;
   }): Promise<any> {
     // Idempotente: dedup por (userId, familyKey) — atualiza o snapshot se ja existe.
     const [row] = await db
@@ -4194,6 +4212,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         metrics: input.metrics ?? null,
         reasons: input.reasons ?? null,
         source: input.source ?? "overview",
+        recipe: input.recipe ?? null,
+        filters: input.filters ?? null,
       })
       .onConflictDoUpdate({
         target: [savedTournamentHighlights.userId, savedTournamentHighlights.familyKey],
@@ -4204,6 +4224,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           site: input.site,
           buyInTier: input.buyInTier ?? null,
           type: input.type ?? null,
+          recipe: input.recipe ?? null,
+          filters: input.filters ?? null,
         },
       })
       .returning();
@@ -4215,6 +4237,188 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .delete(savedTournamentHighlights)
       .where(and(eq(savedTournamentHighlights.id, id), eq(savedTournamentHighlights.userId, userId)))
       .returning({ id: savedTournamentHighlights.id });
+    return deleted.length > 0;
+  }
+
+  // ===========================================================================
+  // Sprint torneios-custom-families Fase 2 — Visões de agrupamento nomeadas
+  // (receitas reutilizáveis, PRIVADAS por usuário).
+  // ===========================================================================
+
+  async listGroupingViews(userId: string): Promise<any[]> {
+    try {
+      return await db
+        .select()
+        .from(tournamentGroupingViews)
+        .where(eq(tournamentGroupingViews.userId, userId))
+        .orderBy(desc(tournamentGroupingViews.createdAt));
+    } catch (error) {
+      console.error("listGroupingViews failed:", error);
+      return [];
+    }
+  }
+
+  async createGroupingView(input: {
+    userId: string;
+    name: string;
+    dims: any;
+    filters?: any;
+  }): Promise<any> {
+    const [row] = await db
+      .insert(tournamentGroupingViews)
+      .values({
+        id: nanoid(),
+        userId: input.userId,
+        name: input.name,
+        dims: input.dims,
+        filters: input.filters ?? null,
+      })
+      .returning();
+    return row;
+  }
+
+  async updateGroupingView(
+    userId: string,
+    id: string,
+    patch: { name?: string; dims?: any; filters?: any },
+  ): Promise<any | null> {
+    const set: any = { updatedAt: new Date() };
+    if (patch.name !== undefined) set.name = patch.name;
+    if (patch.dims !== undefined) set.dims = patch.dims;
+    if (patch.filters !== undefined) set.filters = patch.filters;
+    const [row] = await db
+      .update(tournamentGroupingViews)
+      .set(set)
+      // Ownership: só atualiza visão do próprio user.
+      .where(and(eq(tournamentGroupingViews.id, id), eq(tournamentGroupingViews.userId, userId)))
+      .returning();
+    return row ?? null;
+  }
+
+  async deleteGroupingView(userId: string, id: string): Promise<boolean> {
+    const deleted = await db
+      .delete(tournamentGroupingViews)
+      .where(and(eq(tournamentGroupingViews.id, id), eq(tournamentGroupingViews.userId, userId)))
+      .returning({ id: tournamentGroupingViews.id });
+    return deleted.length > 0;
+  }
+
+  // ===========================================================================
+  // Sprint torneios-custom-families Fase 4 — Workspace cross-conta.
+  // Founder/superadmin vincula contas direto (sem convite). Membros veem os
+  // cards salvos uns dos outros (snapshot CONGELADO — listWorkspaceSavedCards
+  // NUNCA chama getFamilyDetails nem consulta tournaments de outra conta).
+  // ≤1 workspace por user (UNIQUE em workspace_members.user_id).
+  // ===========================================================================
+
+  /** Workspace do user (membro) + nome, ou null se não vinculado. */
+  async getWorkspaceForUser(
+    userId: string,
+  ): Promise<{ workspaceId: string; name: string } | null> {
+    try {
+      const [member] = await db
+        .select()
+        .from(workspaceMembers)
+        .where(eq(workspaceMembers.userId, userId))
+        .limit(1);
+      if (!member) return null;
+      const [ws] = await db
+        .select()
+        .from(accountWorkspaces)
+        .where(eq(accountWorkspaces.id, member.workspaceId))
+        .limit(1);
+      return { workspaceId: member.workspaceId, name: ws?.name ?? "" };
+    } catch (error) {
+      console.error("getWorkspaceForUser failed:", error);
+      return null;
+    }
+  }
+
+  /** userIds dos co-membros do workspace do user (exclui o próprio); [] se sozinho. */
+  async listWorkspaceCoMemberIds(userId: string): Promise<string[]> {
+    const ws = await this.getWorkspaceForUser(userId);
+    if (!ws) return [];
+    const rows = await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, ws.workspaceId));
+    return rows.map((r: any) => r.userId).filter((id: string) => id !== userId);
+  }
+
+  /**
+   * Cards salvos dos co-membros do workspace (snapshot CONGELADO, verbatim). Cada
+   * card ganha um `origin: { userId }` para a UI rotular a procedência. NÃO
+   * re-deriva métricas no histórico do viewer (privacidade + congelamento).
+   */
+  async listWorkspaceSavedCards(userId: string): Promise<any[]> {
+    try {
+      const coMemberIds = await this.listWorkspaceCoMemberIds(userId);
+      if (coMemberIds.length === 0) return [];
+      const rows = await db
+        .select()
+        .from(savedTournamentHighlights)
+        .where(inArray(savedTournamentHighlights.userId, coMemberIds))
+        .orderBy(desc(savedTournamentHighlights.createdAt));
+      return rows.map((r: any) => ({ ...r, origin: { userId: r.userId } }));
+    } catch (error) {
+      console.error("listWorkspaceSavedCards failed:", error);
+      return [];
+    }
+  }
+
+  async createWorkspace(input: { name: string; createdBy: string }): Promise<any> {
+    const [row] = await db
+      .insert(accountWorkspaces)
+      .values({ id: nanoid(), name: input.name, createdBy: input.createdBy })
+      .returning();
+    return row;
+  }
+
+  async listWorkspaces(): Promise<any[]> {
+    const wss = await db
+      .select()
+      .from(accountWorkspaces)
+      .orderBy(desc(accountWorkspaces.createdAt));
+    const members = await db.select().from(workspaceMembers);
+    return wss.map((ws: any) => ({
+      ...ws,
+      members: members.filter((m: any) => m.workspaceId === ws.id),
+    }));
+  }
+
+  /**
+   * Adiciona um user a um workspace. ≤1 workspace por user (UNIQUE user_id) — em
+   * conflito retorna { ok:false, conflict:'already_in_workspace' }.
+   */
+  async addWorkspaceMember(input: {
+    workspaceId: string;
+    userId: string;
+    addedBy?: string;
+  }): Promise<{ ok: true; row: any } | { ok: false; conflict: string }> {
+    try {
+      const [row] = await db
+        .insert(workspaceMembers)
+        .values({
+          id: nanoid(),
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          addedBy: input.addedBy ?? null,
+        })
+        .onConflictDoNothing({ target: workspaceMembers.userId })
+        .returning();
+      if (!row) return { ok: false, conflict: "already_in_workspace" };
+      return { ok: true, row };
+    } catch (error) {
+      console.error("addWorkspaceMember failed:", error);
+      return { ok: false, conflict: "error" };
+    }
+  }
+
+  async removeWorkspaceMember(workspaceId: string, userId: string): Promise<boolean> {
+    const deleted = await db
+      .delete(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)))
+      .returning({ id: workspaceMembers.id });
     return deleted.length > 0;
   }
 
@@ -4230,21 +4434,26 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     familyKey: string,
   ): Promise<{ found: boolean; metrics: any; recentResults: any[] }> {
     try {
-      const site = String(familyKey).split("|")[0];
+      // Sprint torneios-custom-families: re-deriva a receita embutida na chave.
+      // Chave legada -> DEFAULT_RECIPE + site (1o segmento, prefiltro SQL). Chave
+      // g1: sem a dim site -> sem prefiltro por site (scan mais largo, correto).
+      const { recipe, site } = parseFamilyKey(familyKey);
+      const conditions = [
+        eq(tournaments.userId, userId),
+        isNull(tournaments.grindSessionId),
+      ];
+      if (site != null) conditions.push(eq(tournaments.site, site));
+
       const rows = await this.normalizeTournamentsToUsd(
         await db
           .select()
           .from(tournaments)
-          .where(and(
-            eq(tournaments.userId, userId),
-            isNull(tournaments.grindSessionId),
-            eq(tournaments.site, site),
-          ))
+          .where(and(...conditions))
           .orderBy(desc(tournaments.datePlayed)),
         userId,
       );
 
-      const fam = groupTournaments(rows).find((f) => f.familyKey === familyKey);
+      const fam = groupTournaments(rows, recipe).find((f) => f.familyKey === familyKey);
       if (!fam) return { found: false, metrics: null, recentResults: [] };
 
       const list = fam.tournaments;

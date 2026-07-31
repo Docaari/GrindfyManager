@@ -1221,14 +1221,29 @@ export function registerUploadRoutes(app: Express): void {
     }
   });
 
+  // Sprint torneios-custom-families (Fase 4): cards salvos das contas vinculadas
+  // (workspace). Snapshot CONGELADO da origem (read-only). Registrada ANTES de
+  // /:id/details (defensivo — segmento estatico vs :id).
+  app.get('/api/library/highlights/workspace', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      res.json(await storage.listWorkspaceSavedCards(userId));
+    } catch (error) {
+      console.error('highlights.workspace failed:', error);
+      res.status(500).json({ message: 'Erro ao listar cards do workspace' });
+    }
+  });
+
   app.post('/api/library/highlights', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;
-      const { site, familyKey, groupName, buyInTier, type, metrics, reasons, source } = req.body ?? {};
+      // Sprint torneios-custom-families (Fase 3): recipe + filters tornam o card
+      // reproduzível (carrega a própria receita/filtros).
+      const { site, familyKey, groupName, buyInTier, type, metrics, reasons, source, recipe, filters } = req.body ?? {};
       if (!site || !familyKey) {
         return res.status(400).json({ message: 'site e familyKey sao obrigatorios' });
       }
-      const row = await storage.saveHighlight({ userId, site, familyKey, groupName, buyInTier, type, metrics, reasons, source });
+      const row = await storage.saveHighlight({ userId, site, familyKey, groupName, buyInTier, type, metrics, reasons, source, recipe, filters });
       res.json(row);
     } catch (error) {
       console.error('highlights.save failed:', error);
