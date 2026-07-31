@@ -17,6 +17,13 @@ export interface ImportRejection {
   rowData?: Record<string, any>;
 }
 
+export interface QuarantineInfo {
+  /** Quantas linhas foram retidas, por rede. */
+  bySite: Record<string, number>;
+  /** Motivo por rede (texto exibido ao jogador). */
+  reasons: Array<{ site: string; reason: string }>;
+}
+
 export interface ImportReconciliationInput {
   parseReport: { rowsInFile: number; parsedCount: number; rejected: ImportRejection[] } | null;
   /** Linhas que o parser devolveu (antes de dedup). */
@@ -29,6 +36,8 @@ export interface ImportReconciliationInput {
   dbErrors: number;
   /** Amostra dos torneios gravados — usada para os avisos de qualidade. */
   tournaments?: Array<Record<string, any>>;
+  /** Linhas retidas por rede em quarentena (ADR-243). */
+  quarantine?: QuarantineInfo | null;
 }
 
 export interface ImportReconciliation {
@@ -42,6 +51,14 @@ export interface ImportReconciliation {
   rejectedSample: Array<{ rowNum: number; reason: string }>;
   /** Agrupamento "motivo -> quantidade" para exibir resumo. */
   rejectedByReason: Record<string, number>;
+  /**
+   * Linhas NÃO importadas por a rede estar em quarentena (export da origem
+   * inconsistente). Distinto de `rejected`: aqui o parser entendeu a linha, mas
+   * nós escolhemos não gravar. Ver `shared/quarantined-sites`.
+   */
+  quarantined: number;
+  quarantinedBySite: Record<string, number>;
+  quarantineReasons: Array<{ site: string; reason: string }>;
   /** Avisos de qualidade do lote gravado (nao bloqueiam o import). */
   warnings: string[];
 }
@@ -58,6 +75,20 @@ export function buildImportSummary(input: ImportReconciliationInput): ImportReco
   }
 
   const warnings: string[] = [];
+
+  // ADR-243: quarentena aparece PRIMEIRO nos avisos — é a informação mais
+  // importante para o jogador entender por que o total não bate com a origem.
+  const quarantine = input.quarantine ?? null;
+  const quarantinedTotal = quarantine
+    ? Object.values(quarantine.bySite).reduce((a, b) => a + b, 0)
+    : 0;
+  if (quarantine && quarantinedTotal > 0) {
+    for (const { site, reason } of quarantine.reasons) {
+      const n = quarantine.bySite[site] ?? 0;
+      warnings.push(`${n} torneios de ${site} NAO foram importados. ${reason}`);
+    }
+  }
+
   const rows = input.tournaments ?? [];
   if (rows.length > 0) {
     const noPosition = rows.filter((t) => !t.position).length;
@@ -103,6 +134,9 @@ export function buildImportSummary(input: ImportReconciliationInput): ImportReco
       .slice(0, REJECTED_SAMPLE_CAP)
       .map((r) => ({ rowNum: r.rowNum, reason: r.reason })),
     rejectedByReason,
+    quarantined: quarantinedTotal,
+    quarantinedBySite: quarantine?.bySite ?? {},
+    quarantineReasons: quarantine?.reasons ?? [],
     warnings,
   };
 }

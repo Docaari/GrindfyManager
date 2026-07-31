@@ -23,6 +23,9 @@ import { selectorCache } from "../services/selectorCache";
 // de upload usavam listas de campos divergentes; ver o modulo para o historico).
 import { mapParsedToInsertRows } from "../services/tournamentInsertMapper";
 import { buildImportSummary } from "../services/importReconciliation";
+// ADR-243 — redes cujo export está inconsistente na origem não são gravadas;
+// o jogador é avisado no relatório do import. Ver shared/quarantined-sites.
+import { splitQuarantined } from "@shared/quarantined-sites";
 // ADR-243 — cambio pela DATA de cada torneio (antes: taxa flat das settings).
 import { applyHistoricalFxToBatch } from "../services/fx/historicalFxResolver";
 
@@ -380,6 +383,16 @@ export function registerUploadRoutes(app: Express): void {
           console.error('upload.fx.historical_failed', fxErr);
         }
 
+        // ADR-243: retém redes em quarentena (export inconsistente na origem).
+        const quarantineA = splitQuarantined(tournaments, (t: any) => t.site);
+        tournaments = quarantineA.allowed as any;
+        if (quarantineA.quarantined.length > 0) {
+          console.warn('upload.quarantined_rows', {
+            userId: userPlatformId,
+            bySite: quarantineA.bySite,
+          });
+        }
+
         // VERIFICAR SE TOURNAMENTS TÊM USERID CORRETO
         const invalidTournaments = tournaments.filter(t => t.userId !== userPlatformId);
         if (invalidTournaments.length > 0) {
@@ -633,6 +646,10 @@ export function registerUploadRoutes(app: Express): void {
         console.error('check-duplicates.fx.historical_failed', fxErr);
       }
 
+      // ADR-243: mesma quarentena do import — o jogador ve o aviso ANTES de confirmar.
+      const quarantineC = splitQuarantined(parsedData, (t: any) => t.site);
+      parsedData = quarantineC.allowed as any;
+
       // Batch check for duplicates
       const validTournaments: typeof parsedData = [];
       const duplicateTournaments: typeof parsedData = [];
@@ -687,6 +704,7 @@ export function registerUploadRoutes(app: Express): void {
           inserted: 0,
           dbErrors: 0,
           tournaments: parsedData as any[],
+          quarantine: { bySite: quarantineC.bySite, reasons: quarantineC.reasons },
         }),
       });
 
@@ -767,6 +785,17 @@ export function registerUploadRoutes(app: Express): void {
         if (fxInfo?.applied > 0) console.info('upload.fx.historical_applied', fxInfo);
       } catch (fxErr) {
         console.error('upload.fx.historical_failed', fxErr);
+      }
+
+      // ADR-243: retém redes em quarentena ANTES do dedup — assim elas nem entram
+      // na conversa de duplicata, e o jogador vê o motivo no relatório.
+      const quarantineB = splitQuarantined(parsedData, (t: any) => t.site);
+      parsedData = quarantineB.allowed as any;
+      if (quarantineB.quarantined.length > 0) {
+        console.warn('upload.quarantined_rows', {
+          userId: userPlatformId,
+          bySite: quarantineB.bySite,
+        });
       }
 
       // Batch check duplicates
@@ -887,6 +916,7 @@ export function registerUploadRoutes(app: Express): void {
         inserted: successCount,
         dbErrors: errorCount,
         tournaments: tournamentsToSave as any[],
+        quarantine: { bySite: quarantineB.bySite, reasons: quarantineB.reasons },
       });
       try {
         if (uploadId) {
@@ -1699,7 +1729,16 @@ export async function handlePostUploadHistory(
       }
     }
 
-    const rows = mapParsedToInsertRows(validParsed, userPlatformId);
+    // ADR-243: quarentena tambem no endpoint /api/upload (paridade com os outros
+    // dois caminhos) — rede com export inconsistente nao chega ao INSERT.
+    const quarantineD = splitQuarantined(validParsed, (t: any) => t.site);
+    if (quarantineD.quarantined.length > 0) {
+      console.warn('upload.quarantined_rows', {
+        userId: userPlatformId,
+        bySite: quarantineD.bySite,
+      });
+    }
+    const rows = mapParsedToInsertRows(quarantineD.allowed, userPlatformId);
     const total = rows.length;
 
     if (total <= ASYNC_THRESHOLD) {

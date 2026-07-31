@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, FileText, ShieldAlert } from "lucide-react";
 
 export interface ImportReconciliation {
   rowsInFile: number | null;
@@ -20,6 +20,10 @@ export interface ImportReconciliation {
   dbErrors: number;
   rejectedSample?: Array<{ rowNum: number; reason: string }>;
   rejectedByReason?: Record<string, number>;
+  /** Linhas não importadas por a rede estar em quarentena (ADR-243). */
+  quarantined?: number;
+  quarantinedBySite?: Record<string, number>;
+  quarantineReasons?: Array<{ site: string; reason: string }>;
   warnings?: string[];
 }
 
@@ -60,7 +64,14 @@ function Metric({
 export function ImportReconciliationCard({ reconciliation: r, title, className }: Props) {
   const [showRejected, setShowRejected] = useState(false);
   const hasRejections = r.rejected > 0;
-  const warnings = r.warnings ?? [];
+  const quarantined = r.quarantined ?? 0;
+  const quarantineReasons = r.quarantineReasons ?? [];
+  const quarantinedBySite = r.quarantinedBySite ?? {};
+  // Os avisos de quarentena têm bloco próprio (mais destacado); não repetir na
+  // lista genérica de avisos.
+  const warnings = (r.warnings ?? []).filter(
+    (w) => !quarantineReasons.some((q) => w.includes(q.site) && w.includes("NAO foram importados")),
+  );
 
   return (
     <Card className={`bg-gray-800 border-gray-600 ${className ?? ""}`} data-testid="import-reconciliation">
@@ -71,6 +82,37 @@ export function ImportReconciliationCard({ reconciliation: r, title, className }
             {title ?? "Conferência do import"}
           </span>
         </div>
+
+        {/* ADR-243: rede em quarentena — o jogador precisa entender NA HORA por que
+            aqueles torneios não entraram. Fica acima dos números, em destaque. */}
+        {quarantined > 0 && (
+          <div
+            className="rounded-lg border border-amber-500/50 bg-amber-900/20 p-4 space-y-2"
+            data-testid="import-quarantine"
+          >
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-amber-400 flex-shrink-0" />
+              <span className="text-amber-200 font-semibold">
+                {quarantined} torneios não foram importados
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(quarantinedBySite).map(([site, n]) => (
+                <span
+                  key={site}
+                  className="px-2.5 py-1 rounded-full text-xs bg-amber-500/20 border border-amber-500/40 text-amber-100"
+                >
+                  {site}: {n}
+                </span>
+              ))}
+            </div>
+            {quarantineReasons.map((q) => (
+              <p key={q.site} className="text-sm text-amber-100/80 leading-relaxed">
+                {q.reason}
+              </p>
+            ))}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <Metric
@@ -116,7 +158,7 @@ export function ImportReconciliationCard({ reconciliation: r, title, className }
           </ul>
         )}
 
-        {!hasRejections && warnings.length === 0 && (
+        {!hasRejections && warnings.length === 0 && quarantined === 0 && (
           <p className="flex items-center gap-2 text-sm text-green-400" data-testid="recon-all-good">
             <CheckCircle2 className="h-4 w-4" />
             Todas as linhas do arquivo foram reconhecidas.
