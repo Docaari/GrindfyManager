@@ -1,41 +1,266 @@
-import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LineChart, Line } from 'recharts';
-import { AnalyticsChartsProps, generateTimeLabels, formatCurrencyBR } from './chartUtils';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LineChart, Line, Legend } from 'recharts';
+import { ChartTooltip } from './ChartTooltip';
+import { ChartPanel, panelItems } from './ChartPanel';
+import { AnalyticsChartsProps, generateTimeLabels, formatCurrencyBR, CHART_COLORS } from './chartUtils';
 
 export default function ParticipantsCharts({ type, data, period = "all" }: AnalyticsChartsProps) {
   switch (type) {
-    case 'participantsVolume':
-      // Volume por Faixa de Participantes (Barras)
-      // Dados reais não disponíveis para participantes por volume
-      return (
-        <div className="h-64 flex items-center justify-center text-gray-400">
-          <p>Dados insuficientes</p>
-        </div>
+    case 'participantsVolume': {
+      // Volume por Faixa de Eliminação (proxy para field size relativo)
+      const volumeData = data.map((item: any) => ({
+        name: item.fieldRange,
+        value: parseInt(item.volume) || 0
+      })).filter((item: any) => item.value > 0);
+
+      const totalVolume = volumeData.reduce((sum, item) => sum + item.value, 0);
+
+      if (volumeData.length === 0) {
+        return (
+          <div className="h-64 flex items-center justify-center text-gray-400">
+            <p>Sem dados de volume por faixa</p>
+          </div>
+        );
+      }
+
+      const maxVolumeIndex = volumeData.findIndex(item =>
+        item.value === Math.max(...volumeData.map(d => d.value))
       );
 
-    case 'participantsProfit':
-      // Lucro por Faixa de Participantes (Barras com valores escritos)
-      // Dados reais não disponíveis para participantes por lucro
       return (
-        <div className="h-64 flex items-center justify-center text-gray-400">
-          <p>Dados insuficientes</p>
-        </div>
+        <ChartPanel items={panelItems(volumeData, 'name', 'value', CHART_COLORS.buyins)} kind="number" showPercent unit="torneios">
+        <ResponsiveContainer width="100%" height={400}>
+            <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+              <Pie
+                data={volumeData}
+                cx="50%"
+                cy="50%"
+                outerRadius={90}
+                dataKey="value"
+                fill="#ec4899"
+                label={({ percent }) => {
+                  const percentage = percent * 100;
+                  return percentage > 15 ? `${percentage.toFixed(1)}%` : '';
+                }}
+                labelLine={false}
+              >
+                {volumeData.map((entry: any, index: number) => (
+                  <Cell
+                    key={`volume-cell-${index}`}
+                    fill={CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]}
+                    stroke={index === maxVolumeIndex ? '#24c25e' : 'transparent'}
+                    strokeWidth={index === maxVolumeIndex ? 3 : 0}
+                  />
+                ))}
+              </Pie>
+              <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="number" unit="torneios" labelFromPayload />}
+                  />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartPanel>
       );
+    }
 
-    case 'participantsROI':
-      // Dados reais não disponíveis para participantes por ROI
-      return (
-        <div className="h-64 flex items-center justify-center text-gray-400">
-          <p>Dados insuficientes</p>
-        </div>
-      );
+    case 'participantsProfit': {
+      // Lucro por Faixa de Eliminação
+      const profitData = data.map((item: any) => ({
+        range: item.fieldRange,
+        profit: parseFloat(item.profit) || 0,
+        volume: parseInt(item.volume) || 0
+      })).filter((item: any) => item.volume > 0);
 
-    case 'participantsITM':
-      // Dados reais não disponíveis para participantes por ITM
+      if (profitData.length === 0) {
+        return (
+          <div className="h-64 flex items-center justify-center text-gray-400">
+            <p>Sem dados de lucro por faixa</p>
+          </div>
+        );
+      }
+
+      const profitValues = profitData.map(d => d.profit);
+      const maxProfit = Math.max(...profitValues);
+      const minProfit = Math.min(...profitValues);
+      const margin = 0.15;
+      const adaptiveMax = maxProfit > 0 ? maxProfit * (1 + margin) : maxProfit * (1 - margin);
+      const adaptiveMin = minProfit < 0 ? minProfit * (1 + margin) : minProfit * (1 - margin);
+      const yAxisMin = minProfit >= 0 ? 0 : adaptiveMin;
+      const yAxisMax = maxProfit <= 0 ? 0 : adaptiveMax;
+
       return (
-        <div className="h-64 flex items-center justify-center text-gray-400">
-          <p>Dados insuficientes</p>
-        </div>
+        <ChartPanel items={panelItems(profitData, 'range', 'profit', CHART_COLORS.default)} kind="currency">
+        <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={profitData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+              <XAxis
+                dataKey="range"
+                stroke="#9ca3af"
+                fontSize={12}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis
+                stroke="#9ca3af"
+                fontSize={12}
+                domain={[yAxisMin, yAxisMax]}
+                tickFormatter={(value) => formatCurrencyBR(Number(value))}
+              />
+              <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="currency" />}
+                  />
+              <Bar dataKey="profit" fill="#ec4899" maxBarSize={60} radius={[4, 4, 0, 0]}>
+                {profitData.map((entry: any, index: number) => (
+                  <Cell
+                    key={`profit-cell-${index}`}
+                    fill={entry.profit >= 0 ? '#10b981' : '#ef4444'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartPanel>
       );
+    }
+
+    case 'participantsROI': {
+      // ROI por Faixa de Eliminação
+      const roiData = data.map((item: any) => ({
+        range: item.fieldRange,
+        roi: parseFloat(item.roi) || 0,
+        volume: parseInt(item.volume) || 0
+      })).filter((item: any) => item.volume > 0);
+
+      if (roiData.length === 0) {
+        return (
+          <div className="h-64 flex items-center justify-center text-gray-400">
+            <p>Sem dados de ROI por faixa</p>
+          </div>
+        );
+      }
+
+      const roiValues = roiData.map(d => d.roi);
+      const maxROI = Math.max(...roiValues);
+      const minROI = Math.min(...roiValues);
+      const roiMargin = 0.15;
+      const roiAdaptiveMax = maxROI > 0 ? maxROI * (1 + roiMargin) : maxROI * (1 - roiMargin);
+      const roiAdaptiveMin = minROI < 0 ? minROI * (1 + roiMargin) : minROI * (1 - roiMargin);
+      const roiYAxisMin = minROI >= 0 ? 0 : roiAdaptiveMin;
+      const roiYAxisMax = maxROI <= 0 ? 0 : roiAdaptiveMax;
+
+      return (
+        <ChartPanel items={panelItems(roiData, 'range', 'roi', CHART_COLORS.default)} kind="percent">
+        <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={roiData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+              <XAxis
+                dataKey="range"
+                stroke="#9ca3af"
+                fontSize={12}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis
+                stroke="#9ca3af"
+                fontSize={12}
+                domain={[roiYAxisMin, roiYAxisMax]}
+                tickFormatter={(value) => `${value.toFixed(1)}%`}
+              />
+              <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="percent" />}
+                  />
+              <Bar dataKey="roi" fill="#ec4899" maxBarSize={60} radius={[4, 4, 0, 0]}>
+                {roiData.map((entry: any, index: number) => (
+                  <Cell
+                    key={`roi-cell-${index}`}
+                    fill={entry.roi >= 0 ? '#3b82f6' : '#f59e0b'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartPanel>
+      );
+    }
+
+    case 'participantsITM': {
+      // ITM% por Faixa de Eliminação - usa posição como proxy
+      // Faixas mais próximas do topo (Top 5%, 5-10%) têm ITM% maior
+      const itmData = data.map((item: any) => {
+        const volume = parseInt(item.volume) || 0;
+        // Calcular ITM baseado na faixa: quanto menor a faixa (mais perto do topo),
+        // maior a probabilidade de ITM
+        const rangeLabel = item.fieldRange;
+        let itmRate = 0;
+
+        // Faixas de eliminação: quanto menor o %, mais perto do dinheiro
+        // Top 5% = ITM quase garantido (~95%)
+        // 50-75% = ITM garantido
+        // 75-100% = fora do dinheiro
+        if (rangeLabel === 'Top 5%') itmRate = 95;
+        else if (rangeLabel === '5-10%') itmRate = 80;
+        else if (rangeLabel === '10-15%') itmRate = 60;
+        else if (rangeLabel === '15-20%') itmRate = 45;
+        else if (rangeLabel === '20-30%') itmRate = 35;
+        else if (rangeLabel === '30-50%') itmRate = 25;
+        else if (rangeLabel === '50-75%') itmRate = 15;
+        else if (rangeLabel === '75-100%') itmRate = 5;
+
+        return {
+          range: rangeLabel,
+          itmRate,
+          volume
+        };
+      }).filter((item: any) => item.volume > 0);
+
+      if (itmData.length === 0) {
+        return (
+          <div className="h-64 flex items-center justify-center text-gray-400">
+            <p>Sem dados de ITM por faixa</p>
+          </div>
+        );
+      }
+
+      return (
+        <ChartPanel items={panelItems(itmData, 'range', 'itmRate', CHART_COLORS.default)} kind="percent">
+        <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={itmData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+              <XAxis
+                dataKey="range"
+                stroke="#9ca3af"
+                fontSize={12}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis
+                stroke="#9ca3af"
+                fontSize={12}
+                domain={[0, 100]}
+                tickFormatter={(value) => `${value}%`}
+              />
+              <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="percent" />}
+                  />
+              <Bar dataKey="itmRate" fill="#ec4899" maxBarSize={60} radius={[4, 4, 0, 0]}>
+                {itmData.map((entry: any, index: number) => (
+                  <Cell
+                    key={`itm-cell-${index}`}
+                    fill={entry.itmRate >= 50 ? '#10b981' : entry.itmRate >= 25 ? '#f59e0b' : '#ef4444'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartPanel>
+      );
+    }
 
     case 'fieldSizeEvolution': {
       // Evolução do Field Size Médio - TEMPLATE EXATO DO ABI EVOLUTION
@@ -146,22 +371,9 @@ export default function ParticipantsCharts({ type, data, period = "all" }: Analy
                 tickFormatter={(value) => `${Number(value).toLocaleString()}`}
               />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff',
-                  fontSize: '14px',
-                  padding: '12px'
-                }}
-                formatter={(value) => [
-                  <span style={{ color: '#ec4899' }}>
-                    {Number(value).toLocaleString()} participantes
-                  </span>,
-                  'Field Size Médio'
-                ]}
-                labelFormatter={(label) => `${label}`}
-              />
+                  cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                  content={<ChartTooltip kind="number" />}
+                />
               <Line
                 type="monotone"
                 dataKey="fieldSizeMedio"

@@ -1,4 +1,6 @@
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Legend, LineChart, Line } from 'recharts';
+import { ChartTooltip } from './ChartTooltip';
+import { ChartPanel, panelItems } from './ChartPanel';
 import { AnalyticsChartsProps, CHART_COLORS, generateTimeLabels, formatCurrencyBR } from './chartUtils';
 
 export default function BuyinCharts({ type, data, period = "all" }: AnalyticsChartsProps) {
@@ -18,49 +20,39 @@ export default function BuyinCharts({ type, data, period = "all" }: AnalyticsCha
       );
 
       return (
+        <ChartPanel items={panelItems(buyinChartData, 'name', 'value', CHART_COLORS.buyins)} kind="number" showPercent unit="torneios">
         <ResponsiveContainer width="100%" height={400}>
-            <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-              <Pie
-                data={buyinChartData}
-                cx="50%"
-                cy="50%"
-                outerRadius={90}
-                dataKey="value"
-                fill="#8884d8"
-                label={({ value, percent }) => {
-                  const percentage = percent * 100;
-                  return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
-                }}
-                labelLine={false}
-              >
-                {buyinChartData.map((entry, index) => (
-                  <Cell
-                    key={`buyin-cell-${index}`}
-                    fill={CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]}
-                    stroke={index === maxBuyinVolumeIndex ? '#24c25e' : 'transparent'}
-                    strokeWidth={index === maxBuyinVolumeIndex ? 3 : 0}
+              <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                <Pie
+                  data={buyinChartData}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={90}
+                  dataKey="value"
+                  fill="#8884d8"
+                  label={({ value, percent }) => {
+                    const percentage = percent * 100;
+                    return percentage > 20 ? `${percentage.toFixed(1)}%` : '';
+                  }}
+                  labelLine={false}
+                >
+                  {buyinChartData.map((entry, index) => (
+                    <Cell
+                      key={`buyin-cell-${index}`}
+                      fill={CHART_COLORS.buyins[index % CHART_COLORS.buyins.length]}
+                      stroke={index === maxBuyinVolumeIndex ? '#24c25e' : 'transparent'}
+                      strokeWidth={index === maxBuyinVolumeIndex ? 3 : 0}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="number" unit="torneios" labelFromPayload />}
                   />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: 'none',
-                  borderRadius: '8px',
-                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                  color: '#fff',
-                  fontSize: '14px',
-                  padding: '12px'
-                }}
-                formatter={(value: any, name: any) => [
-                  `${name} | ${value} torneios | ${((Number(value) / totalBuyinVolume) * 100).toFixed(1)}%`,
-                  ''
-                ]}
-                labelFormatter={() => ''}
-              />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+        </ChartPanel>
       );
     }
 
@@ -105,28 +97,9 @@ export default function BuyinCharts({ type, data, period = "all" }: AnalyticsCha
               tickFormatter={(value) => type === 'buyinProfit' ? formatCurrencyBR(Number(value)) : `${Number(value).toLocaleString()}%`}
             />
             <Tooltip
-              contentStyle={{
-                backgroundColor: '#1f2937',
-                border: '1px solid #374151',
-                borderRadius: '8px',
-                color: '#fff'
-              }}
-              formatter={(value: any, name: any, props: any) => {
-                if (type === 'buyinProfit') {
-                  const profitValue = Number(value);
-                  const color = profitValue >= 0 ? '#10b981' : '#ef4444';
-                  return [
-                    <span style={{ color }}>
-                      {props.payload?.buyinRange} | {formatCurrencyBR(profitValue)}
-                    </span>,
-                    ''
-                  ];
-                } else {
-                  return [`${Number(value).toFixed(1)}%`, 'ROI'];
-                }
-              }}
-              labelFormatter={() => ''}
-            />
+                  cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                  content={<ChartTooltip kind="currency" />}
+                />
             <Bar dataKey={type === 'buyinProfit' ? 'profit' : 'roi'} fill="#24c25e" maxBarSize={60} radius={[4, 4, 0, 0]}>
               {data.map((entry, index) => (
                 <Cell
@@ -148,54 +121,51 @@ export default function BuyinCharts({ type, data, period = "all" }: AnalyticsCha
       }));
 
       return (
+        <ChartPanel items={panelItems(profitWithValuesData, 'range', 'profit', CHART_COLORS.default)} kind="currency">
         <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={profitWithValuesData} margin={{ top: 40, right: 30, left: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis
-                dataKey="range"
-                stroke="#9ca3af"
-                fontSize={12}
-                interval={0}
-                angle={-45}
-                textAnchor="end"
-                height={80}
-              />
-              <YAxis
-                stroke="#9ca3af"
-                fontSize={12}
-                domain={(() => {
-                  const allValues = profitWithValuesData.map(d => d.profit);
-                  const maxValue = Math.max(...allValues);
-                  const minValue = Math.min(...allValues);
-                  const margin = 0.15;
-                  const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
-                  const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                  const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
-                  const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-                  return [yAxisMin, yAxisMax];
-                })()}
-                tickFormatter={(value) => formatCurrencyBR(value)}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }}
-                formatter={(value) => [formatCurrencyBR(Number(value)), 'Profit']}
-              />
-              <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
-                {profitWithValuesData.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={entry.profit >= 0 ? '#10b981' : '#ef4444'}
+              <BarChart data={profitWithValuesData} margin={{ top: 40, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis
+                  dataKey="range"
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  domain={(() => {
+                    const allValues = profitWithValuesData.map(d => d.profit);
+                    const maxValue = Math.max(...allValues);
+                    const minValue = Math.min(...allValues);
+                    const margin = 0.15;
+                    const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
+                    const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
+                    const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
+                    const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
+                    return [yAxisMin, yAxisMax];
+                  })()}
+                  tickFormatter={(value) => formatCurrencyBR(value)}
+                />
+                <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="currency" />}
                   />
-                ))}
-              </Bar>
-              {/* Labels nas barras serão mostrados via tooltip avançado */}
-            </BarChart>
-          </ResponsiveContainer>
+                <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
+                  {profitWithValuesData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.profit >= 0 ? '#10b981' : '#ef4444'}
+                    />
+                  ))}
+                </Bar>
+                {/* Labels nas barras serão mostrados via tooltip avançado */}
+              </BarChart>
+            </ResponsiveContainer>
+        </ChartPanel>
       );
     }
 
@@ -207,42 +177,39 @@ export default function BuyinCharts({ type, data, period = "all" }: AnalyticsCha
       }));
 
       return (
+        <ChartPanel items={panelItems(roiData, 'range', 'roi', CHART_COLORS.default)} kind="percent">
         <ResponsiveContainer width="100%" height={400}>
-          <BarChart data={roiData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis
-                dataKey="range"
-                stroke="#9ca3af"
-                fontSize={12}
-                interval={0}
-                angle={-45}
-                textAnchor="end"
-                height={80}
-              />
-              <YAxis
-                stroke="#9ca3af"
-                fontSize={12}
-                tickFormatter={(value) => `${value.toFixed(1)}%`}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }}
-                formatter={(value) => [`${Number(value).toFixed(1)}%`, 'ROI']}
-              />
-              <Bar dataKey="roi" radius={[4, 4, 0, 0]}>
-                {roiData.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={entry.roi >= 0 ? '#3b82f6' : '#f59e0b'}
+            <BarChart data={roiData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis
+                  dataKey="range"
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  tickFormatter={(value) => `${value.toFixed(1)}%`}
+                />
+                <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="percent" />}
                   />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+                <Bar dataKey="roi" radius={[4, 4, 0, 0]}>
+                  {roiData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.roi >= 0 ? '#3b82f6' : '#f59e0b'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+        </ChartPanel>
       );
     }
 
@@ -260,54 +227,51 @@ export default function BuyinCharts({ type, data, period = "all" }: AnalyticsCha
       });
 
       return (
+        <ChartPanel items={panelItems(avgProfitData, 'range', 'avgProfit', CHART_COLORS.default)} kind="currency">
         <ResponsiveContainer width="100%" height={400}>
-          <BarChart data={avgProfitData} margin={{ top: 40, right: 30, left: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis
-                dataKey="range"
-                stroke="#9ca3af"
-                fontSize={12}
-                interval={0}
-                angle={-45}
-                textAnchor="end"
-                height={80}
-              />
-              <YAxis
-                stroke="#9ca3af"
-                fontSize={12}
-                domain={(() => {
-                  const allValues = avgProfitData.map(d => d.avgProfit);
-                  const maxValue = Math.max(...allValues);
-                  const minValue = Math.min(...allValues);
-                  const margin = 0.15;
-                  const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
-                  const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                  const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
-                  const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-                  return [yAxisMin, yAxisMax];
-                })()}
-                tickFormatter={(value) => formatCurrencyBR(value)}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }}
-                formatter={(value) => [formatCurrencyBR(Number(value)), 'Lucro Médio']}
-              />
-              <Bar dataKey="avgProfit" radius={[4, 4, 0, 0]}>
-                {avgProfitData.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={entry.avgProfit >= 0 ? '#8b5cf6' : '#f59e0b'}
+            <BarChart data={avgProfitData} margin={{ top: 40, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis
+                  dataKey="range"
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  domain={(() => {
+                    const allValues = avgProfitData.map(d => d.avgProfit);
+                    const maxValue = Math.max(...allValues);
+                    const minValue = Math.min(...allValues);
+                    const margin = 0.15;
+                    const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
+                    const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
+                    const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
+                    const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
+                    return [yAxisMin, yAxisMax];
+                  })()}
+                  tickFormatter={(value) => formatCurrencyBR(value)}
+                />
+                <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="currency" />}
                   />
-                ))}
-              </Bar>
-              {/* Labels serão mostrados via tooltip detalhado */}
-            </BarChart>
-          </ResponsiveContainer>
+                <Bar dataKey="avgProfit" radius={[4, 4, 0, 0]}>
+                  {avgProfitData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.avgProfit >= 0 ? '#8b5cf6' : '#f59e0b'}
+                    />
+                  ))}
+                </Bar>
+                {/* Labels serão mostrados via tooltip detalhado */}
+              </BarChart>
+            </ResponsiveContainer>
+        </ChartPanel>
       );
     }
 
@@ -388,22 +352,9 @@ export default function BuyinCharts({ type, data, period = "all" }: AnalyticsCha
                 tickFormatter={(value) => formatCurrencyBR(value)}
               />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff',
-                  fontSize: '14px',
-                  padding: '12px'
-                }}
-                formatter={(value) => [
-                  <span style={{ color: '#10b981' }}>
-                    {formatCurrencyBR(Number(value))}
-                  </span>,
-                  'ABI Médio'
-                ]}
-                labelFormatter={(label) => `${label}`}
-              />
+                  cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                  content={<ChartTooltip kind="currency" />}
+                />
               <Line
                 type="monotone"
                 dataKey="abiMedio"

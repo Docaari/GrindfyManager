@@ -1,4 +1,6 @@
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Legend, LineChart, Line } from 'recharts';
+import { ChartTooltip } from './ChartTooltip';
+import { ChartPanel, panelItems } from './ChartPanel';
 import { AnalyticsChartsProps, CHART_COLORS, generateTimeLabels, formatCurrencyBR } from './chartUtils';
 
 export default function SiteCharts({ type, data, period = "all" }: AnalyticsChartsProps) {
@@ -18,138 +20,110 @@ export default function SiteCharts({ type, data, period = "all" }: AnalyticsChar
       );
 
       return (
+        <ChartPanel items={panelItems(siteChartData, 'name', 'value', CHART_COLORS.sites)} kind="number" showPercent unit="torneios">
         <ResponsiveContainer width="100%" height={400}>
-              <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                <defs>
-                  <linearGradient id="pieGradient" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#3b82f6" />
-                    <stop offset="100%" stopColor="#1e40af" />
-                  </linearGradient>
-                </defs>
-                <Pie
-                  data={siteChartData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={120}
-                  dataKey="value"
-                  label={({ value, percent }) => {
-                    const percentage = percent * 100;
-                    return percentage > 8 ? `${percentage.toFixed(1)}%` : '';
-                  }}
-                  labelLine={false}
-                >
-                  {siteChartData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={CHART_COLORS.sites[entry.name as keyof typeof CHART_COLORS.sites] || '#6b7280'}
-                      stroke={index === maxVolumeIndex ? '#10b981' : 'transparent'}
-                      strokeWidth={index === maxVolumeIndex ? 4 : 0}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
-                    borderRadius: '12px',
-                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                    color: '#fff',
-                    fontSize: '14px',
-                    padding: '16px',
-                    backdropFilter: 'blur(10px)'
-                  }}
-                  formatter={(value, name) => [
-                    `${name} | ${Number(value)} torneios | ${((Number(value) / totalVolume) * 100).toFixed(1)}%`,
-                    ''
-                  ]}
-                  labelFormatter={() => ''}
-                />
-                <Legend
-                  wrapperStyle={{ color: '#9ca3af', fontSize: '14px' }}
-                  iconType="circle"
-                />
-              </PieChart>
-            </ResponsiveContainer>
+                <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                  <defs>
+                    <linearGradient id="pieGradient" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" />
+                      <stop offset="100%" stopColor="#1e40af" />
+                    </linearGradient>
+                  </defs>
+                  <Pie
+                    data={siteChartData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={120}
+                    dataKey="value"
+                    label={({ value, percent }) => {
+                      const percentage = percent * 100;
+                      return percentage > 8 ? `${percentage.toFixed(1)}%` : '';
+                    }}
+                    labelLine={false}
+                  >
+                    {siteChartData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={CHART_COLORS.sites[entry.name as keyof typeof CHART_COLORS.sites] || '#6b7280'}
+                        stroke={index === maxVolumeIndex ? '#10b981' : 'transparent'}
+                        strokeWidth={index === maxVolumeIndex ? 4 : 0}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="number" unit="torneios" labelFromPayload />}
+                  />
+                  <Legend
+                    wrapperStyle={{ color: '#9ca3af', fontSize: '14px' }}
+                    iconType="circle"
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+        </ChartPanel>
       );
     }
 
     case 'siteProfit':
       return (
+        <ChartPanel items={panelItems(data, 'site', 'profit', CHART_COLORS.default)} kind="currency">
         <ResponsiveContainer width="100%" height={400}>
-              <BarChart data={data} margin={{ top: 40, right: 30, left: 20, bottom: 80 }} barCategoryGap="20%">
-                <defs>
-                  <linearGradient id="profitPositive" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" />
-                    <stop offset="100%" stopColor="#059669" />
-                  </linearGradient>
-                  <linearGradient id="profitNegative" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ef4444" />
-                    <stop offset="100%" stopColor="#dc2626" />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis
-                  dataKey="site"
-                  stroke="#9ca3af"
-                  fontSize={12}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                  tickLine={false}
-                />
-                <YAxis
-                  stroke="#9ca3af"
-                  fontSize={12}
-                  tickLine={false}
-                  domain={(() => {
-                    const siteProfitValues = data.map(item => Number(item.profit || 0));
-                    const maxSiteProfit = Math.max(...siteProfitValues);
-                    const minSiteProfit = Math.min(...siteProfitValues);
-
-                    const margin = 0.15;
-                    const adaptiveMax = maxSiteProfit > 0 ? maxSiteProfit * (1 + margin) : maxSiteProfit * (1 - margin);
-                    const adaptiveMin = minSiteProfit < 0 ? minSiteProfit * (1 + margin) : minSiteProfit * (1 - margin);
-
-                    const yAxisMin = minSiteProfit >= 0 ? 0 : adaptiveMin;
-                    const yAxisMax = maxSiteProfit <= 0 ? 0 : adaptiveMax;
-
-                    return [yAxisMin, yAxisMax];
-                  })()}
-                  tickFormatter={(value) => formatCurrencyBR(Number(value))}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
-                    borderRadius: '12px',
-                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                    color: '#fff',
-                    fontSize: '14px',
-                    padding: '16px',
-                    backdropFilter: 'blur(10px)'
-                  }}
-                  formatter={(value: any, name: any, props: any) => {
-                    const profitValue = Number(value);
-                    const color = profitValue >= 0 ? '#10b981' : '#ef4444';
-                    return [
-                      <span style={{ color }}>
-                        {props.payload?.site} | {formatCurrencyBR(profitValue)}
-                      </span>,
-                      ''
-                    ];
-                  }}
-                  labelFormatter={() => ''}
-                />
-                <Bar dataKey="profit" maxBarSize={60} radius={[6, 6, 0, 0]}>
-                  {data.map((entry, index) => (
-                    <Cell
-                      key={`siteProfit-cell-${index}`}
-                      fill={entry.profit >= 0 ? 'url(#profitPositive)' : 'url(#profitNegative)'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                <BarChart data={data} margin={{ top: 40, right: 30, left: 20, bottom: 80 }} barCategoryGap="20%">
+                  <defs>
+                    <linearGradient id="profitPositive" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" />
+                      <stop offset="100%" stopColor="#059669" />
+                    </linearGradient>
+                    <linearGradient id="profitNegative" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#ef4444" />
+                      <stop offset="100%" stopColor="#dc2626" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                  <XAxis
+                    dataKey="site"
+                    stroke="#9ca3af"
+                    fontSize={12}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    stroke="#9ca3af"
+                    fontSize={12}
+                    tickLine={false}
+                    domain={(() => {
+                      const siteProfitValues = data.map(item => Number(item.profit || 0));
+                      const maxSiteProfit = Math.max(...siteProfitValues);
+                      const minSiteProfit = Math.min(...siteProfitValues);
+  
+                      const margin = 0.15;
+                      const adaptiveMax = maxSiteProfit > 0 ? maxSiteProfit * (1 + margin) : maxSiteProfit * (1 - margin);
+                      const adaptiveMin = minSiteProfit < 0 ? minSiteProfit * (1 + margin) : minSiteProfit * (1 - margin);
+  
+                      const yAxisMin = minSiteProfit >= 0 ? 0 : adaptiveMin;
+                      const yAxisMax = maxSiteProfit <= 0 ? 0 : adaptiveMax;
+  
+                      return [yAxisMin, yAxisMax];
+                    })()}
+                    tickFormatter={(value) => formatCurrencyBR(Number(value))}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="currency" />}
+                  />
+                  <Bar dataKey="profit" maxBarSize={60} radius={[6, 6, 0, 0]}>
+                    {data.map((entry, index) => (
+                      <Cell
+                        key={`siteProfit-cell-${index}`}
+                        fill={entry.profit >= 0 ? 'url(#profitPositive)' : 'url(#profitNegative)'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+        </ChartPanel>
       );
 
     case 'siteEvolution': {
@@ -243,27 +217,8 @@ export default function SiteCharts({ type, data, period = "all" }: AnalyticsChar
                   tickFormatter={(value) => formatCurrencyBR(Number(value))}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
-                    borderRadius: '12px',
-                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                    color: '#fff',
-                    fontSize: '14px',
-                    padding: '16px',
-                    backdropFilter: 'blur(10px)'
-                  }}
-                  formatter={(value, name) => {
-                    const profitValue = Number(value);
-                    const color = CHART_COLORS.sites[name as keyof typeof CHART_COLORS.sites] || '#6b7280';
-                    return [
-                      <span style={{ color }}>
-                        {formatCurrencyBR(profitValue)}
-                      </span>,
-                      name
-                    ];
-                  }}
-                  labelFormatter={(label) => `${label}`}
+                  cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                  content={<ChartTooltip kind="currency" />}
                 />
                 <Legend
                   wrapperStyle={{ color: '#9ca3af', fontSize: '14px' }}

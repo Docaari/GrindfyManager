@@ -1,5 +1,7 @@
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
-import { AnalyticsChartsProps } from './chartUtils';
+import { ChartTooltip } from './ChartTooltip';
+import { ChartPanel, panelItems } from './ChartPanel';
+import { AnalyticsChartsProps, CHART_COLORS } from './chartUtils';
 
 export default function PositionCharts({ type, data, period = "all" }: AnalyticsChartsProps) {
   switch (type) {
@@ -19,62 +21,55 @@ export default function PositionCharts({ type, data, period = "all" }: Analytics
 
       return (
 
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis
-                dataKey="fieldRange"
-                stroke="#9ca3af"
-                fontSize={12}
-                angle={-45}
-                textAnchor="end"
-                height={60}
-              />
-              <YAxis
-                stroke="#9ca3af"
-                fontSize={12}
-                domain={(() => {
-                  // Calculate adaptive Y-axis domain with margins (same as monthProfit)
-                  const fieldVolumeValues = data.map(item => Number(item.volume || 0));
-                  const maxFieldVolume = Math.max(...fieldVolumeValues);
-                  const minFieldVolume = Math.min(...fieldVolumeValues);
-
-                  // Add 15% margin for visual breathing room
-                  const margin = 0.15;
-                  const adaptiveMax = maxFieldVolume > 0 ? maxFieldVolume * (1 + margin) : maxFieldVolume * (1 - margin);
-                  const adaptiveMin = minFieldVolume < 0 ? minFieldVolume * (1 + margin) : minFieldVolume * (1 - margin);
-
-                  // If all values are positive, start from zero
-                  const yAxisMin = minFieldVolume >= 0 ? 0 : adaptiveMin;
-                  const yAxisMax = maxFieldVolume <= 0 ? 0 : adaptiveMax;
-
-                  return [yAxisMin, yAxisMax];
-                })()}
-                tickFormatter={(value) => `${Number(value).toLocaleString()}`}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }}
-                formatter={(value: any, name: any, props: any) => [
-                  `${props.payload.fieldRange} | ${value} eliminações`,
-                  ''
-                ]}
-                labelFormatter={() => ''}
-              />
-              <Bar dataKey="volume" maxBarSize={60} radius={[4, 4, 0, 0]}>
-                {data.map((entry, index) => (
-                  <Cell
-                    key={`field-cell-${index}`}
-                    fill={fieldColors[index] || '#f97316'}
+          <ChartPanel items={panelItems(data, 'fieldRange', 'volume', CHART_COLORS.default)} kind="number">
+        <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis
+                  dataKey="fieldRange"
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  domain={(() => {
+                    // Calculate adaptive Y-axis domain with margins (same as monthProfit)
+                    const fieldVolumeValues = data.map(item => Number(item.volume || 0));
+                    const maxFieldVolume = Math.max(...fieldVolumeValues);
+                    const minFieldVolume = Math.min(...fieldVolumeValues);
+  
+                    // Add 15% margin for visual breathing room
+                    const margin = 0.15;
+                    const adaptiveMax = maxFieldVolume > 0 ? maxFieldVolume * (1 + margin) : maxFieldVolume * (1 - margin);
+                    const adaptiveMin = minFieldVolume < 0 ? minFieldVolume * (1 + margin) : minFieldVolume * (1 - margin);
+  
+                    // If all values are positive, start from zero
+                    const yAxisMin = minFieldVolume >= 0 ? 0 : adaptiveMin;
+                    const yAxisMax = maxFieldVolume <= 0 ? 0 : adaptiveMax;
+  
+                    return [yAxisMin, yAxisMax];
+                  })()}
+                  tickFormatter={(value) => `${Number(value).toLocaleString()}`}
+                />
+                <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="number" />}
                   />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+                <Bar dataKey="volume" maxBarSize={60} radius={[4, 4, 0, 0]}>
+                  {data.map((entry, index) => (
+                    <Cell
+                      key={`field-cell-${index}`}
+                      fill={fieldColors[index] || '#f97316'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+        </ChartPanel>
 
       );
     }
@@ -113,38 +108,31 @@ export default function PositionCharts({ type, data, period = "all" }: Analytics
 
       return (
 
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis dataKey="position" stroke="#9ca3af" />
-              <YAxis
-                stroke="#9ca3af"
-                domain={[0, adaptiveFinalTableMax]}
-                tickFormatter={(value) => `${Number(value).toLocaleString()}`}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }}
-                formatter={(value: any, name: any, props: any) => [
-                  `Posição ${props.payload.position} | ${value} vezes`,
-                  ''
-                ]}
-                labelFormatter={() => ''}
-              />
-              <Bar dataKey="volume">
-                {data.map((entry, index) => (
-                  <Cell
-                    key={`finalTable-cell-${index}`}
-                    fill={finalTableColors[entry.position as keyof typeof finalTableColors] || '#dc2626'}
+          <ChartPanel items={panelItems(data, 'position', 'volume', CHART_COLORS.default)} kind="number">
+        <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis dataKey="position" stroke="#9ca3af" />
+                <YAxis
+                  stroke="#9ca3af"
+                  domain={[0, adaptiveFinalTableMax]}
+                  tickFormatter={(value) => `${Number(value).toLocaleString()}`}
+                />
+                <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="number" />}
                   />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+                <Bar dataKey="volume">
+                  {data.map((entry, index) => (
+                    <Cell
+                      key={`finalTable-cell-${index}`}
+                      fill={finalTableColors[entry.position as keyof typeof finalTableColors] || '#dc2626'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+        </ChartPanel>
 
       );
     }

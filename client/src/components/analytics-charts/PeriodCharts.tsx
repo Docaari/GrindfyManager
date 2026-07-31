@@ -1,5 +1,7 @@
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
-import { AnalyticsChartsProps, formatCurrencyBR } from './chartUtils';
+import { ChartTooltip } from './ChartTooltip';
+import { ChartPanel, panelItems } from './ChartPanel';
+import { AnalyticsChartsProps, CHART_COLORS, formatCurrencyBR } from './chartUtils';
 
 export default function PeriodCharts({ type, data, period = "all" }: AnalyticsChartsProps) {
   switch (type) {
@@ -23,35 +25,31 @@ export default function PeriodCharts({ type, data, period = "all" }: AnalyticsCh
 
       return (
 
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis dataKey="dayName" stroke="#9ca3af" />
-              <YAxis
-                stroke="#9ca3af"
-                domain={[0, Math.ceil(maxDayVolume * 1.15)]}
-                tickFormatter={(value) => `${Number(value).toLocaleString()}`}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }}
-                formatter={(value, name) => [`${value} torneios`, 'Volume']}
-                labelFormatter={() => ''}
-              />
-              <Bar dataKey="volume">
-                {data.map((entry, index) => (
-                  <Cell
-                    key={`dayVolume-cell-${index}`}
-                    fill={getDayVolumeColor(Number(entry.volume), maxDayVolume)}
+          <ChartPanel items={panelItems(data, 'dayName', 'volume', CHART_COLORS.default)} kind="number">
+        <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis dataKey="dayName" stroke="#9ca3af" />
+                <YAxis
+                  stroke="#9ca3af"
+                  domain={[0, Math.ceil(maxDayVolume * 1.15)]}
+                  tickFormatter={(value) => `${Number(value).toLocaleString()}`}
+                />
+                <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="number" unit="torneios" />}
                   />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+                <Bar dataKey="volume">
+                  {data.map((entry, index) => (
+                    <Cell
+                      key={`dayVolume-cell-${index}`}
+                      fill={getDayVolumeColor(Number(entry.volume), maxDayVolume)}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+        </ChartPanel>
 
       );
     }
@@ -68,49 +66,46 @@ export default function PeriodCharts({ type, data, period = "all" }: AnalyticsCh
         }));
 
         return (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dayProfitData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis
-                dataKey="day"
-                stroke="#9ca3af"
-                fontSize={12}
-              />
-              <YAxis
-                stroke="#9ca3af"
-                fontSize={12}
-                domain={(() => {
-                  const allValues = dayProfitData.map(d => d.profit);
-                  const maxValue = Math.max(...allValues);
-                  const minValue = Math.min(...allValues);
-                  const margin = 0.15;
-                  const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
-                  const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
-                  const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
-                  const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
-                  return [yAxisMin, yAxisMax];
-                })()}
-                tickFormatter={(value) => formatCurrencyBR(value)}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }}
-                formatter={(value) => [formatCurrencyBR(Number(value)), 'Profit']}
-              />
-              <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
-                {dayProfitData.map((entry, index) => (
-                  <Cell
-                    key={`dayProfit-cell-${index}`}
-                    fill={entry.profit >= 0 ? '#22c55e' : '#ef4444'}
+          <ChartPanel items={panelItems(dayProfitData, 'day', 'profit', CHART_COLORS.default)} kind="currency">
+        <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dayProfitData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis
+                  dataKey="day"
+                  stroke="#9ca3af"
+                  fontSize={12}
+                />
+                <YAxis
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  domain={(() => {
+                    const allValues = dayProfitData.map(d => d.profit);
+                    const maxValue = Math.max(...allValues);
+                    const minValue = Math.min(...allValues);
+                    const margin = 0.15;
+                    const adaptiveMax = maxValue > 0 ? maxValue * (1 + margin) : maxValue * (1 - margin);
+                    const adaptiveMin = minValue < 0 ? minValue * (1 + margin) : minValue * (1 - margin);
+                    const yAxisMin = minValue >= 0 ? 0 : adaptiveMin;
+                    const yAxisMax = maxValue <= 0 ? 0 : adaptiveMax;
+                    return [yAxisMin, yAxisMax];
+                  })()}
+                  tickFormatter={(value) => formatCurrencyBR(value)}
+                />
+                <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="currency" />}
                   />
-                ))}
-              </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
+                  {dayProfitData.map((entry, index) => (
+                    <Cell
+                      key={`dayProfit-cell-${index}`}
+                      fill={entry.profit >= 0 ? '#22c55e' : '#ef4444'}
+                    />
+                  ))}
+                </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+        </ChartPanel>
         );
       }
 
@@ -166,24 +161,9 @@ export default function PeriodCharts({ type, data, period = "all" }: AnalyticsCh
                 tickFormatter={(value) => formatCurrencyBR(Number(value))}
               />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }}
-                formatter={(value: any, name: any, props: any) => {
-                  const profitValue = Number(value);
-                  const color = profitValue >= 0 ? '#10b981' : '#ef4444';
-                  return [
-                    <span style={{ color }}>
-                      {props.payload.dayName} | {formatCurrencyBR(profitValue)}
-                    </span>,
-                    ''
-                  ];
-                }}
-                labelFormatter={() => ''}
-              />
+                  cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                  content={<ChartTooltip kind="currency" />}
+                />
               <Bar dataKey="profit">
                 {data.map((entry, index) => (
                   <Cell
@@ -201,27 +181,23 @@ export default function PeriodCharts({ type, data, period = "all" }: AnalyticsCh
     case 'dayROI':
       return (
 
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis dataKey="dayName" stroke="#9ca3af" />
-              <YAxis
-                stroke="#9ca3af"
-                tickFormatter={(value) => `${Number(value).toFixed(1)}%`}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }}
-                formatter={(value, name) => [`${Number(value).toFixed(1)}%`, 'ROI']}
-                labelFormatter={() => ''}
-              />
-              <Bar dataKey="roi" fill="#f59e0b" />
-            </BarChart>
-          </ResponsiveContainer>
+          <ChartPanel items={panelItems(data, 'dayName', 'roi', CHART_COLORS.default)} kind="percent">
+        <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis dataKey="dayName" stroke="#9ca3af" />
+                <YAxis
+                  stroke="#9ca3af"
+                  tickFormatter={(value) => `${Number(value).toFixed(1)}%`}
+                />
+                <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                    content={<ChartTooltip kind="percent" />}
+                  />
+                <Bar dataKey="roi" fill="#f59e0b" />
+              </BarChart>
+            </ResponsiveContainer>
+        </ChartPanel>
 
       );
 
@@ -291,31 +267,9 @@ export default function PeriodCharts({ type, data, period = "all" }: AnalyticsCh
                 }
               />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }}
-                formatter={(value: any, name: any, props: any) => {
-                  if (type.includes('Volume')) {
-                    return [
-                      `${props.payload?.monthName} | ${value} torneios`,
-                      ''
-                    ];
-                  } else {
-                    const profitValue = Number(value);
-                    const color = profitValue >= 0 ? '#10b981' : '#ef4444';
-                    return [
-                      <span style={{ color }}>
-                        {props.payload?.monthName} | {formatCurrencyBR(profitValue)}
-                      </span>,
-                      ''
-                    ];
-                  }
-                }}
-                labelFormatter={() => ''}
-              />
+                  cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                  content={<ChartTooltip kind="currency" unit="torneios" />}
+                />
               <Bar dataKey={type.includes('Profit') ? 'profit' : 'volume'}>
                 {sortedData.map((entry, index) => {
                   if (type.includes('Volume')) {
@@ -412,14 +366,9 @@ export default function PeriodCharts({ type, data, period = "all" }: AnalyticsCh
               fontSize={12}
             />
             <Tooltip
-              contentStyle={{
-                backgroundColor: '#1f2937',
-                border: '1px solid #374151',
-                borderRadius: '8px',
-                color: '#fff'
-              }}
-              formatter={(value) => [`${value} torneios`, 'Volume']}
-            />
+                  cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                  content={<ChartTooltip kind="number" unit="torneios" />}
+                />
             <Bar dataKey="volume" radius={[4, 4, 0, 0]} fill="#3b82f6">
             </Bar>
           </BarChart>
@@ -480,14 +429,9 @@ export default function PeriodCharts({ type, data, period = "all" }: AnalyticsCh
               fontSize={12}
             />
             <Tooltip
-              contentStyle={{
-                backgroundColor: '#1f2937',
-                border: '1px solid #374151',
-                borderRadius: '8px',
-                color: '#fff'
-              }}
-              formatter={(value) => [`${value} torneios`, 'Volume']}
-            />
+                  cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                  content={<ChartTooltip kind="number" unit="torneios" />}
+                />
             <Bar dataKey="volume" radius={[4, 4, 0, 0]} fill="#3b82f6">
             </Bar>
           </BarChart>
@@ -560,14 +504,9 @@ export default function PeriodCharts({ type, data, period = "all" }: AnalyticsCh
               tickFormatter={(value) => formatCurrencyBR(value)}
             />
             <Tooltip
-              contentStyle={{
-                backgroundColor: '#1f2937',
-                border: '1px solid #374151',
-                borderRadius: '8px',
-                color: '#fff'
-              }}
-              formatter={(value) => [formatCurrencyBR(Number(value)), 'Profit']}
-            />
+                  cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                  content={<ChartTooltip kind="currency" />}
+                />
             <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
               {sortedQuarterProfitData.map((entry, index) => (
                 <Cell
