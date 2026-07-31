@@ -3088,6 +3088,13 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           // Dias Jogados: Quantidade de dias únicos com registros
           daysPlayed: sql<number>`COUNT(DISTINCT DATE(${tournaments.datePlayed}))`,
 
+          // ADR-243: tempo medio de permanencia no torneio. `duration_seconds`
+          // so existe para linhas importadas com o parser novo (o SharkScope
+          // exporta a coluna); linhas sem duracao ficam fora da media, por isso
+          // devolvemos tambem quantas entraram no calculo.
+          avgDurationSeconds: sql<number>`AVG(NULLIF(${tournaments.durationSeconds}, 0))`,
+          durationSampleSize: sql<number>`COUNT(NULLIF(${tournaments.durationSeconds}, 0))`,
+
           // Heads-Up: eventos heads-up (field_size = 2)
           headsUpTotal: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.fieldSize} = 2 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
           headsUpWins: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.fieldSize} = 2 AND ${tournaments.position} = 1 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
@@ -3234,6 +3241,112 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // 16. Dias Jogados: Quantidade de dias únicos com registros
     const daysPlayed = Number(result.daysPlayed || 0);
 
+    // ============================================================
+    // ADR-243 — métricas de rotina (paridade com o painel do SharkScope):
+    // dias vencedores/perdedores, jogos por dia, mesas simultâneas e tempo médio.
+    //
+    // Isolado em try/catch próprio e com log antes do fallback (lesson #9): se
+    // qualquer uma falhar, o dashboard continua servindo o resto em vez de virar
+    // 500. Valores ficam null (= "não calculado"), distinto de 0.
+    // ============================================================
+    let winningDays: number | null = null;
+    let losingDays: number | null = null;
+    let breakEvenDays: number | null = null;
+    try {
+      const dayRows = await db
+        .select({
+          day: sql<string>`DATE(${tournaments.datePlayed})`,
+          profit: sql<string>`SUM(CAST(${tournaments.prize} AS DECIMAL))`,
+        })
+        .from(tournaments)
+        .where(whereCondition)
+        .groupBy(sql`DATE(${tournaments.datePlayed})`);
+      winningDays = 0;
+      losingDays = 0;
+      breakEvenDays = 0;
+      for (const row of dayRows) {
+        const p = parseFloat(String(row.profit ?? "0"));
+        if (!Number.isFinite(p) || p === 0) breakEvenDays++;
+        else if (p > 0) winningDays++;
+        else losingDays++;
+      }
+    } catch (err) {
+      console.error("dashboard.winning_losing_days_failed", {
+        userId,
+        err: (err as any)?.message ?? String(err),
+      });
+    }
+
+    // Mesas simultâneas: varredura de intervalos [início, fim] por torneio.
+    // `end_date` vem do export (SharkScope traz `Data de Conclusão`); quando
+    // ausente, deriva de `duration_seconds`.
+    //   - pico  = maior número de mesas abertas ao mesmo tempo
+    //   - média = média ponderada por tempo, contada apenas enquanto havia mesa
+    //     aberta (senão as horas dormindo puxariam tudo para ~0)
+    //
+    // LIMITE CONHECIDO (medido no histórico do founder): a coluna `Duração` do
+    // SharkScope é `fim − início do TORNEIO` (1201/1201 linhas conferem) e não
+    // varia com a colocação (top 5% = 7,41h; últimos 20% = 7,72h). Ou seja, é a
+    // duração do evento, NÃO o tempo do jogador na mesa. Logo estes números
+    // representam "torneios registrados em paralelo" e são um TETO — quem busta
+    // cedo continua contando até o fim do evento. Corrigir exigiria o horário de
+    // eliminação, que o export não traz.
+    let maxSimultaneousTables: number | null = null;
+    let avgSimultaneousTables: number | null = null;
+    try {
+      const overlapRaw: any = await db.execute(sql`
+        WITH src AS (
+          SELECT ${tournaments.datePlayed} AS started,
+                 COALESCE(
+                   ${tournaments.endDate},
+                   ${tournaments.datePlayed} + make_interval(secs => COALESCE(${tournaments.durationSeconds}, 0))
+                 ) AS ended
+          FROM ${tournaments}
+          WHERE ${whereCondition}
+            AND COALESCE(${tournaments.durationSeconds}, 0) > 0
+        ),
+        ev AS (
+          SELECT started AS t, 1 AS delta FROM src
+          UNION ALL
+          SELECT ended AS t, -1 AS delta FROM src
+        ),
+        running AS (
+          SELECT t, SUM(delta) OVER (ORDER BY t, delta DESC ROWS UNBOUNDED PRECEDING) AS active
+          FROM ev
+        ),
+        spans AS (
+          SELECT active, EXTRACT(EPOCH FROM (LEAD(t) OVER (ORDER BY t) - t)) AS secs
+          FROM running
+        )
+        SELECT
+          MAX(active) AS max_tables,
+          SUM(active * secs) FILTER (WHERE active > 0 AND secs > 0)
+            / NULLIF(SUM(secs) FILTER (WHERE active > 0 AND secs > 0), 0) AS avg_tables
+        FROM spans
+      `);
+      const overlapRow = (Array.isArray(overlapRaw) ? overlapRaw[0] : overlapRaw?.rows?.[0]) ?? null;
+      if (overlapRow) {
+        const maxT = Number(overlapRow.max_tables);
+        const avgT = Number(overlapRow.avg_tables);
+        maxSimultaneousTables = Number.isFinite(maxT) ? maxT : null;
+        avgSimultaneousTables = Number.isFinite(avgT) ? Math.round(avgT * 100) / 100 : null;
+      }
+    } catch (err) {
+      console.error("dashboard.simultaneous_tables_failed", {
+        userId,
+        err: (err as any)?.message ?? String(err),
+      });
+    }
+
+    // Jogos por dia usa ENTRADAS (buy-ins pagos), mesma base do ITM: re-entrar
+    // é jogar de novo. daysPlayed = dias distintos com registro.
+    const gamesPerDay = daysPlayed > 0 ? Math.round((totalEntries / daysPlayed) * 100) / 100 : 0;
+
+    const avgDurationSeconds = result.avgDurationSeconds == null
+      ? null
+      : Math.round(Number(result.avgDurationSeconds));
+    const durationSampleSize = Number(result.durationSampleSize || 0);
+
     // 12. Lucro Médio/Dia: Lucro total dividido pelos dias jogados
     const avgProfitPerDay = daysPlayed > 0 ? profit / daysPlayed : 0;
 
@@ -3260,6 +3373,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       abi, // 3. ABI
       roi, // 4. ROI
       itm, // 5. ITM% (base = entradas, ADR-243)
+      // ADR-243 — métricas de rotina (paridade SharkScope).
+      winningDays,
+      losingDays,
+      breakEvenDays,
+      gamesPerDay,
+      avgSimultaneousTables,
+      maxSimultaneousTables,
+      avgDurationSeconds,
+      durationSampleSize,
       // ADR-243: denominador das frequencias exposto para a UI poder explicar
       // "X premiados em Y entradas" em vez de so mostrar a porcentagem.
       totalEntries,

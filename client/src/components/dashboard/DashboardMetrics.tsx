@@ -1,6 +1,22 @@
-import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Users } from "lucide-react";
+import { DollarSign, Percent, Trophy, Coins, TrendingUp, Target, Clock, Award, BarChart3, Calendar, Users, CalendarCheck, CalendarX, Layers, Timer, Gauge } from "lucide-react";
 import { formatPercentage } from "@/lib/formatting";
 import { formatCurrency } from './formatCurrency';
+
+
+/**
+ * ADR-243 — duração média legível. Recebe segundos e devolve "2h 14m" / "48m".
+ * `null` (nenhuma linha com duração) vira "—" para não fingir precisão.
+ */
+function formatDuration(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || !Number.isFinite(Number(seconds)) || Number(seconds) <= 0) {
+    return "—";
+  }
+  const total = Math.round(Number(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.round((total % 3600) / 60);
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+  return `${m}m`;
+}
 
 interface DashboardMetricsProps {
   stats: any;
@@ -261,6 +277,78 @@ export function DashboardMetrics({ stats, categoryAnalytics, speedAnalytics, isM
           </div>
           <div className="weekly-card-label">Turbo/Hyper</div>
           <div className="weekly-card-sublabel">Velocidade</div>
+        </div>
+      </div>
+
+      {/* LINHA 4 - ROTINA (ADR-243): dias vencedores/perdedores, ritmo, mesas
+          simultâneas e tempo médio. Mesas e tempo dependem de duração/fim vindos
+          do export — histórico antigo (sem essas colunas) mostra "—". */}
+      <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
+        <div className="weekly-summary-card metric-volume" data-testid="metric-winning-days">
+          <div className="weekly-card-icon text-green-400">
+            <CalendarCheck className="h-8 w-8" />
+          </div>
+          <div className="weekly-card-value text-green-400">
+            {stats?.winningDays ?? "—"}
+          </div>
+          <div className="weekly-card-label">Dias que Venceu</div>
+          <div className="weekly-card-sublabel">
+            {stats?.daysPlayed ? `de ${stats.daysPlayed} jogados` : "Lucro positivo"}
+          </div>
+        </div>
+
+        <div className="weekly-summary-card metric-volume" data-testid="metric-losing-days">
+          <div className="weekly-card-icon text-red-400">
+            <CalendarX className="h-8 w-8" />
+          </div>
+          <div className="weekly-card-value text-red-400">
+            {stats?.losingDays ?? "—"}
+          </div>
+          <div className="weekly-card-label">Dias que Perdeu</div>
+          <div className="weekly-card-sublabel">
+            {stats?.daysPlayed ? `de ${stats.daysPlayed} jogados` : "Lucro negativo"}
+          </div>
+        </div>
+
+        <div className="weekly-summary-card metric-volume" data-testid="metric-games-per-day">
+          <div className="weekly-card-icon text-blue-400">
+            <Gauge className="h-8 w-8" />
+          </div>
+          <div className="weekly-card-value">
+            {stats?.gamesPerDay ? Number(stats.gamesPerDay).toFixed(1) : "—"}
+          </div>
+          <div className="weekly-card-label">Jogos/Dia</div>
+          <div className="weekly-card-sublabel">Entradas por dia jogado</div>
+        </div>
+
+        <div className="weekly-summary-card metric-volume" data-testid="metric-simultaneous-tables">
+          <div className="weekly-card-icon text-blue-400">
+            <Layers className="h-8 w-8" />
+          </div>
+          <div className="weekly-card-value">
+            {stats?.avgSimultaneousTables ? Number(stats.avgSimultaneousTables).toFixed(1) : "—"}
+          </div>
+          <div className="weekly-card-label">Mesas Simultâneas</div>
+          <div className="weekly-card-sublabel">
+            {stats?.maxSimultaneousTables
+              ? `pico de ${stats.maxSimultaneousTables} · torneios em paralelo`
+              : "Torneios em paralelo"}
+          </div>
+        </div>
+
+        <div className="weekly-summary-card metric-volume" data-testid="metric-avg-duration">
+          <div className="weekly-card-icon text-blue-400">
+            <Timer className="h-8 w-8" />
+          </div>
+          <div className="weekly-card-value">
+            {formatDuration(stats?.avgDurationSeconds)}
+          </div>
+          <div className="weekly-card-label">Tempo Médio</div>
+          <div className="weekly-card-sublabel">
+            {stats?.durationSampleSize
+              ? `duração do torneio · ${stats.durationSampleSize} com dado`
+              : "Duração do torneio"}
+          </div>
         </div>
       </div>
     </>
