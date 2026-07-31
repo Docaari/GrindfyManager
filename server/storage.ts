@@ -3338,9 +3338,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       });
     }
 
-    // Jogos por dia usa ENTRADAS (buy-ins pagos), mesma base do ITM: re-entrar
-    // é jogar de novo. daysPlayed = dias distintos com registro.
-    const gamesPerDay = daysPlayed > 0 ? Math.round((totalEntries / daysPlayed) * 100) / 100 : 0;
+    // Jogos por dia = TORNEIOS / dias ativos (não entradas). Conferido contra o
+    // painel do SharkScope no histórico do founder: kdo 275/43 = 6,4 · 5505GG
+    // 630/42 = 15 · grupo 1216/48 = 25,3 — todos batem exatamente com a coluna
+    // "Jogos / Dia" dele. (O ITM, ao contrário, usa entradas — ver acima.)
+    const gamesPerDay = daysPlayed > 0 ? Math.round((count / daysPlayed) * 100) / 100 : 0;
 
     const avgDurationSeconds = result.avgDurationSeconds == null
       ? null

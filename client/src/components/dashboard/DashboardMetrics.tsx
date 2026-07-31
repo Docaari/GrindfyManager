@@ -318,7 +318,7 @@ export function DashboardMetrics({ stats, categoryAnalytics, speedAnalytics, isM
             {stats?.gamesPerDay ? Number(stats.gamesPerDay).toFixed(1) : "—"}
           </div>
           <div className="weekly-card-label">Jogos/Dia</div>
-          <div className="weekly-card-sublabel">Entradas por dia jogado</div>
+          <div className="weekly-card-sublabel">Torneios por dia ativo</div>
         </div>
 
         <div className="weekly-summary-card metric-volume" data-testid="metric-simultaneous-tables">
