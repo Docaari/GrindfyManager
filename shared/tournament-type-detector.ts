@@ -39,6 +39,21 @@ const FLIGHT_KEYWORD_REGEX = /(?<![A-Za-z])(flight|phase|multi[\s\-]?day)(?![A-Z
 export interface TypeDetectionInput {
   name?: string | null;
   category?: string | null;
+  /**
+   * Sprint import-otimizacao (ADR-243): sinais estruturados vindos de uma coluna
+   * de bandeiras do export (hoje so o SharkScope tem — `shared/sharkscope-flags`).
+   * OPCIONAL e ADITIVO: caller que nao passa mantem exatamente o comportamento
+   * antigo (deteccao por nome). Quando presente, a bandeira VENCE o nome para
+   * tipo primario e para allowsAddOn/allowsReentry, porque e dado declarado pela
+   * rede e nao heuristica de string.
+   */
+  flagSignals?: {
+    primaryType?: TournamentPrimaryType | null;
+    allowsAddOn?: boolean;
+    allowsReentry?: boolean;
+    deepStack?: boolean;
+    isMultiDay?: boolean;
+  } | null;
 }
 
 export interface DetectedTypeFields {
@@ -135,16 +150,24 @@ export function enrichTournamentTypeFields(input: TypeDetectionInput): DetectedT
   if (type === 'Vanilla' && nameSaysSatellite) type = 'Satellite';
   if (type === 'Vanilla' && reaFlags.allowsAddOn) type = 'Add-on';
 
-  // Coerencia semantica: type=Add-on -> allowsAddOn=true
-  const allowsAddOn = reaFlags.allowsAddOn || type === 'Add-on';
+  // Sprint import-otimizacao (ADR-243): bandeira declarada pelo export vence a
+  // heuristica de nome para o tipo primario. Sem flagSignals nada muda.
+  const signals = input.flagSignals ?? null;
+  if (signals?.primaryType) type = signals.primaryType;
 
-  const { startingStackBb, deepStack } = detectStackDepthFromName(name);
+  // Coerencia semantica: type=Add-on -> allowsAddOn=true
+  const allowsAddOn = reaFlags.allowsAddOn || type === 'Add-on' || signals?.allowsAddOn === true;
+  const allowsReentry = reaFlags.allowsReentry || signals?.allowsReentry === true;
+
+  const stack = detectStackDepthFromName(name);
+  const startingStackBb = stack.startingStackBb;
+  const deepStack = stack.deepStack || signals?.deepStack === true;
 
   return {
     type,
-    isFlight,
+    isFlight: isFlight || signals?.isMultiDay === true,
     allowsAddOn,
-    allowsReentry: reaFlags.allowsReentry,
+    allowsReentry,
     startingStackBb,
     deepStack,
   };

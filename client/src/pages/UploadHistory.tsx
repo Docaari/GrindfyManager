@@ -7,10 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import AutoUpload from "@/components/AutoUpload";
-import { Upload, CheckCircle, AlertCircle, FileText, Database, Trash2, AlertTriangle } from "lucide-react";
+import { Upload, CheckCircle, AlertCircle, FileText, Database, Trash2, AlertTriangle, Undo2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
+// ADR-243 — conferencia do import (lidas x importadas x duplicadas x rejeitadas).
+import { ImportReconciliationCard, type ImportReconciliation } from "@/components/upload/ImportReconciliationCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -31,6 +33,9 @@ export default function UploadHistory() {
     duplicates: number;
     show: boolean;
   } | null>(null);
+
+  // ADR-243 — conferencia do ultimo import (linhas lidas x importadas x rejeitadas).
+  const [lastReconciliation, setLastReconciliation] = useState<ImportReconciliation | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -64,6 +69,31 @@ export default function UploadHistory() {
   });
 
   // Delete upload mutation
+  // ADR-243 — desfazer import: remove os torneios daquele upload_id.
+  const undoUploadMutation = useMutation({
+    mutationFn: async (uploadId: string) => {
+      return apiRequest('POST', `/api/upload-history/${uploadId}/undo`);
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: 'Import desfeito',
+        description: data?.message ?? 'Torneios do import removidos',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/upload-history'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/upload-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/tournaments/sites'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao desfazer',
+        description: error?.response?.data?.message ?? error?.message ?? 'Falha ao desfazer o import',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const deleteUploadMutation = useMutation({
     mutationFn: async (uploadId: string) => {
 
@@ -149,6 +179,8 @@ export default function UploadHistory() {
           <AutoUpload
             onUploadComplete={(result) => {
               setIsUploading(false);
+              // ADR-243: guarda a conferencia devolvida pelo backend.
+              setLastReconciliation(result?.reconciliation ?? null);
 
               // Invalidate ALL related queries to ensure fresh data
 
@@ -177,6 +209,13 @@ export default function UploadHistory() {
               });
             }}
           />
+
+          {lastReconciliation && (
+            <ImportReconciliationCard
+              reconciliation={lastReconciliation}
+              title="Conferência do último import"
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -299,10 +338,35 @@ export default function UploadHistory() {
                         </div>
                         <div className="flex-1">
                           <p className="text-white font-semibold text-lg">{upload.filename}</p>
-                          <div className="flex items-center gap-3 mt-1">
+                          <div className="flex items-center gap-3 mt-1 flex-wrap">
                             <span className="text-sm text-gray-400">
                               <strong>{upload.tournamentsCount}</strong> torneios
                             </span>
+                            {/* ADR-243: reconciliacao — o jogador ve o que o arquivo tinha. */}
+                            {upload.rowsInFile != null && (
+                              <>
+                                <span className="text-sm text-gray-400">•</span>
+                                <span className="text-sm text-gray-400" data-testid="history-rows-in-file">
+                                  {upload.rowsInFile} linhas no arquivo
+                                </span>
+                              </>
+                            )}
+                            {upload.duplicatesFound > 0 && (
+                              <>
+                                <span className="text-sm text-gray-400">•</span>
+                                <span className="text-sm text-yellow-400">
+                                  {upload.duplicatesFound} duplicadas
+                                </span>
+                              </>
+                            )}
+                            {upload.rejectedCount > 0 && (
+                              <>
+                                <span className="text-sm text-gray-400">•</span>
+                                <span className="text-sm text-red-400" data-testid="history-rejected">
+                                  {upload.rejectedCount} rejeitadas
+                                </span>
+                              </>
+                            )}
                             <span className="text-sm text-gray-400">•</span>
                             <span className="text-sm text-gray-400">
                               {new Date(upload.uploadDate).toLocaleDateString('pt-BR')}
@@ -320,12 +384,36 @@ export default function UploadHistory() {
                         >
                           {upload.status === 'success' ? 'Sucesso' : 'Erro'}
                         </Badge>
+                        {/* ADR-243: desfaz o import (remove os torneios daquele arquivo).
+                            So aparece para imports que gravaram torneios. */}
+                        {upload.status === 'success' && upload.tournamentsCount > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const ok = window.confirm(
+                                `Desfazer este import?
+
+Os ${upload.tournamentsCount} torneios importados de "${upload.filename}" serão removidos do seu histórico. Esta ação não pode ser desfeita.`,
+                              );
+                              if (ok) undoUploadMutation.mutate(upload.id);
+                            }}
+                            disabled={undoUploadMutation.isPending}
+                            className="text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 px-2"
+                            data-testid={`undo-import-${upload.id}`}
+                            title="Desfazer import (remove os torneios deste arquivo)"
+                          >
+                            <Undo2 className="h-4 w-4 mr-1" />
+                            Desfazer
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => deleteUploadMutation.mutate(upload.id)}
                           disabled={deleteUploadMutation.isPending}
                           className="text-red-400 hover:text-red-300 hover:bg-red-500/10 p-2"
+                          title="Remover apenas o registro do histórico (mantém os torneios)"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

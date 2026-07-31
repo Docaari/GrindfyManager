@@ -2607,7 +2607,9 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           count: sql<number>`COUNT(*)::int`,
           totalProfit: sql<number>`COALESCE(SUM(prize::numeric), 0)`,
           totalBuyins: sql<number>`COALESCE(SUM(buy_in::numeric), 0)`,
-          itmCount: sql<number>`COUNT(CASE WHEN prize::numeric > 0 THEN 1 END)::int`,
+          // ADR-243: ITM canonico = premiado (gross_prize), com fallback prize>0
+          // para linhas legadas anteriores a Migration 0097.
+          itmCount: sql<number>`COUNT(CASE WHEN COALESCE(gross_prize::numeric, prize::numeric) > 0 THEN 1 END)::int`,
         })
         .from(tournaments)
         .where(and(...baseConditions));
@@ -3046,8 +3048,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           totalReentriesCost: sql<number>`SUM(COALESCE(CAST(${tournaments.reentries} AS DECIMAL), 0) * CAST(${tournaments.buyIn} AS DECIMAL))`,
           totalAddOnCost: sql<number>`SUM(CASE WHEN ${tournaments.addOnTaken} = true THEN COALESCE(CAST(${tournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END)`,
 
-          // ITM: Quantidade de eventos (series ou singular) que ficou ITM
-          itmCount: sql<number>`COUNT(DISTINCT CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
+          // ITM: eventos (serie ou singular) em que o jogador FOI PREMIADO.
+          // ADR-243: antes era `prize > 0`, mas `prize` nesta tabela e o lucro
+          // LIQUIDO — min-cash abaixo do investimento e cash apos re-entry
+          // terminam liquidos negativos e nao contavam como ITM. Medido no export
+          // real do founder: 134 das 364 premiacoes (37%) eram invisiveis, ITM
+          // aparecia 19,3% quando o real era 30,8% (-11,5 p.p.).
+          // Canonico = gross_prize > 0; linhas legadas (gross_prize NULL, antes da
+          // Migration 0097) mantem o fallback prize > 0.
+          itmCount: sql<number>`COUNT(DISTINCT CASE WHEN (CASE WHEN ${tournaments.grossPrize} IS NOT NULL THEN CAST(${tournaments.grossPrize} AS DECIMAL) > 0 ELSE CAST(${tournaments.prize} AS DECIMAL) > 0 END) THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
 
           // FTs: eventos com posicao final 1-9 (em series, somente Day 2 tem posicao definida)
           finalTablesCount: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.position} >= 1 AND ${tournaments.position} <= 9 AND ${tournaments.position} IS NOT NULL THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)`,
@@ -3560,7 +3569,15 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       const finalTableRate = (finalTables / volume) * 100;
       const bigHits = tournamentsList.filter((t: any) => t.bigHit === true).length;
       const bigHitRate = (bigHits / volume) * 100;
-      const itm = tournamentsList.filter((t: any) => t.position && t.position > 0 && parseFloat(String(t.prize)) > 0).length;
+      // ADR-243: premiado = gross_prize>0 (fallback prize>0 nas linhas legadas).
+      // Mantem o requisito de posicao conhecida deste calculo especifico.
+      const itm = tournamentsList.filter((t: any) => {
+        const gross = t.grossPrize ?? null;
+        const cashed = gross !== null && gross !== undefined
+          ? parseFloat(String(gross)) > 0
+          : parseFloat(String(t.prize)) > 0;
+        return t.position && t.position > 0 && cashed;
+      }).length;
       const itmRate = (itm / volume) * 100;
 
       // Additional metrics (excluir fieldSize=0/null do calculo)
@@ -5147,19 +5164,29 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       .limit(5);
   }
 
+  /**
+   * Teto de linhas de historico de upload por usuario (ADR-243).
+   * Era 5 hardcoded dentro do metodo — ver comentario no createUploadHistory.
+   */
+  static readonly UPLOAD_HISTORY_MAX_ROWS = 200;
+
   async createUploadHistory(uploadRecord: InsertUploadHistory): Promise<UploadHistory> {
+    const UPLOAD_HISTORY_MAX_ROWS = (this.constructor as any).UPLOAD_HISTORY_MAX_ROWS ?? 200;
     const id = nanoid();
 
-    // Primeiro, limpamos registros antigos se já existem 5
+    // ADR-243: o teto era 5 — cada upload novo APAGAVA o historico anterior, o
+    // que impedia auditoria e (agora) desfazer import via tournaments.upload_id.
+    // Historico e metadata barata (1 row por arquivo); teto subiu para 200 e
+    // continua existindo apenas como guarda-chuva anti-crescimento infinito.
     const existing = await db
       .select({ id: uploadHistory.id })
       .from(uploadHistory)
       .where(eq(uploadHistory.userId, uploadRecord.userId))
       .orderBy(desc(uploadHistory.uploadDate));
 
-    if (existing.length >= 5) {
-      // Remove o mais antigo se já tem 5
-      const toDelete = existing.slice(4); // Mantém apenas os primeiros 4
+    if (existing.length >= UPLOAD_HISTORY_MAX_ROWS) {
+      // Mantem os (MAX - 1) mais recentes; o novo insert completa o teto.
+      const toDelete = existing.slice(UPLOAD_HISTORY_MAX_ROWS - 1);
       if (toDelete.length > 0) {
         // inArray (NAO sql`IN (${...})` interpolado — o template tratava o
         // .join() como um unico bound param `IN ($1)`, type mismatch no PG →
@@ -5194,6 +5221,12 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       processedCount: number;
       tournamentsCount: number;
       errorMessage: string | null;
+      // ADR-243 — reconciliacao do import.
+      duplicatesFound: number;
+      duplicateAction: string | null;
+      rowsInFile: number | null;
+      rejectedCount: number | null;
+      importSummary: unknown;
     }>,
   ): Promise<UploadHistory | null> {
     const update: Record<string, unknown> = {};
@@ -5201,6 +5234,11 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     if (patch.processedCount !== undefined) update.processedCount = patch.processedCount;
     if (patch.tournamentsCount !== undefined) update.tournamentsCount = patch.tournamentsCount;
     if (patch.errorMessage !== undefined) update.errorMessage = patch.errorMessage;
+    if (patch.duplicatesFound !== undefined) update.duplicatesFound = patch.duplicatesFound;
+    if (patch.duplicateAction !== undefined) update.duplicateAction = patch.duplicateAction;
+    if (patch.rowsInFile !== undefined) update.rowsInFile = patch.rowsInFile;
+    if (patch.rejectedCount !== undefined) update.rejectedCount = patch.rejectedCount;
+    if (patch.importSummary !== undefined) update.importSummary = patch.importSummary;
     if (Object.keys(update).length === 0) {
       const [row] = await db.select().from(uploadHistory).where(eq(uploadHistory.id, id));
       return row ?? null;
@@ -9400,7 +9438,8 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           + CASE WHEN ${tournaments.addOnTaken} = true THEN COALESCE(CAST(${tournaments.addOnCost} AS DECIMAL), 0) ELSE 0 END
         ), 0)::text`,
         profitNative: sql<string>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)::text`,
-        itmCount: sql<number>`COUNT(DISTINCT CASE WHEN CAST(${tournaments.prize} AS DECIMAL) > 0 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)::int`,
+        // ADR-243: ITM canonico = premiado (gross_prize) com fallback legado.
+        itmCount: sql<number>`COUNT(DISTINCT CASE WHEN COALESCE(CAST(${tournaments.grossPrize} AS DECIMAL), CAST(${tournaments.prize} AS DECIMAL)) > 0 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)::int`,
         finalTablesCount: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.position} >= 1 AND ${tournaments.position} <= 9 AND ${tournaments.position} IS NOT NULL THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)::int`,
         winsCount: sql<number>`COUNT(DISTINCT CASE WHEN ${tournaments.position} = 1 THEN COALESCE(${tournaments.seriesId}, ${tournaments.id}) END)::int`,
       })

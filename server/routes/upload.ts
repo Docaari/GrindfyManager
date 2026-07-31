@@ -11,13 +11,20 @@ import {
 } from "@shared/schema";
 import multer from "multer";
 import { PokerCSVParser } from "../csvParser";
+import type { ParsedTournament } from "../csvParser";
 import { detectFlightCandidate } from "../flightDetector";
 import { enrichTournamentTypeFields } from "@shared/tournament-type-detector";
 import { nanoid } from "nanoid";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { playerBundleCache } from "../services/playerBundle";
 import { selectorCache } from "../services/selectorCache";
+// ADR-243 — mapeamento unico ParsedTournament -> row de INSERT (os 3 endpoints
+// de upload usavam listas de campos divergentes; ver o modulo para o historico).
+import { mapParsedToInsertRows } from "../services/tournamentInsertMapper";
+import { buildImportSummary } from "../services/importReconciliation";
+// ADR-243 — cambio pela DATA de cada torneio (antes: taxa flat das settings).
+import { applyHistoricalFxToBatch } from "../services/fx/historicalFxResolver";
 
 // Wave-1 launch-fix #4: restrict CSV/XLSX/TXT uploads to whitelisted extensions +
 // MIME types. Magic-byte sniffing happens downstream in the parser (XLSX = PK zip
@@ -182,7 +189,7 @@ export function registerUploadRoutes(app: Express): void {
 
       try {
         // Detect file format and use appropriate parser
-        let tournaments;
+        let tournaments: ParsedTournament[];
         let duplicatesIgnored = 0;
         let duplicateIds: string[] = [];
 
@@ -360,62 +367,29 @@ export function registerUploadRoutes(app: Express): void {
           }
         }
 
+        // ADR-243: re-valoriza as linhas nao-USD com a cotacao da DATA do torneio
+        // (cascata historical_exact -> historical_prev -> historical_nearest;
+        // sem cobertura mantem a taxa flat que o parser aplicou).
+        try {
+          const fxResult = await applyHistoricalFxToBatch(tournaments as any[]);
+          tournaments = fxResult.tournaments as any;
+          if (fxResult.fx && fxResult.fx.applied > 0) {
+            console.info('upload.fx.historical_applied', fxResult.fx);
+          }
+        } catch (fxErr) {
+          console.error('upload.fx.historical_failed', fxErr);
+        }
+
         // VERIFICAR SE TOURNAMENTS TÊM USERID CORRETO
         const invalidTournaments = tournaments.filter(t => t.userId !== userPlatformId);
         if (invalidTournaments.length > 0) {
           return res.status(500).json({ message: 'Internal error: Tournament data contains incorrect user identification' });
         }
 
-        // Convert ParsedTournament[] to InsertTournament[] and batch insert.
-        // enrichTournamentTypeFields garante paridade type<->category + Satellite/Flight/Add-on.
-        const tournamentsToInsert = tournaments.map(tournament => {
-          const enriched = enrichTournamentTypeFields({ name: tournament.name, category: tournament.category });
-          // P1 fix (2026-05-11) #2: addOnCost = stake (NOT buyIn). buyIn = stake + rake,
-          // so subtract rake to get stake. Avoids double-counting rake when user adds
-          // a re-buy / add-on later.
-          const buyInNum = Number(tournament.buyIn ?? 0);
-          const rakeNum = Number(tournament.rake ?? 0);
-          const stakeOnly = Math.max(0, buyInNum - rakeNum);
-          // P1 fix (2026-05-11) #3: preserve parser-provided category when it's a
-          // recognized label (legacy Bounty/Knockout/Re-entry are not in PRIMARY_TYPES
-          // but still meaningful as display labels). enriched.type is the SSoT for
-          // the ortogonal `type` column; `category` keeps the historical string.
-          const preservedCategory = (tournament.category && tournament.category.trim() !== '')
-            ? tournament.category
-            : enriched.type;
-          return {
-            userId: userPlatformId,
-            name: tournament.name.trim(),
-            buyIn: tournament.buyIn.toString(),
-            prize: tournament.prize?.toString() || "0",
-            position: tournament.position || null,
-            datePlayed: tournament.datePlayed ?? new Date(),
-            site: tournament.site,
-            format: tournament.format,
-            type: enriched.type,
-            category: preservedCategory,
-            isFlight: enriched.isFlight,
-            allowsAddOn: enriched.allowsAddOn,
-            addOnCost: enriched.allowsAddOn ? stakeOnly.toString() : null,
-            allowsReentry: enriched.allowsReentry,
-            speed: tournament.speed,
-            fieldSize: tournament.fieldSize || null,
-            finalTable: tournament.finalTable || false,
-            bigHit: tournament.bigHit || false,
-            currency: tournament.currency || "USD",
-            prizePool: tournament.prizePool?.toString() || null,
-            reentries: tournament.reentries || 0,
-            tournamentId: tournament.tournamentId || null,
-            // Fase 3 (library-evolution): campos novos. deepStack/startingStackBb
-            // vem do enrich (nome); duracao/mesa/estrutura/jogo vem do parser.
-            durationSeconds: tournament.durationSeconds ?? null,
-            playersPerTable: tournament.playersPerTable ?? null,
-            structure: tournament.structure ?? null,
-            gameType: tournament.gameType ?? null,
-            startingStackBb: tournament.startingStackBb ?? enriched.startingStackBb ?? null,
-            deepStack: tournament.deepStack ?? enriched.deepStack ?? false,
-          };
-        });
+        // ADR-243: mapeamento UNICO compartilhado pelos 3 endpoints de upload
+        // (antes cada um gravava uma lista diferente de campos — rake/duracao/
+        // players_per_table/converted_to_usd morriam dependendo do endpoint).
+        const tournamentsToInsert = mapParsedToInsertRows(tournaments as any[], userPlatformId);
 
         // RF-02 (ADR-181): >ASYNC_THRESHOLD entra em background com polling.
         if (tournamentsToInsert.length > ASYNC_THRESHOLD) {
@@ -621,7 +595,10 @@ export function registerUploadRoutes(app: Express): void {
 
       // Parse the CSV file based on format
       const fileContent = file.buffer.toString('utf-8');
-      let parsedData = [];
+      let parsedData: ParsedTournament[] = [];
+      // ADR-243: preview da reconciliacao ja nesta etapa (o jogador ve, ANTES de
+      // confirmar, quantas linhas o arquivo tinha e quais nao seriam importadas).
+      let parseReport: { rowsInFile: number; parsedCount: number; rejected: any[] } | null = null;
 
       try {
         if (isBodogFormat(file.originalname)) {
@@ -631,7 +608,9 @@ export function registerUploadRoutes(app: Express): void {
         } else if (isCoinPokerFormat(fileContent)) {
           parsedData = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId, exchangeRates);
         } else {
-          parsedData = await PokerCSVParser.parseCSV(fileContent, userPlatformId, exchangeRates);
+          const detailed = await PokerCSVParser.parseCSVDetailed(fileContent, userPlatformId, exchangeRates);
+          parsedData = detailed.tournaments;
+          parseReport = detailed.report;
         }
 
       } catch (parseError) {
@@ -643,6 +622,15 @@ export function registerUploadRoutes(app: Express): void {
 
       if (!parsedData || parsedData.length === 0) {
         return res.status(400).json({ message: 'Nenhum torneio válido encontrado no arquivo' });
+      }
+
+      // ADR-243: a previa usa a MESMA re-valorizacao do import, senao os numeros
+      // mostrados antes de confirmar nao bateriam com os gravados.
+      try {
+        const fxResult = await applyHistoricalFxToBatch(parsedData as any[]);
+        parsedData = fxResult.tournaments as any;
+      } catch (fxErr) {
+        console.error('check-duplicates.fx.historical_failed', fxErr);
       }
 
       // Batch check for duplicates
@@ -690,7 +678,16 @@ export function registerUploadRoutes(app: Express): void {
         duplicates: duplicateTournaments,
         duplicatesBySite,
         totalProcessed: parsedData.length,
-        fileName: file.originalname
+        fileName: file.originalname,
+        // ADR-243 — previa de reconciliacao (linhas lidas x parseadas x rejeitadas).
+        reconciliation: buildImportSummary({
+          parseReport,
+          parsedCount: parsedData.length,
+          duplicates: duplicateTournaments.length,
+          inserted: 0,
+          dbErrors: 0,
+          tournaments: parsedData as any[],
+        }),
       });
 
     } catch (error: any) {
@@ -730,17 +727,27 @@ export function registerUploadRoutes(app: Express): void {
 
       // Re-parse the file to get fresh data
       const fileContent = file.buffer.toString('utf8');
-      let parsedData = [];
+      let parsedData: ParsedTournament[] = [];
+      // ADR-243: relatorio de reconciliacao do import (linhas lidas x parseadas
+      // x rejeitadas com motivo). Apenas o caminho CSV generico produz relatorio
+      // hoje; os parsers dedicados (TXT/XLSX/CoinPoker) devolvem so a lista.
+      let parseReport: { rowsInFile: number; parsedCount: number; rejected: any[] } | null = null;
 
       try {
         if (file.originalname.endsWith('.txt')) {
           parsedData = await PokerCSVParser.parseCoinTXT(fileContent, userPlatformId, exchangeRates);
-        } else if (file.originalname.endsWith('.xlsx')) {
-          parsedData = await PokerCSVParser.parseBodogXLSX(fileContent, userPlatformId, exchangeRates);
+        } else if (file.originalname.toLowerCase().endsWith('.xlsx') || file.originalname.toLowerCase().endsWith('.xls')) {
+          // ADR-243 FIX: passava `fileContent` (string) para uma funcao que exige
+          // Buffer -> todo upload de planilha (Bodog) falhava com 400 justamente
+          // no caminho que a UI usa. O path /api/upload-history sempre passou
+          // file.buffer; aqui estava divergente.
+          parsedData = await PokerCSVParser.parseBodogXLSX(file.buffer, userPlatformId, exchangeRates);
         } else if (PokerCSVParser.isCoinPokerFormat(fileContent)) {
           parsedData = await PokerCSVParser.parseCoinPokerCSV(fileContent, userPlatformId, exchangeRates);
         } else {
-          parsedData = await PokerCSVParser.parseCSV(fileContent, userPlatformId, exchangeRates);
+          const detailed = await PokerCSVParser.parseCSVDetailed(fileContent, userPlatformId, exchangeRates);
+          parsedData = detailed.tournaments;
+          parseReport = detailed.report;
         }
 
 
@@ -749,6 +756,17 @@ export function registerUploadRoutes(app: Express): void {
           message: 'Erro ao processar arquivo',
           error: clientErrorDetail(parseError),
         });
+      }
+
+      // ADR-243: cambio por data do torneio antes de dedup/insert.
+      let fxInfo: any = null;
+      try {
+        const fxResult = await applyHistoricalFxToBatch(parsedData as any[]);
+        parsedData = fxResult.tournaments as any;
+        fxInfo = fxResult.fx;
+        if (fxInfo?.applied > 0) console.info('upload.fx.historical_applied', fxInfo);
+      } catch (fxErr) {
+        console.error('upload.fx.historical_failed', fxErr);
       }
 
       // Batch check duplicates
@@ -802,43 +820,32 @@ export function registerUploadRoutes(app: Express): void {
           return res.status(400).json({ message: 'Ação inválida' });
       }
 
-      // Batch insert tournaments. enrichTournamentTypeFields garante paridade
-      // type<->category + Satellite/Flight/Add-on.
-      const insertData = tournamentsToSave.map(tournament => {
-        const enriched = enrichTournamentTypeFields({ name: tournament.name, category: tournament.category });
-        // P1 fix (2026-05-11) #2: addOnCost = stake (NOT buyIn).
-        const buyInNum = Number(tournament.buyIn ?? 0);
-        const rakeNum = Number(tournament.rake ?? 0);
-        const stakeOnly = Math.max(0, buyInNum - rakeNum);
-        // P1 fix (2026-05-11) #3: preserve parser-provided category.
-        const preservedCategory = (tournament.category && tournament.category.trim() !== '')
-          ? tournament.category
-          : enriched.type;
-        return {
+      // ADR-243: mapeamento UNICO (ver server/services/tournamentInsertMapper).
+      // Este e o caminho que a UI usa (AutoUpload -> check-duplicates ->
+      // upload-with-duplicates) e era o mais pobre dos tres: perdia rake,
+      // duracao, players_per_table, structure, game_type, deep_stack e
+      // converted_to_usd.
+      // ADR-243: cria o registro do upload ANTES do insert para que cada torneio
+      // carregue `upload_id` -> permite auditoria e desfazer o import.
+      let uploadId: string | null = null;
+      try {
+        const created = await storage.createUploadHistory({
           userId: userPlatformId,
-          name: tournament.name.trim(),
-          buyIn: tournament.buyIn.toString(),
-          prize: tournament.prize?.toString() || "0",
-          position: tournament.position || null,
-          datePlayed: tournament.datePlayed ?? new Date(),
-          site: tournament.site,
-          format: tournament.format,
-          type: enriched.type,
-          category: preservedCategory,
-          isFlight: enriched.isFlight,
-          allowsAddOn: enriched.allowsAddOn,
-          addOnCost: enriched.allowsAddOn ? stakeOnly.toString() : null,
-          allowsReentry: enriched.allowsReentry,
-          speed: tournament.speed,
-          fieldSize: tournament.fieldSize || null,
-          finalTable: tournament.finalTable || false,
-          bigHit: tournament.bigHit || false,
-          currency: tournament.currency || "USD",
-          prizePool: tournament.prizePool?.toString() || null,
-          reentries: tournament.reentries || 0,
-          tournamentId: tournament.tournamentId || null,
-        };
-      });
+          filename: file.originalname || 'upload.csv',
+          status: 'processing',
+          tournamentsCount: 0,
+          duplicatesFound: duplicateTournaments.length,
+          errorMessage: null,
+          rowsInFile: parseReport?.rowsInFile ?? null,
+          rejectedCount: parseReport ? parseReport.rejected.length : null,
+        } as any);
+        uploadId = (created as any)?.id ?? null;
+      } catch (historyErr) {
+        // Metadata nao bloqueia o import (comportamento legado preservado).
+        console.error('upload-with-duplicates: createUploadHistory(pre) failed (non-blocking):', historyErr);
+      }
+
+      const insertData = mapParsedToInsertRows(tournamentsToSave as any[], userPlatformId, { uploadId });
 
       const savedTournaments = await storage.createTournamentsBatch(insertData);
       const successCount = savedTournaments.length;
@@ -871,17 +878,44 @@ export function registerUploadRoutes(app: Express): void {
       // deve invalidar o upload que ja gravou os torneios — apenas loga e segue
       // com res.json 200 (consistente com o outro endpoint upload-history que
       // tambem isola a escrita do historico em try/catch — followup 2026-05-14).
+      // ADR-243: fecha o registro criado antes do insert (status + contadores de
+      // reconciliacao). Quando a criacao previa falhou, cria agora (fallback).
+      const importSummary = buildImportSummary({
+        parseReport,
+        parsedCount: parsedData.length,
+        duplicates: duplicateTournaments.length,
+        inserted: successCount,
+        dbErrors: errorCount,
+        tournaments: tournamentsToSave as any[],
+      });
       try {
-        await storage.createUploadHistory({
-          userId: userPlatformId,
-          filename: file.originalname,
-          status: successCount > 0 ? 'success' : 'error',
-          tournamentsCount: successCount,
-          duplicatesFound: duplicateTournaments.length,
-          errorMessage: errorCount > 0 ? `${errorCount} erros durante importação` : null,
-        } as any);
+        if (uploadId) {
+          await storage.updateUploadHistory(uploadId, {
+            status: successCount > 0 ? 'success' : 'error',
+            tournamentsCount: successCount,
+            processedCount: successCount,
+            duplicatesFound: duplicateTournaments.length,
+            duplicateAction: typeof duplicateAction === 'string' ? duplicateAction : null,
+            errorMessage: errorCount > 0 ? `${errorCount} erros durante importação` : null,
+            rowsInFile: parseReport?.rowsInFile ?? null,
+            rejectedCount: parseReport ? parseReport.rejected.length : null,
+            importSummary,
+          } as any);
+        } else {
+          await storage.createUploadHistory({
+            userId: userPlatformId,
+            filename: file.originalname,
+            status: successCount > 0 ? 'success' : 'error',
+            tournamentsCount: successCount,
+            duplicatesFound: duplicateTournaments.length,
+            errorMessage: errorCount > 0 ? `${errorCount} erros durante importação` : null,
+            rowsInFile: parseReport?.rowsInFile ?? null,
+            rejectedCount: parseReport ? parseReport.rejected.length : null,
+            importSummary,
+          } as any);
+        }
       } catch (historyErr) {
-        console.error('upload-with-duplicates: createUploadHistory failed (non-blocking):', historyErr);
+        console.error('upload-with-duplicates: upload history persist failed (non-blocking):', historyErr);
       }
 
 
@@ -890,7 +924,10 @@ export function registerUploadRoutes(app: Express): void {
         message: actionMessage,
         tournamentsImported: successCount,
         duplicatesProcessed: duplicateTournaments.length,
-        errors: errorCount
+        errors: errorCount,
+        // ADR-243: reconciliacao visivel para o jogador.
+        uploadId,
+        reconciliation: importSummary,
       });
 
     } catch (error) {
@@ -964,13 +1001,20 @@ export function registerUploadRoutes(app: Express): void {
     try {
       const userId = req.user.userPlatformId;
 
-      // Buscar os últimos 5 registros diretamente do banco
+      // ADR-243: era `.limit(5)` fixo — o jogador via apenas os 5 ultimos imports
+      // de toda a vida da conta. Agora paginado (default 20, teto 100).
+      const rawLimit = parseInt(String(req.query?.limit ?? '20'), 10);
+      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 20;
+      const rawOffset = parseInt(String(req.query?.offset ?? '0'), 10);
+      const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : 0;
+
       const history = await db
         .select()
         .from(uploadHistory)
         .where(eq(uploadHistory.userId, userId))
         .orderBy(desc(uploadHistory.uploadDate))
-        .limit(5);
+        .limit(limit)
+        .offset(offset);
 
       res.json(history);
     } catch (error) {
@@ -984,10 +1028,12 @@ export function registerUploadRoutes(app: Express): void {
       const userId = req.user.userPlatformId;
 
       // Get total tournaments count
+      // CLAUDE.md 6.1: historico = tournaments com grind_session_id IS NULL.
+      // Sem o filtro, registros de sessao /grind-live inflariam o painel de import.
       const tournamentsCountResult = await db
         .select({ count: sql<string>`count(*)` })
         .from(tournaments)
-        .where(eq(tournaments.userId, userId));
+        .where(and(eq(tournaments.userId, userId), isNull(tournaments.grindSessionId)));
 
       const totalTournaments = parseInt(tournamentsCountResult[0]?.count || '0');
 
@@ -995,7 +1041,7 @@ export function registerUploadRoutes(app: Express): void {
       const sitesResult = await db
         .select({ site: tournaments.site })
         .from(tournaments)
-        .where(eq(tournaments.userId, userId))
+        .where(and(eq(tournaments.userId, userId), isNull(tournaments.grindSessionId)))
         .groupBy(tournaments.site);
 
       const activeSites = sitesResult.length;
@@ -1017,6 +1063,58 @@ export function registerUploadRoutes(app: Express): void {
       res.json(stats);
     } catch (error) {
       res.status(500).json({ message: 'Failed to fetch upload stats' });
+    }
+  });
+
+  /**
+   * ADR-243 — desfazer um import.
+   * Antes era impossivel: `tournaments` nao tinha vinculo com o upload, e o
+   * DELETE /api/upload-history/:id apagava apenas a linha de log (os torneios
+   * ficavam). Agora apaga os torneios daquele upload_id (escopo do usuario) e
+   * o registro de historico, devolvendo a contagem removida.
+   */
+  app.post('/api/upload-history/:id/undo', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const { id } = req.params;
+
+      const [record] = await db
+        .select()
+        .from(uploadHistory)
+        .where(and(eq(uploadHistory.id, id), eq(uploadHistory.userId, userId)));
+      if (!record) {
+        return res.status(404).json({ message: 'Import nao encontrado' });
+      }
+
+      const removed = await db
+        .delete(tournaments)
+        .where(and(eq(tournaments.userId, userId), eq(tournaments.uploadId, id)))
+        .returning({ id: tournaments.id });
+
+      await db
+        .update(uploadHistory)
+        .set({ status: 'undone', errorMessage: `Import desfeito: ${removed.length} torneios removidos` })
+        .where(and(eq(uploadHistory.id, id), eq(uploadHistory.userId, userId)));
+
+      // Caches que dependem do historico do jogador.
+      try {
+        playerBundleCache.invalidate(userId);
+        selectorCache.invalidateAllForUser(userId);
+        invalidateHomeOverviewCache(userId);
+        invalidateDashboardQuickStatsCache(userId);
+        invalidateHistoricalStatsCache(userId);
+      } catch (cacheErr) {
+        console.error('upload-history.undo: cache invalidation failed', cacheErr);
+      }
+
+      res.json({
+        message: `${removed.length} torneios removidos deste import`,
+        removedCount: removed.length,
+        uploadId: id,
+      });
+    } catch (error) {
+      console.error('POST /api/upload-history/:id/undo failed:', error);
+      res.status(500).json({ message: 'Erro ao desfazer import' });
     }
   });
 
@@ -1474,44 +1572,9 @@ export async function handleConfirmFlights(req: any, res: any): Promise<void> {
 const ASYNC_THRESHOLD = 5000;
 const BATCH_CHUNK = 500;
 
-function mapParsedToInsertRows(
-  tournamentsParsed: Array<any>,
-  userPlatformId: string,
-): any[] {
-  return tournamentsParsed.map((t) => {
-    const enriched = enrichTournamentTypeFields({ name: t.name, category: t.category });
-    const buyInNum = Number(t.buyIn ?? 0);
-    const rakeNum = Number(t.rake ?? 0);
-    const stakeOnly = Math.max(0, buyInNum - rakeNum);
-    const preservedCategory = (t.category && t.category.trim() !== '')
-      ? t.category
-      : enriched.type;
-    return {
-      userId: userPlatformId,
-      name: t.name.trim(),
-      buyIn: t.buyIn.toString(),
-      prize: t.prize?.toString() || "0",
-      position: t.position || null,
-      datePlayed: t.datePlayed ?? new Date(),
-      site: t.site,
-      format: t.format,
-      type: enriched.type,
-      category: preservedCategory,
-      isFlight: enriched.isFlight,
-      allowsAddOn: enriched.allowsAddOn,
-      addOnCost: enriched.allowsAddOn ? stakeOnly.toString() : null,
-      allowsReentry: enriched.allowsReentry,
-      speed: t.speed,
-      fieldSize: t.fieldSize || null,
-      finalTable: t.finalTable || false,
-      bigHit: t.bigHit || false,
-      currency: t.currency || "USD",
-      prizePool: t.prizePool?.toString() || null,
-      reentries: t.reentries || 0,
-      tournamentId: t.tournamentId || null,
-    };
-  });
-}
+// ADR-243: a definicao local foi removida — o mapeamento agora vive em
+// server/services/tournamentInsertMapper (importado no topo) e e o MESMO para os
+// tres endpoints de upload. Ver comentario do modulo para o historico.
 
 async function processAsyncBatches(
   injectedStorage: any,

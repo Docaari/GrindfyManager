@@ -6,6 +6,8 @@ import csv from "csv-parser";
 import { detectAddonReaFromName } from "../shared/addon-rea-detector";
 import { detectSatelliteFromName, detectIsFlightFromName, detectStackDepthFromName } from "../shared/tournament-type-detector";
 import { classifySpeed } from "../shared/speed-detector";
+import { parseSharkscopeFlags } from "../shared/sharkscope-flags";
+import { wallClockToUtc, timezoneFromHeader } from "../shared/wallclock-timezone";
 
 export interface ParsedTournament {
   userId: string; // 🎯 ETAPA 2.2: Este campo é preenchido pelo contexto de autenticação, nunca pelos dados CSV
@@ -41,6 +43,65 @@ export interface ParsedTournament {
   startingStackBb?: number | null;
   deepStack?: boolean;
   playerNick?: string; // Fase 5 Overview — nick do jogador (pool multi-jogador)
+  // Sprint import-otimizacao (ADR-243 / Migration 0097). Todos opcionais:
+  // parser de rede que nao tem a coluna simplesmente nao seta (null no DB).
+  /** Premio BRUTO do jogador (distinto de `prize`=liquido e de `prizePool`=premiacao total). */
+  grossPrize?: number | null;
+  /** Fim do torneio — habilita sessao real por overlap de horario. */
+  endDate?: Date | null;
+  /** Total de reentradas do FIELD (nao do jogador). */
+  fieldTotalEntries?: number | null;
+  /** Bandeiras cruas do export (token novo nunca vira perda silenciosa). */
+  flags?: string[] | null;
+  /** Valores na moeda original + taxa/origem usadas na conversao para USD. */
+  buyInNative?: number | null;
+  prizeNative?: number | null;
+  fxRateUsed?: number | null;
+  fxSource?: string | null;
+  /** Data (YYYY-MM-DD) da cotacao usada — cambio por data do torneio (ADR-243). */
+  fxRateDate?: string | null;
+  /** Fuso declarado no cabecalho do export (ex. America/Sao_Paulo). */
+  sourceTimezone?: string | null;
+  /** true quando o nome veio vazio no arquivo e foi sintetizado (auditoria). */
+  nameSynthesized?: boolean;
+}
+
+/** Motivo de rejeicao de uma linha, devolvido no relatorio do import (ADR-243). */
+export interface RejectedRow {
+  rowNum: number;
+  reason: string;
+  /** Linha crua (para o jogador conseguir achar no arquivo). */
+  rowData?: Record<string, any>;
+}
+
+export interface ParseReport {
+  /** Linhas de dado lidas do arquivo (exclui cabecalho). */
+  rowsInFile: number;
+  /** Linhas que viraram torneio. */
+  parsedCount: number;
+  /** Linhas descartadas, com motivo. */
+  rejected: RejectedRow[];
+}
+
+export interface ParseResultDetailed {
+  tournaments: ParsedTournament[];
+  report: ParseReport;
+}
+
+/**
+ * Motivo legivel (PT-BR) da rejeicao de uma linha (ADR-243). Puro.
+ * `null` = o parser da rede nao reconheceu a linha; caso contrario diz QUAL
+ * campo obrigatorio faltou, para o jogador conseguir corrigir o arquivo.
+ */
+export function describeRejection(t: ParsedTournament | null | undefined): string {
+  if (!t) return 'linha nao reconhecida pelo parser da rede (colunas ausentes ou formato inesperado)';
+  const missing: string[] = [];
+  if (!t.name || String(t.name).trim() === '') missing.push('nome do torneio');
+  if (!(typeof t.buyIn === 'number') || !Number.isFinite(t.buyIn) || t.buyIn < 0) missing.push('buy-in valido');
+  if (!(t.datePlayed instanceof Date) || isNaN(t.datePlayed.getTime())) missing.push('data valida');
+  return missing.length > 0
+    ? `campo obrigatorio ausente/invalido: ${missing.join(', ')}`
+    : 'linha rejeitada por validacao do parser';
 }
 
 /**
@@ -691,11 +752,31 @@ export class PokerCSVParser {
     });
   }
 
-  // 🎯 ETAPA 2.2: userId é sempre do contexto de autenticação (userPlatformId), nunca dos dados CSV
+  /**
+   * ETAPA 2.2: userId é sempre do contexto de autenticação (userPlatformId).
+   *
+   * Assinatura preservada (Promise<ParsedTournament[]>) para nao quebrar os ~12
+   * arquivos de teste + 3 endpoints que a consomem. Quem precisa do relatorio de
+   * rejeicao usa `parseCSVDetailed` (ADR-243).
+   */
   static async parseCSV(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParsedTournament[]> {
+    const { tournaments } = await this.parseCSVDetailed(fileContent, userId, exchangeRates);
+    return tournaments;
+  }
+
+  /**
+   * Mesma logica do `parseCSV`, mas devolve tambem o relatorio do import:
+   * linhas lidas, parseadas e REJEITADAS com motivo (ADR-243). Antes as
+   * rejeicoes eram coletadas em `rowErrors` e descartadas ("for now, just
+   * resolving tournaments") — o jogador nao tinha como saber que uma linha do
+   * arquivo nao entrou.
+   */
+  static async parseCSVDetailed(fileContent: string, userId: string, exchangeRates: Record<string, number> = {}): Promise<ParseResultDetailed> {
     const tournaments: ParsedTournament[] = [];
     const rowErrors: { rowNum: number, error: string, rowData: any }[] = [];
+    const rejected: RejectedRow[] = [];
     let rowNum = 0;
+    let dataRows = 0;
 
     // Pre-process CSV to fix unquoted monetary commas (e.g. "$5,000 GTD" -> "$5000 GTD")
     const processedContent = this.preprocessCSV(fileContent);
@@ -715,6 +796,7 @@ export class PokerCSVParser {
 
             if (this.isRowLikelyHeader(data)) {
             } else {
+              dataRows++;
               const tournament = this.parsePokerSiteData(data, userId, exchangeRates);
 
               if (tournament &&
@@ -723,29 +805,46 @@ export class PokerCSVParser {
                   tournament.buyIn >= 0 &&
                   tournament.datePlayed instanceof Date &&
                   !isNaN(tournament.datePlayed.getTime())) {
-                // Add-on + Re-entry (ADR-014) - detect from name centrally
+                // Add-on + Re-entry (ADR-014) - detect from name centrally.
+                // ADR-243: agora OR com o que o parser da rede ja detectou. Antes
+                // sobrescrevia — as bandeiras `Rebuy` (256 linhas) e `Multi-Entry`
+                // (815) do SharkScope morriam aqui e allowsAddOn/allowsReentry
+                // ficavam false em 1179/1179 linhas do export real.
                 const flags = detectAddonReaFromName(tournament.name);
-                tournament.allowsAddOn = flags.allowsAddOn;
-                tournament.addOnCost = flags.allowsAddOn && tournament.buyIn > 0 ? tournament.buyIn : null;
-                tournament.allowsReentry = flags.allowsReentry;
+                const addOn = flags.allowsAddOn || tournament.allowsAddOn === true;
+                tournament.allowsAddOn = addOn;
+                tournament.addOnCost = addOn && tournament.buyIn > 0 ? tournament.buyIn : null;
+                tournament.allowsReentry = flags.allowsReentry || tournament.allowsReentry === true;
                 tournament.maxReentries = tournament.maxReentries ?? null;
                 tournaments.push(tournament);
               } else {
+                // ADR-243: rejeicao deixa de ser silenciosa. Antes este `else`
+                // era vazio — linha valida com nome ausente (4 no export real do
+                // founder) desaparecia sem contagem nem aviso.
+                rejected.push({
+                  rowNum,
+                  reason: describeRejection(tournament),
+                  rowData: data,
+                });
               }
             }
           } catch (error: any) {
             const errorMessage = error.message || 'Unknown error parsing row';
             rowErrors.push({ rowNum, error: errorMessage, rowData: data });
+            rejected.push({ rowNum, reason: `erro ao processar linha: ${errorMessage}`, rowData: data });
           }
         })
         .on('end', () => {
-          if (rowErrors.length > 0) {
-            // Optionally, you could pass rowErrors up in the resolve or a custom object
-            // resolve({ tournaments, errors: rowErrors });
-            // For now, just resolving tournaments to maintain current behavior,
-            // but errors are logged server-side.
-          }
-          if (tournaments.length === 0 && rowNum > 1) { // rowNum > 1 to account for header
+          // ADR-243: rejeicoes viram log estruturado + relatorio devolvido ao
+          // caller (antes o array era montado e descartado).
+          if (rejected.length > 0) {
+            console.warn('csvParser.rows_rejected', {
+              userId,
+              rowsInFile: dataRows,
+              parsed: tournaments.length,
+              rejected: rejected.length,
+              firstReasons: rejected.slice(0, 5).map((r) => `linha ${r.rowNum}: ${r.reason}`),
+            });
           }
           if (newPrizeSemantics && tournaments.length > 0) {
             const byNetwork: Record<string, number> = {};
@@ -759,7 +858,10 @@ export class PokerCSVParser {
               byNetwork,
             });
           }
-          resolve(tournaments);
+          resolve({
+            tournaments,
+            report: { rowsInFile: dataRows, parsedCount: tournaments.length, rejected },
+          });
         })
         .on('error', (error) => {
           reject(new Error(`CSV Stream Error: ${error.message}`));
@@ -1177,46 +1279,113 @@ export class PokerCSVParser {
     const fieldSize = this.parseIntSafe(g('Entrants') || g('Participantes'));
     const reentries = this.parseIntSafe(g('ReEntries/Rebuys') || g('Reentradas/Recompras')) || 0;
     const bountyPrize = this.parseFloatSafe(g('Bounty Prize') || g('Prêmio de Recompensa')) / conversionRate;
-    const prizePool = this.parseFloatSafe(g('Prize Pool') || g('Prêmio')) / conversionRate;
 
-    const flags = g('Flags') || g('Bandeiras');
+    // ADR-243 CORRECAO DE SEMANTICA: a coluna `Prêmio` do SharkScope e o premio
+    // BRUTO recebido pelo jogador, NAO a premiacao total do torneio. Validado no
+    // export real: `Prêmio == Resultado + investimento` em 364/364 linhas com
+    // valor. Antes ia para `prizePool`, poluindo a coluna (ex: "$108 Mystery
+    // Bounty Main Event, $5M GTD" gravava prizePool=241.19) e perdendo a metrica
+    // de ITM correta. Agora vai para `grossPrize`; `prizePool` fica null (o
+    // SharkScope nao exporta premiacao total — ela so existe dentro do nome).
+    // Fonte do premio BRUTO: a coluna PT `Prêmio` ou a EN `Prize`. NUNCA
+    // `Prize Pool` sozinha — num export ingles legitimo `Prize Pool` seria a
+    // premiacao TOTAL do torneio, semantica diferente. Como
+    // normalizePortugueseHeaders espelha `Prêmio` -> `Prize Pool`, so aceitamos
+    // `Prize Pool` como premio do jogador quando o header PT original existe.
+    const hasPtPremio = row['Prêmio'] !== undefined || row[' Prêmio'] !== undefined;
+    const grossPrizeRaw = hasPtPremio
+      ? (row['Prêmio'] ?? row[' Prêmio'])
+      : (g('Prize') !== '' ? g('Prize') : '');
+    const grossPrizeNum = this.parseFloatSafe(grossPrizeRaw);
+    const grossPrize = grossPrizeNum > 0 ? grossPrizeNum / conversionRate : null;
+    // `Prize Pool` de export ingles (premiacao total) continua indo para prizePool.
+    const realPrizePoolNum = hasPtPremio
+      ? 0
+      : this.parseFloatSafe(g('Prize Pool'));
+    const prizePool = realPrizePoolNum > 0 ? realPrizePoolNum / conversionRate : undefined;
+
+    const flagsRaw = g('Flags') || g('Bandeiras');
+    const flagSignals = parseSharkscopeFlags(flagsRaw);
     const speed = g('Speed') || g('Velocidade');
 
-    const finalName = name.trim();
-    if (!finalName || finalName === '' || buyIn < 0) {
+    // ADR-243: linha com `Nome` vazio NAO e mais descartada. No export real 4
+    // linhas WPT Global vinham sem nome mas com stake/resultado/posicao/duracao
+    // completos — eram perdidas em silencio (mexia no lucro total). Sintetiza um
+    // nome rastreavel e marca `nameSynthesized` para a UI poder listar/renomear.
+    let finalName = name.toString().trim();
+    let nameSynthesized = false;
+    if (finalName === '') {
+      const idPart = gameId?.toString().trim();
+      const buyInLabel = Number.isFinite(buyIn) && buyIn > 0 ? `$${buyIn.toFixed(2)}` : 'buy-in ?';
+      finalName = `[sem nome] ${site} ${buyInLabel}${idPart ? ` #${idPart}` : ''}`;
+      nameSynthesized = true;
+    }
+    if (buyIn < 0) {
       return null;
     }
 
-    // Date: prefer "Start Date" (Data de Início), fallback to "Date"
+    // Date: prefer "Start Date" (Data de Início), fallback to "Date".
+    // ADR-243: o SharkScope declara o fuso NO CABECALHO
+    // (`Data de Início (America/Sao_Paulo)`) e o valor vem sem offset. O parser
+    // antigo tratava como UTC -> erro fixo de 3h e torneio 21h+ caindo no dia
+    // seguinte. Agora converte hora-de-parede -> UTC no fuso declarado.
     const dateStr = g('Start Date') || g('Data de Início') || g('Date') || g('Data');
+    const endStr = g('End Date') || g('Data de Conclusão');
+    const sourceTimezone = this.timezoneFromRow(row);
+    const datePlayed = (sourceTimezone ? wallClockToUtc(dateStr, sourceTimezone) : null)
+      ?? this.parseDate(dateStr);
+    const endDate = (sourceTimezone ? wallClockToUtc(endStr, sourceTimezone) : null)
+      ?? this.parseDate(endStr);
 
     // Fase 3 (library-evolution): campos antes descartados do Sharkscope.
     const durationSeconds = parseDurationToSeconds(g('Duration') || g('Duração'));
-    const playersPerTable = this.parseIntSafe(g('Players Per Table') || g('Jogadores por mesa')) || null;
+    const playersPerTable = this.parseIntSafe(g('Players Per Table') || g('Jogadores por mesa'))
+      || flagSignals.maxPlayersPerTable
+      || null;
     const structure = normalizeStructure(g('Structure') || g('Estrutura'));
     const gameType = normalizeGame(g('Game') || g('Jogo'));
-    const { startingStackBb, deepStack } = detectStackDepthFromName(finalName);
+    const stack = detectStackDepthFromName(finalName);
+    const startingStackBb = stack.startingStackBb;
+    const deepStack = stack.deepStack || flagSignals.deepStack;
+
+    // ADR-243: `Total de Reentradas` e do FIELD (media 676 no export real), nao
+    // do jogador — habilita "entradas vs jogadores unicos" e rake real do field.
+    const fieldTotalEntriesRaw = g('Total ReEntries') || g('Total de Reentradas');
+    const fieldTotalEntries = String(fieldTotalEntriesRaw).trim() === ''
+      ? null
+      : this.parseIntSafe(fieldTotalEntriesRaw);
+
+    // ADR-243: bandeira declarada pela rede vence heuristica de nome para o tipo.
+    // Medicao do export real: `Satellite` em 104 linhas, deteccao por nome pegava
+    // apenas 6 (98 satelites classificados como Vanilla, escondendo ROI -76%).
+    const category = flagSignals.primaryType ?? this.detectCategory(finalName, flagsRaw);
 
     return {
       userId,
       tournamentId: gameId?.toString().trim() || undefined,
       name: finalName,
+      nameSynthesized: nameSynthesized || undefined,
       buyIn,
       prize: profit,
       position,
-      datePlayed: this.parseDate(dateStr),
+      datePlayed,
+      endDate,
       site,
       format: this.detectFormat(finalName),
-      category: this.detectCategory(finalName, flags),
+      category,
       speed: this.detectSpeed(speed, finalName),
       fieldSize,
+      fieldTotalEntries,
       currency: originalCurrency,
       finalTable: (position > 0 && (position <= 9 || position <= Math.ceil(fieldSize * 0.1))),
       bigHit: (profit > buyIn * 10 && buyIn > 0),
-      prizePool: prizePool || undefined,
+      // prizePool so recebe uma coluna de premiacao TOTAL de verdade (export EN);
+      // a coluna PT `Prêmio` vai para grossPrize (ver comentario acima).
+      prizePool,
       reentries,
       rake,
       convertedToUSD,
+      grossPrize,
       bountyPrize: bountyPrize || undefined,
       durationSeconds,
       playersPerTable,
@@ -1225,7 +1394,44 @@ export class PokerCSVParser {
       startingStackBb,
       deepStack,
       playerNick,
-    };
+      flags: flagSignals.flags.length > 0 ? flagSignals.flags : null,
+      // Valores nativos + taxa: auditoria e re-valorizacao sem re-import.
+      buyInNative: convertedToUSD ? +(buyIn * conversionRate).toFixed(8) : null,
+      prizeNative: convertedToUSD ? +(profit * conversionRate).toFixed(8) : null,
+      fxRateUsed: convertedToUSD ? conversionRate : null,
+      fxSource: convertedToUSD ? (this._fxSourceHint ?? 'import_rates') : null,
+      sourceTimezone,
+      allowsAddOn: flagSignals.allowsAddOn || undefined,
+      allowsReentry: flagSignals.allowsReentry || undefined,
+    } as ParsedTournament;
+  }
+
+  /**
+   * Origem das taxas de cambio usadas no import corrente (ADR-243). Setado pelo
+   * caller via `setFxSourceHint` para que cada linha registre `fx_source`.
+   * Estatico porque o parser e uma classe estatica; sempre sobrescrito no inicio
+   * de cada parse e apenas informativo (nunca altera valores).
+   */
+  private static _fxSourceHint: string | null = null;
+
+  static setFxSourceHint(source: string | null): void {
+    this._fxSourceHint = source;
+  }
+
+  /**
+   * Fuso declarado no cabecalho do export (`Data de Início (America/Sao_Paulo)`).
+   * Retorna null quando nenhum cabecalho traz `(Area/Local)` — nesse caso o
+   * caller cai no `parseDate` legado (comportamento antigo, sem regressao).
+   */
+  private static timezoneFromRow(row: any): string | null {
+    if (!row || typeof row !== 'object') return null;
+    for (const key of Object.keys(row)) {
+      const trimmed = key.trim();
+      if (!/^(Data de (In[íi]cio|Conclus[ãa]o)|Start Date|End Date|Date|Data)\b/i.test(trimmed)) continue;
+      const tz = timezoneFromHeader(trimmed);
+      if (tz) return tz;
+    }
+    return null;
   }
 
   private static parse888PokerFormat(row: any, userId: string, exchangeRates: Record<string, number> = {}): ParsedTournament | null {

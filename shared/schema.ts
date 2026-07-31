@@ -377,11 +377,47 @@ export const tournaments = pgTable("tournaments", {
   gameType: varchar("game_type"), // 'Holdem' | 'Omaha' | null
   startingStackBb: integer("starting_stack_bb"),
   deepStack: boolean("deep_stack").default(false),
+  // Sprint import-otimizacao (Migration 0097 / ADR-243). Tudo nullable sem
+  // default (lesson #7): null = "o export nao trouxe", distinto de 0/false.
+  /**
+   * Premio BRUTO recebido pelo jogador (coluna `Prêmio` do SharkScope).
+   * NAO confundir com `prizePool` (premiacao total do torneio) nem com `prize`
+   * (que nesta tabela e o lucro LIQUIDO — ver §6.1 + ADR-181).
+   * Validado no export real: `Prêmio == Resultado + investimento` em 364/364 linhas.
+   * ITM canonico = grossPrize > 0 (quando nao-null); `prize > 0` subestimava ITM
+   * em 11,5 p.p. porque min-cash com re-entry termina liquido negativo.
+   */
+  grossPrize: decimal("gross_prize"),
+  /** Parcela do premio vinda de bounties (coluna `Prêmio de Recompensa`). */
+  bountyPrize: decimal("bounty_prize"),
+  /** Nick/conta na rede — export "Player Group" traz varias contas no mesmo arquivo. */
+  playerNick: varchar("player_nick"),
+  /** Fim do torneio (`Data de Conclusão`) — habilita sessao real por overlap. */
+  endDate: timestamp("end_date"),
+  /** Total de reentradas do FIELD (nao do jogador) — entradas vs jogadores unicos. */
+  fieldTotalEntries: integer("field_total_entries"),
+  /** Bandeiras cruas do export (jsonb string[]) — token novo nunca vira perda silenciosa. */
+  flags: jsonb("flags"),
+  /** Upload que originou a linha — habilita desfazer import + auditoria. */
+  uploadId: varchar("upload_id"),
+  /** Valores na moeda original, antes da conversao (auditoria + re-valorizacao). */
+  buyInNative: decimal("buy_in_native"),
+  prizeNative: decimal("prize_native"),
+  /** Taxa e origem usadas na conversao para USD (`fxSource`: user|system|wallets|fallback|import_default). */
+  fxRateUsed: decimal("fx_rate_used"),
+  fxSource: varchar("fx_source"),
+  /** Data da cotacao efetivamente usada (cambio por data do torneio, ADR-243). */
+  fxRateDate: date("fx_rate_date"),
+  /** Fuso declarado pelo export (ex. America/Sao_Paulo) usado para converter a data. */
+  sourceTimezone: varchar("source_timezone"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   templateId: varchar("template_id"),
   grindSessionId: varchar("grind_session_id"),
 }, (table) => [
+  // Migration 0097: desfazer import + ROI por conta (export multi-nick).
+  index("idx_tournaments_upload").on(table.uploadId),
+  index("idx_tournaments_user_nick").on(table.userId, table.playerNick),
   index("idx_tournaments_user_tournament_id").on(table.userId, table.tournamentId),
   index("idx_tournaments_user_name_date_buyin").on(table.userId, table.name, table.datePlayed, table.buyIn),
   index("idx_tournaments_user_date").on(table.userId, table.datePlayed),
@@ -1149,6 +1185,14 @@ export const uploadHistory = pgTable("upload_history", {
   uploadDate: timestamp("upload_date").defaultNow(),
   duplicatesFound: integer("duplicates_found").default(0),
   duplicateAction: varchar("duplicate_action"), // import_new_only, import_all, skip_upload
+  // Sprint import-otimizacao (Migration 0097 / ADR-243) — reconciliacao do import.
+  // Sem isso o jogador nao tem como saber que linha do arquivo nao entrou:
+  // `rowsInFile` (linhas de dado lidas) vs `tournamentsCount` (inseridas) vs
+  // `duplicatesFound` vs `rejectedCount`. `importSummary` guarda a amostra das
+  // rejeicoes (motivo + numero da linha) para exibir na UI.
+  rowsInFile: integer("rows_in_file"),
+  rejectedCount: integer("rejected_count"),
+  importSummary: jsonb("import_summary"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   // Migration 0064 (Fase 3 perf): /api/upload-history list.
