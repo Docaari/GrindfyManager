@@ -154,7 +154,8 @@ export default function Dashboard() {
     speeds: Array.from(new Set(Array.isArray(allTournaments) ? allTournaments.map((t: any) => t.speed).filter(Boolean) : [])) as string[]
   }), [allTournaments]);
 
-  // Queries de metricas (category + speed) necessarias para DashboardMetrics
+  // Queries de metricas (category + speed) — usadas pelas abas Categoria e Velocidade
+  // (os cards de contagem por tipo/velocidade foram removidos do topo do dashboard).
   const { data: categoryAnalytics, isLoading: categoryLoading } = useQuery({
     queryKey: ["/api/analytics/by-category", period, filters],
     queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-category?${params}`); },
@@ -477,16 +478,12 @@ export default function Dashboard() {
       {!isMainLoading && (
         <DashboardMetrics
           stats={stats}
-          categoryAnalytics={categoryAnalytics}
-          speedAnalytics={speedAnalytics}
           isMainLoading={false}
         />
       )}
       {isMainLoading && (
         <DashboardMetrics
           stats={undefined}
-          categoryAnalytics={undefined}
-          speedAnalytics={undefined}
           isMainLoading={true}
         />
       )}

@@ -20,16 +20,15 @@ function formatDuration(seconds: number | null | undefined): string {
 
 interface DashboardMetricsProps {
   stats: any;
-  categoryAnalytics: any;
-  speedAnalytics: any;
   isMainLoading: boolean;
 }
 
-export function DashboardMetrics({ stats, categoryAnalytics, speedAnalytics, isMainLoading }: DashboardMetricsProps) {
+export function DashboardMetrics({ stats, isMainLoading }: DashboardMetricsProps) {
   if (isMainLoading) {
     return (
       <div className="space-y-6 mb-6">
-        {[1, 2, 3].map((row) => (
+        {/* 4 linhas de cards (volume, financeiro, performance, rotina). */}
+        {[1, 2, 3, 4].map((row) => (
           <div key={row} className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
             {[1, 2, 3, 4, 5].map((col) => (
               <div key={col} className="weekly-summary-card">
@@ -226,68 +225,6 @@ export function DashboardMetrics({ stats, categoryAnalytics, speedAnalytics, isM
           <div className="weekly-card-sublabel">Vitórias</div>
         </div>
       </div>
-      {/* LINHA 4 - MÉTRICAS DE CATEGORIAS (Vermelho/Roxo) */}
-      <div className="dashboard-summary grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
-        <div className="weekly-summary-card metric-vanilla">
-          <div className="weekly-card-icon">
-            <div className="text-3xl text-red-400">🎯</div>
-          </div>
-          <div className="weekly-card-value">
-            {Array.isArray(categoryAnalytics) ? categoryAnalytics.find((c: any) => c.category === 'Vanilla')?.volume || 0 : 0}
-          </div>
-          <div className="weekly-card-label">Vanilla</div>
-          <div className="weekly-card-sublabel">Torneios</div>
-        </div>
-
-        <div className="weekly-summary-card metric-pko">
-          <div className="weekly-card-icon">
-            <div className="text-3xl text-red-400">🎖️</div>
-          </div>
-          <div className="weekly-card-value">
-            {Array.isArray(categoryAnalytics) ? categoryAnalytics.find((c: any) => c.category === 'PKO')?.volume || 0 : 0}
-          </div>
-          <div className="weekly-card-label">PKO</div>
-          <div className="weekly-card-sublabel">Progressive</div>
-        </div>
-
-        <div className="weekly-summary-card metric-mystery">
-          <div className="weekly-card-icon">
-            <div className="text-3xl text-red-400">🎁</div>
-          </div>
-          <div className="weekly-card-value">
-            {Array.isArray(categoryAnalytics) ? categoryAnalytics.find((c: any) => c.category === 'Mystery')?.volume || 0 : 0}
-          </div>
-          <div className="weekly-card-label">Mystery</div>
-          <div className="weekly-card-sublabel">Mystery</div>
-        </div>
-
-        <div className="weekly-summary-card metric-normal">
-          <div className="weekly-card-icon">
-            <div className="text-3xl text-purple-400">⏰</div>
-          </div>
-          <div className="weekly-card-value">
-            {Array.isArray(speedAnalytics) ? Number(speedAnalytics.find((s: any) => s.speed === 'Normal')?.volume || 0) : 0}
-          </div>
-          <div className="weekly-card-label">Normal</div>
-          <div className="weekly-card-sublabel">Velocidade</div>
-        </div>
-
-        <div className="weekly-summary-card metric-turbo">
-          <div className="weekly-card-icon">
-            <div className="text-3xl text-purple-400">⚡</div>
-          </div>
-          <div className="weekly-card-value">
-            {(() => {
-              const turboValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find((s: any) => s.speed === 'Turbo')?.volume || 0) : 0;
-              const hyperValue = Array.isArray(speedAnalytics) ? Number(speedAnalytics.find((s: any) => s.speed === 'Hyper')?.volume || 0) : 0;
-              return turboValue + hyperValue;
-            })()}
-          </div>
-          <div className="weekly-card-label">Turbo/Hyper</div>
-          <div className="weekly-card-sublabel">Velocidade</div>
-        </div>
-      </div>
-
       {/* LINHA 4 - ROTINA (ADR-243): dias vencedores/perdedores, ritmo, mesas
           simultâneas e tempo médio. Mesas e tempo dependem de duração/fim vindos
           do export — histórico antigo (sem essas colunas) mostra "—". */}
