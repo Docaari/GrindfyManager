@@ -18,6 +18,8 @@ interface Tournament {
   prize: string;
   datePlayed: string;
   fieldSize?: number;
+  /** Lugares na mesa (6-max, 9-max...). Base do cálculo de mesa final. */
+  playersPerTable?: number | null;
   finalTable: boolean;
   bigHit: boolean;
   category?: string; // Tipo: Vanilla, PKO, Mystery
@@ -109,6 +111,24 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
   const getSiteColor = getTableSiteColor;
   const getTypeColor = getTableTypeColor;
   const getSpeedColor = getTableSpeedColor;
+
+  /**
+   * Chegou à mesa final? Derivado da posição vs tamanho REAL da mesa
+   * (`playersPerTable` do export; 9 quando a rede não informa) — a mesma regra
+   * do card "Mesas Finais" do topo do dashboard.
+   *
+   * A coluna `final_table` gravada na importação NÃO é confiável: a regra antiga
+   * marcava FT quando a posição estava nos 10% melhores do field, então num
+   * torneio de 1000 jogadores o 100º lugar aparecia como mesa final. Aqui a marca
+   * é recalculada na leitura — histórico antigo se corrige sozinho, sem reimportar.
+   */
+  const reachedFinalTable = (tournament: any): boolean => {
+    const position = Number(tournament?.position);
+    if (!Number.isFinite(position) || position < 1) return false;
+    const seats = Number(tournament?.playersPerTable);
+    const tableSize = Number.isFinite(seats) && seats > 0 ? seats : 9;
+    return position <= tableSize;
+  };
 
   // Detectar categoria baseada no nome (fallback se não vier do backend)
   const detectCategory = (name: string) => {
@@ -310,8 +330,8 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
                 {/* Status sem título */}
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center gap-1">
-                    {tournament.finalTable && (
-                      <Badge variant="outline" className="text-xs text-poker-gold border-poker-gold">
+                    {reachedFinalTable(tournament) && (
+                      <Badge variant="outline" className="text-xs text-poker-gold border-poker-gold" data-testid="tournament-badge-ft">
                         FT
                       </Badge>
                     )}
