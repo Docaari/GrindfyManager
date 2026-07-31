@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest } from "@/lib/queryClient";
 // ADR-243 — conferencia do import (lidas x importadas x duplicadas x rejeitadas).
 import { ImportReconciliationCard, type ImportReconciliation } from "@/components/upload/ImportReconciliationCard";
+import { BulkDeleteTournamentsCard } from "@/components/upload/BulkDeleteTournamentsCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -147,7 +148,7 @@ export default function UploadHistory() {
               uploadHistoryQuery.refetch();
               siteStatsQuery.refetch();
             }}
-            className="bg-poker-gold hover:bg-poker-gold/80 text-black"
+            variant="default"
           >
             Tentar Novamente
           </Button>
@@ -457,239 +458,11 @@ Os ${upload.tournamentsCount} torneios importados de "${upload.filename}" serão
         </div>
       )}
 
-      {/* Granular Data Cleanup Section */}
-      <GranularDataCleanup />
+      {/* ADR-243: painel de remocao reescrito (escopo em 1 clique, previa
+          automatica, "remover tudo"). O antigo `GranularDataCleanup` usava
+          `bg-poker-gold` (classe inexistente -> botao sem fundo) e exigia
+          digitar as datas a mao. */}
+      <BulkDeleteTournamentsCard />
     </div>
-  );
-}
-
-// Granular Data Cleanup Component
-function GranularDataCleanup() {
-  const [selectedSites, setSelectedSites] = useState<string[]>([]);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [confirmation, setConfirmation] = useState('');
-  const [previewCount, setPreviewCount] = useState<number | null>(null);
-
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  // Fetch available sites
-  const { data: sites } = useQuery({
-    queryKey: ["/api/tournaments/sites"],
-    queryFn: async () => {
-      return apiRequest('GET', '/api/tournaments/sites');
-    },
-  });
-
-  // Preview count mutation
-  const previewMutation = useMutation({
-    mutationFn: async (filters: { sites: string[]; dateFrom?: string; dateTo?: string }) => {
-      return apiRequest('POST', '/api/tournaments/bulk-delete/preview', filters);
-    },
-    onSuccess: (data) => {
-      setPreviewCount(data.count);
-    },
-  });
-
-  // Bulk delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (filters: { sites: string[]; dateFrom?: string; dateTo?: string; confirmation: string }) => {
-      return apiRequest('POST', '/api/tournaments/bulk-delete', filters);
-    },
-    onSuccess: (data) => {
-      toast({
-        title: "Limpeza concluída",
-        description: `${data.deletedCount} torneios removidos com sucesso`,
-      });
-
-      // Reset form
-      setSelectedSites([]);
-      setDateFrom('');
-      setDateTo('');
-      setConfirmation('');
-      setPreviewCount(null);
-
-      // Invalidate all related caches
-      queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tournaments/sites"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/upload-history"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erro na limpeza",
-        description: error?.message || "Falha ao remover torneios",
-        variant: "destructive",
-      });
-    },
-  });
-
-  return (
-    <Card className="bg-card border-gray-700 shadow-lg">
-      <CardHeader className="text-center">
-        <CardTitle className="text-white flex items-center justify-center gap-3 text-xl">
-          <Trash2 className="h-6 w-6 text-red-400" />
-          Limpeza Granular de Dados
-        </CardTitle>
-        <CardDescription className="text-gray-300 text-base">
-          Remove torneios específicos por site e período com segurança
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6 p-6">
-        {/* Site Selection */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <Label className="text-gray-300">Sites</Label>
-            {Array.isArray(sites) && sites.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs text-gray-400 hover:text-white"
-                onClick={() => {
-                  const allSites = sites.map((s: any) => s.site);
-                  setSelectedSites(selectedSites.length === allSites.length ? [] : allSites);
-                }}
-              >
-                {selectedSites.length === (sites?.length || 0) ? 'Desmarcar Todos' : 'Selecionar Todos'}
-              </Button>
-            )}
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {Array.isArray(sites) ? sites.map((site: any) => (
-              <div key={site.site} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`cleanup-${site.site}`}
-                  checked={selectedSites.includes(site.site)}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      setSelectedSites([...selectedSites, site.site]);
-                    } else {
-                      setSelectedSites(selectedSites.filter(s => s !== site.site));
-                    }
-                  }}
-                />
-                <Label htmlFor={`cleanup-${site.site}`} className="text-sm text-gray-300 cursor-pointer">
-                  {site.site} ({site.count} torneios)
-                </Label>
-              </div>
-            )) : (
-              <div className="text-gray-400">Carregando sites...</div>
-            )}
-          </div>
-        </div>
-
-        {/* Período de Datas - Modernizado */}
-        <div className="space-y-3">
-          <Label className="text-white text-lg font-semibold">Filtrar por Período</Label>
-          <Card className="bg-gray-800 border-gray-600 p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-gray-300 text-sm font-medium">Data Inicial</Label>
-                <Input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="bg-gray-900 border-gray-600 text-white focus:border-poker-gold focus:ring-poker-gold"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-gray-300 text-sm font-medium">Data Final</Label>
-                <Input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="bg-gray-900 border-gray-600 text-white focus:border-poker-gold focus:ring-poker-gold"
-                />
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Botão de Visualização - Modernizado */}
-        <div className="flex flex-col gap-4">
-          <Button
-            onClick={() => previewMutation.mutate({ sites: selectedSites, dateFrom, dateTo })}
-            disabled={selectedSites.length === 0 || previewMutation.isPending}
-            className="bg-poker-gold hover:bg-poker-gold/80 text-black font-semibold py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {previewMutation.isPending ? (
-              <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
-                Calculando...
-              </div>
-            ) : (
-              'Visualizar Dados para Remoção'
-            )}
-          </Button>
-
-          {previewCount !== null && (
-            <Card className="bg-yellow-900/20 border-yellow-500/30 p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-yellow-500/20 rounded-full flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-yellow-400" />
-                </div>
-                <div>
-                  <p className="text-yellow-400 font-semibold text-lg">
-                    {previewCount} torneios serão removidos
-                  </p>
-                  <p className="text-yellow-300 text-sm">
-                    Esta ação é irreversível. Confirme antes de prosseguir.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )}
-        </div>
-
-        {/* Confirmação Final - Modernizada */}
-        {previewCount !== null && previewCount > 0 && (
-          <Card className="bg-red-900/20 border-red-500/30 p-6 space-y-4">
-            <div className="text-center space-y-2">
-              <div className="mx-auto w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
-                <AlertTriangle className="h-6 w-6 text-red-400" />
-              </div>
-              <h3 className="text-red-400 font-bold text-lg">Confirmação Obrigatória</h3>
-              <p className="text-red-300 text-sm">
-                Esta ação removerá permanentemente {previewCount} torneios do sistema
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-gray-300 text-sm font-medium block text-center">
-                Digite <strong className="text-red-400">"CONFIRMAR"</strong> para prosseguir
-              </Label>
-              <Input
-                value={confirmation}
-                onChange={(e) => setConfirmation(e.target.value)}
-                placeholder="CONFIRMAR"
-                className="bg-gray-900 border-red-500/50 text-white text-center font-mono focus:border-red-400 focus:ring-red-400"
-              />
-            </div>
-
-            <Button
-              onClick={() => deleteMutation.mutate({
-                sites: selectedSites,
-                dateFrom,
-                dateTo,
-                confirmation
-              })}
-              disabled={confirmation !== 'CONFIRMAR' || deleteMutation.isPending}
-              className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-            >
-              {deleteMutation.isPending ? (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Removendo Dados...
-                </div>
-              ) : (
-                'Confirmar Remoção de Dados'
-              )}
-            </Button>
-          </Card>
-        )}
-      </CardContent>
-    </Card>
   );
 }

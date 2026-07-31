@@ -1681,7 +1681,10 @@ export class DatabaseStorage implements IStorage {
     dateFrom?: Date | null;
     dateTo?: Date | null;
   }): Promise<number> {
-    const conditions = [eq(tournaments.userId, userId)];
+    // CLAUDE.md 6.1: a limpeza opera sobre o HISTORICO importado. Registros de
+    // sessao /grind-live (grind_session_id preenchido) nao entram na contagem
+    // nem no delete — sao geridos dentro da propria sessao.
+    const conditions = [eq(tournaments.userId, userId), isNull(tournaments.grindSessionId)];
 
     if (filters.sites && filters.sites.length > 0) {
       conditions.push(inArray(tournaments.site, filters.sites));
@@ -1709,7 +1712,9 @@ export class DatabaseStorage implements IStorage {
     dateFrom?: Date | null;
     dateTo?: Date | null;
   }): Promise<number> {
-    const conditions = [eq(tournaments.userId, userId)];
+    // Mesma regra da contagem (CLAUDE.md 6.1) — o preview mostrado ao jogador e
+    // o delete tem que casar exatamente.
+    const conditions = [eq(tournaments.userId, userId), isNull(tournaments.grindSessionId)];
 
     if (filters.sites && filters.sites.length > 0) {
       conditions.push(inArray(tournaments.site, filters.sites));

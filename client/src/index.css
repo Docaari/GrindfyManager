@@ -2451,6 +2451,26 @@
     color: var(--poker-gold);
   }
 
+  /* ADR-243: existia apenas `.text-poker-gold`. Componentes usavam
+     `bg-poker-gold` / `hover:bg-poker-gold/80` / `bg-poker-gold/20` — classes que
+     nunca foram geradas, entao os botoes renderizavam SEM fundo (texto preto em
+     fundo transparente). Definidas aqui para nao deixar utility morta no app. */
+  .bg-poker-gold {
+    background-color: var(--poker-gold);
+  }
+
+  .bg-poker-gold\/20 {
+    background-color: color-mix(in srgb, var(--poker-gold) 20%, transparent);
+  }
+
+  .hover\:bg-poker-gold\/80:hover {
+    background-color: color-mix(in srgb, var(--poker-gold) 80%, transparent);
+  }
+
+  .border-poker-gold {
+    border-color: var(--poker-gold);
+  }
+
   .text-poker-green {
     color: var(--poker-green);
   }
