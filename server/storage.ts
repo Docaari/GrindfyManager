@@ -2381,6 +2381,14 @@ export class DatabaseStorage implements IStorage {
         avgProfit: sql<number>`CASE WHEN COUNT(*) > 0 THEN SUM(CAST(${tournaments.prize} AS DECIMAL)) / COUNT(*) ELSE 0 END`,
         finalTables: sql<number>`SUM(CASE WHEN ${tournaments.finalTable} THEN 1 ELSE 0 END)`,
         bigHits: sql<number>`SUM(CASE WHEN ${tournaments.bigHit} THEN 1 ELSE 0 END)`,
+        // Recompensa (2026-08-01): quanto do premio veio de cabeca vs premiacao.
+        // `bounty_prize`/`gross_prize` chegaram na Migration 0097 e sao NULL em
+        // linha antiga — por isso `bountyRows` acompanha, para a tela saber em
+        // quantos torneios a conta e confiavel em vez de exibir 0% como se fosse
+        // "nao ganhou bounty" quando na verdade e "o export nao trouxe".
+        bountyPrize: sql<number>`SUM(COALESCE(CAST(${tournaments.bountyPrize} AS DECIMAL), 0))`,
+        grossPrize: sql<number>`SUM(COALESCE(CAST(${tournaments.grossPrize} AS DECIMAL), 0))`,
+        bountyRows: sql<number>`COUNT(*) FILTER (WHERE ${tournaments.bountyPrize} IS NOT NULL)::int`,
       })
       .from(tournaments)
       .where(whereCondition)

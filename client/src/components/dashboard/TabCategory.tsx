@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 import { ChartContent } from './ChartWrapper';
+import { BountyBreakdownCard } from './BountyBreakdownCard';
 import type { DashboardFiltersState } from './types';
 
 interface TabCategoryProps {
@@ -14,6 +15,11 @@ export function TabCategory({ categoryAnalytics, categoryLoading, period, filter
   return (
     <>
       <h3 className="text-xl font-bold text-white mb-8">🏷️ Análise Por Tipo</h3>
+
+      {/* Recompensa: de onde vem o premio (some quando o historico nao tem o dado). */}
+      <div className="mb-8">
+        <BountyBreakdownCard categoryAnalytics={categoryAnalytics} />
+      </div>
 
       {/* Primeira linha: Volume e Profit */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
