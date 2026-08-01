@@ -2,9 +2,21 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Filter, CalendarIcon, ChevronUp, ChevronDown } from "lucide-react";
-import type { DashboardFiltersState, AvailableOptions } from './types';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Filter, CalendarIcon, ChevronUp, ChevronDown, Check, Ban, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { tokens } from "@/lib/ui-tokens";
+import {
+  BUYIN_BANDS,
+  FIELD_BANDS,
+  MODIFIER_FILTERS,
+} from "@shared/dashboard-filter-bands";
+import type {
+  DashboardFiltersState,
+  AvailableOptions,
+  FilterGroupKey,
+  FilterMode,
+} from './types';
 
 interface DashboardFiltersProps {
   filters: DashboardFiltersState;
@@ -14,37 +26,88 @@ interface DashboardFiltersProps {
   availableOptions: AvailableOptions;
 }
 
+/** Chave do conjunto "excluir" correspondente a cada grupo. */
+const EXCLUDE_KEY: Record<FilterGroupKey, keyof DashboardFiltersState> = {
+  sites: 'sitesExclude',
+  categories: 'categoriesExclude',
+  speeds: 'speedsExclude',
+  buyinBands: 'buyinBandsExclude',
+  fieldBands: 'fieldBandsExclude',
+  modifiers: 'modifiersExclude',
+};
+
+const GROUP_LABEL: Record<FilterGroupKey, string> = {
+  sites: 'Site',
+  categories: 'Tipo',
+  speeds: 'Velocidade',
+  buyinBands: 'ABI (buy-in)',
+  fieldBands: 'Participantes',
+  modifiers: 'Especiais',
+};
+
+const PERIOD_OPTIONS = [
+  { key: 'current_month', label: 'Mês Atual' },
+  { key: 'last_3_months', label: 'Últimos 3M' },
+  { key: 'last_6_months', label: 'Últimos 6M' },
+  { key: 'current_year', label: 'Ano Atual' },
+  { key: 'last_12_months', label: 'Últimos 12M' },
+  { key: 'last_24_months', label: 'Últimos 24M' },
+  { key: 'last_36_months', label: 'Últimos 36M' },
+  { key: 'all', label: 'Tudo' },
+];
+
+/** Quantos filtros o jogador tem ligados (arrays vazios nao contam). */
+export function countActiveFilters(filters: DashboardFiltersState): number {
+  return Object.entries(filters).filter(([key, value]) => {
+    if (key === 'keywordType') return false; // acompanha `keyword`, nao conta sozinho
+    if (Array.isArray(value)) return value.length > 0;
+    if (value && typeof value === 'object') {
+      return Object.values(value).some((v) => v !== undefined && v !== null && v !== '');
+    }
+    return value !== undefined && value !== null && value !== '';
+  }).length;
+}
+
 export function DashboardFilters({ filters, setFilters, period, setPeriod, availableOptions }: DashboardFiltersProps) {
   const queryClient = useQueryClient();
 
-  // Custom date range modal state
   const [showDateModal, setShowDateModal] = useState(false);
-  const [customDateRange, setCustomDateRange] = useState({
-    from: '',
-    to: ''
-  });
-  const [tempDateRange, setTempDateRange] = useState({
-    from: '',
-    to: ''
-  });
+  const [customDateRange, setCustomDateRange] = useState({ from: '', to: '' });
+  const [tempDateRange, setTempDateRange] = useState({ from: '', to: '' });
 
-  // Temporary filter states for text filters (not applied until button click)
   const [tempKeyword, setTempKeyword] = useState('');
   const [tempKeywordType, setTempKeywordType] = useState<'contains' | 'not_contains'>('contains');
   const [tempParticipantRange, setTempParticipantRange] = useState({ min: '', max: '' });
+  const [tempBuyinRange, setTempBuyinRange] = useState({ min: '', max: '' });
 
-  // Collapsible filter section state
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
-  // Functions for custom date range
+  /**
+   * Modo do painel. Enquanto estiver em "Excluir", clicar numa opcao manda ela
+   * para o conjunto de exclusao em vez do de inclusao.
+   */
+  const [mode, setMode] = useState<FilterMode>('include');
+
+  const activeCount = countActiveFilters(filters);
+
+  // ── Invalidacao ──────────────────────────────────────────────────────────
+  // As tabs usam chaves distintas (/api/analytics/by-site, by-buyin, ...), entao
+  // invalidar por queryKey ["/api/analytics"] NAO casa. Usa predicate de prefixo.
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const first = query.queryKey?.[0];
+        return typeof first === "string" && first.startsWith("/api/analytics");
+      },
+    });
+  };
+
+  // ── Datas ────────────────────────────────────────────────────────────────
   const formatDateForDisplay = (date: string) => {
     if (!date) return '';
     const d = new Date(date);
-    return d.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: '2-digit'
-    });
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
   };
 
   const isValidDateRange = (from: string, to: string) => {
@@ -55,531 +118,537 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
   const handleOpenDateModal = () => {
     const today = new Date();
     const oneMonthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-
     setTempDateRange({
       from: customDateRange.from || oneMonthAgo.toISOString().split('T')[0],
-      to: customDateRange.to || today.toISOString().split('T')[0]
+      to: customDateRange.to || today.toISOString().split('T')[0],
     });
     setShowDateModal(true);
   };
 
   const handleApplyDateRange = () => {
-    if (!isValidDateRange(tempDateRange.from, tempDateRange.to)) {
-      return;
-    }
-
+    if (!isValidDateRange(tempDateRange.from, tempDateRange.to)) return;
     setCustomDateRange(tempDateRange);
     setPeriod('custom');
-    setFilters(prev => ({
-      ...prev,
-      dateFrom: tempDateRange.from,
-      dateTo: tempDateRange.to
-    }));
+    setFilters(prev => ({ ...prev, dateFrom: tempDateRange.from, dateTo: tempDateRange.to }));
     setShowDateModal(false);
-
-    // Invalida stats + TODAS as analytics dependentes de filtro.
-    // As queries das tabs usam chaves distintas (/api/analytics/by-site, by-buyin,
-    // by-day, by-month, by-field, final-table, by-category, by-speed...), entao um
-    // invalidateQueries com queryKey ["/api/analytics"] NAO casa (primeiro elemento
-    // difere). Usa predicate para casar qualquer chave sob o prefixo /api/analytics.
-    queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-    queryClient.invalidateQueries({
-      predicate: (query) => {
-        const first = query.queryKey?.[0];
-        return typeof first === "string" && first.startsWith("/api/analytics");
-      },
-    });
-  };
-
-  const handleCancelDateRange = () => {
-    setTempDateRange(customDateRange);
-    setShowDateModal(false);
+    invalidateAll();
   };
 
   const handlePeriodChange = (newPeriod: string) => {
     setPeriod(newPeriod);
     if (newPeriod !== 'custom') {
       setFilters(prev => {
-        const newFilters = { ...prev };
-        delete newFilters.dateFrom;
-        delete newFilters.dateTo;
-        return newFilters;
+        const next = { ...prev };
+        delete next.dateFrom;
+        delete next.dateTo;
+        return next;
       });
     }
   };
 
-  // Quick participant filter handlers - immediate application
-  const handleParticipantQuickFilter = (min: number, max?: number) => {
-    setFilters(prev => ({
-      ...prev,
-      participantMin: min,
-      participantMax: max
-    }));
+  // ── Selecao de opcao (o coracao do Incluir/Excluir) ──────────────────────
+  const stateOf = (group: FilterGroupKey, value: string): 'included' | 'excluded' | 'neutral' => {
+    if ((filters[group] as string[] | undefined)?.includes(value)) return 'included';
+    if ((filters[EXCLUDE_KEY[group]] as string[] | undefined)?.includes(value)) return 'excluded';
+    return 'neutral';
   };
 
-  // Text filter application handler
-  const applyTextFilter = () => {
-    if (tempKeyword.trim()) {
-      setFilters(prev => ({
-        ...prev,
-        keyword: tempKeyword.trim(),
-        keywordType: tempKeywordType
-      }));
-    }
-  };
-
-  // Manual participant range application handler
-  const applyParticipantRange = () => {
-    const min = tempParticipantRange.min ? parseInt(tempParticipantRange.min) : undefined;
-    const max = tempParticipantRange.max ? parseInt(tempParticipantRange.max) : undefined;
-
-    if (min || max) {
-      setFilters(prev => ({
-        ...prev,
-        participantMin: min,
-        participantMax: max
-      }));
-    }
-  };
-
-  // Remove specific filter tag
-  const removeFilterTag = (filterType: string) => {
+  /**
+   * Clique numa opcao:
+   *  - ja esta no conjunto do modo atual  -> sai (volta a neutro)
+   *  - nao esta                            -> entra no modo atual e sai do outro
+   *
+   * Uma opcao nunca fica incluida e excluida ao mesmo tempo.
+   */
+  const toggleOption = (group: FilterGroupKey, value: string) => {
+    const includeKey = group;
+    const excludeKey = EXCLUDE_KEY[group];
     setFilters(prev => {
-      const newFilters = { ...prev };
-      if (filterType === 'keyword') {
-        delete newFilters.keyword;
-        delete newFilters.keywordType;
-        setTempKeyword('');
-      } else if (filterType === 'participants') {
-        delete newFilters.participantMin;
-        delete newFilters.participantMax;
-        setTempParticipantRange({ min: '', max: '' });
+      const included = new Set((prev[includeKey] as string[] | undefined) ?? []);
+      const excluded = new Set((prev[excludeKey] as string[] | undefined) ?? []);
+      const target = mode === 'include' ? included : excluded;
+      const other = mode === 'include' ? excluded : included;
+
+      if (target.has(value)) {
+        target.delete(value);
+      } else {
+        target.add(value);
+        other.delete(value);
       }
-      return newFilters;
+
+      const next: DashboardFiltersState = { ...prev };
+      if (included.size > 0) (next as any)[includeKey] = Array.from(included);
+      else delete (next as any)[includeKey];
+      if (excluded.size > 0) (next as any)[excludeKey] = Array.from(excluded);
+      else delete (next as any)[excludeKey];
+      return next;
     });
   };
 
-  return (
-    <div className="bg-gradient-to-br from-card/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl mb-8 shadow-xl">
-      {/* Header fixo - sempre visível */}
-      <div className="p-8 pb-4">
+  const clearGroup = (group: FilterGroupKey) => {
+    setFilters(prev => {
+      const next = { ...prev };
+      delete (next as any)[group];
+      delete (next as any)[EXCLUDE_KEY[group]];
+      return next;
+    });
+  };
+
+  // ── Faixas manuais ───────────────────────────────────────────────────────
+  const applyParticipantRange = () => {
+    const min = tempParticipantRange.min ? parseInt(tempParticipantRange.min, 10) : undefined;
+    const max = tempParticipantRange.max ? parseInt(tempParticipantRange.max, 10) : undefined;
+    if (min === undefined && max === undefined) return;
+    setFilters(prev => ({ ...prev, participantMin: min, participantMax: max }));
+  };
+
+  const applyBuyinRange = () => {
+    const min = tempBuyinRange.min ? parseFloat(tempBuyinRange.min) : undefined;
+    const max = tempBuyinRange.max ? parseFloat(tempBuyinRange.max) : undefined;
+    if (min === undefined && max === undefined) return;
+    setFilters(prev => ({ ...prev, buyinRange: { min, max } }));
+  };
+
+  const applyTextFilter = () => {
+    if (!tempKeyword.trim()) return;
+    setFilters(prev => ({ ...prev, keyword: tempKeyword.trim(), keywordType: tempKeywordType }));
+  };
+
+  // ── Resumo dos filtros ligados ───────────────────────────────────────────
+  const labelForOption = (group: FilterGroupKey, value: string): string => {
+    if (group === 'buyinBands') return BUYIN_BANDS.find(b => b.id === value)?.label ?? value;
+    if (group === 'fieldBands') return FIELD_BANDS.find(b => b.id === value)?.label ?? value;
+    if (group === 'modifiers') return MODIFIER_FILTERS.find(m => m.id === value)?.label ?? value;
+    return value;
+  };
+
+  const activeChips: Array<{ key: string; label: string; onRemove: () => void; excluded: boolean }> = [];
+  (Object.keys(EXCLUDE_KEY) as FilterGroupKey[]).forEach(group => {
+    ((filters[group] as string[] | undefined) ?? []).forEach(value => {
+      activeChips.push({
+        key: `${group}-inc-${value}`,
+        label: `${GROUP_LABEL[group]}: ${labelForOption(group, value)}`,
+        excluded: false,
+        onRemove: () => { setMode('include'); toggleOption(group, value); },
+      });
+    });
+    ((filters[EXCLUDE_KEY[group]] as string[] | undefined) ?? []).forEach(value => {
+      activeChips.push({
+        key: `${group}-exc-${value}`,
+        label: `${GROUP_LABEL[group]}: ${labelForOption(group, value)}`,
+        excluded: true,
+        onRemove: () => { setMode('exclude'); toggleOption(group, value); },
+      });
+    });
+  });
+  if (filters.participantMin !== undefined || filters.participantMax !== undefined) {
+    activeChips.push({
+      key: 'participants-manual',
+      label: `Participantes: ${filters.participantMin ?? '0'}–${filters.participantMax ?? '∞'}`,
+      excluded: false,
+      onRemove: () => {
+        setTempParticipantRange({ min: '', max: '' });
+        setFilters(prev => {
+          const next = { ...prev };
+          delete next.participantMin;
+          delete next.participantMax;
+          return next;
+        });
+      },
+    });
+  }
+  if (filters.buyinRange?.min !== undefined || filters.buyinRange?.max !== undefined) {
+    activeChips.push({
+      key: 'buyin-manual',
+      label: `Buy-in: $${filters.buyinRange?.min ?? '0'}–$${filters.buyinRange?.max ?? '∞'}`,
+      excluded: false,
+      onRemove: () => {
+        setTempBuyinRange({ min: '', max: '' });
+        setFilters(prev => {
+          const next = { ...prev };
+          delete next.buyinRange;
+          return next;
+        });
+      },
+    });
+  }
+  if (filters.keyword) {
+    activeChips.push({
+      key: 'keyword',
+      label: `Nome ${filters.keywordType === 'not_contains' ? 'não contém' : 'contém'}: "${filters.keyword}"`,
+      excluded: filters.keywordType === 'not_contains',
+      onRemove: () => {
+        setTempKeyword('');
+        setFilters(prev => {
+          const next = { ...prev };
+          delete next.keyword;
+          delete next.keywordType;
+          return next;
+        });
+      },
+    });
+  }
+
+  // ── Bloco reutilizavel de opcoes ─────────────────────────────────────────
+  const OptionGroup = ({
+    group,
+    options,
+    hint,
+  }: {
+    group: FilterGroupKey;
+    options: Array<{ id: string; label: string }>;
+    hint?: string;
+  }) => {
+    const hasSelection =
+      ((filters[group] as string[] | undefined)?.length ?? 0) > 0 ||
+      ((filters[EXCLUDE_KEY[group]] as string[] | undefined)?.length ?? 0) > 0;
+
+    return (
+      <div className="space-y-2" data-testid={`filter-group-${group}`}>
         <div className="flex items-center justify-between">
+          <h4 className="text-sm font-medium text-foreground">
+            {GROUP_LABEL[group]}
+            {hint && <span className="ml-2 text-xs text-muted-foreground font-normal">{hint}</span>}
+          </h4>
+          {hasSelection && (
+            <button
+              onClick={() => clearGroup(group)}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              limpar
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {options.length === 0 && (
+            <span className="text-xs text-muted-foreground">Nenhuma opção no histórico.</span>
+          )}
+          {options.map(option => {
+            const state = stateOf(group, option.id);
+            return (
+              <button
+                key={option.id}
+                onClick={() => toggleOption(group, option.id)}
+                data-testid={`filter-option-${group}-${option.id}`}
+                data-state={state}
+                title={
+                  state === 'included' ? 'Incluído — clique para tirar'
+                    : state === 'excluded' ? 'Excluído — clique para tirar'
+                    : mode === 'include' ? 'Clique para incluir' : 'Clique para excluir'
+                }
+                className={cn(
+                  'inline-flex items-center gap-1 px-2.5 py-1 rounded-md border text-xs font-medium transition-all',
+                  state === 'neutral' &&
+                    'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30',
+                  state === 'included' &&
+                    cn(tokens.color.success.bg, tokens.color.success.text, tokens.color.success.border),
+                  state === 'excluded' &&
+                    cn(tokens.color.danger.bg, tokens.color.danger.text, tokens.color.danger.border, 'line-through'),
+                )}
+              >
+                {state === 'included' && <Check className="h-3 w-3" />}
+                {state === 'excluded' && <Ban className="h-3 w-3" />}
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  /** Par de campos min/max + botao, compacto, para colar embaixo das faixas. */
+  const RangeInputs = ({
+    value,
+    onChange,
+    onApply,
+    prefix,
+    testId,
+  }: {
+    value: { min: string; max: string };
+    onChange: (v: { min: string; max: string }) => void;
+    onApply: () => void;
+    prefix?: string;
+    testId: string;
+  }) => (
+    <div className="flex items-center gap-1.5" data-testid={testId}>
+      <span className="text-xs text-muted-foreground whitespace-nowrap">ou de</span>
+      <Input
+        type="number"
+        placeholder={prefix ? `${prefix}min` : 'mín'}
+        value={value.min}
+        onChange={(e) => onChange({ ...value, min: e.target.value })}
+        className="h-7 w-20 text-xs px-2"
+      />
+      <span className="text-xs text-muted-foreground">a</span>
+      <Input
+        type="number"
+        placeholder={prefix ? `${prefix}máx` : 'máx'}
+        value={value.max}
+        onChange={(e) => onChange({ ...value, max: e.target.value })}
+        className="h-7 w-20 text-xs px-2"
+      />
+      <Button size="sm" variant="outline" onClick={onApply} className="h-7 px-2 text-xs">
+        Aplicar
+      </Button>
+    </div>
+  );
+
+  return (
+    <div className="bg-card/50 backdrop-blur-sm border border-border rounded-2xl mb-8 shadow-xl">
+      {/* ── Cabecalho ───────────────────────────────────────────────────── */}
+      <div className="p-5 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/20 rounded-lg">
               <Filter className="h-5 w-5 text-primary" />
             </div>
-            <h3 className="text-lg font-semibold text-white">Filtros</h3>
-          </div>
+            <h3 className="text-lg font-semibold text-foreground">Filtros</h3>
 
-          {/* Contador de Filtros Ativos */}
-          {Object.keys(filters).filter(key => {
-            const value = filters[key as keyof typeof filters];
-            return value && (Array.isArray(value) ? value.length > 0 : true);
-          }).length > 0 && (
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-primary/20 px-3 py-1.5 rounded-lg border border-primary/30">
-                <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                <span className="text-sm text-primary font-medium">
-                  {Object.keys(filters).filter(key => {
-                    const value = filters[key as keyof typeof filters];
-                    return value && (Array.isArray(value) ? value.length > 0 : true);
-                  }).length} filtros ativos
-                </span>
-              </div>
-              <button
-                onClick={() => setFilters({})}
-                className="px-4 py-1.5 text-sm font-medium text-red-400 hover:text-red-300 bg-red-900/20 hover:bg-red-900/30 border border-red-700/30 rounded-lg transition-all duration-200 hover:scale-105"
-              >
-                Limpar Todos
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Conteúdo dos filtros - colapsável */}
-      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${filtersExpanded ? 'max-h-none opacity-100' : 'max-h-0 opacity-0'}`}>
-        <div className="px-8 pb-6 space-y-6">
-
-        {/* Card de Período - Modernizado */}
-        <div className="bg-gradient-to-r from-gray-900 to-gray-800 border border-gray-700/50 rounded-xl p-8 mb-12 shadow-2xl">
-          <div className="mb-6">
-            <h4 className="text-lg font-bold text-white flex items-center gap-3">
-              ⚡ Período de Análise
-            </h4>
-            <p className="text-gray-400 text-sm mt-1">Selecione o período para visualização das métricas</p>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-            {[
-              { key: 'current_month', label: 'Mês Atual' },
-              { key: 'last_3_months', label: 'Últimos 3M' },
-              { key: 'last_6_months', label: 'Últimos 6M' },
-              { key: 'current_year', label: 'Ano Atual' },
-              { key: 'last_12_months', label: 'Últimos 12M' },
-              { key: 'last_24_months', label: 'Últimos 24M' },
-              { key: 'last_36_months', label: 'Últimos 36M' },
-              { key: 'all', label: 'Tudo' }
-            ].map((periodOption) => (
-              <button
-                key={periodOption.key}
-                onClick={() => handlePeriodChange(periodOption.key)}
-                className={`px-5 py-4 rounded-xl text-sm font-bold transition-all duration-300 border transform ${
-                  period === periodOption.key
-                    ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white border-emerald-500 shadow-xl shadow-emerald-500/30 scale-110'
-                    : 'bg-gray-800/70 text-gray-300 border-gray-600/50 hover:bg-gray-700/70 hover:text-white hover:border-gray-500 hover:scale-105 hover:shadow-lg'
-                }`}
-              >
-                {periodOption.label}
-              </button>
-            ))}
-
-            {/* Custom Date Range */}
-            <Dialog open={showDateModal} onOpenChange={setShowDateModal}>
-              <DialogTrigger asChild>
+            {/* Modo: define o que o clique numa opcao faz. */}
+            <div className="flex items-center rounded-lg border border-border overflow-hidden" data-testid="filter-mode-switch">
+              {(['include', 'exclude'] as FilterMode[]).map(m => (
                 <button
-                  onClick={handleOpenDateModal}
-                  className={`px-5 py-4 rounded-xl text-sm font-bold transition-all duration-300 border flex items-center gap-2 transform ${
-                    period === 'custom'
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-500 shadow-xl shadow-blue-500/30 scale-110'
-                      : 'bg-gray-800/70 text-gray-300 border-gray-600/50 hover:bg-gray-700/70 hover:text-white hover:border-gray-500 hover:scale-105 hover:shadow-lg'
-                  }`}
-                >
-                  <CalendarIcon className="h-4 w-4" />
-                  {period === 'custom' && customDateRange.from && customDateRange.to
-                    ? `${formatDateForDisplay(customDateRange.from)} - ${formatDateForDisplay(customDateRange.to)}`
-                    : 'Personalizado'
-                  }
-                </button>
-              </DialogTrigger>
-              <DialogContent className="bg-gray-900 border-gray-700">
-                <DialogHeader>
-                  <DialogTitle className="text-white">Período Personalizado</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        De:
-                      </label>
-                      <div className="relative">
-                        <Input
-                          type="date"
-                          value={tempDateRange.from}
-                          onChange={(e) => setTempDateRange(prev => ({ ...prev, from: e.target.value }))}
-                          className="bg-gray-800 border-gray-600 text-white focus:border-primary"
-                        />
-                        <CalendarIcon className="absolute right-3 top-3 h-4 w-4 text-gray-400 pointer-events-none" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Até:
-                      </label>
-                      <div className="relative">
-                        <Input
-                          type="date"
-                          value={tempDateRange.to}
-                          onChange={(e) => setTempDateRange(prev => ({ ...prev, to: e.target.value }))}
-                          className="bg-gray-800 border-gray-600 text-white focus:border-primary"
-                        />
-                        <CalendarIcon className="absolute right-3 top-3 h-4 w-4 text-gray-400 pointer-events-none" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Validation Message */}
-                  {tempDateRange.from && tempDateRange.to && !isValidDateRange(tempDateRange.from, tempDateRange.to) && (
-                    <p className="text-red-400 text-sm">
-                      A data "De" não pode ser maior que a data "Até"
-                    </p>
+                  key={m}
+                  onClick={() => setMode(m)}
+                  data-testid={`filter-mode-${m}`}
+                  aria-pressed={mode === m}
+                  className={cn(
+                    'px-3 py-1.5 text-xs font-medium transition-colors',
+                    mode === m
+                      ? m === 'include'
+                        ? cn(tokens.color.success.bg, tokens.color.success.text)
+                        : cn(tokens.color.danger.bg, tokens.color.danger.text)
+                      : 'text-muted-foreground hover:text-foreground',
                   )}
+                >
+                  {m === 'include' ? 'Incluir' : 'Excluir'}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-muted-foreground hidden md:inline">
+              {mode === 'include'
+                ? 'clicando numa opção, só ela entra na conta'
+                : 'clicando numa opção, ela sai da conta'}
+            </span>
+          </div>
 
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button
-                      variant="outline"
-                      onClick={handleCancelDateRange}
-                      className="bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600"
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      onClick={handleApplyDateRange}
-                      disabled={!isValidDateRange(tempDateRange.from, tempDateRange.to)}
-                      className="bg-primary text-white hover:bg-primary/90 disabled:opacity-50"
-                    >
-                      Aplicar
-                    </Button>
-                  </div>
+          <div className="flex items-center gap-2">
+            {activeCount > 0 && (
+              <>
+                <div className="flex items-center gap-2 bg-primary/20 px-3 py-1.5 rounded-lg border border-primary/30">
+                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                  <span className="text-sm text-primary font-medium" data-testid="filter-active-count">
+                    {activeCount} {activeCount === 1 ? 'filtro ativo' : 'filtros ativos'}
+                  </span>
                 </div>
-              </DialogContent>
-            </Dialog>
+                <button
+                  onClick={() => {
+                    setFilters({});
+                    setTempParticipantRange({ min: '', max: '' });
+                    setTempBuyinRange({ min: '', max: '' });
+                    setTempKeyword('');
+                  }}
+                  data-testid="filter-clear-all"
+                  className={cn(
+                    'px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors',
+                    tokens.color.danger.text, tokens.color.danger.bg, tokens.color.danger.border,
+                  )}
+                >
+                  Limpar todos
+                </button>
+              </>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setFiltersExpanded(v => !v)}
+              data-testid="filter-toggle-expand"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {filtersExpanded ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+              {filtersExpanded ? 'Recolher' : 'Mais filtros'}
+            </Button>
           </div>
         </div>
 
-        {/* Filtros Rápidos - Multiple Choice */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Card Sites */}
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-4">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                Sites de Poker
-              </h4>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {availableOptions.sites.map(site => (
-                <button
-                  key={site}
-                  onClick={() => {
-                    const currentSites = filters.sites || [];
-                    const newSites = currentSites.includes(site)
-                      ? currentSites.filter(s => s !== site)
-                      : [...currentSites, site];
-                    setFilters(prev => ({ ...prev, sites: newSites.length > 0 ? newSites : undefined }));
-                  }}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 border ${
-                    (filters.sites || []).includes(site)
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-500 shadow-md shadow-blue-500/20'
-                      : 'bg-gray-700/50 text-gray-300 border-gray-600/50 hover:bg-gray-600/50 hover:text-white hover:border-gray-500'
-                  }`}
-                >
-                  {site}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Card Categories */}
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-4">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                Categorias
-              </h4>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {availableOptions.categories.map(category => (
-                <button
-                  key={category}
-                  onClick={() => {
-                    const currentCategories = filters.categories || [];
-                    const newCategories = currentCategories.includes(category)
-                      ? currentCategories.filter(c => c !== category)
-                      : [...currentCategories, category];
-                    setFilters(prev => ({ ...prev, categories: newCategories.length > 0 ? newCategories : undefined }));
-                  }}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 border ${
-                    (filters.categories || []).includes(category)
-                      ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white border-orange-500 shadow-md shadow-orange-500/20'
-                      : 'bg-gray-700/50 text-gray-300 border-gray-600/50 hover:bg-gray-600/50 hover:text-white hover:border-gray-500'
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Card Speeds */}
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-4">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                Velocidades
-              </h4>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {availableOptions.speeds.map(speed => (
-                <button
-                  key={speed}
-                  onClick={() => {
-                    const currentSpeeds = filters.speeds || [];
-                    const newSpeeds = currentSpeeds.includes(speed)
-                      ? currentSpeeds.filter(s => s !== speed)
-                      : [...currentSpeeds, speed];
-                    setFilters(prev => ({ ...prev, speeds: newSpeeds.length > 0 ? newSpeeds : undefined }));
-                  }}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 border ${
-                    (filters.speeds || []).includes(speed)
-                      ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white border-purple-500 shadow-md shadow-purple-500/20'
-                      : 'bg-gray-700/50 text-gray-300 border-gray-600/50 hover:bg-gray-600/50 hover:text-white hover:border-gray-500'
-                  }`}
-                >
-                  {speed}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Filtros de Participantes */}
-        <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-5">
-          <div className="mb-4">
-            <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-              <div className="w-2 h-2 bg-cyan-500 rounded-full"></div>
-              Filtros por Participantes
-            </h4>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { label: '<100', min: 0, max: 99 },
-              { label: '100-300', min: 100, max: 300 },
-              { label: '300-700', min: 300, max: 700 },
-              { label: '700-1500', min: 700, max: 1500 },
-              { label: '1500-3000', min: 1500, max: 3000 },
-              { label: '3000-6000', min: 3000, max: 6000 },
-              { label: '6000-12000', min: 6000, max: 12000 },
-              { label: '12000+', min: 12000 }
-            ].map((range) => (
+        {/* ── Etiquetas do que esta ligado ─────────────────────────────── */}
+        {activeChips.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-3" data-testid="filter-active-chips">
+            {activeChips.map(chip => (
               <button
-                key={range.label}
-                onClick={() => handleParticipantQuickFilter(range.min, range.max)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border ${
-                  (filters.participantMin === range.min && filters.participantMax === range.max) ||
-                  (filters.participantMin === range.min && !range.max && !filters.participantMax)
-                    ? 'bg-gradient-to-r from-cyan-600 to-cyan-700 text-white border-cyan-500 shadow-md shadow-cyan-500/20'
-                    : 'bg-gray-700/50 text-gray-300 border-gray-600/50 hover:bg-gray-600/50 hover:text-white hover:border-gray-500'
-                }`}
+                key={chip.key}
+                onClick={chip.onRemove}
+                className={cn(
+                  'inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-opacity hover:opacity-70',
+                  chip.excluded
+                    ? cn(tokens.color.danger.bg, tokens.color.danger.text, tokens.color.danger.border)
+                    : cn(tokens.color.success.bg, tokens.color.success.text, tokens.color.success.border),
+                )}
               >
-                {range.label}
+                {chip.excluded && <Ban className="h-3 w-3" />}
+                {chip.label}
+                <X className="h-3 w-3" />
               </button>
             ))}
-          </div>
-        </div>
-
-        {/* Filtros Especiais - Texto e Range Manual */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Card Filtro de Texto */}
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-5">
-            <div className="mb-4">
-              <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                Busca por Palavra-chave
-              </h4>
-            </div>
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <select
-                  value={tempKeywordType}
-                  onChange={(e) => setTempKeywordType(e.target.value as 'contains' | 'not_contains')}
-                  className="bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-sm text-white focus:border-green-500 focus:outline-none transition-colors"
-                >
-                  <option value="contains">Contém</option>
-                  <option value="not_contains">Não Contém</option>
-                </select>
-                <input
-                  type="text"
-                  value={tempKeyword}
-                  onChange={(e) => setTempKeyword(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && applyTextFilter()}
-                  placeholder="Digite o texto para buscar..."
-                  className="flex-1 bg-gray-700/50 border border-gray-600/50 rounded-lg px-4 py-2 text-sm text-white placeholder-gray-400 focus:border-green-500 focus:outline-none transition-colors"
-                />
-              </div>
-              <button
-                onClick={applyTextFilter}
-                disabled={!tempKeyword.trim()}
-                className="w-full px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white font-medium rounded-lg hover:from-green-700 hover:to-green-800 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed transition-all duration-200 shadow-lg disabled:shadow-none"
-              >
-                {tempKeyword.trim() ? 'Aplicar Filtro de Texto' : 'Digite uma palavra-chave'}
-              </button>
-            </div>
-          </div>
-
-          {/* Card Range Manual de Participantes */}
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-xl p-5">
-            <div className="mb-4">
-              <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                Range Manual de Participantes
-              </h4>
-            </div>
-            <div className="space-y-3">
-              <div className="flex gap-2 items-center">
-                <input
-                  type="number"
-                  value={tempParticipantRange.min}
-                  onChange={(e) => setTempParticipantRange(prev => ({ ...prev, min: e.target.value }))}
-                  placeholder="Mínimo"
-                  className="flex-1 bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:border-yellow-500 focus:outline-none transition-colors"
-                  min="0"
-                />
-                <span className="text-gray-400 text-sm font-medium">até</span>
-                <input
-                  type="number"
-                  value={tempParticipantRange.max}
-                  onChange={(e) => setTempParticipantRange(prev => ({ ...prev, max: e.target.value }))}
-                  placeholder="Máximo"
-                  className="flex-1 bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:border-yellow-500 focus:outline-none transition-colors"
-                  min="1"
-                />
-              </div>
-              <button
-                onClick={applyParticipantRange}
-                disabled={!tempParticipantRange.min && !tempParticipantRange.max}
-                className="w-full px-4 py-2 bg-gradient-to-r from-yellow-600 to-yellow-700 text-white font-medium rounded-lg hover:from-yellow-700 hover:to-yellow-800 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed transition-all duration-200 shadow-lg disabled:shadow-none"
-              >
-                {(tempParticipantRange.min || tempParticipantRange.max) ? 'Aplicar Range Manual' : 'Digite valores mín/máx'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Tags de Filtros Especiais Ativos */}
-        {(filters.keyword || (filters.participantMin !== undefined || filters.participantMax !== undefined)) && (
-          <div className="bg-gray-800/30 backdrop-blur-sm border border-gray-600/40 rounded-xl p-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-gray-300">Filtros Especiais Ativos:</span>
-              </div>
-
-              {filters.keyword && (
-                <div className="flex items-center gap-2 bg-gradient-to-r from-green-600/30 to-green-700/30 border border-green-500/40 rounded-lg px-4 py-2 shadow-lg shadow-green-500/10">
-                  <span className="text-sm font-medium text-green-200">
-                    {filters.keywordType === 'contains' ? 'Contém' : 'Não Contém'}: "{filters.keyword}"
-                  </span>
-                  <button
-                    onClick={() => removeFilterTag('keyword')}
-                    className="text-green-300 hover:text-red-400 transition-colors duration-200 font-bold text-lg"
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-
-              {(filters.participantMin !== undefined || filters.participantMax !== undefined) && (
-                <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-600/30 to-yellow-700/30 border border-yellow-500/40 rounded-lg px-4 py-2 shadow-lg shadow-yellow-500/10">
-                  <span className="text-sm font-medium text-yellow-200">
-                    Range Manual: {filters.participantMin || '0'} - {filters.participantMax || '\u221e'}
-                  </span>
-                  <button
-                    onClick={() => removeFilterTag('participants')}
-                    className="text-yellow-300 hover:text-red-400 transition-colors duration-200 font-bold text-lg"
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
         )}
+
+        {/* ── Periodo (sempre visivel) ─────────────────────────────────── */}
+        <div className="mt-4 space-y-2">
+          <h4 className="text-sm font-medium text-foreground">Período</h4>
+          <div className="flex flex-wrap gap-1.5">
+            {PERIOD_OPTIONS.map(option => (
+              <button
+                key={option.key}
+                onClick={() => handlePeriodChange(option.key)}
+                data-testid={`filter-period-${option.key}`}
+                className={cn(
+                  'px-2.5 py-1 rounded-md border text-xs font-medium transition-all',
+                  period === option.key
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30',
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+            <button
+              onClick={handleOpenDateModal}
+              data-testid="filter-period-custom"
+              className={cn(
+                'inline-flex items-center gap-1 px-2.5 py-1 rounded-md border text-xs font-medium transition-all',
+                period === 'custom'
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30',
+              )}
+            >
+              <CalendarIcon className="h-3 w-3" />
+              {period === 'custom' && customDateRange.from
+                ? `${formatDateForDisplay(customDateRange.from)} – ${formatDateForDisplay(customDateRange.to)}`
+                : 'Escolher datas'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Botão de Toggle para Expandir/Colapsar */}
-      <div className="flex justify-center p-4 pt-0">
-        <button
-          onClick={() => setFiltersExpanded(!filtersExpanded)}
-          className="group flex items-center justify-center w-16 h-10 bg-gradient-to-r from-card/70 to-gray-800/70 backdrop-blur-sm border border-gray-600/50 rounded-lg hover:from-card/90 hover:to-gray-800/90 hover:border-gray-500/70 transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-primary/10"
-        >
-          {filtersExpanded ? (
-            <ChevronUp className="h-6 w-6 text-gray-300 group-hover:text-primary transition-all duration-300 transform group-hover:scale-110" />
-          ) : (
-            <ChevronDown className="h-6 w-6 text-gray-300 group-hover:text-primary transition-all duration-300 transform group-hover:scale-110" />
-          )}
-        </button>
-      </div>
+      {/* ── Corpo colapsavel ────────────────────────────────────────────── */}
+      {filtersExpanded && (
+        <div className="px-5 pb-5 pt-1 border-t border-border grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-5">
+          <OptionGroup
+            group="sites"
+            options={availableOptions.sites.map(s => ({ id: s, label: s }))}
+          />
+          <OptionGroup
+            group="categories"
+            options={availableOptions.categories.map(c => ({ id: c, label: c }))}
+          />
+          <OptionGroup
+            group="speeds"
+            options={availableOptions.speeds.map(s => ({ id: s, label: s }))}
+          />
+          <OptionGroup
+            group="modifiers"
+            options={MODIFIER_FILTERS.map(m => ({ id: m.id, label: m.label }))}
+            hint="satélite e flight são independentes do Tipo"
+          />
+
+          <div className="space-y-2">
+            <OptionGroup
+              group="buyinBands"
+              options={BUYIN_BANDS.map(b => ({ id: b.id, label: b.label }))}
+            />
+            <RangeInputs
+              value={tempBuyinRange}
+              onChange={setTempBuyinRange}
+              onApply={applyBuyinRange}
+              prefix="$"
+              testId="filter-buyin-manual"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <OptionGroup
+              group="fieldBands"
+              options={FIELD_BANDS.map(b => ({ id: b.id, label: b.label }))}
+            />
+            <RangeInputs
+              value={tempParticipantRange}
+              onChange={setTempParticipantRange}
+              onApply={applyParticipantRange}
+              testId="filter-participants-manual"
+            />
+          </div>
+
+          {/* Nome do torneio */}
+          <div className="space-y-2 lg:col-span-2">
+            <h4 className="text-sm font-medium text-foreground">Nome do torneio</h4>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <select
+                value={tempKeywordType}
+                onChange={(e) => setTempKeywordType(e.target.value as 'contains' | 'not_contains')}
+                data-testid="filter-keyword-type"
+                className="h-7 rounded-md border border-border bg-background text-foreground text-xs px-2"
+              >
+                <option value="contains">Contém</option>
+                <option value="not_contains">Não contém</option>
+              </select>
+              <Input
+                value={tempKeyword}
+                onChange={(e) => setTempKeyword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') applyTextFilter(); }}
+                placeholder="ex: Bounty Hunter"
+                data-testid="filter-keyword-input"
+                className="h-7 w-56 text-xs px-2"
+              />
+              <Button size="sm" variant="outline" onClick={applyTextFilter} className="h-7 px-2 text-xs">
+                Aplicar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal de datas ──────────────────────────────────────────────── */}
+      <Dialog open={showDateModal} onOpenChange={setShowDateModal}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Período personalizado</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-2">De</label>
+              <Input
+                type="date"
+                value={tempDateRange.from}
+                onChange={(e) => setTempDateRange(prev => ({ ...prev, from: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-2">Até</label>
+              <Input
+                type="date"
+                value={tempDateRange.to}
+                onChange={(e) => setTempDateRange(prev => ({ ...prev, to: e.target.value }))}
+              />
+            </div>
+            {!isValidDateRange(tempDateRange.from, tempDateRange.to) && (tempDateRange.from || tempDateRange.to) && (
+              <p className={cn('text-xs', tokens.color.danger.text)}>
+                A data inicial precisa ser anterior à final.
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowDateModal(false)}>Cancelar</Button>
+              <Button
+                onClick={handleApplyDateRange}
+                disabled={!isValidDateRange(tempDateRange.from, tempDateRange.to)}
+              >
+                Aplicar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

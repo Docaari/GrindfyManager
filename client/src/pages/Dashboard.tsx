@@ -68,16 +68,32 @@ export default function Dashboard() {
   const [period, setPeriod] = useState(initialUrlFilters.period);
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(initialUrlFilters.tab);
-  const [filters, setFilters] = useState<DashboardFiltersState>({
-    sites: initialUrlFilters.sites.length > 0 ? initialUrlFilters.sites : undefined,
-    categories: initialUrlFilters.categories.length > 0 ? initialUrlFilters.categories : undefined,
-    speeds: initialUrlFilters.speeds.length > 0 ? initialUrlFilters.speeds : undefined,
-    keyword: initialUrlFilters.keyword || undefined,
-    keywordType: (initialUrlFilters.keywordType as 'contains' | 'not_contains') || undefined,
-    dateFrom: initialUrlFilters.dateFrom || undefined,
-    dateTo: initialUrlFilters.dateTo || undefined,
-    participantMin: initialUrlFilters.participantMin ?? undefined,
-    participantMax: initialUrlFilters.participantMax ?? undefined,
+  const [filters, setFilters] = useState<DashboardFiltersState>(() => {
+    const nonEmpty = (list?: string[]) => (list && list.length > 0 ? list : undefined);
+    const buyinMin = initialUrlFilters.buyinMin ?? undefined;
+    const buyinMax = initialUrlFilters.buyinMax ?? undefined;
+    return {
+      sites: nonEmpty(initialUrlFilters.sites),
+      categories: nonEmpty(initialUrlFilters.categories),
+      speeds: nonEmpty(initialUrlFilters.speeds),
+      sitesExclude: nonEmpty(initialUrlFilters.sitesExclude),
+      categoriesExclude: nonEmpty(initialUrlFilters.categoriesExclude),
+      speedsExclude: nonEmpty(initialUrlFilters.speedsExclude),
+      buyinBands: nonEmpty(initialUrlFilters.buyinBands),
+      buyinBandsExclude: nonEmpty(initialUrlFilters.buyinBandsExclude),
+      fieldBands: nonEmpty(initialUrlFilters.fieldBands),
+      fieldBandsExclude: nonEmpty(initialUrlFilters.fieldBandsExclude),
+      modifiers: nonEmpty(initialUrlFilters.modifiers),
+      modifiersExclude: nonEmpty(initialUrlFilters.modifiersExclude),
+      buyinRange:
+        buyinMin !== undefined || buyinMax !== undefined ? { min: buyinMin, max: buyinMax } : undefined,
+      keyword: initialUrlFilters.keyword || undefined,
+      keywordType: (initialUrlFilters.keywordType as 'contains' | 'not_contains') || undefined,
+      dateFrom: initialUrlFilters.dateFrom || undefined,
+      dateTo: initialUrlFilters.dateTo || undefined,
+      participantMin: initialUrlFilters.participantMin ?? undefined,
+      participantMax: initialUrlFilters.participantMax ?? undefined,
+    };
   });
   const [, navigate] = useLocation();
 
@@ -95,6 +111,17 @@ export default function Dashboard() {
       dateTo: filters.dateTo || '',
       participantMin: filters.participantMin ?? null,
       participantMax: filters.participantMax ?? null,
+      sitesExclude: filters.sitesExclude || [],
+      categoriesExclude: filters.categoriesExclude || [],
+      speedsExclude: filters.speedsExclude || [],
+      buyinBands: filters.buyinBands || [],
+      buyinBandsExclude: filters.buyinBandsExclude || [],
+      fieldBands: filters.fieldBands || [],
+      fieldBandsExclude: filters.fieldBandsExclude || [],
+      modifiers: filters.modifiers || [],
+      modifiersExclude: filters.modifiersExclude || [],
+      buyinMin: filters.buyinRange?.min ?? null,
+      buyinMax: filters.buyinRange?.max ?? null,
     };
     const serialized = serializeFiltersToURL(urlFilters);
     const newUrl = serialized ? `${window.location.pathname}?${serialized}` : window.location.pathname;

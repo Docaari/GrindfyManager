@@ -215,6 +215,13 @@ import { savedTournamentHighlights, tournamentGroupingViews, accountWorkspaces, 
 // Fase C #4 (ADR-232) — catalogo de tilt tipado (validacao de tiltType na agregacao).
 import { isValidTiltType, type TiltTypeId } from "@shared/tilt-types";
 // Fase C #3 (ADR-231) — síntese comportamental de leaks (helper puro).
+// Faixas de ABI/participantes dos filtros do dashboard (shared: a tela manda o
+// id da faixa, o servidor traduz para intervalo).
+import {
+  BUYIN_BANDS,
+  FIELD_BANDS,
+  resolveBands,
+} from "@shared/dashboard-filter-bands";
 import { synthesizeLeaks } from "./coach/leaks/detectLeaks";
 // Fase C #10 (ADR-233) — tipo do cruzamento mental × resultado (type-only).
 import type { MentalResultInsights } from "./coach/mental/mentalResultInsights";
@@ -478,6 +485,79 @@ function buildFilters(filters: any) {
     conditions.push(lte(tournaments.fieldSize, filters.participantsTo));
   }
 
+  // ==========================================================================
+  // Filtros do dashboard reformado (2026-08-01) — TODOS aditivos: quem nao
+  // manda as chaves novas continua com exatamente o comportamento anterior.
+  //
+  //   *Exclude   -> "esconda estes" (o inverso do filtro de mesmo nome)
+  //   *Bands     -> multi-selecao de faixas (OR entre elas)
+  //   modifiers  -> satelite / flight, que sao ortogonais ao "Tipo"
+  // ==========================================================================
+  const excludeIn = (column: any, values: any) => {
+    if (!Array.isArray(values) || values.length === 0) return;
+    conditions.push(not(inArray(column, values)));
+  };
+  excludeIn(tournaments.site, filters.sitesExclude);
+  excludeIn(tournaments.category, filters.categoriesExclude);
+  excludeIn(tournaments.speed, filters.speedsExclude);
+
+  /**
+   * Faixas em OR: "buy-in em $20-29 OU em $71-130".
+   * `max` e exclusivo. Linhas com a coluna NULL nunca casam um intervalo, entao
+   * na INCLUSAO elas ficam de fora (correto: nao da para afirmar que pertencem)
+   * e na EXCLUSAO elas ficam DENTRO (tambem correto: nao da para afirmar que
+   * pertencem a faixa que o jogador pediu para esconder).
+   */
+  const bandsCondition = (column: any, ranges: Array<{ min: number; max: number }>): any => {
+    const parts: any[] = ranges.map(({ min, max }) =>
+      Number.isFinite(max)
+        ? and(gte(column, min), lt(column, max))
+        : gte(column, min),
+    );
+    return parts.length === 1 ? parts[0] : or(...parts);
+  };
+
+  const buyinBands = resolveBands(filters.buyinBands, BUYIN_BANDS);
+  if (buyinBands.length > 0) {
+    conditions.push(bandsCondition(tournaments.buyIn, buyinBands));
+  }
+  const buyinBandsExclude = resolveBands(filters.buyinBandsExclude, BUYIN_BANDS);
+  if (buyinBandsExclude.length > 0) {
+    conditions.push(not(bandsCondition(tournaments.buyIn, buyinBandsExclude)));
+  }
+
+  const fieldBands = resolveBands(filters.fieldBands, FIELD_BANDS);
+  if (fieldBands.length > 0) {
+    conditions.push(bandsCondition(tournaments.fieldSize, fieldBands));
+  }
+  const fieldBandsExclude = resolveBands(filters.fieldBandsExclude, FIELD_BANDS);
+  if (fieldBandsExclude.length > 0) {
+    // field_size e nullable: sem o OR o "excluir <100" apagaria tambem os
+    // torneios cujo tamanho de field o export nao trouxe.
+    conditions.push(
+      or(
+        not(bandsCondition(tournaments.fieldSize, fieldBandsExclude)),
+        isNull(tournaments.fieldSize),
+      ),
+    );
+  }
+
+  // Satelite e flight sao independentes entre si e do tipo primario (ADR-031).
+  // COALESCE porque as duas colunas aceitam NULL em linhas antigas.
+  const isSatellite = sql`COALESCE(${tournaments.type}, '') = 'Satellite'`;
+  const isFlightLeg = sql`COALESCE(${tournaments.isFlight}, false) = true`;
+  const modifierCondition = (ids: any) => {
+    if (!Array.isArray(ids) || ids.length === 0) return undefined;
+    const parts: any[] = [];
+    if (ids.includes("satellite")) parts.push(isSatellite);
+    if (ids.includes("flight")) parts.push(isFlightLeg);
+    if (parts.length === 0) return undefined;
+    return parts.length === 1 ? parts[0] : or(...parts);
+  };
+  const modifiersInclude = modifierCondition(filters.modifiers);
+  if (modifiersInclude) conditions.push(modifiersInclude);
+  const modifiersExclude = modifierCondition(filters.modifiersExclude);
+  if (modifiersExclude) conditions.push(not(modifiersExclude));
 
   return conditions.length > 0 ? and(...conditions) : undefined;
 }

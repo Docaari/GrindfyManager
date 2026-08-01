@@ -12,7 +12,37 @@ export interface DashboardFilters {
   dateTo: string;
   participantMin: number | null;
   participantMax: number | null;
+
+  // Reforma dos filtros (2026-08-01). Todos OPCIONAIS: URL antiga, sem nenhum
+  // destes, continua abrindo com o mesmo resultado de antes.
+  sitesExclude?: string[];
+  categoriesExclude?: string[];
+  speedsExclude?: string[];
+  buyinBands?: string[];
+  buyinBandsExclude?: string[];
+  fieldBands?: string[];
+  fieldBandsExclude?: string[];
+  modifiers?: string[];
+  modifiersExclude?: string[];
+  buyinMin?: number | null;
+  buyinMax?: number | null;
 }
+
+/**
+ * Nome curto de cada lista nova na query string. Manter estavel: e o que o
+ * jogador compartilha quando copia o link do dashboard.
+ */
+const LIST_PARAMS: Array<[keyof DashboardFilters, string]> = [
+  ['sitesExclude', 'sitesX'],
+  ['categoriesExclude', 'catsX'],
+  ['speedsExclude', 'speedsX'],
+  ['buyinBands', 'abi'],
+  ['buyinBandsExclude', 'abiX'],
+  ['fieldBands', 'field'],
+  ['fieldBandsExclude', 'fieldX'],
+  ['modifiers', 'mods'],
+  ['modifiersExclude', 'modsX'],
+];
 
 const VALID_PERIODS = [
   'all', 'current_month', 'last_3_months', 'last_6_months',
@@ -66,6 +96,14 @@ export function serializeFiltersToURL(filters: DashboardFilters): string {
   if (!isDefaultFilter('dateTo', filters.dateTo)) params.set('dateTo', filters.dateTo);
   if (!isDefaultFilter('participantMin', filters.participantMin)) params.set('pMin', String(filters.participantMin));
   if (!isDefaultFilter('participantMax', filters.participantMax)) params.set('pMax', String(filters.participantMax));
+
+  // Listas novas (excluir / faixas / modificadores). Lista vazia nao vai pra URL.
+  for (const [key, param] of LIST_PARAMS) {
+    const value = filters[key] as string[] | undefined;
+    if (Array.isArray(value) && value.length > 0) params.set(param, value.join(','));
+  }
+  if (filters.buyinMin !== null && filters.buyinMin !== undefined) params.set('bMin', String(filters.buyinMin));
+  if (filters.buyinMax !== null && filters.buyinMax !== undefined) params.set('bMax', String(filters.buyinMax));
 
   return params.toString();
 }
@@ -127,6 +165,23 @@ export function deserializeFiltersFromURL(searchParams: string): DashboardFilter
   const pMax = params.get('pMax');
   if (pMax && !isNaN(Number(pMax))) {
     defaults.participantMax = Number(pMax);
+  }
+
+  for (const [key, param] of LIST_PARAMS) {
+    const raw = params.get(param);
+    if (raw && raw.length > 0) {
+      (defaults as any)[key] = raw.split(',').filter(Boolean);
+    }
+  }
+
+  const bMin = params.get('bMin');
+  if (bMin && !isNaN(Number(bMin))) {
+    defaults.buyinMin = Number(bMin);
+  }
+
+  const bMax = params.get('bMax');
+  if (bMax && !isNaN(Number(bMax))) {
+    defaults.buyinMax = Number(bMax);
   }
 
   return defaults;
