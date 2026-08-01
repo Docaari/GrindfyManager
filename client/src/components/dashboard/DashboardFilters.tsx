@@ -11,6 +11,7 @@ import {
   FIELD_BANDS,
   MODIFIER_FILTERS,
 } from "@shared/dashboard-filter-bands";
+import { hasAnyActiveFilter } from "@/lib/dashboard-filter-helpers";
 import type {
   DashboardFiltersState,
   AvailableOptions,
@@ -56,16 +57,17 @@ const PERIOD_OPTIONS = [
   { key: 'all', label: 'Tudo' },
 ];
 
-/** Quantos filtros o jogador tem ligados (arrays vazios nao contam). */
+/**
+ * Quantos filtros o jogador tem ligados (arrays vazios nao contam).
+ *
+ * Usa a mesma regra de `hasAnyActiveFilter` (dashboard-filter-helpers), que e a
+ * fonte unica de "isto conta como filtro?" — o estado vazio dos graficos depende
+ * dela para nao dizer "sem dados" quando na verdade o filtro zerou o resultado.
+ */
 export function countActiveFilters(filters: DashboardFiltersState): number {
-  return Object.entries(filters).filter(([key, value]) => {
-    if (key === 'keywordType') return false; // acompanha `keyword`, nao conta sozinho
-    if (Array.isArray(value)) return value.length > 0;
-    if (value && typeof value === 'object') {
-      return Object.values(value).some((v) => v !== undefined && v !== null && v !== '');
-    }
-    return value !== undefined && value !== null && value !== '';
-  }).length;
+  return Object.entries(filters).filter(([key, value]) =>
+    hasAnyActiveFilter({ [key]: value }),
+  ).length;
 }
 
 export function DashboardFilters({ filters, setFilters, period, setPeriod, availableOptions }: DashboardFiltersProps) {

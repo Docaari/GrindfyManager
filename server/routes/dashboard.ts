@@ -237,6 +237,48 @@ export function registerDashboardRoutes(app: Express): void {
     }
   });
 
+  /**
+   * Opções dos filtros (sites, tipos, velocidades que o jogador realmente tem).
+   *
+   * Existe para matar um desperdício: o dashboard carregava TODO o histórico
+   * (`/api/tournaments?limit=50000`) em cada visita só para extrair três listas
+   * de valores distintos. Para quem tem 100k torneios isso é dezenas de MB de
+   * JSON por load. Aqui são três DISTINCT no banco e algumas dezenas de bytes.
+   *
+   * Segue a regra de fonte do histórico (CLAUDE.md §6.1): exclui registros de
+   * sessão de grind e placeholders de Day 1.
+   */
+  app.get('/api/dashboard/filter-options', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const rows = await db
+        .selectDistinct({
+          site: tournaments.site,
+          category: tournaments.category,
+          speed: tournaments.speed,
+        })
+        .from(tournaments)
+        .where(and(
+          eq(tournaments.userId, userId),
+          isNull(tournaments.grindSessionId),
+          isNull(tournaments.baggedAt),
+        ));
+
+      const collect = (key: 'site' | 'category' | 'speed') =>
+        Array.from(new Set(rows.map((r: any) => r[key]).filter(Boolean))).sort() as string[];
+
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      res.json({
+        sites: collect('site'),
+        categories: collect('category'),
+        speeds: collect('speed'),
+      });
+    } catch (error) {
+      console.error('[GET /api/dashboard/filter-options] failed:', error);
+      res.status(500).json({ message: 'Failed to fetch filter options' });
+    }
+  });
+
   app.get('/api/dashboard/performance', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;

@@ -73,6 +73,30 @@ export function getDefaultFilters(): DashboardFilters {
   return { ...DEFAULTS, sites: [], categories: [], speeds: [] };
 }
 
+/**
+ * O jogador tem algum filtro ligado?
+ *
+ * Fonte única para quem precisa saber disso — em especial o estado vazio dos
+ * gráficos, que precisa distinguir "você não tem histórico" de "seus filtros não
+ * deixaram nada passar". A versão anterior olhava só três chaves e, depois da
+ * reforma dos filtros, dizia "sem dados disponíveis" para quem tinha acabado de
+ * excluir um tipo de torneio — dando a entender que o histórico estava vazio.
+ *
+ * NÃO conta `period`: período é sempre algum valor, não é "filtro ligado".
+ */
+export function hasAnyActiveFilter(filters: Record<string, any> | null | undefined): boolean {
+  if (!filters) return false;
+  return Object.entries(filters).some(([key, value]) => {
+    // Acompanha `keyword`; sozinho não significa filtro ativo.
+    if (key === 'keywordType') return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (value && typeof value === 'object') {
+      return Object.values(value).some((v) => v !== undefined && v !== null && v !== '');
+    }
+    return value !== undefined && value !== null && value !== '' && value !== false;
+  });
+}
+
 export function isDefaultFilter(key: string, value: any): boolean {
   if (key === 'sites' || key === 'categories' || key === 'speeds') {
     return Array.isArray(value) && value.length === 0;

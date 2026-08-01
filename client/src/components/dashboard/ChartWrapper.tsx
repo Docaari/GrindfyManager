@@ -1,3 +1,4 @@
+import { hasAnyActiveFilter } from '@/lib/dashboard-filter-helpers';
 import type { DashboardFiltersState } from './types';
 
 // Chart loading skeleton
@@ -18,8 +19,9 @@ export function ChartSkeleton() {
 export function ChartContent({ loading, data, filters, children }: { loading: boolean; data: any; filters: DashboardFiltersState; children: React.ReactNode }) {
   if (loading) return <ChartSkeleton />;
   if (!data || (Array.isArray(data) && data.length === 0)) {
-    const hasActiveFilters = (filters.sites?.length || 0) > 0 || (filters.categories?.length || 0) > 0 ||
-      (filters.speeds?.length || 0) > 0 || filters.keyword || filters.participantMin || filters.participantMax;
+    // Cobre TODOS os filtros, inclusive os de excluir / faixas / satélite e
+    // flight — antes olhava só três chaves e mentia dizendo "sem dados".
+    const hasActiveFilters = hasAnyActiveFilter(filters);
     return (
       <div className="h-full flex items-center justify-center text-gray-400">
         <p>{hasActiveFilters ? 'Nenhum resultado para os filtros selecionados' : 'Sem dados disponíveis'}</p>

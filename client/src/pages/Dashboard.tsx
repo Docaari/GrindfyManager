@@ -163,10 +163,21 @@ export default function Dashboard() {
     staleTime: 2 * 60 * 1000,
   });
 
-  // Fix #1: Sem limite para cobrir todos os torneios (18K+)
+  // Histórico completo — pesado (até 50k linhas). Só a aba Geral precisa dele,
+  // para o gráfico de evolução detectar big hits. Antes carregava em TODA visita
+  // ao dashboard, inclusive para quem só queria olhar a aba Site.
   const { data: allTournaments } = useQuery({
     queryKey: ["/api/tournaments", "all"],
     queryFn: async () => apiRequest('GET', "/api/tournaments?limit=50000"),
+    staleTime: 10 * 60 * 1000,
+    enabled: activeTab === 'evolution',
+  });
+
+  // Opções dos filtros vêm de três DISTINCT no banco, não de baixar o histórico
+  // inteiro para extrair valores únicos no navegador.
+  const { data: filterOptions } = useQuery<{ sites: string[]; categories: string[]; speeds: string[] }>({
+    queryKey: ["/api/dashboard/filter-options"],
+    queryFn: async () => apiRequest('GET', "/api/dashboard/filter-options"),
     staleTime: 10 * 60 * 1000,
   });
 
@@ -180,10 +191,10 @@ export default function Dashboard() {
   });
 
   const availableOptions = useMemo(() => ({
-    sites: Array.from(new Set(Array.isArray(allTournaments) ? allTournaments.map((t: any) => t.site).filter(Boolean) : [])) as string[],
-    categories: Array.from(new Set(Array.isArray(allTournaments) ? allTournaments.map((t: any) => t.category).filter(Boolean) : [])) as string[],
-    speeds: Array.from(new Set(Array.isArray(allTournaments) ? allTournaments.map((t: any) => t.speed).filter(Boolean) : [])) as string[]
-  }), [allTournaments]);
+    sites: filterOptions?.sites ?? [],
+    categories: filterOptions?.categories ?? [],
+    speeds: filterOptions?.speeds ?? [],
+  }), [filterOptions]);
 
   // Queries de metricas (category + speed) — usadas pelas abas Categoria e Velocidade
   // (os cards de contagem por tipo/velocidade foram removidos do topo do dashboard).
