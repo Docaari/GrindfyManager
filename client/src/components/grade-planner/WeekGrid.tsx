@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useDragToScroll } from "@/hooks/useDragToScroll";
 import { Draggable } from "react-beautiful-dnd";
 import { StrictModeDroppable as Droppable } from "./StrictModeDroppable";
-import { Settings, Plus, Eye, X } from "lucide-react";
+import { Settings, Plus, Eye, X, Eraser } from "lucide-react";
 import { generateTimeSlots } from "@shared/grade-hours";
 import { getDisplayRegistrationTime } from "@shared/grade-time";
 import { getCellDisplayInfo } from "@shared/grade-cell-overflow";
@@ -80,6 +80,9 @@ interface WeekGridProps {
   // Click no botao abre DayDetailDrawer no GradePlanner. Renderizado apenas
   // quando profile != OFF (dia ativo) — em OFF nao ha agregados a mostrar.
   onShowDayDetails?: (dayOfWeek: number) => void;
+  // Limpar dia: remove todos os torneios do dia no perfil ativo. So aparece
+  // quando o dia tem torneios; a confirmacao vive no GradePlanner.
+  onClearDay?: (dayOfWeek: number) => void;
 }
 
 export function WeekGrid({
@@ -95,6 +98,7 @@ export function WeekGrid({
   gradeEndHour,
   onOpenSettings,
   onShowDayDetails,
+  onClearDay,
 }: WeekGridProps) {
   const tournaments = Array.isArray(plannedTournaments) ? plannedTournaments : [];
   const TIME_SLOTS = generateTimeSlots(gradeStartHour, gradeEndHour);
@@ -264,6 +268,7 @@ export function WeekGrid({
                               )}
                             </div>
                           )}
+                          <div className="flex items-center gap-1">
                           {onShowDayDetails && (
                             <DayHoverTooltip
                               dayOfWeek={day.id}
@@ -284,6 +289,19 @@ export function WeekGrid({
                               </button>
                             </DayHoverTooltip>
                           )}
+                          {onClearDay && (s?.countDisplay ?? "0 MTTs") !== "0 MTTs" && (
+                            <button
+                              type="button"
+                              data-testid={`week-grid-day-clear-${day.id}`}
+                              onClick={() => onClearDay(day.id)}
+                              className="inline-flex items-center justify-center gap-1 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs font-medium text-gray-400 transition-colors hover:border-red-700/70 hover:bg-red-950/40 hover:text-red-300 focus:outline-none focus:ring-2 focus:ring-red-400"
+                              title="Remover todos os torneios deste dia"
+                            >
+                              <Eraser className="h-3.5 w-3.5" />
+                              <span>Limpar</span>
+                            </button>
+                          )}
+                          </div>
                         </div>
                       );
                     })()}

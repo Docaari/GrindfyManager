@@ -8,12 +8,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useProfileStates, useUpdateProfileState } from "@/hooks/useProfileStates";
-import { DragDropContext, type DropResult } from "react-beautiful-dnd";
+import { DragDropContext, type DropResult, type DragStart } from "react-beautiful-dnd";
 import { Panel, PanelGroup, PanelResizeHandle, type ImperativePanelHandle } from "react-resizable-panels";
 import { validateDrop, mapLibraryToPlanned, calculateMove } from "@shared/drag-drop-utils";
 import { checkOffToggleWarning, getAffectedTournaments, shouldShowOffDialog } from "@shared/grade-off-toggle";
 import { shouldShowGrindCTA, getGrindCTAData, getTodayDayOfWeek } from "@/components/grade-planner/grind-cta-helpers";
-import { Maximize2, Minimize2, BarChart3, Zap, X, Plus, Keyboard, Calendar, Trophy, Plane, Calculator } from "lucide-react";
+import { Maximize2, Minimize2, BarChart3, Zap, X, Plus, Keyboard, Calendar, Trophy, Plane, Calculator, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -46,6 +46,7 @@ import { useTabFromUrl } from '@/hooks/useTabFromUrl';
 import { FocusStatsBar } from '@/components/study/FocusStatsBar';
 import { useFocusStatsBar } from '@/hooks/useFocusStatsBar';
 import { FlightsPanel } from '@/components/grade-planner/FlightsPanel';
+import { DragTrashZone, GRADE_TRASH_DROPPABLE_ID } from '@/components/grade-planner/DragTrashZone';
 
 const COACH_TABS = ['planner', 'selector', 'flights', 'variance'] as const;
 const COACH_TAB_LIST: string[] = [...COACH_TABS];
@@ -140,6 +141,13 @@ export default function GradePlanner() {
 
   // FP-06: Grind CTA banner state
   const [ctaDismissed, setCtaDismissed] = useState(false);
+
+  // Drag-to-trash: origem do item em drag (acende a zona de descarte).
+  const [dragging, setDragging] = useState<'cell' | 'library' | null>(null);
+
+  // "Limpar dia": alvo aguardando confirmacao.
+  const [clearDayTarget, setClearDayTarget] = useState<number | null>(null);
+  const [clearingDay, setClearingDay] = useState(false);
 
   // Modal canonico de criar torneio (DayCreateTournamentDialog) — unico caminho
   // de criacao: "+" da celula e botao "Novo Torneio". EditDialog ficou so com
@@ -373,6 +381,163 @@ export default function GradePlanner() {
     },
   });
 
+  // ==========================================================================
+  // Descarte por arrasto + limpar dia
+  // ==========================================================================
+
+  /** Campos necessarios pra recriar um torneio planejado identico (undo). */
+  const plannedRestorePayload = (t: any) => ({
+    dayOfWeek: t.dayOfWeek,
+    profile: t.profile,
+    site: t.site,
+    time: t.time,
+    type: t.type ?? 'Vanilla',
+    speed: t.speed ?? 'Normal',
+    name: t.name,
+    buyIn: String(t.buyIn ?? '0'),
+    guaranteed: String(t.guaranteed ?? '0'),
+    prioridade: Number(t.prioridade) || 2,
+    registrationTime: t.registrationTime ?? null,
+    lateRegMinutes: t.lateRegMinutes ?? null,
+    alertMinutesBefore: t.alertMinutesBefore ?? null,
+    allowsAddOn: Boolean(t.allowsAddOn),
+    addOnCost: t.addOnCost ?? null,
+    allowsReentry: Boolean(t.allowsReentry),
+    maxReentries: t.maxReentries ?? null,
+    isFlight: Boolean(t.isFlight),
+    isLive: Boolean(t.isLive),
+    libraryTemplateId: t.libraryTemplateId ?? null,
+  });
+
+  const invalidatePlanned = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/active-days"] });
+  };
+
+  const restorePlannedTournaments = async (snapshots: any[]) => {
+    try {
+      await Promise.all(
+        snapshots.map((t) =>
+          apiRequest("POST", "/api/planned-tournaments", plannedRestorePayload(t)),
+        ),
+      );
+      invalidatePlanned();
+    } catch {
+      toast({
+        title: "Nao consegui desfazer",
+        description: "Recarregue a pagina e tente de novo.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const undoAction = (label: string, onClick: () => void) => (
+    <button
+      type="button"
+      aria-label={label}
+      data-alt-text={label}
+      onClick={onClick}
+      className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-gray-600 bg-transparent px-3 text-sm font-medium"
+    >
+      Desfazer
+    </button>
+  );
+
+  /** Torneio da grade solto na lixeira — remove com undo. */
+  const trashPlannedTournament = async (tournamentId: string) => {
+    const snapshot = (Array.isArray(plannedTournaments) ? plannedTournaments : [])
+      .find((t: any) => t.id === tournamentId);
+    if (!snapshot) return;
+    try {
+      await apiRequest("DELETE", `/api/planned-tournaments/${tournamentId}`);
+      invalidatePlanned();
+      toast({
+        title: "Torneio removido da grade",
+        description: snapshot.name || snapshot.site || undefined,
+        action: undoAction("Desfazer remocao", () =>
+          restorePlannedTournaments([snapshot]),
+        ) as any,
+      });
+    } catch {
+      toast({
+        title: "Erro ao remover",
+        description: "Nao consegui tirar o torneio da grade.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  /** Torneio da biblioteca solto na lixeira — vai pra lixeira (soft delete). */
+  const trashLibraryTournament = async (libraryId: string) => {
+    const libraryData = queryClient.getQueryData<any[]>(["/api/tournament-library"]);
+    const snapshot = (libraryData || []).find((t: any) => t.id === libraryId);
+    const invalidateLibrary = () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tournament-library"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tournament-library/trash"] });
+    };
+    try {
+      await apiRequest("PATCH", `/api/tournament-library/${libraryId}/trash`, {});
+      invalidateLibrary();
+      toast({
+        title: "Movido para a lixeira da biblioteca",
+        description: snapshot?.name || snapshot?.site || undefined,
+        action: undoAction("Desfazer envio para lixeira", async () => {
+          try {
+            await apiRequest("POST", `/api/tournament-library/${libraryId}/restore`, {});
+            invalidateLibrary();
+          } catch {
+            toast({
+              title: "Nao consegui restaurar",
+              description: "Abra a lixeira da biblioteca para restaurar.",
+              variant: "destructive",
+            });
+          }
+        }) as any,
+      });
+    } catch {
+      toast({
+        title: "Erro ao mover para a lixeira",
+        description: "Tente pelo menu do card na biblioteca.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleClearDayConfirm = async () => {
+    if (clearDayTarget === null) return;
+    const snapshots = getTournamentsForDay(clearDayTarget);
+    if (snapshots.length === 0) {
+      setClearDayTarget(null);
+      return;
+    }
+    setClearingDay(true);
+    try {
+      await Promise.all(
+        snapshots.map((t: any) =>
+          apiRequest("DELETE", `/api/planned-tournaments/${t.id}`),
+        ),
+      );
+      invalidatePlanned();
+      const dayName = weekDays.find((d) => d.id === clearDayTarget)?.name ?? "dia";
+      toast({
+        title: `${dayName} limpo`,
+        description: `${snapshots.length} torneio${snapshots.length > 1 ? "s" : ""} removido${snapshots.length > 1 ? "s" : ""}.`,
+        action: undoAction("Desfazer limpeza do dia", () =>
+          restorePlannedTournaments(snapshots),
+        ) as any,
+      });
+      setClearDayTarget(null);
+    } catch {
+      toast({
+        title: "Erro ao limpar o dia",
+        description: "Alguns torneios podem nao ter sido removidos.",
+        variant: "destructive",
+      });
+    } finally {
+      setClearingDay(false);
+    }
+  };
+
   // Generate tournament name
   const generateTournamentName = (data: any) => {
     if (data.name && data.name.trim()) return data.name;
@@ -594,10 +759,25 @@ export default function GradePlanner() {
   // =========================================================================
   // Drag & Drop handler
   // =========================================================================
+  const handleDragStart = useCallback((start: DragStart) => {
+    setDragging(start.draggableId.startsWith("library-") ? "library" : "cell");
+  }, []);
+
   const handleDragEnd = useCallback((result: DropResult) => {
     const { source, destination, draggableId } = result;
+    setDragging(null);
 
     if (!destination) return;
+
+    // Solto na zona de descarte do rodape.
+    if (destination.droppableId === GRADE_TRASH_DROPPABLE_ID) {
+      if (draggableId.startsWith("library-")) {
+        void trashLibraryTournament(draggableId.replace("library-", ""));
+      } else if (draggableId.startsWith("cell-")) {
+        void trashPlannedTournament(draggableId.replace("cell-", ""));
+      }
+      return;
+    }
 
     // Parse destination droppable ID: "cell-{dayOfWeek}-{time}"
     const destParts = destination.droppableId.split("-");
@@ -684,6 +864,7 @@ export default function GradePlanner() {
       gradeEndHour={gradeEndHour}
       onOpenSettings={() => setIsSettingsOpen(true)}
       onShowDayDetails={(dayOfWeek) => setDayDetailOpen(dayOfWeek)}
+      onClearDay={(dayOfWeek) => setClearDayTarget(dayOfWeek)}
     />
   );
 
@@ -695,7 +876,7 @@ export default function GradePlanner() {
   );
 
   return (
-    <DragDropContext onDragEnd={handleDragEnd}>
+    <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="w-full px-6 py-6">
         {/* Sprint Estudos-Habito-1 RF-4: stats foco visiveis no /coach. */}
         <div className="mb-3">
@@ -1026,6 +1207,9 @@ export default function GradePlanner() {
         {/* Sprint day-detail-zoom-1: Portal container inside DragDropContext */}
         <div ref={dndPortalRef} id="dnd-portal-container" />
 
+        {/* Zona de descarte — acende ao arrastar (grade ou biblioteca). */}
+        <DragTrashZone dragging={dragging} />
+
         {/* Sprint day-detail-zoom-1: DayDetailHost (zoom default, drawer via ?detail=drawer) */}
         {dayDetailOpen !== null && (
           <DayDetailHost
@@ -1099,6 +1283,52 @@ export default function GradePlanner() {
             }}
           />
         )}
+
+        {/* Limpar dia — confirmacao (remove todos os torneios do perfil ativo) */}
+        <Dialog
+          open={clearDayTarget !== null}
+          onOpenChange={(open) => { if (!open) setClearDayTarget(null); }}
+        >
+          <DialogContent
+            data-testid="grade-clear-day-dialog"
+            className="!bg-zinc-900 border-zinc-800 text-zinc-100 max-w-md p-0 overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] sm:rounded-xl"
+          >
+            <div className="bg-gradient-to-br from-red-900/30 via-zinc-900 to-zinc-900 border-b border-zinc-800 px-6 py-5">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2.5 text-lg font-semibold">
+                  <div className="p-1.5 rounded-lg bg-red-500/15 ring-1 ring-red-500/30">
+                    <Trash2 className="h-4 w-4 text-red-400" />
+                  </div>
+                  Limpar {clearDayTarget !== null ? weekDays.find(d => d.id === clearDayTarget)?.name : ''}?
+                </DialogTitle>
+                <DialogDescription className="text-zinc-400 text-sm">
+                  {clearDayTarget !== null && (() => {
+                    const n = getTournamentsForDay(clearDayTarget).length;
+                    const p = getActiveProfile(clearDayTarget);
+                    return `${n} torneio${n > 1 ? 's' : ''} do perfil ${p} ${n > 1 ? 'serao removidos' : 'sera removido'} da grade. Da pra desfazer no aviso que aparece depois.`;
+                  })()}
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+            <div className="border-t border-zinc-800 bg-zinc-950/60 px-6 py-4 flex gap-2 justify-end">
+              <Button
+                variant="ghost"
+                onClick={() => setClearDayTarget(null)}
+                className="text-zinc-300 hover:bg-zinc-800 hover:text-white"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleClearDayConfirm}
+                disabled={clearingDay}
+                data-testid="grade-clear-day-confirm"
+                className="bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/30"
+              >
+                {clearingDay ? 'Limpando...' : 'Limpar dia'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* FP-04: Off Toggle Dialog */}
         <Dialog open={showOffDialog} onOpenChange={(open) => { if (!open) handleCancelOff(); }}>
