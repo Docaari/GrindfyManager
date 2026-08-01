@@ -369,6 +369,62 @@ export function buildPositionInsight(data: any): TabInsight | null {
 }
 
 /**
+ * Onde o jogador cai dentro do field.
+ *
+ * Cair entre 30% e 100% do field restante é o normal — a maior parte do campo
+ * morre cedo. O alarme é a faixa de 10-20%, a zona da bolha: cair muito ali
+ * significa chegar perto do dinheiro e não converter, que é o erro mais caro.
+ */
+export function buildEliminationInsight(data: any): TabInsight | null {
+  if (!Array.isArray(data) || data.length === 0) return null;
+
+  const byBucket = new Map<string, number>();
+  let total = 0;
+  for (const row of data) {
+    const bucket = String(row?.bucket ?? '');
+    const volume = num(row?.volume);
+    if (!bucket || volume <= 0) continue;
+    byBucket.set(bucket, (byBucket.get(bucket) ?? 0) + volume);
+    total += volume;
+  }
+  if (total === 0) return null;
+  if (total < LOW_SAMPLE_VOLUME) return insufficientInsight(total);
+
+  const share = (buckets: string[]) =>
+    (buckets.reduce((sum, b) => sum + (byBucket.get(b) ?? 0), 0) / total) * 100;
+
+  const bubbleZone = share(['10-20%', '20-30%']);
+  const deep = share(['0-1%', '1-5%', '5-10%']);
+  const early = share(['50-75%', '75-100%']);
+  const lowSample = total < MIN_BUCKET_VOLUME;
+
+  if (bubbleZone >= 30) {
+    return {
+      headline: `${Math.round(bubbleZone)}% das suas eliminações acontecem com 10% a 30% do field restante — a zona da bolha.`,
+      detail: 'É o bust mais caro que existe: você paga o torneio inteiro, chega perto do dinheiro e sai sem ele. Vale revisar o jogo de stack curto perto do corte.',
+      tone: 'bad',
+      lowSample,
+    };
+  }
+
+  if (deep >= 12) {
+    return {
+      headline: `${Math.round(deep)}% das suas eliminações acontecem nos 10% finais do field — você chega fundo com frequência.`,
+      detail: `Bust precoce (mais da metade do field ainda em jogo) em ${Math.round(early)}% das vezes, que é o esperado de MTT.`,
+      tone: 'good',
+      lowSample,
+    };
+  }
+
+  return {
+    headline: `Suas eliminações se concentram cedo: ${Math.round(early)}% saem com mais da metade do field ainda em jogo.`,
+    detail: `Só ${Math.round(deep)}% chegam aos 10% finais. Em MTT bustar cedo é normal, mas essa proporção é o que separa quem paga a grade de quem não paga.`,
+    tone: 'neutral',
+    lowSample,
+  };
+}
+
+/**
  * Reentradas: a pergunta é uma só — reentrar paga ou custa? Compara o ROI das
  * entradas COM reentrada contra as SEM, já descontado o custo das reentradas.
  */
@@ -451,7 +507,12 @@ export function buildTabInsight(tab: string, payload: Record<string, any>): TabI
     case 'por-participantes':
       return buildFieldInsight(payload.fieldAnalytics);
     case 'por-posicao':
-      return buildPositionInsight(payload.finalTableAnalytics);
+      // Onde ele cai no field responde melhor "por que perco" do que a
+      // distribuicao de lugares na mesa final; a FT vira fallback.
+      return (
+        buildEliminationInsight(payload.eliminationAnalytics) ??
+        buildPositionInsight(payload.finalTableAnalytics)
+      );
     case 'reentradas':
       return buildReentryInsight(payload.reentryAnalytics);
     default:

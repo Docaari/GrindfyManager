@@ -721,6 +721,19 @@ export function registerAnalyticsRoutes(app: Express): void {
     }
   });
 
+  app.get('/api/analytics/elimination', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const period = (req.query.period as string) || '30d';
+      const filters = mapFiltersToBackendFormat(parseFiltersParam(req.query.filters));
+      const analytics = await (storage as any).getEliminationBuckets(userId, period, filters);
+      res.json(analytics);
+    } catch (error) {
+      console.error('[GET /api/analytics/elimination] failed:', error);
+      res.status(500).json({ message: 'Failed to fetch elimination analytics' });
+    }
+  });
+
   app.get('/api/analytics/simultaneous-tables', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;

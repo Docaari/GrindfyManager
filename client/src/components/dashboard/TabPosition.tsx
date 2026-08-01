@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 import { ChartContent } from './ChartWrapper';
 import { BubbleCard } from './BubbleCard';
+import { EliminationChart } from './EliminationChart';
 import type { DashboardFiltersState } from './types';
 
 interface TabPositionProps {
@@ -11,10 +12,12 @@ interface TabPositionProps {
   finalTableLoading: boolean;
   /** Bolha e ITM real x esperado (some quando o historico nao tem o dado). */
   bubbleAnalytics?: any;
+  /** Distribuicao de eliminacao por % do field restante. */
+  eliminationAnalytics?: any;
   filters: DashboardFiltersState;
 }
 
-export function TabPosition({ fieldAnalytics, fieldLoading, finalTableAnalytics, finalTableLoading, bubbleAnalytics, filters }: TabPositionProps) {
+export function TabPosition({ fieldAnalytics, fieldLoading, finalTableAnalytics, finalTableLoading, bubbleAnalytics, eliminationAnalytics, filters }: TabPositionProps) {
   return (
     <>
       <h3 className="text-xl font-bold text-white mb-8">🥇 Análise Por Posição</h3>
@@ -33,12 +36,15 @@ export function TabPosition({ fieldAnalytics, fieldLoading, finalTableAnalytics,
               Eliminação por Field
             </CardTitle>
             <CardDescription className="text-gray-300 text-base">
-              Frequência de eliminação por faixa percentual do field
+              Quanto do field ainda restava quando você foi eliminado. Âmbar é a zona da
+              bolha — cair ali é o que mais custa.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="h-[400px]">
-              <ChartContent loading={fieldLoading} data={fieldAnalytics} filters={filters}><AnalyticsCharts type="fieldElimination" data={fieldAnalytics || []} /></ChartContent>
+            <div className="h-[400px]" data-testid="chart-elimination">
+              <ChartContent loading={fieldLoading} data={eliminationAnalytics} filters={filters}>
+                <EliminationChart data={eliminationAnalytics || []} />
+              </ChartContent>
             </div>
           </CardContent>
         </Card>

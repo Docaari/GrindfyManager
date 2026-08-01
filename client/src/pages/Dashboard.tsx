@@ -13,7 +13,7 @@ import {
   deserializeFiltersFromURL,
 } from "@/lib/dashboard-filter-helpers";
 import { isValidTab } from "@/lib/dashboard-tabs-helpers";
-import { buildCSVContent, formatCSVRow, getExportHeaders, getExportFilename, sanitizeForCSV } from "@/lib/export-helpers";
+import { buildCSVContent, formatCSVRow, getExportHeaders, getExportFilename, projectRowForExport } from "@/lib/export-helpers";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -273,6 +273,14 @@ export default function Dashboard() {
     enabled: activeTab === 'por-posicao',
   });
 
+  // Onde ele cai dentro do field (aba Posicao).
+  const { data: eliminationAnalytics } = useQuery({
+    queryKey: ["/api/analytics/elimination", period, filters],
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/elimination?${params}`); },
+    staleTime: 2 * 60 * 1000,
+    enabled: activeTab === 'por-posicao',
+  });
+
   // Mesas simultaneas x ROI (aba Periodo).
   const { data: simultaneousAnalytics } = useQuery({
     queryKey: ["/api/analytics/simultaneous-tables", period, filters],
@@ -305,8 +313,9 @@ export default function Dashboard() {
         fieldAnalytics,
         finalTableAnalytics,
         reentryAnalytics,
+        eliminationAnalytics,
       }),
-    [activeTab, siteAnalytics, buyinAnalytics, categoryAnalytics, speedAnalytics, dayAnalytics, fieldAnalytics, finalTableAnalytics, reentryAnalytics],
+    [activeTab, siteAnalytics, buyinAnalytics, categoryAnalytics, speedAnalytics, dayAnalytics, fieldAnalytics, finalTableAnalytics, reentryAnalytics, eliminationAnalytics],
   );
 
   // FP-10: Export state
@@ -385,7 +394,9 @@ export default function Dashboard() {
       if (headers.length === 0) return;
 
       const data = getActiveTabData();
-      const rows = data.map(row => formatCSVRow(row, headers));
+      // Projeta a linha da API nos rotulos do cabecalho ANTES de formatar —
+      // sem isso o CSV sai com as linhas todas vazias (ver projectRowForExport).
+      const rows = data.map(row => formatCSVRow(projectRowForExport(row, tabType), headers));
       const csvContent = buildCSVContent(headers, rows);
 
       const currentPeriod = period || new Date().toISOString().slice(0, 7);
@@ -592,7 +603,7 @@ export default function Dashboard() {
               <TabParticipants fieldAnalytics={fieldAnalytics} fieldLoading={fieldLoading} monthAnalytics={monthAnalytics} monthLoading={monthLoading} period={period} filters={filters} />
             )}
             {activeTab === 'por-posicao' && (
-              <TabPosition fieldAnalytics={fieldAnalytics} fieldLoading={fieldLoading} finalTableAnalytics={finalTableAnalytics} finalTableLoading={finalTableLoading} bubbleAnalytics={bubbleAnalytics} filters={filters} />
+              <TabPosition fieldAnalytics={fieldAnalytics} fieldLoading={fieldLoading} finalTableAnalytics={finalTableAnalytics} finalTableLoading={finalTableLoading} bubbleAnalytics={bubbleAnalytics} eliminationAnalytics={eliminationAnalytics} filters={filters} />
             )}
             {activeTab === 'reentradas' && (
               <TabReentry reentryAnalytics={reentryAnalytics} reentryLoading={reentryLoading} filters={filters} />

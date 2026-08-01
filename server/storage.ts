@@ -6030,6 +6030,67 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
   }
 
   /**
+   * Onde você cai dentro do field.
+   *
+   * `position / field_size` diz quanto do campo ainda restava quando você foi
+   * eliminado: sair em 300º de 1000 = caiu com 30% do field restante. É a
+   * pergunta que a aba Posição promete responder — e que, até 2026-08-01, ela
+   * NÃO respondia: o gráfico rotulado "Eliminação por Field" na verdade exibia
+   * volume por TAMANHO de field, duplicando a aba Participantes.
+   *
+   * As faixas ficam mais finas perto do dinheiro, que é onde a decisão importa:
+   * cair entre 10% e 20% dói muito mais que cair entre 50% e 75%.
+   */
+  async getEliminationBuckets(userId: string, period = "30d", filters: any = {}): Promise<any[]> {
+    try {
+      const baseConditions = [eq(tournaments.userId, userId)];
+      baseConditions.push(...buildPeriodCondition(period, filters));
+      const dashboardFilters = buildFilters(filters);
+      if (dashboardFilters) baseConditions.push(dashboardFilters);
+
+      const pct = sql`(${tournaments.position}::decimal / NULLIF(${tournaments.fieldSize}, 0)) * 100`;
+      const bucketExpr = sql<string>`CASE
+        WHEN ${pct} <= 1 THEN '0-1%'
+        WHEN ${pct} <= 5 THEN '1-5%'
+        WHEN ${pct} <= 10 THEN '5-10%'
+        WHEN ${pct} <= 20 THEN '10-20%'
+        WHEN ${pct} <= 30 THEN '20-30%'
+        WHEN ${pct} <= 50 THEN '30-50%'
+        WHEN ${pct} <= 75 THEN '50-75%'
+        ELSE '75-100%'
+      END`;
+
+      const invested = sql`SUM(CAST(${tournaments.buyIn} AS DECIMAL) * (1 + COALESCE(${tournaments.reentries}, 0)))`;
+
+      return await db
+        .select({
+          bucket: bucketExpr,
+          volume: sql<number>`COUNT(*)::int`,
+          profit: sql<number>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)`,
+          invested: sql<number>`COALESCE(${invested}, 0)`,
+          roi: sql<number>`CASE WHEN ${invested} > 0
+            THEN (COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0) / ${invested}) * 100 ELSE 0 END`,
+          itmCount: sql<number>`COUNT(*) FILTER (WHERE
+            CASE WHEN ${tournaments.grossPrize} IS NOT NULL
+              THEN CAST(${tournaments.grossPrize} AS DECIMAL) > 0
+              ELSE CAST(${tournaments.prize} AS DECIMAL) > 0 END)::int`,
+        })
+        .from(tournaments)
+        .where(and(
+          ...baseConditions,
+          isNotNull(tournaments.position),
+          gt(tournaments.position, 0),
+          isNotNull(tournaments.fieldSize),
+          gt(tournaments.fieldSize, 0),
+        ))
+        .groupBy(bucketExpr);
+    } catch (error) {
+      console.error("getEliminationBuckets failed:", error);
+      return [];
+    }
+  }
+
+  /**
    * ROI por quantidade de mesas abertas ao mesmo tempo.
    *
    * Para cada torneio, conta quantos outros estavam em andamento no instante em
