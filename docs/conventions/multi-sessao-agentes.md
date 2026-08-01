@@ -146,6 +146,7 @@ Roda em `localhost:3000` e serve **todas** as sessoes.
 | **Torneios** | `/library` | `pages/TournamentLibraryNew.tsx`, `components/library/*`, `components/tournament-library/*` | `routes/tournament-library.ts`, `routes/grouping-views.ts`, `routes/adminWorkspaces.ts`, `services/libraryGrouping.ts`, `shared/library-grouping-dims.ts` |
 | **Grade-Planner** | `/grade-planner`, `/coach` | `pages/GradePlanner.tsx`, `components/grade-planner/*`, `components/grade/*` | `routes/grade-planner.ts`, `routes/grade-day-detail.ts`, `routes/tournament-series.ts` |
 | **Grind-Live** | `/grind-live`, `/grind` | `pages/GrindSessionLive.tsx`, `pages/GrindSession.tsx`, `components/grind-session-live/*`, `components/grind-session/*` | `routes/grind-sessions.ts`, `routes/reentry.ts`, `routes/tickets.ts` |
+| **Import** | `/upload` | `pages/UploadHistory.tsx`, `components/upload/*`, `components/AutoUpload.tsx` | `routes/upload.ts`, `csvParser.ts`, `services/tournamentInsertMapper.ts`, `services/importReconciliation.ts`, `services/fx/*`, `shared/tournament-type-detector.ts` |
 
 ### 4.2 Pre-mapeadas (sessao ainda nao aberta)
 
@@ -159,7 +160,6 @@ Roda em `localhost:3000` e serve **todas** as sessoes.
 | **Estudos** | `/estudos` | `pages/Studies.tsx`, `components/studies/*`, `components/studies-v2/*`, `components/study-themes/*`, `components/spots/*` | `routes/studies.ts`, `routes/studies-v2.ts`, `routes/study-sessions.ts`, `routes/mda.ts`, `routes/themeLessonNotes.ts` |
 | **Coach IA** | `/coach-ai` | `pages/CoachAI.tsx`, `components/coach-ai/*`, `components/coach/*` | `routes/coach.ts`, `routes/coachAi1a.ts`, `routes/coachAi1b.ts`, `routes/coachPlanning.ts`, `routes/coachWeeklyReview.ts`, `server/coach/*` |
 | **Biblioteca (aulas)** | `/biblioteca` | `pages/biblioteca/BibliotecaPage.tsx`, `components/biblioteca/*`, `components/audio-player/*` | `routes/library.ts`, `routes/library-search.ts`, `routes/library-continue.ts`, `routes/premiumLibrary.ts` |
-| **Import** | `/upload` | `pages/UploadHistory.tsx`, `components/upload/*` | `routes/upload.ts`, `csvParser.ts`, `services/tournamentInsertMapper.ts`, `services/importReconciliation.ts`, `services/fx/*` |
 | **Selecao de torneios** | (dentro de `/coach`) | `components/tournament-selector/*` | `routes/tournament-selector.ts`, `server/scoring/*` |
 | **Ajustes** | `/settings` | `pages/Settings.tsx`, `components/settings/*`, `components/profile/*` | `routes/misc.ts`, `routes/userActivity.ts`, `routes/fx.ts` |
 | **Admin** | `/admin/*`, `/analytics` | `pages/AdminDashboard.tsx`, `pages/AdminUsers.tsx`, `pages/Analytics.tsx`, `components/admin/*` | `routes/admin.ts`, `routes/adminLibrary.ts`, `routes/adminFx.ts`, `routes/adminAudioMetrics.ts` |
