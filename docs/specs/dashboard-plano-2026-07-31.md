@@ -32,12 +32,34 @@ Ordem aprovada: bugs → filtros → satelite/flight → dicas por aba → abas 
   `is_flight` — o filtro "Tipo" atual usa a coluna legada `category`).
 - Layout redesenhado; filtros ativos como etiquetas removiveis.
 
-## 3. Satelite vs Flight
+## 3. Satelite vs Flight — ADIADO (decisao do founder, 2026-08-01)
 
-Separar de verdade e garantir que o Day 2 entre na conta (senao o ROI de flight
-fica cronicamente negativo: Day 1 so tem custo). Lado leitura (filtrar, agrupar
-por serie, contar) e desta sessao; mudanca na classificacao durante o import
-pertence a area Import — ver §4.5 do documento de multiplas sessoes.
+O filtro ja existe (item 2). O que **nao** existe e classificacao confiavel por
+tras dele. O founder olhou o resultado e adiou: "precisamos definir bem as chaves
+para a classificacao correta do que e multi-flight e do que e satelite, isso
+demanda tempo, atencao e trabalho".
+
+**Evidencia coletada (nao perder — e o ponto de partida do trabalho futuro):**
+
+1. **`Final` gera falso positivo de flight.** `FLIGHT_DAY_REGEX` em
+   `shared/tournament-type-detector.ts` aceita `Day N | 1A | Phase | Flight |
+   **Final**`. Verificado: `BoM: ₮25 Final Knight Freezeout` — um vanilla comum —
+   e classificado como flight so por conter "Final".
+2. **O balde "Satelite" esta contaminado, mas NAO pela leitura do nome.**
+   Verificado: `SATELLITE_REGEX` **nao** casa "Weekender" nem "Mystery". Ou seja,
+   as linhas que aparecem como satelite tem `type`/`category` gravados errado no
+   **import** — suspeita principal: a bandeira `Satellite` do export SharkScope
+   (o parser cita 104 linhas com ela) esta sendo aceita como verdade.
+3. **Sinal correto de satelite, segundo o founder:** o nome costuma trazer
+   "satelite"/"satellite", "seats" ou equivalente. Ele nao encontrou **nenhum**
+   satelite de verdade na lista filtrada.
+4. Falta ainda a regra de contagem do Day 2 (Day 1 so tem custo; sem juntar as
+   pernas, o ROI de flight e cronicamente negativo).
+
+Trabalho pertence a area **Import** (`csvParser.ts` +
+`shared/tournament-type-detector.ts`), que o founder assumira em sessao propria
+depois do dashboard. Ate la o filtro fica no ar, mas **os baldes Satelite e
+Flight nao sao confiaveis**.
 
 ## 4. Dicas por aba
 
