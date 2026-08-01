@@ -5824,6 +5824,249 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     }
   }
 
+  // ===========================================================================
+  // Dashboard 2026-08-01 — três leituras novas: reentradas, bolha e mesas
+  // simultâneas. Todas READ-ONLY, respeitando período + filtros do dashboard.
+  // ===========================================================================
+
+  /**
+   * Desempenho por número de reentradas na MESMA entrada.
+   *
+   * Aqui o investimento NÃO é `buy_in`: quem reentrou duas vezes pagou três
+   * vezes. O ROI desta aba usa `buy_in * (1 + reentries)` — usar só `buy_in`
+   * inflaria o retorno justamente na faixa em que o jogador mais gasta, que é o
+   * oposto do que a aba existe para mostrar.
+   */
+  async getAnalyticsByReentry(userId: string, period = "30d", filters: any = {}): Promise<any[]> {
+    try {
+      const baseConditions = [eq(tournaments.userId, userId)];
+      baseConditions.push(...buildPeriodCondition(period, filters));
+      const dashboardFilters = buildFilters(filters);
+      if (dashboardFilters) baseConditions.push(dashboardFilters);
+
+      const reentries = sql<number>`COALESCE(${tournaments.reentries}, 0)`;
+      const bucketExpr = sql<string>`CASE
+        WHEN ${reentries} <= 0 THEN 'sem-reentrada'
+        WHEN ${reentries} = 1 THEN '1-reentrada'
+        WHEN ${reentries} = 2 THEN '2-reentradas'
+        ELSE '3-mais'
+      END`;
+
+      // Custo real da entrada, incluindo as reentradas pagas.
+      const invested = sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL) * (1 + ${reentries}))`;
+
+      const result = await db
+        .select({
+          bucket: bucketExpr,
+          volume: sql<number>`COUNT(*)::int`,
+          reentriesTotal: sql<number>`SUM(${reentries})::int`,
+          profit: sql<number>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)`,
+          invested,
+          roi: sql<number>`CASE WHEN ${invested} > 0
+            THEN (COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0) / ${invested}) * 100
+            ELSE 0 END`,
+          avgProfit: sql<number>`CASE WHEN COUNT(*) > 0
+            THEN COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0) / COUNT(*)
+            ELSE 0 END`,
+          itmCount: sql<number>`COUNT(*) FILTER (WHERE
+            CASE WHEN ${tournaments.grossPrize} IS NOT NULL
+              THEN CAST(${tournaments.grossPrize} AS DECIMAL) > 0
+              ELSE CAST(${tournaments.prize} AS DECIMAL) > 0 END)::int`,
+        })
+        .from(tournaments)
+        .where(and(...baseConditions))
+        .groupBy(bucketExpr);
+
+      return result;
+    } catch (error) {
+      console.error("getAnalyticsByReentry failed:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Bolha e ITM real x esperado.
+   *
+   * `places_paid_avg` (quantas posições pagam) chegou com a simulação PrimeDope e
+   * é NULL em boa parte do histórico — por isso o retorno traz `sample` e
+   * `coverage`: a tela precisa poder dizer "medido em 120 dos seus 900 torneios"
+   * em vez de fingir que a conta vale para tudo.
+   *
+   * Definições:
+   *  - ITM        = posição <= posições pagas
+   *  - bolha      = terminou logo fora do dinheiro (até 10% de posições acima do
+   *                 corte, no mínimo 1) — é a faixa que dói
+   *  - ITM esperado = posições pagas / tamanho do field (o que o acaso daria)
+   */
+  async getBubbleAnalytics(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    try {
+      const baseConditions = [eq(tournaments.userId, userId)];
+      baseConditions.push(...buildPeriodCondition(period, filters));
+      const dashboardFilters = buildFilters(filters);
+      if (dashboardFilters) baseConditions.push(dashboardFilters);
+
+      // Denominador honesto: quantos torneios existem no recorte, medidos ou não.
+      const [totals] = await db
+        .select({ total: sql<number>`COUNT(*)::int` })
+        .from(tournaments)
+        .where(and(...baseConditions));
+
+      const measurable = and(
+        ...baseConditions,
+        isNotNull(tournaments.position),
+        isNotNull(tournaments.placesPaidAvg),
+        isNotNull(tournaments.fieldSize),
+        gt(tournaments.placesPaidAvg, 0),
+        gt(tournaments.fieldSize, 0),
+      );
+
+      const paid = sql`${tournaments.placesPaidAvg}`;
+      const bubbleCeiling = sql`GREATEST(${paid} + 1, FLOOR(${paid} * 1.1))`;
+
+      const [row] = await db
+        .select({
+          sample: sql<number>`COUNT(*)::int`,
+          itmCount: sql<number>`COUNT(*) FILTER (WHERE ${tournaments.position} <= ${paid})::int`,
+          bubbleCount: sql<number>`COUNT(*) FILTER (
+            WHERE ${tournaments.position} > ${paid}
+              AND ${tournaments.position} <= ${bubbleCeiling}
+          )::int`,
+          expectedItmRate: sql<number>`AVG(${paid}::decimal / NULLIF(${tournaments.fieldSize}, 0)) * 100`,
+          bubbleProfit: sql<number>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)) FILTER (
+            WHERE ${tournaments.position} > ${paid}
+              AND ${tournaments.position} <= ${bubbleCeiling}
+          ), 0)`,
+        })
+        .from(tournaments)
+        .where(measurable);
+
+      const sample = Number(row?.sample ?? 0);
+      const total = Number(totals?.total ?? 0);
+      const itmCount = Number(row?.itmCount ?? 0);
+      const bubbleCount = Number(row?.bubbleCount ?? 0);
+      const expectedItmRate = Number(row?.expectedItmRate ?? 0);
+      const itmRate = sample > 0 ? (itmCount / sample) * 100 : 0;
+
+      return {
+        sample,
+        total,
+        coverage: total > 0 ? (sample / total) * 100 : 0,
+        itmCount,
+        itmRate,
+        expectedItmRate,
+        // Positivo = você passa da bolha mais do que o acaso daria.
+        itmDeltaPp: itmRate - expectedItmRate,
+        bubbleCount,
+        bubbleRate: sample > 0 ? (bubbleCount / sample) * 100 : 0,
+        bubbleProfit: Number(row?.bubbleProfit ?? 0),
+      };
+    } catch (error) {
+      console.error("getBubbleAnalytics failed:", error);
+      return null;
+    }
+  }
+
+  /**
+   * ROI por quantidade de mesas abertas ao mesmo tempo.
+   *
+   * Para cada torneio, conta quantos outros estavam em andamento no instante em
+   * que ele começou (varredura de eventos, O(n log n) — não é join n²), agrupa
+   * em faixas e compara o retorno.
+   *
+   * LIMITE CONHECIDO, herdado do card "Mesas Simultâneas" (ADR-243): a coluna
+   * `Duração` do export é a duração do EVENTO, não o tempo que o jogador ficou
+   * na mesa. Quem busta cedo continua contando até o fim. Logo estes números são
+   * um TETO — servem para comparar "muitas em paralelo x poucas", não para
+   * afirmar "eu jogo 4,2 mesas". O retorno traz `isUpperBound: true` para a tela
+   * poder dizer isso ao jogador em vez de esconder.
+   *
+   * Só entra torneio com duração conhecida — daí `sample` x `total`.
+   */
+  async getAnalyticsBySimultaneousTables(userId: string, period = "30d", filters: any = {}): Promise<any> {
+    try {
+      const baseConditions = [eq(tournaments.userId, userId)];
+      baseConditions.push(...buildPeriodCondition(period, filters));
+      const dashboardFilters = buildFilters(filters);
+      if (dashboardFilters) baseConditions.push(dashboardFilters);
+      const whereCondition = and(...baseConditions);
+
+      const [totals] = await db
+        .select({ total: sql<number>`COUNT(*)::int` })
+        .from(tournaments)
+        .where(whereCondition);
+
+      const raw: any = await db.execute(sql`
+        WITH src AS (
+          SELECT ${tournaments.id} AS id,
+                 ${tournaments.datePlayed} AS started,
+                 COALESCE(
+                   ${tournaments.endDate},
+                   ${tournaments.datePlayed} + make_interval(secs => COALESCE(${tournaments.durationSeconds}, 0))
+                 ) AS ended,
+                 CAST(${tournaments.prize} AS DECIMAL) AS prize,
+                 CAST(${tournaments.buyIn} AS DECIMAL) * (1 + COALESCE(${tournaments.reentries}, 0)) AS invested
+          FROM ${tournaments}
+          WHERE ${whereCondition}
+            AND COALESCE(${tournaments.durationSeconds}, 0) > 0
+        ),
+        ev AS (
+          SELECT started AS t, 1 AS delta, id FROM src
+          UNION ALL
+          SELECT ended AS t, -1 AS delta, NULL::varchar AS id FROM src
+        ),
+        running AS (
+          -- delta DESC: no mesmo instante, aberturas antes de fechamentos, entao
+          -- o proprio torneio ja entra na contagem (1 = jogando sozinho).
+          SELECT t, id,
+                 SUM(delta) OVER (ORDER BY t, delta DESC ROWS UNBOUNDED PRECEDING) AS active
+          FROM ev
+        ),
+        at_start AS (
+          SELECT id, active FROM running WHERE id IS NOT NULL
+        ),
+        joined AS (
+          SELECT src.prize, src.invested,
+                 CASE
+                   WHEN at_start.active <= 1 THEN '1'
+                   WHEN at_start.active <= 3 THEN '2-3'
+                   WHEN at_start.active <= 6 THEN '4-6'
+                   ELSE '7+'
+                 END AS bucket
+          FROM src JOIN at_start ON at_start.id = src.id
+        )
+        SELECT bucket,
+               COUNT(*)::int AS volume,
+               COALESCE(SUM(prize), 0) AS profit,
+               COALESCE(SUM(invested), 0) AS invested,
+               CASE WHEN SUM(invested) > 0
+                 THEN (SUM(prize) / SUM(invested)) * 100 ELSE 0 END AS roi
+        FROM joined
+        GROUP BY bucket
+      `);
+
+      const rows = (Array.isArray(raw) ? raw : raw?.rows ?? []) as any[];
+      const sample = rows.reduce((acc, r) => acc + Number(r.volume ?? 0), 0);
+      const total = Number(totals?.total ?? 0);
+
+      return {
+        buckets: rows.map((r) => ({
+          bucket: String(r.bucket),
+          volume: Number(r.volume ?? 0),
+          profit: Number(r.profit ?? 0),
+          invested: Number(r.invested ?? 0),
+          roi: Number(r.roi ?? 0),
+        })),
+        sample,
+        total,
+        coverage: total > 0 ? (sample / total) * 100 : 0,
+        isUpperBound: true,
+      };
+    } catch (error) {
+      console.error("getAnalyticsBySimultaneousTables failed:", error);
+      return null;
+    }
+  }
+
   /**
    * Tournament Selector RF-04: Returns ROI per buy-in bucket using BUYIN_BUCKETS labels
    * (CRITICAL #1 — labels devem casar com scoringConstants.BUYIN_BUCKETS).

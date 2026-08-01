@@ -98,9 +98,9 @@ describe('getPrimaryTabs', () => {
 // ---------------------------------------------------------------------------
 
 describe('getSecondaryTabs', () => {
-  it('deve retornar exatamente 4 tabs', () => {
+  it('tem pelo menos as 4 secundarias originais', () => {
     const tabs = getSecondaryTabs();
-    expect(tabs).toHaveLength(4);
+    expect(tabs.length).toBeGreaterThanOrEqual(4);
   });
 
   it('deve incluir tab "velocidade" (Velocidade)', () => {
@@ -127,10 +127,17 @@ describe('getSecondaryTabs', () => {
     expect(ids).toContain('por-posicao');
   });
 
-  it('deve retornar tabs na ordem: velocidade, por-periodo, por-participantes, por-posicao', () => {
+  it('mantem a ordem das secundarias, com as novas no fim', () => {
     const tabs = getSecondaryTabs();
     const ids = tabs.map((t: TabDefinition) => t.id);
-    expect(ids).toEqual(['velocidade', 'por-periodo', 'por-participantes', 'por-posicao']);
+    // Prefixo fixo: aba nova entra DEPOIS, nunca no meio — a posicao das
+    // existentes e memoria muscular do jogador.
+    expect(ids.slice(0, 4)).toEqual(['velocidade', 'por-periodo', 'por-participantes', 'por-posicao']);
+  });
+
+  it('inclui a aba de reentradas', () => {
+    const ids = getSecondaryTabs().map((t: TabDefinition) => t.id);
+    expect(ids).toContain('reentradas');
   });
 });
 
@@ -139,15 +146,22 @@ describe('getSecondaryTabs', () => {
 // ---------------------------------------------------------------------------
 
 describe('getAllTabs', () => {
-  it('deve retornar exatamente 8 tabs', () => {
-    const tabs = getAllTabs();
-    expect(tabs).toHaveLength(8);
+  // Licao #8 do projeto: assertar o TOTAL de um enum e anti-padrao — toda aba
+  // nova quebra o teste sem nenhum bug existir. Vale checar presenca e ordem.
+  it('nao perde nenhuma tab conhecida', () => {
+    const ids = getAllTabs().map((t: TabDefinition) => t.id);
+    for (const expected of [
+      'evolution', 'por-site', 'por-abi', 'por-tipo',
+      'velocidade', 'por-periodo', 'por-participantes', 'por-posicao', 'reentradas',
+    ]) {
+      expect(ids).toContain(expected);
+    }
   });
 
   it('deve retornar primarias antes das secundarias', () => {
     const tabs = getAllTabs();
     const ids = tabs.map((t: TabDefinition) => t.id);
-    expect(ids).toEqual([
+    expect(ids.slice(0, 8)).toEqual([
       'evolution', 'por-site', 'por-abi', 'por-tipo',
       'velocidade', 'por-periodo', 'por-participantes', 'por-posicao',
     ]);

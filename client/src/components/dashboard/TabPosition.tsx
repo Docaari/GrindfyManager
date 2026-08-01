@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 import { ChartContent } from './ChartWrapper';
+import { BubbleCard } from './BubbleCard';
 import type { DashboardFiltersState } from './types';
 
 interface TabPositionProps {
@@ -8,13 +9,20 @@ interface TabPositionProps {
   fieldLoading: boolean;
   finalTableAnalytics: any;
   finalTableLoading: boolean;
+  /** Bolha e ITM real x esperado (some quando o historico nao tem o dado). */
+  bubbleAnalytics?: any;
   filters: DashboardFiltersState;
 }
 
-export function TabPosition({ fieldAnalytics, fieldLoading, finalTableAnalytics, finalTableLoading, filters }: TabPositionProps) {
+export function TabPosition({ fieldAnalytics, fieldLoading, finalTableAnalytics, finalTableLoading, bubbleAnalytics, filters }: TabPositionProps) {
   return (
     <>
       <h3 className="text-xl font-bold text-white mb-8">🥇 Análise Por Posição</h3>
+
+      {/* Bolha e ITM real x esperado. */}
+      <div className="mb-8">
+        <BubbleCard bubble={bubbleAnalytics} />
+      </div>
 
       {/* LINHA 1 - GRÁFICOS DE ELIMINAÇÃO E POSIÇÕES */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">

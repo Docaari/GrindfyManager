@@ -52,6 +52,7 @@ const VALID_PERIODS = [
 const VALID_TABS = [
   'evolution', 'por-site', 'por-abi', 'por-tipo',
   'velocidade', 'por-periodo', 'por-participantes', 'por-posicao',
+  'reentradas',
 ];
 
 const DEFAULTS: DashboardFilters = {

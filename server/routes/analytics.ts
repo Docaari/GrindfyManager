@@ -693,6 +693,47 @@ export function registerAnalyticsRoutes(app: Express): void {
   });
 
   // RF-06 (opcional): GET /api/analytics/by-time-of-day
+  // Dashboard 2026-08-01 — reentradas, bolha e mesas simultâneas.
+  // Todas seguem o mesmo contrato das demais: period + filters do dashboard.
+  app.get('/api/analytics/by-reentry', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const period = (req.query.period as string) || '30d';
+      const filters = mapFiltersToBackendFormat(parseFiltersParam(req.query.filters));
+      const analytics = await (storage as any).getAnalyticsByReentry(userId, period, filters);
+      res.json(analytics);
+    } catch (error) {
+      console.error('[GET /api/analytics/by-reentry] failed:', error);
+      res.status(500).json({ message: 'Failed to fetch reentry analytics' });
+    }
+  });
+
+  app.get('/api/analytics/bubble', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const period = (req.query.period as string) || '30d';
+      const filters = mapFiltersToBackendFormat(parseFiltersParam(req.query.filters));
+      const analytics = await (storage as any).getBubbleAnalytics(userId, period, filters);
+      res.json(analytics);
+    } catch (error) {
+      console.error('[GET /api/analytics/bubble] failed:', error);
+      res.status(500).json({ message: 'Failed to fetch bubble analytics' });
+    }
+  });
+
+  app.get('/api/analytics/simultaneous-tables', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userPlatformId;
+      const period = (req.query.period as string) || '30d';
+      const filters = mapFiltersToBackendFormat(parseFiltersParam(req.query.filters));
+      const analytics = await (storage as any).getAnalyticsBySimultaneousTables(userId, period, filters);
+      res.json(analytics);
+    } catch (error) {
+      console.error('[GET /api/analytics/simultaneous-tables] failed:', error);
+      res.status(500).json({ message: 'Failed to fetch simultaneous tables analytics' });
+    }
+  });
+
   app.get('/api/analytics/by-time-of-day', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userPlatformId;

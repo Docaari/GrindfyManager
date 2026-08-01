@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Clock } from "lucide-react";
 import AnalyticsCharts from "@/components/AnalyticsCharts";
 import { TimeOfDayChart } from "@/components/analytics-charts/TimeOfDayChart";
+import { SimultaneousTablesCard } from './SimultaneousTablesCard';
 import { ChartContent } from './ChartWrapper';
 import type { DashboardFiltersState } from './types';
 
@@ -13,10 +14,12 @@ interface TabPeriodProps {
   /** Desempenho por turno, ja convertido para o fuso do jogador. */
   timeOfDayAnalytics?: any;
   timeOfDayLoading?: boolean;
+  /** ROI por mesas abertas em paralelo (teto — ver SimultaneousTablesCard). */
+  simultaneousAnalytics?: any;
   filters: DashboardFiltersState;
 }
 
-export function TabPeriod({ dayAnalytics, dayLoading, monthAnalytics, monthLoading, timeOfDayAnalytics, timeOfDayLoading, filters }: TabPeriodProps) {
+export function TabPeriod({ dayAnalytics, dayLoading, monthAnalytics, monthLoading, timeOfDayAnalytics, timeOfDayLoading, simultaneousAnalytics, filters }: TabPeriodProps) {
   return (
     <>
       <h3 className="text-xl font-bold text-white mb-8">📅 Análise Por Período</h3>
@@ -41,6 +44,11 @@ export function TabPeriod({ dayAnalytics, dayLoading, monthAnalytics, monthLoadi
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Ritmo: mesas em paralelo x retorno (some quando nao ha duracao no historico). */}
+      <div className="mb-8">
+        <SimultaneousTablesCard data={simultaneousAnalytics} />
       </div>
 
       {/* Primeira linha: Volume e Profit Diário */}

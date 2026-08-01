@@ -17,6 +17,7 @@ const SECONDARY_TABS: TabDefinition[] = [
   { id: 'por-periodo', label: 'Periodo' },
   { id: 'por-participantes', label: 'Participantes' },
   { id: 'por-posicao', label: 'Posicao' },
+  { id: 'reentradas', label: 'Reentradas' },
 ];
 
 const SECONDARY_IDS = new Set(SECONDARY_TABS.map(t => t.id));

@@ -5,7 +5,7 @@ import { apiRequest } from "@/lib/queryClient";
 import AccessDenied from "@/components/AccessDenied";
 import { useLocation } from "wouter";
 
-import { DollarSign, TrendingUp, Target, Calendar, Monitor, Users, Zap, Trophy, Download } from "lucide-react";
+import { DollarSign, TrendingUp, Target, Calendar, Monitor, Users, Zap, Trophy, Download, RotateCcw } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +40,7 @@ import { TabSpeed } from '@/components/dashboard/TabSpeed';
 import { TabPeriod } from '@/components/dashboard/TabPeriod';
 import { TabParticipants } from '@/components/dashboard/TabParticipants';
 import { TabPosition } from '@/components/dashboard/TabPosition';
+import { TabReentry } from '@/components/dashboard/TabReentry';
 import { DashboardGoodMorningSplash } from '@/components/dashboard/DashboardGoodMorningSplash';
 import { TabInsightBanner } from '@/components/dashboard/TabInsightBanner';
 import { buildTabInsight } from '@/lib/dashboard-insights';
@@ -136,7 +137,10 @@ export default function Dashboard() {
     { id: 'velocidade', name: 'Velocidade', icon: Zap, emoji: '⚡', active: activeTab === 'velocidade' },
     { id: 'por-periodo', name: 'Período', icon: Calendar, emoji: '📅', active: activeTab === 'por-periodo' },
     { id: 'por-participantes', name: 'Med. Participantes', icon: Users, emoji: '👥', active: activeTab === 'por-participantes' },
-    { id: 'por-posicao', name: 'Posição', icon: Trophy, emoji: '🥇', active: activeTab === 'por-posicao' }
+    { id: 'por-posicao', name: 'Posição', icon: Trophy, emoji: '🥇', active: activeTab === 'por-posicao' },
+    // Aba nova (2026-08-01). Emoji via fromCodePoint: o hook do projeto bloqueia
+    // emoji literal em arquivo de codigo.
+    { id: 'reentradas', name: 'Reentradas', icon: RotateCcw, emoji: String.fromCodePoint(0x1F504), active: activeTab === 'reentradas' }
   ];
 
   // ── Queries essenciais (sempre carregam) ──
@@ -241,6 +245,31 @@ export default function Dashboard() {
     enabled: activeTab === 'por-participantes' || activeTab === 'por-posicao',
   });
 
+  // Reentradas (aba propria). ROI ja vem calculado sobre o investimento REAL,
+  // incluindo o custo das reentradas.
+  const { data: reentryAnalytics, isLoading: reentryLoading } = useQuery({
+    queryKey: ["/api/analytics/by-reentry", period, filters],
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-reentry?${params}`); },
+    staleTime: 2 * 60 * 1000,
+    enabled: activeTab === 'reentradas',
+  });
+
+  // Bolha / ITM real x esperado (aba Posicao).
+  const { data: bubbleAnalytics } = useQuery({
+    queryKey: ["/api/analytics/bubble", period, filters],
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/bubble?${params}`); },
+    staleTime: 2 * 60 * 1000,
+    enabled: activeTab === 'por-posicao',
+  });
+
+  // Mesas simultaneas x ROI (aba Periodo).
+  const { data: simultaneousAnalytics } = useQuery({
+    queryKey: ["/api/analytics/simultaneous-tables", period, filters],
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/simultaneous-tables?${params}`); },
+    staleTime: 2 * 60 * 1000,
+    enabled: activeTab === 'por-periodo',
+  });
+
   const { data: finalTableAnalytics, isLoading: finalTableLoading } = useQuery({
     queryKey: ["/api/analytics/final-table", period, filters],
     queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/final-table?${params}`); },
@@ -282,6 +311,10 @@ export default function Dashboard() {
     'por-periodo': 'periodo',
     'por-participantes': 'participantes',
     'por-posicao': 'posicao',
+    // Aba nova: `getExportHeaders` ainda nao conhece este tipo, entao o export
+    // simplesmente nao gera arquivo (o handler ja trata headers vazios) em vez
+    // de baixar um CSV com colunas erradas.
+    'reentradas': 'reentradas',
   };
 
   const tabNameMap: Record<string, string> = {
@@ -293,6 +326,7 @@ export default function Dashboard() {
     'por-periodo': 'Periodo',
     'por-participantes': 'Participantes',
     'por-posicao': 'Posicao',
+    'reentradas': 'Reentradas',
   };
 
   // FP-10: Get data for active tab
@@ -320,6 +354,7 @@ export default function Dashboard() {
       'periodo': monthAnalytics,
       'participantes': fieldAnalytics,
       'posicao': finalTableAnalytics,
+      'reentradas': reentryAnalytics,
     };
 
     const data = dataMap[tabType];
@@ -537,13 +572,16 @@ export default function Dashboard() {
               <TabSpeed speedAnalytics={speedAnalytics} speedLoading={speedLoading} period={period} filters={filters} />
             )}
             {activeTab === 'por-periodo' && (
-              <TabPeriod dayAnalytics={dayAnalytics} dayLoading={dayLoading} monthAnalytics={monthAnalytics} monthLoading={monthLoading} timeOfDayAnalytics={timeOfDayAnalytics} timeOfDayLoading={timeOfDayLoading} filters={filters} />
+              <TabPeriod dayAnalytics={dayAnalytics} dayLoading={dayLoading} monthAnalytics={monthAnalytics} monthLoading={monthLoading} timeOfDayAnalytics={timeOfDayAnalytics} timeOfDayLoading={timeOfDayLoading} simultaneousAnalytics={simultaneousAnalytics} filters={filters} />
             )}
             {activeTab === 'por-participantes' && (
               <TabParticipants fieldAnalytics={fieldAnalytics} fieldLoading={fieldLoading} monthAnalytics={monthAnalytics} monthLoading={monthLoading} period={period} filters={filters} />
             )}
             {activeTab === 'por-posicao' && (
-              <TabPosition fieldAnalytics={fieldAnalytics} fieldLoading={fieldLoading} finalTableAnalytics={finalTableAnalytics} finalTableLoading={finalTableLoading} filters={filters} />
+              <TabPosition fieldAnalytics={fieldAnalytics} fieldLoading={fieldLoading} finalTableAnalytics={finalTableAnalytics} finalTableLoading={finalTableLoading} bubbleAnalytics={bubbleAnalytics} filters={filters} />
+            )}
+            {activeTab === 'reentradas' && (
+              <TabReentry reentryAnalytics={reentryAnalytics} reentryLoading={reentryLoading} filters={filters} />
             )}
           </div>
 
