@@ -5,7 +5,7 @@ import { apiRequest } from "@/lib/queryClient";
 import AccessDenied from "@/components/AccessDenied";
 import { useLocation } from "wouter";
 
-import { DollarSign, TrendingUp, Target, Calendar, Monitor, Users, Zap, Trophy, Download, Info, Lightbulb, X } from "lucide-react";
+import { DollarSign, TrendingUp, Target, Calendar, Monitor, Users, Zap, Trophy, Download } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,8 +14,6 @@ import {
 } from "@/lib/dashboard-filter-helpers";
 import { isValidTab } from "@/lib/dashboard-tabs-helpers";
 import { buildCSVContent, formatCSVRow, getExportHeaders, getExportFilename, sanitizeForCSV } from "@/lib/export-helpers";
-import { formatCorrelationInsight } from "@/lib/mental-correlation-helpers";
-import { calendarDaysSince } from "@shared/calendarDaysSince";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +41,8 @@ import { TabPeriod } from '@/components/dashboard/TabPeriod';
 import { TabParticipants } from '@/components/dashboard/TabParticipants';
 import { TabPosition } from '@/components/dashboard/TabPosition';
 import { DashboardGoodMorningSplash } from '@/components/dashboard/DashboardGoodMorningSplash';
+import { TabInsightBanner } from '@/components/dashboard/TabInsightBanner';
+import { buildTabInsight } from '@/lib/dashboard-insights';
 
 export default function Dashboard() {
   const hasDashboardAccess = usePermission('dashboard_access');
@@ -239,40 +239,25 @@ export default function Dashboard() {
     enabled: activeTab === 'por-posicao',
   });
 
-  // FP-13: Mental correlation data
-  const { data: mentalCorrelation } = useQuery<{
-    roiHighFocus: number | null;
-    roiLowFocus: number | null;
-    roiHighEnergy: number | null;
-    roiLowEnergy: number | null;
-    roiHighConfidence: number | null;
-    roiLowConfidence: number | null;
-    sampleSize: number;
-    insufficient: boolean;
-  }>({
-    queryKey: ["/api/analytics/mental-correlation"],
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // FP-13: Insight card dismiss state (7 day cooldown)
-  const [insightDismissed, setInsightDismissed] = useState(() => {
-    try {
-      const dismissed = localStorage.getItem('mentalInsightDismissed');
-      if (dismissed) {
-        const dismissedDate = new Date(dismissed);
-        const days = calendarDaysSince(dismissedDate, new Date());
-        return Number.isFinite(days) && days < 7;
-      }
-    } catch { /* ignore */ }
-    return false;
-  });
-
-  const dismissInsight = useCallback(() => {
-    setInsightDismissed(true);
-    try {
-      localStorage.setItem('mentalInsightDismissed', new Date().toISOString());
-    } catch { /* ignore */ }
-  }, []);
+  // Dica da aba ativa (2026-08-01). Calculada em cima dos MESMOS dados que
+  // alimentam os graficos, entao respeita os filtros por construcao. Regra
+  // deterministica, sem IA — ver client/src/lib/dashboard-insights.ts.
+  //
+  // Substituiu o antigo card de correlacao mental que ficava na aba Geral: esse
+  // cruzamento passa a ser assunto da aba Mental (decisao do founder).
+  const tabInsight = useMemo(
+    () =>
+      buildTabInsight(activeTab, {
+        siteAnalytics,
+        buyinAnalytics,
+        categoryAnalytics,
+        speedAnalytics,
+        dayAnalytics,
+        fieldAnalytics,
+        finalTableAnalytics,
+      }),
+    [activeTab, siteAnalytics, buyinAnalytics, categoryAnalytics, speedAnalytics, dayAnalytics, fieldAnalytics, finalTableAnalytics],
+  );
 
   // FP-10: Export state
   const [isExporting, setIsExporting] = useState(false);
@@ -391,29 +376,6 @@ export default function Dashboard() {
     }
   }, [activeTab, period]);
 
-  // FP-13: Determine best mental metric insight
-  const mentalInsight = useMemo(() => {
-    if (!mentalCorrelation || mentalCorrelation.insufficient || insightDismissed) return null;
-
-    const diffs: Array<{ type: 'foco' | 'energia' | 'confianca'; diff: number; high: number; low: number }> = [];
-    if (mentalCorrelation.roiHighFocus != null && mentalCorrelation.roiLowFocus != null) {
-      diffs.push({ type: 'foco', diff: mentalCorrelation.roiHighFocus - mentalCorrelation.roiLowFocus, high: mentalCorrelation.roiHighFocus, low: mentalCorrelation.roiLowFocus });
-    }
-    if (mentalCorrelation.roiHighEnergy != null && mentalCorrelation.roiLowEnergy != null) {
-      diffs.push({ type: 'energia', diff: mentalCorrelation.roiHighEnergy - mentalCorrelation.roiLowEnergy, high: mentalCorrelation.roiHighEnergy, low: mentalCorrelation.roiLowEnergy });
-    }
-    if (mentalCorrelation.roiHighConfidence != null && mentalCorrelation.roiLowConfidence != null) {
-      diffs.push({ type: 'confianca', diff: mentalCorrelation.roiHighConfidence - mentalCorrelation.roiLowConfidence, high: mentalCorrelation.roiHighConfidence, low: mentalCorrelation.roiLowConfidence });
-    }
-    if (diffs.length === 0) return null;
-
-    const best = diffs.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))[0];
-    return {
-      type: best.type,
-      text: `Dica: Seu ROI e ${Math.round(best.high)}% quando ${best.type} >= 7, vs ${Math.round(best.low)}% quando ${best.type} < 5. Diferenca de ${Math.abs(Math.round(best.diff))} pontos percentuais.`,
-    };
-  }, [mentalCorrelation, insightDismissed]);
-
   const isMainLoading = statsLoading || performanceLoading;
   const hasError = statsError || performanceError;
   const hasNoData = !isMainLoading && !hasError && stats?.count === 0;
@@ -515,19 +477,6 @@ export default function Dashboard() {
         />
       )}
 
-      {/* FP-13: Mental insight card */}
-      {!isMainLoading && mentalInsight && (
-        <div className="mt-4 mb-2 bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-4 flex items-start gap-3">
-          <Lightbulb className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm text-yellow-200">{mentalInsight.text}</p>
-          </div>
-          <button onClick={dismissInsight} className="text-gray-400 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
       {!isMainLoading && (
         <div className="mt-8">
           <div className="flex items-center justify-between mb-0">
@@ -559,6 +508,10 @@ export default function Dashboard() {
           </div>
 
           <div ref={tabContentRef} className="space-y-6">
+            {/* Diagnóstico da aba — fica FORA do print/PNG? Não: entra de
+                propósito, porque a leitura acompanha o gráfico. */}
+            <TabInsightBanner insight={tabInsight} />
+
             {activeTab === 'evolution' && (
               <TabEvolution performance={performance} filteredTournaments={filteredTournaments} allTournaments={allTournaments} period={period} filters={filters} />
             )}
