@@ -1,14 +1,26 @@
+// =============================================================================
+// Sprint tournament-dialog-unification — o "Adicionar Torneio" do grind ao
+// vivo passou a usar o dialog canonico (components/tournament/
+// TournamentFormDialog), o mesmo modal do /coach. Este arquivo ficou como
+// adaptador do contexto "sessao ao vivo":
+//   - botao trigger na header da lista de torneios
+//   - mapeamento NewTournamentForm <-> TournamentFormState (modo controlado:
+//     o state segue vivendo em GrindSessionLive porque as sugestoes filtram
+//     pelos valores digitados)
+//   - extras: checkbox "Adicionar na Grade" + painel de sugestoes da semana
+//
+// A prop `onAddTournament` continua recebendo o mesmo payload de antes
+// (NewTournamentForm + syncWithGrade), entao a pagina nao mudou.
+// =============================================================================
+
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { getCategoryColor, getSpeedColor } from './helpers';
 import type { NewTournamentForm } from './types';
 import { TOURNAMENT_PRIMARY_TYPES, getTypeLabel } from "@shared/tournamentTypes";
-import { detectAddonReaFromName } from "@shared/addon-rea-detector";
+import { TournamentFormDialog } from "@/components/tournament/TournamentFormDialog";
+import type { TournamentFormState } from "@/components/tournament/useTournamentDialogForm";
 
 interface AddTournamentDialogProps {
   open: boolean;
@@ -30,6 +42,42 @@ interface AddTournamentDialogProps {
   getSimilarityScore: (suggestion: any) => number;
 }
 
+/** NewTournamentForm (sessao) -> TournamentFormState (dialog canonico). */
+function toFormState(t: NewTournamentForm): TournamentFormState {
+  return {
+    name: t.name ?? "",
+    site: t.site ?? "",
+    buyIn: t.buyIn ?? "",
+    time: t.scheduledTime ?? "",
+    maxLate: t.registrationTime ?? "",
+    guaranteed: t.guaranteed ?? "",
+    type: t.type || "Vanilla",
+    speed: t.speed || "Normal",
+    allowsAddOn: Boolean(t.allowsAddOn),
+    addOnCost: t.addOnCost ?? "",
+    allowsReentry: Boolean(t.allowsReentry),
+    maxReentries: t.maxReentries ?? null,
+  };
+}
+
+/** TournamentFormState -> patch de NewTournamentForm (preserva os campos de sessao). */
+function toSessionPatch(v: TournamentFormState): Partial<NewTournamentForm> {
+  return {
+    name: v.name,
+    site: v.site,
+    buyIn: v.buyIn,
+    scheduledTime: v.time,
+    registrationTime: v.maxLate.trim() === "" ? undefined : v.maxLate,
+    guaranteed: v.guaranteed,
+    type: v.type,
+    speed: v.speed,
+    allowsAddOn: v.allowsAddOn,
+    addOnCost: v.addOnCost,
+    allowsReentry: v.allowsReentry,
+    maxReentries: v.maxReentries,
+  };
+}
+
 export default function AddTournamentDialog({
   open,
   onOpenChange,
@@ -46,11 +94,12 @@ export default function AddTournamentDialog({
   getSuggestionStats,
   applySuggestion,
   applyQuickFilter,
-  getSimilarityScore,
 }: AddTournamentDialogProps) {
-  // RF-12: Progressive disclosure state
-  const [showAdvancedFields, setShowAdvancedFields] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const todayLabel = new Date()
+    .toLocaleDateString('pt-BR', { weekday: 'long' })
+    .replace(/^\w/, (c) => c.toUpperCase());
 
   return (
     <>
@@ -65,377 +114,148 @@ export default function AddTournamentDialog({
           <option key={t} value={t}>{getTypeLabel(t)}</option>
         ))}
       </select>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <button className="add-tournament-btn">
-          <span>+</span>
-          Adicionar Torneio
-        </button>
-      </DialogTrigger>
-      <DialogContent className="bg-[#0a0a0a] border-[#333333] text-white max-w-2xl max-h-[95vh] overflow-y-auto shadow-2xl">
-        <DialogHeader className="border-b border-[#333333] pb-4">
-          <DialogTitle className="text-2xl font-bold text-[#00ff88] flex items-center gap-2">
-            Adicionar Novo Torneio
-          </DialogTitle>
-          <DialogDescription className="text-gray-400 mt-1">
-            Preencha os dados essenciais ou selecione uma sugestao
-          </DialogDescription>
-        </DialogHeader>
 
-        <div className="mt-6 space-y-4">
-          {/* Essential fields — Tipo e Velocidade promovidos para visibilidade padrao (leak de categorizacao) */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-[#00ff88] font-medium">Site</Label>
-              <select
-                value={newTournament.site}
-                onChange={(e) => setNewTournament({...newTournament, site: e.target.value})}
-                className="w-full p-2 bg-[#1a1a1a] border border-[#333333] rounded-md text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
-              >
-                <option value="">Selecione o site</option>
-                <option value="PokerStars">PokerStars</option>
-                <option value="GGPoker">GGPoker</option>
-                <option value="PartyPoker">PartyPoker</option>
-                <option value="888poker">888poker</option>
-                <option value="WPN">WPN</option>
-                <option value="Chico">Chico</option>
-                <option value="iPoker">iPoker</option>
-                <option value="CoinPoker">CoinPoker</option>
-                <option value="Bodog">Bodog</option>
-                <option value="WPT Global">WPT Global</option>
-              </select>
-            </div>
-            <div>
-              <Label className="text-[#00ff88] font-medium">Horario</Label>
-              <Input
-                type="time"
-                value={newTournament.scheduledTime}
-                onChange={(e) => setNewTournament({...newTournament, scheduledTime: e.target.value})}
-                className="bg-[#1a1a1a] border-[#333333] text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
-              />
-            </div>
-            <div>
-              <Label className="text-[#00ff88] font-medium">Buy-in ($)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={newTournament.buyIn}
-                onChange={(e) => setNewTournament({...newTournament, buyIn: e.target.value})}
-                className="bg-[#1a1a1a] border-[#333333] text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <Label className="text-[#00ff88] font-medium">Nome (opcional)</Label>
-              <Input
-                value={newTournament.name}
-                onChange={(e) => setNewTournament({...newTournament, name: e.target.value})}
-                className="bg-[#1a1a1a] border-[#333333] text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
-                placeholder="Deixe vazio para gerar automaticamente"
-              />
-            </div>
-            <div>
-              <Label className="text-[#00ff88] font-medium">Tipo</Label>
-              <select
-                value={newTournament.type}
-                onChange={(e) => setNewTournament({...newTournament, type: e.target.value})}
-                className="w-full p-2 bg-[#1a1a1a] border border-[#333333] rounded-md text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
-              >
-                {TOURNAMENT_PRIMARY_TYPES.map((t) => (
-                  <option key={t} value={t}>{getTypeLabel(t)}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label className="text-[#00ff88] font-medium">Velocidade</Label>
-              <select
-                value={newTournament.speed}
-                onChange={(e) => setNewTournament({...newTournament, speed: e.target.value})}
-                className="w-full p-2 bg-[#1a1a1a] border border-[#333333] rounded-md text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
-              >
-                <option value="Normal">Normal</option>
-                <option value="Turbo">Turbo</option>
-                <option value="Hyper">Hyper</option>
-              </select>
-            </div>
-          </div>
+      <button
+        type="button"
+        className="add-tournament-btn"
+        data-testid="grind-live-add-tournament-trigger"
+        onClick={() => onOpenChange(true)}
+      >
+        <span>+</span>
+        Adicionar Torneio
+      </button>
 
-          {/* Auto-detect hint: Plus / ReA detectado pelo nome */}
-          {(() => {
-            const nameForDetect = newTournament.name || `${newTournament.site} ${newTournament.type || ''}`.trim();
-            const detected = detectAddonReaFromName(nameForDetect);
-            const showAddOnHint = detected.allowsAddOn && !newTournament.allowsAddOn;
-            const showReentryHint = detected.allowsReentry && !newTournament.allowsReentry;
-            if (!showAddOnHint && !showReentryHint) return null;
-            return (
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200" data-testid="autodetect-hint">
-                <div className="font-semibold mb-1">Detectado pelo nome:</div>
-                <div className="flex flex-wrap gap-2">
-                  {showAddOnHint && (
-                    <button
-                      type="button"
-                      onClick={() => setNewTournament((prev) => ({
-                        ...prev,
-                        allowsAddOn: true,
-                        addOnCost: prev.addOnCost && String(prev.addOnCost).trim() !== '' ? prev.addOnCost : prev.buyIn,
-                      }))}
-                      className="px-2 py-0.5 rounded bg-amber-600/40 hover:bg-amber-600/60 text-amber-100"
-                      data-testid="autodetect-apply-addon"
-                    >
-                      Marcar Permite Add-on
-                    </button>
-                  )}
-                  {showReentryHint && (
-                    <button
-                      type="button"
-                      onClick={() => setNewTournament((prev) => ({ ...prev, allowsReentry: true }))}
-                      className="px-2 py-0.5 rounded bg-purple-600/40 hover:bg-purple-600/60 text-purple-100"
-                      data-testid="autodetect-apply-reentry"
-                    >
-                      Marcar Permite Re-entry
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Advanced fields - apenas GTD por enquanto */}
-          <Collapsible open={showAdvancedFields} onOpenChange={setShowAdvancedFields}>
-            <CollapsibleTrigger asChild>
-              <button className="flex items-center gap-2 text-sm text-gray-400 hover:text-[#00ff88] transition-colors w-full py-2">
-                {showAdvancedFields ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                Mais opcoes
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-4 pt-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-[#00ff88] font-medium">Guaranteed (opcional)</Label>
-                  <Input
-                    type="number"
-                    value={newTournament.guaranteed}
-                    onChange={(e) => setNewTournament({...newTournament, guaranteed: e.target.value})}
-                    className="bg-[#1a1a1a] border-[#333333] text-white focus:border-[#00ff88] focus:ring-2 focus:ring-[#00ff88]/20 transition-all"
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-              {/* Add-on + Re-entry (ADR-014) */}
-              <div className="space-y-3 p-3 rounded-lg border border-[#333333]/50 bg-[#0f0f0f]">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="allowsAddOn"
-                    checked={Boolean(newTournament.allowsAddOn)}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setNewTournament((prev) => ({
-                        ...prev,
-                        allowsAddOn: checked,
-                        addOnCost: checked && !prev.addOnCost ? prev.buyIn : prev.addOnCost,
-                      }));
-                    }}
-                    className="w-4 h-4 text-amber-500 bg-[#1a1a1a] border-[#333333] rounded focus:ring-amber-500/50"
-                    data-testid="checkbox-allows-addon"
-                  />
-                  <Label htmlFor="allowsAddOn" className="text-sm text-gray-200 cursor-pointer">
-                    Permite Add-on (Plus)
-                  </Label>
-                </div>
-                {newTournament.allowsAddOn && (
-                  <div className="ml-6">
-                    <Label className="text-xs text-gray-400 mb-1 block">Custo do Add-on ($)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={newTournament.addOnCost ?? ''}
-                      onChange={(e) =>
-                        setNewTournament((prev) => ({ ...prev, addOnCost: e.target.value }))
-                      }
-                      placeholder={newTournament.buyIn}
-                      className="bg-[#1a1a1a] border-[#333333] text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all"
-                      data-testid="input-addon-cost"
-                    />
-                  </div>
-                )}
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="allowsReentry"
-                    checked={Boolean(newTournament.allowsReentry)}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setNewTournament((prev) => ({
-                        ...prev,
-                        allowsReentry: checked,
-                        maxReentries: checked ? prev.maxReentries ?? null : null,
-                      }));
-                    }}
-                    className="w-4 h-4 text-purple-500 bg-[#1a1a1a] border-[#333333] rounded focus:ring-purple-500/50"
-                    data-testid="checkbox-allows-reentry"
-                  />
-                  <Label htmlFor="allowsReentry" className="text-sm text-gray-200 cursor-pointer">
-                    Permite Re-entry (ReA)
-                  </Label>
-                </div>
-                {newTournament.allowsReentry && (
-                  <div className="ml-6">
-                    <Label className="text-xs text-gray-400 mb-1 block">
-                      Max. re-entradas (vazio = ilimitado)
-                    </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={newTournament.maxReentries ?? ''}
-                      onChange={(e) =>
-                        setNewTournament((prev) => ({
-                          ...prev,
-                          maxReentries: e.target.value === '' ? null : parseInt(e.target.value),
-                        }))
-                      }
-                      placeholder="Ilimitado"
-                      className="bg-[#1a1a1a] border-[#333333] text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
-                      data-testid="input-max-reentries"
-                    />
-                  </div>
-                )}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          {/* Sync with Grade checkbox */}
-          <div className="p-3 bg-[#1a1a1a]/50 rounded-lg border border-[#333333]/50">
-            <div className="flex items-center space-x-2">
+      <TournamentFormDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        mode="create"
+        title="Adicionar torneio a sessao"
+        testIdPrefix="grind-live-add"
+        requireName={false}
+        requireBuyIn
+        advanced
+        keepOpenOnSubmit
+        submitLabel="Adicionar Torneio"
+        submittingLabel="Adicionando..."
+        submitting={isPending}
+        values={toFormState(newTournament)}
+        onValuesChange={(next) =>
+          setNewTournament((prev) => ({ ...prev, ...toSessionPatch(next) }))
+        }
+        onSubmit={(values) => {
+          onAddTournament({
+            ...newTournament,
+            ...toSessionPatch(values),
+            syncWithGrade,
+          });
+        }}
+        extraSlot={() => (
+          <div className="space-y-3">
+            {/* Sync com a Grade da semana */}
+            <label className="flex items-center gap-2 rounded border border-gray-800 bg-gray-900/60 px-2 py-2 text-xs text-gray-200">
               <input
                 type="checkbox"
                 id="sync-with-grade"
                 checked={syncWithGrade}
                 onChange={(e) => setSyncWithGrade(e.target.checked)}
-                className="w-4 h-4 text-[#00ff88] bg-[#1a1a1a] border-[#333333] rounded focus:ring-[#00ff88]/50 focus:border-[#00ff88]"
+                className="h-3.5 w-3.5 rounded border-gray-700 bg-gray-900"
+                data-testid="grind-live-add-sync-grade"
               />
-              <Label htmlFor="sync-with-grade" className="text-gray-300 cursor-pointer">
-                Adicionar na Grade do {new Date().toLocaleDateString('pt-BR', { weekday: 'long' }).replace(/^\w/, c => c.toUpperCase())}
-              </Label>
-            </div>
-          </div>
+              Adicionar tambem na Grade de {todayLabel}
+            </label>
 
-          {/* Action buttons */}
-          <div className="flex space-x-2">
-            <Button
-              onClick={() => onOpenChange(false)}
-              variant="outline"
-              className="flex-1 border-[#333333] text-gray-300 hover:bg-[#1a1a1a] hover:border-[#00ff88] transition-all"
-            >
-              Fechar
-            </Button>
-            <Button
-              onClick={() => {
-                onAddTournament({
-                  ...newTournament,
-                  syncWithGrade
-                });
-                // RF-12: Keep modal open after adding (dialog stays open, form resets via parent)
-              }}
-              className="flex-1 bg-[#00ff88] hover:bg-[#00dd77] text-black font-medium transition-all"
-              disabled={isPending || !newTournament.site || !newTournament.buyIn || parseFloat(newTournament.buyIn) <= 0}
-            >
-              {isPending ? "Adicionando..." : "Adicionar Torneio"}
-            </Button>
-          </div>
-
-          {/* RF-12: Suggestions collapsed by default */}
-          <Collapsible open={showSuggestions} onOpenChange={setShowSuggestions}>
-            <CollapsibleTrigger asChild>
-              <button className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 transition-colors w-full py-2 border-t border-[#333333]/50 mt-4 pt-4">
-                {showSuggestions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                Ver sugestoes ({getSuggestionStats().total} disponiveis)
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-2">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-blue-300">Baseado no seu planejamento semanal</p>
-                  <button
-                    onClick={resetFilters}
-                    className={`text-xs transition-colors px-3 py-1.5 rounded border ${
-                      hasActiveFilters()
-                        ? 'text-[#00ff88] border-[#00ff88]/70 bg-[#00ff88]/10 hover:bg-[#00ff88]/20'
-                        : 'text-gray-400 border-[#333333]/50 hover:text-[#00ff88] hover:border-[#00ff88]/70'
-                    }`}
-                    disabled={!hasActiveFilters()}
-                  >
-                    {hasActiveFilters() ? 'Limpar Filtros' : 'Sem Filtros'}
-                  </button>
-                </div>
-
-                {/* Quick filter tags */}
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {Array.from(new Set(weeklySuggestions.map(s => s.site))).slice(0, 3).map(site => (
+            {/* Sugestoes da grade semanal (colapsadas por default). */}
+            <Collapsible open={showSuggestions} onOpenChange={setShowSuggestions}>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 border-t border-gray-800 pt-2 text-xs text-blue-400 transition-colors hover:text-blue-300"
+                  data-testid="grind-live-add-suggestions-toggle"
+                >
+                  {showSuggestions ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  Ver sugestoes ({getSuggestionStats().total} disponiveis)
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-2">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-blue-300">Baseado no seu planejamento semanal</p>
                     <button
-                      key={site}
-                      onClick={() => applyQuickFilter('site', site)}
-                      className="text-xs px-2 py-1 bg-blue-700/40 text-blue-200 rounded hover:bg-blue-600/50 transition-colors"
+                      type="button"
+                      onClick={resetFilters}
+                      disabled={!hasActiveFilters()}
+                      className={`rounded border px-2 py-1 text-[11px] transition-colors ${
+                        hasActiveFilters()
+                          ? 'border-emerald-500/70 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                          : 'border-gray-800 text-gray-500'
+                      }`}
                     >
-                      {site}
+                      {hasActiveFilters() ? 'Limpar Filtros' : 'Sem Filtros'}
                     </button>
-                  ))}
-                  {Array.from(new Set(weeklySuggestions.map(s => s.type))).slice(0, 3).map(type => (
-                    <button
-                      key={type}
-                      onClick={() => applyQuickFilter('type', type)}
-                      className="text-xs px-2 py-1 bg-blue-700/40 text-blue-200 rounded hover:bg-blue-600/50 transition-colors"
-                    >
-                      {type}
-                    </button>
-                  ))}
-                </div>
+                  </div>
 
-                <div className="max-h-[300px] overflow-y-auto space-y-1">
-                  {(() => {
-                    const filteredSuggestions = getFilteredSuggestions();
-                    if (filteredSuggestions.length === 0) {
-                      return (
-                        <div className="p-4 bg-[#1a1a1a]/50 rounded-lg border border-[#333333]/50 text-center">
-                          <p className="text-gray-400 text-sm">
+                  {/* Quick filter tags */}
+                  <div className="flex flex-wrap gap-1">
+                    {Array.from(new Set(weeklySuggestions.map((s) => s.site))).slice(0, 3).map((site) => (
+                      <button
+                        type="button"
+                        key={site}
+                        onClick={() => applyQuickFilter('site', site)}
+                        className="rounded bg-blue-700/40 px-2 py-0.5 text-[11px] text-blue-200 transition-colors hover:bg-blue-600/50"
+                      >
+                        {site}
+                      </button>
+                    ))}
+                    {Array.from(new Set(weeklySuggestions.map((s) => s.type))).slice(0, 3).map((type) => (
+                      <button
+                        type="button"
+                        key={type}
+                        onClick={() => applyQuickFilter('type', type)}
+                        className="rounded bg-blue-700/40 px-2 py-0.5 text-[11px] text-blue-200 transition-colors hover:bg-blue-600/50"
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="max-h-[240px] space-y-1 overflow-y-auto">
+                    {(() => {
+                      const filteredSuggestions = getFilteredSuggestions();
+                      if (filteredSuggestions.length === 0) {
+                        return (
+                          <div className="rounded border border-gray-800 bg-gray-900/60 p-3 text-center text-xs text-gray-400">
                             {weeklySuggestions.length === 0
                               ? 'Nenhuma sugestao disponivel. Adicione torneios na sua Grade semanal.'
                               : 'Nenhuma sugestao encontrada para os filtros atuais.'}
-                          </p>
-                        </div>
-                      );
-                    }
-                    return filteredSuggestions.map((suggestion, index) => (
-                      <div
-                        key={index}
-                        className="p-2 bg-[#1a1a1a]/50 rounded border border-[#333333]/40 hover:border-[#00ff88]/60 hover:bg-[#1a1a1a]/80 transition-all duration-200 cursor-pointer"
-                        onClick={() => applySuggestion(suggestion)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 flex-1">
-                            <span className="font-medium text-white text-sm min-w-[80px]">{suggestion.site}</span>
-                            <div className="flex items-center gap-1">
-                              <span className={`px-2 py-0.5 rounded text-xs text-white ${getCategoryColor(suggestion.type)}`}>{suggestion.type}</span>
-                              <span className={`px-1.5 py-0.5 rounded text-xs ${getSpeedColor(suggestion.speed)}`}>{suggestion.speed}</span>
-                            </div>
                           </div>
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="font-medium text-[#00ff88]">${suggestion.buyIn}</span>
+                        );
+                      }
+                      return filteredSuggestions.map((suggestion, index) => (
+                        <button
+                          type="button"
+                          key={index}
+                          onClick={() => applySuggestion(suggestion)}
+                          className="flex w-full items-center justify-between rounded border border-gray-800 bg-gray-900/60 p-2 text-left transition-all hover:border-emerald-500/60"
+                        >
+                          <span className="flex flex-1 items-center gap-2">
+                            <span className="min-w-[80px] text-xs font-medium text-white">{suggestion.site}</span>
+                            <span className={`rounded px-1.5 py-0.5 text-[10px] text-white ${getCategoryColor(suggestion.type)}`}>{suggestion.type}</span>
+                            <span className={`rounded px-1.5 py-0.5 text-[10px] ${getSpeedColor(suggestion.speed)}`}>{suggestion.speed}</span>
+                          </span>
+                          <span className="flex items-center gap-2 text-xs">
+                            <span className="font-medium text-emerald-400">${suggestion.buyIn}</span>
                             {suggestion.guaranteed && <span className="text-gray-400">| ${suggestion.guaranteed}</span>}
-                          </div>
-                        </div>
-                      </div>
-                    ));
-                  })()}
+                          </span>
+                        </button>
+                      ));
+                    })()}
+                  </div>
                 </div>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        </div>
-      </DialogContent>
-    </Dialog>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+        )}
+      />
     </>
   );
 }

@@ -42,6 +42,8 @@ import { StrictModeDroppable as Droppable } from "./StrictModeDroppable";
 import { sites, types, speeds } from "./types";
 import SupremaImportModal from "@/components/SupremaImportModal";
 import { BibliotecaQuickFilters } from "./BibliotecaQuickFilters";
+import { TournamentFormDialog } from "@/components/tournament/TournamentFormDialog";
+import type { TournamentFormState } from "@/components/tournament/useTournamentDialogForm";
 
 interface BibliotecaPanelProps {
   collapsed: boolean;
@@ -97,14 +99,8 @@ export function BibliotecaPanel({
     });
   }, [filterType, filterSpeed, filterSites, filterCurrency, filterMinBuyIn, filterMaxBuyIn, filterTimeFrom, filterTimeTo, sortMode]);
 
-  // Manual add form state
-  const [addSite, setAddSite] = useState("");
-  const [addName, setAddName] = useState("");
-  const [addBuyIn, setAddBuyIn] = useState("");
-  const [addTime, setAddTime] = useState("");
-  const [addType, setAddType] = useState("");
-  const [addSpeed, setAddSpeed] = useState("");
-  const [addGuaranteed, setAddGuaranteed] = useState("");
+  // Adicionar manualmente: usa o modal canonico de torneio (o mesmo do /coach).
+  // O state do form vive dentro do dialog — aqui so controlamos a abertura.
 
   // Queries
   const { data: libraryTournaments = [], isLoading: libraryLoading } = useQuery({
@@ -130,7 +126,6 @@ export function BibliotecaPanel({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tournament-library"] });
       toast({ title: "Torneio Adicionado", description: "Torneio adicionado a biblioteca" });
-      resetAddForm();
       setShowAddForm(false);
     },
     onError: () => {
@@ -230,29 +225,19 @@ export function BibliotecaPanel({
   const totalCount = Array.isArray(libraryTournaments) ? libraryTournaments.length : 0;
   const trashCount = Array.isArray(trashTournaments) ? trashTournaments.length : 0;
 
-  const resetAddForm = () => {
-    setAddSite("");
-    setAddName("");
-    setAddBuyIn("");
-    setAddTime("");
-    setAddType("");
-    setAddSpeed("");
-    setAddGuaranteed("");
-  };
-
-  const handleAddSubmit = () => {
-    if (!addSite || !addName || !addBuyIn) {
-      toast({ title: "Campos obrigatorios", description: "Site, nome e buy-in sao obrigatorios", variant: "destructive" });
-      return;
-    }
+  // Submit do modal canonico -> POST /api/tournament-library.
+  const handleAddSubmit = (values: TournamentFormState) => {
     addMutation.mutate({
-      site: addSite,
-      name: addName,
-      buyIn: addBuyIn,
-      time: addTime || null,
-      type: addType || null,
-      speed: addSpeed || null,
-      guaranteed: addGuaranteed || null,
+      site: values.site.trim(),
+      name: values.name.trim(),
+      buyIn: values.buyIn.replace(",", ".").trim(),
+      time: values.time || null,
+      type: values.type || null,
+      speed: values.speed || null,
+      guaranteed:
+        values.guaranteed.trim() === ""
+          ? null
+          : values.guaranteed.replace(",", ".").trim(),
       source: "manual",
     });
   };
@@ -538,82 +523,20 @@ export function BibliotecaPanel({
         </div>
       </div>
 
-      {/* Manual add form (inline) */}
-      {showAddForm && (
-        <div className="p-3 border-b border-gray-700 space-y-2 bg-gray-800/50">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-white">Adicionar Manualmente</span>
-            <button
-              onClick={() => { setShowAddForm(false); resetAddForm(); }}
-              className="text-gray-400 hover:text-white"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <Select value={addSite} onValueChange={setAddSite}>
-            <SelectTrigger className="bg-gray-800 border-gray-600 text-xs h-8">
-              <SelectValue placeholder="Site *" />
-            </SelectTrigger>
-            <SelectContent className="bg-gray-800 border-gray-600">
-              {sites.map((s) => (
-                <SelectItem key={s} value={s}>{s}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Input
-            value={addName}
-            onChange={(e) => setAddName(e.target.value)}
-            placeholder="Nome do torneio *"
-            className="bg-gray-800 border-gray-600 text-xs h-8"
-          />
-          <div className="flex gap-2">
-            <Input
-              type="number"
-              step="0.01"
-              value={addBuyIn}
-              onChange={(e) => setAddBuyIn(e.target.value)}
-              placeholder="Buy-in *"
-              className="bg-gray-800 border-gray-600 text-xs h-8 flex-1"
-            />
-            <Input
-              type="time"
-              value={addTime}
-              onChange={(e) => setAddTime(e.target.value)}
-              className="bg-gray-800 border-gray-600 text-xs h-8 w-24"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Select value={addType} onValueChange={setAddType}>
-              <SelectTrigger className="bg-gray-800 border-gray-600 text-xs h-8">
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-600">
-                {types.map((t) => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={addSpeed} onValueChange={setAddSpeed}>
-              <SelectTrigger className="bg-gray-800 border-gray-600 text-xs h-8">
-                <SelectValue placeholder="Speed" />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-600">
-                {speeds.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button
-            size="sm"
-            onClick={handleAddSubmit}
-            disabled={addMutation.isPending}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-7"
-          >
-            {addMutation.isPending ? "Adicionando..." : "Adicionar"}
-          </Button>
-        </div>
-      )}
+      {/* Adicionar manualmente — modal canonico de torneio (mesmo do /coach). */}
+      <TournamentFormDialog
+        open={showAddForm}
+        onOpenChange={setShowAddForm}
+        mode="create"
+        title="Adicionar torneio a biblioteca"
+        testIdPrefix="biblioteca-add"
+        requireBuyIn
+        submitLabel="Adicionar"
+        submittingLabel="Adicionando..."
+        submitting={addMutation.isPending}
+        knownSites={sites}
+        onSubmit={handleAddSubmit}
+      />
 
       {/* Trash toggle */}
       <div className="px-3 py-1.5 border-b border-gray-700">

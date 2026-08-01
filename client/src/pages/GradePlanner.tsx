@@ -141,11 +141,9 @@ export default function GradePlanner() {
   // FP-06: Grind CTA banner state
   const [ctaDismissed, setCtaDismissed] = useState(false);
 
-  // UX: Dialog de novo torneio com seletor de dia (independente do clique-na-celula)
-  const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
-
-  // Modal enxuto de criar torneio (DayCreateTournamentDialog) — substitui o
-  // EditDialog antigo no "+" da celula e no botao "Novo Torneio".
+  // Modal canonico de criar torneio (DayCreateTournamentDialog) — unico caminho
+  // de criacao: "+" da celula e botao "Novo Torneio". EditDialog ficou so com
+  // edicao (Sprint tournament-dialog-unification).
   const [createDialog, setCreateDialog] = useState<
     { dayOfWeek: number; profileLetter: 'A' | 'B' | 'C'; suggestedSlot: string } | null
   >(null);
@@ -563,53 +561,11 @@ export default function GradePlanner() {
     });
   };
 
-  // Override edit submit to handle new tournaments (no id)
+  // EditDialog e exclusivamente de EDICAO — a criacao passa pelo modal canonico
+  // (DayCreateTournamentDialog). O dialog so abre via handleEditTournament, que
+  // sempre seta editingTournament com id.
   const handleFormSubmit = (data: TournamentForm) => {
-    if (editingTournament?.id) {
-      // Existing tournament - update
-      handleEditSubmit(data);
-    } else {
-      // New tournament - create
-      const targetDay = data.dayOfWeek ?? editingTournament?.dayOfWeek ?? 0;
-      const activeProfile = getActiveProfile(targetDay);
-
-      // Se o dia de destino estiver OFF/null, ativar perfil A automaticamente
-      if (!activeProfile || activeProfile === 'OFF') {
-        executeProfileSwitch(targetDay, 'A');
-      }
-      const profileToUse = (activeProfile && activeProfile !== 'OFF') ? activeProfile : 'A';
-      const advanced = normalizeAdvancedFields(data);
-
-      // Auto-gerar nome se nao preenchido (schema do DB exige name not null)
-      const buyInNum = parseFloat(data.buyIn || "0");
-      const autoName = (data.name && data.name.trim())
-        ? data.name
-        : `$${isNaN(buyInNum) ? "0" : buyInNum.toFixed(0)} ${data.site}`;
-
-      addPlannedMutation.mutate({
-        dayOfWeek: targetDay,
-        profile: profileToUse,
-        site: String(data.site || ""),
-        time: String(data.time || ""),
-        type: String(data.type || "Vanilla"),
-        speed: String(data.speed || "Normal"),
-        name: autoName,
-        buyIn: String(data.buyIn || "0"),
-        guaranteed: String(data.guaranteed || "0"),
-        prioridade: Number(data.prioridade) || 2,
-        ...advanced,
-      }, {
-        onSuccess: () => {
-          setIsEditDialogOpen(false);
-          setIsNewDialogOpen(false);
-          setEditingTournament(null);
-          toast({
-            title: "✓ Torneio adicionado",
-            description: `${autoName} — ${weekDays.find(d => d.id === targetDay)?.name} às ${data.time}`,
-          });
-        },
-      });
-    }
+    handleEditSubmit(data);
   };
 
   // Keyboard shortcut: N abre o dialog de novo torneio
