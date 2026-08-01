@@ -29,6 +29,29 @@ export interface TabInsight {
   tone: InsightTone;
   /** true quando a conclusão se apoia em pouca amostra. */
   lowSample: boolean;
+  /**
+   * true quando existe dado na aba, mas pouco demais para comparar. Nesse caso a
+   * faixa aparece explicando o silêncio em vez de sumir — silêncio puro é
+   * indistinguível de tela quebrada (relato do founder em 2026-08-01).
+   */
+  insufficient?: boolean;
+}
+
+/**
+ * "Tenho dado, mas não o bastante para afirmar." Sempre acionável: diz o que
+ * fazer para a dica aparecer.
+ */
+function insufficientInsight(totalVolume: number): TabInsight {
+  return {
+    headline:
+      totalVolume > 0
+        ? `Poucos torneios neste recorte (${totalVolume}) para comparar com honestidade.`
+        : 'Sem torneios suficientes neste recorte para comparar.',
+    detail: `São necessários pelo menos ${LOW_SAMPLE_VOLUME} torneios em cada faixa. Amplie o período ou solte algum filtro.`,
+    tone: 'neutral',
+    lowSample: true,
+    insufficient: true,
+  };
 }
 
 /** Faixa genérica comparável (site, ABI, tipo, velocidade...). */
@@ -64,6 +87,11 @@ export function formatUsd(value: number): string {
 
 export function formatPct(value: number): string {
   return `${value >= 0 ? '' : '-'}${Math.abs(value).toFixed(1)}%`;
+}
+
+/** Soma de torneios de todas as faixas — usada na mensagem de amostra curta. */
+function totalVolume(buckets: Array<{ volume: number }>): number {
+  return buckets.reduce((sum, b) => sum + (Number(b.volume) || 0), 0);
 }
 
 /** Faixas com volume suficiente para comparar, da melhor para a pior por ROI. */
@@ -103,7 +131,9 @@ function buildComparisonInsight(
   opts: { noun: string; metric?: 'roi' | 'avgProfit' },
 ): TabInsight | null {
   const { rows, lowSample } = pickComparable(buckets);
-  if (rows.length < 2) return null;
+  if (rows.length < 2) {
+    return buckets.length > 0 ? insufficientInsight(totalVolume(buckets)) : null;
+  }
 
   const best = rows[0];
   const worst = rows[rows.length - 1];
@@ -202,7 +232,9 @@ export function buildDayOfWeekInsight(data: any): TabInsight | null {
     }))
     .filter((d) => d.label.length > 0 && d.volume > 0);
 
-  if (days.length < 2) return null;
+  if (days.length < 2) {
+    return days.length > 0 ? insufficientInsight(totalVolume(days)) : null;
+  }
 
   const lowSample = days.some((d) => d.volume < LOW_SAMPLE_VOLUME);
   const sorted = [...days].sort((a, b) => b.profit - a.profit);
@@ -250,13 +282,15 @@ export function buildFieldInsight(data: any): TabInsight | null {
     .filter((b) => b.label.length > 0 && b.volume > 0);
 
   const { rows, lowSample } = pickComparable(buckets);
-  if (rows.length < 2) return null;
+  if (rows.length < 2) {
+    return buckets.length > 0 ? insufficientInsight(totalVolume(buckets)) : null;
+  }
 
   const bestRoi = rows[0];
   const byVolume = [...rows].sort((a, b) => b.volume - a.volume);
   const mostPlayed = byVolume[0];
-  const totalVolume = rows.reduce((sum, b) => sum + b.volume, 0);
-  const share = totalVolume > 0 ? (mostPlayed.volume / totalVolume) * 100 : 0;
+  const comparedVolume = rows.reduce((sum, b) => sum + b.volume, 0);
+  const share = comparedVolume > 0 ? (mostPlayed.volume / comparedVolume) * 100 : 0;
 
   const itmPart =
     bestRoi.itmRate !== undefined && mostPlayed.itmRate !== undefined
@@ -295,7 +329,9 @@ export function buildPositionInsight(data: any): TabInsight | null {
   }
 
   const total = Array.from(byPosition.values()).reduce((sum, v) => sum + v, 0);
-  if (total < LOW_SAMPLE_VOLUME) return null;
+  if (total < LOW_SAMPLE_VOLUME) {
+    return total > 0 ? insufficientInsight(total) : null;
+  }
 
   const sum = (positions: number[]) =>
     positions.reduce((acc, p) => acc + (byPosition.get(p) ?? 0), 0);

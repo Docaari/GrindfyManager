@@ -56,22 +56,38 @@ describe('helpers', () => {
 });
 
 describe('silencio quando o dado nao sustenta', () => {
-  it('devolve null sem dado', () => {
+  it('devolve null SEM NENHUM dado — a aba ja tem estado vazio proprio', () => {
     expect(buildSiteInsight(null)).toBeNull();
     expect(buildSiteInsight([])).toBeNull();
     expect(buildSiteInsight(undefined)).toBeNull();
   });
 
-  it('devolve null com uma unica faixa (nao ha com o que comparar)', () => {
-    expect(buildSiteInsight([bigBucket('ACR', 20)])).toBeNull();
-  });
-
-  it('devolve null quando todas as faixas estao abaixo do minimo tolerado', () => {
+  // Regressao 2026-08-01: o founder abriu as abas com um recorte de 19 torneios
+  // e nao viu faixa nenhuma — impossivel distinguir "calado de proposito" de
+  // "quebrado". Havendo dado, a faixa aparece explicando o silencio.
+  it('com dado insuficiente EXPLICA o silencio em vez de sumir', () => {
     const tiny = [
       { site: 'ACR', volume: 3, profit: 500, buyins: 100, roi: 500 },
       { site: 'GG', volume: 2, profit: -50, buyins: 80, roi: -60 },
     ];
-    expect(buildSiteInsight(tiny)).toBeNull();
+    const insight = buildSiteInsight(tiny);
+    expect(insight).not.toBeNull();
+    expect(insight!.insufficient).toBe(true);
+    expect(insight!.headline).toContain('5'); // 3 + 2 torneios
+    expect(insight!.detail).toContain('Amplie o período');
+  });
+
+  it('nao da veredito com uma unica faixa (nao ha com o que comparar)', () => {
+    const insight = buildSiteInsight([bigBucket('ACR', 20)]);
+    expect(insight!.insufficient).toBe(true);
+  });
+
+  it('a mensagem de amostra insuficiente nunca afirma nada sobre desempenho', () => {
+    const tiny = [{ site: 'ACR', volume: 2, profit: 9999, buyins: 10, roi: 5000 }];
+    const insight = buildSiteInsight(tiny);
+    expect(insight!.tone).toBe('neutral');
+    expect(insight!.headline).not.toContain('ROI');
+    expect(insight!.headline).not.toContain('ACR');
   });
 
   it('ignora faixa sem volume — um torneio premiado nao vira "melhor faixa"', () => {
@@ -219,8 +235,14 @@ describe('posicao na mesa final', () => {
     expect(insight!.tone).toBe('good');
   });
 
-  it('cala quando ha mesas finais de menos', () => {
-    expect(buildPositionInsight([{ position: 1, volume: '2' }])).toBeNull();
+  it('com mesas finais de menos, avisa em vez de sumir', () => {
+    const insight = buildPositionInsight([{ position: 1, volume: '2' }]);
+    expect(insight!.insufficient).toBe(true);
+  });
+
+  it('devolve null quando nao ha nenhuma mesa final', () => {
+    expect(buildPositionInsight([])).toBeNull();
+    expect(buildPositionInsight([{ position: 40, volume: '10' }])).toBeNull();
   });
 
   it('ignora posicao fora de 1-9 (dado sujo nao vira estatistica)', () => {

@@ -17,13 +17,17 @@ interface TabInsightBannerProps {
 export function TabInsightBanner({ insight }: TabInsightBannerProps) {
   if (!insight) return null;
 
+  // Amostra insuficiente nao e alerta nem elogio: e recado. Fica discreto para
+  // nao competir com o grafico, mas VISIVEL — sumir de vez parece tela quebrada.
   const palette =
-    insight.tone === 'good' ? tokens.color.success
+    insight.insufficient ? tokens.color.neutral
+    : insight.tone === 'good' ? tokens.color.success
     : insight.tone === 'bad' ? tokens.color.danger
     : tokens.color.info;
 
   const Icon =
-    insight.tone === 'good' ? TrendingUp
+    insight.insufficient ? Info
+    : insight.tone === 'good' ? TrendingUp
     : insight.tone === 'bad' ? TrendingDown
     : Lightbulb;
 
