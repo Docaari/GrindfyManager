@@ -40,49 +40,43 @@ const ITEMS_PER_PAGE = 50;
 
 export default function TournamentTable({ tournaments, filters, period, onEdit, onDelete }: TournamentTableProps) {
   const [sortType, setSortType] = useState<SortType>('date');
-  const [isLoadingSort, setIsLoadingSort] = useState(false);
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   
-  // Query para buscar todos os torneios quando necessário para ordenação
-  const { data: allTournaments, refetch: refetchAllTournaments } = useQuery({
+  /**
+   * Ordenação por lucro precisa ir ao servidor (o maior lucro pode estar fora
+   * das linhas já carregadas).
+   *
+   * CORREÇÃO 2026-08-01: esta busca ignorava `period` e `filters` de propósito
+   * ("buscar TODA a base"). Consequência: clicar em "Maiores Lucros" trazia
+   * torneios de FORA do recorte que o jogador está analisando — e o resultado
+   * ficava preso na tela mesmo depois de ele trocar o filtro, porque
+   * `allTournaments` sobrescrevia a lista para sempre. Agora o recorte viaja
+   * junto, e a chave da query inclui filtros: mudou o filtro, refaz a busca.
+   */
+  const { data: sortedFromServer, isFetching: isFetchingSorted } = useQuery({
     queryKey: ['/api/tournaments', 'sort', sortType, period, filters],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      
-      // Para ordenação, não aplicar filtros de período - buscar TODA a base de dados
-      
-      // Adicionar ordenação específica - usar parâmetro sortBy diretamente
-      if (sortType === 'profit-high') {
-        params.append('sortBy', 'profit-high');
-        params.append('limit', '500');
-      } else if (sortType === 'profit-low') {
-        params.append('sortBy', 'profit-low');
-        params.append('limit', '500');
-      } else {
-        params.append('sortBy', 'date');
-        params.append('limit', '500');
-      }
-      
-      const response = await apiRequest('GET', `/api/tournaments?${params}`);
-      return response;
+      const params = new URLSearchParams({ sortBy: sortType, limit: '500' });
+      if (period) params.append('period', period);
+      if (filters) params.append('filters', JSON.stringify(filters));
+      return apiRequest('GET', `/api/tournaments?${params}`);
     },
-    enabled: false, // Só busca quando necessário
+    // Só a ordenação por lucro precisa do servidor; por data a lista que já
+    // veio da página basta.
+    enabled: sortType !== 'date',
+    staleTime: 60 * 1000,
   });
 
-  // Função para lidar com ordenação
-  const handleSort = async (newSortType: SortType) => {
+  const handleSort = (newSortType: SortType) => {
     setSortType(newSortType);
     setVisibleCount(ITEMS_PER_PAGE);
-    setIsLoadingSort(true);
-    try {
-      await refetchAllTournaments();
-    } finally {
-      setIsLoadingSort(false);
-    }
   };
-  
-  // Determinar quais torneios mostrar (local ou da busca completa)
-  const displayTournaments = allTournaments || tournaments;
+
+  const isLoadingSort = sortType !== 'date' && isFetchingSorted;
+
+  // Enquanto a busca ordenada não volta, segue mostrando o que já existe.
+  const serverRows = sortType !== 'date' && Array.isArray(sortedFromServer) ? sortedFromServer : null;
+  const displayTournaments = serverRows ?? tournaments;
 
   const formatCurrency = (value: string | number) => {
     const num = typeof value === "string" ? parseFloat(value) : value;
@@ -150,12 +144,12 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
   const sortedTournaments = useMemo(() => {
     const tournamentsToSort = displayTournaments;
     if (!tournamentsToSort || tournamentsToSort.length === 0) return [];
-    
-    // Se temos dados da busca completa, usá-los diretamente pois já vêm ordenados do backend
-    if (allTournaments && allTournaments.length > 0) {
-      return allTournaments;
+
+    // Resultado do servidor já vem ordenado E filtrado pelo recorte atual.
+    if (serverRows && serverRows.length > 0) {
+      return serverRows;
     }
-    
+
     const sorted = [...tournamentsToSort].sort((a, b) => {
       switch (sortType) {
         case 'date':
@@ -172,7 +166,7 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
     });
     
     return sorted;
-  }, [displayTournaments, allTournaments, sortType]);
+  }, [displayTournaments, serverRows, sortType]);
 
   // Validação defensiva - garantir que tournaments é array
   if (!tournaments || !Array.isArray(tournaments) || tournaments.length === 0) {
@@ -194,10 +188,12 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
           {/* Título e descrição */}
           <div>
             <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
-              🏆 Todos os Torneios
+              {String.fromCodePoint(0x1F3C6)} Torneios do Recorte
             </h3>
             <p className="text-gray-300 text-sm">
-              Histórico detalhado de torneios do período selecionado
+              {sortType === 'date'
+                ? `Últimos ${sortedTournaments.length} torneios do recorte selecionado`
+                : `Top ${sortedTournaments.length} do recorte selecionado, por resultado`}
             </p>
           </div>
           
@@ -215,7 +211,9 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
               }`}
             >
               <Calendar className="h-4 w-4" />
-              {isLoadingSort && sortType === 'date' ? 'Carregando...' : 'Data'}
+              {/* Ordenar por data usa a lista que a página já carregou — nunca
+                  fica "carregando", ao contrário das ordenações por resultado. */}
+              Data
             </Button>
             
             <Button
