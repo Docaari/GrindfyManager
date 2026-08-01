@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrencyRounded } from "@/lib/formatting";
 
 import type { ProfitChartProps, ComparisonDataItem, ComparisonChartDataItem, BigHitData } from './profit-chart/types';
 import { parsePortugueseDate, generateAdaptiveXAxisTicks, generateTimeLabels } from './profit-chart/dateUtils';
@@ -10,14 +11,10 @@ import { BigHitMedal } from './profit-chart/BigHitMedal';
 import { BigHitsList } from './profit-chart/BigHitsList';
 import { ComparisonInterface } from './profit-chart/ComparisonInterface';
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-};
+// Sem centavos: este gráfico mostra lucro acumulado, onde os centavos só
+// poluem. Mesma grafia do resto da aplicação (`$1.234`), via formatador
+// compartilhado — antes havia uma implementação local que gerava "US$ 1.235".
+const formatCurrency = formatCurrencyRounded;
 
 const medals = ['🥇', '🥈', '🥉'];
 

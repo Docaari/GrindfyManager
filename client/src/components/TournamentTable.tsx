@@ -8,6 +8,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { getTableSiteColor, getTableTypeColor, getTableSpeedColor } from "@/lib/poker-colors";
+import { formatCurrency as formatCurrencyCanonical } from "@/lib/utils";
 
 interface Tournament {
   id: string;
@@ -78,12 +79,11 @@ export default function TournamentTable({ tournaments, filters, period, onEdit, 
   const serverRows = sortType !== 'date' && Array.isArray(sortedFromServer) ? sortedFromServer : null;
   const displayTournaments = serverRows ?? tournaments;
 
+  // Formatador canônico do projeto (pt-BR com símbolo `$`). Antes era `en-US`
+  // aqui e `pt-BR` no gráfico logo acima — mesmo valor, duas grafias.
   const formatCurrency = (value: string | number) => {
-    const num = typeof value === "string" ? parseFloat(value) : value;
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(num);
+    const parsed = typeof value === "string" ? parseFloat(value) : value;
+    return formatCurrencyCanonical(Number.isFinite(parsed) ? parsed : 0);
   };
 
   const formatDate = (dateString: string) => {

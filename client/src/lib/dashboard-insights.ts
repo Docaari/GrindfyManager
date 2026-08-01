@@ -14,6 +14,8 @@
  *    nenhuma. Melhor silêncio do que conselho inventado.
  */
 
+import { formatCurrencyRounded } from './formatting';
+
 /** Volume mínimo numa faixa para ela entrar numa comparação. */
 export const MIN_BUCKET_VOLUME = 30;
 /** Abaixo disso a dica sai, mas avisando que a amostra é curta. */
@@ -79,10 +81,14 @@ export function num(value: unknown): number {
   return 0;
 }
 
+/**
+ * Dinheiro nas frases das dicas — sem centavos, que só poluem texto corrido.
+ * Delega ao formatador compartilhado para não existir uma quarta grafia de
+ * dinheiro na página. Import relativo de propósito: este módulo é carregado
+ * direto por testes em ambiente node, onde o alias `@/` não é garantido.
+ */
 export function formatUsd(value: number): string {
-  const rounded = Math.round(value);
-  const abs = Math.abs(rounded).toLocaleString('pt-BR');
-  return `${rounded < 0 ? '-' : ''}$${abs}`;
+  return formatCurrencyRounded(value);
 }
 
 export function formatPct(value: number): string {
