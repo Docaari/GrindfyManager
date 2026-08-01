@@ -218,6 +218,15 @@ export default function Dashboard() {
     enabled: activeTab === 'por-periodo',
   });
 
+  // Turno do dia (aba Periodo). O endpoint ja existia desde o Tournament
+  // Selector e nenhuma tela consumia — converte para o fuso do jogador no SQL.
+  const { data: timeOfDayAnalytics, isLoading: timeOfDayLoading } = useQuery({
+    queryKey: ["/api/analytics/by-time-of-day", period, filters],
+    queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-time-of-day?${params}`); },
+    staleTime: 2 * 60 * 1000,
+    enabled: activeTab === 'por-periodo',
+  });
+
   const { data: monthAnalytics, isLoading: monthLoading } = useQuery({
     queryKey: ["/api/analytics/by-month", period, filters],
     queryFn: async () => { const params = new URLSearchParams({ period, filters: JSON.stringify(filters) }); return apiRequest('GET', `/api/analytics/by-month?${params}`); },
@@ -528,7 +537,7 @@ export default function Dashboard() {
               <TabSpeed speedAnalytics={speedAnalytics} speedLoading={speedLoading} period={period} filters={filters} />
             )}
             {activeTab === 'por-periodo' && (
-              <TabPeriod dayAnalytics={dayAnalytics} dayLoading={dayLoading} monthAnalytics={monthAnalytics} monthLoading={monthLoading} filters={filters} />
+              <TabPeriod dayAnalytics={dayAnalytics} dayLoading={dayLoading} monthAnalytics={monthAnalytics} monthLoading={monthLoading} timeOfDayAnalytics={timeOfDayAnalytics} timeOfDayLoading={timeOfDayLoading} filters={filters} />
             )}
             {activeTab === 'por-participantes' && (
               <TabParticipants fieldAnalytics={fieldAnalytics} fieldLoading={fieldLoading} monthAnalytics={monthAnalytics} monthLoading={monthLoading} period={period} filters={filters} />

@@ -61,7 +61,21 @@ Trabalho pertence a area **Import** (`csvParser.ts` +
 depois do dashboard. Ate la o filtro fica no ar, mas **os baldes Satelite e
 Flight nao sao confiaveis**.
 
-## 4. Dicas por aba
+## 4. Dicas por aba — ENTREGUE, revisao de conteudo PENDENTE
+
+**Status:** motor + faixa nas 7 abas no ar; popup mental removido do Geral.
+
+**Pendente (founder, 2026-08-01):** revisar o CONTEUDO das dicas com calma —
+se a frase de cada aba diz a coisa certa, se o cruzamento escolhido e o mais
+util, se os limites de amostra (30 para veredito / 10 para tendencia) estao no
+ponto. Nada disso foi validado contra o historico real ainda; so a mecanica foi.
+Ajustar a regra e barato — tudo vive em `client/src/lib/dashboard-insights.ts`,
+funcao pura, sem chamada de rede.
+
+Faltam duas dicas que dependem de agregacao nova no servidor: participacao de
+bounty no lucro (aba Tipo) e $/hora por velocidade (aba Velocidade).
+
+### Desenho original
 
 Remove o popup de correlacao mental do Geral (vai para a aba Mental no futuro —
 decisao do founder). Cada aba ganha um diagnostico proprio, **por regra
