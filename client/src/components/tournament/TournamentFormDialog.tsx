@@ -24,6 +24,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X, ChevronDown, ChevronUp } from "lucide-react";
 import { TOURNAMENT_PRIMARY_TYPES, getTypeLabel } from "@shared/tournamentTypes";
 import { detectAddonReaFromName } from "@shared/addon-rea-detector";
+import { getCurrencyForSite } from "@shared/platform-currency";
 import {
   useTournamentDialogForm,
   type TournamentFormState,
@@ -72,6 +73,18 @@ export interface TournamentFormDialogProps {
   knownSites?: string[];
   /** Mostra a secao colapsavel "Mais opcoes" (add-on / re-entry). */
   advanced?: boolean;
+  /** Select de prioridade da grade (1 alta / 2 media / 3 baixa). */
+  showPriority?: boolean;
+  /** Switches dos modificadores ortogonais isFlight / isLive (ADR-031). */
+  showModifiers?: boolean;
+  /** Bloco Satellite — so aparece quando `type === "Satellite"`. */
+  showSatellite?: boolean;
+  /** Campos enriquecidos: late reg (min) + alerta (min antes). */
+  showEnriched?: boolean;
+  /** Conteudo read-only exibido junto dos enriquecidos (stack, mesa, etc). */
+  enrichedInfo?: React.ReactNode;
+  /** Erros por campo (ex: issues Zod do backend) exibidos inline. */
+  fieldErrors?: Partial<Record<keyof TournamentFormState, string>>;
   /** Nome obrigatorio para submeter (default true). */
   requireName?: boolean;
   /** Buy-in obrigatorio e > 0 para submeter (default false). */
@@ -114,6 +127,12 @@ export function TournamentFormDialog(
     hydrateKey,
     knownSites = [],
     advanced = false,
+    showPriority = false,
+    showModifiers = false,
+    showSatellite = false,
+    showEnriched = false,
+    enrichedInfo,
+    fieldErrors,
     requireName = true,
     requireBuyIn = false,
     keepOpenOnSubmit = false,
@@ -282,6 +301,26 @@ export function TournamentFormDialog(
 
   if (!open) return null;
 
+  // Moeda da plataforma escolhida — o buy-in digitado esta na moeda do site
+  // (o server normaliza pra USD). Rotular errado induz erro de digitacao.
+  const currencyCode = site.trim()
+    ? getCurrencyForSite(site).code
+    : "USD";
+
+  const errFor = (k: keyof TournamentFormState) => fieldErrors?.[k];
+  const renderErr = (k: keyof TournamentFormState) => {
+    const msg = errFor(k);
+    if (!msg) return null;
+    return (
+      <p
+        data-testid={`${testIdPrefix}-error-${String(k)}`}
+        className="mt-1 text-[11px] text-red-400"
+      >
+        {msg}
+      </p>
+    );
+  };
+
   const inputCls =
     "w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-emerald-500 outline-none";
   const labelCls = "block text-xs text-gray-400 mb-1";
@@ -323,6 +362,7 @@ export function TournamentFormDialog(
                 className={inputCls}
                 autoFocus
               />
+              {renderErr("name")}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -389,10 +429,11 @@ export function TournamentFormDialog(
                     </ul>
                   )}
                 </div>
+                {renderErr("site")}
               </div>
               <div>
                 <label className={labelCls}>
-                  Buy-in USD {requireBuyIn ? "*" : ""}
+                  Buy-in {currencyCode} {requireBuyIn ? "*" : ""}
                 </label>
                 <input
                   type="text"
@@ -403,6 +444,7 @@ export function TournamentFormDialog(
                   placeholder="11.00"
                   className={inputCls}
                 />
+                {renderErr("buyIn")}
               </div>
             </div>
 
@@ -416,6 +458,7 @@ export function TournamentFormDialog(
                   onChange={(e) => patch({ time: e.target.value })}
                   className={inputCls}
                 />
+                {renderErr("time")}
               </div>
               <div>
                 <label className={labelCls}>Tipo</label>
@@ -462,7 +505,7 @@ export function TournamentFormDialog(
                 />
               </div>
               <div>
-                <label className={labelCls}>Garantido USD</label>
+                <label className={labelCls}>Garantido {currencyCode}</label>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -472,8 +515,149 @@ export function TournamentFormDialog(
                   placeholder="0"
                   className={inputCls}
                 />
+                {renderErr("guaranteed")}
               </div>
             </div>
+
+            {showPriority && (
+              <div>
+                <label className={labelCls}>Prioridade</label>
+                <select
+                  data-testid={`${testIdPrefix}-input-prioridade`}
+                  value={String(values.prioridade)}
+                  onChange={(e) =>
+                    patch({ prioridade: Number(e.target.value) || 2 })
+                  }
+                  className={inputCls}
+                >
+                  <option value="1">Alta</option>
+                  <option value="2">Media</option>
+                  <option value="3">Baixa</option>
+                </select>
+              </div>
+            )}
+
+            {showModifiers && (
+              <div className="grid grid-cols-2 gap-3 rounded border border-gray-800 p-2">
+                <label className="flex items-center gap-2 text-xs text-gray-200">
+                  <input
+                    type="checkbox"
+                    data-testid={`${testIdPrefix}-checkbox-is-flight`}
+                    checked={values.isFlight}
+                    onChange={(e) => patch({ isFlight: e.target.checked })}
+                    className="h-3.5 w-3.5 rounded border-gray-700 bg-gray-900"
+                  />
+                  Multi-flight (Day 1A/1B...)
+                </label>
+                <label className="flex items-center gap-2 text-xs text-gray-200">
+                  <input
+                    type="checkbox"
+                    data-testid={`${testIdPrefix}-checkbox-is-live`}
+                    checked={values.isLive}
+                    onChange={(e) => patch({ isLive: e.target.checked })}
+                    className="h-3.5 w-3.5 rounded border-gray-700 bg-gray-900"
+                  />
+                  Live (presencial)
+                </label>
+              </div>
+            )}
+
+            {showSatellite && type === "Satellite" && (
+              <div className="space-y-2 rounded border border-amber-700/40 bg-amber-950/10 p-2">
+                <div className="text-[11px] font-medium uppercase tracking-wider text-amber-400">
+                  Satellite
+                </div>
+                <div>
+                  <label className={labelCls}>Tipo de premio</label>
+                  <select
+                    data-testid={`${testIdPrefix}-input-satellite-reward`}
+                    value={values.satelliteRewardType}
+                    onChange={(e) =>
+                      patch({ satelliteRewardType: e.target.value })
+                    }
+                    className={inputCls}
+                  >
+                    <option value="">Selecione</option>
+                    <option value="ticket">Ticket</option>
+                    <option value="package">Package (live)</option>
+                    <option value="cash">Cash</option>
+                    <option value="mixed">Mixed (ticket + cash)</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>
+                      Valor do ticket {currencyCode}
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      data-testid={`${testIdPrefix}-input-satellite-ticket`}
+                      value={values.satelliteTicketValue}
+                      onChange={(e) =>
+                        patch({ satelliteTicketValue: e.target.value })
+                      }
+                      placeholder="0.00"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Torneio alvo</label>
+                    <input
+                      type="text"
+                      data-testid={`${testIdPrefix}-input-satellite-target`}
+                      value={values.satelliteTargetName}
+                      onChange={(e) =>
+                        patch({ satelliteTargetName: e.target.value })
+                      }
+                      placeholder="Ex: Sunday Million $109"
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {showEnriched && (
+              <div className="space-y-2 rounded border border-gray-800 p-2">
+                <div className="text-[11px] font-medium uppercase tracking-wider text-gray-400">
+                  Dados enriquecidos
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Late reg (min)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="2880"
+                      data-testid={`${testIdPrefix}-input-latereg`}
+                      value={values.lateRegMinutes}
+                      onChange={(e) =>
+                        patch({ lateRegMinutes: e.target.value })
+                      }
+                      placeholder="Ex: 60"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Alerta (min antes)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="120"
+                      data-testid={`${testIdPrefix}-input-alert`}
+                      value={values.alertMinutesBefore}
+                      onChange={(e) =>
+                        patch({ alertMinutesBefore: e.target.value })
+                      }
+                      placeholder="Default: 10min"
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+                {enrichedInfo}
+              </div>
+            )}
 
             {/* Sugestao automatica de Add-on / ReA a partir do nome. */}
             {advanced && (autoDetect.addOn || autoDetect.reentry) && (

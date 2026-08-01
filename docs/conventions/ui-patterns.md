@@ -476,12 +476,46 @@ modernizado; o reviewer reprova drift que viole estas regras:
 
 ---
 
-## 17. Historico de revisoes
+## 17. Torneio — um unico modal
+
+**Regra:** todo lugar que cria ou edita torneio usa
+`client/src/components/tournament/TournamentFormDialog.tsx`. Nao existe segundo
+formulario de torneio no app; markup novo pra isso e regressao.
+
+Quando o contexto pede algo a mais, entra por prop — nunca por copia do
+componente:
+
+| Precisa de | Use |
+|---|---|
+| titulo/testids proprios | `title`, `testIdPrefix` |
+| add-on / re-entry | `advanced` |
+| prioridade da grade | `showPriority` |
+| isFlight / isLive (ADR-031) | `showModifiers` |
+| campos de satelite | `showSatellite` (so renderiza com `type === "Satellite"`) |
+| late reg / alerta + info read-only | `showEnriched` + `enrichedInfo` |
+| qualquer campo exclusivo do contexto | `extraSlot` (render-prop, recebe o form vivo) |
+| state do form fora do modal | `values` + `onValuesChange` (modo controlado) |
+| erros vindos do backend | `fieldErrors` |
+
+O modal nao sabe persistir: quem chama implementa `onSubmit(values)` com o
+endpoint, a telemetria e as invalidacoes do seu dominio. Adaptadores atuais:
+`grade/DayCreateTournamentDialog`, `grade/DayEditTournamentDialog`,
+`grade-planner/EditDialog`, `grind-session-live/AddTournamentDialog`,
+`grind-session-live/EditTournamentDialog`, `grade-planner/BibliotecaPanel`.
+
+Tipos de torneio **sempre** de `@shared/tournamentTypes`
+(`TOURNAMENT_PRIMARY_TYPES` + `getTypeLabel`). Lista literal em componente ja
+produziu tipo fantasma gravado no banco ("Bounty").
+
+---
+
+## 18. Historico de revisoes
 
 | Data | Versao | Autor | Mudanca |
 |---|---|---|---|
 | 2026-05-02 | 1.0 | Sprint UI-FND-1 | Versao inicial — tokens + EmptyState + FilterChip + PageHeader documentados |
 | 2026-06-02 | 1.1 | Sprint Estudos-UX | §16 Studies — 5 regras de ouro (tokens/Tabs/PageHeader/densidade/Dialog); migracao poker-* (ADR-239) |
+| 2026-08-01 | 1.2 | Sprint tournament-dialog-unification | §17 Torneio — um unico modal (TournamentFormDialog + tabela de props) |
 
 ---
 

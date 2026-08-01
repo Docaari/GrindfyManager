@@ -19,6 +19,9 @@ export const tournamentSchema = z.object({
   maxPlayers: z.union([z.string(), z.number()]).nullable().optional(),
   blindLevelMinutes: z.union([z.string(), z.number()]).nullable().optional(),
 
+  // Horario de registro final ("Max Late") — HH:MM. Editavel no modal canonico.
+  registrationTime: z.string().nullable().optional(),
+
   // Late Reg / Alerta
   lateRegMinutes: z.union([z.string(), z.number()]).nullable().optional(),
   alertMinutesBefore: z.union([z.string(), z.number()]).nullable().optional(),

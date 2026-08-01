@@ -20,7 +20,10 @@ import { getCategoryColor, getSpeedColor } from './helpers';
 import type { NewTournamentForm } from './types';
 import { TOURNAMENT_PRIMARY_TYPES, getTypeLabel } from "@shared/tournamentTypes";
 import { TournamentFormDialog } from "@/components/tournament/TournamentFormDialog";
-import type { TournamentFormState } from "@/components/tournament/useTournamentDialogForm";
+import {
+  EMPTY_TOURNAMENT_FORM_STATE,
+  type TournamentFormState,
+} from "@/components/tournament/useTournamentDialogForm";
 
 interface AddTournamentDialogProps {
   open: boolean;
@@ -45,6 +48,7 @@ interface AddTournamentDialogProps {
 /** NewTournamentForm (sessao) -> TournamentFormState (dialog canonico). */
 function toFormState(t: NewTournamentForm): TournamentFormState {
   return {
+    ...EMPTY_TOURNAMENT_FORM_STATE,
     name: t.name ?? "",
     site: t.site ?? "",
     buyIn: t.buyIn ?? "",

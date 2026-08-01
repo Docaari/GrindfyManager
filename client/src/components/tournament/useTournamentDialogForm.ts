@@ -33,6 +33,18 @@ export interface TournamentFormState {
   addOnCost: string;
   allowsReentry: boolean;
   maxReentries: number | null;
+  // Prioridade da grade (1 alta / 2 media / 3 baixa) — `showPriority`.
+  prioridade: number;
+  // Modificadores ortogonais (ADR-031) — `showModifiers`.
+  isFlight: boolean;
+  isLive: boolean;
+  // Satellite (so quando type=Satellite) — `showSatellite`.
+  satelliteRewardType: string;
+  satelliteTicketValue: string;
+  satelliteTargetName: string;
+  // Dados enriquecidos — `showEnriched`. String pra aceitar campo vazio.
+  lateRegMinutes: string;
+  alertMinutesBefore: string;
 }
 
 export const EMPTY_TOURNAMENT_FORM_STATE: TournamentFormState = {
@@ -48,6 +60,14 @@ export const EMPTY_TOURNAMENT_FORM_STATE: TournamentFormState = {
   addOnCost: "",
   allowsReentry: false,
   maxReentries: null,
+  prioridade: 2,
+  isFlight: false,
+  isLive: false,
+  satelliteRewardType: "",
+  satelliteTicketValue: "",
+  satelliteTargetName: "",
+  lateRegMinutes: "",
+  alertMinutesBefore: "",
 };
 
 export interface UseTournamentDialogFormReturn {

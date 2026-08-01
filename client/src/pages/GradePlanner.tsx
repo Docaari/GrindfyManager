@@ -479,6 +479,9 @@ export default function GradePlanner() {
       buyIn: String(data.buyIn || "0"),
       guaranteed: String(data.guaranteed || "0"),
       prioridade: Number(data.prioridade) || 2,
+      // Max Late — o modal canonico edita este campo; sem isso a alteracao
+      // era descartada silenciosamente no submit.
+      registrationTime: data.registrationTime ?? null,
       ...advanced,
     });
   };
