@@ -368,6 +368,73 @@ export function buildPositionInsight(data: any): TabInsight | null {
   };
 }
 
+/**
+ * Reentradas: a pergunta é uma só — reentrar paga ou custa? Compara o ROI das
+ * entradas COM reentrada contra as SEM, já descontado o custo das reentradas.
+ */
+export function buildReentryInsight(payload: any): TabInsight | null {
+  const buckets = Array.isArray(payload?.buckets) ? payload.buckets : [];
+  if (buckets.length === 0) return null;
+
+  const byBucket = new Map<string, any>();
+  for (const row of buckets) {
+    const key = String(row?.bucket ?? '');
+    if (key) byBucket.set(key, row);
+  }
+
+  const clean = byBucket.get('sem-reentrada');
+  const cleanVolume = num(clean?.volume);
+  const cleanRoi = num(clean?.roi);
+
+  let withVolume = 0;
+  let withProfit = 0;
+  let withInvested = 0;
+  for (const key of ['1-reentrada', '2-reentradas', '3-mais']) {
+    const row = byBucket.get(key);
+    withVolume += num(row?.volume);
+    withProfit += num(row?.profit);
+    withInvested += num(row?.invested);
+  }
+
+  const totalVolumeAll = cleanVolume + withVolume;
+  if (totalVolumeAll === 0) return null;
+
+  if (withVolume === 0) {
+    return {
+      headline: `Você não reentrou em nenhum dos ${cleanVolume} torneios deste recorte.`,
+      detail: 'Sem reentrada não há o que comparar aqui — a aba fica útil quando houver.',
+      tone: 'neutral',
+      lowSample: cleanVolume < MIN_BUCKET_VOLUME,
+      insufficient: false,
+    };
+  }
+
+  if (cleanVolume < LOW_SAMPLE_VOLUME || withVolume < LOW_SAMPLE_VOLUME) {
+    return insufficientInsight(totalVolumeAll);
+  }
+
+  const withRoi = withInvested > 0 ? (withProfit / withInvested) * 100 : 0;
+  const gap = withRoi - cleanRoi;
+  const reentryCost = buckets.reduce((sum: number, r: any) => sum + num(r?.reentryCost), 0);
+  const lowSample = cleanVolume < MIN_BUCKET_VOLUME || withVolume < MIN_BUCKET_VOLUME;
+
+  if (gap >= 0) {
+    return {
+      headline: `Reentrar está pagando: ROI de ${formatPct(withRoi)} com reentrada contra ${formatPct(cleanRoi)} sem.`,
+      detail: `${Math.abs(gap).toFixed(1)} pontos a mais, já descontados os ${formatUsd(reentryCost)} gastos em reentradas.`,
+      tone: 'good',
+      lowSample,
+    };
+  }
+
+  return {
+    headline: `Reentrar está custando: ROI de ${formatPct(withRoi)} com reentrada contra ${formatPct(cleanRoi)} sem.`,
+    detail: `${Math.abs(gap).toFixed(1)} pontos a menos. Você pagou ${formatUsd(reentryCost)} só em reentradas neste recorte.`,
+    tone: 'bad',
+    lowSample,
+  };
+}
+
 /** Despacha a dica da aba ativa. `null` = a aba não mostra faixa. */
 export function buildTabInsight(tab: string, payload: Record<string, any>): TabInsight | null {
   switch (tab) {
@@ -385,6 +452,8 @@ export function buildTabInsight(tab: string, payload: Record<string, any>): TabI
       return buildFieldInsight(payload.fieldAnalytics);
     case 'por-posicao':
       return buildPositionInsight(payload.finalTableAnalytics);
+    case 'reentradas':
+      return buildReentryInsight(payload.reentryAnalytics);
     default:
       return null;
   }

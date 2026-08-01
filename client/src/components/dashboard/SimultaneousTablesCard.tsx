@@ -15,14 +15,24 @@ import { num, formatUsd, formatPct } from "@/lib/dashboard-insights";
  * Esconder isso seria vender precisão que o dado não tem.
  */
 
-const BUCKET_ORDER = ['1', '2-3', '4-6', '7+'] as const;
+// Faixas finas: o multitabler precisa ver ONDE a curva vira. Um balde "7+"
+// escondia a diferenca entre jogar 8 e jogar 16 mesas.
+const BUCKET_ORDER = ['1', '2', '3-4', '5-6', '7-8', '9-10', '11-12', '13-16', '17+'] as const;
 
 const BUCKET_LABEL: Record<string, string> = {
-  '1': '1 mesa',
-  '2-3': '2 a 3',
-  '4-6': '4 a 6',
-  '7+': '7 ou mais',
+  '1': '1',
+  '2': '2',
+  '3-4': '3-4',
+  '5-6': '5-6',
+  '7-8': '7-8',
+  '9-10': '9-10',
+  '11-12': '11-12',
+  '13-16': '13-16',
+  '17+': '17+',
 };
+
+/** Volume minimo para a faixa entrar na comparacao do resumo. */
+const MIN_BUCKET_VOLUME = 10;
 
 interface SimultaneousTablesCardProps {
   data: any;
@@ -39,7 +49,9 @@ function SimultaneousTooltip({ active, payload }: any) {
         <div className={row.profit >= 0 ? 'text-green-400' : 'text-red-400'}>
           Lucro: {formatUsd(row.profit)}
         </div>
+        <div className="text-muted-foreground">Lucro médio: {formatUsd(row.avgProfit)}</div>
         <div className="text-muted-foreground">Torneios: {row.volume}</div>
+        <div className="text-muted-foreground">Terminou no lucro: {row.profitableRate.toFixed(1)}%</div>
         <div className="text-muted-foreground">Investido: {formatUsd(row.invested)}</div>
       </div>
     </div>
@@ -60,23 +72,33 @@ export function SimultaneousTablesCard({ data }: SimultaneousTablesCardProps) {
 
   const rows = BUCKET_ORDER.map((bucket) => {
     const row = byBucket.get(bucket);
+    const volume = num(row?.volume);
     return {
       bucket,
       label: BUCKET_LABEL[bucket] ?? bucket,
-      volume: num(row?.volume),
+      volume,
       profit: num(row?.profit),
       invested: num(row?.invested),
       roi: num(row?.roi),
+      avgProfit: num(row?.avgProfit),
+      profitableRate: volume > 0 ? (num(row?.profitable) / volume) * 100 : 0,
     };
+    // Faixas sem torneio ficam no eixo de proposito: o buraco mostra ate onde
+    // o jogador costuma ir.
   });
 
   const coverage = num(data.coverage);
   const total = num(data.total);
+  const avgActive = num(data.avgActive);
+  const maxActive = num(data.maxActive);
 
   // Comparação direta só entre faixas com volume que sustente.
-  const usable = rows.filter((r) => r.volume >= 10);
+  const usable = rows.filter((r) => r.volume >= MIN_BUCKET_VOLUME);
   const best = usable.length >= 2 ? [...usable].sort((a, b) => b.roi - a.roi)[0] : null;
   const worst = usable.length >= 2 ? [...usable].sort((a, b) => a.roi - b.roi)[0] : null;
+  // Onde ele concentra o volume — o ponto de operacao real, que pode nao ser o
+  // melhor ponto de retorno.
+  const busiest = usable.length > 0 ? [...usable].sort((a, b) => b.volume - a.volume)[0] : null;
 
   return (
     <Card
@@ -93,10 +115,41 @@ export function SimultaneousTablesCard({ data }: SimultaneousTablesCardProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4 space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <div className="text-xs text-gray-400">Média de mesas</div>
+            <div className="text-xl font-bold text-white" data-testid="simultaneous-avg">
+              {avgActive > 0 ? avgActive.toFixed(1) : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400">Pico</div>
+            <div className="text-xl font-bold text-white" data-testid="simultaneous-max">
+              {maxActive > 0 ? maxActive : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400">Onde você mais joga</div>
+            <div className="text-xl font-bold text-white" data-testid="simultaneous-busiest">
+              {busiest ? busiest.label : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400">Melhor retorno</div>
+            <div className="text-xl font-bold text-green-400" data-testid="simultaneous-best">
+              {best ? best.label : '—'}
+            </div>
+          </div>
+        </div>
+
         {best && worst && best.bucket !== worst.bucket && (
           <p className="text-sm text-gray-300" data-testid="simultaneous-summary">
-            Melhor retorno com <strong className="text-white">{best.label}</strong> ({formatPct(best.roi)});
+            Melhor retorno com <strong className="text-white">{best.label}</strong> mesas ({formatPct(best.roi)});
             pior com <strong className="text-white">{worst.label}</strong> ({formatPct(worst.roi)}).
+            {busiest && busiest.bucket !== best.bucket && (
+              <> Mas o seu volume está concentrado em <strong className="text-white">{busiest.label}</strong> ({formatPct(busiest.roi)})
+                — é ali que a decisão de abrir mais ou menos mesa realmente pesa.</>
+            )}
           </p>
         )}
 
@@ -112,7 +165,7 @@ export function SimultaneousTablesCard({ data }: SimultaneousTablesCardProps) {
                   <Cell
                     key={entry.bucket}
                     fill={entry.roi >= 0 ? '#34d399' : '#f87171'}
-                    fillOpacity={entry.volume >= 10 ? 1 : 0.3}
+                    fillOpacity={entry.volume >= MIN_BUCKET_VOLUME ? 1 : 0.3}
                   />
                 ))}
               </Bar>

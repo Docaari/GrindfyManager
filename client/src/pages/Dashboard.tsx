@@ -293,8 +293,9 @@ export default function Dashboard() {
         dayAnalytics,
         fieldAnalytics,
         finalTableAnalytics,
+        reentryAnalytics,
       }),
-    [activeTab, siteAnalytics, buyinAnalytics, categoryAnalytics, speedAnalytics, dayAnalytics, fieldAnalytics, finalTableAnalytics],
+    [activeTab, siteAnalytics, buyinAnalytics, categoryAnalytics, speedAnalytics, dayAnalytics, fieldAnalytics, finalTableAnalytics, reentryAnalytics],
   );
 
   // FP-10: Export state
@@ -354,7 +355,9 @@ export default function Dashboard() {
       'periodo': monthAnalytics,
       'participantes': fieldAnalytics,
       'posicao': finalTableAnalytics,
-      'reentradas': reentryAnalytics,
+      // A aba de reentradas devolve um objeto rico; para exportar interessa a
+      // tabela por faixa.
+      'reentradas': reentryAnalytics?.buckets,
     };
 
     const data = dataMap[tabType];

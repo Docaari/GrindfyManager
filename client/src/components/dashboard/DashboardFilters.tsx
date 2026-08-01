@@ -185,6 +185,32 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
     });
   };
 
+  /**
+   * Tira a opção dos DOIS conjuntos. É o que o "x" da etiqueta deve fazer.
+   *
+   * Existe separado de `toggleOption` de propósito: a etiqueta não pode depender
+   * do modo atual do painel. A primeira versão fazia `setMode(...)` e chamava
+   * `toggleOption` em seguida — mas `setMode` só vale no próximo render, então o
+   * toggle rodava com o modo ANTIGO e o "x" de uma opção excluída acabava
+   * MOVENDO ela para incluída, invertendo o filtro em vez de limpá-lo.
+   */
+  const removeOption = (group: FilterGroupKey, value: string) => {
+    const excludeKey = EXCLUDE_KEY[group];
+    setFilters(prev => {
+      const next: DashboardFiltersState = { ...prev };
+      const dropFrom = (key: keyof DashboardFiltersState) => {
+        const current = prev[key] as string[] | undefined;
+        if (!Array.isArray(current)) return;
+        const kept = current.filter(v => v !== value);
+        if (kept.length > 0) (next as any)[key] = kept;
+        else delete (next as any)[key];
+      };
+      dropFrom(group);
+      dropFrom(excludeKey);
+      return next;
+    });
+  };
+
   const clearGroup = (group: FilterGroupKey) => {
     setFilters(prev => {
       const next = { ...prev };
@@ -229,7 +255,7 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
         key: `${group}-inc-${value}`,
         label: `${GROUP_LABEL[group]}: ${labelForOption(group, value)}`,
         excluded: false,
-        onRemove: () => { setMode('include'); toggleOption(group, value); },
+        onRemove: () => removeOption(group, value),
       });
     });
     ((filters[EXCLUDE_KEY[group]] as string[] | undefined) ?? []).forEach(value => {
@@ -237,7 +263,7 @@ export function DashboardFilters({ filters, setFilters, period, setPeriod, avail
         key: `${group}-exc-${value}`,
         label: `${GROUP_LABEL[group]}: ${labelForOption(group, value)}`,
         excluded: true,
-        onRemove: () => { setMode('exclude'); toggleOption(group, value); },
+        onRemove: () => removeOption(group, value),
       });
     });
   });

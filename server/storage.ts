@@ -5837,14 +5837,25 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
    * inflaria o retorno justamente na faixa em que o jogador mais gasta, que é o
    * oposto do que a aba existe para mostrar.
    */
-  async getAnalyticsByReentry(userId: string, period = "30d", filters: any = {}): Promise<any[]> {
+  async getAnalyticsByReentry(userId: string, period = "30d", filters: any = {}): Promise<any> {
     try {
       const baseConditions = [eq(tournaments.userId, userId)];
       baseConditions.push(...buildPeriodCondition(period, filters));
       const dashboardFilters = buildFilters(filters);
       if (dashboardFilters) baseConditions.push(dashboardFilters);
+      const whereCondition = and(...baseConditions);
 
-      const reentries = sql<number>`COALESCE(${tournaments.reentries}, 0)`;
+      const reentries = sql`COALESCE(${tournaments.reentries}, 0)`;
+      const prize = sql`CAST(${tournaments.prize} AS DECIMAL)`;
+      const buyIn = sql`CAST(${tournaments.buyIn} AS DECIMAL)`;
+      // Custo real da entrada: quem reentrou 2x pagou 3 buy-ins.
+      const investedExpr = sql`${buyIn} * (1 + ${reentries})`;
+      // ITM canonico (ADR-243): gross_prize > 0; prize e lucro LIQUIDO e
+      // min-cash com reentrada termina negativo.
+      const isItm = sql`CASE WHEN ${tournaments.grossPrize} IS NOT NULL
+        THEN CAST(${tournaments.grossPrize} AS DECIMAL) > 0
+        ELSE ${prize} > 0 END`;
+
       const bucketExpr = sql<string>`CASE
         WHEN ${reentries} <= 0 THEN 'sem-reentrada'
         WHEN ${reentries} = 1 THEN '1-reentrada'
@@ -5852,35 +5863,87 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
         ELSE '3-mais'
       END`;
 
-      // Custo real da entrada, incluindo as reentradas pagas.
-      const invested = sql<number>`SUM(CAST(${tournaments.buyIn} AS DECIMAL) * (1 + ${reentries}))`;
+      /** Colunas repetidas em todos os recortes desta aba. */
+      const metrics = {
+        volume: sql<number>`COUNT(*)::int`,
+        reentriesTotal: sql<number>`SUM(${reentries})::int`,
+        profit: sql<number>`COALESCE(SUM(${prize}), 0)`,
+        invested: sql<number>`COALESCE(SUM(${investedExpr}), 0)`,
+        // Quanto saiu do bolso SO em reentrada — o custo que o jogador nao ve.
+        reentryCost: sql<number>`COALESCE(SUM(${buyIn} * ${reentries}), 0)`,
+        roi: sql<number>`CASE WHEN SUM(${investedExpr}) > 0
+          THEN (COALESCE(SUM(${prize}), 0) / SUM(${investedExpr})) * 100 ELSE 0 END`,
+        avgProfit: sql<number>`CASE WHEN COUNT(*) > 0
+          THEN COALESCE(SUM(${prize}), 0) / COUNT(*) ELSE 0 END`,
+        avgBuyin: sql<number>`COALESCE(AVG(${buyIn}), 0)`,
+        avgField: sql<number>`COALESCE(ROUND(AVG(${tournaments.fieldSize})), 0)::int`,
+        itmCount: sql<number>`COUNT(*) FILTER (WHERE ${isItm})::int`,
+        // Quantas vezes a entrada terminou no lucro LIQUIDO — "valeu a pena?"
+        profitableCount: sql<number>`COUNT(*) FILTER (WHERE ${prize} > 0)::int`,
+        maxPrize: sql<number>`COALESCE(MAX(${prize}), 0)`,
+      };
 
-      const result = await db
-        .select({
-          bucket: bucketExpr,
+      const [buckets, bySite, byBuyin, bySpeed, topTournaments, totals] = await Promise.all([
+        db.select({ bucket: bucketExpr, ...metrics })
+          .from(tournaments).where(whereCondition).groupBy(bucketExpr),
+
+        // Onde ele reentra: por site, por faixa de buy-in e por velocidade.
+        // Reentrada concentrada em turbo/hyper e em field pequeno costuma ser
+        // teimosia; em field grande com stack raso costuma ser matematica.
+        db.select({ label: tournaments.site, ...metrics })
+          .from(tournaments).where(whereCondition).groupBy(tournaments.site),
+
+        db.select({
+          label: sql<string>`CASE
+            WHEN ${buyIn} < 7 THEN '$1-6'
+            WHEN ${buyIn} < 16 THEN '$7-15'
+            WHEN ${buyIn} < 30 THEN '$16-29'
+            WHEN ${buyIn} < 50 THEN '$30-49'
+            WHEN ${buyIn} < 131 THEN '$50-130'
+            WHEN ${buyIn} < 351 THEN '$131-350'
+            ELSE '$351+'
+          END`,
+          minBuyin: sql<number>`MIN(${buyIn})`,
+          ...metrics,
+        }).from(tournaments).where(whereCondition)
+          .groupBy(sql`1`).orderBy(sql`MIN(${buyIn})`),
+
+        db.select({ label: tournaments.speed, ...metrics })
+          .from(tournaments).where(whereCondition).groupBy(tournaments.speed),
+
+        // Torneios em que mais reentrou — nome proprio, nao agregado abstrato.
+        db.select({
+          name: tournaments.name,
+          site: tournaments.site,
+          ...metrics,
+        }).from(tournaments)
+          .where(and(whereCondition, gt(tournaments.reentries, 0)))
+          .groupBy(tournaments.name, tournaments.site)
+          .orderBy(desc(sql`SUM(${reentries})`))
+          .limit(15),
+
+        db.select({
           volume: sql<number>`COUNT(*)::int`,
+          withReentry: sql<number>`COUNT(*) FILTER (WHERE ${reentries} > 0)::int`,
           reentriesTotal: sql<number>`SUM(${reentries})::int`,
-          profit: sql<number>`COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0)`,
-          invested,
-          roi: sql<number>`CASE WHEN ${invested} > 0
-            THEN (COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0) / ${invested}) * 100
-            ELSE 0 END`,
-          avgProfit: sql<number>`CASE WHEN COUNT(*) > 0
-            THEN COALESCE(SUM(CAST(${tournaments.prize} AS DECIMAL)), 0) / COUNT(*)
-            ELSE 0 END`,
-          itmCount: sql<number>`COUNT(*) FILTER (WHERE
-            CASE WHEN ${tournaments.grossPrize} IS NOT NULL
-              THEN CAST(${tournaments.grossPrize} AS DECIMAL) > 0
-              ELSE CAST(${tournaments.prize} AS DECIMAL) > 0 END)::int`,
-        })
-        .from(tournaments)
-        .where(and(...baseConditions))
-        .groupBy(bucketExpr);
+          reentryCost: sql<number>`COALESCE(SUM(${buyIn} * ${reentries}), 0)`,
+          invested: sql<number>`COALESCE(SUM(${investedExpr}), 0)`,
+          profit: sql<number>`COALESCE(SUM(${prize}), 0)`,
+        }).from(tournaments).where(whereCondition),
+      ]);
 
-      return result;
+      const total = totals?.[0] ?? null;
+      return {
+        buckets,
+        bySite: bySite.filter((r: any) => Number(r.reentriesTotal) > 0),
+        byBuyin: byBuyin.filter((r: any) => Number(r.volume) > 0),
+        bySpeed: bySpeed.filter((r: any) => Number(r.volume) > 0),
+        topTournaments,
+        totals: total,
+      };
     } catch (error) {
       console.error("getAnalyticsByReentry failed:", error);
-      return [];
+      return { buckets: [], bySite: [], byBuyin: [], bySpeed: [], topTournaments: [], totals: null };
     }
   }
 
@@ -6025,12 +6088,19 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
           SELECT id, active FROM running WHERE id IS NOT NULL
         ),
         joined AS (
-          SELECT src.prize, src.invested,
+          SELECT src.prize, src.invested, at_start.active,
+                 -- Faixas finas: o multitabler precisa enxergar onde a curva
+                 -- vira. "7+" num balde so escondia a diferenca entre 8 e 16.
                  CASE
                    WHEN at_start.active <= 1 THEN '1'
-                   WHEN at_start.active <= 3 THEN '2-3'
-                   WHEN at_start.active <= 6 THEN '4-6'
-                   ELSE '7+'
+                   WHEN at_start.active = 2 THEN '2'
+                   WHEN at_start.active <= 4 THEN '3-4'
+                   WHEN at_start.active <= 6 THEN '5-6'
+                   WHEN at_start.active <= 8 THEN '7-8'
+                   WHEN at_start.active <= 10 THEN '9-10'
+                   WHEN at_start.active <= 12 THEN '11-12'
+                   WHEN at_start.active <= 16 THEN '13-16'
+                   ELSE '17+'
                  END AS bucket
           FROM src JOIN at_start ON at_start.id = src.id
         )
@@ -6038,6 +6108,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
                COUNT(*)::int AS volume,
                COALESCE(SUM(prize), 0) AS profit,
                COALESCE(SUM(invested), 0) AS invested,
+               COALESCE(AVG(active), 0) AS avg_active,
+               MAX(active)::int AS max_active,
+               COALESCE(AVG(prize), 0) AS avg_profit,
+               COUNT(*) FILTER (WHERE prize > 0)::int AS profitable,
                CASE WHEN SUM(invested) > 0
                  THEN (SUM(prize) / SUM(invested)) * 100 ELSE 0 END AS roi
         FROM joined
@@ -6048,17 +6122,28 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       const sample = rows.reduce((acc, r) => acc + Number(r.volume ?? 0), 0);
       const total = Number(totals?.total ?? 0);
 
+      const buckets = rows.map((r) => ({
+        bucket: String(r.bucket),
+        volume: Number(r.volume ?? 0),
+        profit: Number(r.profit ?? 0),
+        invested: Number(r.invested ?? 0),
+        roi: Number(r.roi ?? 0),
+        avgProfit: Number(r.avg_profit ?? 0),
+        profitable: Number(r.profitable ?? 0),
+        avgActive: Number(r.avg_active ?? 0),
+        maxActive: Number(r.max_active ?? 0),
+      }));
+
       return {
-        buckets: rows.map((r) => ({
-          bucket: String(r.bucket),
-          volume: Number(r.volume ?? 0),
-          profit: Number(r.profit ?? 0),
-          invested: Number(r.invested ?? 0),
-          roi: Number(r.roi ?? 0),
-        })),
+        buckets,
         sample,
         total,
         coverage: total > 0 ? (sample / total) * 100 : 0,
+        // Media ponderada por torneio de quantas mesas estavam abertas.
+        avgActive: sample > 0
+          ? buckets.reduce((acc, b) => acc + b.avgActive * b.volume, 0) / sample
+          : 0,
+        maxActive: buckets.reduce((max, b) => Math.max(max, b.maxActive), 0),
         isUpperBound: true,
       };
     } catch (error) {
