@@ -10,7 +10,7 @@
 | **Entrega** | 7 correcoes na Calculadora de Combos |
 | **Migration** | nao |
 | **Feature nova** | nenhuma |
-| **Status** | Nao iniciada |
+| **Status** | **Concluida** 2026-08-16 — 201/201 verdes, `tsc` 0 |
 
 Esforco `Alto` e nao `Extra` porque o diagnostico ja esta feito e cada sintoma
 esta medido. Se aparecer divergencia nao prevista durante a implementacao, subir
@@ -175,6 +175,61 @@ opacidade da celula estoura. O clamp so acontece la no fundo, em
 5. `npx vitest run tests/unit/combo-calc` verde (85 atuais + novos).
 6. `npm run check` limpo.
 
+## O que de fato saiu (2026-08-16)
+
+Os 7 RFs entraram inteiros. Contratos novos que a F1 herda:
+
+| Onde | O que mudou |
+|---|---|
+| `types.ts` | `Verdict.decision: Decision \| null` + `degradedReason: "empty_range" \| null` + `totalWeight` / `wEff` / `lEff` |
+| `evaluateSpot.ts` | `heroEquityAtMultiplier(Spot \| Verdict, k, subset?)` — equity ponderada e sempre `soma(w*eq)/soma(w)`; aceita o `Verdict` pronto para nao reexecutar a enumeracao de runouts a cada tick |
+| `evaluateSpot.ts` | `verdictCalcBasis(verdict)` — `discrete` no river, `effective` fora dele (D10) |
+| `evaluateSpot.ts` | `tryEvaluateSpot(spot)` — `{ verdict, error }`; erro que nao e carta duplicada continua subindo |
+| `combos.ts` | `RANGE_TOKEN_RULES` — tabela ordenada, aberta para a F2 (D9) |
+| `persistence.ts` | `sanitizeSavedSpot` / `hydrateSpot`; `loadSavedSpots` saneia item a item |
+| `uiRules.ts` (novo) | `parseImportedFrequency`, `resolveCardClick`, `describeSpotReadiness` — regras de tela como funcoes puras |
+
+### Divergencia nao prevista, achada durante a F0 — `breakevenFrequency`
+
+O RF-00.5 corrigiu a **base** (massa efetiva em vez do bucket discreto), mas o
+`breakevenFrequency` vem de outro **modelo**, e fora do river os dois nao sao a
+mesma funcao de `k`:
+
+- fechado (`computeEv`): `E(k) = k*wEff / (k*wEff + lEff)`
+- slider (real): `E(k) = (k*wEffVenc + wEffOutros) / (k*Wvenc + Woutros)`
+
+Escalar o peso de um combo vencedor move o numerador **e** o denominador, porque
+esse combo carrega a propria fracao perdedora. No river a equity de cada combo e
+0/0,5/1 e as duas expressoes coincidem exatamente. Fora dele, nao:
+
+| street | break-even mostrado | k real do slider | equity no k mostrado (alpha 52,56%) |
+|---|---|---|---|
+| flop | 0,4185 | **0,1958** | 63,14% |
+| turn | 0,3240 | **0,2294** | 59,38% |
+| river | 0,9234 | 0,9234 | 52,56% (exato) |
+
+**O que a F0 fez:** o valor de `breakevenFrequency` esta fixado pelo teste
+(`f0-combos-basis.test.ts` exige `wNeeded / basis.W` nos tres streets) e o
+implementer nao mexe em teste. Entao a F0 **tirou o numero da tela fora do
+river** e mandou o jogador no slider, que agora e exato — numero ausente vence
+numero errado. No river a frase continua igual.
+
+**O que fica para a F2** (dona das ferramentas de range/frequencia): um solver
+numerico do ponto de virada — bissecao sobre `heroEquityAtMultiplier`, que ja
+recebe o `Verdict` pronto e nao reenumera runout. Oraculo de validacao de graca:
+no river o resultado tem que bater com o `breakevenFrequency` fechado ate `1e-9`
+(medido: 0,9234 nos dois). Ver [F2 RF-02.6](F2-range-builder.md).
+
+Duas observacoes que valem para quem abrir a F1 a frio:
+
+1. **`T9o+` sao 5 mãos, nao 4.** O criterio de aceite 3 ja tinha sido corrigido no
+   texto em 2026-08-04; o test-writer chegou na mesma conclusao por conta propria
+   e travou a regra (`13 - idx(carta alta)`), nao o numero solto.
+2. **Massa zero nao apaga `evCall`.** O `Verdict` continua carregando `evCall` e
+   `equityGap` calculados — um teste do baseline exige `Number.isFinite(evCall)`.
+   O portao e `decision: null` + `degradedReason`, e e ele que a UI le. Quem
+   consumir `evCall` sem olhar `decision` volta a exibir o numero fantasma.
+
 ## Fora de escopo desta frente
 Qualquer feature nova. Sem pagina nova, sem heroi-como-range, sem atalhos, sem
 ICM. F0 so devolve a verdade ao que ja existe.
@@ -199,8 +254,28 @@ Aba `/calculadoras` -> **Combos**.
 4. **Percentual no import.** Cole `AKo:50`. Tem que virar 50%, nao 5000%.
 5. **Nada quebrou.** Salve um spot, recarregue a pagina, abra o spot salvo. Tudo
    volta igual.
+6. **Break-even nao contradiz o slider** (item novo — o reviewer notou que os 5
+   acima passavam mesmo com o defeito). No **river**, arraste o slider ate o
+   percentual que o texto de break-even anuncia: a equity ali tem que encostar no
+   alpha. No **turn e no flop**, o numero fechado nao deve mais aparecer — no
+   lugar dele fica a frase mandando usar o slider. Se um numero de break-even
+   reaparecer fora do river, algo regrediu.
+7. **Frequencia com virgula.** Cole `AKo:0,5`. Tem que entrar como 50%, nao como
+   0% com um aviso solto de "5".
 
 Se qualquer um falhar, nao siga para a F1.
+
+### Pendencias conhecidas ao fechar a F0 (nao bloqueiam a F1)
+- **Sem teste de wiring.** Os 201 testes cobrem as funcoes puras; nao ha nenhum
+  `.test.tsx` para `CombosCalculator`. Os `data-testid` ja estao plantados
+  (`combos-empty-state`, `combos-empty-range`, `combos-duplicate-card`,
+  `combos-import-warnings`, `combos-card-notice`) — falta o test-writer usar.
+  Risco ja conhecido do projeto (`memory/session_2026-04-27-tts-wiring`: unit
+  verde + zero integracao = quebrado em producao). Vai para a F2, que reabre a UI.
+- **`Verdict` degradado carrega numeros mortos.** Ver D8 no indice: e decisao
+  consciente (teste do baseline exige `evCall` finito), nao esquecimento. A F1 e a
+  F4, que levam o `Verdict` para worker/export/Coach, tem que checar
+  `decision != null` antes de ler qualquer numero.
 
 ### Prompt da proxima sessao
 

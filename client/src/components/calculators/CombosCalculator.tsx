@@ -34,21 +34,35 @@ import {
   cardKey,
   rankChar,
   comboKey,
-  evaluateSpot,
+  tryEvaluateSpot,
+  verdictCalcBasis,
   enumerateCombos,
   parseNotation,
   expandRangeToken,
   heroEquityAtMultiplier,
-  DuplicateCardError,
+  describeSpotReadiness,
+  parseImportedFrequency,
+  resolveCardClick,
   RANGE_PRESETS,
   saveDraft,
   loadDraft,
-  deserializeState,
+  hydrateSpot,
   loadSavedSpots,
   persistSavedSpots,
   type SavedSpot,
+  type SpotReadinessReason,
 } from "@/lib/combo-calc";
-import type { Card as PCard, RangeEntry, Spot, Verdict } from "@/lib/combo-calc";
+import type { Card as PCard, RangeEntry, Spot } from "@/lib/combo-calc";
+
+/** Mensagem do portao de "spot pronto" (RF-00.2): a tela diz o que falta. */
+const READINESS_MESSAGE: Record<SpotReadinessReason, string> = {
+  board_incomplete: "Monte o bordo com 3 a 5 cartas.",
+  hero_incomplete: "Escolha as 2 cartas da mao do heroi.",
+  pot_missing: "Informe o pote atual (ja com a aposta do vilao).",
+  call_missing: "Informe o valor do call.",
+  range_empty: "Pinte ao menos uma classe no range do vilao.",
+  range_weightless: "Range sem combos com peso — ajuste as frequencias.",
+};
 
 // Simbolos de naipe via codePoint (hook bloqueia glyph cru no fonte).
 const SUIT_SYM: Record<string, string> = {
@@ -68,6 +82,8 @@ function fmtPct(fraction: number, dec = 1): string {
   return (fraction * 100).toFixed(dec) + "%";
 }
 function fmtChips(v: number, dec = 1): string {
+  // Infinity/NaN chegam a tela como texto ("Infinity") se passarem direto.
+  if (!Number.isFinite(v)) return "—";
   return v.toFixed(dec);
 }
 
@@ -118,6 +134,8 @@ export default function CombosCalculator() {
   const [entries, setEntries] = useState<RangeEntry[]>([]);
   const [defaultFreq, setDefaultFreq] = useState(1);
   const [importText, setImportText] = useState("");
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [cardNotice, setCardNotice] = useState<string | null>(null);
   const [suitPickerFor, setSuitPickerFor] = useState<string | null>(null);
 
   const [potInput, setPotInput] = useState("36.1");
@@ -185,31 +203,38 @@ export default function CombosCalculator() {
   }, [board, hero]);
 
   // ── card picker ──
+  // A decisao do clique mora em resolveCardClick (lib, testavel fora do React).
+  // Antes, clique com o bordo cheio simplesmente nao fazia nada — silencio total.
   function toggleCard(card: PCard) {
     const key = cardKey(card);
-    // ja alocada? remove de onde estiver.
-    if (board.some((c) => cardKey(c) === key)) {
-      setBoard((b) => b.filter((c) => cardKey(c) !== key));
+    const action = resolveCardClick({ card, board, hero, target });
+
+    if (action.type === "reject") {
+      setCardNotice("Bordo e mao completos — remova uma carta antes de trocar.");
       return;
     }
-    if (hero.some((c) => cardKey(c) === key)) {
-      setHero((h) => h.filter((c) => cardKey(c) !== key));
+    setCardNotice(null);
+
+    if (action.type === "remove") {
+      // Remover NAO mexe no alvo — o RF-00.7 so pediu voz para o clique mudo.
+      if (action.from === "board") setBoard((b) => b.filter((c) => cardKey(c) !== key));
+      else setHero((h) => h.filter((c) => cardKey(c) !== key));
       return;
     }
-    if (target === "board") {
-      if (board.length >= 5) return;
-      setBoard((b) => {
-        const next = [...b, card];
-        if (next.length >= 5 && hero.length < 2) setTarget("hero"); // auto-avanca
-        return next;
-      });
+
+    if (action.to === "board") {
+      setBoard((b) => [...b, card]);
+      if (board.length + 1 >= 5 && hero.length < 2) setTarget("hero"); // auto-avanca
     } else {
-      if (hero.length >= 2) return;
-      setHero((h) => {
-        const next = [...h, card];
-        if (next.length >= 2 && board.length < 5) setTarget("board");
-        return next;
-      });
+      setHero((h) => [...h, card]);
+      if (hero.length + 1 >= 2 && board.length < 5) setTarget("board");
+    }
+    if (action.retargeted) {
+      setCardNotice(
+        action.to === "hero"
+          ? "Bordo completo — a carta foi para a mao do heroi."
+          : "Mao completa — a carta foi para o bordo.",
+      );
     }
   }
 
@@ -256,29 +281,69 @@ export default function CombosCalculator() {
     setEntries((prev) => prev.filter((e) => e.notation !== notation));
   }
 
-  // aplica uma string de range (solver: "99+, ATs+:0.5, A5s-A2s, QhJh") nas entries
+  // aplica uma string de range (solver: "99+, ATs+:0.5, A5s-A2s, QhJh") nas entries.
+  // O parse acontece FORA do updater do setEntries: o updater tem que ser puro (o
+  // React o invoca no render seguinte, e duas vezes em StrictMode), entao acumular
+  // avisos la dentro entregaria lista vazia agora e lista duplicada depois.
   function applyRangeString(text: string, replace = false) {
+    // A virgula e separador de token E separador decimal em PT-BR. `AKo:0,5`
+    // quebrava em "AKo:0" (que entrava com peso 0, em silencio) + "5". Normaliza
+    // ANTES de separar, e so a virgula que esta dentro de uma frequencia — assim
+    // "55,66" continua sendo duas classes.
     const tokens = text
+      .replace(/([:=]\s*\d+),(\d)/g, "$1.$2")
       .split(/[\n,;]+/)
       .map((t) => t.trim())
       .filter(Boolean);
+    const warnings: string[] = [];
+    const parsedTokens: { notation: string; kind: RangeEntry["kind"]; frequency: number }[] = [];
+
+    for (const tok of tokens) {
+      // separa "<notacao> : <freq>" — o sufixo "%" e aceito e descartado aqui.
+      // ATENCAO F2 (emenda A11): a tabela de regras do combos.ts ja aceita token
+      // com espaco, mas ESTE fallback exige `^(\S+)$` — entao "top 25%" morre aqui,
+      // antes de chegar ao parser. Quem for plugar "top X%" abre os dois lados.
+      const m = tok.match(/^(.+?)\s*[:=]\s*(\S+?)%?$/) ?? tok.match(/^(\S+)$/);
+      if (!m) {
+        warnings.push(`Token ignorado: ${tok}`);
+        continue;
+      }
+      // Normaliza a frequencia na FRONTEIRA: "AKo:50" e 50%, nao 5000% (RF-00.6).
+      let freq = 1;
+      if (m[2] != null) {
+        const parsedFreq = parseImportedFrequency(m[2]);
+        if (!parsedFreq.ok) {
+          warnings.push(
+            parsedFreq.reason === "out_of_range"
+              ? `Frequencia fora da faixa 0-100 em "${tok}" (${parsedFreq.raw}) — token recusado.`
+              : `Frequencia ilegivel em "${tok}" (${parsedFreq.raw}) — token recusado.`,
+          );
+          continue;
+        }
+        freq = parsedFreq.frequency;
+      }
+      const expanded = expandRangeToken(m[1].trim());
+      if (expanded.length === 0) {
+        warnings.push(`Notacao nao reconhecida: ${m[1].trim()}`);
+        continue;
+      }
+      for (const base of expanded) {
+        const parsed = parseNotation(base);
+        if (!parsed) continue;
+        parsedTokens.push({ notation: base, kind: parsed.kind, frequency: freq });
+      }
+    }
+
     setEntries((prev) => {
       const next = replace ? [] : [...prev];
-      for (const tok of tokens) {
-        // separa "<notacao> : <freq>"
-        const m = tok.match(/^(.+?)\s*[:=]\s*([\d.]+)$/) ?? tok.match(/^(\S+)$/);
-        if (!m) continue;
-        const freq = m[2] != null ? parseNum(m[2]) : 1;
-        for (const base of expandRangeToken(m[1].trim())) {
-          const parsed = parseNotation(base);
-          if (!parsed) continue;
-          const idx = next.findIndex((e) => e.notation === base);
-          if (idx >= 0) next[idx] = { ...next[idx], frequency: freq };
-          else next.push({ notation: base, kind: parsed.kind, frequency: freq });
-        }
+      for (const t of parsedTokens) {
+        const idx = next.findIndex((e) => e.notation === t.notation);
+        if (idx >= 0) next[idx] = { ...next[idx], frequency: t.frequency };
+        else next.push(t);
       }
       return next;
     });
+    setImportWarnings(warnings);
   }
   function doImport() {
     applyRangeString(importText);
@@ -307,15 +372,16 @@ export default function CombosCalculator() {
     setSpotName("");
   }
   function loadSpot(s: SavedSpot) {
-    const r = deserializeState(s);
+    // hydrateSpot devolve os campos SANEADOS — os crus de `s` nao entram no estado.
+    const r = hydrateSpot(s);
     if (!r) return;
-    setBoard(r.board ?? []);
-    setHero(r.hero ?? []);
-    setEntries(r.entries ?? []);
-    setPotInput(s.potInput);
-    setCallInput(s.callInput);
-    setBbInput(s.bbInput);
-    setTarget((r.board?.length ?? 0) >= 5 ? "hero" : "board");
+    setBoard(r.board);
+    setHero(r.hero);
+    setEntries(r.entries);
+    setPotInput(r.potInput);
+    setCallInput(r.callInput);
+    setBbInput(r.bbInput);
+    setTarget(r.board.length >= 5 ? "hero" : "board");
   }
   function deleteSpot(id: string) {
     const next = savedSpots.filter((s) => s.id !== id);
@@ -328,10 +394,15 @@ export default function CombosCalculator() {
   const callAmount = parseNum(callInput);
   const bb = parseNum(bbInput);
 
+  // Portao de "spot pronto": range inteiro em frequencia 0 nao passa mais
+  // (antes virava FOLD -EV com 0.0% de equity — RF-00.2).
+  const readiness = useMemo(
+    () => describeSpotReadiness({ board, hero, entries, potCurrent, callAmount }),
+    [board, hero, entries, potCurrent, callAmount],
+  );
+
   const spot: Spot | null = useMemo(() => {
-    if (board.length < 3 || hero.length !== 2 || entries.length === 0) return null;
-    // call/pote ausentes -> spot incompleto (evita alpha=0 -> "CALL +EV" falso)
-    if (callAmount <= 0 || potCurrent <= 0) return null;
+    if (!readiness.ready) return null;
     return {
       board,
       hero: [hero[0], hero[1]],
@@ -339,22 +410,32 @@ export default function CombosCalculator() {
       potCurrent,
       callAmount,
     };
-  }, [board, hero, entries, potCurrent, callAmount]);
+  }, [readiness, board, hero, entries, potCurrent, callAmount]);
 
-  const verdict: Verdict | null = useMemo(() => {
-    if (!spot) return null;
-    try {
-      return evaluateSpot(spot);
-    } catch (e) {
-      if (e instanceof DuplicateCardError) return null;
-      throw e;
-    }
+  const evaluation = useMemo(() => {
+    if (!spot) return { verdict: null, error: null };
+    return tryEvaluateSpot(spot);
   }, [spot]);
 
+  const verdict = evaluation.verdict;
+  // Card removal pode matar o range inteiro mesmo com frequencias > 0.
+  const rangeIsEmpty = verdict?.degradedReason === "empty_range";
+  // A guarda e `decision != null`, NAO `!rangeIsEmpty`: `degradedReason` e uma
+  // uniao feita para crescer (a F1 traz Monte Carlo e card removal mutuo). Se a
+  // guarda olhasse so a razao de hoje, a razao de amanha renderizaria o banner
+  // vermelho escrito "BREAK-EVEN" com 0,0% — o bug que esta frente veio matar.
+  const showVerdict = verdict != null && verdict.decision != null;
+  const basis = useMemo(
+    () => (showVerdict && verdict ? verdictCalcBasis(verdict) : null),
+    [showVerdict, verdict],
+  );
+
+  // Reusa o Verdict ja calculado: sem isto cada tick do slider reexecutava a
+  // enumeracao de runouts do turn/flop inteira.
   const sliderEquity = useMemo(() => {
-    if (!spot) return null;
-    return heroEquityAtMultiplier(spot, k);
-  }, [spot, k]);
+    if (!showVerdict || !verdict) return null;
+    return heroEquityAtMultiplier(verdict, k);
+  }, [showVerdict, verdict, k]);
 
   // combos concretos disponiveis de uma entry (card removal aplicado)
   function availableCombos(notation: string): PCard[][] {
@@ -429,8 +510,33 @@ export default function CombosCalculator() {
           </div>
         )}
 
+        {/* Estados que antes eram mudos: carta duplicada, range sem peso, o que falta */}
+        {evaluation.error?.kind === "duplicate_card" && (
+          <div
+            data-testid="combos-duplicate-card"
+            className="flex items-center gap-2 rounded-lg border border-red-800/50 bg-red-950/30 px-3 py-2 text-xs text-red-300"
+          >
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            A carta <span className="font-mono font-bold">{evaluation.error.card}</span> aparece
+            duas vezes entre o bordo e a mao do heroi. Remova a repetida.
+          </div>
+        )}
+
+        {cardNotice && (
+          <div
+            data-testid="combos-card-notice"
+            className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800/40 px-3 py-2 text-xs text-gray-300"
+          >
+            <Info className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex-1">{cardNotice}</span>
+            <button onClick={() => setCardNotice(null)} className="text-gray-500 hover:text-gray-200" title="Dispensar">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Sticky verdict summary */}
-        {verdict && (
+        {showVerdict && verdict && (
           <div className="sticky top-0 z-20 -mx-1">
             <div className={`flex items-center justify-center gap-3 rounded-lg px-3 py-1.5 text-sm font-semibold shadow-lg ${
               verdict.decision === "call"
@@ -606,6 +712,31 @@ export default function CombosCalculator() {
                   Substituir range
                 </Button>
               </div>
+              {importWarnings.length > 0 && (
+                <div
+                  data-testid="combos-import-warnings"
+                  className="rounded-lg border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-300"
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 space-y-0.5">
+                      {/* key por indice: dois tokens ruins iguais colidiriam por texto. */}
+                      {importWarnings.map((w, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                          <span>{w}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setImportWarnings([])}
+                      className="text-amber-500/70 hover:text-amber-200"
+                      title="Dispensar"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* active entries list */}
@@ -753,7 +884,7 @@ export default function CombosCalculator() {
         </Card>
 
         {/* ── RESULTS ── */}
-        {verdict && spot && (
+        {showVerdict && verdict && spot && (
           <>
             <div className="pt-1">
               <div className="flex items-center gap-2 mb-3">
@@ -772,7 +903,8 @@ export default function CombosCalculator() {
 
             {verdict.street !== "river" && (
               <div className="text-[10px] text-gray-500 text-center">
-                Bordo de {verdict.street} — equity por enumeracao de runouts (nao showdown fixo).
+                Bordo de {verdict.street} — equity por enumeracao de runouts; ganha/perde/chop
+                e a categoria dominante do combo, nao o resultado final.
               </div>
             )}
 
@@ -803,8 +935,15 @@ export default function CombosCalculator() {
             {/* Combo counts */}
             <Card className="bg-gray-900 border-gray-800 text-gray-200">
               <CardContent className="p-4">
-                <Label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                <Label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center">
                   Contagem de Combos (ponderada)
+                  <InfoTip
+                    text={
+                      verdict.street === "river"
+                        ? "Combos ponderados por categoria. No river a categoria e o resultado final, entao esta contagem tambem e a base do calculo."
+                        : "Contagem por categoria dominante. Fora do river ela NAO e a base do calculo — o veredito roda sobre a massa efetiva, mostrada no bloco 'Quanto Falta'."
+                    }
+                  />
                 </Label>
                 <div className="grid grid-cols-4 gap-2 mt-2 text-center">
                   <div>
@@ -828,12 +967,18 @@ export default function CombosCalculator() {
             </Card>
 
             {/* Quanto falta */}
-            {verdict.decision !== "call" && (
+            {verdict.decision !== "call" && basis && (
               <Card className="bg-gray-900 border-gray-800 text-gray-200">
                 <CardContent className="p-4 space-y-2">
                   <Label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Quanto Falta
                   </Label>
+                  {basis.basis === "effective" && (
+                    <p className="text-[10px] text-gray-500">
+                      Base: massa efetiva do range (soma de peso x equity) — a mesma do
+                      veredito. A contagem por categoria acima e outra base.
+                    </p>
+                  )}
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-400 flex items-center">Gap de equity<InfoTip text="alpha - E. Pontos percentuais que faltam." /></span>
                     <span className="font-mono text-red-400">{fmtPct(verdict.equityGap, 2)}</span>
@@ -843,8 +988,11 @@ export default function CombosCalculator() {
                     <span className="font-mono text-red-400">{fmtChips(verdict.evDeficit)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-400 flex items-center">Combos vencedores necessarios<InfoTip text="W* = [alpha*L + C*(alpha-0.5)]/(1-alpha). Quantos combos de vitoria voce precisaria." /></span>
-                    <span className="font-mono text-gray-200">{fmtChips(verdict.winningCombosNeeded)} (tem {fmtChips(verdict.W)})</span>
+                    <span className="text-gray-400 flex items-center">
+                      {basis.basis === "effective" ? "Massa vencedora necessaria" : "Combos vencedores necessarios"}
+                      <InfoTip text="W* = [alpha*L + C*(alpha-0.5)]/(1-alpha), na base declarada acima. Quanta massa de vitoria voce precisaria." />
+                    </span>
+                    <span className="font-mono text-gray-200">{fmtChips(verdict.winningCombosNeeded)} (tem {fmtChips(basis.W)})</span>
                   </div>
                 </CardContent>
               </Card>
@@ -871,9 +1019,31 @@ export default function CombosCalculator() {
                     </span>
                   </div>
                 )}
-                {verdict.breakevenFrequency != null && (
-                  <div className="text-xs text-center text-amber-400">
-                    Break-even: vilao precisa estar blefando ~<span className="font-mono font-bold">{fmtPct(verdict.breakevenFrequency, 0)}</span> da frequencia atual para o call ficar marginal.
+                {/*
+                  O valor fechado de breakevenFrequency (W-estrela sobre W) supoe que escalar um
+                  combo vencedor move so a massa vencedora. Isso e verdade no river
+                  (equity 0/0.5/1); no turn/flop o combo vencedor carrega a propria
+                  fracao perdedora junto, e o numero erra feio — medido no flop:
+                  0,42 anunciado contra 0,20 real, 63% de equity onde alpha e 53%.
+                  Numero errado perde para numero ausente: fora do river a tela
+                  manda o jogador no slider, que agora e exato. Solver numerico do
+                  ponto de virada foi passado para a F2 (ver F0-verdade.md).
+                */}
+                {verdict.breakevenFrequency != null && verdict.street === "river" ? (
+                  verdict.breakevenFrequency > 1.5 ? (
+                    <div className="text-[10px] text-center text-gray-500">
+                      Ponto de virada acima de 150% — fora da faixa que o slider demonstra.
+                    </div>
+                  ) : (
+                    <div className="text-xs text-center text-amber-400">
+                      Break-even: vilao precisa estar blefando ~<span className="font-mono font-bold">{fmtPct(verdict.breakevenFrequency, 0)}</span> da frequencia atual para o call ficar marginal.
+                    </div>
+                  )
+                ) : (
+                  <div className="text-[10px] text-center text-gray-500">
+                    Ponto de virada: arraste o slider ate a equity encostar em{" "}
+                    {fmtPct(verdict.requiredEquity, 2)}. O valor fechado de break-even so e
+                    exato no river — fora dele nao mostramos numero.
                   </div>
                 )}
               </CardContent>
@@ -923,10 +1093,27 @@ export default function CombosCalculator() {
           </>
         )}
 
-        {!verdict && (
-          <p className="text-xs text-gray-500 text-center py-4">
-            Monte o bordo (3+ cartas), a mao do heroi (2 cartas) e o range do vilao para ver o veredito.
-          </p>
+        {!showVerdict && !evaluation.error && (
+          <div
+            data-testid={rangeIsEmpty ? "combos-empty-range" : "combos-empty-state"}
+            className="text-center py-4 space-y-1"
+          >
+            <p className="text-xs text-gray-400">
+              {rangeIsEmpty
+                ? "Range sem combos com peso — ajuste as frequencias."
+                : readiness.reason
+                  ? READINESS_MESSAGE[readiness.reason]
+                  : "Monte o spot para ver o veredito."}
+            </p>
+            {rangeIsEmpty && verdict!.emptyEntries.length > 0 && (
+              <p className="text-[10px] text-amber-400">
+                Card removal zerou estas classes: {verdict!.emptyEntries.join(", ")}
+              </p>
+            )}
+            <p className="text-[10px] text-gray-600">
+              Bordo (3 a 5 cartas), mao do heroi (2 cartas), range do vilao com peso, pote e call.
+            </p>
+          </div>
         )}
 
         {/* How it works */}

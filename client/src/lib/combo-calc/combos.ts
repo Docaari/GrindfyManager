@@ -155,65 +155,135 @@ function rCh(idx: number): string {
   return RANK_STR[idx];
 }
 
+const R = "[2-9TJQKA]"; // um rank; NAO inclui X (o coringa dos atalhos AXs / XX)
+
+/**
+ * Uma regra do parser de range. A gramatica alvo (emenda A11 da F5) e maior do
+ * que a F0 precisa — `55-TT`, `T9s-54s`, `AsKh` e `top X%` chegam na F2. Manter
+ * as regras como uma lista ordenada e o que deixa a porta aberta: a F2 acrescenta
+ * entradas aqui em vez de reabrir uma cadeia de `if` fechada em volta do `+`.
+ *
+ * `expand` devolve `null` para dizer "casei o formato mas este token nao e meu" —
+ * o parser segue para a proxima regra. E o que permite `T9s-54s` (F2) entrar
+ * ANTES de `A5s-A2s` sem que a regra de baixo precise saber da de cima.
+ */
+interface RangeTokenRule {
+  id: string;
+  pattern: RegExp;
+  expand: (m: RegExpMatchArray) => string[] | null;
+}
+
+/** Sobe pares de `start` ate AA. */
+function pairsFrom(start: number): string[] {
+  const out: string[] = [];
+  for (let i = start; i <= 12; i++) out.push(rCh(i) + rCh(i));
+  return out;
+}
+
+const RANGE_TOKEN_RULES: RangeTokenRule[] = [
+  {
+    // "XX" — todos os pares.
+    id: "all-pairs",
+    pattern: /^XX$/i,
+    expand: () => pairsFrom(0),
+  },
+  {
+    // "99+" — pares subindo ate AA.
+    id: "pairs-plus",
+    pattern: new RegExp(`^(${R})\\1\\+$`, "i"),
+    expand: (m) => pairsFrom(rIdx(m[1])),
+  },
+  {
+    // "55-22" — intervalo de pares.
+    id: "pairs-range",
+    pattern: new RegExp(`^(${R})(${R})-(${R})(${R})$`, "i"),
+    expand: (m) => {
+      if (m[1].toUpperCase() !== m[2].toUpperCase()) return null;
+      if (m[3].toUpperCase() !== m[4].toUpperCase()) return null;
+      const lo = Math.min(rIdx(m[1]), rIdx(m[3]));
+      const hi = Math.max(rIdx(m[1]), rIdx(m[3]));
+      const out: string[] = [];
+      for (let i = lo; i <= hi; i++) out.push(rCh(i) + rCh(i));
+      return out;
+    },
+  },
+  {
+    // "AXs" / "KXo" — carta alta fixa, qualquer kicker abaixo dela.
+    id: "any-kicker",
+    pattern: new RegExp(`^(${R})X([so])$`, "i"),
+    expand: (m) => {
+      const high = rIdx(m[1]);
+      if (high <= 0) return null; // 2Xs nao tem kicker abaixo
+      const suit = m[2].toLowerCase();
+      const out: string[] = [];
+      for (let k = 0; k < high; k++) out.push(rCh(high) + rCh(k) + suit);
+      return out;
+    },
+  },
+  {
+    // "ATs+" (gap > 1: carta alta fixa, kicker sobe) e
+    // "98s+" (conector: sobe AS DUAS cartas preservando o gap — RF-00.3).
+    id: "suited-offsuit-plus",
+    pattern: new RegExp(`^(${R})(${R})([so])\\+$`, "i"),
+    expand: (m) => {
+      const a = rIdx(m[1]);
+      const b = rIdx(m[2]);
+      if (a === b) return null; // "AAs+" nao existe
+      const hi = Math.max(a, b);
+      const kick = Math.min(a, b);
+      const suit = m[3].toLowerCase();
+      const out: string[] = [];
+      if (hi - kick === 1) {
+        // Convencao PokerStove/Equilab: 98s+ = 98s, T9s, JTs, QJs, KQs, AKs.
+        // Antes o laco `k < hi` produzia um unico elemento e o range colado de um
+        // solver perdia mãos em silencio.
+        for (let i = hi; i <= 12; i++) out.push(rCh(i) + rCh(i - 1) + suit);
+      } else {
+        for (let k = kick; k < hi; k++) out.push(rCh(hi) + rCh(k) + suit);
+      }
+      return out;
+    },
+  },
+  {
+    // "A5s-A2s" — intervalo de kicker sob a mesma carta alta.
+    id: "kicker-range",
+    pattern: new RegExp(`^(${R})(${R})([so])-(${R})(${R})([so])$`, "i"),
+    expand: (m) => {
+      if (m[1].toUpperCase() !== m[4].toUpperCase()) return null;
+      if (m[3].toLowerCase() !== m[6].toLowerCase()) return null;
+      const high = rIdx(m[1]);
+      const lo = Math.min(rIdx(m[2]), rIdx(m[5]));
+      const hiK = Math.max(rIdx(m[2]), rIdx(m[5]));
+      const suit = m[3].toLowerCase();
+      const out: string[] = [];
+      for (let k = lo; k <= hiK && k < high; k++) out.push(rCh(high) + rCh(k) + suit);
+      return out;
+    },
+  },
+];
+
 /**
  * Expande UM token de range para notacoes base. Suporta:
- *  - pares: "99", "99+" (ate AA), "55-22" (intervalo)
- *  - suited/offsuit: "AKs", "ATs+" (kicker sobe), "A5s-A2s" (intervalo de kicker)
+ *  - pares: "99", "99+" (ate AA), "55-22" (intervalo), "XX" (todos)
+ *  - suited/offsuit: "AKs", "ATs+" (kicker sobe), "98s+" (conector sobe o gap),
+ *    "A5s-A2s" (intervalo de kicker), "AXs"/"KXo" (qualquer kicker)
  *  - specific: "QhJh", "K7hh"
- * Retorna [] se invalido.
+ * Retorna [] se invalido. Saida sempre ascendente por forca.
  */
 export function expandRangeToken(token: string): string[] {
   const t = token.trim();
   if (!t) return [];
-  const R = "[2-9TJQKA]";
 
-  // pares "99+"
-  let m = t.match(new RegExp(`^(${R})\\1\\+$`, "i"));
-  if (m) {
-    const start = rIdx(m[1]);
-    const out: string[] = [];
-    for (let i = start; i <= 12; i++) out.push(rCh(i) + rCh(i));
-    return out;
+  for (const rule of RANGE_TOKEN_RULES) {
+    const m = t.match(rule.pattern);
+    if (!m) continue;
+    const out = rule.expand(m);
+    // `[]` e truthy: comparar com null explicitamente, senao uma regra que casa o
+    // formato e produz zero notacoes encerra a cadeia dizendo "sou eu" (o contrato
+    // acima diz que so `null` cede a vez).
+    if (out !== null) return out;
   }
-  // pares "55-22"
-  m = t.match(new RegExp(`^(${R})(${R})-(${R})(${R})$`, "i"));
-  if (m && m[1].toUpperCase() === m[2].toUpperCase() && m[3].toUpperCase() === m[4].toUpperCase()) {
-    const lo = Math.min(rIdx(m[1]), rIdx(m[3]));
-    const hi = Math.max(rIdx(m[1]), rIdx(m[3]));
-    const out: string[] = [];
-    for (let i = lo; i <= hi; i++) out.push(rCh(i) + rCh(i));
-    return out;
-  }
-  // suited/offsuit "ATs+"
-  m = t.match(new RegExp(`^(${R})(${R})([so])\\+$`, "i"));
-  if (m) {
-    const a = rIdx(m[1]);
-    const b = rIdx(m[2]);
-    if (a === b) return [];
-    const hi = Math.max(a, b);
-    const kick = Math.min(a, b);
-    const suit = m[3].toLowerCase();
-    const out: string[] = [];
-    for (let k = kick; k < hi; k++) out.push(rCh(hi) + rCh(k) + suit);
-    return out;
-  }
-  // suited/offsuit intervalo "A5s-A2s"
-  m = t.match(new RegExp(`^(${R})(${R})([so])-(${R})(${R})([so])$`, "i"));
-  if (
-    m &&
-    m[1].toUpperCase() === m[4].toUpperCase() &&
-    m[3].toLowerCase() === m[6].toLowerCase()
-  ) {
-    const high = rIdx(m[1]);
-    const k1 = rIdx(m[2]);
-    const k2 = rIdx(m[5]);
-    const lo = Math.min(k1, k2);
-    const hiK = Math.max(k1, k2);
-    const suit = m[3].toLowerCase();
-    const out: string[] = [];
-    for (let k = lo; k <= hiK && k < high; k++) out.push(rCh(high) + rCh(k) + suit);
-    return out;
-  }
+
   // passa direto se for notacao valida
   return parseNotation(t) ? [t] : [];
 }

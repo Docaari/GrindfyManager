@@ -48,15 +48,27 @@ export interface ComboResult {
 
 export type Decision = "call" | "fold" | "breakeven";
 
+/** Razao nomeada pela qual o veredito nao tem decisao (00-produto.md: numero errado perde para ausente). */
+export type VerdictDegradedReason = "empty_range";
+
 export interface Verdict {
   heroEquity: number; // E ponderada (0..1)
   requiredEquity: number; // alpha (0..1)
   evCall: number; // fichas, relativo a foldar
-  decision: Decision;
-  W: number; // combos ponderados que o heroi ganha
-  L: number; // combos ponderados que o heroi perde
-  C: number; // combos ponderados de chop
+  /** null quando a massa do range e zero — a UI mostra empty state, nao FOLD. */
+  decision: Decision | null;
+  /** Preenchido junto com `decision: null`; null quando o veredito e legitimo. */
+  degradedReason: VerdictDegradedReason | null;
+  W: number; // combos ponderados que o heroi ganha (bucket discreto — contagem)
+  L: number; // combos ponderados que o heroi perde (bucket discreto — contagem)
+  C: number; // combos ponderados de chop (bucket discreto — contagem)
   totalCombos: number;
+  /** Massa total ponderada do range (soma dos pesos dos combos vivos). */
+  totalWeight: number;
+  /** Massa efetiva de vitoria: soma(w * equity). Base do calculo fora do river. */
+  wEff: number;
+  /** Massa efetiva de derrota: soma(w * (1 - equity)). */
+  lEff: number;
   equityGap: number; // pp em fracao: max(0, alpha - E)
   evDeficit: number; // EV se negativo, senao 0
   winningCombosNeeded: number; // W* break-even

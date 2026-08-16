@@ -10,9 +10,9 @@ Este indice e o unico lugar onde o estado global vive.
 
 | Frente | Entrega | Modelo | Depende de | Status |
 |---|---|---|---|---|
-| [F0 Verdade](F0-verdade.md) | 7 correcoes, incl. 2 que mentem numero na tela | Opus 5 — Alto | — | Nao iniciada |
+| [F0 Verdade](F0-verdade.md) | 7 correcoes, incl. 2 que mentem numero na tela | Opus 5 — Alto | — | **Concluida** 2026-08-16 — commit `PENDENTE` |
 | [F1 Motor](F1-motor.md) | Avaliador rapido, worker, exato/MC, heroi-como-range, `/range-lab` | Opus 5 — Extra | F0 | Nao iniciada |
-| [F2 Range builder](F2-range-builder.md) | Atalhos, naipes em grade, freq por combo, top X%, undo | Sonnet 5 — Alto | F0 | Nao iniciada |
+| [F2 Range builder](F2-range-builder.md) | Atalhos, naipes em grade, freq por combo, top X%, undo, **+ RF-02.6 (ponto de virada, herdado da F0)** | Sonnet 5 — Alto | F0 | Nao iniciada |
 | [F3 Leitura](F3-leitura.md) | Categorias, cascata, bloqueadores, MDF, runout, distribuicao, filtros | Opus 5 — Extra | F1 | Nao iniciada |
 | [F4 Contexto](F4-contexto.md) | Risk premium, servidor (migration 0101), Estudos/MDA, Coach, export | Opus 5 — Alto | F1 | Nao iniciada |
 | [F5a Graficos](F5-mindriver.md) | Curva dupla de equity, fluxo rua a rua, hotness, heatmap 13x13 + chips | Opus 5 — Extra | F1 | Nao iniciada |
@@ -46,6 +46,10 @@ isso direto.
 | D5 | Precisao | Exato e o padrao. Monte Carlo e opt-in e **sempre** mostra intervalo de confianca. Numero aproximado nunca se disfarca de exato |
 | D6 | Aprendizados do MindRiver (2026-08-16) | Quebrar em **F5a** (graficos, Extra) e **F5b** (ferramentas, Alto); consolidar RF-03.5 e RF-03.6 na F5a; espalhar as 20 emendas nas frentes ja escritas |
 | D7 | Multiway | Segue fora. Por isso a pizza "Groups" e a faixa de 2-6 ranges do MindRiver **nao** entram; aproveitamos so o cartao de range com selo de equity ao vivo, para dois ranges |
+| D8 (2026-08-16, F0) | Massa zero no `Verdict` | `Verdict.decision` passou a ser `Decision \| null` e ganhou `degradedReason: "empty_range" \| null`. **Nao** se criou um tipo separado de veredito: quem consome ja tinha que tratar o caso, so nao tinha como saber. `evCall`/`equityGap` continuam calculados no objeto (o teste legado exige `Number.isFinite`), mas `decision: null` e o portao — nenhuma tela mostra numero de massa zero |
+| D9 (2026-08-16, F0) | Forma do parser de range | `expandRangeToken` virou **tabela ordenada de regras** (`RANGE_TOKEN_RULES`), nao cadeia de `if`. `expand` devolvendo `null` significa "casei o formato mas nao sou eu", e o parser segue para a proxima regra. E assim que a F2 pluga `55-TT`, `T9s-54s`, `AsKh` e `top X%` sem reabrir a gramatica (emenda A11) |
+| D11 (2026-08-16, F0) | Break-even fora do river | O `breakevenFrequency` fechado (`W*/W`) so descreve o slider **no river** — medido: 0,42 anunciado contra 0,20 real no flop. O valor esta fixado por teste e nao foi tocado; a F0 **tirou o numero da tela fora do river** e deixou o slider (agora exato) como ferramenta. O solver numerico virou **RF-02.6 da F2**, com o river servindo de oraculo |
+| D10 (2026-08-16, F0) | Base de calculo declarada | `verdictCalcBasis(verdict)` e a fonte unica de qual base alimenta o numero — `discrete` no river, `effective` (massa `wEff`/`lEff`) fora dele. A UI passou a ler dai; a contagem por categoria continua na tela, rotulada como contagem |
 
 ## Nao objetivos
 - Solver (nao resolve arvore de jogo).
@@ -66,12 +70,13 @@ um combo do vilao que dividem carta nao se enfrentam. A ponderacao honesta e por
 par valido `(combo_heroi, combo_vilao)`, nao produto de pesos. Implementado como
 produto simples, o numero sai errado de um jeito que nao parece errado.
 
-## Estado do codigo hoje (baseline 2026-08-04)
-- Nucleo: [`client/src/lib/combo-calc/`](../../../client/src/lib/combo-calc/) — 10 arquivos, ~1020 linhas.
-- UI: [`CombosCalculator.tsx`](../../../client/src/components/calculators/CombosCalculator.tsx) — 955 linhas, monolito.
+## Estado do codigo hoje (pos-F0, 2026-08-16)
+- Nucleo: [`client/src/lib/combo-calc/`](../../../client/src/lib/combo-calc/) — 11 arquivos (`uiRules.ts` novo: regras de tela como funcoes puras).
+- UI: [`CombosCalculator.tsx`](../../../client/src/components/calculators/CombosCalculator.tsx) — ~1030 linhas, ainda monolito (a quebra e da F1).
 - ICM ja existe e esta desligado da calculadora: [`RPCalculator.tsx`](../../../client/src/components/calculators/RPCalculator.tsx) (`computeRPMatrix`, Malmuth-Harville).
-- Testes: `tests/unit/combo-calc/` — 6 arquivos, 85 testes, verdes.
-- Sprint original: commit `2aed9b1d`.
+- Testes: `tests/unit/combo-calc/` — 15 arquivos, **201 testes verdes** (85 do baseline + 116 da F0).
+- Contratos que a F1 herda: `Verdict.decision` e `Decision | null`; `verdictCalcBasis` diz a base; `tryEvaluateSpot` devolve erro nomeado; `heroEquityAtMultiplier` aceita `Spot | Verdict`.
+- Sprint original: commit `2aed9b1d`. F0: ver a linha da frente no placar.
 - Ultima migration existente: `0100_manual_session_result.sql`. Proxima livre: **0101**.
 
 ## Referencias externas do benchmark

@@ -74,6 +74,26 @@ export function expandRange(
   return { combos, emptyEntries };
 }
 
+/**
+ * Base de calculo declarada de um veredito (RF-00.5). Fora do river o veredito
+ * roda sobre a massa efetiva (soma de `w * equity`), nao sobre o bucket discreto:
+ * a UI precisa exibir os tres numeros — W, W* e break-even — da MESMA base.
+ */
+export interface VerdictCalcBasis {
+  basis: "discrete" | "effective";
+  W: number;
+  L: number;
+  C: number;
+}
+
+export function verdictCalcBasis(verdict: Verdict): VerdictCalcBasis {
+  if (verdict.street === "river") {
+    return { basis: "discrete", W: verdict.W, L: verdict.L, C: verdict.C };
+  }
+  // Turn/flop: chop nao existe como bucket — o meio-ponto ja esta dentro de wEff.
+  return { basis: "effective", W: verdict.wEff, L: verdict.lEff, C: 0 };
+}
+
 /** Pipeline completo: range -> equity por combo -> W/L/C -> veredito. */
 export function evaluateSpot(spot: Spot): Verdict {
   const dead = deadCards(spot.board, spot.hero);
@@ -87,9 +107,11 @@ export function evaluateSpot(spot: Spot): Verdict {
   // Massas efetivas (para EV em qualquer street): chops contam meia vitoria.
   let wEff = 0;
   let lEff = 0;
+  let totalWeight = 0;
   const perCombo: ComboResult[] = [];
 
   for (const { combo, weight } of combos) {
+    totalWeight += weight;
     const eq = comboEquityCached(spot.hero, combo, spot.board);
     wEff += weight * eq;
     lEff += weight * (1 - eq);
@@ -111,15 +133,23 @@ export function evaluateSpot(spot: Spot): Verdict {
       : { W: wEff, L: lEff, C: 0, potCurrent: spot.potCurrent, callAmount: spot.callAmount },
   );
 
+  // Massa ponderada zero: o range nao diz nada sobre o spot. Devolver "fold" com
+  // equity 0 seria um numero errado com cara de certo (RF-00.2).
+  const hasMass = totalWeight > 0;
+
   return {
     heroEquity: ev.heroEquity,
     requiredEquity: ev.requiredEquity,
     evCall: ev.evCall,
-    decision: ev.decision,
+    decision: hasMass ? ev.decision : null,
+    degradedReason: hasMass ? null : "empty_range",
     W,
     L,
     C,
     totalCombos: W + L + C,
+    totalWeight,
+    wEff,
+    lEff,
     equityGap: ev.equityGap,
     evDeficit: ev.evDeficit,
     winningCombosNeeded: ev.winningCombosNeeded,
@@ -130,28 +160,58 @@ export function evaluateSpot(spot: Spot): Verdict {
   };
 }
 
+function isVerdict(source: Spot | Verdict): source is Verdict {
+  return Array.isArray((source as Verdict).perCombo);
+}
+
 /**
  * Sensibilidade: recalcula a equity do heroi aplicando um multiplicador global
  * `k` (0..~) sobre a frequencia dos combos que casam com `subset`. Usado pelo
  * slider pedagogico (A9). Por padrao escala os combos que o heroi GANHA
  * (blefes/maos piores do vilao).
+ *
+ * A equity ponderada e SEMPRE `soma(w * eq) / soma(w)`, em qualquer street — a
+ * versao anterior somava `w*eq` so no bucket `win` e `w*(1-eq)` so no `lose`,
+ * perdendo a fracao cruzada e inflando o numero em turn/flop (RF-00.1). Com
+ * `k = 1` o resultado e identico a `evaluateSpot(spot).heroEquity`.
+ *
+ * Aceita o `Verdict` ja calculado para nao reexecutar o pipeline (enumeracao de
+ * runouts) a cada tick do slider.
  */
 export function heroEquityAtMultiplier(
-  spot: Spot,
+  source: Spot | Verdict,
   k: number,
   subset: (r: ComboResult) => boolean = (r) => r.outcome === "win",
 ): number {
-  const verdict = evaluateSpot(spot);
-  let W = 0;
-  let L = 0;
-  let C = 0;
-  for (const r of verdict.perCombo) {
-    const scale = subset(r) ? Math.max(0, k) : 1;
-    const w = r.weight * scale;
-    if (r.outcome === "win") W += w * r.equity;
-    else if (r.outcome === "lose") L += w * (1 - r.equity);
-    else C += w;
+  const perCombo = isVerdict(source) ? source.perCombo : evaluateSpot(source).perCombo;
+  let num = 0;
+  let den = 0;
+  for (const r of perCombo) {
+    const w = r.weight * (subset(r) ? Math.max(0, k) : 1);
+    num += w * r.equity;
+    den += w;
   }
-  const total = W + L + C;
-  return total > 0 ? (W + 0.5 * C) / total : 0;
+  return den > 0 ? num / den : 0;
+}
+
+/** Erro nomeado que a UI consegue explicar ao jogador (RF-00.7). */
+export type SpotError = { kind: "duplicate_card"; card: string };
+
+/**
+ * Avalia o spot devolvendo erro nomeado em vez de veredito nulo e mudo. Erro que
+ * nao seja carta duplicada continua subindo — nao se engole o que nao se sabe
+ * explicar (03-padrao-codigo.md: falhar alto).
+ */
+export function tryEvaluateSpot(spot: Spot): {
+  verdict: Verdict | null;
+  error: SpotError | null;
+} {
+  try {
+    return { verdict: evaluateSpot(spot), error: null };
+  } catch (e) {
+    if (e instanceof DuplicateCardError) {
+      return { verdict: null, error: { kind: "duplicate_card", card: e.card } };
+    }
+    throw e;
+  }
 }

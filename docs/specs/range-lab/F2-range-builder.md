@@ -106,6 +106,46 @@ UI escreve**. Capacidade morta desde a sprint original.
   cabe em lugar nenhum.
 - Sanitizacao por item herdada da RF-00.4 — nao repetir o bug dos spots salvos.
 
+## RF-02.6: Ponto de virada do slider fora do river (herdado da F0, 2026-08-16)
+A F0 mediu que o `breakevenFrequency` fechado (`W*/W`, em `ev.ts`) so descreve o
+slider **no river**. Fora dele, escalar o peso de um combo vencedor mexe tambem
+no denominador — o combo carrega a propria fracao perdedora — e o numero erra por
+mais do que o dobro:
+
+| street | fechado | k real do slider | equity no k fechado (alpha 52,56%) |
+|---|---|---|---|
+| flop | 0,4185 | **0,1958** | 63,14% |
+| turn | 0,3240 | **0,2294** | 59,38% |
+| river | 0,9234 | 0,9234 | 52,56% (exato) |
+
+A F0 **removeu o numero da tela fora do river** (numero ausente vence numero
+errado) e deixou o slider, que agora e exato, como a ferramenta do ponto de
+virada. A F2 devolve o numero, calculado do jeito certo.
+
+**Regras:**
+- `solveBreakevenMultiplier(verdict, subset?)`. Nao precisa de bissecao: a conta
+  fecha em forma **exata**, com quatro acumuladores em uma passada por `perCombo`,
+  separando o subconjunto escalado do resto —
+
+  ```
+  A = soma_escalado(w * eq)     B = soma_escalado(w)
+  C = soma_resto(w * eq)        D = soma_resto(w)
+  k* = (alpha * D - C) / (A - alpha * B)
+  ```
+
+  Sai direto de `E(k) = (kA + C) / (kB + D) = alpha`. Recebe o `Verdict` pronto
+  (a F0 ja permite isso), entao **nao** reenumera runout.
+- Devolve `null` quando o denominador zera ou quando `k* < 0` (spot que nunca
+  vira), com razao nomeada — nao satura silenciosamente no extremo.
+- Valores conferidos na F0 para o spot de referencia (`f0-fixtures.ts`, pote 36,1
+  / call 13,8): flop `0,00762`, turn `0,05437`, river `0,31856`. O river bate com
+  o `breakevenFrequency` fechado atual.
+- `ev.ts` **nao muda**: `breakevenFrequency` fechado continua como esta, e o teste
+  `f0-combos-basis.test.ts` que o fixa continua verde. O solver e um numero novo,
+  ao lado, nao uma reescrita do antigo.
+- A tela volta a mostrar a frase do ponto de virada nos tres streets, a partir do
+  solver.
+
 ---
 
 ## Criterios de aceite
@@ -114,11 +154,16 @@ UI escreve**. Capacidade morta desde a sprint original.
 3. Desfazer restaura o range exato anterior, inclusive pesos e naipes.
 4. Override de frequencia por combo persiste no rascunho e volta apos recarregar.
 5. Matriz responde a toque (arrastar pinta no tablet).
-6. `npm run check` limpo; suite da area verde.
+6. **No river, `solveBreakevenMultiplier` bate com `verdict.breakevenFrequency`
+   ate `1e-9`** — o fechado e o oraculo de graca onde os dois modelos coincidem.
+   Medido no spot de referencia: 0,9234 nos dois.
+7. No turn e no flop, a equity avaliada no `k` devolvido encosta em
+   `requiredEquity` (tolerancia `1e-6`). Hoje o fechado erra 6,8pp no turn.
+8. `npm run check` limpo; suite da area verde.
 
 ## Fora de escopo desta frente
 Motor, equity, categorias, ICM. A F2 nao toca em `equity.ts`, `ev.ts` nem
-`evaluator.ts`.
+`evaluator.ts` — a RF-02.6 inclusive depende de `ev.ts` ficar intocado.
 
 ---
 
