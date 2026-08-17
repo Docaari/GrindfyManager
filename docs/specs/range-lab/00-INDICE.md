@@ -11,7 +11,7 @@ Este indice e o unico lugar onde o estado global vive.
 | Frente | Entrega | Modelo | Depende de | Status |
 |---|---|---|---|---|
 | [F0 Verdade](F0-verdade.md) | 7 correcoes, incl. 2 que mentem numero na tela | Opus 5 — Alto | — | **Concluida** 2026-08-16 — commit `ea0f8303` |
-| [F1 Motor](F1-motor.md) | Avaliador rapido, worker, exato/MC, heroi-como-range, `/range-lab` | Opus 5 — Extra | F0 | **Concluida** 2026-08-17 — commit `<pendente>` |
+| [F1 Motor](F1-motor.md) | Avaliador rapido, worker, exato/MC, heroi-como-range, `/range-lab` | Opus 5 — Extra | F0 | **Concluida** 2026-08-17 — commit `6f02c872` |
 | [F2 Range builder](F2-range-builder.md) | Atalhos, naipes em grade, freq por combo, top X%, undo, **+ RF-02.6 (ponto de virada, herdado da F0)** | Sonnet 5 — Alto | F0 | Nao iniciada |
 | [F3 Leitura](F3-leitura.md) | Categorias, cascata, bloqueadores, MDF, runout, distribuicao, filtros | Opus 5 — Extra | F1 | Nao iniciada |
 | [F4 Contexto](F4-contexto.md) | Risk premium, servidor (migration 0101), Estudos/MDA, Coach, export | Opus 5 — Alto | F1 | Nao iniciada |
