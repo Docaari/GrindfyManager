@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { ExternalLink } from "lucide-react";
+import { ArrowRight, ExternalLink, FlaskConical } from "lucide-react";
+import { Link } from "wouter";
 import SizeGeometricoCalculator from "@/components/calculators/SizeGeometricoCalculator";
 import RPCalculator from "@/components/calculators/RPCalculator";
 import MysteryBountyCalculator from "@/components/calculators/MysteryBountyCalculator";
@@ -96,6 +97,19 @@ export default function Calculadoras() {
           </TabsContent>
 
           <TabsContent value="combos" className="mt-4">
+            {/* Range Lab F1 (ADR-246 D-F1-10): o atalho para a bancada completa.
+                A calculadora compacta continua AQUI e no popup — ela e a versao
+                para usar ao lado da mesa, sem range vs range. */}
+            <div className="flex justify-center mb-3">
+              <Link href="/range-lab">
+                <a className="flex items-center gap-2 rounded-lg border border-emerald-600/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300 hover:bg-emerald-500/20">
+                  <FlaskConical className="h-4 w-4" />
+                  Abrir no Range Lab — heroi como range, bordo de flop e turn sem
+                  travar a tela
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              </Link>
+            </div>
             <PopoutButton toolKey="combos" />
             <div className="flex justify-center">
               <CombosCalculator />

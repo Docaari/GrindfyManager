@@ -188,6 +188,77 @@ export default tokens;
 // Tipos exportados (D11) — uso em props de componentes para autocomplete.
 // ============================================================================
 
+// ============================================================================
+// Escala de calor (Range Lab F1, emenda A18 / ADR-246 D-F1-10)
+//
+// FICA FORA DE `tokens.color` DE PROPOSITO. A licao #22 registra o custo de
+// meter shape heterogeneo la dentro: `tokens.color.delta` quebrou `ColorKey` e
+// todos os consumidores de swatch, e exigiu `ColorKey` literal mais um
+// `DeltaTone` a parte. Repetir o erro conhecido custaria a mesma correcao.
+//
+// Tres derivacoes, porque uma so nao serve:
+//   absolute — 0..1, para equity (a escala tem significado absoluto);
+//   relative — ao min/max do conjunto, para quando o que importa e o RANKING e
+//              nao o valor (hotness por carta);
+//   text     — variante para cor de FONTE. O amarelo do meio da escala e
+//              ilegivel como texto, entao esta faixa nao e a de fundo.
+// ============================================================================
+
+const HEAT_STEPS = 7;
+
+const HEAT_BG = [
+  'bg-red-900/60',
+  'bg-red-700/60',
+  'bg-orange-600/60',
+  'bg-amber-500/60',
+  'bg-lime-600/60',
+  'bg-emerald-600/60',
+  'bg-emerald-500/70',
+] as const;
+
+const HEAT_TEXT = [
+  'text-red-300',
+  'text-red-200',
+  'text-orange-300',
+  'text-amber-200',
+  'text-lime-300',
+  'text-emerald-300',
+  'text-emerald-200',
+] as const;
+
+/** Fracao -> indice de degrau. Entrada nao finita cai em 0, nunca em NaN. */
+function heatIndex(fraction: number): number {
+  if (typeof fraction !== 'number' || Number.isNaN(fraction)) return 0;
+  const clamped = fraction < 0 ? 0 : fraction > 1 ? 1 : fraction;
+  return Math.round(clamped * (HEAT_STEPS - 1));
+}
+
+export const heat = {
+  /** Cor de fundo para uma fracao 0..1 (equity). */
+  absolute(fraction: number): string {
+    return HEAT_BG[heatIndex(fraction)];
+  },
+  /**
+   * Cor de fundo pela posicao do valor dentro do conjunto. Conjunto sem
+   * amplitude (`min === max`) nao tem ranking: o meio da escala e a resposta
+   * honesta, e nao uma divisao por zero disfarcada de cor.
+   */
+  relative(value: number, min: number, max: number): string {
+    if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(value)) {
+      return HEAT_BG[heatIndex(0.5)];
+    }
+    const lo = Math.min(min, max);
+    const hi = Math.max(min, max);
+    const span = hi - lo;
+    if (span <= 0) return HEAT_BG[heatIndex(0.5)];
+    return HEAT_BG[heatIndex((value - lo) / span)];
+  },
+  /** Cor de FONTE para a mesma fracao. Nunca e igual a `absolute`. */
+  text(fraction: number): string {
+    return HEAT_TEXT[heatIndex(fraction)];
+  },
+} as const;
+
 export type Tokens = typeof tokens;
 export type SpaceKey = keyof Tokens['space'];
 export type FontKey = keyof Tokens['font'];

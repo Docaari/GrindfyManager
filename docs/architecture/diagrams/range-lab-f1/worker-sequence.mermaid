@@ -1,0 +1,75 @@
+%% Range Lab F1 (ADR-246, D-F1-6 e D-F1-7) — Worker, stepper e descarte por runId.
+%%
+%% Um laco sincrono DENTRO de um Worker nao recebe postMessage: a fila de
+%% mensagens do proprio worker so drena entre tarefas. Por isso o motor e um
+%% STEPPER puro e sincrono e o worker e casca fina que cede a thread entre fatias.
+%% E o ceder que deixa a mensagem de cancelamento chegar.
+%%
+%% Fatia = 200 ms OU 200 mil unidades, o que vier primeiro. O cancelamento e
+%% checado no MESMO ponto.
+sequenceDiagram
+    actor Player as Jogador
+    participant UI as Painel /range-lab
+    participant Cli as engineClient<br/>main thread
+    participant W as Web Worker<br/>casca fina
+    participant St as createEngineRun<br/>stepper puro e sincrono
+
+    Note over UI: Recalculo preguicoso, emenda A4.<br/>Painel invisivel NAO roda: marca sujo<br/>e recalcula ao aparecer
+
+    Player->>UI: muda bordo ou range
+    UI->>UI: debounce por superficie<br/>selo 450 ms, matriz 400 ms, hotness 400 ms
+    UI->>Cli: run(request)
+
+    Cli->>Cli: runId = runId + 1<br/>runId e monotonico
+    Cli->>W: postMessage type run, runId 7, request
+
+    Note over Cli,W: O payload e RangeEntry mais bordo,<br/>NAO lista de combos. A expansao acontece<br/>dentro do worker: menos trabalho na main<br/>thread e payload menor
+
+    W->>W: expande os dois ranges em combos<br/>com mascara de 52 bits
+    W->>St: createEngineRun(request)
+    St-->>W: totalUnits, step, progress, result, cancel
+
+    loop ate acabar, cancelar ou dar erro
+        W->>St: step(maxUnits)
+        Note over St: roda ate 200 ms OU 200 mil unidades.<br/>Sem timer, sem Worker, sem Date.now<br/>obrigatorio dentro da matematica
+        St-->>W: progresso parcial
+        W->>Cli: postMessage type progress, runId 7, percent
+        Cli->>UI: barra de progresso
+        W->>W: setTimeout de 0 — CEDE A THREAD
+        Note right of W: e aqui, e so aqui, que a fila<br/>de mensagens do worker drena
+    end
+
+    rect rgb(245, 238, 220)
+        Note over Player,St: Jogador troca o bordo NO MEIO do calculo
+        Player->>UI: troca uma carta do bordo
+        UI->>Cli: run(novoRequest)
+        Cli->>Cli: runId = 8
+        Cli->>W: postMessage type cancel, runId 7
+        Cli->>W: postMessage type run, runId 8, novoRequest
+        W->>St: cancel() no proximo limite de fatia
+        St-->>W: corrida 7 interrompida
+    end
+
+    alt corrida terminou
+        St-->>W: result()
+        W->>Cli: postMessage type done, runId, result
+    else erro dentro do motor
+        W->>Cli: postMessage type error, runId, error
+    end
+
+    Cli->>Cli: compara runId da mensagem<br/>com o runId atual
+
+    alt runId igual ao atual
+        Cli->>UI: entrega o EngineResult
+        UI->>UI: checa status ok ou degraded<br/>antes de ler qualquer numero
+        UI-->>Player: pinta a tela
+    else runId diferente
+        Cli->>Cli: DESCARTA a mensagem
+        Note right of Cli: resultado velho nunca pinta a tela.<br/>Este e o caso de teste<br/>"trocar o bordo no meio do calculo"
+    end
+
+    Note over Cli,W: Sem Worker disponivel — teste, SSR, navegador antigo:<br/>a criacao vai em try/catch e cai num RUNNER SINCRONO<br/>com o MESMO contrato. Licoes 5 e 35 do CLAUDE.md.<br/>O ramo sincrono BLOQUEIA a main thread e por isso<br/>precisa ser observavel, nao silencioso
+
+    Note over W: O cache de equity migra para DENTRO do worker<br/>e e invalidado por bordo. Hoje vive em equity.ts:62,<br/>na main thread, com cap de 50 mil e clear total
+
+    Note over St: Consequencia de teste — metade do valor da decisao:<br/>o teste dirige step() DIRETO.<br/>Nada de fake timer, nada de Worker em jsdom

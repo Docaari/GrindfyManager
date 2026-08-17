@@ -59,6 +59,9 @@ const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage").then(m 
 const RegistrationConfirmationPage = lazy(() => import("@/pages/RegistrationConfirmationPage").then(m => ({ default: m.RegistrationConfirmationPage })));
 const Calculadoras = lazy(() => import("@/pages/Calculadoras"));
 const CalculadoraPopup = lazy(() => import("@/pages/CalculadoraPopup"));
+// Range Lab F1 (ADR-246): bancada de estudo de spot pos-flop. A aba "Combos" de
+// /calculadoras vira atalho para ca; o popup continua servindo a versao compacta.
+const RangeLab = lazy(() => import("@/pages/RangeLab"));
 const CoachAI = lazy(() => import("@/pages/CoachAI"));
 // Sprint AI-1A — wizard de onboarding do Grindfy AI (full-page)
 const CoachOnboarding = lazy(() => import("@/pages/CoachOnboarding"));
@@ -142,6 +145,10 @@ function Router() {
                       NotFound (404). Studies le useLocation() (path completo). */}
                   <Route path="/estudos/*" component={() => (<ProtectedRoute><Studies /></ProtectedRoute>)} />
                   <Route path="/calculadoras" component={() => (<ProtectedRoute><Calculadoras /></ProtectedRoute>)} />
+                  {/* Range Lab F1 (ADR-246 D-F1-10). A aba Combos de /calculadoras
+                      linka para ca — licao #19: CTA para rota nao registrada cai no
+                      NotFound SEM erro no console, e so aparece quando alguem clica. */}
+                  <Route path="/range-lab" component={() => (<ProtectedRoute><RangeLab /></ProtectedRoute>)} />
                   {/* METAS-1 fatia-1 (ADR-229): rota mais especifica /nova ANTES da generica. */}
                   <Route path="/metas/nova" component={() => (<ProtectedRoute><MetasNovaPage /></ProtectedRoute>)} />
                   <Route path="/metas" component={() => (<ProtectedRoute><MetasPage /></ProtectedRoute>)} />

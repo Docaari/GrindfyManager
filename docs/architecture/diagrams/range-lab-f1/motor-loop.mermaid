@@ -1,0 +1,80 @@
+%% Range Lab F1 (ADR-246, D-F1-3 e D-F1-4) — laco do motor no modo exato.
+%%
+%% A inversao da ordem e a decisao: laco EXTERNO = runout. Para cada runout,
+%% cada combo do heroi e avaliado UMA vez e cada combo do vilao UMA vez; a
+%% comparacao de pares le os dois placares, sem avaliar nada.
+%%   custo = runouts x (H + V) avaliacoes  +  runouts x H x V comparacoes
+%% Caso de aceite (mao unica x 236 combos, flop):
+%%   1176 x 237 = cerca de 280 mil avaliacoes
+%%   1176 x 236 = cerca de 277 mil comparacoes
+%%
+%% Os DOIS pontos de card removal mutuo estao marcados como CR-1 e CR-2.
+%% CR-1 e o denominador exato por combo do heroi, calculado fora do laco.
+%% CR-2 e a recusa do par que divide carta, dentro do laco.
+%% Produto simples de pesos da numero errado com cara de certo.
+flowchart TD
+    req(["EngineRequest chega ao stepper<br/>bordo, heroRange, villainRange"]) --> exp
+
+    exp["<b>Expande os dois ranges em combos</b><br/>cada combo ganha mascara de 52 bits<br/>em dois inteiros: lo cartas 0 a 31, hi cartas 32 a 51<br/><i>a expansao acontece dentro do worker — D-F1-7</i>"]
+
+    exp --> guard{"Algum range<br/>ficou vazio?"}
+    guard -->|"heroi vazio"| degH(["status degraded<br/>reason empty_hero_range"])
+    guard -->|"vilao vazio"| degV(["status degraded<br/>reason empty_villain_range"])
+    guard -->|"os dois tem massa"| den
+
+    den["<b>CR-1 — denominador exato por combo do heroi</b><br/>heroDen de h = soma de w_v sobre os v compativeis com h<br/>par invalido quando lo de h AND lo de v, ou hi de h AND hi de v,<br/>e diferente de zero<br/><i>custo H x V, barato, INDEPENDENTE do runout</i>"]
+
+    den --> nopair{"Todo par<br/>colide?"}
+    nopair -->|"sim"| degP(["status degraded<br/>reason no_valid_pairs"])
+    nopair -->|"nao"| enum
+
+    enum["<b>Enumera os runouts</b><br/>flop: C de 49 e 2 = 1176<br/>turn: 48<br/>river: 1 runout vazio"]
+
+    enum --> rloop{"Ainda ha<br/>runout?"}
+
+    rloop -->|"sim"| board["loadBoard do bordo completo<br/>flop 3 mais 2, turn 4 mais 1, river 5<br/><i>D-F1-2: as 5 cartas entram UMA vez por runout</i>"]
+
+    board --> hs["<b>Placar do heroi</b><br/>para cada combo h que NAO colide com o runout:<br/>heroScore de h igual a evalWithBoard<br/><i>H avaliacoes</i>"]
+
+    hs --> vs["<b>Placar do vilao</b><br/>para cada combo v que NAO colide com o runout:<br/>villainScore de v igual a evalWithBoard<br/><i>V avaliacoes</i>"]
+
+    vs --> pairs["<b>Comparacao de pares</b><br/>le os dois placares, SEM avaliar nada<br/><i>H x V comparacoes de inteiro</i>"]
+
+    pairs --> cr2{"<b>CR-2</b><br/>h e v dividem carta,<br/>ou um deles colide<br/>com o runout?"}
+    cr2 -->|"sim"| skip["Pula o par neste runout<br/><i>no flop sobram exatamente<br/>C de 45 e 2 = 990 runouts validos POR PAR;<br/>turn 44, river 1 — constante para todo par</i>"]
+    skip --> pairs
+
+    cr2 -->|"nao"| cmp{"heroScore de h<br/>contra<br/>villainScore de v"}
+    cmp -->|"maior"| acc1["acumula w_v vezes 1"]
+    cmp -->|"igual"| acc2["acumula w_v vezes 0.5<br/><i>empate de inteiro e chop</i>"]
+    cmp -->|"menor"| acc3["acumula w_v vezes 0"]
+
+    acc1 --> sum
+    acc2 --> sum
+    acc3 --> sum
+    sum["heroWinSum de h recebe o acumulado"] --> pairs
+
+    pairs -.->|"pares deste runout esgotados"| rloop
+    rloop -->|"nao, runouts esgotados"| final
+
+    final["<b>Divide UMA vez, no fim</b><br/>equity de h igual a heroWinSum de h<br/>dividido por heroDen de h vezes runoutsPorPar<br/><i>a constancia de runoutsPorPar e o que permite isso</i>"]
+
+    final --> zerod{"heroDen de h<br/>igual a zero?"}
+    zerod -->|"sim"| degc["<b>Combo degradado</b><br/>razao no_valid_villain_combo<br/>FORA do agregado — nunca 0 por cento<br/><i>numero errado perde para numero ausente</i>"]
+    zerod -->|"nao"| ok["Combo entra no agregado"]
+
+    degc --> agg
+    ok --> agg
+
+    agg["<b>Agregado do range do heroi</b><br/>peso de cada combo igual a w_h vezes heroDen de h<br/>MASSA DE PARES VALIDOS<br/><i>nao w_h sozinho, e NUNCA produto simples de pesos</i>"]
+
+    agg --> res(["status ok<br/>perHeroCombo, heroRangeEquity, callThresholdIndex"])
+
+    subgraph custo["Modelo de custo — consequencia declarada da D-F1-3"]
+        direction TB
+        k1["O gargalo MUDA DE LUGAR.<br/>Em range vs range no flop o custo dominante<br/>deixa de ser avaliacao e passa a ser COMPARACAO"]
+        k2["1176 x 1300 x 1300 comparacoes<br/>contra 1176 x 2600 avaliacoes"]
+        k3["O estimador conta COMPARACOES.<br/>Contar avaliacoes subestima por ordens de grandeza"]
+        k4["EXACT_LIMIT igual a 4 milhoes de showdowns.<br/>Estimativa igual a paresValidos vezes runoutsPorPar.<br/>Teto pratico: cerca de 4 mil pares no flop,<br/>91 mil no turn, 4 milhoes no river"]
+        k1 --> k2 --> k3 --> k4
+    end

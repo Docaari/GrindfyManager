@@ -9,8 +9,8 @@
 | **Depende de** | F0 concluida e verificada |
 | **Entrega** | Avaliador rapido, Web Worker, exato/Monte Carlo, heroi-como-range, pagina `/range-lab` |
 | **Migration** | nao |
-| **ADR** | sim — obrigatorio antes dos testes |
-| **Status** | Nao iniciada |
+| **ADR** | [246](../../architecture/decisions/246-range-lab-f1-motor.md) + 4 diagramas em `diagrams/range-lab-f1/` |
+| **Status** | **Concluida** 2026-08-17 — 384 + 44 testes verdes, `tsc` 0, build de producao OK |
 
 Frente maior do projeto. Reescreve o nucleo de calculo e muda o modelo de dados.
 Toca zona critica (matematica que vira numero na tela). Nunca abaixo de `Extra`.
@@ -30,7 +30,7 @@ Arquivos que importam:
 - [`equity.ts`](../../../client/src/lib/combo-calc/equity.ts) — enumeracao de runouts + cache.
 - [`evaluateSpot.ts`](../../../client/src/lib/combo-calc/evaluateSpot.ts) — pipeline.
 - [`types.ts`](../../../client/src/lib/combo-calc/types.ts) — modelo.
-- [`CombosCalculator.tsx`](../../../client/src/components/calculators/CombosCalculator.tsx) — 955 linhas a quebrar.
+- [`CombosCalculator.tsx`](../../../client/src/components/calculators/CombosCalculator.tsx) — **1142 linhas** (o texto dizia 955; estava velho).
 
 ---
 
@@ -69,8 +69,11 @@ aloca por avaliacao.
   `(combo_heroi, combo_vilao)` — enumerar os pares e a unica forma correta.
   Produto simples de pesos produz numero errado que **nao parece errado**.
   Declarar no codigo e cobrir por teste.
-- `Verdict` ganha `perHeroCombo: HeroComboResult[]` — equity, EV do call e decisao
-  por combo do heroi.
+- ~~`Verdict` ganha `perHeroCombo`~~ — **decisao D12 (2026-08-17):** o `Verdict` da
+  v1 nao foi tocado. `perHeroCombo: HeroComboResult[]` (equity, EV do call e
+  decisao por combo do heroi) vive no `EngineResult`, que e uniao discriminada
+  `ok | degraded`. Reaproveitar o `Verdict` com campos opcionais herdaria a
+  armadilha da D8 — objeto degradado carregando numero finito que alguem le.
 - **Compatibilidade:** `persistence.ts` migra rascunho e spots do formato v1
   (`hero: string[]`) para v2 (`heroRange`), sem perder dado do jogador. Chave nova
   `grindfy.comboCalc.draft.v2`; a v1 e lida uma vez e convertida.
@@ -79,7 +82,7 @@ aloca por avaliacao.
 **Regras:**
 - Equity do range do heroi = media ponderada das equities por combo do heroi, com
   peso igual a massa de pares validos daquele combo.
-- Saidas novas no `Verdict`:
+- Saidas novas no `EngineResult` (nao no `Verdict` — D12):
   - `heroRangeEquity` — equity agregada.
   - `perHeroCombo` — ordenavel por equity ou por EV do call.
   - `callThresholdIndex` — quantos combos do heroi tem EV de call `>= 0`. E a
@@ -131,9 +134,15 @@ aloca por avaliacao.
   Link tem que casar com rota registrada (licao #19).
 - O popup (`CalculadoraPopup`) continua servindo o componente compacto atual, sem
   range vs range, para uso ao lado da mesa.
-- `CombosCalculator.tsx` quebrado por responsabilidade: `BoardPicker`,
-  `RangeMatrix`, `RangeEntryList`, `BetInputs`, `VerdictPanel`, `ComboTable`,
-  `SpotLibrary`.
+- Sete componentes por responsabilidade: `BoardPicker`, `RangeMatrix`,
+  `RangeEntryList`, `BetInputs`, `VerdictPanel`, `ComboTable`, `SpotLibrary`
+  (mais `ModeSelector`, que a spec nao previu e o RF-01.4 exigiu).
+  **Decisao D13 (2026-08-17):** os sete foram escritos contra o modelo v2, em
+  `components/range-lab/`; o `CombosCalculator.tsx` **nao** foi refatorado. Ele
+  nao tem teste de wiring proprio (pendencia declarada da F0) e e a unica
+  superficie que funciona hoje — religa-lo aos componentes novos e da F2, que
+  reabre a UI. Custo aceito: duplicacao temporaria entre a calculadora compacta e
+  os paineis novos.
 - Tokens de `@/lib/ui-tokens`; nada de valor solto (`14-frontend-ui.md`).
   `z-index` pelo `Docs/conventions/z-index.md` (a barra de veredito e sticky).
 - **Escala de calor nos tokens (emenda A18).** Tres derivacoes da mesma escala,
@@ -166,6 +175,50 @@ motor e modelo; a UI nova e o minimo para exercitar os dois.
 
 ---
 
+## O que de fato saiu (2026-08-17)
+
+Os cinco RFs entraram. Numeros medidos, nao estimados:
+
+| | Antes | Depois |
+|---|---|---|
+| Flop `Ad 8h 4h`, 236 combos | 555 ms | **~7 ms** (mediana de 5, alvo 20) |
+| Showdowns do mesmo caso | — | 233.640 (236 pares x 990 runouts) |
+| Paridade avaliador novo x oraculo | — | 50 mil amostras, **zero** divergencia de ordem |
+| Testes | 201 | **384** (`tests/unit/combo-calc`) + **44** (`tests/client/range-lab`) |
+
+### Armadilhas que so apareceram na implementacao
+
+1. **Trinca pura virando full house.** No avaliador bitmask, `m2` (ranks vistos
+   ao menos duas vezes) contem o proprio rank da trinca — 3 cartas setam `m1`,
+   `m2` E `m3`. A forma ingenua `rest = (m3 & ~bit) | m2` transforma **toda**
+   trinca pura em full house com par igual a trinca. A forma certa e
+   `rest = (m3 | m2) & ~(1 << t)`. Pego no prototipo, antes de virar codigo, e
+   fixado por teste.
+2. **Array plano nao e detalhe de estilo.** A primeira versao do laco lia
+   `combos[i].lo` (propriedade de objeto) e deu **33 ms** — 4,7x o prototipo, com
+   a mesma matematica. Trocar para `Int32Array` paralelos devolveu os ~7 ms. No
+   caso de aceite sao mais de um milhao de cargas de propriedade por corrida.
+3. **Nao ponderar a amostra do Monte Carlo duas vezes.** O combo do vilao ja e
+   sorteado proporcional ao peso; multiplicar de novo pelo peso na acumulacao
+   elevaria o peso ao quadrado. A amostra aceita entra com peso 1.
+4. **Variancia amostral zero nao e certeza.** Amostra degenerada (todo mundo
+   ganhou) tem meia-largura honesta desconhecida, nao nula. O motor usa o desvio
+   maximo possivel (0,5) nesse caso — conservador de proposito: superestima a
+   margem, nunca a esconde.
+
+### O que NAO foi verificado
+A conferencia visual no `:3000` **nao foi feita**: `/range-lab`, `/calculadoras` e
+ate `/calculadora-popup/:tool` estao atras do login, e a sessao da IA nao loga.
+Foi verificado o que nao depende de sessao: o Vite serve os modulos novos
+(`RangeLab.tsx`, `useRangeEngine.ts`, `client.ts`, `rangeEngine.worker.ts`), e o
+**build de producao** emite `rangeEngine.worker-*.js` como chunk proprio chamado
+com `{type:"module"}` — que era o risco real (`worker.format: "es"` novo no
+`vite.config.ts`; sem ele o worker quebra so depois do build).
+
+Os 8 itens do "Confira voce mesmo" abaixo continuam **pendentes de olho humano**.
+
+---
+
 ## HANDOFF — ao concluir a F1
 
 ### Confira voce mesmo (8 min, no `:3000` reiniciado)
@@ -185,6 +238,24 @@ motor e modelo; a UI nova e o minimo para exercitar os dois.
 7. **Nao perdi nada.** Um spot salvo antes da F1 tem que abrir normal.
 8. **O velho continua certo.** Um spot de river com mao unica: o veredito tem que
    ser identico ao de antes.
+
+### Pendencias conhecidas ao fechar a F1 (nao bloqueiam F2 nem F3)
+- **Conferencia visual pendente.** Os 8 itens acima nunca foram vistos numa tela.
+  Tudo esta atras do login e a sessao da IA nao loga.
+- **`CombosCalculator.tsx` segue monolito e sem teste de wiring.** A F0 deixou os
+  `data-testid` plantados; a F1 os usou num smoke test
+  (`tests/client/range-lab/combos-calculator-smoke.test.tsx`, 4 casos) **sem
+  tocar no componente**. O 5o testid (`combos-card-notice`) continua inalcancavel:
+  os 52 botoes da grade nao tem `data-testid`, e acha-los pelo glifo do naipe
+  seria a heuristica de DOM que a licao #2 proibe. A F2 reabre a UI e paga o
+  resto.
+- **A matriz da F1 e o minimo.** Sem drag-select, sem grade de naipes, sem peso
+  por combo, sem import de texto — tudo isso e da F2, que ja tem os RFs escritos.
+  O `RangeMatrix` foi escrito para servir os dois lados com o mesmo componente.
+- **`ModeSelector` nasceu fora da spec.** O RF-01.4 exige escolha explicita de
+  modo e estimativa de custo visivel, e nao havia componente previsto para isso.
+- **O painel de leitura mostra a `ComboTable` e mais nada.** E o placeholder ate a
+  F3; a coluna existe e declara o que vem.
 
 ### Prompt da proxima sessao
 

@@ -2,6 +2,7 @@
 import type { Card, RangeEntry } from "./types";
 import { parseCard, cardKey } from "./cards";
 import { parseNotation, clampFreq } from "./combos";
+import { heroRangeFromHand } from "./spotV2";
 
 export interface SerializedSpot {
   board: string[]; // cardKeys
@@ -172,4 +173,150 @@ export function loadSavedSpots(): SavedSpot[] {
 }
 export function persistSavedSpots(spots: SavedSpot[]): void {
   safeSet(SPOTS_KEY, spots);
+}
+
+// ── v2: o heroi tambem e um range (F1, ADR-246 D-F1-9) ───────
+//
+// As chaves v2 sao NOVAS e as v1 NAO sao apagadas. Nao apagar e barato e compra o
+// caminho de volta: se a F1 precisar ser revertida em producao, o dado do jogador
+// continua no formato que a versao anterior le.
+
+export const DRAFT_KEY_V2 = "grindfy.comboCalc.draft.v2";
+export const SPOTS_KEY_V2 = "grindfy.comboCalc.spots.v2";
+
+export interface CalcStateV2 {
+  board: Card[];
+  heroRange: RangeEntry[];
+  entries: RangeEntry[];
+  potInput: string;
+  callInput: string;
+  bbInput: string;
+}
+
+export interface SavedSpotV2 {
+  id: string;
+  name: string;
+  savedAt: number;
+  board: string[]; // cardKeys
+  heroRange: RangeEntry[];
+  entries: RangeEntry[];
+  potInput: string;
+  callInput: string;
+  bbInput: string;
+}
+
+function sanitizeEntries(raw: unknown): RangeEntry[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(sanitizeEntry).filter((e): e is RangeEntry => e != null);
+}
+
+/**
+ * Converte um rascunho v1 (`hero: string[]`) para v2 (`heroRange`). Heroi
+ * incompleto ou ilegivel vira `heroRange: []` — nao null e nao lixo: o resto do
+ * rascunho (bordo, range do vilao, apostas) continua servindo.
+ */
+export function migrateDraftV1ToV2(raw: unknown): CalcStateV2 | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const s = raw as Record<string, unknown>;
+
+  const board = (Array.isArray(s.board) ? s.board : [])
+    .map((k) => (typeof k === "string" ? parseCard(k) : null))
+    .filter((c): c is Card => c != null);
+
+  const heroCards = (Array.isArray(s.hero) ? s.hero : [])
+    .map((k) => (typeof k === "string" ? parseCard(k) : null))
+    .filter((c): c is Card => c != null);
+  const heroRange =
+    heroCards.length === 2 ? heroRangeFromHand([heroCards[0], heroCards[1]]) : [];
+
+  return {
+    board,
+    heroRange,
+    entries: sanitizeEntries(s.entries),
+    potInput: asStr(s.potInput),
+    callInput: asStr(s.callInput),
+    bbInput: asStr(s.bbInput),
+  };
+}
+
+function deserializeStateV2(raw: unknown): CalcStateV2 | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const s = raw as Record<string, unknown>;
+  return {
+    board: (Array.isArray(s.board) ? s.board : [])
+      .map((k) => (typeof k === "string" ? parseCard(k) : null))
+      .filter((c): c is Card => c != null),
+    heroRange: sanitizeEntries(s.heroRange),
+    entries: sanitizeEntries(s.entries),
+    potInput: asStr(s.potInput),
+    callInput: asStr(s.callInput),
+    bbInput: asStr(s.bbInput),
+  };
+}
+
+export function saveDraftV2(state: CalcStateV2): void {
+  safeSet(DRAFT_KEY_V2, {
+    board: state.board.map(cardKey),
+    heroRange: state.heroRange,
+    entries: state.entries,
+    potInput: state.potInput,
+    callInput: state.callInput,
+    bbInput: state.bbInput,
+  });
+}
+
+/** Le a v2; na ausencia dela, le a v1 UMA vez e converte. A v1 fica onde esta. */
+export function loadDraftV2(): CalcStateV2 | null {
+  const v2 = deserializeStateV2(safeGet(DRAFT_KEY_V2));
+  if (v2) return v2;
+  return migrateDraftV1ToV2(safeGet(DRAFT_KEY));
+}
+
+function sanitizeSavedSpotV2(raw: unknown): SavedSpotV2 | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const s = raw as Record<string, unknown>;
+  if (typeof s.id !== "string" || s.id === "") return null;
+  if (typeof s.name !== "string") return null;
+  if (!Array.isArray(s.board) || !Array.isArray(s.entries)) return null;
+
+  // Spot v1 nao tem `heroRange`; tem `hero: string[]`. Aceitar os dois e o que faz
+  // o item 7 do handoff ("um spot salvo antes da F1 abre normal") valer.
+  let heroRange: RangeEntry[];
+  if (Array.isArray(s.heroRange)) {
+    heroRange = sanitizeEntries(s.heroRange);
+  } else if (Array.isArray(s.hero)) {
+    const heroCards = s.hero
+      .map((k) => (typeof k === "string" ? parseCard(k) : null))
+      .filter((c): c is Card => c != null);
+    heroRange = heroCards.length === 2 ? heroRangeFromHand([heroCards[0], heroCards[1]]) : [];
+  } else {
+    return null;
+  }
+
+  return {
+    id: s.id,
+    name: s.name,
+    savedAt: typeof s.savedAt === "number" && Number.isFinite(s.savedAt) ? s.savedAt : 0,
+    board: sanitizeCardKeys(s.board),
+    heroRange,
+    entries: sanitizeEntries(s.entries),
+    potInput: asStr(s.potInput),
+    callInput: asStr(s.callInput),
+    bbInput: asStr(s.bbInput),
+  };
+}
+
+/** Le a v2; na ausencia dela, le a v1 e converte. Saneia item a item (F0 RF-00.4). */
+export function loadSavedSpotsV2(): SavedSpotV2[] {
+  const v2 = safeGet(SPOTS_KEY_V2);
+  if (Array.isArray(v2)) {
+    return v2.map(sanitizeSavedSpotV2).filter((s): s is SavedSpotV2 => s != null);
+  }
+  const v1 = safeGet(SPOTS_KEY);
+  if (!Array.isArray(v1)) return [];
+  return v1.map(sanitizeSavedSpotV2).filter((s): s is SavedSpotV2 => s != null);
+}
+
+export function persistSavedSpotsV2(spots: SavedSpotV2[]): void {
+  safeSet(SPOTS_KEY_V2, spots);
 }

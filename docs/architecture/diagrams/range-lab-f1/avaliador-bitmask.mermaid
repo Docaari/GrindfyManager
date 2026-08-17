@@ -1,0 +1,99 @@
+%% Range Lab F1 (ADR-246, D-F1-1) — avaliador bitmask de 7 cartas.
+%% Arquivo alvo: client/src/lib/combo-calc/fastEvaluator.ts (novo).
+%% O evaluator.ts atual NAO e deletado: vira oraculo de teste (D4 do indice).
+%%
+%% Codificacao: code = rankIdx * 4 + suitIdx, rankIdx 0..12 (0 = 2, 12 = A),
+%% suitIdx = indice em SUITS = ["c","d","h","s"]. Cartas sao codificadas UMA vez
+%% por combo e por bordo, nunca dentro do laco de showdown.
+%%
+%% Empacotamento exato do score (o diagrama mostra a forma; esta e a expressao):
+%%   score = (categoria << 20) | (r1 << 16) | (r2 << 12) | (r3 << 8) | (r4 << 4) | r5
+%% com os r em indice 0..12 e desempates ausentes em 0.
+%%
+%% Ordem das categorias identica a de evaluator.ts: o flush e DETECTADO junto com
+%% a contagem de naipe, mas so VENCE depois do full house.
+flowchart TD
+    start(["evaluate7 recebe 7 codigos de carta"]) --> reset["Zera o contexto:<br/>mask1..mask4 de 13 bits,<br/>4 contadores de naipe,<br/>4 bitmasks de rank por naipe"]
+
+    reset --> loop{"Ainda ha carta<br/>a inserir?"}
+    loop -->|"sim"| bit["bit = 1 deslocado por rankIdx"]
+
+    bit --> inc{"bit ja esta<br/>em mask3?"}
+    inc -->|"sim"| m4["Marca o bit em mask4<br/><i>rank visto 4 vezes</i>"]
+    inc -->|"nao"| inc2{"bit ja esta<br/>em mask2?"}
+    inc2 -->|"sim"| m3["Marca o bit em mask3<br/><i>rank visto ao menos 3 vezes</i>"]
+    inc2 -->|"nao"| inc3{"bit ja esta<br/>em mask1?"}
+    inc3 -->|"sim"| m2["Marca o bit em mask2<br/><i>rank visto ao menos 2 vezes</i>"]
+    inc3 -->|"nao"| m1["Marca o bit em mask1<br/><i>rank visto ao menos 1 vez</i>"]
+
+    m4 --> suit
+    m3 --> suit
+    m2 --> suit
+    m1 --> suit
+    suit["Incrementa o contador do naipe<br/>e marca o rank na bitmask daquele naipe"] --> loop
+
+    loop -->|"nao, as 7 entraram"| flushq{"Algum contador<br/>de naipe maior<br/>ou igual a 5?"}
+    flushq -->|"sim"| fmask["flushMask = bitmask de ranks<br/>daquele naipe"]
+    flushq -->|"nao"| nofl["flushMask = 0"]
+
+    fmask --> sfq
+    nofl --> sfq
+
+    sfq{"STRAIGHT_TOP de flushMask<br/>maior que 0?"}
+    sfq -->|"sim"| CSF["<b>8 STRAIGHT FLUSH</b><br/>r1 = topo do straight flush"]
+    sfq -->|"nao"| quadq{"mask4 diferente<br/>de zero?"}
+
+    quadq -->|"sim"| CQ["<b>7 QUADRA</b><br/>r1 = rank da quadra<br/>r2 = maior rank restante"]
+    quadq -->|"nao"| fhq{"mask3 diferente de zero<br/>E existe segundo par<br/>ou segunda trinca?"}
+
+    fhq -->|"sim"| CFH["<b>6 FULL HOUSE</b><br/>r1 = trinca alta<br/>r2 = melhor par restante"]
+    fhq -->|"nao"| flq{"flushMask diferente<br/>de zero?"}
+
+    flq -->|"sim"| CF["<b>5 FLUSH</b><br/>r1..r5 = 5 maiores ranks<br/>do naipe de flush"]
+    flq -->|"nao"| stq{"STRAIGHT_TOP de mask1<br/>maior que 0?"}
+
+    stq -->|"sim"| CS["<b>4 STRAIGHT</b><br/>r1 = topo do straight"]
+    stq -->|"nao"| tq{"mask3 diferente<br/>de zero?"}
+
+    tq -->|"sim"| CT["<b>3 TRINCA</b><br/>r1 = trinca<br/>r2, r3 = 2 maiores kickers"]
+    tq -->|"nao"| tpq{"mask2 tem<br/>2 bits ou mais?"}
+
+    tpq -->|"sim"| C2P["<b>2 DOIS PARES</b><br/>r1, r2 = os 2 pares<br/>r3 = maior kicker"]
+    tpq -->|"nao"| pq{"mask2 diferente<br/>de zero?"}
+
+    pq -->|"sim"| CP["<b>1 PAR</b><br/>r1 = par<br/>r2, r3, r4 = 3 maiores kickers"]
+    pq -->|"nao"| CH["<b>0 CARTA ALTA</b><br/>r1..r5 = 5 maiores ranks"]
+
+    CSF --> pack
+    CQ --> pack
+    CFH --> pack
+    CF --> pack
+    CS --> pack
+    CT --> pack
+    C2P --> pack
+    CP --> pack
+    CH --> pack
+
+    pack["<b>Empacota em UM inteiro</b><br/>categoria nos bits 20 a 23,<br/>r1 a r5 em 4 bits cada,<br/>desempate ausente vale 0"] --> out(["Devolve o score inteiro<br/><i>comparar maos = comparar inteiro;<br/>empate de inteiro = chop</i>"])
+
+    subgraph tabela["STRAIGHT_TOP — montada UMA vez na carga do modulo"]
+        direction TB
+        t1["Uint8Array de 8192 posicoes,<br/>indexada pela bitmask de 13 ranks"]
+        t2["Valor = INDICE do rank alto do straight, 0 a 12"]
+        t3["0 = nao ha straight.<br/>Sentinela segura: straight com topo em 2<br/>e impossivel; o menor e a roda, topo 5 = indice 3"]
+        t4["Roda A5432 = mask 4111<br/>bits 12, 3, 2, 1, 0 — devolve 3"]
+        t5["Straight flush sai da MESMA tabela,<br/>aplicada a flushMask"]
+        t1 --> t2 --> t3 --> t4 --> t5
+    end
+
+    tabela -.->|"consultada por indice"| sfq
+    tabela -.->|"consultada por indice"| stq
+
+    subgraph contrato["Contrato com o oraculo — D-F1-1 e D-F1-2"]
+        direction TB
+        o1["evaluate7 aceita EXATAMENTE 7 cartas.<br/>evaluateHand aceita 5 a 7.<br/>Paridade so se amostra em maos de 7"]
+        o2["Paridade compara ORDEM, nao valor:<br/>sinal de evaluate7 a menos evaluate7 b<br/>igual ao sinal de compareHands"]
+        o3["A ordem se preserva porque a lista de<br/>desempates e a mesma e o mapa<br/>rank-valor para rank-indice e monotono"]
+        o4["Board hoisting D-F1-2:<br/>evaluate7 de bordo mais mao<br/>e igual a evalWithBoard de loadBoard do bordo.<br/>As duas funcoes concordam SEMPRE"]
+        o1 --> o2 --> o3 --> o4
+    end

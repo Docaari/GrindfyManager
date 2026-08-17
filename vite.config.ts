@@ -14,6 +14,13 @@ export default defineConfig({
     },
   },
   root: path.resolve(import.meta.dirname, "client"),
+  // Range Lab F1 (ADR-246 D-F1-7): o motor de equity roda em Web Worker criado
+  // como `new Worker(new URL(...), { type: "module" })`. O default do Vite emite
+  // o worker em `iife`, que nao casa com `type: "module"` no build de producao —
+  // funciona em dev e quebra depois do build. Primeiro worker do projeto.
+  worker: {
+    format: "es",
+  },
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,

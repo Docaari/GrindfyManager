@@ -1,0 +1,195 @@
+%% Range Lab F1 (ADR-246, D-F1-8 e D-F1-9) — modelo v2 do Spot e resultado do motor.
+%%
+%% Duas coisas que este diagrama existe para deixar explicitas:
+%% 1. EngineResult e UNIAO DISCRIMINADA por status. O compilador passa a cobrar
+%%    o if. Motivo escrito na F0 (D8 do indice): hoje Verdict.decision e
+%%    Decision ou null mas o objeto AINDA carrega evCall e equityGap calculados,
+%%    e quem le um numero sem checar decision faz voltar o menos 13,8 fichas.
+%% 2. O Verdict v1 e evaluateSpot NAO sao reescritos: 201 testes verdes e o popup
+%%    dependem deles, e evaluateSpot e o oraculo de regressao do motor novo.
+classDiagram
+    direction LR
+
+    class Card {
+        +Rank rank
+        +Suit suit
+    }
+
+    class RangeEntry {
+        +string notation
+        +RangeKind kind
+        +number frequency
+        +Record comboFreqOverrides
+        +string[] suits
+    }
+    note for RangeEntry "Inalterado desde a v1.<br/>Mao unica e o caso de UMA entry specific com frequencia 1 —<br/>SEM caminho de codigo separado, para nao divergir (RF-01.2)"
+
+    class SpotV2 {
+        +Card[] board
+        +RangeEntry[] heroRange
+        +RangeEntry[] villainRange
+        +number potCurrent
+        +number callAmount
+    }
+
+    class Spot {
+        +Card[] board
+        +CardPair hero
+        +RangeEntry[] villainRange
+        +number potCurrent
+        +number callAmount
+    }
+    note for Spot "v1 PRESERVADA. Consumida por evaluateSpot e pelo popup<br/>/calculadora-popup/combos. Coexiste com SpotV2 — divida assumida"
+
+    class EngineMode {
+        <<enumeration>>
+        exact
+        monte_carlo
+    }
+
+    class EngineRequest {
+        +SpotV2 spot
+        +EngineMode mode
+        +number iterations
+        +number seed
+        +number exactLimit
+    }
+    note for EngineRequest "seed fixa 20240815, PRNG proprio mulberry32.<br/>exactLimit 4 milhoes de SHOWDOWNS, contados como COMPARACOES.<br/>iterations vem do orcamento por superficie (emenda A3)"
+
+    class EngineRunHandle {
+        +number totalUnits
+        +step(maxUnits) void
+        +progress() number
+        +result() EngineResult
+        +cancel() void
+    }
+    note for EngineRunHandle "Stepper PURO e SINCRONO. Sem timer, sem Worker,<br/>sem Date.now obrigatorio dentro da matematica.<br/>Fatia = 200 ms OU 200 mil unidades"
+
+    class EngineResult {
+        <<union>>
+        +string status
+    }
+    note for EngineResult "Uniao DISCRIMINADA por status.<br/>O compilador passa a cobrar o if:<br/>nao ha como ler um numero sem antes checar o status"
+
+    class EngineResultOk {
+        +status : ok
+        +HeroComboResult[] perHeroCombo
+        +number heroRangeEquity
+        +number callThresholdIndex
+        +EngineMode modeUsed
+        +number runoutsPorPar
+        +ConfidenceInterval aggregateCi
+    }
+    note for EngineResultOk "callThresholdIndex = quantos combos do heroi tem EV de call maior ou igual a zero.<br/>E a resposta direta de quantas das minhas maos pagam.<br/>heroRangeEquity e ponderada por MASSA DE PARES VALIDOS: w_h vezes heroDen"
+
+    class EngineResultDegraded {
+        +status : degraded
+        +EngineDegradedReason reason
+    }
+
+    class EngineDegradedReason {
+        <<enumeration>>
+        empty_hero_range
+        empty_villain_range
+        no_valid_pairs
+    }
+    note for EngineDegradedReason "Uniao ABERTA. O consumidor guarda por status,<br/>NUNCA pela razao especifica — razao nova entra sem quebrar consumidor"
+
+    class HeroComboResult {
+        +CardPair combo
+        +number weight
+        +number pairMass
+        +number equity
+        +number evCall
+        +Decision decision
+        +ComboDegradedReason degradedReason
+        +ConfidenceInterval ci
+    }
+    note for HeroComboResult "pairMass = heroDen do combo = soma de w_v sobre os v compativeis.<br/>pairMass zero produz degradedReason no_valid_villain_combo:<br/>combo FORA do agregado, nunca 0 por cento.<br/>Este e o SEGUNDO nivel de degradacao — o do combo, nao o da corrida"
+
+    class ComboDegradedReason {
+        <<enumeration>>
+        no_valid_villain_combo
+    }
+
+    class ConfidenceInterval {
+        +number mean
+        +number halfWidth
+        +number n
+    }
+    note for ConfidenceInterval "OBRIGATORIO em Monte Carlo, por combo e no agregado.<br/>halfWidth = 1.96 vezes s dividido por raiz de n.<br/>n = amostras ACEITAS daquele combo, nao o S global.<br/>Numero de Monte Carlo sem intervalo e bug (D5 do indice)"
+
+    class Verdict {
+        +number heroEquity
+        +number requiredEquity
+        +number evCall
+        +Decision decision
+        +VerdictDegradedReason degradedReason
+        +number W
+        +number L
+        +number C
+        +number totalWeight
+        +number wEff
+        +number lEff
+        +ComboResult[] perCombo
+        +string street
+        +HeroComboResult[] perHeroCombo
+        +number heroRangeEquity
+        +number callThresholdIndex
+    }
+    note for Verdict "decision e degradedReason vem da F0 e NAO mudam:<br/>degradedReason so tem empty_range, vocabulario separado do motor.<br/>Os tres ultimos campos sao OPCIONAIS e populados SOMENTE pelo caminho novo —<br/>evaluateSpot nunca os preenche, e por isso os golden tests do commit 2aed9b1d seguem valendo.<br/>ATENCAO: o Verdict degradado AINDA carrega evCall finito (teste do baseline exige).<br/>O portao e decision diferente de null"
+
+    class ComboResult {
+        +CardPair combo
+        +number weight
+        +Outcome outcome
+        +number equity
+    }
+
+    class WorkerInbound {
+        <<message>>
+        +run runId request
+        +cancel runId
+    }
+
+    class WorkerOutbound {
+        <<message>>
+        +progress runId percent
+        +done runId result
+        +error runId error
+    }
+    note for WorkerOutbound "runId monotonico. Mensagem com runId diferente do atual<br/>e DESCARTADA pelo cliente: resultado velho nunca pinta a tela"
+
+    class PersistenceV2 {
+        +string draftKey
+        +string spotsKey
+    }
+    note for PersistenceV2 "Chaves novas grindfy.comboCalc.draft.v2 e grindfy.comboCalc.spots.v2.<br/>A v1 e lida UMA vez e convertida: hero string[] vira heroRange<br/>com uma entry specific de frequencia 1.<br/>A chave v1 NAO e apagada — caminho de volta se a F1 for revertida"
+
+    SpotV2 "1" o-- "3..5" Card : board
+    SpotV2 "1" o-- "1..*" RangeEntry : heroRange
+    SpotV2 "1" o-- "1..*" RangeEntry : villainRange
+    Spot "1" o-- "1..*" RangeEntry : villainRange
+
+    EngineRequest "1" --> "1" SpotV2 : spot
+    EngineRequest "1" --> "1" EngineMode : mode
+    EngineRequest ..> EngineRunHandle : createEngineRun
+
+    EngineRunHandle ..> EngineResult : result()
+
+    EngineResult <|-- EngineResultOk
+    EngineResult <|-- EngineResultDegraded
+    EngineResultDegraded "1" --> "1" EngineDegradedReason : reason
+    EngineResultOk "1" o-- "1..*" HeroComboResult : perHeroCombo
+    EngineResultOk "1" o-- "0..1" ConfidenceInterval : aggregateCi
+    HeroComboResult "1" o-- "0..1" ConfidenceInterval : ci
+    HeroComboResult "1" --> "0..1" ComboDegradedReason : degradedReason
+
+    Spot ..> Verdict : evaluateSpot INTOCADA — oraculo de regressao
+    Verdict "1" o-- "0..*" ComboResult : perCombo
+    Verdict "1" o-- "0..*" HeroComboResult : perHeroCombo opcional
+    EngineResultOk ..> Verdict : alimenta os campos opcionais
+
+    WorkerInbound ..> EngineRequest : carrega
+    WorkerOutbound ..> EngineResult : carrega
+    PersistenceV2 ..> SpotV2 : serializa
