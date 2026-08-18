@@ -1,0 +1,114 @@
+%% Range Lab F3a (ADR-248, D-F3-2 e D-F3-3) — arvore de decisao de classifyMade.
+%% Arquivo alvo: client/src/lib/combo-calc/classify.ts (novo, puro, FORA do worker).
+%%
+%% O que este diagrama existe para deixar explicito:
+%% 1. O avaliador da a FAMILIA (0..8). Ele NAO da a categoria — a subdivisao de
+%%    par depende de ONDE VEIO O PAR, informacao que o score de 5 cartas descarta.
+%% 2. Familia de FORCA (8,7,6,5,4) fica com o nome mesmo quando a mesa joga,
+%%    marcada usesHoleCards false. Familia de PAR (3,2,1) EXIGE participacao das
+%%    cartas do heroi; sem ela, cai no passo de par e vira ace_high ou no_pair.
+%% 3. O passo de par recebe fam 1 SEMPRE, e fam 2 ou 3 quando o heroi nao
+%%    participa (F3-detalhamento secao 3.2). A linha comprimida da F3a omite o
+%%    fam 3; sem isso, AK em 7-7-7 sairia como TRINCA.
+%% 4. Familia 2 exige participacao em AO MENOS UM dos dois pares, nao nos dois —
+%%    quem resolve e a tabela de qualificadores, que define with_board_pair como
+%%    "par do heroi + par da mesa, heroi NAO pareia dois ranks distintos".
+%%
+%% Notacao: boardRanks = ranks DISTINTOS do bordo, decrescente (b0 > b1 > ...).
+%% higherCount(r) = quantos ranks do bordo sao estritamente maiores que r.
+%%
+%% PONTO ABERTO (ADR-248, pergunta 1 ao founder): evaluate7 exige EXATAMENTE 7
+%% cartas (loadBoard recebe 5 codigos de bordo). No flop sao 5 cartas no total e
+%% no turn 6. A familia fora do river sai de evaluateHand (evaluator.ts, aceita
+%% 5..7) ou de uma entrada nova de 5/6 cartas no fastEvaluator. Nao decidido.
+flowchart TD
+    start(["classifyMade(hole, board)"]) --> fam["fam = handCategory(score)<br/><i>0 a 8, mesma ordem de CATEGORY em evaluator.ts</i>"]
+
+    fam --> sw{"Qual familia?"}
+
+    %% ── familia de FORCA: fica com o nome mesmo quando a mesa joga (D-F3-3) ──
+    sw -->|"8"| F8["<b>straight_flush</b>"]
+    sw -->|"7"| F7["<b>quads</b>"]
+    sw -->|"6"| F6["<b>full_house</b>"]
+    sw -->|"5"| F5["<b>flush</b><br/>qualificador nut / strong / weak<br/><i>posicao entre as cartas VIVAS do naipe</i>"]
+    sw -->|"4"| F4["<b>straight</b>"]
+
+    F8 --> forca
+    F7 --> forca
+    F6 --> forca
+    F5 --> forca
+    F4 --> forca
+    forca["<b>FAMILIA DE FORCA</b><br/>mantem o nome mesmo sem carta do heroi.<br/>usesHoleCards = false quando o avaliador<br/>nomeou a mao do BORDO"]
+
+    %% ── familia 3: set, trinca, ou nada ──
+    sw -->|"3"| Q3{"O heroi participa<br/>da trinca?"}
+    Q3 -->|"par de bolso do rank<br/>que aparece no bordo"| C6["<b>set</b><br/>fromPocketPair = true"]
+    Q3 -->|"bordo tem o par,<br/>heroi tem 1 carta do rank"| C7["<b>trips</b> + kicker"]
+    Q3 -->|"nenhuma carta do heroi<br/><i>ex.: AK em 7-7-7</i>"| passo
+
+    %% ── familia 2: dois pares, ou nada ──
+    sw -->|"2"| Q2{"O heroi participa de<br/>AO MENOS UM dos<br/>dois pares?"}
+    Q2 -->|"sim"| C8["<b>two_pair</b> + qualificador"]
+    Q2 -->|"nao, os dois pares<br/>sao da mesa"| passo
+
+    C8 --> QUAL{"De onde vieram<br/>os dois pares?"}
+    QUAL -->|"heroi pareia b0 e b1"| QT["top_two"]
+    QUAL -->|"heroi pareia b0 e um<br/>rank abaixo de b1"| QTB["top_bottom"]
+    QUAL -->|"heroi pareia dois ranks,<br/>nenhum deles b0"| QBB["bottom_two"]
+    QUAL -->|"par do heroi + par da mesa<br/>heroi NAO pareia dois ranks distintos"| QWB["with_board_pair"]
+
+    %% ── familia 1 e 0 ──
+    sw -->|"1"| passo
+    sw -->|"0"| Q0{"O heroi tem<br/>um A na mao?"}
+    Q0 -->|"sim"| C15["<b>ace_high</b>"]
+    Q0 -->|"nao"| C16["<b>no_pair</b>"]
+
+    %% ── o passo de par ──
+    passo["<b>PASSO DE PAR</b><br/>recebe fam 1 sempre,<br/>e fam 2 ou 3 sem participacao do heroi"]
+
+    passo --> P1{"hole e par de bolso p,<br/>com p FORA do bordo?"}
+
+    P1 -->|"sim"| P2{"higherCount(p)"}
+    P2 -->|"0"| C9["<b>overpair</b><br/>fromPocketPair = true"]
+    P2 -->|"igual a boardRanks.length<br/><i>abaixo de TODOS</i>"| C14["<b>underpair</b><br/>fromPocketPair = true"]
+    P2 -->|"no meio"| NTH
+
+    P1 -->|"nao"| P3{"EXATAMENTE 1 carta do heroi<br/>tem rank r presente no bordo?"}
+    P3 -->|"sim"| NTHK["kicker = a OUTRA carta do heroi<br/>banda absoluta k_top A/K ·<br/>k_good Q/J/T · k_weak 9-<br/>nutKicker = kicker e o maior<br/>rank AUSENTE do bordo"]
+    NTHK --> NTH
+
+    P3 -->|"nao — o par e todo da mesa"| P4{"O heroi tem<br/>um A na mao?"}
+    P4 -->|"sim"| CB1["<b>ace_high</b><br/>usesHoleCards = false"]
+    P4 -->|"nao"| CB2["<b>no_pair</b><br/>usesHoleCards = false"]
+
+    NTH{"nth por higherCount"}
+    NTH -->|"0"| C10["<b>top_pair</b>"]
+    NTH -->|"1"| C11["<b>second_pair</b>"]
+    NTH -->|"2"| C12["<b>third_pair</b>"]
+    NTH -->|"3 ou mais"| C13["<b>weak_pair</b> — 4o ou pior"]
+
+    %% ── os dois casos canonicos (criterio de aceite 2) ──
+    CASO1["<b>CASO CANONICO 1</b><br/>AK em Qh 7s 7d<br/>avaliador diz fam 1 — par de setes.<br/>Mapear familia direto escreveria '2o par',<br/>que e FALSO: o par e da mesa"]
+    CASO1 -.->|"entra por fam 1"| passo
+    CB1 -.->|"e o resultado certo:<br/><b>ace_high</b>, nao second_pair"| CASO1
+
+    CASO2["<b>CASO CANONICO 2</b><br/>88 em Qh 7s 7d<br/>fam 2 — 88 e 77 — COM participacao.<br/>O heroi pareia UM rank, nao dois,<br/>e ainda assim e dois pares"]
+    CASO2 -.->|"entra por fam 2"| Q2
+    QWB -.->|"e o resultado certo:<br/><b>two_pair</b> / with_board_pair"| CASO2
+
+    subgraph regra["A regra que o tipo carrega — D-F3-4"]
+        direction TB
+        r1["made e UM valor: a saida acima e sempre<br/>exatamente uma das 16 categorias"]
+        r2["draws e um CONJUNTO de 0..n tags,<br/>calculado em separado e nunca aqui"]
+        r3["Por isso sum(massa por made) = massa total,<br/>por construcao e nao por cuidado"]
+        r4["Mao feita forte NAO apaga draw:<br/>set com flush draw e set + fd.<br/>Nunca reclassificar, nunca subtrair"]
+        r1 --> r2 --> r3 --> r4
+    end
+
+    subgraph flags["Flags que TODA leitura carrega"]
+        direction TB
+        f1["usesHoleCards — descreve a mao que o<br/>AVALIADOR nomeou, nao o rotulo da tela.<br/>ace_high com o as na mao ainda sai false<br/>quando a familia vista foi o par do bordo"]
+        f2["fromPocketPair — permite a tela escrever<br/>'88 de bolso = 3o par' em vez de deixar<br/>o jogador adivinhar por que nao ha kicker"]
+        f3["nutKicker — resolve AJ em A-K-Q:<br/>banda diz k_good, relativa diria k_weak,<br/>e a verdade e que nao existe kicker melhor<br/>ali, porque K ou Q dariam DOIS PARES"]
+        f1 --> f2 --> f3
+    end

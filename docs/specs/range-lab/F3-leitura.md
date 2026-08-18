@@ -1,6 +1,26 @@
 # F3 — Leitura do spot
 
 > Frente 3 de 5 do [Range Lab](00-INDICE.md). Uma frente por sessao.
+>
+> ## ESTE DOCUMENTO NAO ABRE SESSAO
+>
+> O passe de detalhamento de 2026-08-18 quebrou a F3 em duas (D-F3-14), como o
+> proprio texto abaixo autorizava. **Nao trabalhe a partir daqui** — os dois
+> documentos que abrem a frio sao:
+>
+> - **[F3a — Leitura por categoria](F3a-leitura-categorias.md)** — taxonomia,
+>   textura, filtros, mao por combo, `perVillainCombo` no motor. *(RF-03.1,
+>   RF-03.7, RF-03.8)*
+> - **[F3b — Aritmetica da decisao](F3b-decisao.md)** — cascata, bloqueadores,
+>   MDF. *(RF-03.2, RF-03.3, RF-03.4)*
+>
+> O **porque** de cada decisao, e os cinco achados que mudaram este texto, estao
+> em **[F3-detalhamento.md](F3-detalhamento.md)**. O mais grave: o criterio de
+> aceite 4 daqui (`MDF + alpha = 1`) **nao fecha** com o `alpha` que o codigo ja
+> tem — sao dois alphas diferentes. Ver F-1 no detalhamento.
+>
+> Este arquivo fica por referencia historica: e o texto original da frente, com
+> as emendas do MindRiver ja aplicadas.
 
 ## Cabecalho
 | | |

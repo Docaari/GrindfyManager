@@ -1,0 +1,87 @@
+%% Range Lab F3a (ADR-248, D-F3-1 e D-F3-11) — o painel de leitura, dois caminhos.
+%%
+%% O que este diagrama existe para deixar obvio:
+%% 1. Sao DOIS caminhos independentes. A equity vem do motor, atras do worker e
+%%    do debounce de 400 ms. A categoria vem de classify.ts, sincrono, na propria
+%%    thread, sem passar pelo worker.
+%% 2. Mudar o TAMANHO DA APOSTA redispara o motor e NAO reclassifica nada — a
+%%    categoria de um combo nao depende do pote. Era o custo escondido de
+%%    classificar dentro do motor, e a razao da D-F3-1.
+%% 3. Marcar um filtro NAO dispara corrida nenhuma. Pintar a matriz e leitura
+%%    local do que classify.ts ja devolveu.
+%% 4. A tela tem um estado intermediario LEGITIMO: contagem e massa por
+%%    categoria ja na tela, coluna de equity ainda em branco, porque o motor nao
+%%    terminou. Isso e desenho, nao erro.
+sequenceDiagram
+    autonumber
+    actor Jogador
+    participant Page as RangeLab.tsx
+    participant Hook as useRangeEngine
+    participant Motor as Worker e engine/run.ts
+    participant Classify as classify.ts
+    participant Read as read.ts
+    participant Panel as CategoryPanel
+    participant Matrix as RangeMatrix
+
+    Note over Page,Matrix: ENTRADA 1 — muda o BORDO ou um dos RANGES
+
+    Jogador->>Page: pinta uma classe na matriz do vilao
+
+    par Caminho do motor — assincrono, atras do worker
+        Page->>Hook: spot v2 novo
+        Hook->>Hook: debounce 400 ms, emenda A3
+        Hook->>Motor: run com runId novo, descarta o anterior
+        Motor->>Motor: expandRangeV2 dos dois lados
+        Motor->>Motor: pares validos e card removal mutuo<br/>pairMass do heroi E villainPairMass do vilao
+        loop por runout, cedendo a thread entre as fatias
+            Motor->>Motor: placar por combo em Int32Array
+            Motor->>Motor: heroNum += w_v * outcome<br/>villainNum += w_h * de 1 menos outcome
+        end
+        Motor-->>Hook: EngineResultOk com perHeroCombo E perVillainCombo
+        Hook-->>Page: result, progress, running
+        Page->>Read: equity por combo do vilao
+    and Caminho da leitura — sincrono, na propria thread
+        Page->>Classify: para cada combo do range, classifyCombo com hole e board
+        Note right of Classify: no maximo 1326 combos por lado.<br/>Puro, sem worker, sem motor, sem pote
+        Classify-->>Page: HandRead por combo<br/>made unico + draws como conjunto
+        Page->>Classify: boardTexture do bordo
+        Classify-->>Page: naipe rainbow / 2flush / monotone<br/>e pareamento unpaired / paired / trips
+        Page->>Read: agrupa por categoria, contagem e massa
+        Read-->>Panel: linhas de MAOS FEITAS e de DRAWS
+        Panel-->>Jogador: categorias na tela com contagem e massa,<br/>coluna de equity ainda em branco
+    end
+
+    Read-->>Panel: coluna de equity preenchida
+    Panel-->>Jogador: painel completo — combos, massa e equity
+
+    Note over Panel: sum de massa por MADE bate com a massa total, ate 1e-9.<br/>sum por DRAW nao tem relacao com o total e pode passar dele.<br/>O rodape do bloco de draws conta COMBOS COM PELO MENOS UM DRAW
+
+    Note over Page,Matrix: ENTRADA 2 — muda o TAMANHO DA APOSTA
+
+    Jogador->>Page: digita outro pote ou outro call
+    Page->>Hook: spot v2 com potCurrent e callAmount novos
+    Hook->>Motor: nova corrida
+    Motor-->>Hook: EngineResultOk novo
+    Hook-->>Page: equity e EV atualizados
+    Page->>Read: so a coluna de equity muda
+    Read-->>Panel: mesmas linhas, numeros novos
+    Note over Page,Classify: classify.ts NAO e chamado.<br/>AJ em A-K-Q e top par com kicker nut contra aposta de 10<br/>e contra aposta de 100. Dentro do motor, cada tecla no pote<br/>reclassificaria os 1326 combos sem nada mudar na leitura
+
+    Note over Page,Matrix: ENTRADA 3 — marca um FILTRO de categoria
+
+    Jogador->>Panel: marca "flush draw"
+    Panel->>Page: conjunto de categorias marcadas
+    Page->>Read: quais classes tem ao menos um combo que passa
+    Note right of Read: OU dentro do grupo, E entre grupos.<br/>top par + 2o par acende quem for um ou outro.<br/>top par + flush draw acende so quem e os dois
+    Read-->>Page: highlight como Set de classes
+    Page->>Matrix: prop highlight opcional
+    Matrix-->>Jogador: matriz esmaecida, celulas que passam acesas<br/>tooltip diz X de Y combos passam
+    Note over Hook,Motor: nenhuma corrida disparada.<br/>O filtro le o que classify.ts ja devolveu
+
+    Note over Page,Matrix: RESET
+
+    Jogador->>Page: botao Reset
+    Page->>Page: limpa bordo, ranges E os filtros marcados
+    Note over Page: o RESET_TITLE promete isso desde a F1 —<br/>e esta frente que cumpre
+
+    Note over Motor,Panel: MODO MONTE CARLO — limite conhecido.<br/>O combo do vilao e sorteado proporcional ao peso e o heroi e<br/>exaustivo, entao cada combo do vilao recebe MUITO menos amostra.<br/>Combo de peso baixo sai com equity null e razao nomeada,<br/>e a tela escreve travessao. Nunca 0%
