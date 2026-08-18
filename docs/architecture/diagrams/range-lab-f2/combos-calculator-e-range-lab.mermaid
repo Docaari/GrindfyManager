@@ -1,0 +1,56 @@
+%% Range Lab F2 (ADR-247, D-F2-4 e D-F2-6) — os dois consumidores dos
+%% componentes de range-lab/ e a fronteira exata de solveBreakevenMultiplier.
+%%
+%% Duas coisas que este diagrama existe para deixar explicitas:
+%% 1. D-F2-6 (quitacao da D13 do ADR-246): CombosCalculator.tsx troca sua
+%%    matriz/naipes inline pelos MESMOS componentes que RangeLab.tsx ja usa,
+%%    porque RangeMatrix opera sobre RangeEntry[] generico — nao sobre SpotV2.
+%%    O escopo da troca e SO o range do vilao; o heroi de CombosCalculator
+%%    continua [Card,Card] unico, fora desta troca.
+%% 2. D-F2-4: solveBreakevenMultiplier consome Verdict.perCombo (v1 — um item
+%%    por combo do VILAO contra a mao UNICA do heroi). EngineResultOk.perHeroCombo
+%%    (v2) e um shape DIFERENTE — um item por combo do HEROI, ja agregado
+%%    contra o range inteiro do vilao. Os dois NAO sao intercambiaveis, e por
+%%    isso a linha tracejada abaixo mostra o breakeven solver conectado SO ao
+%%    lado v1 — RangeLab/VerdictPanel ficam sem esse numero nesta frente.
+graph TB
+    subgraph V1["Mundo v1 — mao unica do heroi"]
+        CC["CombosCalculator.tsx<br/>popup /calculadora-popup/combos"]
+        Spot["Spot<br/>hero: [Card,Card] unico<br/>villainRange: RangeEntry[]"]
+        EvalSpot["evaluateSpot(spot)<br/>INTOCADA — oraculo de regressao"]
+        Verdict["Verdict<br/>perCombo: ComboResult[]<br/>1 item por combo do VILAO"]
+        Breakeven["breakeven.ts<br/>solveBreakevenMultiplier(verdict, subset?)<br/>D-F2-4 — arquivo NOVO, ev.ts intocado"]
+    end
+
+    subgraph V2["Mundo v2 — range do heroi"]
+        RL["RangeLab.tsx<br/>pagina /range-lab"]
+        SpotV2["SpotV2<br/>heroRange: RangeEntry[]<br/>villainRange: RangeEntry[]"]
+        Engine["createEngineRun / worker<br/>(F1, ADR-246)"]
+        EngineResult["EngineResultOk<br/>perHeroCombo: HeroComboResult[]<br/>1 item por combo do HEROI,<br/>ja agregado contra o range do vilao"]
+        VerdictPanel["VerdictPanel.tsx"]
+    end
+
+    subgraph Shared["Componentes compartilhados — client/src/components/range-lab/"]
+        Matrix["RangeMatrix<br/>{entries: RangeEntry[], onChange,<br/>defaultFrequency, testId}<br/>gestos da F2 (D-F2-1/2/5) moram aqui"]
+        EntryList["RangeEntryList"]
+        SuitPopover["SuitPickerPopover<br/>RF-02.2 — NOVO"]
+    end
+
+    CC -->|"range do VILAO<br/>(D-F2-6 — escopo desta troca)"| Matrix
+    CC -->|"range do VILAO"| EntryList
+    CC -->|"range do VILAO"| SuitPopover
+    CC -.->|"heroi continua [Card,Card] unico —<br/>grade de 52 cartas propria,<br/>FORA do escopo D-F2-6"| Spot
+
+    RL -->|"heroRange E villainRange<br/>(os DOIS lados, desde a F1)"| Matrix
+    RL --> EntryList
+    RL --> SuitPopover
+
+    CC --> Spot --> EvalSpot --> Verdict --> Breakeven
+    Breakeven -.->|"'ponto de virada' nos 3 streets<br/>criterios de aceite 6 e 7"| CC
+
+    RL --> SpotV2 --> Engine --> EngineResult --> VerdictPanel
+    EngineResult -.->|"perHeroCombo NAO tem o<br/>equivalente de perCombo —<br/>reconciliar seria OUTRO calculo<br/>(range x range, nao mao x range).<br/>FORA de escopo desta frente"| Breakeven
+
+    style Breakeven fill:#f8d7d7,stroke:#b03030
+    style EngineResult fill:#e8e8e8,stroke:#666
+    style Matrix fill:#d6f0e0,stroke:#2e8b57

@@ -11,15 +11,28 @@ import { RotateCcw } from "lucide-react";
 import BoardPicker from "@/components/range-lab/BoardPicker";
 import RangeMatrix from "@/components/range-lab/RangeMatrix";
 import RangeEntryList from "@/components/range-lab/RangeEntryList";
+import SuitPickerPopover from "@/components/range-lab/SuitPickerPopover";
 import BetInputs, { parseAmount } from "@/components/range-lab/BetInputs";
 import ModeSelector from "@/components/range-lab/ModeSelector";
 import VerdictPanel from "@/components/range-lab/VerdictPanel";
 import ComboTable from "@/components/range-lab/ComboTable";
 import SpotLibrary from "@/components/range-lab/SpotLibrary";
+import BrushWeightControl from "@/components/range-lab/BrushWeightControl";
+import TopPercentSlider from "@/components/range-lab/TopPercentSlider";
+import RangeLibrary from "@/components/range-lab/RangeLibrary";
 import { useRangeEngine } from "@/hooks/useRangeEngine";
 import { cardKey, parseCard } from "@/lib/combo-calc/cards";
+import { enumerateCombos, parseNotation } from "@/lib/combo-calc/combos";
 import { estimateCost, suggestMode } from "@/lib/combo-calc/engine/cost";
 import type { EngineMode, SpotV2 } from "@/lib/combo-calc/engine/types";
+import {
+  createHistory,
+  push as pushHistory,
+  undo as undoHistory,
+  redo as redoHistory,
+  resetHistory,
+  type HistoryState,
+} from "@/lib/combo-calc/history";
 import {
   loadDraftV2,
   loadSavedSpotsV2,
@@ -29,6 +42,8 @@ import {
 import type { Card, RangeEntry } from "@/lib/combo-calc/types";
 import { tokens } from "@/lib/ui-tokens";
 
+type RangeSide = "hero" | "villain";
+
 type HeroMode = "hand" | "range";
 
 const RESET_TITLE =
@@ -37,15 +52,65 @@ const RESET_TITLE =
 export default function RangeLab() {
   const [board, setBoard] = useState<Card[]>([]);
   const [heroMode, setHeroMode] = useState<HeroMode>("hand");
-  const [heroRange, setHeroRange] = useState<RangeEntry[]>([]);
-  const [villainRange, setVillainRange] = useState<RangeEntry[]>([]);
+  // F2 D-F2-2 (ADR-247): dois historicos INDEPENDENTES, um por matriz — Ctrl+Z
+  // no heroi nunca desfaz o vilao. heroRange/villainRange sao derivados do
+  // `.present` de cada historico, nao um useState paralelo (fonte unica).
+  const [heroHistory, setHeroHistory] = useState<HistoryState<RangeEntry[]>>(() =>
+    createHistory<RangeEntry[]>([]),
+  );
+  const [villainHistory, setVillainHistory] = useState<HistoryState<RangeEntry[]>>(() =>
+    createHistory<RangeEntry[]>([]),
+  );
+  const heroRange = heroHistory.present;
+  const villainRange = villainHistory.present;
   const [potInput, setPotInput] = useState("36.1");
   const [callInput, setCallInput] = useState("13.8");
   const [bbInput, setBbInput] = useState("");
   const [mode, setMode] = useState<EngineMode>("exact");
   const [savedSpots, setSavedSpots] = useState<SavedSpotV2[]>([]);
+  // RF-02.2 (D): { side, notation } da celula ATIVA cujo popover de naipes
+  // esta aberto. null quando fechado.
+  const [suitPicker, setSuitPicker] = useState<{ side: RangeSide; notation: string } | null>(null);
+  // Peso rapido do pincel (emenda A9, D-F2-1): um por lado, alimenta o
+  // `defaultFrequency` que `RangeMatrix` ja aceita — zero mudanca de contrato.
+  const [heroBrush, setHeroBrush] = useState(1);
+  const [villainBrush, setVillainBrush] = useState(1);
 
   const hydrated = useRef(false);
+
+  function setHeroRange(next: RangeEntry[]): void {
+    setHeroHistory((h) => pushHistory(h, next));
+  }
+  function setVillainRange(next: RangeEntry[]): void {
+    setVillainHistory((h) => pushHistory(h, next));
+  }
+  function undoHero(): void {
+    setHeroHistory((h) => undoHistory(h));
+  }
+  function redoHero(): void {
+    setHeroHistory((h) => redoHistory(h));
+  }
+  function undoVillain(): void {
+    setVillainHistory((h) => undoHistory(h));
+  }
+  function redoVillain(): void {
+    setVillainHistory((h) => redoHistory(h));
+  }
+
+  function toggleSuitPicker(side: RangeSide, notation: string): void {
+    setSuitPicker((cur) =>
+      cur && cur.side === side && cur.notation === notation ? null : { side, notation },
+    );
+  }
+
+  function handleSuitPickerChange(next: RangeEntry): void {
+    if (!suitPicker) return;
+    if (suitPicker.side === "hero") {
+      setHeroRange(heroRange.map((e) => (e.notation === next.notation ? next : e)));
+    } else {
+      setVillainRange(villainRange.map((e) => (e.notation === next.notation ? next : e)));
+    }
+  }
 
   // Hidratacao unica. `loadDraftV2` le a v2 e, na ausencia dela, converte a v1 —
   // rascunho de antes da F1 abre sem perda (criterio de aceite 5).
@@ -53,8 +118,8 @@ export default function RangeLab() {
     const draft = loadDraftV2();
     if (draft) {
       setBoard(draft.board);
-      setHeroRange(draft.heroRange);
-      setVillainRange(draft.entries);
+      setHeroHistory(createHistory<RangeEntry[]>(draft.heroRange));
+      setVillainHistory(createHistory<RangeEntry[]>(draft.entries));
       if (draft.potInput) setPotInput(draft.potInput);
       if (draft.callInput) setCallInput(draft.callInput);
       setBbInput(draft.bbInput);
@@ -78,6 +143,11 @@ export default function RangeLab() {
     }, 400);
     return () => clearTimeout(timer);
   }, [board, heroRange, villainRange, potInput, callInput, bbInput]);
+
+  // Cartas mortas do bordo — mesma convencao ja usada pelo SuitPickerPopover
+  // (nao inclui o range do outro lado: card removal contra um RANGE, nao mao
+  // concreta, e responsabilidade do motor).
+  const dead = useMemo(() => new Set(board.map(cardKey)), [board]);
 
   const spot: SpotV2 = useMemo(
     () => ({
@@ -109,15 +179,19 @@ export default function RangeLab() {
 
   function reset(): void {
     setBoard([]);
-    setHeroRange([]);
-    setVillainRange([]);
+    // resetHistory (nao push): reset() troca o range por fora do fluxo de
+    // pintura — um Ctrl+Z depois nao pode revelar o range anterior (D-F2-2).
+    setHeroHistory((h) => resetHistory(h, []));
+    setVillainHistory((h) => resetHistory(h, []));
     setMode("exact");
+    setSuitPicker(null);
   }
 
   function loadSpot(saved: SavedSpotV2): void {
     setBoard(saved.board.map(parseCard).filter((c): c is Card => c != null));
-    setHeroRange(saved.heroRange);
-    setVillainRange(saved.entries);
+    setHeroHistory((h) => resetHistory(h, saved.heroRange));
+    setVillainHistory((h) => resetHistory(h, saved.entries));
+    setSuitPicker(null);
     setPotInput(saved.potInput || "36.1");
     setCallInput(saved.callInput || "13.8");
     setBbInput(saved.bbInput);
@@ -194,9 +268,18 @@ export default function RangeLab() {
                 (RF-01.2). O que muda e so a superficie: no modo mao a expectativa
                 e uma entrada so.
               */}
+              <BrushWeightControl
+                value={heroBrush}
+                onChange={setHeroBrush}
+                testId="range-lab-hero-brush"
+              />
               <RangeMatrix
                 entries={heroRange}
                 onChange={setHeroRange}
+                defaultFrequency={heroBrush}
+                onUndo={undoHero}
+                onRedo={redoHero}
+                onOpenSuitPicker={(notation) => toggleSuitPicker("hero", notation)}
                 testId="range-lab-hero-matrix"
               />
               <RangeEntryList
@@ -204,6 +287,22 @@ export default function RangeLab() {
                 onChange={setHeroRange}
                 testId="range-lab-hero-entries"
               />
+              <TopPercentSlider dead={dead} onApply={setHeroRange} testId="range-lab-hero-top-percent" />
+              <RangeLibrary entries={heroRange} onApply={setHeroRange} testId="range-lab-hero-library" />
+              {suitPicker?.side === "hero" &&
+                (() => {
+                  const activeEntry = heroRange.find((e) => e.notation === suitPicker.notation);
+                  const parsed = parseNotation(suitPicker.notation);
+                  if (!activeEntry || !parsed) return null;
+                  return (
+                    <SuitPickerPopover
+                      notation={suitPicker.notation}
+                      combos={enumerateCombos(parsed, new Set(board.map(cardKey)))}
+                      entry={activeEntry}
+                      onChange={handleSuitPickerChange}
+                    />
+                  );
+                })()}
               {showCallThreshold && result.status === "ok" && (
                 <p
                   data-testid="range-lab-call-threshold"
@@ -219,9 +318,18 @@ export default function RangeLab() {
               <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Range do oponente
               </h2>
+              <BrushWeightControl
+                value={villainBrush}
+                onChange={setVillainBrush}
+                testId="range-lab-villain-brush"
+              />
               <RangeMatrix
                 entries={villainRange}
                 onChange={setVillainRange}
+                defaultFrequency={villainBrush}
+                onUndo={undoVillain}
+                onRedo={redoVillain}
+                onOpenSuitPicker={(notation) => toggleSuitPicker("villain", notation)}
                 testId="range-lab-villain-matrix"
               />
               <RangeEntryList
@@ -229,6 +337,22 @@ export default function RangeLab() {
                 onChange={setVillainRange}
                 testId="range-lab-villain-entries"
               />
+              <TopPercentSlider dead={dead} onApply={setVillainRange} testId="range-lab-villain-top-percent" />
+              <RangeLibrary entries={villainRange} onApply={setVillainRange} testId="range-lab-villain-library" />
+              {suitPicker?.side === "villain" &&
+                (() => {
+                  const activeEntry = villainRange.find((e) => e.notation === suitPicker.notation);
+                  const parsed = parseNotation(suitPicker.notation);
+                  if (!activeEntry || !parsed) return null;
+                  return (
+                    <SuitPickerPopover
+                      notation={suitPicker.notation}
+                      combos={enumerateCombos(parsed, new Set(board.map(cardKey)))}
+                      entry={activeEntry}
+                      onChange={handleSuitPickerChange}
+                    />
+                  );
+                })()}
             </div>
           </section>
 

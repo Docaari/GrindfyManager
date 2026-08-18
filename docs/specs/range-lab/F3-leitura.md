@@ -161,14 +161,19 @@ eles aqui.
 
 ### Prompt da proxima sessao
 
-Frente: **F4 — Contexto**. Modelo: **Opus 5 — Alto**.
+**F4 foi cancelada (founder, 2026-08-18)** — ICM/RP, persistencia server-side,
+ponte com Estudos/MDA, Coach e export saem do roadmap do Range Lab. A proxima
+frente e a F5a.
+
+Frente: **F5a — Graficos**. Modelo: **Opus 5 — Extra**.
 ```
-Frente F4 do Range Lab. Leia Docs/specs/range-lab/00-INDICE.md e
-Docs/specs/range-lab/F4-contexto.md antes de qualquer coisa.
+Frente F5a do Range Lab. Leia Docs/specs/range-lab/00-INDICE.md e
+Docs/specs/range-lab/F5-mindriver.md antes de qualquer coisa.
 
-F0 a F3 estao concluidas e verificadas. Esta frente tem migration (0101) e toca
-dinheiro (ICM). Comece pelo ADR: formula do risk premium, estrutura das tabelas
-novas e gate de tier da biblioteca sincronizada. Depois pipeline TDD.
-
-Confirme comigo o gate de tier antes de implementar.
+F1 e F3 estao concluidas e verificadas. F4 foi cancelada — nao depende dela.
+Esta frente e so leitura visual — nao muda motor nem modelo. Comece pelo passe
+de detalhamento dos quatro RFs (05.1 a 05.4), com foco em: normalizacao do
+eixo X quando os dois ranges tem tamanhos diferentes, e como o seletor
+equity/decisao do hotness reaproveita uma corrida so. Me mostre o
+detalhamento antes do TDD.
 ```

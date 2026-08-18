@@ -12,21 +12,28 @@ Este indice e o unico lugar onde o estado global vive.
 |---|---|---|---|---|
 | [F0 Verdade](F0-verdade.md) | 7 correcoes, incl. 2 que mentem numero na tela | Opus 5 — Alto | — | **Concluida** 2026-08-16 — commit `ea0f8303` |
 | [F1 Motor](F1-motor.md) | Avaliador rapido, worker, exato/MC, heroi-como-range, `/range-lab` | Opus 5 — Extra | F0 | **Concluida** 2026-08-17 — commit `6f02c872` |
-| [F2 Range builder](F2-range-builder.md) | Atalhos, naipes em grade, freq por combo, top X%, undo, **+ RF-02.6 (ponto de virada, herdado da F0)** | Sonnet 5 — Alto | F0 | Nao iniciada |
-| [F3 Leitura](F3-leitura.md) | Categorias, cascata, bloqueadores, MDF, runout, distribuicao, filtros | Opus 5 — Extra | F1 | Nao iniciada |
-| [F4 Contexto](F4-contexto.md) | Risk premium, servidor (migration 0101), Estudos/MDA, Coach, export | Opus 5 — Alto | F1 | Nao iniciada |
-| [F5a Graficos](F5-mindriver.md) | Curva dupla de equity, fluxo rua a rua, hotness, heatmap 13x13 + chips | Opus 5 — Extra | F1 | Nao iniciada |
-| [F5b Ferramentas](F5-mindriver.md) | Range Finder, cartas mortas, cenario em arquivo | Sonnet 5 — Alto | F1 | Nao iniciada |
+| [F2 Range builder](F2-range-builder.md) | Atalhos, naipes em grade, freq por combo, top X%, undo, **+ RF-02.6 (ponto de virada, herdado da F0)** | Sonnet 5 — Alto | F0 | **Concluida** 2026-08-18 — RF-02.1 a RF-02.6 ligados de verdade em `RangeLab.tsx` e no popup, 579/579 verdes, `tsc` 0. Rodada 3 fechou: `handRanking.json` real (Monte Carlo 60k/mao, `scripts/generate-hand-ranking.ts`), `TopPercentSlider`/`RangeLibrary`/`BrushWeightControl` nos dois lados, e D13 pago — `CombosCalculator.tsx` (popup) consome os mesmos `RangeMatrix`/`RangeEntryList`/`SuitPickerPopover` de `range-lab/`, ganhando Ctrl+Z/Ctrl+Y de graca |
+| [F3 Leitura](F3-leitura.md) | Categorias, cascata, bloqueadores, MDF, runout, distribuicao, filtros | Opus 5 — Extra | F1 | Nao iniciada — **proxima frente** |
+| ~~F4 Contexto~~ | ~~Risk premium, servidor, Estudos/MDA, Coach, export~~ | — | — | **Cancelada** 2026-08-18 (decisao founder) — ver nota abaixo |
+| [F5a Graficos](F5-mindriver.md) | Curva dupla de equity, fluxo rua a rua, hotness, heatmap 13x13 + chips | Opus 5 — Extra | F1 | Nao iniciada — depois da F3 |
+| [F5b Ferramentas](F5-mindriver.md) | Range Finder + cartas mortas separadas do board (RF-05.7 cenario em arquivo cortado) | Sonnet 5 — Alto | F1 | Nao iniciada — depois da F5a |
 
-F0 e F2 podem correr em paralelo com F1 — tocam arquivos diferentes. F3, F4 e F5
+F0 e F2 podem correr em paralelo com F1 — tocam arquivos diferentes. F3 e F5
 exigem o modelo novo de `Spot` que a F1 entrega.
+
+**Ordem confirmada (founder, 2026-08-18): F3 -> F5a -> F5b.** `F4-contexto.md`
+continua no repo por referencia (formula do risk premium, desenho de
+persistencia), mas nao abre sessao — ICM/RP, biblioteca de ranges sincronizada
+no servidor, ponte com Estudos/MDA, tool do Coach e export ficaram fora do
+roadmap do Range Lab. Motivo: escopo de integracao maior do que o produto
+precisa agora. Detalhe em `memory/session_2026-08-18-range-lab-f2-round3-f4-cut.md`.
 
 A F5 nasceu do estudo do **Mind River** (app desktop do proprio founder,
 2026-08-16). Alem das duas sub-frentes acima, ela distribuiu **20 emendas** (A1 a
-A20) dentro da F0, F1, F2, F3 e F4 — cada uma marcada no texto como
-`emenda AN`. Dois RFs da F3 foram consolidados na F5a para nao construir a mesma
-tela duas vezes: RF-03.5 (runout) virou RF-05.3, e RF-03.6 (distribuicao) virou
-RF-05.1.
+A20) dentro da F0, F1, F2, F3 e F4 (a F4 recebeu so a A13, que caiu junto com a
+frente) — cada uma marcada no texto como `emenda AN`. Dois RFs da F3 foram
+consolidados na F5a para nao construir a mesma tela duas vezes: RF-03.5 (runout)
+virou RF-05.3, e RF-03.6 (distribuicao) virou RF-05.1.
 
 Ao concluir uma frente: marcar o status aqui e registrar o commit.
 

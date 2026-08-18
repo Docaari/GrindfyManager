@@ -320,3 +320,43 @@ export function loadSavedSpotsV2(): SavedSpotV2[] {
 export function persistSavedSpotsV2(spots: SavedSpotV2[]): void {
   safeSet(SPOTS_KEY_V2, spots);
 }
+
+// ── biblioteca de ranges (F2, RF-02.5) ────────────────────────
+//
+// Um range salvo e SEPARADO de um spot salvo: nao carrega bordo, mao do
+// heroi, nem apostas — so a lista de classes, pra ser aplicavel em QUALQUER
+// lado (heroi ou vilao) de qualquer spot. Chave propria, nao reaproveita
+// `SPOTS_KEY_V2`.
+
+export const RANGE_LIBRARY_KEY = "grindfy.comboCalc.rangeLibrary.v1";
+
+export interface SavedRange {
+  id: string;
+  name: string;
+  savedAt: number;
+  entries: RangeEntry[];
+}
+
+function sanitizeSavedRange(raw: unknown): SavedRange | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const s = raw as Record<string, unknown>;
+  if (typeof s.id !== "string" || s.id === "") return null;
+  if (typeof s.name !== "string") return null;
+  if (!Array.isArray(s.entries)) return null;
+  return {
+    id: s.id,
+    name: s.name,
+    savedAt: typeof s.savedAt === "number" && Number.isFinite(s.savedAt) ? s.savedAt : 0,
+    entries: sanitizeEntries(s.entries),
+  };
+}
+
+export function loadRangeLibrary(): SavedRange[] {
+  const v = safeGet(RANGE_LIBRARY_KEY);
+  if (!Array.isArray(v)) return [];
+  return v.map(sanitizeSavedRange).filter((r): r is SavedRange => r != null);
+}
+
+export function persistRangeLibrary(ranges: SavedRange[]): void {
+  safeSet(RANGE_LIBRARY_KEY, ranges);
+}

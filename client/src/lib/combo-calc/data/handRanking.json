@@ -1,0 +1,678 @@
+[
+  {
+    "notation": "22",
+    "equity": 0.505658
+  },
+  {
+    "notation": "33",
+    "equity": 0.535875
+  },
+  {
+    "notation": "44",
+    "equity": 0.570525
+  },
+  {
+    "notation": "55",
+    "equity": 0.605642
+  },
+  {
+    "notation": "66",
+    "equity": 0.633675
+  },
+  {
+    "notation": "77",
+    "equity": 0.663558
+  },
+  {
+    "notation": "88",
+    "equity": 0.690483
+  },
+  {
+    "notation": "99",
+    "equity": 0.719725
+  },
+  {
+    "notation": "TT",
+    "equity": 0.748517
+  },
+  {
+    "notation": "JJ",
+    "equity": 0.775492
+  },
+  {
+    "notation": "QQ",
+    "equity": 0.7983
+  },
+  {
+    "notation": "KK",
+    "equity": 0.822208
+  },
+  {
+    "notation": "AA",
+    "equity": 0.853967
+  },
+  {
+    "notation": "32s",
+    "equity": 0.359775
+  },
+  {
+    "notation": "32o",
+    "equity": 0.322925
+  },
+  {
+    "notation": "42s",
+    "equity": 0.36685
+  },
+  {
+    "notation": "42o",
+    "equity": 0.33035
+  },
+  {
+    "notation": "43s",
+    "equity": 0.383042
+  },
+  {
+    "notation": "43o",
+    "equity": 0.34765
+  },
+  {
+    "notation": "52s",
+    "equity": 0.378283
+  },
+  {
+    "notation": "52o",
+    "equity": 0.342583
+  },
+  {
+    "notation": "53s",
+    "equity": 0.393325
+  },
+  {
+    "notation": "53o",
+    "equity": 0.36285
+  },
+  {
+    "notation": "54s",
+    "equity": 0.4145
+  },
+  {
+    "notation": "54o",
+    "equity": 0.383275
+  },
+  {
+    "notation": "62s",
+    "equity": 0.381533
+  },
+  {
+    "notation": "62o",
+    "equity": 0.340608
+  },
+  {
+    "notation": "63s",
+    "equity": 0.394192
+  },
+  {
+    "notation": "63o",
+    "equity": 0.362642
+  },
+  {
+    "notation": "64s",
+    "equity": 0.412108
+  },
+  {
+    "notation": "64o",
+    "equity": 0.381383
+  },
+  {
+    "notation": "65s",
+    "equity": 0.432925
+  },
+  {
+    "notation": "65o",
+    "equity": 0.399642
+  },
+  {
+    "notation": "72s",
+    "equity": 0.382033
+  },
+  {
+    "notation": "72o",
+    "equity": 0.347825
+  },
+  {
+    "notation": "73s",
+    "equity": 0.399808
+  },
+  {
+    "notation": "73o",
+    "equity": 0.36455
+  },
+  {
+    "notation": "74s",
+    "equity": 0.420333
+  },
+  {
+    "notation": "74o",
+    "equity": 0.384642
+  },
+  {
+    "notation": "75s",
+    "equity": 0.436267
+  },
+  {
+    "notation": "75o",
+    "equity": 0.4031
+  },
+  {
+    "notation": "76s",
+    "equity": 0.455617
+  },
+  {
+    "notation": "76o",
+    "equity": 0.422733
+  },
+  {
+    "notation": "82s",
+    "equity": 0.408675
+  },
+  {
+    "notation": "82o",
+    "equity": 0.368767
+  },
+  {
+    "notation": "83s",
+    "equity": 0.409475
+  },
+  {
+    "notation": "83o",
+    "equity": 0.376683
+  },
+  {
+    "notation": "84s",
+    "equity": 0.426692
+  },
+  {
+    "notation": "84o",
+    "equity": 0.393558
+  },
+  {
+    "notation": "85s",
+    "equity": 0.44275
+  },
+  {
+    "notation": "85o",
+    "equity": 0.41365
+  },
+  {
+    "notation": "86s",
+    "equity": 0.464533
+  },
+  {
+    "notation": "86o",
+    "equity": 0.43355
+  },
+  {
+    "notation": "87s",
+    "equity": 0.483117
+  },
+  {
+    "notation": "87o",
+    "equity": 0.447508
+  },
+  {
+    "notation": "92s",
+    "equity": 0.423458
+  },
+  {
+    "notation": "92o",
+    "equity": 0.39115
+  },
+  {
+    "notation": "93s",
+    "equity": 0.431467
+  },
+  {
+    "notation": "93o",
+    "equity": 0.401842
+  },
+  {
+    "notation": "94s",
+    "equity": 0.436058
+  },
+  {
+    "notation": "94o",
+    "equity": 0.406767
+  },
+  {
+    "notation": "95s",
+    "equity": 0.456667
+  },
+  {
+    "notation": "95o",
+    "equity": 0.430458
+  },
+  {
+    "notation": "96s",
+    "equity": 0.475867
+  },
+  {
+    "notation": "96o",
+    "equity": 0.444858
+  },
+  {
+    "notation": "97s",
+    "equity": 0.491808
+  },
+  {
+    "notation": "97o",
+    "equity": 0.459683
+  },
+  {
+    "notation": "98s",
+    "equity": 0.505592
+  },
+  {
+    "notation": "98o",
+    "equity": 0.479217
+  },
+  {
+    "notation": "T2s",
+    "equity": 0.447808
+  },
+  {
+    "notation": "T2o",
+    "equity": 0.418175
+  },
+  {
+    "notation": "T3s",
+    "equity": 0.457258
+  },
+  {
+    "notation": "T3o",
+    "equity": 0.424542
+  },
+  {
+    "notation": "T4s",
+    "equity": 0.468167
+  },
+  {
+    "notation": "T4o",
+    "equity": 0.432008
+  },
+  {
+    "notation": "T5s",
+    "equity": 0.475025
+  },
+  {
+    "notation": "T5o",
+    "equity": 0.442492
+  },
+  {
+    "notation": "T6s",
+    "equity": 0.491917
+  },
+  {
+    "notation": "T6o",
+    "equity": 0.463358
+  },
+  {
+    "notation": "T7s",
+    "equity": 0.508175
+  },
+  {
+    "notation": "T7o",
+    "equity": 0.476883
+  },
+  {
+    "notation": "T8s",
+    "equity": 0.525683
+  },
+  {
+    "notation": "T8o",
+    "equity": 0.494033
+  },
+  {
+    "notation": "T9s",
+    "equity": 0.539492
+  },
+  {
+    "notation": "T9o",
+    "equity": 0.514658
+  },
+  {
+    "notation": "J2s",
+    "equity": 0.473167
+  },
+  {
+    "notation": "J2o",
+    "equity": 0.44315
+  },
+  {
+    "notation": "J3s",
+    "equity": 0.478892
+  },
+  {
+    "notation": "J3o",
+    "equity": 0.454608
+  },
+  {
+    "notation": "J4s",
+    "equity": 0.487642
+  },
+  {
+    "notation": "J4o",
+    "equity": 0.46205
+  },
+  {
+    "notation": "J5s",
+    "equity": 0.498708
+  },
+  {
+    "notation": "J5o",
+    "equity": 0.471108
+  },
+  {
+    "notation": "J6s",
+    "equity": 0.505217
+  },
+  {
+    "notation": "J6o",
+    "equity": 0.479492
+  },
+  {
+    "notation": "J7s",
+    "equity": 0.5243
+  },
+  {
+    "notation": "J7o",
+    "equity": 0.494675
+  },
+  {
+    "notation": "J8s",
+    "equity": 0.536442
+  },
+  {
+    "notation": "J8o",
+    "equity": 0.514708
+  },
+  {
+    "notation": "J9s",
+    "equity": 0.555025
+  },
+  {
+    "notation": "J9o",
+    "equity": 0.530308
+  },
+  {
+    "notation": "JTs",
+    "equity": 0.574883
+  },
+  {
+    "notation": "JTo",
+    "equity": 0.550525
+  },
+  {
+    "notation": "Q2s",
+    "equity": 0.501542
+  },
+  {
+    "notation": "Q2o",
+    "equity": 0.475075
+  },
+  {
+    "notation": "Q3s",
+    "equity": 0.513375
+  },
+  {
+    "notation": "Q3o",
+    "equity": 0.480775
+  },
+  {
+    "notation": "Q4s",
+    "equity": 0.5161
+  },
+  {
+    "notation": "Q4o",
+    "equity": 0.491283
+  },
+  {
+    "notation": "Q5s",
+    "equity": 0.528633
+  },
+  {
+    "notation": "Q5o",
+    "equity": 0.501917
+  },
+  {
+    "notation": "Q6s",
+    "equity": 0.538975
+  },
+  {
+    "notation": "Q6o",
+    "equity": 0.511525
+  },
+  {
+    "notation": "Q7s",
+    "equity": 0.544783
+  },
+  {
+    "notation": "Q7o",
+    "equity": 0.518567
+  },
+  {
+    "notation": "Q8s",
+    "equity": 0.561175
+  },
+  {
+    "notation": "Q8o",
+    "equity": 0.537817
+  },
+  {
+    "notation": "Q9s",
+    "equity": 0.576125
+  },
+  {
+    "notation": "Q9o",
+    "equity": 0.55295
+  },
+  {
+    "notation": "QTs",
+    "equity": 0.5984
+  },
+  {
+    "notation": "QTo",
+    "equity": 0.570233
+  },
+  {
+    "notation": "QJs",
+    "equity": 0.601017
+  },
+  {
+    "notation": "QJo",
+    "equity": 0.582933
+  },
+  {
+    "notation": "K2s",
+    "equity": 0.532358
+  },
+  {
+    "notation": "K2o",
+    "equity": 0.504108
+  },
+  {
+    "notation": "K3s",
+    "equity": 0.541208
+  },
+  {
+    "notation": "K3o",
+    "equity": 0.515742
+  },
+  {
+    "notation": "K4s",
+    "equity": 0.551217
+  },
+  {
+    "notation": "K4o",
+    "equity": 0.521058
+  },
+  {
+    "notation": "K5s",
+    "equity": 0.558483
+  },
+  {
+    "notation": "K5o",
+    "equity": 0.531683
+  },
+  {
+    "notation": "K6s",
+    "equity": 0.568117
+  },
+  {
+    "notation": "K6o",
+    "equity": 0.544183
+  },
+  {
+    "notation": "K7s",
+    "equity": 0.576758
+  },
+  {
+    "notation": "K7o",
+    "equity": 0.550217
+  },
+  {
+    "notation": "K8s",
+    "equity": 0.582275
+  },
+  {
+    "notation": "K8o",
+    "equity": 0.561708
+  },
+  {
+    "notation": "K9s",
+    "equity": 0.602958
+  },
+  {
+    "notation": "K9o",
+    "equity": 0.581267
+  },
+  {
+    "notation": "KTs",
+    "equity": 0.618067
+  },
+  {
+    "notation": "KTo",
+    "equity": 0.594958
+  },
+  {
+    "notation": "KJs",
+    "equity": 0.62555
+  },
+  {
+    "notation": "KJo",
+    "equity": 0.600958
+  },
+  {
+    "notation": "KQs",
+    "equity": 0.630325
+  },
+  {
+    "notation": "KQo",
+    "equity": 0.615508
+  },
+  {
+    "notation": "A2s",
+    "equity": 0.57105
+  },
+  {
+    "notation": "A2o",
+    "equity": 0.549058
+  },
+  {
+    "notation": "A3s",
+    "equity": 0.583375
+  },
+  {
+    "notation": "A3o",
+    "equity": 0.5588
+  },
+  {
+    "notation": "A4s",
+    "equity": 0.589875
+  },
+  {
+    "notation": "A4o",
+    "equity": 0.566917
+  },
+  {
+    "notation": "A5s",
+    "equity": 0.598575
+  },
+  {
+    "notation": "A5o",
+    "equity": 0.576508
+  },
+  {
+    "notation": "A6s",
+    "equity": 0.599
+  },
+  {
+    "notation": "A6o",
+    "equity": 0.574917
+  },
+  {
+    "notation": "A7s",
+    "equity": 0.610858
+  },
+  {
+    "notation": "A7o",
+    "equity": 0.586283
+  },
+  {
+    "notation": "A8s",
+    "equity": 0.619075
+  },
+  {
+    "notation": "A8o",
+    "equity": 0.5964
+  },
+  {
+    "notation": "A9s",
+    "equity": 0.62965
+  },
+  {
+    "notation": "A9o",
+    "equity": 0.60655
+  },
+  {
+    "notation": "ATs",
+    "equity": 0.646992
+  },
+  {
+    "notation": "ATo",
+    "equity": 0.623075
+  },
+  {
+    "notation": "AJs",
+    "equity": 0.652433
+  },
+  {
+    "notation": "AJo",
+    "equity": 0.6371
+  },
+  {
+    "notation": "AQs",
+    "equity": 0.659842
+  },
+  {
+    "notation": "AQo",
+    "equity": 0.6445
+  },
+  {
+    "notation": "AKs",
+    "equity": 0.669742
+  },
+  {
+    "notation": "AKo",
+    "equity": 0.654967
+  }
+]

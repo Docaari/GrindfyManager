@@ -1,0 +1,48 @@
+%% Range Lab F2 (ADR-247, D-F2-3) — despacho de applyRangeString entre a tabela
+%% de regras (peso uniforme) e o ramo dedicado de "top X%" (peso fracionado).
+%%
+%% O ponto central: RangeTokenRule.expand devolve string[] — nenhum campo de
+%% peso por item. Isso e SUFICIENTE para toda RANGE_TOKEN_RULES, inclusive a
+%% regra nova gap-range (T9s-54s), mas e INSUFICIENTE para top X%, que exige
+%% que a ULTIMA mao do preenchimento entre com peso FRACIONADO (emenda A6) pra
+%% bater a porcentagem pedida exata. Por isso top X% fica FORA da tabela, em
+%% ramo proprio, e teve que entrar ANTES do fallback parseNotation(t)?[t]:[]
+%% que hoje mata qualquer string nao reconhecida tratando-a como notacao literal.
+flowchart TD
+    Input["Texto digitado pelo jogador<br/>ex.: '99+', 'T9s-54s', 'top 23%', 'AsKh'"]
+
+    Input --> CheckTop{"Casa o padrao<br/>de top X%?"}
+
+    CheckTop -- sim --> Strength["rangeStrength.ts<br/>le data/handRanking.json"]
+    Strength --> Ranked["169 maos ordenadas por equity<br/>vs mao aleatoria<br/>(MC 60.000 amostras/mao,<br/>semente fixa, GERADO OFFLINE<br/>por scripts/generate-hand-ranking.ts,<br/>commitado — nao recalculado no cliente)"]
+    Ranked --> Fill["Preenche em peso 1<br/>na ordem de forca ate<br/>ULTRAPASSAR a porcentagem pedida"]
+    Fill --> LastHand["ULTIMA mao entra com<br/>PESO FRACIONADO<br/>(fecha o acumulado exato no alvo —<br/>emenda A6)"]
+    LastHand --> EntriesTop["RangeEntry[]<br/>frequencies MISTAS<br/>(uma so fracionaria)"]
+
+    CheckTop -- nao --> Rules["RANGE_TOKEN_RULES<br/>tabela ORDENADA, combos.ts"]
+
+    subgraph RulesTable["expand(m): string[] | null — null cede a vez"]
+        R1["all-pairs — XX"]
+        R2["pairs-plus — 99+"]
+        R3["pairs-range — 55-22"]
+        R4["any-kicker — AXs / KXo"]
+        R5["suited-offsuit-plus — ATs+ / 98s+"]
+        R6["kicker-range — A5s-A2s"]
+        R7["gap-range — T9s-54s<br/>(REGRA NOVA da F2 —<br/>mesmo gap dos dois lados do '-',<br/>varia a carta alta)"]
+    end
+
+    Rules --> RulesTable
+    RulesTable --> Uniform["Toda notacao devolvida recebe<br/>a MESMA frequencia<br/>(pincel corrente / defaultFrequency)"]
+    Uniform --> EntriesUniform["RangeEntry[]<br/>frequency UNIFORME"]
+
+    RulesTable -.->|"toda regra 'null'"| Fallback["fallback: parseNotation(t) ? [t] : []<br/>notacao literal<br/>(ex.: AsKh — specific)"]
+    Fallback --> EntriesUniform
+
+    EntriesTop --> Merge["Range final aplicado<br/>(RangeMatrix.onChange)"]
+    EntriesUniform --> Merge
+
+    Merge --> Cell["Celula mostra fracao/opacidade —<br/>classe parcial ganha borda ambar<br/>(mesmo mecanismo de comboFreqOverrides,<br/>emenda A10)"]
+
+    style CheckTop fill:#f5e8d0,stroke:#b8860b
+    style LastHand fill:#f8d7d7,stroke:#b03030
+    style Uniform fill:#d6f0e0,stroke:#2e8b57

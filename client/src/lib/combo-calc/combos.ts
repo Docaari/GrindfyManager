@@ -260,6 +260,35 @@ const RANGE_TOKEN_RULES: RangeTokenRule[] = [
       return out;
     },
   },
+  {
+    // "T9s-54s" (F2, RF-02.5/emenda A11) — intervalo de conectores/gappers com
+    // o MESMO gap dos dois lados do "-", variando a carta alta. Vem DEPOIS de
+    // kicker-range: quando a carta alta e a mesma dos dois lados (A5s-A2s),
+    // kicker-range ja resolve; e o `null` dela que cede a vez para esta regra.
+    id: "gap-range",
+    pattern: new RegExp(`^(${R})(${R})([so])-(${R})(${R})([so])$`, "i"),
+    expand: (m) => {
+      const suit1 = m[3].toLowerCase();
+      const suit2 = m[6].toLowerCase();
+      if (suit1 !== suit2) return null;
+      const hi1 = Math.max(rIdx(m[1]), rIdx(m[2]));
+      const lo1 = Math.min(rIdx(m[1]), rIdx(m[2]));
+      const hi2 = Math.max(rIdx(m[4]), rIdx(m[5]));
+      const lo2 = Math.min(rIdx(m[4]), rIdx(m[5]));
+      const gap1 = hi1 - lo1;
+      const gap2 = hi2 - lo2;
+      if (gap1 <= 0 || gap1 !== gap2) return null; // gaps diferentes: nao e minha
+      const hiLo = Math.min(hi1, hi2);
+      const hiHi = Math.max(hi1, hi2);
+      const out: string[] = [];
+      for (let hi = hiLo; hi <= hiHi; hi++) {
+        const lo = hi - gap1;
+        if (lo < 0) continue;
+        out.push(rCh(hi) + rCh(lo) + suit1);
+      }
+      return out;
+    },
+  },
 ];
 
 /**

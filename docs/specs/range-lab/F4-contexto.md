@@ -1,6 +1,14 @@
 # F4 — Contexto
 
-> Frente 4 de 5 do [Range Lab](00-INDICE.md). Ultima frente. Uma frente por sessao.
+> Frente 4 de 5 do [Range Lab](00-INDICE.md). Uma frente por sessao.
+
+> **CANCELADA (founder, 2026-08-18).** Escopo de integracao maior do que o
+> produto precisa agora — nem RP/ICM, nem biblioteca sincronizada no servidor,
+> nem ponte com Estudos/MDA/Coach/export. O roadmap ativo pula F3 -> F5a -> F5b.
+> Este documento fica no repo so como referencia (formula do risk premium,
+> desenho de persistencia) caso o founder peca de volta mais pra frente — **nao
+> abrir sessao a partir daqui sem reconfirmar com o founder**. Detalhe da
+> decisao: `memory/session_2026-08-18-range-lab-f2-round3-f4-cut.md`.
 
 ## Cabecalho
 | | |
@@ -10,7 +18,7 @@
 | **Entrega** | Risk premium (ICM), persistencia server-side, ponte com Estudos/MDA, Coach, export |
 | **Migration** | **sim — 0101** (additive-only, com `_rollback.sql`) |
 | **ADR** | sim — obrigatorio antes dos testes |
-| **Status** | Nao iniciada |
+| **Status** | **Cancelada** 2026-08-18 |
 
 Toca duas zonas criticas: **dinheiro/ICM** e **schema/migration**. Nunca abaixo de
 `Alto`. Migration e additive-only e sem back-fill, por isso nao exige `Extra`.

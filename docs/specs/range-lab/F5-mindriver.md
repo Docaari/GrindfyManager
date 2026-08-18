@@ -10,14 +10,19 @@
 | **Depende de** | F1 (motor rapido + worker). F3 e vizinha: parte do F5a **substitui** RFs da F3 |
 | **Entrega** | Os graficos de leitura do MindRiver + as ferramentas que faltam na nossa |
 | **Migration** | nao |
-| **Status** | Proposta — aguardando aval |
+| **Status** | **Aprovada, escopo cortado** (founder, 2026-08-18) — ordem confirmada F3 -> F5a -> F5b. Nao iniciada |
+
+**Corte de escopo (founder, 2026-08-18):** RF-05.7 (cenario em arquivo,
+exportar/importar `.json`) saiu — junto com a F4, que era pra quem esse arquivo
+complementava a persistencia server-side. F5b fica so RF-05.5 (Range Finder) +
+RF-05.6 (cartas mortas). Ver `memory/session_2026-08-18-range-lab-f2-round3-f4-cut.md`.
 
 Frente grande demais para uma sessao. Quebrada em duas:
 
 | Sub-frente | Escopo | Modelo |
 |---|---|---|
 | **F5a — Graficos** | Curva de equity dos dois ranges, fluxo rua a rua, hotness por carta, heatmap 13x13 + chips por combo | Opus 5 — Extra |
-| **F5b — Ferramentas** | Range Finder, dead cards, peso rapido/scroll, notacao completa + serializador, cenario em arquivo | Sonnet 5 — Alto |
+| **F5b — Ferramentas** | Range Finder, dead cards, peso rapido/scroll, notacao completa + serializador | Sonnet 5 — Alto |
 
 ---
 
@@ -56,7 +61,7 @@ citados quando o founder aprovar.
 | A10 | Celula mostra `pct` selecionado, fracao morta pelo board com opacidade reduzida, e tooltip com `X/Y combos · avg N%` + `Z% blocked by board` | **F2 / RF-02.4** | Nossa spec pede contagem global; aqui e por celula, que e onde o card removal e visivel |
 | A11 | Gramatica de notacao completa: `AA`, `AKs`, `AKo`, `AK`, `77+`, `A5s+`, `55-TT`, `T9s-54s`, `AsKh`, `AQo:0.5`, `AQo:50%`, `top 25%` | **F0 / RF-00.3** | A F0 conserta so o `98s+`. Adotar a gramatica inteira como alvo, incluindo intervalo (`T9s-54s`), combo especifico e peso inline |
 | A12 | Serializador que **colapsa** o range de volta em notacao curta (`22+`, `A2s+`) em vez de listar combo a combo | **F2 / RF-02.5** | Sem isso, "copiar range" devolve um paredao ilegivel |
-| A13 | `Copy GTO Wizard`: mesma notacao, peso como fracao de 3 casas (`AQo:0.336`), sem `%` | **F4 / RF-04.5** | Formato exato, ja resolvido |
+| A13 | `Copy GTO Wizard`: mesma notacao, peso como fracao de 3 casas (`AQo:0.336`), sem `%` | ~~F4 / RF-04.5~~ | **Sem destino — F4 cancelada 2026-08-18.** `collapseRangeToNotation` (F2 RF-02.5) ja exporta com `%`; este formato alternativo fica descartado ate/se export virar prioridade de novo |
 | A14 | Taxonomia de `classify`: 16 categorias de mao feita com cor fixa e qualificador (flush `nut`/`strong`/`weak`; dois pares `top two`/`top + bottom`/`bottom two`/`pair + board pair`; par com kicker `k_top`/`k_good`/`k_weak`) + 8 draws (`fd_nut`, `fd`, `bdfd`, `oesd`, `gutshot`, `bdsd`, `overcards2`, `overcard1`) | **F3 / RF-03.1** | Nossa lista era mais grossa. Adotar esta, inclusive as cores |
 | A15 | `board_texture`: `monotone`/`2flush`/`rainbow` + `trips`/`paired`/`unpaired`, exibido no topo das estatisticas | **F3 / RF-03.1** | Barato e informativo |
 | A16 | Filtro de categoria **esmaece a matriz**: marcar "flush draw" acende so as celulas que contem flush draw (`set_filter_hits`) | **F3 / RF-03.7** | Este e o mecanismo que faltava especificar. O filtro nao filtra uma tabela, ele pinta o range |
@@ -208,20 +213,12 @@ ranges, mas nao contam como rua.
       tamanho exato esperado.
 - [ ] Carta ja no board nao pode ser marcada como morta.
 
-#### RF-05.7: Cenario em arquivo (exportar / importar a mao)
-Um `.json` com versao de formato contendo os ranges dos dois lados (em notacao,
-nao em lista de combos), board e cartas mortas. Abre em outra maquina.
-
-**Regras:**
-- Campo de versao no arquivo; arquivo de outra origem e recusado com mensagem
-  clara, nao com stack trace.
-- Importar **valida cada item** antes de aplicar — e o mesmo bug da F0 RF-00.4
-  (`loadSavedSpots` sem validacao derrubando a tela).
-- Complementa, nao substitui, a persistencia server-side da F4 RF-04.2.
-
-**Aceite:**
-- [ ] Exportar e importar devolve o spot identico (ranges, pesos, board, mortas).
-- [ ] Arquivo corrompido ou de outro app mostra mensagem e nao quebra a pagina.
+#### RF-05.7: ~~Cenario em arquivo~~ — CORTADO (founder, 2026-08-18)
+Era: `.json` com versao de formato contendo os ranges dos dois lados, board e
+cartas mortas, pra abrir em outra maquina. Saiu junto com a F4 — o proposito
+original era complementar a persistencia server-side (F4 RF-04.2), que tambem
+foi cancelada. Sem a F4, este RF fica sem par: a biblioteca de ranges local
+(F2 RF-02.5) ja cobre "salvar e reaplicar" dentro do navegador.
 
 ---
 
@@ -254,7 +251,8 @@ nao em lista de combos), board e cartas mortas. Abre em outra maquina.
 - Multiway (3+ ranges) e a pizza "Groups" — segue fora ate a F3 fechar.
 - Tres idiomas: a UI e PT-BR.
 - Licenciamento, tema claro/escuro proprio, janela desktop.
-- ICM e persistencia server-side: continuam na F4.
+- ICM, persistencia server-side e cenario em arquivo (RF-05.7): eram da F4 —
+  **cancelada** (founder, 2026-08-18). Fora do roadmap do Range Lab.
 
 ## Dependencias
 F1 fechada (motor rapido, worker, heroi como range). O RF-05.4 e o RF-05.1
@@ -305,22 +303,22 @@ Monte um **turn** de verdade: 4 cartas no bordo, dois ranges com value e blefe.
 4. **Carta morta come combo.** Marque uma carta morta: os combos vivos do range
    tem que cair no tamanho exato esperado. Tente marcar uma carta que ja esta no
    bordo: tem que ser recusada no clique.
-5. **A mao viaja.** Exporte o cenario, aperte Reset, importe de volta: ranges,
-   pesos, bordo e cartas mortas voltam iguais. Importe um arquivo qualquer de
-   outro app: mensagem clara, tela em pe.
 
 ### Prompt da proxima sessao
+
+**Ordem confirmada (founder, 2026-08-18): F3 -> F5a -> F5b.** F4 foi cancelada.
 
 Frente: **F5a — Graficos**. Modelo: **Opus 5 — Extra**.
 ```
 Frente F5a do Range Lab. Leia Docs/specs/range-lab/00-INDICE.md e
 Docs/specs/range-lab/F5-mindriver.md antes de qualquer coisa.
 
-F1 esta concluida e verificada. Esta frente e so leitura visual — nao muda
-motor nem modelo. Comece pelo passe de detalhamento dos quatro RFs (05.1 a
-05.4), com foco em: normalizacao do eixo X quando os dois ranges tem tamanhos
-diferentes, e como o seletor equity/decisao do hotness reaproveita uma corrida
-so. Me mostre o detalhamento antes do TDD.
+F1 e F3 estao concluidas e verificadas. F4 foi cancelada — nao depende dela.
+Esta frente e so leitura visual — nao muda motor nem modelo. Comece pelo passe
+de detalhamento dos quatro RFs (05.1 a 05.4), com foco em: normalizacao do
+eixo X quando os dois ranges tem tamanhos diferentes, e como o seletor
+equity/decisao do hotness reaproveita uma corrida so. Me mostre o
+detalhamento antes do TDD.
 ```
 
 Frente: **F5b — Ferramentas**. Modelo: **Sonnet 5 — Alto**.
@@ -328,7 +326,6 @@ Frente: **F5b — Ferramentas**. Modelo: **Sonnet 5 — Alto**.
 Frente F5b do Range Lab. Leia Docs/specs/range-lab/00-INDICE.md e
 Docs/specs/range-lab/F5-mindriver.md antes de qualquer coisa.
 
-F1 esta concluida e verificada. Tres RFs (05.5 a 05.7), sem matematica nova.
-Atencao ao RF-05.7: importar cenario valida item a item — e o mesmo bug que a
-F0 RF-00.4 consertou nos spots salvos. Siga o pipeline TDD.
+F1 e F5a estao concluidas. Dois RFs (05.5 e 05.6), sem matematica nova —
+RF-05.7 (cenario em arquivo) foi cortado junto com a F4. Siga o pipeline TDD.
 ```

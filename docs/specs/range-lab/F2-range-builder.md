@@ -148,6 +148,43 @@ virada. A F2 devolve o numero, calculado do jeito certo.
 
 ---
 
+## Detalhamento (2026-08-17, passe de arquitetura antes do TDD)
+
+**Correcao no criterio de aceite 6.** O numero `0,9234` la embaixo e resto do
+D11 (spot com alpha 52,56%, nao o `f0-fixtures.ts`). Rodei `evaluateSpot` direto
+nos tres spots de `f0-fixtures.ts` (pote 36,1/call 13,8, alpha 27,65%) e os
+numeros do corpo do RF-02.6 batem exatos: flop `0,007621097718527866`, turn
+`0,05437127917598511`, river `0,31855955678670356` — e o river bate com
+`verdict.breakevenFrequency` a `1e-16`. O criterio 6 abaixo ja foi corrigido para
+`0,31856`.
+
+**Alt+arrastar (RF-02.1) — decisao do founder.** A celula da matriz e a classe
+inteira (ate 12 combos), sem alvo de "qual naipe" durante um drag por varias
+classes. Resolvido: no `pointerdown` do Alt+drag abre um mini-seletor de 4
+naipes (ou reusa o ultimo escolhido na sessao); toda classe tocada pelo drag
+ganha `suits` filtrado para ESSE UNICO naipe. Cobre "quero so as maos de
+espadas do meu range" varrendo a matriz de uma vez.
+
+**Arquitetura desta frente (arquivos novos):** `combo-calc/history.ts` (undo/redo
+generico, puro), `combo-calc/rangeGestures.ts` (Ctrl+clique reusa
+`expandRangeToken(notation + "+")` — zero gramatica nova; cabecalho de
+linha/coluna deriva da mesma matematica de `cellNotation`), `combo-calc/
+breakeven.ts` (`solveBreakevenMultiplier`, `ev.ts` intocado), `combo-calc/
+rangeStrength.ts` + `combo-calc/data/handRanking.json` (169 maos, gerado por
+`scripts/generate-hand-ranking.ts`, MC 60k/mao, semente fixa, committed),
+`combo-calc/rangeSerializer.ts` (`collapseRangeToNotation`, A12),
+`range-lab/{SuitPickerPopover,RangeLibrary,TopPercentSlider,
+BrushWeightControl}.tsx`. Gramatica: `55-TT` e `AsKh` ja funcionam (regras
+existentes); so falta 1 regra nova (`gap-range`) para `T9s-54s`.
+`top X%` digitado fica FORA de `RANGE_TOKEN_RULES` (peso fracionado na ultima
+mao nao cabe no contrato `string[]` das regras) — ramo dedicado em
+`applyRangeString`, antes do fallback `^(\S+)$` que hoje o mata.
+`solveBreakevenMultiplier` so se conecta em `CombosCalculator.tsx` (consome o
+`Verdict` v1) — `RangeLab.tsx`/`VerdictPanel` roda sobre `EngineResult`, que nao
+tem o mesmo `perCombo` ponderado, entao RF-02.6 nao se aplica la.
+`CombosCalculator.tsx` troca a matriz e a lista de naipes inline pelos
+componentes de `range-lab/` (paga a divida D13).
+
 ## Criterios de aceite
 1. Ctrl + clique no `22` seleciona 13 classes (`22` ate `AA`).
 2. Ctrl + clique em `A9s` seleciona `A9s` ate `AKs`.
@@ -156,7 +193,8 @@ virada. A F2 devolve o numero, calculado do jeito certo.
 5. Matriz responde a toque (arrastar pinta no tablet).
 6. **No river, `solveBreakevenMultiplier` bate com `verdict.breakevenFrequency`
    ate `1e-9`** — o fechado e o oraculo de graca onde os dois modelos coincidem.
-   Medido no spot de referencia: 0,9234 nos dois.
+   Medido no spot de referencia: `0,31856` nos dois (corrigido 2026-08-17 — o
+   `0,9234` original era de outro spot, ver "Detalhamento" acima).
 7. No turn e no flop, a equity avaliada no `k` devolvido encosta em
    `requiredEquity` (tolerancia `1e-6`). Hoje o fechado erra 6,8pp no turn.
 8. `npm run check` limpo; suite da area verde.

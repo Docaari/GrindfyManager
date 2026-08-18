@@ -38,10 +38,8 @@ import {
   verdictCalcBasis,
   enumerateCombos,
   parseNotation,
-  expandRangeToken,
   heroEquityAtMultiplier,
   describeSpotReadiness,
-  parseImportedFrequency,
   resolveCardClick,
   RANGE_PRESETS,
   saveDraft,
@@ -53,6 +51,19 @@ import {
   type SpotReadinessReason,
 } from "@/lib/combo-calc";
 import type { Card as PCard, RangeEntry, Spot } from "@/lib/combo-calc";
+import { solveBreakevenMultiplier } from "@/lib/combo-calc/breakeven";
+import { parseRangeText } from "@/lib/combo-calc/rangeImport";
+import {
+  createHistory,
+  push as pushHistory,
+  undo as undoHistory,
+  redo as redoHistory,
+  resetHistory,
+  type HistoryState,
+} from "@/lib/combo-calc/history";
+import RangeMatrix from "@/components/range-lab/RangeMatrix";
+import RangeEntryList from "@/components/range-lab/RangeEntryList";
+import SuitPickerPopover from "@/components/range-lab/SuitPickerPopover";
 
 /** Mensagem do portao de "spot pronto" (RF-00.2): a tela diz o que falta. */
 const READINESS_MESSAGE: Record<SpotReadinessReason, string> = {
@@ -94,15 +105,6 @@ function suitColor(suit: string): string {
   return suit === "h" || suit === "d" ? "text-red-400" : "text-gray-200";
 }
 
-/** Notacao da celula da matriz 13x13. */
-function cellNotation(r: number, c: number): string {
-  const a = RANKS_DESC[r];
-  const b = RANKS_DESC[c];
-  if (r === c) return rankChar(a) + rankChar(a); // par
-  if (r < c) return rankChar(a) + rankChar(b) + "s"; // suited (acima da diagonal)
-  return rankChar(b) + rankChar(a) + "o"; // offsuit (abaixo)
-}
-
 const inputCls =
   "bg-gray-800/50 border-gray-700 text-gray-100 font-mono placeholder:text-gray-500 focus-visible:ring-emerald-500/50 focus-visible:border-emerald-500/50 h-9";
 
@@ -130,8 +132,22 @@ export default function CombosCalculator() {
   const [hero, setHero] = useState<PCard[]>([]);
   const [target, setTarget] = useState<"board" | "hero">("board");
 
-  // entries: Map notation -> frequency (classes da matriz + specific via texto).
-  const [entries, setEntries] = useState<RangeEntry[]>([]);
+  // entries: range do vilao. Historico local (D-F2-2/D-F2-6): Ctrl+Z/Ctrl+Y
+  // escopados a esta matriz, igual as duas de `RangeLab.tsx` — o popup ganha o
+  // atalho "de graca" por consumir o mesmo `RangeMatrix`.
+  const [entryHistory, setEntryHistory] = useState<HistoryState<RangeEntry[]>>(() =>
+    createHistory<RangeEntry[]>([]),
+  );
+  const entries = entryHistory.present;
+  function setEntries(next: RangeEntry[]): void {
+    setEntryHistory((h) => pushHistory(h, next));
+  }
+  function undoEntries(): void {
+    setEntryHistory((h) => undoHistory(h));
+  }
+  function redoEntries(): void {
+    setEntryHistory((h) => redoHistory(h));
+  }
   const [defaultFreq, setDefaultFreq] = useState(1);
   const [importText, setImportText] = useState("");
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
@@ -153,7 +169,6 @@ export default function CombosCalculator() {
   const [spotsOpen, setSpotsOpen] = useState(false);
 
   const hydrated = useRef(false);
-  const drag = useRef<{ active: boolean; mode: "add" | "remove" } | null>(null);
 
   // ── hidratacao: carrega rascunho + spots salvos uma vez ──
   useEffect(() => {
@@ -161,7 +176,9 @@ export default function CombosCalculator() {
     if (draft) {
       if (draft.board) setBoard(draft.board);
       if (draft.hero) setHero(draft.hero);
-      if (draft.entries) setEntries(draft.entries);
+      // Init direto do historico (nao push): hidratacao nao e um gesto de
+      // pintura, e o ponto de partida — nao ha "antes" para Ctrl+Z revelar.
+      if (draft.entries) setEntryHistory(createHistory<RangeEntry[]>(draft.entries));
       if (draft.potInput != null && draft.potInput !== "") setPotInput(draft.potInput);
       if (draft.callInput != null && draft.callInput !== "") setCallInput(draft.callInput);
       if (draft.bbInput != null) setBbInput(draft.bbInput);
@@ -178,23 +195,6 @@ export default function CombosCalculator() {
     }, 400);
     return () => clearTimeout(id);
   }, [board, hero, entries, potInput, callInput, bbInput]);
-
-  // ── encerra drag da matriz em mouseup/saida-da-janela/blur ──
-  useEffect(() => {
-    const stop = () => {
-      drag.current = null;
-    };
-    window.addEventListener("mouseup", stop);
-    window.addEventListener("pointerup", stop);
-    window.addEventListener("blur", stop);
-    document.addEventListener("mouseleave", stop); // mouse sai da viewport
-    return () => {
-      window.removeEventListener("mouseup", stop);
-      window.removeEventListener("pointerup", stop);
-      window.removeEventListener("blur", stop);
-      document.removeEventListener("mouseleave", stop);
-    };
-  }, []);
 
   const dead = useMemo(() => {
     const s = new Set<string>();
@@ -238,111 +238,18 @@ export default function CombosCalculator() {
     }
   }
 
-  // ── range matrix ──
-  const entryMap = useMemo(() => {
-    const m = new Map<string, RangeEntry>();
-    for (const e of entries) m.set(e.notation, e);
-    return m;
-  }, [entries]);
-
-  function addCell(notation: string) {
-    setEntries((prev) => {
-      if (prev.some((e) => e.notation === notation)) return prev;
-      const parsed = parseNotation(notation);
-      if (!parsed) return prev;
-      return [...prev, { notation, kind: parsed.kind, frequency: defaultFreq }];
-    });
-  }
-  function toggleCell(notation: string) {
-    if (entryMap.has(notation)) removeEntry(notation);
-    else addCell(notation);
-  }
-
-  // ── drag-select da matriz ──
-  function onCellDown(notation: string) {
-    const present = entryMap.has(notation);
-    drag.current = { active: true, mode: present ? "remove" : "add" };
-    if (present) removeEntry(notation);
-    else addCell(notation);
-  }
-  function onCellEnter(notation: string) {
-    const d = drag.current;
-    if (!d?.active) return;
-    if (d.mode === "add") addCell(notation);
-    else removeEntry(notation);
-  }
-
-  function setEntryFreq(notation: string, freq: number) {
-    setEntries((prev) =>
-      prev.map((e) => (e.notation === notation ? { ...e, frequency: freq } : e)),
-    );
-  }
-  function removeEntry(notation: string) {
-    setEntries((prev) => prev.filter((e) => e.notation !== notation));
-  }
-
-  // aplica uma string de range (solver: "99+, ATs+:0.5, A5s-A2s, QhJh") nas entries.
-  // O parse acontece FORA do updater do setEntries: o updater tem que ser puro (o
-  // React o invoca no render seguinte, e duas vezes em StrictMode), entao acumular
-  // avisos la dentro entregaria lista vazia agora e lista duplicada depois.
+  // Aplica uma string de range (solver: "99+, ATs+:0.5, A5s-A2s, QhJh") nas
+  // entries. `parseRangeText` (RF-02.5) e a MESMA gramatica que a biblioteca de
+  // ranges usa — sem parser paralelo (D9 do indice do Range Lab).
   function applyRangeString(text: string, replace = false) {
-    // A virgula e separador de token E separador decimal em PT-BR. `AKo:0,5`
-    // quebrava em "AKo:0" (que entrava com peso 0, em silencio) + "5". Normaliza
-    // ANTES de separar, e so a virgula que esta dentro de uma frequencia — assim
-    // "55,66" continua sendo duas classes.
-    const tokens = text
-      .replace(/([:=]\s*\d+),(\d)/g, "$1.$2")
-      .split(/[\n,;]+/)
-      .map((t) => t.trim())
-      .filter(Boolean);
-    const warnings: string[] = [];
-    const parsedTokens: { notation: string; kind: RangeEntry["kind"]; frequency: number }[] = [];
-
-    for (const tok of tokens) {
-      // separa "<notacao> : <freq>" — o sufixo "%" e aceito e descartado aqui.
-      // ATENCAO F2 (emenda A11): a tabela de regras do combos.ts ja aceita token
-      // com espaco, mas ESTE fallback exige `^(\S+)$` — entao "top 25%" morre aqui,
-      // antes de chegar ao parser. Quem for plugar "top X%" abre os dois lados.
-      const m = tok.match(/^(.+?)\s*[:=]\s*(\S+?)%?$/) ?? tok.match(/^(\S+)$/);
-      if (!m) {
-        warnings.push(`Token ignorado: ${tok}`);
-        continue;
-      }
-      // Normaliza a frequencia na FRONTEIRA: "AKo:50" e 50%, nao 5000% (RF-00.6).
-      let freq = 1;
-      if (m[2] != null) {
-        const parsedFreq = parseImportedFrequency(m[2]);
-        if (!parsedFreq.ok) {
-          warnings.push(
-            parsedFreq.reason === "out_of_range"
-              ? `Frequencia fora da faixa 0-100 em "${tok}" (${parsedFreq.raw}) — token recusado.`
-              : `Frequencia ilegivel em "${tok}" (${parsedFreq.raw}) — token recusado.`,
-          );
-          continue;
-        }
-        freq = parsedFreq.frequency;
-      }
-      const expanded = expandRangeToken(m[1].trim());
-      if (expanded.length === 0) {
-        warnings.push(`Notacao nao reconhecida: ${m[1].trim()}`);
-        continue;
-      }
-      for (const base of expanded) {
-        const parsed = parseNotation(base);
-        if (!parsed) continue;
-        parsedTokens.push({ notation: base, kind: parsed.kind, frequency: freq });
-      }
+    const { entries: parsed, warnings } = parseRangeText(text);
+    const next = replace ? [] : [...entries];
+    for (const t of parsed) {
+      const idx = next.findIndex((e) => e.notation === t.notation);
+      if (idx >= 0) next[idx] = t;
+      else next.push(t);
     }
-
-    setEntries((prev) => {
-      const next = replace ? [] : [...prev];
-      for (const t of parsedTokens) {
-        const idx = next.findIndex((e) => e.notation === t.notation);
-        if (idx >= 0) next[idx] = { ...next[idx], frequency: t.frequency };
-        else next.push(t);
-      }
-      return next;
-    });
+    setEntries(next);
     setImportWarnings(warnings);
   }
   function doImport() {
@@ -377,7 +284,10 @@ export default function CombosCalculator() {
     if (!r) return;
     setBoard(r.board);
     setHero(r.hero);
-    setEntries(r.entries);
+    // resetHistory (nao push): carregar um spot salvo e reset por fora do
+    // fluxo de pintura — um Ctrl+Z depois nao pode revelar o range anterior
+    // (D-F2-2, o proprio exemplo citado no ADR).
+    setEntryHistory((h) => resetHistory(h, r.entries));
     setPotInput(r.potInput);
     setCallInput(r.callInput);
     setBbInput(r.bbInput);
@@ -437,42 +347,13 @@ export default function CombosCalculator() {
     return heroEquityAtMultiplier(verdict, k);
   }, [showVerdict, verdict, k]);
 
-  // combos concretos disponiveis de uma entry (card removal aplicado)
-  function availableCombos(notation: string): PCard[][] {
-    const parsed = parseNotation(notation);
-    if (!parsed) return [];
-    return enumerateCombos(parsed, dead);
-  }
-
-  // contagem de combos efetivos da entry (respeita filtro de naipe)
-  function comboCount(e: RangeEntry): number {
-    const avail = availableCombos(e.notation);
-    if (!e.suits || e.suits.length === 0) return avail.length;
-    const sel = new Set(e.suits);
-    return avail.filter((c) => sel.has(comboKey(c[0], c[1]))).length;
-  }
-
-  // alterna um combo concreto dentro da entry (filtro de naipe)
-  function toggleSuit(notation: string, key: string) {
-    setEntries((prev) =>
-      prev.map((en) => {
-        if (en.notation !== notation) return en;
-        const allKeys = availableCombos(notation).map((c) => comboKey(c[0], c[1]));
-        const cur =
-          en.suits && en.suits.length > 0
-            ? new Set(en.suits)
-            : new Set(allKeys);
-        if (cur.has(key)) {
-          if (cur.size <= 1) return en; // nao deixa zerar a classe
-          cur.delete(key);
-        } else {
-          cur.add(key);
-        }
-        const arr = allKeys.filter((k) => cur.has(k));
-        return { ...en, suits: arr.length === allKeys.length ? undefined : arr };
-      }),
-    );
-  }
+  // Ponto de virada fora do river (RF-02.6, D-F2-4): forma fechada sobre o
+  // Verdict ja calculado, sem reenumerar runout. `ev.ts` nao muda — este e um
+  // numero NOVO ao lado do `breakevenFrequency` fechado (que so vale no river).
+  const breakeven = useMemo(() => {
+    if (!showVerdict || !verdict) return null;
+    return solveBreakevenMultiplier(verdict);
+  }, [showVerdict, verdict]);
 
   const alpha = potCurrent + callAmount > 0 ? callAmount / (potCurrent + callAmount) : 0;
 
@@ -627,6 +508,10 @@ export default function CombosCalculator() {
         </Card>
 
         {/* ── Range matrix ── */}
+        {/* D13 (F2, ADR-247 D-F2-6): matriz e naipes vem de range-lab/ — o
+            mesmo componente que /range-lab usa nos dois lados. So o range do
+            VILAO troca aqui; o heroi de CombosCalculator continua sendo
+            [Card, Card] unico, fora deste escopo. */}
         <Card className="bg-gray-900 border-gray-800 text-gray-200">
           <CardContent className="p-4 space-y-3">
             <Label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
@@ -646,41 +531,32 @@ export default function CombosCalculator() {
               )}
             </div>
 
-            <p className="text-[10px] text-gray-500">Clique ou arraste para pintar o range.</p>
-            <div className="overflow-x-auto select-none">
-              <div className="inline-grid" style={{ gridTemplateColumns: `repeat(13, minmax(0, 1fr))` }}
-                onMouseLeave={() => { /* drag continua ate mouseup global */ }}>
-                {RANKS_DESC.map((_, r) =>
-                  RANKS_DESC.map((__, c) => {
-                    const notation = cellNotation(r, c);
-                    const e = entryMap.get(notation);
-                    const active = !!e;
-                    const partial = active && !!e.suits && e.suits.length > 0;
-                    const isPair = r === c;
-                    const isSuited = r < c;
-                    return (
-                      <button key={`${r}-${c}`}
-                        onMouseDown={() => onCellDown(notation)}
-                        onMouseEnter={() => onCellEnter(notation)}
-                        title={notation}
-                        className={`w-[26px] h-[26px] text-[9px] font-mono border ${partial ? "border-amber-400" : "border-gray-800"} ${
-                          active
-                            ? "bg-emerald-600 text-white"
-                            : isPair
-                              ? "bg-gray-700/60 text-gray-300"
-                              : isSuited
-                                ? "bg-gray-800/60 text-gray-400"
-                                : "bg-gray-800/30 text-gray-500"
-                        } hover:outline hover:outline-1 hover:outline-emerald-400`}
-                        style={active && e.frequency < 1 ? { opacity: 0.4 + e.frequency * 0.6 } : undefined}
-                      >
-                        {notation.replace(/[so]$/, "")}
-                      </button>
-                    );
-                  }),
-                )}
-              </div>
-            </div>
+            <RangeMatrix
+              entries={entries}
+              onChange={setEntries}
+              defaultFrequency={defaultFreq}
+              onUndo={undoEntries}
+              onRedo={redoEntries}
+              onOpenSuitPicker={(notation) => setSuitPickerFor(suitPickerFor === notation ? null : notation)}
+              testId="combos-villain-matrix"
+            />
+
+            {suitPickerFor &&
+              (() => {
+                const activeEntry = entries.find((e) => e.notation === suitPickerFor);
+                const parsed = parseNotation(suitPickerFor);
+                if (!activeEntry || !parsed) return null;
+                return (
+                  <SuitPickerPopover
+                    notation={suitPickerFor}
+                    combos={enumerateCombos(parsed, dead)}
+                    entry={activeEntry}
+                    onChange={(next) =>
+                      setEntries(entries.map((e) => (e.notation === next.notation ? next : e)))
+                    }
+                  />
+                );
+              })()}
 
             {/* presets */}
             <div className="flex flex-wrap gap-1.5">
@@ -740,70 +616,7 @@ export default function CombosCalculator() {
             </div>
 
             {/* active entries list */}
-            {entries.length > 0 && (
-              <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
-                {entries.map((e) => {
-                  const parsed = parseNotation(e.notation);
-                  const avail = availableCombos(e.notation);
-                  // Picker de naipe so faz sentido p/ classes com >1 combo possivel.
-                  const canPickSuits =
-                    parsed != null &&
-                    parsed.kind !== "specific" &&
-                    avail.length > 1;
-                  const total = avail.length;
-                  const selKeys =
-                    e.suits && e.suits.length > 0
-                      ? new Set(e.suits)
-                      : null; // null = todos
-                  const open = suitPickerFor === e.notation;
-                  return (
-                    <div key={e.notation} className="space-y-1">
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="font-mono text-gray-200 w-14 shrink-0">{e.notation}</span>
-                        {canPickSuits ? (
-                          <button
-                            onClick={() => setSuitPickerFor(open ? null : e.notation)}
-                            className={`w-12 shrink-0 text-left ${selKeys ? "text-emerald-400" : "text-gray-500"} hover:text-emerald-300`}
-                            title="Escolher naipes"
-                          >
-                            {comboCount(e)}/{total}c
-                          </button>
-                        ) : (
-                          <span className="text-gray-500 w-12 shrink-0">{comboCount(e)}c</span>
-                        )}
-                        <div className="flex-1 min-w-[80px]">
-                          <Slider value={[e.frequency]} min={0} max={1} step={0.01}
-                            onValueChange={([v]) => setEntryFreq(e.notation, v)} />
-                        </div>
-                        <span className="font-mono text-gray-400 w-10 text-right">{fmtPct(e.frequency, 0)}</span>
-                        <button onClick={() => removeEntry(e.notation)} className="text-gray-600 hover:text-red-400">
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                      {open && canPickSuits && (
-                        <div className="flex flex-wrap gap-1 pl-16 pb-1">
-                          {avail.map((combo) => {
-                            const key = comboKey(combo[0], combo[1]);
-                            const on = selKeys ? selKeys.has(key) : true;
-                            return (
-                              <button key={key} onClick={() => toggleSuit(e.notation, key)}
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-mono border ${
-                                  on
-                                    ? "bg-emerald-600/80 border-emerald-500 text-white"
-                                    : "bg-gray-800/60 border-gray-700 text-gray-500"
-                                }`}>
-                                <span className={on ? "" : suitColor(combo[0].suit)}>{rankChar(combo[0].rank)}{SUIT_GLYPH[combo[0].suit]}</span>
-                                <span className={on ? "" : suitColor(combo[1].suit)}>{rankChar(combo[1].rank)}{SUIT_GLYPH[combo[1].suit]}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <RangeEntryList entries={entries} onChange={setEntries} testId="combos-villain-entries" />
           </CardContent>
         </Card>
 
@@ -1029,21 +842,46 @@ export default function CombosCalculator() {
                   manda o jogador no slider, que agora e exato. Solver numerico do
                   ponto de virada foi passado para a F2 (ver F0-verdade.md).
                 */}
-                {verdict.breakevenFrequency != null && verdict.street === "river" ? (
-                  verdict.breakevenFrequency > 1.5 ? (
-                    <div className="text-[10px] text-center text-gray-500">
-                      Ponto de virada acima de 150% — fora da faixa que o slider demonstra.
-                    </div>
+                {verdict.street === "river" ? (
+                  verdict.breakevenFrequency != null ? (
+                    verdict.breakevenFrequency > 1.5 ? (
+                      <div
+                        data-testid="combos-breakeven-river"
+                        className="text-[10px] text-center text-gray-500"
+                      >
+                        Ponto de virada acima de 150% — fora da faixa que o slider demonstra.
+                      </div>
+                    ) : (
+                      <div
+                        data-testid="combos-breakeven-river"
+                        className="text-xs text-center text-amber-400"
+                      >
+                        Break-even: vilao precisa estar blefando ~<span className="font-mono font-bold">{fmtPct(verdict.breakevenFrequency, 0)}</span> da frequencia atual para o call ficar marginal.
+                      </div>
+                    )
                   ) : (
-                    <div className="text-xs text-center text-amber-400">
-                      Break-even: vilao precisa estar blefando ~<span className="font-mono font-bold">{fmtPct(verdict.breakevenFrequency, 0)}</span> da frequencia atual para o call ficar marginal.
+                    <div
+                      data-testid="combos-breakeven-river"
+                      className="text-[10px] text-center text-gray-500"
+                    >
+                      Ponto de virada indisponivel para este spot.
                     </div>
                   )
+                ) : breakeven?.k != null ? (
+                  <div
+                    data-testid="combos-breakeven-turnflop"
+                    className="text-xs text-center text-amber-400"
+                  >
+                    Ponto de virada: vilao precisa estar blefando ~<span className="font-mono font-bold">{fmtPct(breakeven.k, 2)}</span> da frequencia atual para o call ficar marginal.
+                  </div>
                 ) : (
-                  <div className="text-[10px] text-center text-gray-500">
-                    Ponto de virada: arraste o slider ate a equity encostar em{" "}
-                    {fmtPct(verdict.requiredEquity, 2)}. O valor fechado de break-even so e
-                    exato no river — fora dele nao mostramos numero.
+                  <div
+                    data-testid="combos-breakeven-turnflop"
+                    className="text-[10px] text-center text-gray-500"
+                  >
+                    {breakeven?.degradedReason === "no_flip"
+                      ? "Este spot nao vira dentro da faixa — nao ha ponto de virada a mostrar."
+                      : "Ponto de virada indisponivel para este spot."}
                   </div>
                 )}
               </CardContent>

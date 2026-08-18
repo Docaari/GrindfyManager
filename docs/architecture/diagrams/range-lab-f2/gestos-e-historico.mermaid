@@ -1,0 +1,80 @@
+%% Range Lab F2 (ADR-247, D-F2-1, D-F2-2 e D-F2-5) — de um gesto de pointer ate
+%% o range mudar, com undo/redo local e o reset em prop externa.
+%%
+%% Tres coisas que este diagrama existe para deixar explicitas:
+%% 1. rangeGestures.ts (puro) fica ENTRE o pointer event e o onChange — a
+%%    matriz continua "so pintando", a math de expansao mora fora dela.
+%% 2. history.ts vive no DONO do estado (RangeLab.tsx / CombosCalculator.tsx),
+%%    NAO dentro de RangeMatrix — por isso ha TRES instancias independentes
+%%    (heroi, vilao, popup), nao uma so pra pagina inteira.
+%% 3. resetHistory (loadSpot / reset "Limpar tudo") e um caminho DIFERENTE de
+%%    pushHistory — sem essa distincao, Ctrl+Z depois de carregar um spot
+%%    salvo revelaria o spot ANTERIOR (estado fantasma).
+sequenceDiagram
+    actor Player as Jogador
+    participant Matrix as RangeMatrix<br/>pointer events
+    participant Gest as rangeGestures.ts<br/>puro
+    participant Hist as useRangeHistory<br/>history.ts, por matriz
+    participant Owner as Dono do estado<br/>RangeLab.tsx / CombosCalculator.tsx
+
+    Note over Hist: UMA instancia por range: heroi, vilao (RangeLab)<br/>e entries (CombosCalculator) NUNCA compartilham pilha
+
+    rect rgb(230, 244, 237)
+        Note over Player,Owner: Ctrl+clique — RF-02.1, D-F2-1
+        Player->>Matrix: pointerdown Ctrl no A9s
+        Matrix->>Gest: expandCtrlClick("A9s")
+        Note right of Gest: expandRangeToken("A9s+")<br/>casa suited-offsuit-plus, kicker sobe.<br/>ZERO gramatica nova (D9 do indice)
+        Gest-->>Matrix: [A9s, ATs, AJs, AQs, AKs]
+        Matrix->>Owner: onChange(entries + 5 classes)
+        Owner->>Hist: push(novoEntries)
+        Hist-->>Owner: state.present = novoEntries
+        Owner-->>Matrix: entries (prop atualizada)
+    end
+
+    rect rgb(230, 238, 248)
+        Note over Player,Owner: Shift+clique — retangulo
+        Player->>Matrix: click simples (guarda lastCell)
+        Player->>Matrix: shift+click em outra celula
+        Matrix->>Gest: expandRectangle(lastCell, atual)
+        Gest-->>Matrix: notacoes do retangulo (cellNotation por eixo)
+        Matrix->>Owner: onChange(entries + retangulo)
+        Owner->>Hist: push(novoEntries)
+    end
+
+    rect rgb(248, 240, 227)
+        Note over Player,Owner: Alt+arrastar — D-F2-5, UM naipe por gesto
+        Player->>Matrix: pointerdown com Alt
+        alt primeira vez na sessao da pagina
+            Matrix->>Player: abre mini-seletor de 4 naipes
+            Player-->>Matrix: escolhe naipe (ex.: espadas)
+            Note right of Matrix: altDragSuit guardado em estado de sessao —<br/>os PROXIMOS Alt+drag nao perguntam de novo
+        else ja escolhido nesta sessao
+            Note right of Matrix: reusa altDragSuit sem interromper
+        end
+        loop pointermove sobre cada classe tocada
+            Matrix->>Gest: aplica suits=[naipe] na classe tocada
+            Gest-->>Matrix: entry com suits filtrado
+        end
+        Matrix->>Owner: onChange(entries com suits por classe)
+        Owner->>Hist: push(novoEntries)
+    end
+
+    rect rgb(245, 232, 232)
+        Note over Player,Owner: Desfazer / refazer
+        Player->>Matrix: Ctrl+Z (escopo DESTA matriz)
+        Matrix->>Owner: undo()
+        Owner->>Hist: undo()
+        Hist-->>Owner: state.present = past.pop()
+        Owner-->>Matrix: entries restaurado (pesos e naipes inclusos)
+    end
+
+    rect rgb(255, 235, 235)
+        Note over Player,Owner: Reset em prop externa — NAO e push
+        Player->>Owner: clica "Limpar tudo" OU carrega spot salvo
+        Owner->>Owner: setEntries(valorNovo) — substitui por FORA do fluxo de pintura
+        Owner->>Hist: resetHistory(valorNovo)
+        Note right of Hist: Hist DETECTA que o prop mudou sem<br/>vir do proprio push (ref interna) e zera<br/>past/future — senao Ctrl+Z revelaria<br/>o spot ANTERIOR (estado fantasma)
+        Hist-->>Owner: state = { past: [], present: valorNovo, future: [] }
+    end
+
+    Note over Matrix: RangeMatrix continua presentacional —<br/>"faz o minimo" do comentario original da F1<br/>segue valendo: gesto e math ficam FORA dela
