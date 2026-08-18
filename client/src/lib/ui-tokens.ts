@@ -259,6 +259,62 @@ export const heat = {
   },
 } as const;
 
+/**
+ * Paleta por categoria de leitura do Range Lab (F3a, emenda A14).
+ *
+ * Mora AQUI FORA, ao lado do `heat`, e NAO dentro de `tokens.color`. `ColorKey` e
+ * derivado de `keyof tokens.color` e todo consumidor de `tokens.color[tom]` espera
+ * o shape `{ bg, text, border }` — foi assim que `tokens.color.delta` quebrou o
+ * `FilterChip` (licao #22). Uma entrada por categoria, com shape proprio, entraria
+ * no mesmo buraco.
+ *
+ * A escala vai do forte (esmeralda) ao sem valor (ardosia), para o painel ficar
+ * legivel de relance: nut e lixo nunca dividem a mesma cor.
+ */
+const CATEGORY_MADE_BG: Record<string, string> = {
+  straight_flush: 'bg-emerald-400/70',
+  quads: 'bg-emerald-500/70',
+  full_house: 'bg-emerald-600/65',
+  flush: 'bg-teal-600/65',
+  straight: 'bg-cyan-600/60',
+  set: 'bg-lime-600/60',
+  trips: 'bg-lime-700/55',
+  two_pair: 'bg-amber-500/55',
+  overpair: 'bg-amber-600/55',
+  top_pair: 'bg-orange-500/55',
+  second_pair: 'bg-orange-600/50',
+  third_pair: 'bg-orange-700/45',
+  weak_pair: 'bg-red-700/45',
+  underpair: 'bg-red-800/45',
+  ace_high: 'bg-slate-600/50',
+  no_pair: 'bg-slate-700/50',
+};
+
+const CATEGORY_DRAW_BG: Record<string, string> = {
+  fd_nut: 'bg-sky-400/60',
+  fd: 'bg-sky-500/55',
+  bdfd: 'bg-sky-700/45',
+  oesd: 'bg-violet-500/55',
+  gutshot: 'bg-violet-600/50',
+  bdsd: 'bg-violet-800/45',
+  overcards2: 'bg-zinc-500/50',
+  overcard1: 'bg-zinc-600/45',
+};
+
+/** Fundo neutro para id desconhecido: nunca `bg-undefined` na tela. */
+const CATEGORY_FALLBACK_BG = 'bg-slate-700/40';
+
+export const categoryPalette = {
+  /** Cor de fundo da linha/celula de uma categoria de mao feita. */
+  made(id: string): string {
+    return CATEGORY_MADE_BG[id] ?? CATEGORY_FALLBACK_BG;
+  },
+  /** Cor de fundo da linha/chip de uma tag de draw. */
+  draw(id: string): string {
+    return CATEGORY_DRAW_BG[id] ?? CATEGORY_FALLBACK_BG;
+  },
+} as const;
+
 export type Tokens = typeof tokens;
 export type SpaceKey = keyof Tokens['space'];
 export type FontKey = keyof Tokens['font'];

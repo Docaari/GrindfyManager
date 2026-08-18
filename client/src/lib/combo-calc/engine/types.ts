@@ -74,6 +74,28 @@ export interface HeroComboResult {
   degradedReason: HeroComboDegradedReason | null;
 }
 
+/**
+ * O mesmo do lado do vilao (D-F3-11), com a equity medida contra o range do
+ * heroi. Campo aditivo: quem consome `EngineResultOk` da F1 nao quebra.
+ *
+ * SEM `evCall` e SEM `decision` de proposito. Quem enfrenta a aposta e o heroi;
+ * um EV de call do lado do vilao seria um numero finito, calculavel e sem
+ * pergunta correspondente na tela — o genero exato de campo que a D8 ensinou a
+ * nao criar.
+ */
+export interface VillainComboResult {
+  combo: [Card, Card];
+  /** Frequencia do combo dentro do range do vilao. */
+  weight: number;
+  /** Massa do range do HEROI que este combo realmente enfrenta. */
+  pairMass: number;
+  equity: number | null;
+  confidenceHalfWidth: number | null;
+  sampleCount: number | null;
+  /** Nomes ESPELHADOS do lado do heroi — a uniao e a mesma. */
+  degradedReason: HeroComboDegradedReason | null;
+}
+
 export interface EngineResultOk {
   status: "ok";
   mode: EngineMode;
@@ -89,6 +111,19 @@ export interface EngineResultOk {
   /** null no exato; NUNCA null no Monte Carlo (criterio de aceite 4). */
   confidence: EngineConfidence | null;
   perHeroCombo: HeroComboResult[];
+  /**
+   * Leitura do outro lado, da MESMA corrida (D-F3-11). Rodar o motor de novo com
+   * os lados trocados produziria duas corridas que podem divergir — no exato por
+   * ULPs de ordem de soma, no Monte Carlo por amostras diferentes — e a tela
+   * mostraria "58,3% contra 41,8%" sem ninguem saber qual esta certo.
+   */
+  perVillainCombo: VillainComboResult[];
+  /**
+   * Equity agregada do range do vilao. `heroRangeEquity + villainRangeEquity`
+   * fecha em 1 POR CONSTRUCAO: os dois dividem o mesmo denominador e o chop conta
+   * 0,5 dos dois lados.
+   */
+  villainRangeEquity: number;
   /**
    * Quantos combos do heroi tem EV de call `>= 0`. E a resposta direta de
    * "quantas das minhas maos pagam" — a razao de existir da frente.

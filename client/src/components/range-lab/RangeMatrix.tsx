@@ -66,6 +66,19 @@ export interface RangeMatrixProps {
   onRedo?: () => void;
   /** Abre o popover de naipes (RF-02.2) para a notacao da celula ativa clicada. */
   onOpenSuitPicker?: (notation: string) => void;
+  /**
+   * Classes acesas pelo filtro de leitura da F3a (RF-03.7). OPCIONAL de proposito:
+   * SEM a prop a celula se comporta exatamente como antes, e o popup
+   * (`CombosCalculator`, D13/D-F2-6) nao sente a F3a. Conjunto VAZIO nao e o
+   * mesmo que ausencia — vazio significa "nada passou no filtro".
+   */
+  highlight?: Set<string>;
+  /**
+   * Quantos combos de cada classe passam no filtro. Uma celula e uma classe com
+   * ate 4 combos, que podem cair em categorias diferentes: sem essa contagem a
+   * celula acesa mente.
+   */
+  highlightCounts?: Map<string, { passing: number; total: number }>;
 }
 
 export function RangeMatrix({
@@ -76,6 +89,8 @@ export function RangeMatrix({
   onUndo,
   onRedo,
   onOpenSuitPicker,
+  highlight,
+  highlightCounts,
 }: RangeMatrixProps) {
   const [lastCell, setLastCell] = useState<{ row: number; col: number } | null>(null);
   const [altDragSuit, setAltDragSuit] = useState<Suit | null>(null);
@@ -308,17 +323,27 @@ export function RangeMatrix({
               const isPair = row === col;
               const isSuited = row < col;
               const partial = !!entry?.suits && entry.suits.length > 0;
+              const counts = highlightCounts?.get(notation);
+              const cellTitle = counts
+                ? `${notation} — ${counts.passing} de ${counts.total} passam no filtro`
+                : notation;
+              // Sem a prop `highlight` nao ha esmaecimento nenhum: e assim que o
+              // popup continua identico ao que era antes da F3a.
+              const dimmed = highlight ? !highlight.has(notation) : false;
               return (
                 <div key={`${row}-${col}`} className="relative w-[26px] h-[26px]">
                   <button
                     type="button"
                     data-testid={`range-cell-${notation}`}
-                    title={notation}
+                    title={cellTitle}
+                    data-highlighted={highlight ? String(highlight.has(notation)) : undefined}
                     onPointerDown={(e) => handlePointerDown(row, col, e)}
                     onPointerEnter={() => handlePointerEnter(row, col)}
                     onClick={(e) => handleCellClick(row, col, e)}
                     onWheel={(e) => handleWheel(row, col, e)}
                     className={`w-full h-full text-[9px] font-mono border ${
+                      dimmed ? "opacity-30" : ""
+                    } ${
                       partial ? "border-amber-400" : "border-gray-800"
                     } ${
                       entry

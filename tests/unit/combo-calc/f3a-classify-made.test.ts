@@ -95,13 +95,13 @@ describe("F3a criterio 2 / R1 — o par da MESA nao vira o seu par", () => {
     expect(read.nutKicker).toBe(false);
   });
 
-  it("AK em Q-7-7 sai com usesHoleCards false: a familia vista foi a da mesa (R3)", () => {
+  it("AK em Q-7-7 sai com usesHoleCards true: a categoria nomeada e ace_high, e o as e dele (R3)", () => {
     const read = classifyCombo(hole("Ah", "Kc"), BOARD_Q77);
     expect(
       read.usesHoleCards,
-      "a flag descreve a mao que o AVALIADOR nomeou (o par de setes), " +
-        "nao o rotulo que a tela escreve",
-    ).toBe(false);
+      "a flag descreve a CATEGORIA NOMEADA (ace_high), nao a familia que o " +
+        "avaliador viu: o as que da o nome a categoria e carta do heroi",
+    ).toBe(true);
   });
 
   it("88 no MESMO bordo e dois pares com qualificador with_board_pair", () => {
@@ -137,7 +137,11 @@ describe("F3a R2 — a trinca inteira da mesa nao e a sua trinca", () => {
       `${spot(h, BOARD_777)}: trips exige 1 carta do heroi no rank; aqui nao ha nenhuma`,
     ).toBe("ace_high");
     expect(read.made).not.toBe("trips");
-    expect(read.usesHoleCards).toBe(false);
+    expect(
+      read.usesHoleCards,
+      "a categoria nomeada e ace_high e o as e do heroi — a trinca da mesa nao " +
+        "entra nessa conta",
+    ).toBe(true);
   });
 
   it("com uma carta do rank na mao, a MESMA familia 3 vira trinca", () => {
@@ -169,8 +173,8 @@ describe("F3a R2 — a trinca inteira da mesa nao e a sua trinca", () => {
   });
 });
 
-describe("F3a R3 — usesHoleCards descreve a mao que o AVALIADOR nomeou", () => {
-  it("os dois casos de natureza diferente saem false no mesmo teste", () => {
+describe("F3a R3 — usesHoleCards descreve a CATEGORIA NOMEADA", () => {
+  it("a mesa jogando sozinha sai false; o as que nomeia a categoria sai true", () => {
     // 1. Familia de FORCA formada so pela mesa: a sequencia e sua, mas nenhuma
     //    carta sua entrou nela.
     const naMesa = classifyCombo(hole("2h", "3d"), BOARD_STRAIGHT_RIVER);
@@ -186,9 +190,10 @@ describe("F3a R3 — usesHoleCards descreve a mao que o AVALIADOR nomeou", () =>
     expect(parDaMesa.made).toBe("ace_high");
     expect(
       parDaMesa.usesHoleCards,
-      "AK em Q-7-7: mesmo com o as na mao, a familia que o avaliador viu e da mesa. " +
-        "A UI NAO pode renderizar esta flag como 'sua mao nao participa'",
-    ).toBe(false);
+      "AK em Q-7-7: a categoria nomeada e ace_high e o as e dele. A flag responde " +
+        "'a categoria nomeada usa carta minha', e nao 'a melhor mao de 5 cartas usa " +
+        "carta minha' — sao duas perguntas, e uma flag so nao responde as duas",
+    ).toBe(true);
   });
 
   it("carta alta formada so pela mesa no river tambem sai false", () => {

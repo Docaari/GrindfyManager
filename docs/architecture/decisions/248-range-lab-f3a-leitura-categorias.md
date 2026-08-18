@@ -155,8 +155,9 @@ do heroi)"*. Com bordo `7-7-7` e `AK`, nenhuma carta do heroi entra na trinca ->
 passo de par -> **`ace_high`**, `usesHoleCards: false`. A tabela de categorias
 concorda: `trips` exige "1 carta do heroi no rank".
 
-**R3 — `usesHoleCards` descreve a mao que o AVALIADOR nomeou, nao o rotulo que a
-tela escreve.** E a unica leitura compativel com os dois usos da spec ao mesmo
+**R3 — SUPERADA em 2026-08-18 pela D-F3-20 (adiante).** Texto original mantido
+para rastreabilidade: `usesHoleCards` descreveria a mao que o AVALIADOR nomeou,
+nao o rotulo que a tela escreve. E a unica leitura compativel com os dois usos da spec ao mesmo
 tempo: sequencia na mesa -> `straight` + `usesHoleCards: false`; par na mesa com
 `AK` -> `ace_high` + `usesHoleCards: false`, **mesmo com o as na mao do heroi**.
 Consequencia direta para a UI: a flag **nao** pode ser renderizada como "sua mao
@@ -557,6 +558,38 @@ heroi) e nao sobrevive ao modelo v2. E o mesmo descasamento que o ADR-247
 (D-F2-4) registrou para o `solveBreakevenMultiplier`. Obrigacao de teste que
 nasce daqui: nenhum ponto da UI pode construir uma linha que junte um combo do
 heroi a um combo do vilao — se aparecer, e o shape v1 vazando.
+
+**D-F3-20 (2026-08-18) — `usesHoleCards` descreve a CATEGORIA NOMEADA; a leitura
+R3 fica SUPERADA.** O test-writer achou a contradicao ao escrever o caso: o ADR
+(R3) pedia `false` para `AK` em `Q-7-7`, e a spec (`F3a-leitura-categorias.md`,
+secao "`usesHoleCards` — o que a flag significa") pede `true`, com a justificativa
+ja escrita la:
+
+> A flag **nao** e "a melhor mao de 5 cartas usa carta minha", que e outra
+> pergunta e produziria `false` no primeiro exemplo. Duas perguntas parecidas,
+> uma flag so: se ela responder as duas, responde errado uma delas.
+
+O founder decidiu pela leitura da **spec**. Definicao valendo: `usesHoleCards` =
+**a categoria nomeada foi formada com ao menos uma carta do heroi**.
+
+- `AK` em `Q-7-7` -> `ace_high`, **`true`** (o as nomeia a categoria e e dele).
+- `AK` em `7-7-7` -> `ace_high`, **`true`**, pelo mesmo motivo.
+- `23` em `5-6-7-8-9` -> `straight`, **`false`** — a mesa joga sozinha, e este e o
+  caso para o qual a flag existe.
+- `32` em `A-K-Q-J-9` -> `no_pair`, **`false`** — nada foi formado pelo heroi.
+
+O argumento que decidiu: o proprio R3 admitia que a flag **nao** poderia ser
+renderizada como "sua mao nao participa". Uma flag chamada `usesHoleCards` que
+nao pode ser lida como "usa minhas cartas" tem nome mentindo sobre conteudo, e a
+UI teria que traduzir a flag toda vez que a mostrasse.
+
+**A invariante do R3 sobrevive intacta:** fora do river, `usesHoleCards` so pode
+ser `false` pelo passo de par (`ace_high` / `no_pair`), porque bordo de 3 ou 4
+cartas nao forma cinco cartas sozinho — qualquer familia de forca no flop ou no
+turn obriga participacao do heroi. O teste que trava essa invariante nao mudou.
+
+Custo: 3 assercoes da red phase invertidas. Para esta flag, a tabela de decisoes
+da spec passa a ser a fonte.
 
 ---
 

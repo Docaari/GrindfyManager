@@ -16,6 +16,10 @@ import BetInputs, { parseAmount } from "@/components/range-lab/BetInputs";
 import ModeSelector from "@/components/range-lab/ModeSelector";
 import VerdictPanel from "@/components/range-lab/VerdictPanel";
 import ComboTable from "@/components/range-lab/ComboTable";
+import CategoryPanel from "@/components/range-lab/CategoryPanel";
+import type { ReadSide } from "@/components/range-lab/CategoryPanel";
+import { buildHighlight } from "@/lib/combo-calc/read";
+import type { ReadCombo, ReadFilter } from "@/lib/combo-calc/read";
 import SpotLibrary from "@/components/range-lab/SpotLibrary";
 import BrushWeightControl from "@/components/range-lab/BrushWeightControl";
 import TopPercentSlider from "@/components/range-lab/TopPercentSlider";
@@ -49,6 +53,20 @@ type HeroMode = "hand" | "range";
 const RESET_TITLE =
   "Limpa tudo: o range do heroi, o range do oponente, o bordo, as cartas mortas e os filtros.";
 
+/**
+ * Avisa UMA vez por sessao que o motor devolveu resultado sem `perVillainCombo`.
+ * Repetir a cada render afogaria o console a cada tecla no pote.
+ */
+let missingVillainRowsWarned = false;
+function warnMissingVillainRows(): void {
+  if (missingVillainRowsWarned) return;
+  missingVillainRowsWarned = true;
+  console.warn(
+    "[range-lab] resultado do motor sem `perVillainCombo` (bundle antigo?): " +
+      "a leitura do lado do oponente fica vazia nesta corrida.",
+  );
+}
+
 export default function RangeLab() {
   const [board, setBoard] = useState<Card[]>([]);
   const [heroMode, setHeroMode] = useState<HeroMode>("hand");
@@ -73,6 +91,14 @@ export default function RangeLab() {
   const [suitPicker, setSuitPicker] = useState<{ side: RangeSide; notation: string } | null>(null);
   // Peso rapido do pincel (emenda A9, D-F2-1): um por lado, alimenta o
   // `defaultFrequency` que `RangeMatrix` ja aceita — zero mudanca de contrato.
+  // Lado ativo do painel de leitura (D-F3-22): ele decide QUAL range e agrupado e
+  // qual das duas matrizes o filtro pinta. Acender as duas ao mesmo tempo torna o
+  // filtro ilegivel.
+  const [readSide, setReadSide] = useState<ReadSide>("villain");
+  const [readFilter, setReadFilter] = useState<ReadFilter>(() => ({
+    made: new Set(),
+    draws: new Set(),
+  }));
   const [heroBrush, setHeroBrush] = useState(1);
   const [villainBrush, setVillainBrush] = useState(1);
 
@@ -185,6 +211,8 @@ export default function RangeLab() {
     setVillainHistory((h) => resetHistory(h, []));
     setMode("exact");
     setSuitPicker(null);
+    setReadFilter({ made: new Set(), draws: new Set() });
+    setReadSide("villain");
   }
 
   function loadSpot(saved: SavedSpotV2): void {
@@ -200,6 +228,36 @@ export default function RangeLab() {
 
   const showCallThreshold =
     heroMode === "range" && result != null && result.status === "ok";
+
+  // A classificacao e LOCAL (D-F3-1): ela nao espera a corrida. A equity vem da
+  // corrida e entra como `null` enquanto nao chegou — categoria com contagem e
+  // massa e coluna de equity em branco e estado legitimo, nao erro.
+  const readOk = result != null && result.status === "ok";
+  const heroReadCombos: ReadCombo[] = readOk
+    ? result.perHeroCombo.map((row) => ({
+        combo: row.combo,
+        weight: row.weight,
+        equity: row.equity,
+      }))
+    : [];
+  // `perVillainCombo` nasceu na F3a. Um resultado sem ele so pode vir de um worker
+  // de bundle antigo ainda vivo no navegador do jogador: a lista sai vazia (que e a
+  // verdade — nao ha dado), e o log vem ANTES do fallback para o caso nao passar
+  // despercebido (licao #9).
+  const villainRows = readOk ? (result.perVillainCombo ?? null) : null;
+  if (readOk && villainRows === null) {
+    warnMissingVillainRows();
+  }
+  const villainReadCombos: ReadCombo[] = (villainRows ?? []).map((row) => ({
+    combo: row.combo,
+    weight: row.weight,
+    equity: row.equity,
+  }));
+  const showRead = board.length >= 3 && readOk;
+  const activeReadCombos = readSide === "hero" ? heroReadCombos : villainReadCombos;
+  const readHighlight = showRead
+    ? buildHighlight(activeReadCombos, board, readFilter)
+    : null;
 
   return (
     <div data-testid="range-lab-page" className="min-h-screen bg-background text-white">
@@ -281,6 +339,10 @@ export default function RangeLab() {
                 onRedo={redoHero}
                 onOpenSuitPicker={(notation) => toggleSuitPicker("hero", notation)}
                 testId="range-lab-hero-matrix"
+                highlight={readHighlight && readSide === "hero" ? readHighlight.cells : undefined}
+                highlightCounts={
+                  readHighlight && readSide === "hero" ? readHighlight.perCell : undefined
+                }
               />
               <RangeEntryList
                 entries={heroRange}
@@ -331,6 +393,12 @@ export default function RangeLab() {
                 onRedo={redoVillain}
                 onOpenSuitPicker={(notation) => toggleSuitPicker("villain", notation)}
                 testId="range-lab-villain-matrix"
+                highlight={
+                  readHighlight && readSide === "villain" ? readHighlight.cells : undefined
+                }
+                highlightCounts={
+                  readHighlight && readSide === "villain" ? readHighlight.perCell : undefined
+                }
               />
               <RangeEntryList
                 entries={villainRange}
@@ -403,13 +471,28 @@ export default function RangeLab() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
               Leitura
             </h2>
-            {result && result.status === "ok" ? (
-              <ComboTable rows={result.perHeroCombo} />
+            {showRead && result && result.status === "ok" ? (
+              <>
+                <CategoryPanel
+                  board={board}
+                  heroCombos={heroReadCombos}
+                  villainCombos={villainReadCombos}
+                  side={readSide}
+                  onSideChange={setReadSide}
+                  filter={readFilter}
+                  onFilterChange={setReadFilter}
+                />
+                <ComboTable
+                  heroRows={result.perHeroCombo}
+                  villainRows={villainRows ?? []}
+                  board={board}
+                  heroMode={heroMode}
+                />
+              </>
             ) : (
               <p className={`text-xs ${tokens.color.neutral.text}`}>
-                Categorias de mao, cascata de equity, bloqueadores e MDF chegam na
-                proxima frente. Por enquanto, esta coluna mostra a tabela por mao
-                assim que houver resultado.
+                Monte o bordo e os dois ranges: a leitura por categoria, a textura e
+                a tabela por mao aparecem assim que houver resultado.
               </p>
             )}
           </section>

@@ -22,6 +22,7 @@ import type {
   EngineRequest,
   EngineResult,
   HeroComboResult,
+  VillainComboResult,
 } from "./types";
 
 /** z de 95% numa normal. O intervalo e `media +- z * erro padrao`. */
@@ -114,6 +115,8 @@ interface PreparedRun {
   pairVillain: Int32Array;
   /** Massa do range do vilao que cada combo do heroi realmente enfrenta. */
   pairMass: Float64Array;
+  /** A metade simetrica: massa do heroi que cada combo do vilao enfrenta (D-F3-11). */
+  villainPairMass: Float64Array;
   boardCodes: number[];
   pool: number[];
   /** Cartas de cada runout, ja resolvidas — evita refazer a conta por runout. */
@@ -185,6 +188,7 @@ export function createEngineRun(request: EngineRequest): EngineRun {
   const pairHeroList: number[] = [];
   const pairVillainList: number[] = [];
   const pairMass = new Float64Array(hero.length);
+  const villainPairMass = new Float64Array(villain.length);
   for (let h = 0; h < hero.length; h++) {
     const hc = hero[h];
     for (let v = 0; v < villain.length; v++) {
@@ -193,6 +197,9 @@ export function createEngineRun(request: EngineRequest): EngineRun {
       pairHeroList.push(h);
       pairVillainList.push(v);
       pairMass[h] += vc.weight;
+      // O(H*V) uma vez, fora do laco quente: e a metade simetrica do que a F1 ja
+      // faz para o heroi, e o denominador do lado de la sai daqui.
+      villainPairMass[v] += hc.weight;
     }
   }
   if (pairHeroList.length === 0) return degraded("no_valid_pairs");
@@ -213,6 +220,7 @@ export function createEngineRun(request: EngineRequest): EngineRun {
     pairHero: Int32Array.from(pairHeroList),
     pairVillain: Int32Array.from(pairVillainList),
     pairMass,
+    villainPairMass,
     boardCodes,
     pool,
     ...buildRunouts(pool, spot.board.length),
@@ -271,6 +279,10 @@ function exactRun(
   // (runouts x pairMass) acontece UMA vez no fim — o denominador e constante por
   // par, entao dividir dentro do laco so acrescentaria erro de ponto flutuante.
   const heroNum = new Float64Array(H);
+  // Espelho do lado do vilao. O chop conta 0,5 dos dois lados, entao heroi e
+  // vilao somam 1 por par avaliado — e dai que a identidade `heroi + vilao = 1`
+  // sai por construcao, sem depender de julgamento.
+  const villainNum = new Float64Array(V);
   const heroScore = new Int32Array(H);
   const villainScore = new Int32Array(V);
 
@@ -337,6 +349,15 @@ function exactRun(
       },
       halfWidthOf: () => null,
       sampleCountOf: () => null,
+      villainEquityOf: (v) => {
+        // Denominador simetrico ao do heroi: `runoutsPerPair` (990 no flop) e
+        // EXATAMENTE o numero de runouts em que nenhuma das 4 cartas do par foi
+        // comida, que sao os unicos que entram no numerador.
+        const denom = prep.runoutsPerPair * prep.villainPairMass[v];
+        return denom > 0 ? villainNum[v] / denom : null;
+      },
+      villainHalfWidthOf: () => null,
+      villainSampleCountOf: () => null,
       confidence: null,
       seed: null,
       samples: null,
@@ -375,6 +396,7 @@ function exactRun(
         const pairH = prep.pairHero;
         const pairV = prep.pairVillain;
         const vWeight = villain.weight;
+        const hWeight = hero.weight;
         while (pairIndex < P && localProcessed < maxUnits) {
           const h = pairH[pairIndex];
           const v = pairV[pairIndex];
@@ -382,7 +404,9 @@ function exactRun(
           const a = sh[h];
           const b = sv[v];
           if (a < 0 || b < 0) continue; // o runout comeu uma das cartas do par
-          heroNum[h] += vWeight[v] * (a > b ? 1 : a < b ? 0 : 0.5);
+          const outcome = a > b ? 1 : a < b ? 0 : 0.5;
+          heroNum[h] += vWeight[v] * outcome;
+          villainNum[v] += hWeight[h] * (1 - outcome);
           localProcessed++;
           processed++;
         }
@@ -437,6 +461,18 @@ function monteCarloRun(
   const sum = new Float64Array(H);
   const sumSq = new Float64Array(H);
   const count = new Float64Array(H);
+  // O lado do vilao NAO pode copiar a forma do lado do heroi (D-F3-11 item 3).
+  // O combo do vilao ja e sorteado proporcional ao peso, entao a amostra entra no
+  // acumulador do heroi com peso 1. Do outro lado a assimetria e total: os combos
+  // do HEROI sao percorridos exaustivamente com rejeicao, e o peso deles nunca
+  // entrou na amostragem. Por isso o acumulador do vilao carrega
+  // `hero.weight[h]` EXPLICITAMENTE — contagem simples estimaria a equity do
+  // vilao contra um range de heroi UNIFORME: plausivel, estavel, reproduzivel e
+  // errado.
+  const villainNum = new Float64Array(V);
+  const villainDen = new Float64Array(V);
+  const villainSumSq = new Float64Array(V);
+  const villainCount = new Float64Array(V);
   const pool = prep.pool;
 
   let sampleIndex = 0;
@@ -511,6 +547,13 @@ function monteCarloRun(
       sum[h] += outcome;
       sumSq[h] += outcome * outcome;
       count[h] += 1;
+
+      const heroWeight = hero.weight[h];
+      const villainOutcome = 1 - outcome;
+      villainNum[v] += heroWeight * villainOutcome;
+      villainDen[v] += heroWeight;
+      villainSumSq[v] += heroWeight * villainOutcome * villainOutcome;
+      villainCount[v] += 1;
       accepted++;
     }
   }
@@ -530,6 +573,20 @@ function monteCarloRun(
       halfWidths[h] = (Z_95 * sd) / Math.sqrt(n);
     }
 
+    const villainHalfWidths = new Float64Array(V);
+    for (let v = 0; v < V; v++) {
+      const n = villainCount[v];
+      const den = villainDen[v];
+      if (n < 2 || den <= 0) {
+        villainHalfWidths[v] = NaN;
+        continue;
+      }
+      const mean = villainNum[v] / den;
+      const variance = Math.max(0, villainSumSq[v] / den - mean * mean);
+      const sd = variance > 0 ? Math.sqrt(variance) : DEGENERATE_SD;
+      villainHalfWidths[v] = (Z_95 * sd) / Math.sqrt(n);
+    }
+
     out = assemble({
       request,
       prep,
@@ -539,6 +596,11 @@ function monteCarloRun(
       equityOf: (h) => (count[h] >= 2 ? sum[h] / count[h] : null),
       halfWidthOf: (h) => (Number.isFinite(halfWidths[h]) ? halfWidths[h] : null),
       sampleCountOf: (h) => count[h],
+      villainEquityOf: (v) =>
+        villainCount[v] >= 2 && villainDen[v] > 0 ? villainNum[v] / villainDen[v] : null,
+      villainHalfWidthOf: (v) =>
+        Number.isFinite(villainHalfWidths[v]) ? villainHalfWidths[v] : null,
+      villainSampleCountOf: (v) => villainCount[v],
       confidence: (weights) => aggregateConfidence(weights, halfWidths),
       seed,
       samples,
@@ -611,6 +673,9 @@ interface AssembleInput {
   equityOf: (heroIndex: number) => number | null;
   halfWidthOf: (heroIndex: number) => number | null;
   sampleCountOf: (heroIndex: number) => number | null;
+  villainEquityOf: (villainIndex: number) => number | null;
+  villainHalfWidthOf: (villainIndex: number) => number | null;
+  villainSampleCountOf: (villainIndex: number) => number | null;
   confidence: ((weights: Float64Array) => EngineConfidence | null) | null;
   seed: number | null;
   samples: number | null;
@@ -678,6 +743,47 @@ function assemble(input: AssembleInput): EngineResult {
   }
 
   const heroRangeEquity = num / den;
+
+  // Segunda passada, simetrica a do heroi (D-F3-11 item 4). Roda DEPOIS do
+  // `den <= 0`, entao um resultado degradado nunca carrega estes campos.
+  const V = prep.villain.combos.length;
+  const perVillainCombo: VillainComboResult[] = [];
+  let villainNum = 0;
+  let villainDen = 0;
+
+  for (let v = 0; v < V; v++) {
+    const vc = prep.villain.combos[v];
+    const mass = prep.villainPairMass[v];
+    const equity = mass > EPS ? input.villainEquityOf(v) : null;
+
+    if (equity === null || !Number.isFinite(equity)) {
+      perVillainCombo.push({
+        combo: vc.combo,
+        weight: vc.weight,
+        pairMass: mass,
+        equity: null,
+        confidenceHalfWidth: null,
+        sampleCount: null,
+        degradedReason: mass > EPS ? "insufficient_samples" : "no_valid_villain_combo",
+      });
+      continue;
+    }
+
+    const weight = vc.weight * mass;
+    villainNum += weight * equity;
+    villainDen += weight;
+
+    perVillainCombo.push({
+      combo: vc.combo,
+      weight: vc.weight,
+      pairMass: mass,
+      equity,
+      confidenceHalfWidth: input.villainHalfWidthOf(v),
+      sampleCount: input.villainSampleCountOf(v),
+      degradedReason: null,
+    });
+  }
+
   return {
     status: "ok",
     mode: input.request.mode,
@@ -689,6 +795,8 @@ function assemble(input: AssembleInput): EngineResult {
     decision: decisionFrom(heroRangeEquity, alpha),
     confidence: input.confidence ? input.confidence(aggregateWeights) : null,
     perHeroCombo,
+    perVillainCombo,
+    villainRangeEquity: villainDen > 0 ? villainNum / villainDen : 1 - heroRangeEquity,
     callThresholdIndex,
     runoutsPerPair: prep.runoutsPerPair,
     totalShowdowns: input.totalShowdowns,
