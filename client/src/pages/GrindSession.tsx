@@ -1157,7 +1157,8 @@ export default function GrindSession() {
             : {}),
           profit: String(editData.profit || 0),
           abiMed: String(editData.abiMed || 0),
-          roi: String(editData.roi || 0),
+          // ADR-244 D4: preserva a ausencia; a coluna e nullable e o PUT aceita null.
+          roi: editData.roi == null ? null : String(editData.roi),
           fts: editData.fts,
           cravadas: editData.cravadas,
           // ADR-242 (RF-07): as 5 medias *Media agora sao DERIVADAS da serie de
@@ -1232,7 +1233,10 @@ export default function GrindSession() {
       volume: editingSession?.volume || 0,
       profit: editingSession?.profit || 0,
       abiMed: editingSession?.abiMed || 0,
-      roi: editingSession?.roi || 0,
+      // ADR-244 D4: roi ausente e null, nunca 0. `|| 0` fazia o editor
+      // pre-preencher 0 e o save gravar "0" por cima do null — o jogador
+      // perdia a distincao "sem ROI" sem perceber.
+      roi: editingSession?.roi ?? null,
       fts: editingSession?.fts || 0,
       cravadas: editingSession?.cravadas || 0,
       energiaMedia: editingSession?.energiaMedia || 5,

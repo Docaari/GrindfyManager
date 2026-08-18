@@ -14,6 +14,8 @@
  * Estado module-level (singleton). NAO usar Context/Zustand.
  */
 
+import { playBeep } from '../alertSound';
+
 export type Priority = 'high' | 'normal';
 
 export interface QueueItem {
@@ -37,6 +39,8 @@ interface CurrentlySpeaking extends QueueItem {
   repeatRemaining: number;
   /** Quando promovido da queue, repeat e desativado (toca 1x). */
   allowRepeat: boolean;
+  /** True apos `onstart`. Enquanto false, a fala pode ter morrido calada. */
+  started: boolean;
 }
 
 // ============================================================================
@@ -47,14 +51,72 @@ let _currentlySpeaking: CurrentlySpeaking | null = null;
 let _queue: QueueItem[] = [];
 let _alertTimeouts: Map<string, any[]> = new Map();
 let _watchdogTimer: any = null;
+let _startTimer: any = null;
+let _unstickTimer: any = null;
 
 const MAX_QUEUE_ITEMS = 3; // Excluindo current. Caps tempo total ~15s (3 * ~5s).
 const MAX_BUFFERED_MS = 30_000; // Items mais antigos que isso na queue sao descartados em promoteNext.
 const WATCHDOG_MS = 30_000; // Stuck utterance detection. Independente de MAX_BUFFERED_MS.
+/**
+ * Se `onstart` nao disparar nesse prazo, a fala morreu calada e caimos no beep.
+ * O watchdog de 30s existia, mas era tarde demais: durante os 30s de espera o
+ * `_currentlySpeaking` travado enfileirava os alarmes seguintes, e o
+ * `promoteNext` entao os descartava por `MAX_BUFFERED_MS` (tambem 30s). Ou seja,
+ * uma fala travada engolia calada TODOS os alarmes da janela. Este timer curto
+ * corta o problema na raiz.
+ */
+const START_TIMEOUT_MS = 3_000;
+/** Poll do destravamento do speechSynthesis (bug de `paused` grudado no Chrome). */
+const UNSTICK_POLL_MS = 5_000;
 
 // ============================================================================
 // Helpers internos
 // ============================================================================
+
+function hasSpeechSynthesis(): boolean {
+  return typeof speechSynthesis !== 'undefined' && !!speechSynthesis;
+}
+
+/**
+ * Chrome deixa o `speechSynthesis` grudado em `paused` depois que a aba fica em
+ * background (o jogador esta na mesa do site de poker, nao no Grindfy). Nesse
+ * estado `speak()` aceita a utterance, nao lanca erro e nao emite som algum —
+ * o alarme simplesmente nao toca. Chamar `resume()` destrava.
+ */
+function unstickSpeechSynthesis() {
+  if (!hasSpeechSynthesis()) return;
+  try {
+    if (speechSynthesis.paused) speechSynthesis.resume();
+  } catch (err) {
+    console.warn('[narrationQueue] resume falhou', err);
+  }
+}
+
+function startUnstickPoll() {
+  if (_unstickTimer) return;
+  if (typeof setInterval === 'undefined') return;
+  _unstickTimer = setInterval(() => {
+    if (!_currentlySpeaking) {
+      stopUnstickPoll();
+      return;
+    }
+    unstickSpeechSynthesis();
+  }, UNSTICK_POLL_MS);
+}
+
+function stopUnstickPoll() {
+  if (_unstickTimer) {
+    clearInterval(_unstickTimer);
+    _unstickTimer = null;
+  }
+}
+
+function clearStartTimer() {
+  if (_startTimer) {
+    clearTimeout(_startTimer);
+    _startTimer = null;
+  }
+}
 
 function clearWatchdog() {
   if (_watchdogTimer) {
@@ -84,11 +146,12 @@ function startWatchdog() {
     if (_currentlySpeaking) {
       try {
         speechSynthesis.cancel();
-      } catch {
-        // ignore
+      } catch (err) {
+        console.warn('[narrationQueue] cancel no watchdog falhou', err);
       }
       const stuckId = _currentlySpeaking.alertId;
       _currentlySpeaking = null;
+      clearStartTimer();
       clearTimeoutsFor(stuckId);
       promoteNext();
     }
@@ -113,19 +176,65 @@ function startUtterance(
     utterance,
     repeatRemaining,
     allowRepeat,
+    started: false,
   } as CurrentlySpeaking;
 
+  utterance.onstart = () => {
+    if (_currentlySpeaking !== current) return;
+    current.started = true;
+    clearStartTimer();
+  };
   utterance.onend = () => handleUtteranceFinished(current, 'end');
   utterance.onerror = () => handleUtteranceFinished(current, 'error');
 
   _currentlySpeaking = current;
   startWatchdog();
+  startStartTimer(current);
+  startUnstickPoll();
+
+  // Destrava antes de falar: se o engine ficou `paused` (aba em background),
+  // `speak()` aceita a utterance e nao emite som nenhum.
+  unstickSpeechSynthesis();
+
   try {
     speechSynthesis.speak(utterance);
   } catch (err) {
     console.warn('[narrationQueue] speak failed', err);
+    handleUtteranceFinished(current, 'error');
   }
   return current;
+}
+
+/**
+ * Se a fala nao comecar em START_TIMEOUT_MS, considera natimorta: cai no beep
+ * (o jogador PRECISA ouvir algo) e libera a fila para o proximo alarme.
+ */
+function startStartTimer(current: CurrentlySpeaking) {
+  clearStartTimer();
+  if (typeof setTimeout === 'undefined') return;
+  _startTimer = setTimeout(() => {
+    _startTimer = null;
+    if (_currentlySpeaking !== current || current.started) return;
+    // O engine pode estar apenas com a fila cheia (outra aba falando): nesse
+    // caso a utterance esta viva, so nao comecou. Nao mata — re-checa depois.
+    if (hasSpeechSynthesis() && (speechSynthesis.pending || speechSynthesis.speaking)) {
+      startStartTimer(current);
+      return;
+    }
+    console.warn(
+      '[narrationQueue] TTS nao iniciou em',
+      START_TIMEOUT_MS,
+      'ms — fallback beep',
+      { alertId: current.alertId },
+    );
+    try {
+      speechSynthesis.cancel();
+    } catch (err) {
+      console.warn('[narrationQueue] cancel apos falha de start', err);
+    }
+    playBeep();
+    handleUtteranceFinished(current, 'error');
+  }, START_TIMEOUT_MS);
 }
 
 function speakNow(item: QueueItem, allowRepeat: boolean): CurrentlySpeaking {
@@ -137,9 +246,15 @@ function handleUtteranceFinished(current: CurrentlySpeaking, reason: 'end' | 'er
   // Se current ja foi sobrescrito por FLUSH/stop, ignorar.
   if (_currentlySpeaking !== current) return;
 
+  // Terminou (bem ou mal) => a fala nao esta natimorta. Desarma o start timer
+  // antes de qualquer branch, senao ele dispararia no meio do gap do repeat e
+  // mataria uma narracao saudavel.
+  clearStartTimer();
+
   // Caso de erro: promove proximo (R-12 mitigation).
   if (reason === 'error') {
     clearWatchdog();
+    clearStartTimer();
     _currentlySpeaking = null;
     clearTimeoutsFor(current.alertId);
     promoteNext();
@@ -159,6 +274,7 @@ function handleUtteranceFinished(current: CurrentlySpeaking, reason: 'end' | 'er
 
   // Sem repeat ou repeat exaurido: promove proximo da queue.
   clearWatchdog();
+  clearStartTimer();
   _currentlySpeaking = null;
   clearTimeoutsFor(current.alertId);
   promoteNext();
@@ -181,6 +297,8 @@ function promoteNext() {
   }
   // Queue vazia.
   clearWatchdog();
+  clearStartTimer();
+  stopUnstickPoll();
 }
 
 // ============================================================================
@@ -216,6 +334,7 @@ export function enqueue(item: QueueItem): EnqueueResult {
       console.warn('[narrationQueue] cancel during FLUSH failed', err);
     }
     clearTimeoutsFor(_currentlySpeaking.alertId);
+    clearStartTimer();
     _currentlySpeaking = null;
     _queue = [];
     speakNow(item, /* allowRepeat */ true);
@@ -245,6 +364,7 @@ export function stopAlertById(alertId: string): void {
     }
     clearTimeoutsFor(alertId);
     clearWatchdog();
+    clearStartTimer();
     _currentlySpeaking = null;
     promoteNext();
     return;
@@ -274,6 +394,8 @@ export function stopAllAlerts(): void {
     // ignore
   }
   clearWatchdog();
+  clearStartTimer();
+  stopUnstickPoll();
   _alertTimeouts.forEach((list) => list.forEach((t) => clearTimeout(t)));
   _alertTimeouts.clear();
   _currentlySpeaking = null;
@@ -282,7 +404,7 @@ export function stopAllAlerts(): void {
 
 export function getCurrentlySpeaking(): QueueItem | null {
   if (!_currentlySpeaking) return null;
-  const { utterance, repeatRemaining, allowRepeat, ...item } = _currentlySpeaking;
+  const { utterance, repeatRemaining, allowRepeat, started, ...item } = _currentlySpeaking;
   return item;
 }
 
@@ -301,6 +423,8 @@ export function getQueue(): QueueItem[] {
  */
 export function __resetForTesting(): void {
   clearWatchdog();
+  clearStartTimer();
+  stopUnstickPoll();
   _alertTimeouts.forEach((list) => list.forEach((t) => clearTimeout(t)));
   _alertTimeouts.clear();
   _currentlySpeaking = null;

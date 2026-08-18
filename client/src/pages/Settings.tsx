@@ -67,6 +67,11 @@ export default function Settings() {
   const [optimisticBankrollManagement, setOptimisticBankrollManagement] = useState<
     boolean | null
   >(null);
+  // ADR-244 (RF-01): toggle do ajuste manual do resultado final da sessao.
+  // Mesmo padrao do bankrollManagementEnabled (estado otimista + PUT parcial).
+  const [optimisticManualSessionResult, setOptimisticManualSessionResult] = useState<
+    boolean | null
+  >(null);
 
   // Hook de vozes pt-BR (Chrome async via voiceschanged).
   const { voices, available: ttsAvailable, preferredVoice } = useTTSVoices(preferredVoiceURI);
@@ -239,6 +244,38 @@ export default function Settings() {
   const handleToggleBankrollManagement = (checked: boolean) => {
     setOptimisticBankrollManagement(checked);
     saveBankrollManagementToggle.mutate(checked);
+  };
+
+  // ADR-244 (RF-01): ajuste manual do resultado final da sessao. Fail-open —
+  // valor ausente no server resolve para true (ligado por padrao, D3).
+  const manualSessionResultFromServer =
+    userSettings && typeof (userSettings as any).manualSessionResultEnabled === 'boolean'
+      ? ((userSettings as any).manualSessionResultEnabled as boolean)
+      : null;
+  const manualSessionResultEnabled =
+    optimisticManualSessionResult ??
+    (manualSessionResultFromServer === null ? true : manualSessionResultFromServer);
+
+  const saveManualSessionResultToggle = useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiRequest("PUT", "/api/user-settings", { manualSessionResultEnabled: enabled }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/user-settings"] });
+      setOptimisticManualSessionResult(null);
+    },
+    onError: (error: Error) => {
+      setOptimisticManualSessionResult(null);
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleToggleManualSessionResult = (checked: boolean) => {
+    setOptimisticManualSessionResult(checked);
+    saveManualSessionResultToggle.mutate(checked);
   };
 
   // Save exchange rates mutation
@@ -466,6 +503,39 @@ export default function Settings() {
                 className="data-[state=checked]:bg-primary"
               />
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sessao de Grind — ADR-244 (RF-01): ajuste manual do resultado final */}
+      <Card className="bg-card border-gray-700" data-testid="settings-grind-session-section">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-emerald-400" />
+            Sessao de Grind
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label
+                htmlFor="manual-session-result-toggle"
+                className="text-white font-medium"
+              >
+                Ajustar resultado final da sessao manualmente
+              </Label>
+              <p className="text-gray-400 text-sm">
+                Permite digitar o lucro/prejuizo da sessao ao finalizar. O
+                investido nao muda e o ROI e recalculado.
+              </p>
+            </div>
+            <Switch
+              id="manual-session-result-toggle"
+              data-testid="settings-toggle-manual-session-result"
+              checked={manualSessionResultEnabled}
+              onCheckedChange={handleToggleManualSessionResult}
+              className="data-[state=checked]:bg-primary"
+            />
           </div>
         </CardContent>
       </Card>

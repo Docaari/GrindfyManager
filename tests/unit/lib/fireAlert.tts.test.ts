@@ -284,6 +284,38 @@ describe('fireAlert — toast e notification sempre', () => {
   });
 });
 
+describe('fireAlert — action passthrough (botoes de soneca)', () => {
+  it('repassa `action` ao toast — e o que faz os botoes +1min/+3min aparecerem', () => {
+    const toast = vi.fn();
+    const action = { __element: 'AlertSnoozeActions' } as any;
+
+    fireAlert({
+      title: 'Late Reg Encerrando!',
+      description: 'Sunday Plus',
+      soundMode: 'mute',
+      action,
+      toast,
+    } as any);
+
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ action }));
+  });
+
+  it('sem `action` o toast continua valido (alertas sem soneca nao quebram)', () => {
+    const toast = vi.fn();
+
+    fireAlert({
+      title: 'X',
+      description: 'Y',
+      soundMode: 'mute',
+      toast,
+    } as any);
+
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'X', description: 'Y', action: undefined })
+    );
+  });
+});
+
 describe('fireAlert — prefers-reduced-data (RF-12)', () => {
   it('prefers-reduced-data: reduce + soundMode tts -> fallback beep', () => {
     (globalThis as any).matchMedia = vi.fn((q: string) => ({

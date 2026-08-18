@@ -1,3 +1,35 @@
+import { getDisplayRegistrationTime } from "./grade-time";
+
+/**
+ * Ordem de exibicao DENTRO da celula: horario de registro crescente, com a
+ * prioridade so desempatando. A posicao do chip precisa refletir o horario
+ * porque arrastar um torneio para baixo de outro passou a definir o horario
+ * dele (ver computeGradeDropUpdates). Ordenar por prioridade aqui faria o chip
+ * "pular de volta" depois do drop.
+ *
+ * Estavel: empate de horario e prioridade mantem a ordem original.
+ */
+export function sortCellByTime<T extends Record<string, any>>(tournaments: T[]): T[] {
+  const toMinutes = (t: T): number => {
+    const display = getDisplayRegistrationTime(t as any);
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(display || "").trim());
+    if (!m) return Number.MAX_SAFE_INTEGER;
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  };
+  return tournaments
+    .map((t, idx) => ({
+      t,
+      idx,
+      minutes: toMinutes(t),
+      priority: (t.priority ?? t.prioridade ?? 2) as number,
+    }))
+    .sort(
+      (a, b) =>
+        a.minutes - b.minutes || a.priority - b.priority || a.idx - b.idx,
+    )
+    .map((x) => x.t);
+}
+
 interface CellDisplayInfo {
   visible: any[];
   overflow: number;

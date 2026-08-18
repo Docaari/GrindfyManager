@@ -88,13 +88,9 @@ export default function AlertsPanel({
         setFormError("Informe o horario");
         return;
       }
-      const [h, m] = formTime.split(':').map(Number);
-      const target = new Date();
-      target.setHours(h, m, 0, 0);
-      if (target <= new Date()) {
-        setFormError("Horario ja passou");
-        return;
-      }
+      // Sem checagem de "ja passou": o grind atravessa a meia-noite e as 23h um
+      // alerta para "01:00" e legitimo. O handler aplica rollover para o dia
+      // seguinte, mesma regra do TournamentAlertDialog.
       onCreateAlert(formLabel.trim(), 'absolute', formTime);
     } else {
       const mins = parseInt(formMinutes);

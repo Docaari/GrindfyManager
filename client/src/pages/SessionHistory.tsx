@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar, Clock, Target, Trophy, DollarSign, TrendingUp, Coffee, FileText, CheckCircle, XCircle, Edit3, Trash2, Save, X, Wallet } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { parseSessionRoi, formatSessionRoi } from "@shared/session-roi";
 import { useToast } from "@/hooks/use-toast";
 // Sprint Bankroll-Reports-Detail (R2 fix H3): wiring de SessionHistoryUnified
 // + GrindProfitHeader + BankrollDetailModal na pagina de historico.
@@ -423,8 +424,9 @@ export default function SessionHistory() {
                     <div className="text-xs text-gray-400">ABI Médio</div>
                   </div>
                   <div className="text-center bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-3">
-                    <div className={`text-lg font-bold ${session.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {session.roi.toFixed(1)}%
+                    {/* ADR-244 (D4): ROI ausente exibe "—", nunca "0.0%". */}
+                    <div className={`text-lg font-bold ${(parseSessionRoi(session.roi) ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {formatSessionRoi(parseSessionRoi(session.roi))}
                     </div>
                     <div className="text-xs text-gray-400">ROI</div>
                   </div>
@@ -589,8 +591,9 @@ export default function SessionHistory() {
                           <div className="text-xs text-gray-500 mt-1">Average buy-in da sessão</div>
                         </div>
                         <div className="bg-gray-800 p-4 rounded-lg">
-                          <div className={`text-2xl font-bold ${session.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {session.roi.toFixed(1)}%
+                          {/* ADR-244 (D4): ROI ausente exibe "—", nunca "0.0%". */}
+                          <div className={`text-2xl font-bold ${(parseSessionRoi(session.roi) ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {formatSessionRoi(parseSessionRoi(session.roi))}
                           </div>
                           <div className="text-sm text-gray-400">ROI da Sessão</div>
                           <div className="text-xs text-gray-500 mt-1">Return on Investment</div>

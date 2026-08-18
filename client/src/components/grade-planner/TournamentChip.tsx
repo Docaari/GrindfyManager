@@ -3,6 +3,8 @@ import { prepareTournamentChip } from "@shared/grade-chip-data";
 import { getDisplayRegistrationTime } from "@shared/grade-time";
 import { getPlannerSiteColor } from "@/lib/poker-colors";
 import { formatBuyIn } from "@shared/platform-currency";
+import { abbreviateTournamentName } from "@shared/tournament-name-abbrev";
+import { estimatedFieldSize } from "@/lib/median";
 import {
   Tooltip,
   TooltipContent,
@@ -29,6 +31,14 @@ const SITE_ICONS: Record<string, string> = {
 interface TournamentChipProps {
   tournament: any;
   onClick?: () => void;
+  /**
+   * Modo compacto (default): nome abreviado, fontes menores e sem o badge de
+   * garantido — e o que faz as sete colunas caberem sem scroll horizontal. O
+   * conteudo completo fica no tooltip.
+   */
+  compact?: boolean;
+  /** Limite de caracteres do nome no modo compacto. */
+  maxNameChars?: number;
 }
 
 const TYPE_BG: Record<string, string> = {
@@ -66,7 +76,12 @@ function formatGtdCompact(raw: any): string | null {
   return `$${n}`;
 }
 
-export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
+export function TournamentChip({
+  tournament,
+  onClick,
+  compact = true,
+  maxNameChars = 16,
+}: TournamentChipProps) {
   const chip = prepareTournamentChip(tournament);
   const siteColor = getPlannerSiteColor(tournament.site);
   const typeBg = TYPE_BG[chip.typeColor] || TYPE_BG.gray;
@@ -74,19 +89,32 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
   const siteIcon = SITE_ICONS[tournament.site];
   const timeLabel = getDisplayRegistrationTime(tournament) || tournament.time || "";
   const gtdLabel = formatGtdCompact(tournament.guaranteed);
+  const fullName = tournament.name || tournament.site || siteAbbr;
+  const displayName = compact
+    ? abbreviateTournamentName(tournament.name, {
+        maxChars: maxNameChars,
+        site: tournament.site,
+      }) || siteAbbr
+    : tournament.name || siteAbbr;
+  const estField = estimatedFieldSize(tournament);
 
   return (
     <TooltipProvider delayDuration={300}>
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className={`rounded-md px-2 py-1.5 text-sm cursor-pointer hover:brightness-110 transition-all ${typeBg} border border-gray-600`}
+            className={
+              (compact
+                ? "rounded px-1.5 py-1 text-xs "
+                : "rounded-md px-2 py-1.5 text-sm ") +
+              `cursor-pointer hover:brightness-110 transition-all ${typeBg} border border-gray-600`
+            }
             onClick={(e) => {
               e.stopPropagation();
               onClick?.();
             }}
           >
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className={`flex items-center min-w-0 ${compact ? "gap-1" : "gap-1.5"}`}>
               {chip.priorityIndicator === "star" && (
                 <Star className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="currentColor" />
               )}
@@ -107,7 +135,7 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
                   alt={tournament.site}
                   title={tournament.site}
                   data-testid="tournament-chip-site-badge"
-                  className="h-5 w-5 rounded-sm object-contain flex-shrink-0"
+                  className={`rounded-sm object-contain flex-shrink-0 ${compact ? "h-4 w-4" : "h-5 w-5"}`}
                 />
               ) : (
                 <span
@@ -119,20 +147,26 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
                 </span>
               )}
               {timeLabel && (
-                <span className="text-gray-400 font-mono text-xs flex-shrink-0">{timeLabel}</span>
+                <span className={`text-gray-400 font-mono flex-shrink-0 ${compact ? "text-[10px]" : "text-xs"}`}>
+                  {timeLabel}
+                </span>
               )}
-              <span className="text-emerald-400 font-bold text-base flex-shrink-0">
+              <span className={`text-emerald-400 font-bold flex-shrink-0 ${compact ? "text-xs" : "text-base"}`}>
                 {chip.buyInDisplay}
               </span>
-              <span className="text-gray-200 truncate text-sm flex-1 min-w-0" title={tournament.name || tournament.site || siteAbbr}>
-                {tournament.name || siteAbbr}
+              <span
+                className={`text-gray-200 truncate flex-1 min-w-0 ${compact ? "text-[11px]" : "text-sm"}`}
+                title={fullName}
+              >
+                {displayName}
               </span>
               {chip.speedBadge && (
-                <span className={`text-xs px-1 rounded flex-shrink-0 ${SPEED_BADGE_COLORS[tournament.speed] || ""}`}>
+                <span className={`px-1 rounded flex-shrink-0 ${compact ? "text-[10px]" : "text-xs"} ${SPEED_BADGE_COLORS[tournament.speed] || ""}`}>
                   {chip.speedBadge}
                 </span>
               )}
-              {gtdLabel && (
+              {/* Garantido some no modo compacto — vive no tooltip. */}
+              {!compact && gtdLabel && (
                 <span className="text-cyan-300 text-xs font-semibold flex-shrink-0" title="Garantido">
                   {gtdLabel}
                 </span>
@@ -140,9 +174,9 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
             </div>
           </div>
         </TooltipTrigger>
-        <TooltipContent side="top" className="bg-gray-800 border-gray-600 text-white max-w-[250px]">
-          <div className="space-y-1 text-xs">
-            <div className="font-semibold">{tournament.name || siteAbbr}</div>
+        <TooltipContent side="top" className="bg-gray-800 border-gray-600 text-white max-w-[260px]">
+          <div className="space-y-1 text-xs" data-testid="tournament-chip-tooltip">
+            <div className="font-semibold">{fullName}</div>
             <div className="flex items-center gap-2 text-gray-300">
               <span>{tournament.site}</span>
               <span>|</span>
@@ -164,6 +198,15 @@ export function TournamentChip({ tournament, onClick }: TournamentChipProps) {
                 GTD: ${parseFloat(tournament.guaranteed).toLocaleString("pt-BR")}
               </div>
             )}
+            <div className="text-gray-400" data-testid="tournament-chip-tooltip-field">
+              Participantes est.:{" "}
+              <span className="text-gray-200">
+                {estField != null ? estField.toLocaleString("pt-BR") : "sem GTD"}
+              </span>
+            </div>
+            <div className="text-gray-500" data-testid="tournament-chip-tooltip-roi">
+              ROI est.: em breve
+            </div>
             {/* TS-G polish: linha de feedback do Selector quando aplicavel */}
             {chip.viaSelector && (
               <div className="flex items-center gap-1 text-yellow-300 pt-1 border-t border-gray-700">

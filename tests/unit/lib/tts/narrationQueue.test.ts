@@ -204,12 +204,34 @@ describe('narrationQueue (RF-01 + RF-13 priority queue)', () => {
   });
 
   describe('Watchdog — utterance stuck (R-12)', () => {
-    it('utterance sem onend em 30s -> cancela + promove proximo', () => {
+    it('utterance que nunca comeca a falar -> recupera em 3s (start timeout) e promove proximo', () => {
+      // Fix "as vezes nao toca": o engine aceita `speak()` e nunca fala (Chrome
+      // com speechSynthesis grudado em paused apos aba em background). Antes so
+      // o watchdog de 30s reagia — e durante esses 30s todo alarme novo ficava
+      // enfileirado atras do travado e depois era descartado por cap_time (30s),
+      // sumindo calado. Agora a ausencia de `onstart` e detectada em 3s.
       enqueue(makeItem({ alertId: 'STUCK' }));
       enqueue(makeItem({ alertId: 'NEXT' }));
 
-      // Avanca 30s sem onend.
-      vi.advanceTimersByTime(30000);
+      vi.advanceTimersByTime(3000);
+
+      expect(speechSynthesisMock.cancel).toHaveBeenCalled();
+      expect(getCurrentlySpeaking()?.alertId).toBe('NEXT');
+    });
+
+    it('utterance que comeca mas nunca termina -> watchdog de 30s cancela + promove proximo', () => {
+      // Com `onstart` disparado o start timeout e desarmado, entao quem cobre o
+      // travamento no meio da fala continua sendo o watchdog de 30s.
+      enqueue(makeItem({ alertId: 'STUCK' }));
+      enqueue(makeItem({ alertId: 'NEXT' }));
+
+      const utteranceStuck = speechSynthesisMock.speak.mock.calls[0][0];
+      utteranceStuck.onstart?.({});
+
+      vi.advanceTimersByTime(3000);
+      expect(getCurrentlySpeaking()?.alertId).toBe('STUCK');
+
+      vi.advanceTimersByTime(27000);
 
       expect(speechSynthesisMock.cancel).toHaveBeenCalled();
       expect(getCurrentlySpeaking()?.alertId).toBe('NEXT');

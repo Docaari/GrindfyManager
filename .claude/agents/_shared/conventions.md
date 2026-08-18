@@ -27,38 +27,30 @@ Se algo faltar, sinalize ANTES de prosseguir. Nao invente.
 
 ---
 
-## Convencoes do Projeto (rapido)
+## Convencoes e anti-padroes — fonte unica
 
-- **Codigo:** ingles. **UI:** PT-BR.
-- **IDs:** `nanoid()`, nunca auto-increment. User IDs: `USER-XXXX`.
-- **Schemas:** Drizzle + drizzle-zod em `shared/schema.ts`.
-- **Storage:** queries via `storage.ts` (camada de abstracao).
-- **Auth:** middleware `requireAuth` (JWT) + `requirePermission(name)`.
-- **Validacao:** `schema.parse(req.body)` ANTES de operacoes.
-- **Errors:** `try/catch` + `console.error` + `res.status(N).json({message})`.
-- **Frontend state servidor:** TanStack Query.
-- **Frontend forms:** React Hook Form + Zod.
-- **Path aliases:** `@/` = `client/src/`, `@shared/` = `shared/`.
-- **Componentes:** shadcn/ui (Radix + CVA + Tailwind + `cn()`).
+NAO duplicar regra aqui. A fonte e:
 
----
+| Assunto | Arquivo |
+|---|---|
+| Principios inegociaveis | `CONSTITUICAO.md` |
+| Produto e prioridade | `.claude/rules/00-produto.md` |
+| Pilha, dinheiro, concorrencia, env | `.claude/rules/01-tecnologia.md` |
+| Onde cada coisa mora | `.claude/rules/02-estrutura.md` |
+| Nomes, erros, validacao, idioma | `.claude/rules/03-padrao-codigo.md` |
+| Modelo e esforco por tarefa | `.claude/rules/04-modelo-e-esforco.md` |
+| Fonte do historico, FX, parser CSV | `.claude/rules/10-dominio-dados.md` |
+| Coach AI (prompt, cache, tier, jobs) | `.claude/rules/11-coach-ia.md` |
+| Schema e migrations | `.claude/rules/12-schema-migrations.md` |
+| Testes (Vitest 4, mocks, imports) | `.claude/rules/13-testes.md` |
+| Frontend (tokens, hooks, Wouter) | `.claude/rules/14-frontend-ui.md` |
+| Rotas Express (ordem, auth, upload) | `.claude/rules/15-rotas-express.md` |
+| Molde de codigo executavel | `Docs/padrao/exemplo-padrao.ts` |
+| Catalogo completo de erros | `Docs/architecture/lessons-learned.md` |
 
-## Anti-Padroes a Evitar (top 12)
-
-Catalogo completo em `Docs/architecture/lessons-learned.md`. TL;DR:
-
-1. Hooks SEMPRE antes de early return (Rules of Hooks).
-2. Tests com `data-testid` estavel — heuristicas DOM forcam workarounds em prod.
-3. Mocks idealizados escondem bugs CRITICAL — validar shape REAL do storage.
-4. Vitest 4: `test.projects` + `oxc.jsx` + polyfills Radix em `tests/setup.ts`.
-5. `vi.fn()` nao eh constructor — try/catch fallback para mockar SDKs.
-6. Conversao de moeda: SEMPRE normalizar para USD antes de comparar com thresholds USD.
-7. Schema deprecation gradual: Zod `optional + default` + back-fill no storage.
-8. Length de enum em test eh anti-pattern — validar presenca individual.
-9. Try/catch generico engole erros — logue antes de fallback. Distinga "no rows" de "DB explodiu".
-10. DRY de prompts — divergencia silenciosa quebra cache da Anthropic.
-11. Default minimo em componentes — spec eh fonte de verdade. Componentes "decorativos" NAO ganham acoes default.
-12. Estado persistente: React Query cache (`setQueryData` + `enabled: false`) sobrevive a re-mount; `useState` local nao.
+Este arquivo antes repetia as convencoes e os 12 anti-padroes. Foi esvaziado de
+proposito: mesma verdade em dois lugares diverge (Artigo V). Se a regra mudar,
+muda no `rules/`.
 
 ---
 

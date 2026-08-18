@@ -9,6 +9,12 @@
 //     modal nao mostra: gameType, startingStack, maxPlayers, blindLevel)
 //   - repassa os erros do RHF (issues Zod do backend) como erros inline
 //
+// Sprint tournament-dialog-parity — o modal de edicao ficou identico ao de
+// criacao (so com os dados ja preenchidos): sairam prioridade, modificadores
+// isFlight/isLive, bloco Satellite, "Dados enriquecidos" e "Mais opcoes". Esses
+// valores continuam hidratados em `initial` e voltam intactos no submit — a
+// edicao esconde, nao apaga.
+//
 // A assinatura das props NAO mudou — GradePlanner continua igual.
 // =============================================================================
 
@@ -157,44 +163,6 @@ export function EditDialog({
     [editForm, onSubmit, onUpdateEnrichedFields],
   );
 
-  const enrichedInfo =
-    editingTournament &&
-    (editingTournament.startingStack ||
-      editingTournament.maxPlayers ||
-      editingTournament.gameType ||
-      editingTournament.blindLevelMinutes) ? (
-      <div className="space-y-0.5 text-[11px] text-gray-400">
-        {editingTournament.gameType && (
-          <div>
-            Tipo de jogo:{" "}
-            <span className="text-gray-200">{editingTournament.gameType}</span>
-          </div>
-        )}
-        {editingTournament.startingStack && (
-          <div>
-            Stack inicial:{" "}
-            <span className="text-gray-200">
-              {editingTournament.startingStack}
-            </span>
-          </div>
-        )}
-        {editingTournament.maxPlayers && (
-          <div>
-            Max jogadores:{" "}
-            <span className="text-gray-200">{editingTournament.maxPlayers}</span>
-          </div>
-        )}
-        {editingTournament.blindLevelMinutes && (
-          <div>
-            Nivel de blind:{" "}
-            <span className="text-gray-200">
-              {editingTournament.blindLevelMinutes}min
-            </span>
-          </div>
-        )}
-      </div>
-    ) : null;
-
   return (
     <TournamentFormDialog
       open={open}
@@ -208,12 +176,6 @@ export function EditDialog({
       initial={initial}
       hydrateKey={editingTournament?.id ?? null}
       requireName={false}
-      advanced
-      showPriority
-      showModifiers
-      showSatellite
-      showEnriched
-      enrichedInfo={enrichedInfo}
       fieldErrors={fieldErrors}
       submitting={isPending}
       submitLabel="Salvar alteracoes"

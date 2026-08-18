@@ -9,7 +9,8 @@ export interface SessionHistoryData {
   profit: number;
   profitUsd?: number;
   abiMed: number;
-  roi: number;
+  // ADR-244 D4: a API devolve null quando a sessao nao tem ROI (nunca 0).
+  roi: number | null;
   fts: number;
   cravadas: number;
   energiaMedia: number;

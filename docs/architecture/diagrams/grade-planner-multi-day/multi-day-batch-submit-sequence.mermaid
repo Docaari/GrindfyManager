@@ -1,0 +1,67 @@
+%% ADR-245 — Grade Planner multi-dia
+%% Sequencia do submit em lote: componente -> helper puro -> N POST -> invalidacao -> toast.
+%% Vale para os dois fluxos de criacao da grade: "+" da celula / Novo Torneio e clique no card.
+sequenceDiagram
+    autonumber
+    actor User as Jogador
+    participant Dialog as TournamentFormDialog - modal canonico
+    participant Adapter as DayCreateTournamentDialog - adapter da grade
+    participant Planner as GradePlanner - fonte de getActiveProfile
+    participant Helper as shared/grade-multi-day.ts - puro
+    participant API as POST /api/planned-tournaments
+    participant Storage as storage.createPlannedTournament
+    participant Cache as queryClient
+    participant Toast as useToast
+
+    Note over Dialog,Adapter: O state dos dias vive no ADAPTER.<br/>TournamentFormState fica INTOCADO.
+
+    User->>Dialog: Marca chips Qua, Qui, Sex no WeekDaysPicker
+    Dialog->>Adapter: extraSlot re-renderiza com selectedDays
+    Adapter-->>Dialog: extraCanSubmit = selectedDays.length > 0
+    Dialog-->>User: Botao Salvar habilitado
+
+    User->>Dialog: Clica em Salvar
+    Dialog->>Adapter: onSubmit(values: TournamentFormState)
+
+    Adapter->>Planner: getActiveProfile injetado como prop
+    Adapter->>Helper: resolveMultiDayTargets([3,4,5], getProfileForDay)
+    Helper-->>Adapter: targets [{3,'B'}] + skipped [{4,'day_off'},{5,'no_active_profile'}]
+
+    alt targets vazio - todos OFF ou sem perfil
+        Adapter->>Toast: toast destructive - Nenhum dia valido
+        Adapter-->>Dialog: lanca, com errorMessage controlada pelo adapter
+        Dialog-->>User: MODAL CONTINUA ABERTO, nenhum POST disparado
+    else targets nao vazio
+        loop SEQUENCIAL - 1 iteracao por alvo, max 7
+            Adapter->>API: POST payload do dia + profile daquele dia
+            API->>Storage: insert planned_tournaments
+            Storage-)Storage: ensureLibraryEntryForPlannedSafe - fire-and-forget, sem await
+            alt 2xx
+                API-->>Adapter: torneio criado
+                Adapter->>Adapter: created.push(dayOfWeek)
+            else 4xx / 5xx
+                API-->>Adapter: erro
+                Adapter->>Adapter: failed.push(dayOfWeek) e SEGUE para o proximo alvo
+            end
+        end
+
+        Note over Adapter,Cache: Invalidacao UMA vez, depois do laco — nunca por item.
+        Adapter->>Cache: invalidate /api/planned-tournaments
+        Adapter->>Cache: invalidate /api/active-days
+        Adapter->>Cache: invalidate /api/tournament-library
+        Adapter->>Cache: invalidate day-detail por alvo criado
+
+        Adapter->>Adapter: safeEmit coach.day_zoom_create_save uma unica vez, com daysCount e skippedCount
+
+        Adapter->>Helper: summarizeMultiDayResult({created, failed, skipped}, dayLabels)
+        Helper-->>Adapter: { title, description, variant }
+        Adapter->>Toast: UM unico toast do lote
+
+        alt houve ao menos 1 sucesso
+            Adapter-->>Dialog: retorna normalmente
+            Dialog-->>User: Modal fecha; criados permanecem
+        else nenhum sucesso - todos falharam
+            Adapter-->>Dialog: lanca, com errorMessage controlada pelo adapter
+            Dialog-->>User: MODAL CONTINUA ABERTO
+        end
+    end

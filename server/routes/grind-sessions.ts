@@ -16,6 +16,7 @@ import {
 import { eq, and, desc, gte, sql, count, avg } from "drizzle-orm";
 import { clampBreakFeedback } from "@shared/utils";
 import { ReconcileWalletsBodySchema } from "@shared/reconcile-schemas";
+import { parseSessionRoi } from "@shared/session-roi";
 import { runReconciliation } from "../services/sessionReconciliation";
 import { walletLimiter } from "./wallets";
 import { mapSiteToWallet, buildSuggestedBindings } from "@shared/wallet-reconciliation";
@@ -842,7 +843,10 @@ export function registerGrindSessionRoutes(app: Express): void {
           const volume = session.volume || 0;
           const profit = parseFloat(session.profit || '0') || 0;
           const abiMed = parseFloat(session.abiMed || '0') || 0;
-          const roi = parseFloat(session.roi || '0') || 0;
+          // ADR-244 (D4): ausencia de ROI devolve null, nunca 0 — o achatamento
+          // antigo (`parseFloat(session.roi || '0') || 0`) fazia o historico
+          // afirmar "0.0%" para sessao que nunca teve ROI.
+          const roi = parseSessionRoi(session.roi);
           const fts = session.fts || 0;
           const cravadas = session.cravadas || 0;
 

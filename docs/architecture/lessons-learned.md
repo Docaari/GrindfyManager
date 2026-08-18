@@ -191,6 +191,29 @@ Tambem precisa instalar accessor com setter no proto de Navigator e re-instalar 
 **Erro:** Aplicar `clamp(50 + speedBonus + fieldBonus + timeBonus, 0, 100)` puramente linear nao reproduz os anchors da spec (Normal+medio+nobre=75, Hyper+massivo+madrugada=25). A spec define dois pontos extremos que NAO sao saida da formula linear.
 **Correto:** Aplicar `clamp(sum - hyperMassivoPenalty, 0, 75)` onde `hyperMassivoPenalty = 10 if (speed=Hyper && field=massivo) else 0`. Isso modela "synergy de variancia" e respeita o cap superior 75 (anchor da spec). Documentado em `server/scoring/tournamentScorer.ts` — funcao `computeColdStartScore`.
 
+### 2026-08-01 — Alarme do grind-live "as vezes nao toca": AudioContext vazado + TTS natimorto + mute cruzado
+**Sintoma:** Founder reportou que o alarme do /grind-live as vezes nao toca. Intermitente, sem erro no console, e em parte dos casos parava de tocar de vez ate dar F5.
+
+**Causa — quatro defeitos independentes, todos silenciosos:**
+1. **AudioContext vazado (o pior).** `playBeep` em `client/src/lib/fireAlert.ts` fazia `new AudioContext()` a CADA beep e so fechava em `oscillator.onended`. Quando a policy de autoplay deixava o contexto `suspended` (aba sem gesto do usuario, ou aba em background — o jogador esta na mesa do site de poker), o oscillator nunca rodava, `onended` nunca disparava e o contexto vazava. Chrome limita ~6 contextos por documento: a partir do 7o beep `new AudioContext()` passava a **lancar**, com o erro engolido por um `catch {}` vazio (Artigo IV). Dai o "parou de tocar e so voltou com F5".
+2. **TTS natimorto sem deteccao.** `narrationQueue` so tinha watchdog de 30s. O Chrome deixa o `speechSynthesis` grudado em `paused` depois que a aba fica em background: `speak()` aceita a utterance, nao lanca e nao emite som. Durante os 30s de watchdog o `_currentlySpeaking` travado enfileirava os alarmes seguintes — e o `promoteNext` entao os descartava por `MAX_BUFFERED_MS` (tambem 30s). Uma fala travada engolia calada TODOS os alarmes da janela.
+3. **Mute cruzado.** `GrindSessionLive` aplicava `lateRegAlertSound` (preferencia do alerta AUTOMATICO de late reg) tambem aos alertas manuais/de torneio. Quem desligava o som do late reg perdia calado todo alarme que criou na mao.
+4. **Voz pt-BR como requisito duro.** `fireAlert` filtrava so `pt-br`; em Windows sem o pacote de idioma a lista voltava vazia e caia no beep — que era o defeito 1.
+
+Agravantes: tick de 30s (o "faltam 2min" chegava com 1min30) e alerta absoluto sem rollover de meia-noite, num produto cujo publico grinda atravessando a meia-noite.
+
+**Correto:**
+- Beep extraido para `client/src/lib/alertSound.ts` (modulo proprio, evita ciclo `fireAlert` -> `narrationQueue` -> `fireAlert`), com **AudioContext singleton** reaproveitado, `resume()` explicito antes de emitir e **sem** `close()`. `primeAlertAudio()` destrava no primeiro gesto do usuario (`pointerdown`/`keydown`, `once: true`) — sem isso o PRIMEIRO alarme da sessao nasce mudo.
+- `narrationQueue` ganhou `onstart` + **start timeout de 3s**: se a fala nao comeca, cai no beep e libera a fila. Guard contra falso positivo: se `speechSynthesis.pending || speaking`, a utterance esta viva (fila de outra aba) e o timer so re-agenda. `unstickSpeechSynthesis()` chama `resume()` antes de cada `speak` e num poll de 5s enquanto ha fala em curso. `clearStartTimer()` no topo de `handleUtteranceFinished` — senao o timer dispara no meio do gap do repeat e mata narracao saudavel.
+- Alertas manuais passam a usar `soundMode` (o mute global do jogador); `lateRegAlertSound` volta a governar so o late reg automatico.
+- Cascata de vozes `pt-BR > pt-* > default > primeira`. Lista totalmente vazia continua caindo em beep (nao ha o que falar). Narrar em voz nao-PT soa pior, mas silencio e pior ainda.
+- Tick de 5s + `visibilitychange`/`focus` para recuperar da estrangulacao de timer em aba background (Chrome ~1/min). Nenhum alerta se perde por atraso — `getAlertsToFire` compara `triggerAt <= now` — mas passa a chegar na hora. `try/catch` por alarme: um alarme que explode nao leva junto os outros do mesmo tick.
+- Rollover de meia-noite no alerta absoluto, igual ao `TournamentAlertDialog`.
+
+**Validacao:** `tests/unit/lib/tts/narrationQueue.test.ts` (o teste do watchdog virou dois: "nunca comeca a falar" recupera em 3s; "comeca e nao termina" continua no watchdog de 30s), `tests/unit/lib/fireAlert.tts.test.ts`, `tests/unit/generic-alerts`, `tests/components/grind-session-live`, `tests/integration/grind-session-live`. 166 + 45 + 7 verdes, `tsc` limpo.
+
+**Generalizavel:** recurso de browser com cota rigida (AudioContext ~6/documento, Notification, WebSocket) nunca deve ser criado por evento — singleton com `resume()`. E API que aceita o comando sem confirmar execucao (`speechSynthesis.speak`) exige prova de inicio (`onstart`) com timeout curto; watchdog longo demais nao protege, so adia a perda — e, combinado com cap de fila do mesmo tamanho, transforma uma falha em perda silenciosa de tudo que chegou depois.
+
 ### 2026-04-30 — calculateSessionStats ignorava 5o argumento usdConversionRates (FX bug grind-live)
 **Contexto:** Founder reportou: torneio Suprema (BRL), result R$53 -> dashboard mostrou profit como -266 USD em vez de converter (R$53 ~ $10 a 5.3 BRL/USD). Caller `GrindSessionLive.tsx` ja passava `usdConversionRates` como 5o arg para `calculateSessionStats`; tipo `SessionStats` ja declarava `totalInvestidoUSD/profitUSD/breakdown`.
 **Erro:** Funcao era 4-arity — JS silenciosamente descartava o 5o argumento. Stats fields USD ficavam `undefined`. UI fallback (`stats.profitUSD ?? stats.profit`) caia em `stats.profit` raw, que somava valores nativos sem conversao. Same bug em `calculateFinalSessionStats` (sem suporte a rates), persistindo profit em moeda mixed-currency no `grind_sessions.profit`.

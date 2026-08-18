@@ -9,7 +9,11 @@
 
 import { enqueue, stopAlertById } from './tts/narrationQueue';
 import { pickVoice } from './ttsVoices';
+import { playBeep } from './alertSound';
 import { generateClientId } from '@shared/ids';
+// Import de TIPO apenas — apagado na compilacao, entao nao arrasta React nem o
+// componente de toast para dentro deste modulo em runtime.
+import type { ToastActionElement } from '@/components/ui/toast';
 
 export const SOUND_MODES = ['tts', 'beep', 'mute'] as const;
 export type SoundMode = (typeof SOUND_MODES)[number];
@@ -28,11 +32,18 @@ interface FireAlertOptions {
   priority?: 'high' | 'normal';
   alertId?: string;
   duration?: number;
+  /**
+   * Elemento de acao renderizado dentro do toast (ex.: os botoes de soneca
+   * `AlertSnoozeActions`). Passthrough puro: `fireAlert` nao monta JSX, so
+   * repassa — por isso este modulo continua sendo `.ts`, sem React em runtime.
+   */
+  action?: ToastActionElement;
   toast: (opts: {
     title: string;
     description: string;
     variant?: 'default' | 'destructive' | null;
     duration?: number;
+    action?: ToastActionElement;
     onOpenChange?: (open: boolean) => void;
   }) => void;
 }
@@ -49,40 +60,40 @@ function prefersReducedData(): boolean {
   }
 }
 
-function getPtBRVoices(): SpeechSynthesisVoice[] {
+/**
+ * Vozes candidatas em ordem de preferencia: pt-BR > pt-* > default do browser >
+ * primeira disponivel.
+ *
+ * Antes filtravamos SO `pt-br`: em Windows sem o pacote de idioma PT-BR (e em
+ * Linux com espeak en-only) a lista voltava vazia e o alarme caia no beep — que
+ * por sua vez estava quebrado (ver getAudioContext). Resultado pro jogador:
+ * alarme mudo. Narrar em voz nao-PT soa pior, mas e audivel; silencio nao.
+ * Lista totalmente vazia continua caindo em beep (nao ha o que falar).
+ */
+function getNarrationVoices(): SpeechSynthesisVoice[] {
   if (typeof speechSynthesis === 'undefined') return [];
+  let all: SpeechSynthesisVoice[] = [];
   try {
-    return (speechSynthesis.getVoices() ?? []).filter(
-      (v) => v.lang && v.lang.toLowerCase().startsWith('pt-br')
-    );
+    all = speechSynthesis.getVoices() ?? [];
   } catch {
     return [];
   }
+  if (all.length === 0) return [];
+
+  const lang = (v: SpeechSynthesisVoice) => (v.lang ?? '').toLowerCase();
+  const ptBR = all.filter((v) => lang(v).startsWith('pt-br'));
+  if (ptBR.length > 0) return ptBR;
+  const pt = all.filter((v) => lang(v).startsWith('pt'));
+  if (pt.length > 0) return pt;
+  const def = all.filter((v) => v.default);
+  if (def.length > 0) return def;
+  return all;
 }
 
-function playBeep() {
-  try {
-    const Ctx =
-      (typeof window !== 'undefined' &&
-        ((window as any).AudioContext || (window as any).webkitAudioContext)) ||
-      (typeof globalThis !== 'undefined' && (globalThis as any).AudioContext);
-    if (!Ctx) return;
-    const audioCtx = new Ctx();
-    const oscillator = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    oscillator.frequency.value = 880;
-    oscillator.type = 'sine';
-    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
-    oscillator.onended = () => audioCtx.close();
-    oscillator.start(audioCtx.currentTime);
-    oscillator.stop(audioCtx.currentTime + 0.2);
-  } catch {
-    // ignore
-  }
-}
+// Beep vive em `alertSound.ts` para que narrationQueue possa reusa-lo como
+// fallback audivel sem import circular. Re-exportado aqui por compatibilidade
+// com os callers historicos.
+export { primeAlertAudio, _resetAudioContextForTests } from './alertSound';
 
 function fireToast(
   toast: FireAlertOptions['toast'],
@@ -90,12 +101,14 @@ function fireToast(
   description: string,
   duration: number,
   alertId: string,
+  action?: ToastActionElement,
 ) {
   toast({
     title,
     description,
     variant: 'destructive',
     duration,
+    action,
     onOpenChange: (open) => {
       if (!open) stopAlertById(alertId);
     },
@@ -131,6 +144,7 @@ export function fireAlert(opts: FireAlertOptions): void {
     priority = 'normal',
     alertId: providedAlertId,
     duration = 30000,
+    action,
     toast,
   } = opts;
 
@@ -141,13 +155,15 @@ export function fireAlert(opts: FireAlertOptions): void {
   const alertId = providedAlertId ?? generateClientId('alert');
 
   // Layer 1: Toast — sempre dispara. Fechar toast = parar TTS associado.
-  fireToast(toast, title, description, duration, alertId);
+  // Isso cobre tambem a soneca: `ToastAction` do Radix fecha o toast ao clicar,
+  // entao o `onOpenChange` corta a narracao em curso sem codigo extra.
+  fireToast(toast, title, description, duration, alertId, action);
 
   // Layer 2: Sound.
   if (soundMode === 'mute') {
     // No-op em audio.
   } else if (soundMode === 'tts') {
-    const voices = prefersReducedData() ? [] : getPtBRVoices();
+    const voices = prefersReducedData() ? [] : getNarrationVoices();
     if (voices.length === 0) {
       // RF-11/RF-12: fallback transparente para beep.
       playBeep();

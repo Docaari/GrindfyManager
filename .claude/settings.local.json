@@ -139,7 +139,9 @@
       "Bash(git checkout *)",
       "Bash(findstr /I \"node tsx\")",
       "Bash(git push *)",
-      "Bash(Get-ChildItem *)"
+      "Bash(Get-ChildItem *)",
+      "Bash(git rev-list *)",
+      "WebFetch(domain:www.power-equilab.com)"
     ]
   }
 }

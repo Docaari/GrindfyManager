@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,7 +10,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useProfileStates, useUpdateProfileState } from "@/hooks/useProfileStates";
 import { DragDropContext, type DropResult, type DragStart } from "react-beautiful-dnd";
 import { Panel, PanelGroup, PanelResizeHandle, type ImperativePanelHandle } from "react-resizable-panels";
-import { validateDrop, mapLibraryToPlanned, calculateMove } from "@shared/drag-drop-utils";
+import { validateDrop, mapLibraryToPlanned } from "@shared/drag-drop-utils";
+import { computeGradeDropUpdates } from "@shared/grade-drop-time";
+import { sortCellByTime } from "@shared/grade-cell-overflow";
+import { getDisplayRegistrationTime } from "@shared/grade-time";
 import { checkOffToggleWarning, getAffectedTournaments, shouldShowOffDialog } from "@shared/grade-off-toggle";
 import { shouldShowGrindCTA, getGrindCTAData, getTodayDayOfWeek } from "@/components/grade-planner/grind-cta-helpers";
 import { Maximize2, Minimize2, BarChart3, Zap, X, Plus, Keyboard, Calendar, Trophy, Plane, Calculator, Trash2 } from "lucide-react";
@@ -47,6 +50,37 @@ import { FocusStatsBar } from '@/components/study/FocusStatsBar';
 import { useFocusStatsBar } from '@/hooks/useFocusStatsBar';
 import { FlightsPanel } from '@/components/grade-planner/FlightsPanel';
 import { DragTrashZone, GRADE_TRASH_DROPPABLE_ID } from '@/components/grade-planner/DragTrashZone';
+// Sprint grade-planner-library-and-multi-day (ADR-245 §D3/§D7).
+import { shouldIgnoreLibraryCardClick } from '@/components/grade-planner/library-click-guard';
+import type { TournamentFormState } from '@/components/tournament/useTournamentDialogForm';
+
+/**
+ * ADR-245 §D7 — offset UNICO que alimenta ao mesmo tempo o `top` do sticky e o
+ * teto de altura da Biblioteca, para os dois nao poderem divergir. Sai do
+ * padding vertical do container da pagina (`px-6 py-6` = 1.5rem), nao de um
+ * pixel escolhido no olho.
+ */
+const LIBRARY_PANEL_OFFSET = '1.5rem';
+
+/**
+ * `react-resizable-panels` aplica `overflow: hidden` no PanelGroup e no Panel;
+ * um ancestral com overflow hidden cria um scrollport que nunca rola e o
+ * `position: sticky` resolvido contra ele nao gruda em nada. O `style` do
+ * componente vence o default da lib (styleFromProps entra depois no merge).
+ * `alignSelf: flex-start` tira o esticamento vertical sem tocar no
+ * dimensionamento horizontal (flex-basis/grow/shrink continuam com a lib);
+ * `display: flex` deixa o painel filho encolher ate o teto de altura, que e o
+ * que faz a lista (unico scroll container) passar a rolar por dentro.
+ */
+const LIBRARY_PANEL_STYLE: CSSProperties = {
+  overflow: 'visible',
+  alignSelf: 'flex-start',
+  position: 'sticky',
+  top: LIBRARY_PANEL_OFFSET,
+  maxHeight: `calc(100vh - ${LIBRARY_PANEL_OFFSET} * 2)`,
+  display: 'flex',
+  flexDirection: 'column',
+};
 
 const COACH_TABS = ['planner', 'selector', 'flights', 'variance'] as const;
 const COACH_TAB_LIST: string[] = [...COACH_TABS];
@@ -144,6 +178,10 @@ export default function GradePlanner() {
 
   // Drag-to-trash: origem do item em drag (acende a zona de descarte).
   const [dragging, setDragging] = useState<'cell' | 'library' | null>(null);
+  // ADR-245 §D3 (defesa 3): instante do ultimo onDragEnd. Alimenta a guarda que
+  // descarta o "clique" que o navegador dispara logo depois de soltar um card
+  // (na grade ou na lixeira) — o bloqueio nativo do rbd nao e testavel.
+  const [lastDragEndAt, setLastDragEndAt] = useState<number | null>(null);
 
   // "Limpar dia": alvo aguardando confirmacao.
   const [clearDayTarget, setClearDayTarget] = useState<number | null>(null);
@@ -152,8 +190,21 @@ export default function GradePlanner() {
   // Modal canonico de criar torneio (DayCreateTournamentDialog) — unico caminho
   // de criacao: "+" da celula e botao "Novo Torneio". EditDialog ficou so com
   // edicao (Sprint tournament-dialog-unification).
+  // Sprint grade-planner-library-and-multi-day: o mesmo modal serve o "+" da
+  // celula / "Novo Torneio" (com dia de origem) e o clique no card da
+  // biblioteca (sem dia de origem, com prefill).
   const [createDialog, setCreateDialog] = useState<
-    { dayOfWeek: number; profileLetter: 'A' | 'B' | 'C'; suggestedSlot: string } | null
+    {
+      dayOfWeek?: number;
+      profileLetter?: 'A' | 'B' | 'C';
+      suggestedSlot: string;
+      /** Dias ja marcados ao abrir (RF-02). Biblioteca abre com nenhum. */
+      initialDays: number[];
+      /** Prefill vindo da linha de tournament_library (RF-03). */
+      initial?: Partial<TournamentFormState>;
+      /** Id da linha de origem — vai no payload de cada POST (ADR-245 §D6). */
+      libraryTemplateId?: string;
+    } | null
   >(null);
 
   // ===========================================================================
@@ -693,6 +744,7 @@ export default function GradePlanner() {
       dayOfWeek,
       profileLetter: activeProfile,
       suggestedSlot: time,
+      initialDays: [dayOfWeek],
     });
   };
 
@@ -726,8 +778,44 @@ export default function GradePlanner() {
       dayOfWeek: defaultDay,
       profileLetter: profile,
       suggestedSlot: defaultTime,
+      initialDays: [defaultDay],
     });
   };
+
+  /**
+   * RF-03 — clique (sem arrasto) num card da Biblioteca abre o modal canonico
+   * ja preenchido, com o seletor de dias e nenhum dia marcado.
+   */
+  const handleLibraryCardClick = useCallback(
+    (tournament: any) => {
+      if (
+        shouldIgnoreLibraryCardClick({
+          dragging,
+          lastDragEndAt,
+          now: Date.now(),
+        })
+      ) {
+        return;
+      }
+      setCreateDialog({
+        suggestedSlot: '',
+        initialDays: [],
+        libraryTemplateId: tournament?.id,
+        // Mesmos campos que mapLibraryToPlanned usa no arrasto; ausentes ficam
+        // vazios / no default do formulario.
+        initial: {
+          name: tournament?.name ?? '',
+          site: tournament?.site ?? '',
+          buyIn: tournament?.buyIn ?? '',
+          guaranteed: tournament?.guaranteed ?? '',
+          time: tournament?.time ?? '',
+          type: tournament?.type || 'Vanilla',
+          speed: tournament?.speed || 'Normal',
+        },
+      });
+    },
+    [dragging, lastDragEndAt],
+  );
 
   // EditDialog e exclusivamente de EDICAO — a criacao passa pelo modal canonico
   // (DayCreateTournamentDialog). O dialog so abre via handleEditTournament, que
@@ -759,6 +847,14 @@ export default function GradePlanner() {
   // =========================================================================
   // Drag & Drop handler
   // =========================================================================
+  /** "11:37" -> "11:00" (rotulo do bloco da grade). */
+  const timeToSlotLabel = (time: string): string | null => {
+    if (!time) return null;
+    const h = parseInt(time.split(":")[0], 10);
+    if (isNaN(h)) return null;
+    return `${String(h).padStart(2, "0")}:00`;
+  };
+
   const handleDragStart = useCallback((start: DragStart) => {
     setDragging(start.draggableId.startsWith("library-") ? "library" : "cell");
   }, []);
@@ -766,6 +862,7 @@ export default function GradePlanner() {
   const handleDragEnd = useCallback((result: DropResult) => {
     const { source, destination, draggableId } = result;
     setDragging(null);
+    setLastDragEndAt(Date.now());
 
     if (!destination) return;
 
@@ -820,18 +917,44 @@ export default function GradePlanner() {
 
       addPlannedMutation.mutate(planned);
     } else if (draggableId.startsWith("cell-")) {
-      // Dragging from one cell to another (reposition)
+      // Reposicionamento dentro da grade.
       const tournamentId = draggableId.replace("cell-", "");
       const tournament = plannedTournaments.find((t: any) => t.id === tournamentId);
 
       if (!tournament) return;
 
-      const move = calculateMove(tournament, destDayOfWeek, destTime);
+      // Bloco de origem ("HH:00") — quando e o mesmo do destino, o horario
+      // digitado e preservado (o arrasto ali e so reordenacao).
+      const srcParts = source.droppableId.split("-");
+      const sourceSlot =
+        srcParts[0] === "cell" && srcParts.length >= 3
+          ? srcParts.slice(2).join("-")
+          : null;
 
-      if (Object.keys(move.updates).length > 0) {
+      // Vizinhos do destino na mesma ordem que a celula exibe, sem o arrastado.
+      const destNeighbors = sortCellByTime(
+        (Array.isArray(plannedTournaments) ? plannedTournaments : []).filter(
+          (t: any) =>
+            t.id !== tournamentId &&
+            t.dayOfWeek === destDayOfWeek &&
+            t.profile === destProfile &&
+            timeToSlotLabel(getDisplayRegistrationTime(t)) === destTime,
+        ),
+      );
+
+      const { updates } = computeGradeDropUpdates({
+        dragged: tournament,
+        sourceSlot,
+        destSlot: destTime,
+        destDayOfWeek,
+        destNeighbors,
+        destIndex: destination.index,
+      });
+
+      if (Object.keys(updates).length > 0) {
         updateTournamentMutation.mutate({
           id: tournamentId,
-          ...move.updates,
+          ...updates,
         });
       }
     }
@@ -872,6 +995,7 @@ export default function GradePlanner() {
     <BibliotecaPanel
       collapsed={libraryCollapsed && !isMobile}
       onToggleCollapsed={handleToggleLibrary}
+      onTournamentClick={handleLibraryCardClick}
     />
   );
 
@@ -986,7 +1110,8 @@ export default function GradePlanner() {
                 <div>
                   <div className="text-sm font-semibold text-zinc-100">Comece sua grade semanal</div>
                   <div className="text-xs text-zinc-400 mt-0.5">
-                    Ative um perfil (A/B/C) num dia e adicione torneios, ou arraste da biblioteca à esquerda.
+                    Ative um perfil (A/B/C) num dia e adicione torneios. Na biblioteca, arraste um card
+                    para a grade ou clique nele para escolher os dias da semana.
                   </div>
                 </div>
               </div>
@@ -1112,6 +1237,9 @@ export default function GradePlanner() {
               <PanelGroup
                 direction="horizontal"
                 className="min-h-[800px]"
+                // ADR-245 §D7: sem isto o `overflow: hidden` default da lib
+                // vira scrollport e o sticky da Biblioteca nao gruda em nada.
+                style={{ overflow: 'visible' }}
               >
                 {/* Grade à ESQUERDA (espelha o modal Detalhe do Dia).
                     NAO capar altura nem aninhar overflow vertical: react-beautiful-dnd
@@ -1153,6 +1281,7 @@ export default function GradePlanner() {
                     persistLibraryCollapsed(false);
                   }}
                   className={libraryCollapsed ? "" : "pl-2"}
+                  style={LIBRARY_PANEL_STYLE}
                 >
                   {bibliotecaContent}
                 </Panel>
@@ -1269,6 +1398,7 @@ export default function GradePlanner() {
             dayOfWeek={createDialog.dayOfWeek}
             profileLetter={createDialog.profileLetter}
             suggestedSlot={createDialog.suggestedSlot}
+            initial={createDialog.initial}
             knownSites={Array.from(
               new Set(
                 (Array.isArray(plannedTournaments) ? plannedTournaments : [])
@@ -1276,10 +1406,13 @@ export default function GradePlanner() {
                   .filter((s: any): s is string => typeof s === 'string' && s.trim().length > 0),
               ),
             )}
-            onSaved={() => {
-              queryClient.invalidateQueries({ queryKey: ["/api/planned-tournaments"] });
-              queryClient.invalidateQueries({ queryKey: ["/api/active-days"] });
-              toast({ title: "Torneio adicionado" });
+            // RF-02/RF-04: o lote (invalidacao, telemetria e o UNICO toast) e
+            // do adapter. Nao ha `onSaved` com toast aqui: dois toasts por
+            // submit era o risco declarado da sprint.
+            multiDay={{
+              initialDays: createDialog.initialDays,
+              getProfileForDay: getActiveProfile,
+              libraryTemplateId: createDialog.libraryTemplateId,
             }}
           />
         )}

@@ -1,0 +1,53 @@
+%% ADR-245 — Grade Planner multi-dia
+%% Ownership de state e props NOVAS. Quem detem o que, e o que nao muda.
+%% Legenda: [N] = superficie nova nesta sprint; [=] = consumidor intocado.
+graph TB
+    subgraph page["GradePlanner.tsx — pagina"]
+        GP["GradePlanner<br/><i>detem: getActiveProfile, dragging,<br/>createDialog, queryClient, toast</i>"]
+        PG["PanelGroup + Panel da biblioteca<br/><i>[N] overflow visible, self-start,<br/>sticky e max-height derivada do viewport</i>"]
+    end
+
+    subgraph lib["Biblioteca — painel da direita"]
+        BP["BibliotecaPanel<br/><i>detem: busca, filtros, ordenacao,<br/>disclosure de Importar e Lixeira</i>"]
+        DR["Droppable id=library<br/><i>UNICO scroll container vertical do painel</i>"]
+        LC["LibraryCard<br/><i>Draggable; X de excluir e + mobile<br/>seguem com stopPropagation</i>"]
+    end
+
+    subgraph modal["Modal de torneio"]
+        ADP["DayCreateTournamentDialog<br/><i>[N] DETEM selectedDays;<br/>monta payload, roda o lote,<br/>invalida cache, emite telemetria</i>"]
+        TFD["TournamentFormDialog<br/><i>detem TournamentFormState via<br/>useTournamentDialogForm — INTOCADO</i>"]
+        WDP["WeekDaysPicker<br/><i>[N] apresentacao pura, sem state proprio</i>"]
+    end
+
+    subgraph pure["Regra pura"]
+        H["shared/grade-multi-day.ts<br/><i>[N] resolveMultiDayTargets<br/>+ summarizeMultiDayResult</i>"]
+    end
+
+    subgraph outros["Consumidores que NAO mudam"]
+        DDZ["DayDetailZoom<br/><i>[=] usa o mesmo adapter sem a prop multiDay</i>"]
+        BE["BibliotecaEmbedded<br/><i>[=] usa LibraryCard sem onCardClick</i>"]
+        GL["Grind ao vivo e edicao da grade<br/><i>[=] usam TournamentFormDialog</i>"]
+    end
+
+    API["POST /api/planned-tournaments<br/><i>endpoint existente, 1 registro por chamada</i>"]
+
+    GP -->|"renderiza dentro do Panel capado"| PG
+    PG -->|"collapsed + onToggleCollapsed (props de hoje)"| BP
+    GP -->|"[N] prop onTournamentClick"| BP
+    BP -->|"lista filtrada rola por dentro"| DR
+    DR -->|"1 Draggable por torneio"| LC
+    LC -->|"[N] prop opcional onCardClick"| BP
+    BP -->|"[N] devolve o registro clicado"| GP
+
+    GP -->|"[N] props: initial de prefill,<br/>multiDay com initialDays e getProfileForDay"| ADP
+    ADP -->|"props de hoje + [N] extraCanSubmit"| TFD
+    TFD -->|"extraSlot(ctx) — render-prop ja existente"| WDP
+    WDP -->|"[N] onToggleDay sobe para o adapter"| ADP
+
+    ADP -->|"[N] chama com dias + perfil por dia"| H
+    H -->|"targets e skipped com razao nomeada"| ADP
+    ADP -->|"[N] N chamadas sequenciais, 1 por alvo"| API
+
+    ADP -->|"sem a prop multiDay: caminho de hoje, 1 POST"| DDZ
+    LC -->|"sem onCardClick: so arrastavel"| BE
+    TFD -->|"sem extraCanSubmit: disabled de hoje"| GL

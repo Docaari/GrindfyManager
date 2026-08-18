@@ -147,6 +147,27 @@ export class SessionAlertManager {
   }
 
   /**
+   * Adia um alerta ja disparado: reagenda para `minutes` a partir de AGORA e
+   * devolve o alerta a fila de pendentes.
+   *
+   * Nao basta `unmarkFired`: o `triggerAt` continuaria no passado e
+   * `getAlertsToFire` (que compara `triggerAt <= now`) re-dispararia no tick
+   * seguinte, ou seja, o soneca nao soneca nada.
+   *
+   * Retorna o alerta reagendado, ou `null` se o id nao existe aqui — caso dos
+   * alertas automaticos de late reg, que vivem no LateRegAlertManager e o
+   * caller recria como alerta custom.
+   */
+  snoozeAlert(id: string, minutes: number): SessionAlert | null {
+    const alert = this.alerts.get(id);
+    if (!alert) return null;
+    alert.triggerAt = new Date(Date.now() + minutes * 60000);
+    alert.fired = false;
+    alert.dismissed = false;
+    return alert;
+  }
+
+  /**
    * Get every alert currently in the manager (regardless of fired/dismissed),
    * sorted by triggerAt ascending. Read-only snapshot — callers must not mutate
    * the returned objects. Used by replaceMaxLateAlert (ADR-214 D4) to find and

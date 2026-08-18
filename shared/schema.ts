@@ -782,9 +782,16 @@ export const grindSessions = pgTable("grind_sessions", {
   roi: decimal("roi"), // ROI da sessão
   fts: integer("fts"), // Final tables da sessão
   cravadas: integer("cravadas"), // Cravadas da sessão
-  // Lucro reconciliado da banca (USD) — delta saldos das wallets reportado no
-  // SessionSummaryModal ("Lucro Total da Sessao"). Nullable: sessoes legadas
-  // ou sem reconciliacao caem no fallback profit (P&L de torneios) + snapshots.
+  // Resultado final DECLARADO da sessao em USD (ADR-244 D1). Origem: card
+  // "Lucro Total da Sessao" do SessionSummaryModal — reconciliado das wallets
+  // OU digitado pelo jogador quando o ajuste manual esta ligado.
+  // NAO e mais espelho da banca. Consequencias:
+  //   - pode divergir da soma dos deltas de wallet da mesma sessao;
+  //   - nao-nulo NAO implica que houve reconciliacao (sessao sem wallet
+  //     nenhuma tambem preenche quando ha ajuste manual);
+  //   - valor digitado e indistinguivel do calculado (D2, sem auditoria).
+  // Nullable: sessoes legadas ou sem reconciliacao caem no fallback profit
+  // (P&L de torneios) + snapshots.
   walletProfitUsd: decimal("wallet_profit_usd"),
   energiaMedia: decimal("energia_media"), // Energia média (dos breaks)
   focoMedio: decimal("foco_medio"), // Foco médio (dos breaks)
@@ -1092,6 +1099,12 @@ export const userSettings = pgTable("user_settings", {
   // ADR-124. Toggle persistente do auto-open do BreakFeedbackPopup em XX:54
   // BRT (close em XX:02). Default true para todos (back-fill via DB DEFAULT).
   breakAutoOpenEnabled: boolean("break_auto_open_enabled").default(true).notNull(),
+  // Sprint Grind-Live Manual Session Result — ADR-244 (D3), migration 0100.
+  // Habilita o campo de ajuste manual do resultado final no modal de fim de
+  // sessao. Default true (back-fill via DB DEFAULT). DEPENDENCIA DURA com o Zod
+  // abaixo: coluna no banco ausente do schema derruba TODO o PUT parcial de
+  // settings, porque o handler faz `.parse` do merge.
+  manualSessionResultEnabled: boolean("manual_session_result_enabled").default(true).notNull(),
   // Sprint TS-3 RF-04 (ADR-178, migration 0072) — tristate Bankroll Mode no
   // Tournament Selector. 'all' = sem filtro; 'hide' = omite buy-in > hardLimit;
   // 'warn' = mostra com badge (default). CHECK constraint enforced em DB
@@ -1952,6 +1965,9 @@ export const insertUserSettingsSchema = _insertUserSettingsSchemaBase.extend({
   // Sprint Grind-Live Break Auto-Open (RF-06): toggle clock-aligned auto-open.
   // Optional + default true — back-fill via DB DEFAULT.
   breakAutoOpenEnabled: z.boolean().optional(),
+  // Sprint Grind-Live Manual Session Result (ADR-244 D3, migration 0100).
+  // Optional + default true — back-fill via DB DEFAULT.
+  manualSessionResultEnabled: z.boolean().optional(),
 }).strict();
 
 export const insertBreakFeedbackSchema = createInsertSchema(breakFeedbacks).omit({

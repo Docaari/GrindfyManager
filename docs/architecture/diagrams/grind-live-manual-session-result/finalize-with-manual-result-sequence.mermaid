@@ -1,0 +1,66 @@
+%% Ajuste manual do resultado final da sessao (ADR-244) — fluxo de finalizacao.
+%% Ponto central deste diagrama: o valor manual NAO entra no payload de
+%% reconcile-wallets (invariante RF-05 / D5). A banca so ve os saldos digitados
+%% por wallet; o valor declarado so viaja no PUT /api/grind-sessions/:id.
+%% Ordem preservada: guardAndReconcile PRIMEIRO, onEndSession DEPOIS.
+sequenceDiagram
+    actor Player as Jogador
+    participant Modal as SessionSummaryModal<br/>(client)
+    participant Live as GrindSessionLive<br/>(client)
+    participant Helper as manual-session-result.ts<br/>(helper puro)
+    participant API as Express<br/>server/routes
+    participant Bank as walletService +<br/>bankroll_snapshots
+    participant DB as PostgreSQL<br/>grind_sessions
+
+    Note over Live: summary abre -> Promise.allSettled<br/>GET /reconcilable-wallets + GET /api/user-settings
+    API-->>Live: settings.manualSessionResultEnabled<br/><i>ausente/404 resolve para true (fail-open)</i>
+    Live->>Modal: props { manualResultEnabled, summaryData,<br/>reconcilable, usdConversionRates }
+
+    alt manualResultEnabled = false
+        Note over Modal: modal identico ao de hoje<br/>(zero diff visual, sem campo no DOM)
+    else manualResultEnabled = true
+        Modal->>Modal: base = showProfitCard ? totalProfitUSD : summaryData.profit
+        Player->>Modal: clica "Ajustar" e digita valor USD
+        Modal->>Helper: computeAdjustedResult({ manualProfitUsd, investedUsd })
+        Helper-->>Modal: { profitUsd, roi: number ou null, reason? }
+        Note over Modal: cards Resultado + ROI refletem o ajuste.<br/>Card "Investido" NAO muda (RF-03).<br/>Valor invalido -> erro + Finalizar desabilitado
+    end
+
+    Player->>Modal: clica "Finalizar Sessao"
+    Modal->>Modal: guardAndReconcile()
+
+    alt hasMissing (plataforma sem wallet)
+        Modal->>API: POST /grind-sessions/:id/reconcile-wallets<br/>{ adjustments: [], skipReconciliation: true }
+        Note right of Modal: marcador de skip. Sem valor manual.
+        API-->>Modal: 200 (ou 409 already_reconciled = idempotente)
+    else sem alteracao de saldo
+        Note over Modal: skip local — nenhuma chamada<br/>(regra "sem mudancas -> skip" preservada)
+    else ha wallets com saldo alterado
+        Modal->>API: POST /grind-sessions/:id/reconcile-wallets<br/>{ adjustments: [{ walletId, reportedBalance,<br/>expectedPreviousBalance, expectedDelta? }] }
+        Note right of Modal: PAYLOAD IDENTICO ao cenario sem ajuste.<br/>O valor manual NAO aparece aqui (RF-05).
+        API->>Bank: aplica delta por wallet
+        Bank->>DB: wallet_transactions + bankroll_snapshots
+        Note over Bank,DB: a banca ignora o ajuste manual por completo
+        API-->>Modal: 200 (ou 409 already_reconciled -> segue)
+    end
+
+    Modal->>Live: onEndSession(showProfitCard ? totalProfitUSD : undefined)
+    Note over Modal,Live: com ajuste ativo, o valor propagado<br/>e o resultado manual (D1)
+
+    Modal->>Modal: safeTrack("session_result_manual_override", {...})
+    Note right of Modal: RF-06 — so com ajuste ativo, 1x.<br/>safeTrack nunca lanca (nao bloqueia a finalizacao)
+
+    Live->>API: PUT /api/grind-sessions/:id<br/>{ status: 'completed', volume, abiMed,<br/>profit, roi, walletProfitUsd, medias mentais }
+    Note right of Live: com ajuste: profit = roi-base = walletProfitUsd = valor manual (D1).<br/>roi = null quando investido menor ou igual a zero (D4).<br/>abiMed continua invested/volume.
+
+    alt PUT ok
+        API->>DB: storage.updateGrindSession
+        API->>API: status completed -> evaluateStops<br/>+ invalidateHomeOverviewCache<br/>+ enqueue Daily Debrief (best-effort)
+        API-->>Live: 200
+        Live->>Live: limpa backup local, setLocation('/grind')
+        Note over DB: historico le grind_sessions.wallet_profit_usd<br/>como degrau 1 da precedencia<br/>(grindSessionHistory.ts) -> mostra o valor declarado
+    else PUT falha
+        API-->>Live: 4xx/5xx
+        Live->>Modal: toast de erro + reabre o summary
+        Note over Modal: valor digitado PRESERVADO no campo<br/>(nao volta ao calculado)
+    end

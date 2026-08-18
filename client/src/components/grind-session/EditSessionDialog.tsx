@@ -242,13 +242,20 @@ export default function EditSessionDialog({
                       <Input
                         type="number"
                         step="0.1"
-                        value={editData.roi || 0}
+                        value={editData.roi ?? ''}
                         onChange={(e) => {
-                          const value = parseFloat(e.target.value) || 0;
-                          updateField('roi', value);
+                          // ADR-244 D4: campo vazio significa "sem ROI" (null),
+                          // nunca 0 — zero inventado mente no historico.
+                          const raw = e.target.value.trim();
+                          if (raw === '') {
+                            updateField('roi', null);
+                            return;
+                          }
+                          const value = parseFloat(raw);
+                          updateField('roi', Number.isFinite(value) ? value : null);
                         }}
                         className="field-input"
-                        placeholder="Return on Investment"
+                        placeholder="Sem ROI registrado"
                       />
                       <TrendingUp className="input-icon" />
                     </div>

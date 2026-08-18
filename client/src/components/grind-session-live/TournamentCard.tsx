@@ -112,10 +112,13 @@ function MaxLateControl({
 }: {
   tournament: any;
   onMaxLateChange: (id: string, value: string | null) => void;
-  variant?: 'inline' | 'block';
+  variant?: 'inline' | 'block' | 'action';
 }) {
   const id = tournament.id;
   const block = variant === 'block';
+  const action = variant === 'action';
+  // block + action compartilham picker em dropdown absoluto + erro inline.
+  const dropdown = block || action;
   const hasMaxLate = getMaxLateValue(tournament) != null;
   const [showPicker, setShowPicker] = useState(false);
   const [pickerValue, setPickerValue] = useState('');
@@ -144,7 +147,7 @@ function MaxLateControl({
   };
 
   return (
-    <span className={block ? 'relative flex w-full' : 'inline-flex items-center gap-1'}>
+    <span className={block ? 'relative flex w-full' : action ? 'relative flex w-full sm:w-auto sm:inline-flex' : 'inline-flex items-center gap-1'}>
       <button
         type="button"
         data-testid={`live-maxlate-toggle-${id}`}
@@ -152,24 +155,26 @@ function MaxLateControl({
         title={hasMaxLate ? 'Desligar Max Late' : 'Definir Max Late'}
         className={block
           ? 'flex items-center justify-center gap-1 w-full h-10 px-2 rounded text-xs font-semibold border-2 border-amber-500 bg-gradient-to-r from-amber-600/60 to-amber-700/60 text-amber-100 hover:from-amber-500/80 hover:to-amber-600/80 hover:text-white shadow-lg transition-all duration-200'
+          : action
+          ? 'flex items-center justify-center gap-1 w-full sm:w-auto h-10 px-3 rounded text-xs font-bold border-2 border-amber-500 bg-gradient-to-r from-amber-600/70 to-amber-700/70 text-amber-100 hover:from-amber-500/80 hover:to-amber-600/80 hover:text-white shadow-lg transition-all duration-200'
           : 'inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-medium border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 shrink-0'}
       >
-        <Hourglass className={block ? 'w-4 h-4 text-amber-300' : 'w-3 h-3'} />
+        <Hourglass className={dropdown ? 'w-4 h-4 text-amber-300' : 'w-3 h-3'} />
         Max Late
       </button>
       {showPicker && (
         <span
-          className={block
-            ? 'absolute left-0 top-full mt-1 z-30 flex flex-col gap-1 bg-gray-900 border border-gray-700 rounded p-1.5 shadow-xl'
+          className={dropdown
+            ? 'absolute right-0 top-full mt-1 z-30 flex flex-col gap-1 bg-gray-900 border border-gray-700 rounded p-1.5 shadow-xl'
             : 'inline-flex items-center gap-1'}
         >
-          <span className={block ? 'flex items-center gap-1' : 'contents'}>
+          <span className={dropdown ? 'flex items-center gap-1' : 'contents'}>
             <input
               type="time"
               data-testid={`live-maxlate-picker-${id}`}
               value={pickerValue}
               onChange={(e) => setPickerValue(e.target.value)}
-              className={block
+              className={dropdown
                 ? 'bg-gray-700 border border-amber-500/60 rounded text-sm font-semibold text-white px-2 py-1 h-9 w-28 [color-scheme:dark]'
                 : 'bg-gray-700 border border-amber-500/60 rounded text-xs text-white px-1.5 py-1 [color-scheme:dark]'}
             />
@@ -177,21 +182,21 @@ function MaxLateControl({
               type="button"
               data-testid={`live-maxlate-confirm-${id}`}
               onClick={handleConfirm}
-              className={block
+              className={dropdown
                 ? 'inline-flex items-center justify-center h-9 px-3 rounded text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-500'
                 : 'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-emerald-600 text-white hover:bg-emerald-500'}
             >
               OK
             </button>
           </span>
-          {block && error && (
+          {dropdown && error && (
             <span data-testid={`live-maxlate-error-${id}`} className="text-[9px] text-red-400">
               {error}
             </span>
           )}
         </span>
       )}
-      {!block && error && (
+      {!dropdown && error && (
         <span data-testid={`live-maxlate-error-${id}`} className="text-[9px] text-red-400">
           {error}
         </span>
@@ -336,9 +341,6 @@ function RegisteredCard({
           <div className="flex gap-1 flex-wrap text-xs items-center">
             <PriorityBadge tournament={tournament} />
             <MaxLateChip tournament={tournament} />
-            {onMaxLateChange && (
-              <MaxLateControl tournament={tournament} onMaxLateChange={onMaxLateChange} />
-            )}
             <Badge className={`px-1.5 py-0.5 text-white ${getSiteColor(tournament.site)}`}>
               {tournament.site}
             </Badge>
@@ -493,6 +495,11 @@ function RegisteredCard({
             <CheckCircle className="w-3 h-3 mr-1" />
             Resultado
           </Button>
+
+          {/* Max Late — botao de acao ao lado do GG (paridade Upcoming, variant action) */}
+          {onMaxLateChange && (
+            <MaxLateControl tournament={tournament} onMaxLateChange={onMaxLateChange} variant="action" />
+          )}
 
           {/* GG Button */}
           <Button

@@ -1,0 +1,60 @@
+%% Ajuste manual do resultado final da sessao (ADR-244) — decisao do valor.
+%% Responde: qual numero vai para profit / roi / wallet_profit_usd no PUT.
+%% Regras duras: investido NUNCA muda; entrada invalida NUNCA vira 0;
+%% investido <= 0 produz roi = null com motivo (D4), nunca 0 inventado.
+flowchart TD
+    START["Modal de fim de sessao abre<br/><i>SessionSummaryModal</i>"] --> PREF{"user_settings.<br/>manualSessionResultEnabled?"}
+
+    PREF -->|"false"| OFF["Campo NAO renderiza<br/><i>zero diff visual</i>"]
+    PREF -->|"ausente / 404 / carregando"| FAILOPEN["resolve para true<br/><i>fail-open, igual bankrollManagementEnabled</i>"]
+    PREF -->|"true"| BASE
+    FAILOPEN --> BASE
+
+    BASE{"showProfitCard?<br/><i>secao Bancas visivel = showBankrollSection<br/>AND wallets.length maior que 0</i>"}
+    BASE -->|"sim"| BW["base = totalProfitUSD<br/><i>card Lucro Total da Sessao</i><br/>source = 'wallet'"]
+    BASE -->|"nao"| BT["base = summaryData.profit<br/><i>card Profit, P&amp;L de torneios</i><br/>source = 'tournaments'"]
+
+    BW --> ADJ
+    BT --> ADJ
+
+    ADJ{"jogador acionou<br/>Ajustar e digitou valor?"}
+
+    %% --- Caminho sem ajuste: byte-a-byte igual ao de hoje ---
+    ADJ -->|"nao (ou clicou Desfazer ajuste)"| NOADJ["resultado = base calculada"]
+    OFF --> NOADJ
+    NOADJ --> PAYOLD["PUT com o payload ATUAL:<br/>profit = base, roi = stats.roi,<br/>walletProfitUsd SO se showProfitCard<br/><i>sem evento de telemetria</i>"]
+
+    %% --- Caminho com ajuste: valida antes de qualquer coisa ---
+    ADJ -->|"sim"| VAL{"valor e numero finito?<br/><i>vazio, '-', NaN, Infinity</i>"}
+    VAL -->|"nao"| ERR["erro 'Informe um valor numerico'<br/>role=alert + botao Finalizar DESABILITADO<br/><b>NAO vira 0</b>"]
+    ERR -.->|"jogador corrige"| VAL
+
+    VAL -->|"sim (aceita negativo, 0 e decimais)"| MANUAL["manualProfitUsd = valor digitado (USD)<br/><i>sem conversao FX: os cards do modal ja sao USD</i>"]
+
+    MANUAL --> INV["investedUsd = summaryData.invested<br/><i>= stats.totalInvestidoUSD ?? stats.totalInvestido</i><br/><b>base de investimento NUNCA muda</b>"]
+
+    INV --> HELPER["computeAdjustedResult({ manualProfitUsd, investedUsd })<br/><i>helper puro, sem calculo no JSX</i>"]
+
+    HELPER --> ZERO{"investedUsd maior que 0<br/>e finito?"}
+
+    ZERO -->|"nao (0, negativo ou nao finito)"| RNULL["roi = null<br/>reason = 'invested_zero'<br/>UI mostra '—', nunca 0%"]
+    ZERO -->|"sim"| RNUM["roi = (manualProfitUsd / investedUsd) * 100<br/><i>exibicao arredonda a 1 casa;<br/>valor persistido NAO e arredondado</i>"]
+
+    RNULL --> PAYNEW
+    RNUM --> PAYNEW
+
+    PAYNEW["PUT /api/grind-sessions/:id (D1 — valor unico):<br/>profit = manualProfitUsd<br/>roi = numero ou null<br/>walletProfitUsd = manualProfitUsd<br/><i>mesmo sem wallets</i><br/>abiMed = invested / volume (intocado)"]
+
+    PAYNEW --> TRACK["safeTrack('session_result_manual_override')<br/>{ sessionId, computedProfitUsd, manualProfitUsd,<br/>deltaUsd, investedUsd, roiComputed, roiManual, source }"]
+
+    PAYOLD -.->|"vale nos dois caminhos"| BANK
+    TRACK -.->|"vale nos dois caminhos"| BANK
+
+    BANK["INVARIANTE RF-05 / D5 (nao e um passo, e uma garantia):<br/>o payload de reconcile-wallets sai so de reportedBalances<br/>e ja foi enviado ANTES deste PUT (ver o sequence).<br/>Nenhuma wallet, wallet_transaction ou<br/>bankroll_snapshot muda pelo ajuste."]
+
+    BANK --> READ["Leitura do historico:<br/>grindSessionHistory le wallet_profit_usd como degrau 1<br/>-> o valor declarado aparece em /grind.<br/>grind-sessions.ts:845 preserva roi null (D4)<br/>-> 4 telas de sessao legada passam de '0.0%' para '—'."]
+
+    classDef hard fill:#7f1d1d,stroke:#f87171,color:#fee2e2;
+    classDef safe fill:#14532d,stroke:#4ade80,color:#dcfce7;
+    class ERR,RNULL,BANK hard;
+    class PAYOLD safe;

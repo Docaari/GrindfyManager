@@ -44,6 +44,8 @@ import { FocusStatsBar } from "@/components/study/FocusStatsBar";
 import { useFocusStatsBar } from "@/hooks/useFocusStatsBar";
 import type { SessionAlert } from "@shared/generic-alerts";
 import { fireAlert } from "@/lib/fireAlert";
+import { primeAlertAudio } from "@/lib/alertSound";
+import { AlertSnoozeActions } from "@/components/grind-session-live/AlertSnoozeActions";
 import { stopAlertById, stopAllAlerts } from "@/lib/tts/narrationQueue";
 import { calculatorTools, openCalculatorPopup } from "@/lib/calculatorTools";
 
@@ -106,7 +108,9 @@ import { calculateSessionStats, calculateFinalSessionStats, calculateBreakAverag
 import {
   getPendingTournamentsForSessionEnd,
   formatPendingTournamentLabel,
+  buildEndSessionPayload,
 } from "@/components/grind-session-live/session-end-helpers";
+import type { ManualSessionResultOverride } from "@/components/grind-session-live/session-end-helpers";
 import {
   captureFinishSnapshot,
   buildUndoFinishPayload,
@@ -238,6 +242,8 @@ export default function GrindSessionLive() {
     missingPlatforms: string[];
     playedPlatforms: string[];
     bankrollManagementEnabled: boolean;
+    // ADR-244 (D3): toggle do ajuste manual do resultado. Fail-open = true.
+    manualSessionResultEnabled: boolean;
     loadFailed: boolean;
     loading: boolean;
   }>({
@@ -245,6 +251,7 @@ export default function GrindSessionLive() {
     missingPlatforms: [],
     playedPlatforms: [],
     bankrollManagementEnabled: true,
+    manualSessionResultEnabled: true,
     loadFailed: false,
     loading: false,
   });
@@ -676,7 +683,10 @@ export default function GrindSessionLive() {
     }
   };
 
-  const handleEndSession = async (walletProfitUsd?: number) => {
+  const handleEndSession = async (
+    walletProfitUsd?: number,
+    manualOverride?: ManualSessionResultOverride | null,
+  ) => {
     const sessionId = activeSession?.id;
     if (!sessionId) return;
     // P0 launch-fix: guard double-click. Sem isto, dois cliques rapidos no
@@ -707,30 +717,20 @@ export default function GrindSessionLive() {
     // server retornava alreadyReconciled=true e mostrava toast confuso ao
     // founder. Aqui apenas marca completed e redireciona.
     try {
-      await apiRequest('PUT', `/api/grind-sessions/${sessionId}`, {
-        status: 'completed',
-        endTime: new Date().toISOString(),
-        finalNotes: finalNotes || '',
-        objectiveCompleted: sessionData.objectiveStatus === 'completed',
-        volume: sessionData.volume,
-        profit: sessionData.profit.toString(),
-        abiMed: sessionData.invested > 0
-          ? (sessionData.invested / sessionData.volume).toString()
-          : '0',
-        roi: sessionData.roi.toString(),
-        fts: sessionData.fts,
-        cravadas: sessionData.wins,
-        energiaMedia: sessionData.mentalAverages.energy.toString(),
-        focoMedio: sessionData.mentalAverages.focus.toString(),
-        confiancaMedia: sessionData.mentalAverages.confidence.toString(),
-        inteligenciaEmocionalMedia: sessionData.mentalAverages.emotionalIntelligence.toString(),
-        interferenciasMedia: sessionData.mentalAverages.interference.toString(),
-        // Lucro reconciliado da banca — card "Lucro Total da Sessao" do modal.
-        // Persistido para o historico de sessoes exibir o mesmo numero.
-        ...(typeof walletProfitUsd === 'number' && Number.isFinite(walletProfitUsd)
-          ? { walletProfitUsd: walletProfitUsd.toString() }
-          : {}),
-      });
+      // Corpo montado por helper puro (ADR-244 RF-04): sem ajuste manual o
+      // payload e byte-a-byte o de antes; com ajuste, o valor declarado ocupa
+      // profit, roi e walletProfitUsd.
+      await apiRequest(
+        'PUT',
+        `/api/grind-sessions/${sessionId}`,
+        buildEndSessionPayload({
+          sessionData: sessionData as any,
+          finalNotes: finalNotes || '',
+          endTimeIso: new Date().toISOString(),
+          walletProfitUsd,
+          manualOverride,
+        }),
+      );
     } catch (err) {
       console.error("Failed to end session:", err);
       toast({
@@ -797,6 +797,10 @@ export default function GrindSessionLive() {
           bankrollManagementEnabled:
             typeof s?.bankrollManagementEnabled === 'boolean'
               ? s.bankrollManagementEnabled
+              : true,
+          manualSessionResultEnabled:
+            typeof s?.manualSessionResultEnabled === 'boolean'
+              ? s.manualSessionResultEnabled
               : true,
           loadFailed: walletsErr,
           loading: false,
@@ -1243,8 +1247,25 @@ export default function GrindSessionLive() {
   // RF-10: Request notification permission once on mount
   useEffect(() => {
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
+      Notification.requestPermission().catch((err) => {
+        console.warn('[grind-live] permissao de notificacao negada', err);
+      });
     }
+  }, []);
+
+  // A policy de autoplay do Chrome so libera o AudioContext apos um gesto do
+  // usuario. Sem destravar, o PRIMEIRO alarme da sessao sai mudo — o contexto
+  // nasce 'suspended' e o beep nao emite som nem lanca erro. Escuta o primeiro
+  // gesto na pagina e destrava. `once: true` mantem o custo em zero depois.
+  useEffect(() => {
+    const prime = () => primeAlertAudio();
+    const opts = { once: true, capture: true } as AddEventListenerOptions;
+    window.addEventListener('pointerdown', prime, opts);
+    window.addEventListener('keydown', prime, opts);
+    return () => {
+      window.removeEventListener('pointerdown', prime, opts);
+      window.removeEventListener('keydown', prime, opts);
+    };
   }, []);
 
   // Sprint Grind-Live Break Auto-Open (clock-aligned BRT) — Spec + ADR-124.
@@ -1378,18 +1399,31 @@ export default function GrindSessionLive() {
             ? userTTSSettings.soundMode
             : 'mute';
           // alertId deterministic permite stopAlertById quando o usuario dispensar.
-          fireAlert({
-            title: "Late Reg Encerrando!",
-            description,
-            narrationText: description,
-            soundMode: effectiveSoundMode,
-            voiceURI: userTTSSettings.preferredVoiceURI,
-            volume: userTTSSettings.volume,
-            repeatCount: userTTSSettings.repeatCount,
-            repeatGapMs: userTTSSettings.repeatGapMs,
-            alertId: `latereg-${tournament.id}`,
-            toast,
-          });
+          const lateRegAlertId = `latereg-${tournament.id}`;
+          try {
+            fireAlert({
+              title: "Late Reg Encerrando!",
+              description,
+              narrationText: description,
+              soundMode: effectiveSoundMode,
+              voiceURI: userTTSSettings.preferredVoiceURI,
+              volume: userTTSSettings.volume,
+              repeatCount: userTTSSettings.repeatCount,
+              repeatGapMs: userTTSSettings.repeatGapMs,
+              alertId: lateRegAlertId,
+              action: (
+                <AlertSnoozeActions
+                  onSnooze={(minutes) =>
+                    handleSnoozeAlert(lateRegAlertId, minutes, description, description)
+                  }
+                />
+              ),
+              toast,
+            });
+          } catch (err) {
+            // Nao deixa um torneio problematico abortar o alerta dos demais.
+            console.error('[grind-live] fireAlert late-reg falhou', { tournamentId: tournament.id }, err);
+          }
         }
       }
       } // end if lateRegAlertEnabled
@@ -1399,21 +1433,35 @@ export default function GrindSessionLive() {
       for (const alert of alertsToFire) {
         sessionAlertManagerRef.current.markFired(alert.id);
         const title = alert.type === 'late-reg' ? `Late Reg: ${alert.label.replace('Late Reg: ', '')}` : 'Lembrete';
-        const effectiveSoundMode = alertSettings.lateRegAlertSound
-          ? userTTSSettings.soundMode
-          : 'mute';
-        fireAlert({
-          title,
-          description: alert.label,
-          narrationText: (alert as any).narrationText || alert.label,
-          soundMode: effectiveSoundMode,
-          voiceURI: userTTSSettings.preferredVoiceURI,
-          volume: userTTSSettings.volume,
-          repeatCount: userTTSSettings.repeatCount,
-          repeatGapMs: userTTSSettings.repeatGapMs,
-          alertId: alert.id,
-          toast,
-        });
+        // `lateRegAlertSound` governa SO o alerta automatico de late reg. Antes
+        // ele tambem mutava os alertas manuais/de torneio: quem desligava o som
+        // do late reg perdia calado todos os alarmes que criou na mao. O mute
+        // global do jogador e `soundMode`.
+        const narration = (alert as any).narrationText || alert.label;
+        try {
+          fireAlert({
+            title,
+            description: alert.label,
+            narrationText: narration,
+            soundMode: userTTSSettings.soundMode,
+            voiceURI: userTTSSettings.preferredVoiceURI,
+            volume: userTTSSettings.volume,
+            repeatCount: userTTSSettings.repeatCount,
+            repeatGapMs: userTTSSettings.repeatGapMs,
+            alertId: alert.id,
+            action: (
+              <AlertSnoozeActions
+                onSnooze={(minutes) =>
+                  handleSnoozeAlert(alert.id, minutes, alert.label, narration)
+                }
+              />
+            ),
+            toast,
+          });
+        } catch (err) {
+          // Um alarme que explode nao pode levar junto os outros do mesmo tick.
+          console.error('[grind-live] fireAlert falhou', { alertId: alert.id }, err);
+        }
       }
       if (alertsToFire.length > 0) {
         refreshAlertState();
@@ -1421,8 +1469,28 @@ export default function GrindSessionLive() {
     };
 
     checkAlerts();
-    const interval = setInterval(checkAlerts, 30000);
-    return () => clearInterval(interval);
+    // Tick de 5s (era 30s). O alerta nunca se perde — `getAlertsToFire` compara
+    // `triggerAt <= now`, entao um tick atrasado ainda dispara — mas com 30s o
+    // jogador ouvia o "faltam 2min" quando ja faltava 1min30. Chrome ainda
+    // estrangula timers de aba em background (~1/min), por isso o listener de
+    // visibilitychange abaixo faz a recuperacao assim que a aba volta ao foco.
+    const interval = setInterval(checkAlerts, 5000);
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && !document.hidden) checkAlerts();
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibility);
+    }
+    window.addEventListener('focus', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibility);
+      }
+      window.removeEventListener('focus', handleVisibility);
+    };
   }, [activeSession, plannedTournaments, sessionTournaments, userAlertSettings, userTTSSettings, toast]);
 
   // Sprint grind-live-detail-parity (RF-04 / ADR-214 D4) — reconciliacao idempotente.
@@ -1797,6 +1865,12 @@ export default function GrindSessionLive() {
         const [h, m] = time.split(':').map(Number);
         const triggerAt = new Date();
         triggerAt.setHours(h, m, 0, 0);
+        // Auto-rollover: grind atravessa a meia-noite. As 23h, "01:00" quer
+        // dizer amanha — sem isso o alerta nascia no passado e disparava na
+        // hora (ou nem era aceito). Mesma regra do TournamentAlertDialog.
+        if (triggerAt.getTime() <= Date.now()) {
+          triggerAt.setDate(triggerAt.getDate() + 1);
+        }
         mgr.addAlert({ type: 'custom', label, triggerAt });
       } else if (mode === 'relative' && minutesAhead) {
         mgr.addRelativeAlert(label, minutesAhead);
@@ -1835,6 +1909,55 @@ export default function GrindSessionLive() {
   const handleRefireAlert = (id: string) => {
     sessionAlertManagerRef.current.unmarkFired(id);
     refreshAlertState();
+  };
+
+  /**
+   * Soneca do toast de alerta (+1min / +3min).
+   *
+   * O `ToastAction` do Radix ja fecha o toast no clique, e o `onOpenChange`
+   * instalado pelo `fireAlert` corta a narracao em curso — `stopAlertById` aqui
+   * e so defesa em profundidade (idempotente).
+   *
+   * Dois caminhos:
+   *  - alerta manual/de torneio: vive no SessionAlertManager, so reagendar.
+   *  - alerta AUTOMATICO de late reg: vive no LateRegAlertManager, que ja marcou
+   *    `markAlerted` e nao re-dispara. `snoozeAlert` devolve null, entao criamos
+   *    um alerta custom equivalente — o lembrete volta pelo pipeline normal.
+   */
+  const handleSnoozeAlert = (
+    alertId: string,
+    minutes: number,
+    label: string,
+    narrationText?: string,
+  ) => {
+    stopAlertById(alertId);
+    const mgr = sessionAlertManagerRef.current;
+    try {
+      const snoozed = mgr.snoozeAlert(alertId, minutes);
+      if (!snoozed) {
+        mgr.addAlert({
+          type: 'custom',
+          label,
+          triggerAt: new Date(Date.now() + minutes * 60000),
+          narrationText,
+        });
+      }
+      refreshAlertState();
+      const back = new Date(Date.now() + minutes * 60000);
+      const hh = String(back.getHours()).padStart(2, '0');
+      const mm = String(back.getMinutes()).padStart(2, '0');
+      toast({
+        title: `Adiado ${minutes}min`,
+        description: `${label} volta as ${hh}:${mm}`,
+      });
+    } catch (err) {
+      console.error('[grind-live] snooze falhou', { alertId, minutes }, err);
+      toast({
+        title: 'Nao foi possivel adiar',
+        description: err instanceof Error ? err.message : 'Erro ao reagendar o alerta',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleClearAllAlerts = () => {
@@ -3107,6 +3230,9 @@ export default function GrindSessionLive() {
         reconcilableLoadFailed={summaryReconcilable.loadFailed}
         onRetryReconcilable={() => setReconcileFetchTrigger((n) => n + 1)}
         usdConversionRates={usdConversionRates}
+        manualResultEnabled={
+          summaryReconcilable.manualSessionResultEnabled !== false
+        }
       />
 
       {/* QA fix BUG 2: CoolDownRunner / QuickCoolDownDialog inline.

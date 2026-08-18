@@ -22,6 +22,14 @@ interface LibraryCardProps {
   showAddInlineButton?: boolean;
   /** Callback do botao "+" mobile. */
   onAddInline?: () => void;
+  /**
+   * Sprint grade-planner-library-and-multi-day §RF-03 (ADR-245 §D3).
+   * Quando presente, o card responde ao clique (abre a escolha de dias) alem do
+   * arrasto. OPCIONAL de proposito: sem ela o card segue como hoje, so
+   * arrastavel — e o que mantem BibliotecaEmbedded intocado.
+   * Quem filtra clique falso pos-arrasto e o caller (library-click-guard.ts).
+   */
+  onCardClick?: () => void;
 }
 
 const SOURCE_ICONS: Record<string, string> = {
@@ -51,6 +59,7 @@ export function LibraryCard({
   draggableProps,
   showAddInlineButton = false,
   onAddInline,
+  onCardClick,
 }: LibraryCardProps) {
   const siteColor = getPlannerSiteColor(tournament.site);
   const parsedBuyIn = parseFloat(tournament.buyIn || "0");
@@ -85,13 +94,33 @@ export function LibraryCard({
     setShowDelete(false);
   };
 
+  // Affordance do clique (RF-03). Sem `onCardClick` nada disso e emitido: o card
+  // continua exatamente o de hoje (so arrastavel).
+  const clickable = typeof onCardClick === "function";
+  // `role` entra DEPOIS de dragHandleProps de proposito: o rbd marca todo drag
+  // handle como role="button" (react-beautiful-dnd.cjs.js:7925). Card sem acao
+  // de clique nao e botao — anunciar "button" sem clique associado engana o
+  // leitor de tela. O tabIndex/data-rbd-* do rbd continuam intactos, entao o
+  // arrasto por teclado nao muda.
+  const clickableProps: Record<string, unknown> = clickable
+    ? {
+        role: "button",
+        title: "Clique para escolher os dias da semana",
+        onClick: () => onCardClick?.(),
+      }
+    : { role: undefined };
+
   if (compact) {
     return (
       <div
         ref={innerRef}
         {...draggableProps}
         {...dragHandleProps}
-        className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors cursor-grab group"
+        {...clickableProps}
+        data-testid={`library-card-${tournament.id}`}
+        className={`flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 transition-colors group ${
+          clickable ? "cursor-pointer" : "cursor-grab"
+        }`}
       >
         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${siteColor}`} />
         <span className="text-emerald-400 font-bold text-sm flex-shrink-0">
@@ -119,9 +148,13 @@ export function LibraryCard({
       ref={innerRef}
       {...draggableProps}
       {...dragHandleProps}
+      {...clickableProps}
+      data-testid={`library-card-${tournament.id}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className="bg-gray-800 border border-gray-700 rounded-lg p-3 hover:border-gray-500 transition-colors cursor-grab group shadow-lg shadow-black/20"
+      className={`bg-gray-800 border border-gray-700 rounded-lg p-3 hover:border-gray-500 transition-colors group shadow-lg shadow-black/20 ${
+        clickable ? "cursor-pointer" : "cursor-grab"
+      }`}
     >
       <div className="flex items-start gap-3">
         {/* Site color indicator */}

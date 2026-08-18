@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Target,
 } from "lucide-react";
+import { parseSessionRoi, formatSessionRoi } from "@shared/session-roi";
 import { FilterState } from "@/components/FilterPopupSimple";
 import { SessionHistoryData } from "./types";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -229,7 +230,8 @@ export default function SessionHistoryList({
                           <div className="metric-label">ABI</div>
                         </div>
                         <div className="session-summary-metric">
-                          <div className="metric-value">{(Number(session.roi) || 0).toFixed(1)}%</div>
+                          {/* ADR-244 (D4): ROI ausente exibe "—", nunca "0.0%". */}
+                          <div className="metric-value">{formatSessionRoi(parseSessionRoi(session.roi))}</div>
                           <div className="metric-label">ROI</div>
                         </div>
                         <div className="session-summary-metric">

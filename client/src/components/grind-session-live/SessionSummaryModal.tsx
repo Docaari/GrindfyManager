@@ -1,11 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { track as trackTelemetry } from "@/lib/telemetry";
 import { getDefaultCurrencyForSite } from "@shared/wallet-reconciliation";
+import { formatSessionRoi } from "@shared/session-roi";
 import { WalletCreateDialog } from "@/components/bankroll/WalletCreateDialog";
 // Sprint Estudos-Coach-Biblio-2 RF-4.4: insights pos-finalize.
 import { SessionInsightsPanel } from "@/components/grind/SessionInsightsPanel";
+import { tokens } from "@/lib/ui-tokens";
+import { computeAdjustedResult } from "./manual-session-result";
+import type { ManualSessionResultOverride } from "./session-end-helpers";
 import type { SessionSummaryData } from './types';
 
 function safeTrack(name: string, payload: Record<string, unknown>): void {
@@ -46,7 +50,13 @@ interface SessionSummaryModalProps {
   // walletProfitUsd: lucro reconciliado da banca (card "Lucro Total da Sessao").
   // Passado adiante para persistir em grind_sessions.wallet_profit_usd — assim
   // o historico mostra o mesmo numero que apareceu ao finalizar.
-  onEndSession: (walletProfitUsd?: number) => void;
+  // manualOverride (ADR-244 D1): resultado declarado pelo jogador. Quando
+  // presente, o mesmo valor ocupa profit, roi e walletProfitUsd no PUT — e o
+  // 1o argumento tambem vira o valor manual, inclusive sem wallets.
+  onEndSession: (
+    walletProfitUsd?: number,
+    manualOverride?: ManualSessionResultOverride | null,
+  ) => void;
   onStartFullCooldown?: (logId: string) => void;
   onStartQuickCooldown?: (logId: string) => void;
   bankrollManagementEnabled?: boolean;
@@ -59,6 +69,9 @@ interface SessionSummaryModalProps {
   // FX rates "1 USD = N native units" — usado pra computar lucro total
   // dinamico em USD a partir dos saldos reportados (delta wallet -> USD).
   usdConversionRates?: Record<string, number>;
+  // ADR-244 (D3): user_settings.manualSessionResultEnabled. Fail-open igual ao
+  // bankrollManagementEnabled — undefined (settings carregando/404) = ligado.
+  manualResultEnabled?: boolean;
 }
 
 const MAX_VISIBLE_MISSING = 3;
@@ -85,6 +98,7 @@ export default function SessionSummaryModal({
   reconcilableLoadFailed,
   onRetryReconcilable,
   usdConversionRates,
+  manualResultEnabled,
 }: SessionSummaryModalProps) {
   const [isReconciling, setIsReconciling] = useState(false);
   const { toast } = useToast();
@@ -95,6 +109,12 @@ export default function SessionSummaryModal({
   const [reportedBalances, setReportedBalances] = useState<Record<string, string>>({});
   const [walletDialogOpen, setWalletDialogOpen] = useState(false);
   const [walletDialogPlatform, setWalletDialogPlatform] = useState<string | null>(null);
+  // ADR-244 (RF-02): rascunho do resultado declarado. `null` = campo fechado
+  // (sem ajuste). String crua para nao transformar entrada invalida em 0.
+  const [manualResultDraft, setManualResultDraft] = useState<string | null>(null);
+  // Guard de duplo clique do proprio modal: sem ele o rastro de auditoria
+  // (RF-06) sairia duas vezes para uma unica finalizacao.
+  const finalizingRef = useRef(false);
 
   const sessionId = summaryData?.sessionId;
   const wallets = reconcilableWallets ?? [];
@@ -123,6 +143,12 @@ export default function SessionSummaryModal({
       missingPlatforms: missing,
     });
   }, [show, sessionId, hasMissing, missing]);
+
+  // O PUT falhando reabre o summary (GrindSessionLive). Libera o guard para o
+  // jogador poder tentar de novo; o valor digitado e preservado de proposito.
+  useEffect(() => {
+    if (show) finalizingRef.current = false;
+  }, [show]);
 
   if (!show || !summaryData) return null;
 
@@ -176,6 +202,44 @@ export default function SessionSummaryModal({
     return sum + profitNative;
   }, 0);
   const showProfitCard = showBankrollSection && wallets.length > 0;
+
+  // ===== Ajuste manual do resultado final (ADR-244) =====
+  // Fail-open: undefined (settings ainda carregando ou 404) mantem ligado.
+  const manualResultAvailable = manualResultEnabled !== false;
+  // Base "calculada" que o ajuste sobrescreve: o card de banca quando ha
+  // wallets reconciliaveis, senao o P&L de torneios.
+  const computedProfitUsd = showProfitCard ? totalProfitUSD : summaryData.profit;
+  const manualResultSource: "wallet" | "tournaments" = showProfitCard
+    ? "wallet"
+    : "tournaments";
+  // Entrada invalida NUNCA vira 0: fica null e bloqueia a finalizacao.
+  const manualResultValue = (() => {
+    if (manualResultDraft === null) return null;
+    const trimmed = manualResultDraft.trim();
+    if (trimmed === "") return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  })();
+  const manualResultInvalid = manualResultDraft !== null && manualResultValue === null;
+  const hasManualAdjustment = manualResultAvailable && manualResultValue !== null;
+  const adjustedResult = hasManualAdjustment
+    ? computeAdjustedResult({
+        manualProfitUsd: manualResultValue as number,
+        investedUsd: summaryData.invested,
+      })
+    : null;
+  // Investido NUNCA entra nesta conta — a base de investimento nao muda.
+  const displayProfitUsd = adjustedResult ? adjustedResult.profitUsd : summaryData.profit;
+  const displayRoi = adjustedResult ? adjustedResult.roi : summaryData.roi;
+  const displayTotalProfitUSD = adjustedResult ? adjustedResult.profitUsd : totalProfitUSD;
+
+  const openManualResultAdjust = () => {
+    setManualResultDraft(computedProfitUsd.toFixed(2));
+  };
+
+  const resetManualResultAdjust = () => {
+    setManualResultDraft(null);
+  };
 
   const submitReconcile = async (): Promise<boolean> => {
     if (!sessionId) return true;
@@ -282,12 +346,46 @@ export default function SessionSummaryModal({
   };
 
   const handleFinalizeSession = async () => {
-    if (await guardAndReconcile()) {
-      // Persiste o lucro da banca apenas quando a secao de bankroll esta
-      // visivel (ha wallets reconciliaveis). Sem wallets, o historico mantem
-      // o fallback de P&L de torneios.
-      onEndSession(showProfitCard ? totalProfitUSD : undefined);
+    if (finalizingRef.current) return;
+    // Ausencia de dado nao finaliza a sessao com numero inventado.
+    if (manualResultInvalid) return;
+    finalizingRef.current = true;
+
+    const reconciled = await guardAndReconcile();
+    if (!reconciled) {
+      finalizingRef.current = false;
+      return;
     }
+
+    if (adjustedResult) {
+      // RF-06: como D2 dispensa coluna de auditoria, este evento e o UNICO
+      // rastro de que o resultado foi declarado, e nao calculado.
+      safeTrack("session_result_manual_override", {
+        sessionId,
+        computedProfitUsd,
+        manualProfitUsd: adjustedResult.profitUsd,
+        deltaUsd: adjustedResult.profitUsd - computedProfitUsd,
+        investedUsd: summaryData.invested,
+        roiComputed: computeAdjustedResult({
+          manualProfitUsd: computedProfitUsd,
+          investedUsd: summaryData.invested,
+        }).roi,
+        roiManual: adjustedResult.roi,
+        source: manualResultSource,
+      });
+      // D1: o valor declarado ocupa tambem o walletProfitUsd — inclusive sem
+      // wallets, porque passa a significar "resultado final da sessao".
+      onEndSession(adjustedResult.profitUsd, {
+        profitUsd: adjustedResult.profitUsd,
+        roi: adjustedResult.roi,
+      });
+      return;
+    }
+
+    // Persiste o lucro da banca apenas quando a secao de bankroll esta
+    // visivel (ha wallets reconciliaveis). Sem wallets, o historico mantem
+    // o fallback de P&L de torneios.
+    onEndSession(showProfitCard ? totalProfitUSD : undefined);
   };
 
   const handleRegisterMissingWallet = () => {
@@ -320,19 +418,34 @@ export default function SessionSummaryModal({
               <div className="summary-value">{summaryData.volume}</div>
               <div className="summary-label">Torneios</div>
             </div>
-            <div className="summary-item">
+            {/* Investido NUNCA muda com o ajuste manual (RF-03). */}
+            <div className="summary-item" data-testid="summary-stat-invested">
               <div className="summary-value">${summaryData.invested.toFixed(2)}</div>
               <div className="summary-label">Investido</div>
             </div>
-            <div className="summary-item">
-              <div className={`summary-value ${summaryData.profit >= 0 ? 'positive' : 'negative'}`}>
-                {summaryData.profit >= 0 ? '+' : ''}${summaryData.profit.toFixed(2)}
+            <div className="summary-item" data-testid="summary-stat-profit">
+              <div
+                className={`summary-value ${displayProfitUsd >= 0 ? 'positive' : 'negative'} ${
+                  displayProfitUsd >= 0
+                    ? tokens.color.delta.positive
+                    : tokens.color.delta.negative
+                }`}
+              >
+                {displayProfitUsd >= 0 ? '+' : ''}${displayProfitUsd.toFixed(2)}
               </div>
               <div className="summary-label">Profit</div>
             </div>
-            <div className="summary-item">
-              <div className={`summary-value ${summaryData.roi >= 0 ? 'positive' : 'negative'}`}>
-                {summaryData.roi >= 0 ? '+' : ''}{summaryData.roi.toFixed(1)}%
+            <div className="summary-item" data-testid="summary-stat-roi">
+              <div
+                className={`summary-value ${
+                  displayRoi === null
+                    ? tokens.color.delta.neutral
+                    : displayRoi >= 0
+                      ? `positive ${tokens.color.delta.positive}`
+                      : `negative ${tokens.color.delta.negative}`
+                }`}
+              >
+                {formatSessionRoi(displayRoi)}
               </div>
               <div className="summary-label">ROI</div>
             </div>
@@ -346,6 +459,83 @@ export default function SessionSummaryModal({
             </div>
           </div>
         </div>
+
+        {/* RF-02 (ADR-244): ajuste manual do resultado final. Fechado por
+            padrao; com a preferencia OFF o modal fica exatamente como antes. */}
+        {manualResultAvailable && (
+          <div className="summary-section" data-testid="manual-session-result-section">
+            <h4>Resultado Final da Sessao</h4>
+            {manualResultDraft === null ? (
+              <div className="flex items-center justify-between gap-3 py-1">
+                <div
+                  className={`text-lg font-semibold ${
+                    computedProfitUsd >= 0
+                      ? tokens.color.delta.positive
+                      : tokens.color.delta.negative
+                  }`}
+                >
+                  {computedProfitUsd >= 0 ? '+' : ''}${computedProfitUsd.toFixed(2)}
+                </div>
+                <button
+                  type="button"
+                  data-testid="manual-session-result-toggle"
+                  onClick={openManualResultAdjust}
+                  className="rounded border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  Ajustar
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2 py-1">
+                <label
+                  htmlFor="manual-session-result-input"
+                  className="block text-xs text-muted-foreground"
+                >
+                  Resultado final da sessao (USD)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="manual-session-result-input"
+                    data-testid="manual-session-result-input"
+                    type="number"
+                    step="0.01"
+                    value={manualResultDraft}
+                    onChange={(e) => setManualResultDraft(e.target.value)}
+                    className="w-36 rounded border border-border bg-background px-2 py-1 text-sm text-foreground"
+                  />
+                  <button
+                    type="button"
+                    data-testid="manual-session-result-reset"
+                    onClick={resetManualResultAdjust}
+                    className="rounded border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                  >
+                    Desfazer ajuste
+                  </button>
+                  {hasManualAdjustment && (
+                    <span
+                      data-testid="session-result-adjusted-badge"
+                      className={`text-xs ${tokens.color.delta.neutral}`}
+                    >
+                      ajustado manualmente
+                    </span>
+                  )}
+                </div>
+                {manualResultInvalid && (
+                  <div
+                    data-testid="manual-session-result-error"
+                    role="alert"
+                    className={`text-xs ${tokens.color.danger.text}`}
+                  >
+                    Informe um valor numerico
+                  </div>
+                )}
+                <div className="text-[10px] text-muted-foreground">
+                  O investido nao muda e o ROI e recalculado.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {hasMissing && (
           <div
@@ -490,12 +680,18 @@ export default function SessionSummaryModal({
                     data-testid="session-total-profit-card"
                   >
                     <div
-                      className={`best-result-value ${totalProfitUSD >= 0 ? 'positive' : 'negative'}`}
+                      className={`best-result-value ${displayTotalProfitUSD >= 0 ? 'positive' : 'negative'} ${
+                        displayTotalProfitUSD >= 0
+                          ? tokens.color.delta.positive
+                          : tokens.color.delta.negative
+                      }`}
                     >
-                      {totalProfitUSD >= 0 ? '+' : ''}${totalProfitUSD.toFixed(2)}
+                      {displayTotalProfitUSD >= 0 ? '+' : ''}${displayTotalProfitUSD.toFixed(2)}
                     </div>
                     <div className="best-result-tournament">
-                      Reconciliado USD (atualiza ao preencher saldos)
+                      {adjustedResult
+                        ? "Ajustado manualmente (USD)"
+                        : "Reconciliado USD (atualiza ao preencher saldos)"}
                     </div>
                   </div>
                 </div>
@@ -595,7 +791,7 @@ export default function SessionSummaryModal({
             data-testid="cta-finalize-session"
             className="end-session-btn bg-primary text-primary-foreground"
             onClick={handleFinalizeSession}
-            disabled={isReconciling}
+            disabled={isReconciling || manualResultInvalid}
           >
             Finalizar Sessao
           </button>

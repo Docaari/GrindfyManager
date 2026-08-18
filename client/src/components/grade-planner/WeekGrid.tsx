@@ -5,26 +5,11 @@ import { StrictModeDroppable as Droppable } from "./StrictModeDroppable";
 import { Settings, Plus, Eye, X, Eraser } from "lucide-react";
 import { generateTimeSlots } from "@shared/grade-hours";
 import { getDisplayRegistrationTime } from "@shared/grade-time";
-import { getCellDisplayInfo } from "@shared/grade-cell-overflow";
-import { groupBuyInsByCurrency, formatGroupedBuyIns, formatBuyIn, getCurrencyForSite } from "@shared/platform-currency";
+import { sortCellByTime } from "@shared/grade-cell-overflow";
+import { groupBuyInsByCurrency, formatGroupedBuyIns, getCurrencyForSite } from "@shared/platform-currency";
 import { TournamentChip } from "./TournamentChip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DayHoverTooltip } from "@/components/grade/DayHoverTooltip";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { sites, types, speeds } from "./types";
 import { useToast } from "@/hooks/use-toast";
 
 /** Days ordered Mon-Sun for grid columns. dayOfWeek uses JS convention: 0=Sun, 1=Mon...6=Sat */
@@ -203,12 +188,15 @@ export function WeekGrid({
       {...panHandlers}
       className="flex-1 overflow-x-auto scroll-smooth cursor-grab"
     >
-      <div className="min-w-[800px]">
-        <table className="w-full border-collapse">
+      {/* table-fixed + min-w baixo: as 7 colunas dividem a largura disponivel
+          em partes iguais, entao Dom aparece sem scroll horizontal. O nome do
+          torneio e quem cede espaco (abreviado no chip). */}
+      <div className="min-w-[680px]">
+        <table className="w-full table-fixed border-collapse">
           {/* Header */}
           <thead>
             <tr>
-              <th className="w-20 bg-gray-900 border border-gray-700 p-2 text-base text-gray-400 text-center sticky left-0 top-0 z-20">
+              <th className="w-14 bg-gray-900 border border-gray-700 p-1 text-sm text-gray-400 text-center sticky left-0 top-0 z-20">
                 <div className="flex items-center justify-center gap-1">
                   <span>Hora</span>
                   {onOpenSettings && (
@@ -228,9 +216,9 @@ export function WeekGrid({
                 return (
                   <th
                     key={day.id}
-                    className={`bg-gray-900 border border-gray-700 p-2 text-center sticky top-0 z-10 ${isOff ? "opacity-50" : ""}`}
+                    className={`bg-gray-900 border border-gray-700 p-1.5 text-center sticky top-0 z-10 ${isOff ? "opacity-50" : ""}`}
                   >
-                    <div className="text-lg font-semibold text-white mb-1">{day.short}</div>
+                    <div className="text-base font-semibold text-white mb-1">{day.short}</div>
                     <div className="flex justify-center gap-1">
                       {(["A", "B", "C", "OFF"] as const).map((profile) => {
                         const isActive = activeProfile === profile || (!activeProfile && profile === "OFF");
@@ -241,7 +229,7 @@ export function WeekGrid({
                           <button
                             key={profile}
                             onClick={() => setActiveProfile(day.id, profile)}
-                            className={`w-9 h-7 rounded text-sm font-bold transition-all focus:ring-2 focus:ring-emerald-400 focus:outline-none ${cls}`}
+                            className={`w-7 h-6 rounded text-xs font-bold transition-all focus:ring-2 focus:ring-emerald-400 focus:outline-none ${cls}`}
                             title={profile === "OFF" ? "Dia OFF" : `Perfil ${profile}`}
                           >
                             {profile === "OFF" ? "OFF" : profile}
@@ -257,12 +245,12 @@ export function WeekGrid({
                         <div className="mt-2 flex flex-col items-center gap-1">
                           {s && (s.buyInDisplay || s.countDisplay) && (
                             <div className="leading-tight">
-                              <span className="text-xs text-emerald-400 font-semibold">
+                              <span className="text-[10px] text-emerald-400 font-semibold">
                                 {s.buyInDisplay}{s.buyInDisplay ? " · " : ""}{s.countDisplay}
                                 {s.abiDisplay ? ` · ABI ${s.abiDisplay}` : ""}
                               </span>
                               {(s.pkoDisplay || s.turboDisplay) && (
-                                <span className="text-xs text-gray-400">
+                                <span className="text-[10px] text-gray-400">
                                   {" · "}{s.pkoDisplay} · {s.turboDisplay}
                                 </span>
                               )}
@@ -281,7 +269,7 @@ export function WeekGrid({
                                 type="button"
                                 data-testid={`week-grid-day-detail-${day.id}`}
                                 onClick={() => onShowDayDetails(day.id)}
-                                className="inline-flex items-center justify-center gap-1 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                className="inline-flex items-center justify-center gap-1 rounded border border-gray-700 bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-300 transition-colors hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                                 title="Ver detalhes do dia"
                               >
                                 <Eye className="h-3.5 w-3.5" />
@@ -294,7 +282,7 @@ export function WeekGrid({
                               type="button"
                               data-testid={`week-grid-day-clear-${day.id}`}
                               onClick={() => onClearDay(day.id)}
-                              className="inline-flex items-center justify-center gap-1 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs font-medium text-gray-400 transition-colors hover:border-red-700/70 hover:bg-red-950/40 hover:text-red-300 focus:outline-none focus:ring-2 focus:ring-red-400"
+                              className="inline-flex items-center justify-center gap-1 rounded border border-gray-700 bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 transition-colors hover:border-red-700/70 hover:bg-red-950/40 hover:text-red-300 focus:outline-none focus:ring-2 focus:ring-red-400"
                               title="Remover todos os torneios deste dia"
                             >
                               <Eraser className="h-3.5 w-3.5" />
@@ -315,15 +303,17 @@ export function WeekGrid({
           <tbody>
             {TIME_SLOTS.map((slot) => (
               <tr key={slot}>
-                <td className="bg-gray-900 border border-gray-700 p-1 text-base text-gray-400 text-center font-mono sticky left-0 z-10 w-20">
+                <td className="bg-gray-900 border border-gray-700 p-0.5 text-xs text-gray-400 text-center font-mono sticky left-0 z-10 w-14">
                   {slot}
                 </td>
                 {GRID_DAYS.map((day) => {
                   const activeProfile = getActiveProfile(day.id);
                   const isOff = activeProfile === "OFF" || !activeProfile;
                   const cellTournaments = getTournamentsForCell(day.id, slot);
-                  // Mostra TODOS os torneios do slot (sem "+N torneios") — ordenados por prioridade.
-                  const displayInfo = getCellDisplayInfo(cellTournaments, Number.MAX_SAFE_INTEGER);
+                  // Todos os torneios do slot, em ordem de horario (prioridade
+                  // so desempata). A ordem precisa casar com a regra de drop:
+                  // soltar abaixo de um 11:30 vira 11:31.
+                  const cellList = sortCellByTime(cellTournaments);
                   const droppableId = `cell-${day.id}-${slot}`;
 
                   return (
@@ -332,7 +322,7 @@ export function WeekGrid({
                         <td
                           ref={provided.innerRef}
                           {...provided.droppableProps}
-                          className={`border border-gray-700/70 p-2 align-top min-h-[52px] transition-colors group ${
+                          className={`border border-gray-700/70 p-1 align-top min-h-[44px] transition-colors group ${
                             isOff
                               ? "bg-gray-800/60 cursor-default border-dashed"
                               : snapshot.isDraggingOver
@@ -358,8 +348,8 @@ export function WeekGrid({
                             <Plus className="h-4 w-4 text-gray-500 opacity-30 group-hover:opacity-60 transition-opacity" />
                           </div>
                         ) : (
-                            <div className="space-y-1.5">
-                              {displayInfo.visible.map((t: any, idx: number) => (
+                            <div className={viewMode === "expanded" ? "space-y-1.5" : "space-y-1"}>
+                              {cellList.map((t: any, idx: number) => (
                                 <Draggable
                                   key={t.id}
                                   draggableId={`cell-${t.id}`}
@@ -375,6 +365,7 @@ export function WeekGrid({
                                         tournament={t}
                                         onClick={() => onClickTournament(t)}
                                         onRemove={onRemoveTournament}
+                                        compact={viewMode !== "expanded"}
                                       />
                                     </div>
                                   )}
@@ -407,10 +398,12 @@ export function CellChip({
   tournament,
   onClick,
   onRemove,
+  compact = true,
 }: {
   tournament: any;
   onClick: () => void;
   onRemove?: (id: string) => void;
+  compact?: boolean;
 }) {
   // hovering = mouse dentro do chip mas gate ainda nao completou.
   // isArmed = gate de 1s completou. Mouseleave apos armed preserva.
@@ -467,15 +460,16 @@ export function CellChip({
     }
   };
 
+  // Sem popover: hover mostra o tooltip do chip (nome completo, buy-in, GTD,
+  // participantes estimados) e o clique abre direto o modal de edicao — o
+  // popover duplicava as duas coisas e roubava o clique.
   return (
-    <Popover>
-      <PopoverTrigger asChild>
         <div
           className="group relative"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          <TournamentChip tournament={tournament} onClick={onClick} />
+          <TournamentChip tournament={tournament} onClick={onClick} compact={compact} />
           {onRemove && (
             <button
               type="button"
@@ -503,55 +497,5 @@ export function CellChip({
             </button>
           )}
         </div>
-      </PopoverTrigger>
-      <PopoverContent
-        className="bg-gray-800 border-gray-600 text-white w-56 p-3"
-        side="right"
-        align="start"
-      >
-        <div className="space-y-2">
-          <div className="font-semibold text-sm">
-            {tournament.name || tournament.site}
-          </div>
-          <div className="text-xs text-gray-300 space-y-1">
-            <div>Site: {tournament.site}</div>
-            <div>Buy-in: {formatBuyIn(tournament.buyIn || "0", tournament.site)}</div>
-            {tournament.time && (
-              <div>Registro: {getDisplayRegistrationTime(tournament) || tournament.time}</div>
-            )}
-            <div>Tipo: {tournament.type || "Vanilla"} | {tournament.speed || "Normal"}</div>
-            {tournament.guaranteed && parseFloat(tournament.guaranteed) > 0 && (
-              <div>GTD: {formatBuyIn(tournament.guaranteed, tournament.site)}</div>
-            )}
-          </div>
-          <div className="flex gap-2 pt-1">
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs h-7 bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 flex-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClick();
-              }}
-            >
-              Editar
-            </Button>
-            {onRemove && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-xs h-7 bg-red-900/30 border-red-800 text-red-400 hover:bg-red-900/50 flex-1"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemove(tournament.id);
-                }}
-              >
-                Remover
-              </Button>
-            )}
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
   );
 }

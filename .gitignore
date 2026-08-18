@@ -12,6 +12,7 @@ vite.config.ts.*
 .claude/transcripts/
 .claude/cache/
 .claude/worktrees/
+.claude/estado/
 
 # CSVs de uso pessoal (importados pelo founder localmente)
 CSV Field/

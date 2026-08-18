@@ -144,3 +144,95 @@ export function deriveAlertsSuspended(s: DeriveAlertsSuspendedInput): boolean {
     s.showConfirmationModal
   );
 }
+
+// =============================================================================
+// Ajuste manual do resultado final da sessao — RF-04 / ADR-244 (D1, D4)
+// =============================================================================
+
+export interface EndSessionMentalAverages {
+  focus: number;
+  energy: number;
+  confidence: number;
+  emotionalIntelligence: number;
+  interference: number;
+}
+
+export interface EndSessionSessionData {
+  volume: number;
+  invested: number;
+  profit: number;
+  roi: number;
+  fts: number;
+  wins: number;
+  objectiveStatus?: string;
+  mentalAverages: EndSessionMentalAverages;
+}
+
+/** Resultado declarado pelo jogador no modal de fim de sessao. */
+export interface ManualSessionResultOverride {
+  profitUsd: number;
+  roi: number | null;
+}
+
+export interface BuildEndSessionPayloadInput {
+  sessionData: EndSessionSessionData;
+  finalNotes: string;
+  endTimeIso: string;
+  /** Lucro reconciliado da banca. Ausente quando nao ha secao Bancas. */
+  walletProfitUsd?: number;
+  /** Ajuste manual ativo. `null`/ausente = sem ajuste. */
+  manualOverride?: ManualSessionResultOverride | null;
+}
+
+/**
+ * Monta o corpo do `PUT /api/grind-sessions/:id` disparado ao finalizar.
+ *
+ * Sem ajuste, o payload e byte-a-byte o de antes desta feature (inclusive a
+ * regra de so mandar `walletProfitUsd` quando ele e um numero finito).
+ *
+ * Com ajuste (D1), o valor declarado ocupa `profit`, `roi` e `walletProfitUsd` —
+ * inclusive em sessao sem wallet nenhuma. A chave `roi` fica SEMPRE presente:
+ * omitir deixaria o ROI antigo no banco, pior que `null` (ADR-244 Q4, opcao C).
+ * `abiMed` continua derivado de `invested / volume` — o override nao o toca.
+ */
+export function buildEndSessionPayload(
+  input: BuildEndSessionPayloadInput,
+): Record<string, any> {
+  const { sessionData, finalNotes, endTimeIso, walletProfitUsd } = input;
+  const override = input.manualOverride ?? null;
+
+  const profit = override ? override.profitUsd : sessionData.profit;
+  const roi = override ? override.roi : sessionData.roi;
+  const effectiveWalletProfitUsd = override ? override.profitUsd : walletProfitUsd;
+
+  const payload: Record<string, any> = {
+    status: 'completed',
+    endTime: endTimeIso,
+    finalNotes,
+    objectiveCompleted: sessionData.objectiveStatus === 'completed',
+    volume: sessionData.volume,
+    profit: profit.toString(),
+    abiMed:
+      sessionData.invested > 0
+        ? (sessionData.invested / sessionData.volume).toString()
+        : '0',
+    roi: roi === null || roi === undefined ? null : roi.toString(),
+    fts: sessionData.fts,
+    cravadas: sessionData.wins,
+    energiaMedia: sessionData.mentalAverages.energy.toString(),
+    focoMedio: sessionData.mentalAverages.focus.toString(),
+    confiancaMedia: sessionData.mentalAverages.confidence.toString(),
+    inteligenciaEmocionalMedia:
+      sessionData.mentalAverages.emotionalIntelligence.toString(),
+    interferenciasMedia: sessionData.mentalAverages.interference.toString(),
+  };
+
+  if (
+    typeof effectiveWalletProfitUsd === 'number' &&
+    Number.isFinite(effectiveWalletProfitUsd)
+  ) {
+    payload.walletProfitUsd = effectiveWalletProfitUsd.toString();
+  }
+
+  return payload;
+}

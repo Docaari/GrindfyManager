@@ -4,7 +4,12 @@
 // Este e o unico dialog de criacao/edicao de torneio do app. O visual e o
 // mesmo que ja rodava no /coach (DayCreateTournamentDialog): header com titulo
 // + X, corpo com Nome / Plataforma (combobox) / Buy-in / Horario / Tipo /
-// Velocidade / Max Late / Garantido, rodape Cancelar + Salvar.
+// Velocidade / Registro (Alerta/Max Late) / Garantido, rodape Cancelar + Salvar.
+//
+// Edicao mostra o MESMO corpo da criacao, so que ja preenchido. Os grupos
+// opcionais abaixo existem para contextos especificos e ficam desligados por
+// default; o valor de um campo escondido continua hidratado no state e volta
+// intacto no submit (esconder nao apaga).
 //
 // Tudo que precisa de modal de torneio consome ESTE componente:
 //   - grade (planned_tournaments): DayCreateTournamentDialog / DayEditTournamentDialog
@@ -85,6 +90,13 @@ export interface TournamentFormDialogProps {
   enrichedInfo?: React.ReactNode;
   /** Erros por campo (ex: issues Zod do backend) exibidos inline. */
   fieldErrors?: Partial<Record<keyof TournamentFormState, string>>;
+  /**
+   * Validacao adicional do caller, somada ao `canSubmit` interno (ADR-245 §D2).
+   * Default `true` — quem nao passa a prop tem o `disabled` de hoje, byte-a-byte.
+   * Existe porque o state do `extraSlot` vive fora do dialog (ex.: os dias
+   * marcados do lote da grade) e o dialog nao tem como enxerga-lo.
+   */
+  extraCanSubmit?: boolean;
   /** Nome obrigatorio para submeter (default true). */
   requireName?: boolean;
   /** Buy-in obrigatorio e > 0 para submeter (default false). */
@@ -133,6 +145,7 @@ export function TournamentFormDialog(
     showEnriched = false,
     enrichedInfo,
     fieldErrors,
+    extraCanSubmit = true,
     requireName = true,
     requireBuyIn = false,
     keepOpenOnSubmit = false,
@@ -259,7 +272,8 @@ export function TournamentFormDialog(
     (!requireName || name.trim().length > 0) &&
     site.trim().length > 0 &&
     /^\d{2}:\d{2}$/.test(time) &&
-    (!requireBuyIn || (!isNaN(buyInNumber) && buyInNumber > 0));
+    (!requireBuyIn || (!isNaN(buyInNumber) && buyInNumber > 0)) &&
+    extraCanSubmit;
 
   const handleSubmit = React.useCallback(async () => {
     if (!canSubmit || submittingFlag) return;
@@ -494,7 +508,7 @@ export function TournamentFormDialog(
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>Max Late (reg final)</label>
+                <label className={labelCls}>Registro (Alerta/Max Late)</label>
                 <input
                   type="time"
                   data-testid={`${testIdPrefix}-input-maxlate`}

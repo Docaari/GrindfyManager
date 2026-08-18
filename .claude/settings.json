@@ -10,6 +10,11 @@
           {
             "type": "command",
             "command": "node .claude/hooks/block-emojis.cjs"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/avisar-zona-critica.cjs",
+            "timeout": 10
           }
         ]
       },
@@ -30,6 +35,11 @@
           {
             "type": "command",
             "command": "node .claude/hooks/auto-sync-agents.cjs"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/rastrear-tocados.cjs",
+            "timeout": 10
           }
         ]
       }
@@ -40,6 +50,11 @@
           {
             "type": "command",
             "command": "node .claude/hooks/session-summary.cjs"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/lembrar-testes.cjs",
+            "timeout": 10
           }
         ]
       }

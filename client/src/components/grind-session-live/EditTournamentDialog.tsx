@@ -95,30 +95,6 @@ export default function EditTournamentDialog({
           testIdPrefix="grind-live-edit"
           requireName={false}
           advanced
-          showModifiers
-          showSatellite
-          showEnriched
-          enrichedInfo={
-            (editingTournament.startingStack ||
-              editingTournament.maxPlayers ||
-              editingTournament.gameType ||
-              editingTournament.blindLevelMinutes) ? (
-              <div className="space-y-0.5 text-[11px] text-gray-400">
-                {editingTournament.gameType && (
-                  <div>Tipo de jogo: <span className="text-gray-200">{editingTournament.gameType}</span></div>
-                )}
-                {editingTournament.startingStack && (
-                  <div>Stack inicial: <span className="text-gray-200">{editingTournament.startingStack}</span></div>
-                )}
-                {editingTournament.maxPlayers && (
-                  <div>Max jogadores: <span className="text-gray-200">{editingTournament.maxPlayers}</span></div>
-                )}
-                {editingTournament.blindLevelMinutes && (
-                  <div>Nivel de blind: <span className="text-gray-200">{editingTournament.blindLevelMinutes}min</span></div>
-                )}
-              </div>
-            ) : null
-          }
           values={toFormState(editingTournament)}
           onValuesChange={(next) => {
             // Regra da sessao (spec 3 caso 9): nao da pra desmarcar re-entry

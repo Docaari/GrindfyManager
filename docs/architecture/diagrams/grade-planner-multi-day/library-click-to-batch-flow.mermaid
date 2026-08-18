@@ -1,0 +1,58 @@
+%% ADR-245 — Grade Planner multi-dia
+%% Fluxo: clique num card da Biblioteca -> modal pre-preenchido -> lote de POSTs.
+%% Cobre os ramos de dia OFF, dia sem perfil ativo e falha parcial.
+%% Leia junto: Docs/specs/grade-planner-library-and-multi-day.md (RF-03 + RF-04).
+flowchart TD
+    A["Jogador aponta um card da Biblioteca<br/><i>aba Grade do /coach</i>"] --> B{"Interacao<br/>foi arrasto?"}
+
+    B -->|"Sim: soltou numa celula da grade"| B1["handleDragEnd cria 1 planejado<br/><i>mapLibraryToPlanned</i>"]
+    B -->|"Sim: soltou no DragTrashZone"| B2["Card vai para a lixeira<br/><i>PATCH /api/tournament-library/:id/trash</i>"]
+    B1 --> BX["Clique suprimido<br/><i>bloqueio pos-drag do rbd + guarda dragging</i>"]
+    B2 --> BX
+    BX --> Z0["Nenhum modal abre"]
+
+    B -->|"Nao: clicou no X de excluir"| B3["stopPropagation<br/>manda para a lixeira"]
+    B3 --> Z0
+
+    B -->|"Nao: clique simples no card"| C["BibliotecaPanel dispara onTournamentClick"]
+    C --> D["GradePlanner abre o modal canonico<br/><i>DayCreateTournamentDialog em modo criacao</i>"]
+    D --> E["Modal pre-preenchido do tournament_library<br/><i>name, site, buyIn, time, type, speed, guaranteed</i>"]
+    E --> F["extraSlot renderiza o WeekDaysPicker<br/><i>7 chips, nenhum marcado neste fluxo</i>"]
+
+    F --> G{"Ao menos 1<br/>dia marcado?"}
+    G -->|"Nao"| G1["Salvar desabilitado<br/><i>extraCanSubmit = false</i>"]
+    G1 --> F
+    G -->|"Sim"| H["Jogador clica em Salvar"]
+
+    H --> I["resolveMultiDayTargets<br/><i>dias marcados + perfil ativo por dia</i>"]
+    I --> J["Cada dia vira alvo ou pulado com razao nomeada"]
+    J --> J1["Perfil A, B ou C -> alvo herda o perfil DAQUELE dia"]
+    J --> J2["Perfil OFF -> pulado com reason day_off"]
+    J --> J3["Sem perfil ativo -> pulado com reason no_active_profile"]
+
+    J1 --> K{"targets<br/>vazio?"}
+    J2 --> K
+    J3 --> K
+
+    K -->|"Sim: todos os dias marcados invalidos"| L["Nenhum POST e disparado<br/><i>nenhum perfil e ativado automaticamente</i>"]
+    L --> L1["errorMessage controlada + toast explicativo<br/><i>Nenhum dia valido</i>"]
+    L1 --> L2["onSubmit lanca -> MODAL CONTINUA ABERTO"]
+
+    K -->|"Nao"| M["Laco SEQUENCIAL: 1 POST /api/planned-tournaments por alvo<br/><i>try/catch por item, com libraryTemplateId do registro de origem</i>"]
+    M --> N{"Resultado<br/>do lote"}
+
+    N -->|"Todos criados"| O1["Toast padrao<br/><i>Torneio adicionado a N dias</i>"]
+    N -->|"Criados + pulados"| O2["Toast padrao + clausula Pulados<br/><i>Pulados: Qui, Sex (dia sem perfil ativo)</i>"]
+    N -->|"Falha parcial: ao menos 1 sucesso e ao menos 1 erro"| O3["Toast destructive<br/><i>Adicionado a 2 de 3 dias. Falhou em Qua</i>"]
+    N -->|"Todos os POSTs falharam"| O4["Toast destructive<br/><i>Nao foi possivel adicionar</i>"]
+
+    O1 --> P["Invalidacao UMA vez por lote<br/><i>planned-tournaments, active-days, tournament-library, day-detail</i>"]
+    O2 --> P
+    O3 --> P
+    O4 --> P
+
+    P --> Q["Telemetria UMA vez por lote<br/><i>coach.day_zoom_create_save + daysCount + skippedCount</i>"]
+
+    Q --> R{"Houve ao menos<br/>1 sucesso?"}
+    R -->|"Sim"| S["Modal fecha; torneios ja criados permanecem"]
+    R -->|"Nao"| L2
