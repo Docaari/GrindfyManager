@@ -11,7 +11,7 @@
 | **Depende de** | F1 (motor). **Nao** depende da F3a — nenhum RF daqui usa `classify.ts` |
 | **Entrega** | Tres paineis que respondem "de onde veio esse numero" e "quanto ele precisa blefar" |
 | **Migration** | nao |
-| **Status** | Nao iniciada |
+| **Status** | **Concluida** 2026-08-18 — ver [ADR-249](../../architecture/decisions/249-range-lab-f3b-decisao.md) |
 
 Zona critica: **nenhuma** das sete de `.claude/rules/04-modelo-e-esforco.md`. Mas
 o achado F-1 (abaixo) e do tipo "numero errado que nao parece errado", que a

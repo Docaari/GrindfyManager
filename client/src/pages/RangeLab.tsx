@@ -18,8 +18,22 @@ import VerdictPanel from "@/components/range-lab/VerdictPanel";
 import ComboTable from "@/components/range-lab/ComboTable";
 import CategoryPanel from "@/components/range-lab/CategoryPanel";
 import type { ReadSide } from "@/components/range-lab/CategoryPanel";
+import MdfPanel from "@/components/range-lab/MdfPanel";
+import CascadeBar from "@/components/range-lab/CascadeBar";
+import BlockerPanel from "@/components/range-lab/BlockerPanel";
 import { buildHighlight } from "@/lib/combo-calc/read";
 import type { ReadCombo, ReadFilter } from "@/lib/combo-calc/read";
+import { buildCascade } from "@/lib/combo-calc/cascade";
+import {
+  decisionBasis,
+  partitionVillainRows,
+  splitByConfrontation,
+  villainRowsOf,
+} from "@/lib/combo-calc/confront";
+import { computeBluffBalance, computeMdf, rankBluffcatchers } from "@/lib/combo-calc/mdf";
+import type { BluffBalance } from "@/lib/combo-calc/mdf";
+import { analyzeBlockers, blockerAvailability } from "@/lib/combo-calc/blockers";
+import type { BlockerReport } from "@/lib/combo-calc/blockers";
 import SpotLibrary from "@/components/range-lab/SpotLibrary";
 import BrushWeightControl from "@/components/range-lab/BrushWeightControl";
 import TopPercentSlider from "@/components/range-lab/TopPercentSlider";
@@ -101,6 +115,10 @@ export default function RangeLab() {
   }));
   const [heroBrush, setHeroBrush] = useState(1);
   const [villainBrush, setVillainBrush] = useState(1);
+  // F3b / D-F3-13: fora do river o contrafactual do bloqueador e trabalho sincrono
+  // na thread principal, entao ele so roda sob pedido. No river a conta e analitica
+  // (um runout) e sai sozinha.
+  const [deltaRequested, setDeltaRequested] = useState(false);
 
   const hydrated = useRef(false);
 
@@ -213,6 +231,7 @@ export default function RangeLab() {
     setSuitPicker(null);
     setReadFilter({ made: new Set(), draws: new Set() });
     setReadSide("villain");
+    setDeltaRequested(false);
   }
 
   function loadSpot(saved: SavedSpotV2): void {
@@ -258,6 +277,73 @@ export default function RangeLab() {
   const readHighlight = showRead
     ? buildHighlight(activeReadCombos, board, readFilter)
     : null;
+
+  // ── F3b: MDF, cascata e bloqueador (ADR-249 D-F3-34) ──
+  //
+  // O portao dos tres e o mesmo do painel de leitura: sem range declarado nao ha
+  // o que explicar. O que muda por painel e quanto de cada um sobrevive a ausencia
+  // da corrida — e o cartao de MDF sobrevive INTEIRO, porque as tres porcentagens
+  // saem so do pote e da aposta.
+  const hasAnyRange = heroRange.length > 0 || villainRange.length > 0;
+  const potCurrent = parseAmount(potInput);
+  const callAmount = parseAmount(callInput);
+
+  const bluffBalance: BluffBalance | null = useMemo(() => {
+    const mdf = computeMdf(potCurrent, callAmount);
+    if (mdf.status !== "ok") return null;
+    // Sem bordo nao ha confronto a medir: o showdown precisa de 5 cartas no total.
+    if (board.length < 3 || result == null || result.status !== "ok") return null;
+
+    const rows = villainRowsOf(result);
+    if (rows === null) return null;
+
+    const { basis } = decisionBasis(result, board);
+    // A conta usa apenas os combos VIVOS: o range de aposta dele nao contem as
+    // suas cartas, e os bloqueados sao materia do outro painel (D-F3-24).
+    const { alive } = partitionVillainRows(rows);
+    const split = splitByConfrontation({
+      hero: result.perHeroCombo.length === 1 ? result.perHeroCombo[0].combo : null,
+      rows: alive.map((row) => ({ combo: row.combo, weight: row.weight, equity: row.equity })),
+      board,
+      basis,
+    });
+    return computeBluffBalance(mdf, {
+      value: split.value.mass,
+      bluff: split.bluff.mass,
+      chop: split.chop.mass,
+      unknown: split.unknown.mass,
+    });
+  }, [potCurrent, callAmount, board, result]);
+
+  const cascade = useMemo(
+    () => buildCascade({ villainRange, board, result: result ?? null }),
+    [villainRange, board, result],
+  );
+
+  // Sai do JSX: ordenar o range inteiro a cada render so para ler `.total` era
+  // trabalho jogado fora em toda tecla digitada no pote.
+  const heroRanking = useMemo(
+    () => (result != null && result.status === "ok" ? rankBluffcatchers(result.perHeroCombo) : null),
+    [result],
+  );
+
+  const blockerAvail = blockerAvailability(result ?? null);
+  // No river a conta e um runout so; fora dele espera o botao.
+  const computeDelta = board.length === 5 || deltaRequested;
+  const blockerReport: BlockerReport | null = useMemo(() => {
+    if (board.length < 3 || result == null || result.status !== "ok") return null;
+    const out = analyzeBlockers({ result, board, computeDelta });
+    // `BlockerReport` nao tem `status`: a presenca da chave JA discrimina a uniao,
+    // e sem o cast o compilador continua cobrando o ramo.
+    if ("status" in out) return null;
+    return out;
+  }, [board, result, computeDelta]);
+
+  // O pedido e por BORDO: trocar a rua muda a enumeracao inteira, e herdar o "sim"
+  // da rua anterior faria o laco rodar sem o jogador ter pedido de novo.
+  useEffect(() => {
+    setDeltaRequested(false);
+  }, [board]);
 
   return (
     <div data-testid="range-lab-page" className="min-h-screen bg-background text-white">
@@ -370,8 +456,15 @@ export default function RangeLab() {
                   data-testid="range-lab-call-threshold"
                   className={`text-sm ${tokens.color.action.text}`}
                 >
+                  {/*
+                    O denominador e "combos COM numero", nao `perHeroCombo.length`
+                    (D-F3-31 + ponto aberto 1 do ADR-249, respondido pelo founder).
+                    O numerador ja exclui os combos degradados; com card removal
+                    pesado, o denominador cheio dizia "12 de 16 pagam" quando 4 das
+                    16 nem existem no spot.
+                  */}
                   <span className="font-mono font-bold">{result.callThresholdIndex}</span>{" "}
-                  de {result.perHeroCombo.length} maos suas pagam.
+                  de {heroRanking?.total ?? 0} maos suas pagam.
                 </p>
               )}
             </div>
@@ -447,6 +540,21 @@ export default function RangeLab() {
               suggested={cost ? suggestMode(cost.showdowns) : null}
             />
             <VerdictPanel result={result} progress={progress} running={running} />
+            {/*
+              D-F3-34: o MDF le pote e call, que sao os campos deste mesmo painel, e
+              responde a continuacao direta do veredito ("quanto ele precisa
+              blefar"). A cascata explica o numero que esta logo acima.
+            */}
+            {hasAnyRange && (
+              <>
+                <MdfPanel
+                  potCurrent={potCurrent}
+                  callAmount={callAmount}
+                  balance={bluffBalance}
+                />
+                <CascadeBar cascade={cascade} />
+              </>
+            )}
             <SpotLibrary
               spots={savedSpots}
               onSpotsChange={setSavedSpots}
@@ -471,6 +579,18 @@ export default function RangeLab() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
               Leitura
             </h2>
+            {/*
+              D-F3-34: o bloqueador fala do range dele carta a carta, e o painel de
+              categorias detalha em seguida. A queda do degrau 3 para o 4 da cascata
+              e este mesmo fato, visto do outro lado.
+            */}
+            {hasAnyRange && board.length >= 3 && (
+              <BlockerPanel
+                availability={blockerAvail}
+                report={blockerReport}
+                onComputeDelta={() => setDeltaRequested(true)}
+              />
+            )}
             {showRead && result && result.status === "ok" ? (
               <>
                 <CategoryPanel

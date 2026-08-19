@@ -315,6 +315,61 @@ export const categoryPalette = {
   },
 } as const;
 
+/**
+ * Paleta da aritmetica da decisao (Range Lab F3b, ADR-249 D-F3-33).
+ *
+ * TERCEIRA paleta a morar aqui fora, pelo mesmo motivo das duas de cima:
+ * `ColorKey` e derivado de `keyof tokens.color` e todo consumidor de
+ * `tokens.color[tom]` espera `{ bg, text, border }`. Foi assim que
+ * `tokens.color.delta` quebrou o `FilterChip` (licao #22). Repetir o erro
+ * conhecido custaria a mesma correcao.
+ *
+ * Tres funcoes porque sao tres eixos diferentes: o degrau da cascata (a barra
+ * desce, a cor escurece), o resultado do confronto e o veredito de balanco.
+ */
+const CASCADE_BG: Record<string, string> = {
+  nominal: 'bg-slate-600/50',
+  declared: 'bg-sky-700/55',
+  after_board_removal: 'bg-teal-700/55',
+  after_mutual_removal: 'bg-emerald-700/55',
+  loses_to_hero: 'bg-emerald-500/60',
+};
+
+/**
+ * `unknown` PRECISA de cor propria: ele existe justamente para nao se disfarcar
+ * de blefe, e cor igual a do blefe desfaria isso na tela (D-F3-24).
+ */
+const CONFRONT_BG: Record<string, string> = {
+  value: 'bg-red-700/55',
+  bluff: 'bg-emerald-600/55',
+  chop: 'bg-amber-500/50',
+  unknown: 'bg-zinc-600/45',
+};
+
+const BALANCE_BG: Record<string, string> = {
+  bluffs_missing: 'bg-emerald-600/55',
+  balanced: 'bg-sky-600/50',
+  bluffs_excess: 'bg-red-700/55',
+};
+
+/** Fundo neutro para id desconhecido: nunca `bg-undefined` na tela. */
+const DECISION_FALLBACK_BG = 'bg-slate-700/40';
+
+export const decisionPalette = {
+  /** Cor de fundo do degrau da cascata. */
+  cascade(id: string): string {
+    return CASCADE_BG[id] ?? DECISION_FALLBACK_BG;
+  },
+  /** Cor de fundo do balde de confronto (value / blefe / chop / desconhecido). */
+  confront(outcome: string): string {
+    return CONFRONT_BG[outcome] ?? DECISION_FALLBACK_BG;
+  },
+  /** Cor de fundo do veredito de balanco de blefes. */
+  balance(verdict: string): string {
+    return BALANCE_BG[verdict] ?? DECISION_FALLBACK_BG;
+  },
+} as const;
+
 export type Tokens = typeof tokens;
 export type SpaceKey = keyof Tokens['space'];
 export type FontKey = keyof Tokens['font'];

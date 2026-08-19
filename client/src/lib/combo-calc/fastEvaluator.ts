@@ -6,6 +6,18 @@
 // teste (decisao D4 do Range Lab) e o motor do popup. Os dois tem que produzir a
 // mesma ORDEM — ha teste de paridade com semente fixa cobrando isso.
 //
+// CONTRATO DE REENTRANCIA (ADR-249 D-F3-28) — leia antes de chamar daqui de fora.
+//
+// `loadBoard` guarda o bordo em ESTADO DE MODULO. Quem chama `evalWithBoard` tem
+// de chamar `loadBoard` no MESMO bloco sincrono: sem `await`, sem `setTimeout` e
+// sem ceder a thread no meio. Cedendo, outro cliente carrega o bordo dele e o seu
+// lote passa a medir maos contra um bordo que nao e o seu — e o sintoma e um
+// numero errado, nao um erro.
+//
+// Sao dois clientes hoje: `engine/run.ts` (que ja obedecia, e por isso o contrato
+// nao existia escrito) e `blockers.ts` (F3b). Codigo novo que precise ceder a
+// thread vai para o worker, e ai e mudanca de protocolo, nao de detalhe.
+//
 // Empacotamento do score:
 //   score = (categoria << 20) | (r1 << 16) | (r2 << 12) | (r3 << 8) | (r4 << 4) | r5
 // com `r` em INDICE de rank (0 = 2, 12 = A) e desempate ausente valendo 0. As 9

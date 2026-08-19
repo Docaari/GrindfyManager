@@ -1,0 +1,76 @@
+%% Range Lab F3b (ADR-249) — o contrafactual do bloqueador: river analitico
+%% contra fora do river sob botao (D-F3-13, D-F3-27, D-F3-28, D-F3-29).
+%%
+%% Ler junto de: Docs/architecture/decisions/249-range-lab-f3b-decisao.md
+%%
+%% O ponto do diagrama: NAO ha segunda corrida do motor. Os combos bloqueados ja
+%% vem em perVillainCombo com pairMass 0 (Refutacao 1), e a equity real ja vem em
+%% heroRangeEquity. O unico trabalho novo e a equity FICTICIA dos pares
+%% impossiveis — e so ela fica atras do botao fora do river.
+
+sequenceDiagram
+    actor User as Jogador
+    participant Page as RangeLab.tsx
+    participant Blk as blockers.ts
+    participant Conf as confront.ts
+    participant Fast as fastEvaluator.ts
+    participant Res as EngineResultOk
+
+    Note over Res: ja em memoria — a corrida do worker terminou
+
+    User->>Page: monta o spot (heroi = mao unica)
+    Page->>Blk: blockerAvailability(result)
+    alt perHeroCombo.length !== 1
+        Blk-->>Page: available false, reason hero_is_range, heroCombos N
+        Page-->>User: "seu range tem N combos; o bloqueador precisa de uma mao so"
+        Note over Page: F-5 / D-F3-30 — sem numero inventado sobre a carta mais frequente
+    else heroi e uma mao so
+        Blk-->>Page: available true, hero
+    end
+
+    Page->>Blk: analyzeBlockers(result, board, computeDelta)
+    Blk->>Res: perVillainCombo
+    Res-->>Blk: vivos (pairMass > 0) + bloqueados (pairMass = 0, equity null)
+    Note over Blk: a CONTAGEM sai daqui, sempre — nao custa corrida
+
+    Blk->>Conf: splitByConfrontation(hero, bloqueados da carta 1, board)
+    Conf->>Conf: confrontNow via evaluateHand (5 a 7 cartas)
+    Conf-->>Blk: value / blefe / chop removidos pela carta 1
+    Blk->>Conf: idem para a carta 2
+    Conf-->>Blk: value / blefe / chop removidos pela carta 2
+    Note over Blk: por carta e ETIQUETA, nao particao:<br/>o combo igual a mao do heroi conta nas duas.<br/>blockedMass e a UNIAO
+
+    alt modo Monte Carlo
+        Blk-->>Page: delta unavailable, reason monte_carlo_mode
+        Page-->>User: "troque para o modo exato para ver o efeito em pontos"
+        Note over Blk: D-F3-29 — eqReal tem meia-largura da ordem do proprio delta
+    else river (board.length === 5)
+        Note over Blk: 1 runout: analitico e barato -> sempre
+        Blk->>Fast: loadBoard(board 5 cartas)
+        Blk->>Fast: evalWithBoard(heroi)
+        loop cada combo bloqueado
+            Blk->>Fast: evalWithBoard(combo bloqueado)
+            Fast-->>Blk: score — o PAR e impossivel, cada mao de 7 e legal
+        end
+        Blk->>Res: heroRangeEquity
+        Res-->>Blk: equityReal (identidade algebrica, sem recalcular)
+        Blk->>Blk: eqCf = media ponderada sobre vivos + bloqueados
+        Blk-->>Page: delta ok, equityReal - equityCounterfactual
+    else fora do river e computeDelta false
+        Blk-->>Page: delta unavailable, reason not_requested
+        Page-->>User: botao "calcular efeito" (D-F3-13)
+        User->>Page: clica
+        Page->>Blk: analyzeBlockers(..., computeDelta true)
+        loop cada runout do baralho menos bordo menos as 2 cartas do heroi
+            Blk->>Fast: loadBoard(bordo + runout)
+            Note over Blk,Fast: loadBoard e estado de MODULO: a chamada e o lote de<br/>evalWithBoard ficam no MESMO bloco sincrono (D-F3-28).<br/>blockers.ts nao tem async interno
+            Blk->>Fast: evalWithBoard(heroi) — uma vez por runout
+            loop cada combo bloqueado que o runout nao come
+                Blk->>Fast: evalWithBoard(combo bloqueado)
+            end
+        end
+        Note over Blk: denominador POR COMBO: o par ficticio tira 3 cartas,<br/>nao 4 — C(46,2) = 1035 no flop, nunca os 990 de cost.ts
+        Blk-->>Page: delta ok + runoutsEnumerated
+    end
+
+    Page-->>User: "o seu As tira 6 combos de value e 2 de blefe: +2,3 pontos de equity"

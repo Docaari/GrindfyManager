@@ -1,0 +1,78 @@
+%% Range Lab F3b (ADR-249) — de onde cada numero dos tres paineis novos vem.
+%%
+%% Ler junto de: Docs/architecture/decisions/249-range-lab-f3b-decisao.md
+%%
+%% O ponto do diagrama: DUAS FONTES, nao uma. O que e local (pote, call, range
+%% declarado) nao espera a corrida; o que depende de confronto espera. O painel
+%% de MDF e o unico que responde antes de existir spot, e e por isso que a
+%% D-F3-34 nao o esconde atras do resultado.
+
+flowchart TB
+    subgraph entrada["Entrada da pagina — RangeLab.tsx"]
+        pot["potCurrent / callAmount<br/><i>BetInputs</i>"]
+        vr["villainRange<br/><i>RangeEntry[]</i>"]
+        bd["board<br/><i>3 a 5 cartas</i>"]
+        hr["heroRange<br/><i>RangeEntry[]</i>"]
+    end
+
+    engine["useRangeEngine -> worker<br/><i>EngineResult = ok | degraded</i>"]
+
+    subgraph resultado["EngineResultOk — NAO muda nesta frente"]
+        pvc["perVillainCombo<br/><i>inclui os BLOQUEADOS,<br/>com pairMass = 0 e equity null</i>"]
+        phc["perHeroCombo<br/><i>+ callThresholdIndex</i>"]
+        hre["heroRangeEquity"]
+    end
+
+    subgraph nucleo["Nucleo puro — sem React, sem window"]
+        mdf["mdf.ts<br/><i>defenseAlpha, mdf, bluffsNeeded</i><br/><b>nao importa ev.ts</b>"]
+        conf["confront.ts<br/><i>decisionBasis, splitByConfrontation</i>"]
+        casc["cascade.ts<br/><i>os cinco degraus</i>"]
+        blk["blockers.ts<br/><i>contrafactual por carta</i>"]
+        copy["uiRules.ts<br/><i>as frases PT-BR (D-F3-32)</i>"]
+    end
+
+    subgraph paineis["Componentes"]
+        mp["MdfPanel<br/><i>centro, abaixo do veredito</i>"]
+        cb["CascadeBar<br/><i>centro</i>"]
+        bp["BlockerPanel<br/><i>direita, acima das categorias</i>"]
+    end
+
+    ev["ev.ts requiredEquity<br/><i>B / (P + 2B) — do HEROI</i>"]
+    vp["VerdictPanel<br/><i>ja existe</i>"]
+
+    hr --> engine
+    vr --> engine
+    bd --> engine
+    pot --> engine
+    engine -->|"status ok"| resultado
+    engine -->|"status degraded"| casc
+
+    pot -->|"P = pot - call, B = call<br/>NAO passa pelo motor"| mdf
+    ev -.->|"aparece no MESMO cartao,<br/>nunca reusado como MDF (F-1)"| mp
+
+    bd --> conf
+    phc -->|"perHeroCombo.length === 1 ?"| conf
+    pvc -->|"vivos: pairMass > 0"| conf
+    conf -->|"value / blefe / chop / unknown"| mdf
+    mdf -->|"MdfOk + BluffBalance"| copy
+    phc -->|"rankBluffcatchers<br/>equity desc, desempate comboKey"| mdf
+
+    vr -->|"expandRangeV2 com dead VAZIO<br/>= degrau 2"| casc
+    bd -->|"boardDeadSet = degrau 3"| casc
+    pvc -->|"villainPairMass = degrau 4"| casc
+    conf -->|"degrau 5, base declarada"| casc
+
+    pvc -->|"bloqueados: pairMass = 0<br/>peso declarado intacto"| blk
+    hre -->|"equityReal, de graca"| blk
+    conf -->|"split dos removidos, por carta"| blk
+
+    mdf --> mp
+    copy --> mp
+    copy --> cb
+    copy --> bp
+    casc --> cb
+    blk --> bp
+    vp -.->|"e o numero que a cascata explica"| cb
+
+    casc -.->|"degrau 3 - degrau 4"| bp
+    blk -.->|"blockedMass — invariante:<br/>os dois tem que bater"| cb

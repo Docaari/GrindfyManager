@@ -7,6 +7,9 @@
 import type { Card, RangeEntry } from "./types";
 import { cardKey } from "./cards";
 import { clampFreq } from "./combos";
+import type { BlockerAvailability } from "./blockers";
+import type { CascadeStep, CascadeStepId, CascadeStepUnavailable } from "./cascade";
+import type { BluffBalance, BluffBalanceVerdict, MdfDegradedReason, MdfResult } from "./mdf";
 
 // ── RF-00.6: frequencia vinda do import ──────────────────────
 
@@ -131,4 +134,178 @@ export function describeSpotReadiness(draft: {
   if (!draft.entries.some(entryHasWeight)) return block("range_weightless");
 
   return { ready: true, reason: null };
+}
+
+// ── F3b: as frases da aritmetica da decisao (D-F3-16 + D-F3-32) ──
+//
+// A D-F3-16 e requisito de aceite: "numero nunca aparece solto; sempre em frase,
+// com sujeito, com a consequencia escrita". Requisito de aceite que so existe
+// dentro de JSX so se testa cacando texto no DOM — o anti-padrao da licao #2. As
+// frases nascem AQUI, no modulo que ja e desse genero no Range Lab
+// (`describeSpotReadiness`), e nao num modulo de copy novo: um segundo lugar para
+// a mesma coisa e como a divergencia entra.
+//
+// Tres porcentagens parecidas dividem o mesmo cartao (a equity que VOCE precisa,
+// o quanto o blefe DELE precisa funcionar, e o quanto voce precisa defender).
+// Cada frase carrega o sujeito junto do numero — e a unica coisa que impede o
+// jogador de somar duas delas com os olhos.
+
+/** Formata fracao 0..1 como porcentagem PT-BR com uma casa. */
+function formatPercentPtBr(fraction: number): string {
+  return `${(fraction * 100).toFixed(1).replace(".", ",")}%`;
+}
+
+/** Massa de combos: inteiro sai sem casa decimal, fracao sai com uma. */
+function formatMassPtBr(mass: number): string {
+  return Number.isInteger(mass) ? String(mass) : mass.toFixed(1).replace(".", ",");
+}
+
+export type MdfCopy =
+  | {
+      status: "ok";
+      headline: string;
+      heroEquityLine: string;
+      defenseLine: string;
+      mdfLine: string;
+      /** `null` enquanto nao houver corrida: as tres frases acima nao dependem dela. */
+      balanceLine: string | null;
+      action: string;
+      formulaTooltip: string;
+    }
+  | {
+      status: "degraded";
+      reason: MdfDegradedReason;
+      headline: string;
+      action: string;
+      formulaTooltip: string;
+    };
+
+/** A formula vive AQUI e em lugar nenhum mais — a face do cartao leva frase. */
+const MDF_FORMULA_TOOLTIP =
+  "Alpha de defesa = B / (P + B), com P sendo o pote antes da aposta e B a aposta dele. " +
+  "O MDF e o complemento: o que sobra depois de tirar o alpha.";
+
+const MDF_ACTION_BY_VERDICT: Record<BluffBalanceVerdict, string> = {
+  bluffs_missing: "Ele blefa de menos aqui: da pra foldar mais contra esta aposta.",
+  balanced: "Ele esta equilibrado: pague com os bluffcatchers de topo e solte o resto.",
+  bluffs_excess: "Ele blefa demais aqui: pague mais largo do que a leitura padrao.",
+};
+
+const MDF_ACTION_WITHOUT_BALANCE =
+  "Monte o range dele para saber se os blefes fecham a conta desta aposta.";
+
+/**
+ * `P <= 0` (ou pote/aposta nao finitos) vira frase de ESTADO, sem numero nenhum.
+ * Zero seria pior que vazio, e um `NaN` que passa pinta um cartao inteiro de
+ * tracinhos sem explicacao (criterio 3, D-F3-23).
+ */
+export function describeMdf(input: {
+  mdf: MdfResult;
+  requiredEquity: number;
+  balance: BluffBalance | null;
+}): MdfCopy {
+  const { mdf, requiredEquity: heroAlpha, balance } = input;
+
+  if (mdf.status !== "ok") {
+    return {
+      status: "degraded",
+      reason: mdf.reason,
+      headline:
+        "Confira o pote e a aposta: o pote antes da aposta precisa ser maior que zero " +
+        "para haver o que defender.",
+      action: "Ajuste os valores e o cartao volta.",
+      formulaTooltip: MDF_FORMULA_TOOLTIP,
+    };
+  }
+
+  const balanceOk = balance !== null && balance.status === "ok" ? balance : null;
+
+  let balanceLine: string | null = null;
+  if (balanceOk) {
+    const value = formatMassPtBr(balanceOk.valueMass);
+    const needed = formatMassPtBr(balanceOk.bluffsNeeded);
+    const gap = formatMassPtBr(Math.abs(balanceOk.bluffGap));
+    const fecho =
+      balanceOk.verdict === "bluffs_missing"
+        ? `faltam ${gap} de blefe para a aposta se sustentar.`
+        : balanceOk.verdict === "bluffs_excess"
+          ? `ele passa disso em ${gap}.`
+          : "e a conta fecha exatamente.";
+    balanceLine = `Ele aposta ${value} de value e precisaria de ${needed} de blefe: ${fecho}`;
+  }
+
+  return {
+    status: "ok",
+    headline: "Quanto o blefe dele precisa funcionar",
+    heroEquityLine: `Para pagar, a sua mao precisa de ${formatPercentPtBr(heroAlpha)} de equity.`,
+    defenseLine: `O blefe dele so se paga se funcionar ${formatPercentPtBr(mdf.defenseAlpha)} das vezes.`,
+    mdfLine: `Para o blefe dele nao sair de graca, a sua defesa tem de cobrir ${formatPercentPtBr(mdf.mdf)} da massa.`,
+    balanceLine,
+    action: balanceOk ? MDF_ACTION_BY_VERDICT[balanceOk.verdict] : MDF_ACTION_WITHOUT_BALANCE,
+    formulaTooltip: MDF_FORMULA_TOOLTIP,
+  };
+}
+
+// ── rotulos da cascata ───────────────────────────────────────
+
+const CASCADE_LABEL: Record<CascadeStepId, string> = {
+  nominal: "Todos os combos do baralho",
+  declared: "O range que voce declarou",
+  after_board_removal: "O que sobrou depois do bordo",
+  after_mutual_removal: "O que sobrou depois das suas cartas",
+  loses_to_hero: "O que perde para voce",
+};
+
+const CASCADE_UNAVAILABLE_NOTE: Record<CascadeStepUnavailable, string> = {
+  no_result:
+    "Ainda nao ha corrida: monte o spot para ver quanto as suas cartas tiram do range dele.",
+  engine_degraded:
+    "A corrida nao produziu numero, entao este degrau fica em branco — e nao vazio.",
+};
+
+/**
+ * Fora do river (ou com o heroi como range) nao existe "combo que perde", existe
+ * combo com equity: o rotulo passa a ser `massa efetiva` (F-4). Foi assim que o
+ * `breakevenFrequency` da F0 anunciou 0,42 contra 0,20 real (D11).
+ */
+export function describeCascadeStep(step: CascadeStep): { label: string; note: string | null } {
+  if (step.status !== "ok") {
+    return { label: CASCADE_LABEL[step.id], note: CASCADE_UNAVAILABLE_NOTE[step.reason] };
+  }
+
+  if (step.id === "loses_to_hero") {
+    return step.basis === "discrete"
+      ? {
+          label: CASCADE_LABEL.loses_to_hero,
+          note: "Contagem de maos dele que a sua bate no showdown; o chop entra pela metade.",
+        }
+      : {
+          label: CASCADE_LABEL.loses_to_hero,
+          note: "Fora do river isto e massa efetiva, e nao contagem de maos.",
+        };
+  }
+
+  return { label: CASCADE_LABEL[step.id], note: null };
+}
+
+// ── o motivo do bloqueador indisponivel ──────────────────────
+
+/**
+ * Frase especifica em vez do generico "indisponivel", que faz o jogador achar que
+ * quebrou. `hero_is_range` cita a contagem; as outras duas nao inventam numero
+ * nenhum, porque nao ha contagem de onde tirar (D-F3-30, D-F3-38).
+ */
+export function describeBlockerUnavailable(
+  availability: Extract<BlockerAvailability, { available: false }>,
+): string {
+  if (availability.reason === "hero_is_range") {
+    return (
+      `O seu range tem ${availability.heroCombos} combos, e o efeito de bloqueio precisa ` +
+      "de uma mao so. Escolha uma mao para ver o que ela tira do range dele."
+    );
+  }
+  if (availability.reason === "engine_degraded") {
+    return "A corrida nao produziu numero, entao o efeito das suas cartas fica indisponivel.";
+  }
+  return "Monte o spot: sem corrida nao da para dizer o que as suas cartas tiram do range dele.";
 }
