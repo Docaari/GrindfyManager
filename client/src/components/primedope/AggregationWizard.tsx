@@ -16,7 +16,7 @@
 
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Info, Loader2, Plus, Trash2 } from "lucide-react";
+import { Info, Loader2, Plus, Trash2, Download } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,11 +37,28 @@ interface AggGroup {
   countPerWeek: number;
   count: number;
   isPKO: boolean;
-  source: "historical" | "default";
+  source: "historical" | "default" | "library";
   lowSample: boolean;
+  // Importacao "Grade e ROI" (biblioteca de torneios) — rastro do dado cru.
+  plannedId?: string;
+  totalBuyIn?: number;
+  siteFeePct?: number;
+  site?: string | null;
+  tournamentName?: string | null;
+  occurrencesPerWeek?: number;
+  days?: number[];
+  libRoiPct?: number | null;
+  libVolume?: number;
+  matchLevel?: string;
+  matchScopeLabel?: string | null;
+  siteSampleMissing?: boolean;
   placesPaidPct?: number; // ADR-215 D6 — ITM% (decimal, default 0.15)
   rakePct?: number; // ADR-216 — rake (decimal, default 0)
 }
+
+// Espelha o cap do backend (server/routes/primedope.ts). Passar disso derrubava
+// a simulacao com "Payload invalido" sem explicar o motivo.
+const MAX_SIM_GROUPS = 80;
 
 const DEFAULT_ITM = 0.15;
 const DEFAULT_RAKE = 0;
@@ -74,6 +91,16 @@ interface AggregationWizardProps {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const intFmt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+
+const DAY_LABELS: Record<number, string> = {
+  0: "dom",
+  1: "seg",
+  2: "ter",
+  3: "qua",
+  4: "qui",
+  5: "sex",
+  6: "sab",
+};
 
 function InfoTip({ text }: { text: string }) {
   return (
@@ -152,6 +179,17 @@ export default function AggregationWizard({
   const [editedGroups, setEditedGroups] = useState<AggGroup[] | null>(null);
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  // Importacao da grade + ROI da biblioteca (1 linha por torneio planejado).
+  const [imported, setImported] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importMeta, setImportMeta] = useState<{
+    lineCount: number;
+    plannedCount: number;
+    matchedCount: number;
+    activeDays: number[];
+    skippedInactive: number;
+  } | null>(null);
 
   const { data, isLoading } = useQuery<AggResponse>({
     queryKey: ["buckets-aggregate", profile, weeks],
@@ -164,11 +202,94 @@ export default function AggregationWizard({
   });
 
   useEffect(() => {
+    // Import da grade vence a agregacao por bucket — nao clobbera as linhas
+    // importadas quando a query de buckets responde.
+    if (imported) return;
     if (data?.groups) {
       setEditedGroups(data.groups.map((g) => ({ ...g })));
       setRawInputs({});
     }
-  }, [data]);
+  }, [data, imported]);
+
+  const importGradeAndRoi = async (opts?: { silent?: boolean }) => {
+    setImporting(true);
+    if (!opts?.silent) setImportError(null);
+    try {
+      const res: any = await apiRequest(
+        "GET",
+        `/api/variance/grade-roi?profileLetter=${profile}&weeks=${weeks}`,
+      );
+      const rows: any[] = Array.isArray(res?.rows) ? res.rows : [];
+      if (rows.length === 0) {
+        const skipped = Number(res?.meta?.skippedInactive) || 0;
+        setImportError(
+          skipped > 0
+            ? `Nenhum dia da semana esta com o perfil ${profile} ativo — ${skipped} torneio(s) do perfil ficaram de fora. Ative o perfil ${profile} em algum dia na aba Grade.`
+            : `Nenhum torneio na grade do perfil ${profile}.`,
+        );
+        setEditedGroups([]);
+        setImportMeta(null);
+        setImporting(false);
+        return;
+      }
+      setEditedGroups(
+        rows.map((r) => ({
+          name: r.name,
+          tier: r.tier,
+          type: r.type,
+          buyIn: Number(r.buyIn) || 0,
+          field: Number(r.field) || 500,
+          roi: Number(r.roi) || 0,
+          countPerWeek: Number(r.countPerWeek) || 1,
+          count: Number(r.count) || weeks,
+          isPKO: !!r.isPKO,
+          source: r.source === "library" ? "library" : "default",
+          lowSample: !!r.lowSample,
+          placesPaidPct: Number(r.placesPaidPct) || DEFAULT_ITM,
+          rakePct: Number(r.rakePct) || DEFAULT_RAKE,
+          plannedId: r.plannedId,
+          totalBuyIn: Number(r.totalBuyIn) || undefined,
+          siteFeePct: Number(r.siteFeePct) || undefined,
+          site: r.site ?? null,
+          tournamentName: r.tournamentName ?? null,
+          occurrencesPerWeek: Number(r.occurrencesPerWeek) || 1,
+          days: Array.isArray(r.days) ? r.days : [],
+          libRoiPct: r.libRoiPct ?? null,
+          libVolume: Number(r.libVolume) || 0,
+          matchLevel: r.matchLevel,
+          matchScopeLabel: r.matchScopeLabel ?? null,
+          siteSampleMissing: !!r.siteSampleMissing,
+        })),
+      );
+      setImportMeta({
+        lineCount: Number(res?.meta?.lineCount) || rows.length,
+        plannedCount: Number(res?.meta?.plannedCount) || rows.length,
+        matchedCount: Number(res?.meta?.matchedCount) || 0,
+        activeDays: Array.isArray(res?.meta?.activeDays)
+          ? res.meta.activeDays
+          : [],
+        skippedInactive: Number(res?.meta?.skippedInactive) || 0,
+      });
+      setImportError(null);
+      setRawInputs({});
+      setImported(true);
+    } catch (err: any) {
+      console.error("[AggregationWizard] importGradeAndRoi falhou", err);
+      setImportError(
+        err?.message ?? "Nao foi possivel importar a grade agora.",
+      );
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // Trocar perfil/periodo depois de importar re-puxa a grade correspondente
+  // (senao a tabela ficaria mostrando a grade do perfil anterior).
+  useEffect(() => {
+    if (!imported) return;
+    void importGradeAndRoi({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, weeks]);
 
   const groups = editedGroups ?? data?.groups ?? [];
 
@@ -231,6 +352,13 @@ export default function AggregationWizard({
   const totalCount = groups.reduce((s, g) => s + (Number(g.count) || 0), 0);
   const totalInvest = groups.reduce(
     (s, g) => s + (Number(g.buyIn) || 0) * (Number(g.count) || 0),
+    0,
+  );
+  // EV esperado da grade = soma de (investimento da linha x ROI da linha).
+  const totalEv = groups.reduce(
+    (s, g) =>
+      s +
+      (Number(g.buyIn) || 0) * (Number(g.count) || 0) * (Number(g.roi) || 0),
     0,
   );
 
@@ -444,6 +572,57 @@ export default function AggregationWizard({
           </div>
         </div>
 
+        {/* Importar Grade e ROI — 1 linha por torneio planejado, rotulado e
+            com o ROI do jogador vindo da Biblioteca de Torneios. */}
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/20 p-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="import-grade-roi-button"
+            disabled={importing}
+            onClick={() => void importGradeAndRoi()}
+          >
+            {importing ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-1 h-4 w-4" />
+            )}
+            Importar Grade e ROI
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Puxa os torneios do perfil {profile} nos dias em que ele esta ativo
+            (ignora dias OFF e dias de outro perfil), rotula pelo padrao da
+            Biblioteca, traz seu ROI naquele tipo de torneio — limitado a faixa
+            realista de -20% a +40% — e o rake padrao de cada site.
+          </p>
+          {importMeta ? (
+            <span
+              data-testid="import-grade-meta"
+              className="text-xs text-muted-foreground"
+            >
+              {importMeta.lineCount} linhas · {importMeta.plannedCount} torneios
+              na semana · {importMeta.matchedCount} com amostra do proprio site
+              {importMeta.activeDays.length > 0
+                ? ` · dias com perfil ${profile} ativo: ${importMeta.activeDays
+                    .map((d) => DAY_LABELS[d] ?? d)
+                    .join(", ")}`
+                : ""}
+              {importMeta.skippedInactive > 0
+                ? ` · ${importMeta.skippedInactive} fora (dia OFF ou de outro perfil)`
+                : ""}
+            </span>
+          ) : null}
+          {importError ? (
+            <span
+              data-testid="import-grade-error"
+              className="text-xs text-red-500"
+            >
+              {importError}
+            </span>
+          ) : null}
+        </div>
+
         {/* Loading state */}
         {isLoading && mode === "period" ? (
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
@@ -488,6 +667,23 @@ export default function AggregationWizard({
                 Investimento total:{" "}
                 <span className="font-semibold text-foreground">
                   ${intFmt.format(Math.round(totalInvest))}
+                </span>
+              </span>
+              <span className="text-muted-foreground">
+                EV esperado:{" "}
+                <span
+                  data-testid="grade-ev-total"
+                  className={cn(
+                    "font-semibold",
+                    totalEv > 0
+                      ? "text-emerald-500"
+                      : totalEv < 0
+                        ? "text-red-500"
+                        : "text-foreground",
+                  )}
+                >
+                  {totalEv < 0 ? "-" : ""}$
+                  {intFmt.format(Math.round(Math.abs(totalEv)))}
                 </span>
               </span>
             </div>
@@ -571,11 +767,20 @@ export default function AggregationWizard({
                             }
                             className={cn(inputBase, "w-full min-w-[120px]")}
                           />
-                          {g.isPKO ? (
-                            <span className="mt-0.5 inline-block text-[10px] text-muted-foreground">
-                              PKO
-                            </span>
-                          ) : null}
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground">
+                            {g.isPKO ? <span>PKO</span> : null}
+                            {g.tournamentName ? <span>{g.tournamentName}</span> : null}
+                            {g.occurrencesPerWeek && g.occurrencesPerWeek > 0 ? (
+                              <span data-testid={`row-frequency-${i}`}>
+                                {g.occurrencesPerWeek}x/semana
+                                {g.days && g.days.length > 0
+                                  ? ` · ${g.days
+                                      .map((d) => DAY_LABELS[d] ?? d)
+                                      .join(", ")}`
+                                  : ""}
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="px-3 py-2.5 text-right">
                           <div className="relative inline-block">
@@ -600,6 +805,16 @@ export default function AggregationWizard({
                               )}
                             />
                           </div>
+                          {g.totalBuyIn ? (
+                            <div
+                              data-testid={`buyin-total-hint-${i}`}
+                              className="mt-0.5 text-[10px] text-muted-foreground"
+                              title="Voce paga o buy-in total; a coluna mostra so a parte que vai ao prize pool. A diferenca e a taxa do site, aplicada na coluna Rake."
+                            >
+                              total ${g.totalBuyIn}
+                              {g.siteFeePct ? ` · taxa ${g.siteFeePct}%` : ""}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-3 py-2.5 text-right">
                           <div className="relative inline-block">
@@ -703,6 +918,36 @@ export default function AggregationWizard({
                               {roiPctDisplay}
                             </span>
                           </div>
+                          {g.matchLevel === "none" ? (
+                            <div
+                              data-testid={`roi-library-hint-${i}`}
+                              className="mt-0.5 text-[10px] text-amber-500"
+                              title="A Biblioteca nao tem nenhum torneio parecido. O ROI e um ponto de partida, nao um dado seu."
+                            >
+                              sem amostra na biblioteca · ROI padrao 15%
+                            </div>
+                          ) : g.libRoiPct !== null && g.libRoiPct !== undefined ? (
+                            <div
+                              data-testid={`roi-library-hint-${i}`}
+                              className={cn(
+                                "mt-0.5 text-[10px]",
+                                g.siteSampleMissing
+                                  ? "text-amber-500/80"
+                                  : "text-muted-foreground",
+                              )}
+                              title={
+                                g.siteSampleMissing
+                                  ? "A Biblioteca nao tem torneios desse site nessa faixa. O ROI vem da sua media no mesmo tipo e faixa de buy-in, somando todos os sites."
+                                  : "ROI e volume que constam na Biblioteca de Torneios para esse tipo de torneio (valor cru, sem o limite de -20%/+40%)"
+                              }
+                            >
+                              {g.siteSampleMissing
+                                ? `sem amostra${g.site ? ` de ${g.site}` : ""} · sua media em ${g.matchScopeLabel}: `
+                                : "biblioteca: "}
+                              {g.libRoiPct.toFixed(1)}% ·{" "}
+                              {intFmt.format(Number(g.libVolume) || 0)} torneios
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-3 py-2.5 text-right">
                           <input
@@ -724,7 +969,24 @@ export default function AggregationWizard({
                           />
                         </td>
                         <td className="px-3 py-2.5 text-center">
-                          {g.source === "historical" ? (
+                          {g.source === "library" ? (
+                            <span
+                              data-testid={`badge-lib-${i}`}
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                                g.siteSampleMissing
+                                  ? "bg-amber-500/15 text-amber-500"
+                                  : "bg-emerald-500/15 text-emerald-500",
+                              )}
+                              title={
+                                g.siteSampleMissing
+                                  ? "Aproximacao: sua media no mesmo tipo/faixa, sem amostra desse site"
+                                  : "ROI vindo da Biblioteca de Torneios (seu historico real)"
+                              }
+                            >
+                              {g.siteSampleMissing ? "aprox" : "lib"}
+                            </span>
+                          ) : g.source === "historical" ? (
                             <span
                               data-testid={`badge-hist-${i}`}
                               className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-medium text-blue-500"
@@ -785,11 +1047,18 @@ export default function AggregationWizard({
 
             <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
               <p className="text-xs text-muted-foreground">
-                Edicoes ficam ativas so nesta sessao — nao alteram o historico.
+                {groups.length > MAX_SIM_GROUPS
+                  ? `${groups.length} linhas — a simulacao aceita ate ${MAX_SIM_GROUPS}. Junte ou remova linhas.`
+                  : "Edicoes ficam ativas so nesta sessao — nao alteram o historico."}
               </p>
               <Button
                 data-testid="simulate-button"
-                disabled={groups.length === 0}
+                disabled={groups.length === 0 || groups.length > MAX_SIM_GROUPS}
+                title={
+                  groups.length > MAX_SIM_GROUPS
+                    ? `A simulacao aceita ate ${MAX_SIM_GROUPS} linhas. Remova ou junte linhas antes de simular.`
+                    : undefined
+                }
                 onClick={() => {
                   if (onRun && groups.length > 0) {
                     onRun({

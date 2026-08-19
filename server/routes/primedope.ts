@@ -59,8 +59,28 @@ const groupSchema = z.object({
   rakePct: z.number().min(0).max(0.5).optional(),
 });
 
+// Cap de grupos: a calculadora passou a mandar UMA LINHA POR TORNEIO da grade
+// (Sprint grade-roi), nao mais ~6 buckets agregados. Uma grade real de perfil
+// A da ~44 linhas; o cap antigo de 20 derrubava a simulacao com "Payload
+// invalido". Custo medido com 44 grupos / 2664 torneios / 10k simulacoes:
+// ~550ms — o driver de custo e o TOTAL de torneios, nao o numero de grupos,
+// e esse total tem guarda propria logo abaixo.
+const MAX_GROUPS = 80;
+
+// Teto de trabalho por requisicao: sorteios ~= totalEntradas x simulacoes.
+// 200k entradas ja e ~75x uma grade anual real; existe so para impedir que um
+// payload absurdo prenda o event loop.
+const MAX_TOTAL_ENTRIES = 200000;
+
 const varianceSimulateBodySchema = z.object({
-  groups: z.array(groupSchema).min(1).max(20),
+  groups: z
+    .array(groupSchema)
+    .min(1)
+    .max(MAX_GROUPS)
+    .refine(
+      (gs) => gs.reduce((sum, g) => sum + g.count, 0) <= MAX_TOTAL_ENTRIES,
+      { message: `Total de torneios acima do limite (${MAX_TOTAL_ENTRIES}).` },
+    ),
   weeks: z.number().int().refine((v) => [1, 4, 12, 52].includes(v), {
     message: "weeks deve ser 1, 4, 12 ou 52",
   }),

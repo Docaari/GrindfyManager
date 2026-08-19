@@ -656,7 +656,7 @@ export interface IStorage {
   getAnalyticsByDayOfWeek(userId: string, period?: string, filters?: any[]): Promise<any[]>;
 
   // Tournament Library operations
-  getTournamentLibrary(userId: string, period?: string, filters?: any): Promise<any[]>;
+  getTournamentLibrary(userId: string, period?: string, filters?: any, recipe?: any, options?: { includeBelowFloor?: boolean }): Promise<any[]>;
 
   // Planned tournament operations
   getPlannedTournaments(userId: string, dayOfWeek?: number): Promise<PlannedTournament[]>;
@@ -1253,6 +1253,7 @@ export interface IStorage {
     userId: string;
     profileLetter: string;
   }): Promise<any[]>;
+  listProfileStates(userId: string): Promise<any[]>;
   listPlannedTournamentsForDayDetail(input: {
     userId: string;
     profileLetter: string;
@@ -3673,7 +3674,14 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     });
   }
 
-  async getTournamentLibrary(userId: string, period: string = "all", filters: any = {}, recipe: GroupDim[] = DEFAULT_RECIPE): Promise<any[]> {
+  /**
+   * @param options.includeBelowFloor  ignora o piso de EXIBICAO (FAMILY_GROUP_FLOOR).
+   *   O piso existe para a tela nao virar uma lista de familias de 2 torneios;
+   *   quem usa a biblioteca como FONTE DE ROI (calculadora de variancia) quer a
+   *   amostra inteira — esconder familia pequena fazia o site parecer "sem
+   *   amostra" e jogava o ROI para uma media cross-site.
+   */
+  async getTournamentLibrary(userId: string, period: string = "all", filters: any = {}, recipe: GroupDim[] = DEFAULT_RECIPE, options: { includeBelowFloor?: boolean } = {}): Promise<any[]> {
     // Base condition - always filter by user
     const baseConditions = [
       eq(tournaments.userId, userId),
@@ -3799,6 +3807,10 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
     // floor, mostra todas (o badge lowConfidence ja sinaliza "amostra baixa").
     // Alto volume nao e afetado (tem familias >= floor; as pequenas seguem ocultas
     // como ruido, igual a Fase 1).
+    if (options.includeBelowFloor) {
+      return mappedGroups;
+    }
+
     const aboveFloor = mappedGroups.filter((fam: any) => fam.volume >= FAMILY_GROUP_FLOOR);
     const libraryGroups = aboveFloor.length > 0 ? aboveFloor : mappedGroups;
 
@@ -13886,6 +13898,7 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
               site,
               time,
               type,
+              speed,
               name,
               buy_in AS "buyIn",
               is_active AS "isActive"
@@ -13899,6 +13912,29 @@ async getAnalyticsBySpeed(userId: string, period = "30d", filters: any = {}): Pr
       return raw ?? [];
     } catch (err) {
       console.error("[storage] listPlannedTournamentsByProfile failed", err);
+      return [];
+    }
+  }
+
+  /**
+   * Estado de perfil por dia da semana (qual perfil esta ativo em cada dia, ou
+   * "OFF"). A grade so exibe os torneios do perfil ativo do dia — quem consome
+   * planned_tournaments direto PRECISA cruzar com isto, senao mostra torneio
+   * que o jogador nao ve na tela.
+   */
+  async listProfileStates(userId: string): Promise<any[]> {
+    try {
+      const rows = await db
+        .select({
+          dayOfWeek: profileStates.dayOfWeek,
+          activeProfile: profileStates.activeProfile,
+        })
+        .from(profileStates)
+        .where(eq(profileStates.userId, userId))
+        .orderBy(profileStates.dayOfWeek);
+      return rows ?? [];
+    } catch (err) {
+      console.error("[storage] listProfileStates failed", err);
       return [];
     }
   }
