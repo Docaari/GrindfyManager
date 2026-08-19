@@ -6,6 +6,26 @@
 tela decide grade e stake do jogador. Nao rodar nenhum estagio abaixo de `high`.
 **Parado em:** 2026-08-19, por decisao do founder, ao fim do estagio 1.
 
+> ## BLOQUEIO — ler antes de retomar
+>
+> Ainda em 2026-08-19, o founder achou um bug na **Biblioteca de Torneios**: o
+> filtro "Ultimos 6M" exibe so 2 dos 7 sites que existem na janela. Provado no
+> dado real: sao dois bugs empilhados (a tela manda `period='180d'`, que o
+> storage nao conhece e converte em 30 dias; depois o piso de exibicao apaga os
+> sites que sobraram).
+>
+> **A Calculadora consome a Biblioteca como fonte de ROI.** Enquanto a
+> Biblioteca mentir, o ROI de cada linha desta tela herda o erro — e o gate de
+> prova no dado real nao pegaria, porque o prototipo pede `period='all'`.
+>
+> **Decisao:** T2 fica parado ate a Biblioteca ser auditada. A ordem e
+> `Biblioteca (varredura -> correcao) -> Calculadora T2`. Detalhes, evidencia e
+> escopo da varredura em **`Docs/specs/biblioteca-torneios-auditoria.md`**.
+>
+> Consequencia direta no ADR-252: **D-1 (fonte do ROI / piso de exibicao) nao
+> pode ser decidida aqui** — ela depende do que a Biblioteca decidir sobre o
+> proprio piso. O architect precisa dessa resposta antes.
+
 ---
 
 ## Placar do pipeline
