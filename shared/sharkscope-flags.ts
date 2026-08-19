@@ -26,12 +26,19 @@ export interface SharkscopeFlagSignals {
    * Tipo primario sugerido pelas bandeiras, ou null quando as bandeiras nao
    * dizem nada sobre tipo (caller mantem o que veio do nome).
    * Precedencia: Satellite > Mystery > PKO > Add-on.
+   * `allowsRebuy` NAO entra aqui (ADR-251): permitir rebuy e atributo do
+   * torneio, nao a categoria dele.
    */
   primaryType: TournamentPrimaryType | null;
   /** `Multi-Entry` / `Re-Entry` / `Unlimited-Re-Entry`. */
   allowsReentry: boolean;
-  /** `Rebuy` / `Add-On`. */
+  /**
+   * `Add-On` de verdade — a compra unica do intervalo. NAO inclui rebuy:
+   * sao estruturas diferentes e independentes (ADR-251).
+   */
   allowsAddOn: boolean;
+  /** `Rebuy` — recompra de stack durante o periodo de rebuy. */
+  allowsRebuy: boolean;
   /** `Deep-Stack`. */
   deepStack: boolean;
   /** `Multi-Day` (day 1 + day 2). */
@@ -79,7 +86,11 @@ const REENTRY_KEYS = new Set([
   "unlimitedreentry",
   "multientries",
 ]);
-const ADDON_KEYS = new Set(["rebuy", "rebuys", "addon", "addons", "rebuyaddon"]);
+// ADR-251: `rebuy` saiu daqui. A bandeira Rebuy ligava allowsAddOn e o torneio
+// virava tipo "Add-on" — 4307 linhas do historico real classificadas errado,
+// nenhuma delas com add-on de verdade.
+const ADDON_KEYS = new Set(["addon", "addons", "rebuyaddon"]);
+const REBUY_KEYS = new Set(["rebuy", "rebuys", "rebuyaddon"]);
 const DEEP_KEYS = new Set(["deepstack", "deep", "superdeep", "hyperdeep"]);
 const MULTIDAY_KEYS = new Set(["multiday", "twoday", "day1", "day2"]);
 const SHOOTOUT_KEYS = new Set(["shootout"]);
@@ -106,6 +117,7 @@ export function parseSharkscopeFlags(raw: unknown): SharkscopeFlagSignals {
     primaryType: null,
     allowsReentry: false,
     allowsAddOn: false,
+    allowsRebuy: false,
     deepStack: false,
     isMultiDay: false,
     maxPlayersPerTable: null,
@@ -139,6 +151,7 @@ export function parseSharkscopeFlags(raw: unknown): SharkscopeFlagSignals {
     if (BOUNTY_KEYS.has(key)) out.isBounty = true;
     if (REENTRY_KEYS.has(key)) out.allowsReentry = true;
     if (ADDON_KEYS.has(key)) out.allowsAddOn = true;
+    if (REBUY_KEYS.has(key)) out.allowsRebuy = true;
     if (DEEP_KEYS.has(key)) out.deepStack = true;
     if (MULTIDAY_KEYS.has(key)) out.isMultiDay = true;
     if (SHOOTOUT_KEYS.has(key)) out.isShootout = true;

@@ -332,6 +332,9 @@ export const tournaments = pgTable("tournaments", {
   addOnTaken: boolean("addon_taken").default(false),
   allowsReentry: boolean("allows_reentry").default(false),
   maxReentries: integer("max_reentries"),
+  // Rebuy (ADR-251 / migration 0101). Atributo proprio: antes a bandeira Rebuy
+  // entrava em allowsAddOn e promovia o torneio ao tipo "Add-on".
+  allowsRebuy: boolean("allows_rebuy").default(false),
   // Sprint 1 (ADR-031): modificadores ortogonais
   isFlight: boolean("is_flight").default(false),
   isLive: boolean("is_live").default(false),

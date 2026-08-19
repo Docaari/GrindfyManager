@@ -73,7 +73,9 @@ describe("parseSharkScopeFormat — contrato ADR-243", () => {
 
     const [sat] = await PokerCSVParser.parseCSV(csv(ROW_SAT), "USER-T", {});
     expect(sat.category).toBe("Satellite");
-    expect(sat.allowsAddOn).toBe(true); // Rebuy
+    // ADR-251: a bandeira Rebuy alimenta allowsRebuy, nao allowsAddOn.
+    expect(sat.allowsRebuy).toBe(true);
+    expect(sat.allowsAddOn).toBeFalsy();
     expect(sat.speed).toBe("Hyper"); // Super Turbo -> Hyper
     expect(sat.reentries).toBe(1);
   });

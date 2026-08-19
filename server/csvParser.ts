@@ -30,8 +30,9 @@ export interface ParsedTournament {
   rake?: number; // Added rake
   convertedToUSD?: boolean; // Flag to indicate if currency conversion happened
   bountyPrize?: number | null; // Bounty/knockout prize (SharkScope PKO tournaments)
-  // Add-on + Re-entry (ADR-014)
+  // Add-on + Re-entry (ADR-014) + Rebuy (ADR-251)
   allowsAddOn?: boolean;
+  allowsRebuy?: boolean;
   addOnCost?: number | null;
   allowsReentry?: boolean;
   maxReentries?: number | null;
@@ -1402,6 +1403,7 @@ export class PokerCSVParser {
       fxSource: convertedToUSD ? (this._fxSourceHint ?? 'import_rates') : null,
       sourceTimezone,
       allowsAddOn: flagSignals.allowsAddOn || undefined,
+      allowsRebuy: flagSignals.allowsRebuy || undefined,
       allowsReentry: flagSignals.allowsReentry || undefined,
     } as ParsedTournament;
   }

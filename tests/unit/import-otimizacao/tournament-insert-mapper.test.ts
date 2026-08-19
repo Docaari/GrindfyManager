@@ -91,13 +91,26 @@ describe("buildTournamentInsertRow", () => {
     expect(row.type).toBe("Satellite");
   });
 
-  it("Rebuy/Multi-Entry das bandeiras chegam em allowsAddOn/allowsReentry", () => {
+  // ADR-251: Rebuy alimenta allowsRebuy, nao allowsAddOn — e sem add-on nao ha
+  // addOnCost. A assercao antiga esperava allowsAddOn=true e addOnCost=stake.
+  it("Rebuy/Multi-Entry das bandeiras chegam em allowsRebuy/allowsReentry", () => {
     const row = buildTournamentInsertRow(
       { ...base, name: "BoM: 25 Cavalry Charge", category: "Vanilla", flags: ["Rebuy", "Multi-Entry"] },
       "U",
     );
-    expect(row.allowsAddOn).toBe(true);
+    expect(row.allowsRebuy).toBe(true);
+    expect(row.allowsAddOn).toBeFalsy();
     expect(row.allowsReentry).toBe(true);
+    expect(row.addOnCost).toBeNull();
+  });
+
+  it("Add-On de verdade continua produzindo addOnCost = stake", () => {
+    const row = buildTournamentInsertRow(
+      { ...base, name: "BoM: 25 Cavalry Charge", category: "Vanilla", flags: ["Add-On"] },
+      "U",
+    );
+    expect(row.allowsAddOn).toBe(true);
+    expect(row.allowsRebuy).toBe(false);
     // addOnCost = stake (buyIn - rake), nunca buyIn cheio (launch-fix P1#2).
     expect(row.addOnCost).toBe(String(108 - 8.64));
   });

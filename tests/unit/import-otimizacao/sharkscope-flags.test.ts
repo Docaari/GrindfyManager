@@ -42,10 +42,14 @@ describe("parseSharkscopeFlags", () => {
     expect(r.isProgressive).toBe(true);
   });
 
-  it("Rebuy marca allowsAddOn e (sem sinal mais forte) tipo Add-on", () => {
+  // ADR-251: rebuy deixou de ligar allowsAddOn e de virar tipo. A assercao
+  // antiga ("Rebuy marca allowsAddOn e tipo Add-on") codificava o bug que
+  // classificou 4307 torneios errado. Contrato novo em rebuy-nao-e-addon.test.ts.
+  it("Rebuy marca allowsRebuy e NAO sugere tipo", () => {
     const r = parseSharkscopeFlags("Rebuy");
-    expect(r.allowsAddOn).toBe(true);
-    expect(r.primaryType).toBe("Add-on");
+    expect(r.allowsRebuy).toBe(true);
+    expect(r.allowsAddOn).toBe(false);
+    expect(r.primaryType).toBeNull();
   });
 
   it("Multi-Entry marca allowsReentry", () => {

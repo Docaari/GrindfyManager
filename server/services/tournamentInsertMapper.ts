@@ -106,6 +106,8 @@ export function buildTournamentInsertRow(
     category: preservedCategory,
     isFlight: enriched.isFlight,
     allowsAddOn: enriched.allowsAddOn,
+    // ADR-251: rebuy vem das bandeiras (export) ou do campo ja parseado.
+    allowsRebuy: flagSignals?.allowsRebuy === true || t.allowsRebuy === true,
     addOnCost: enriched.allowsAddOn ? stakeOnly.toString() : null,
     allowsReentry: enriched.allowsReentry,
     maxReentries: intOrNull(t.maxReentries),
